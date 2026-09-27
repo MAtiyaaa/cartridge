@@ -21,7 +21,15 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - name: Build and publish AppImage
+      - name: Build AppImage
+        run: npm run dist
+      - name: Launch check (must open and render before anything is published)
+        run: |
+          sudo apt-get update -q && sudo apt-get install -y -q xvfb libfuse2t64 || sudo apt-get install -y -q xvfb libfuse2
+          cd release
+          CARTRIDGE_SMOKE=1 APPIMAGE_EXTRACT_AND_RUN=1 timeout 90 xvfb-run -a ./Cartridge-x86_64.AppImage --no-sandbox 2>&1 | tee smoke.log
+          grep -q "SMOKE OK" smoke.log
+      - name: Publish AppImage
         run: npm run release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

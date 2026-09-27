@@ -689,6 +689,20 @@ function createWindow() {
   if (process.env.VITE_DEV) win.loadURL('http://localhost:5173');
   else win.loadFile(path.join(__dirname, '../dist/index.html'));
   win.webContents.on('render-process-gone', (_e, d) => log('renderer gone', d.reason, d.exitCode));
+  // CI launch check: exit 0 only if the UI actually rendered
+  if (process.env.CARTRIDGE_SMOKE) {
+    const fail = (why) => { console.error('SMOKE FAIL: ' + why); app.exit(1); };
+    const t = setTimeout(() => fail('timeout'), 30000);
+    win.webContents.on('render-process-gone', (_e, d) => fail('renderer ' + d.reason));
+    win.webContents.once('did-finish-load', () => setTimeout(async () => {
+      try {
+        const text = await win.webContents.executeJavaScript('document.body.innerText');
+        clearTimeout(t);
+        if (/Cartridge/.test(text)) { console.log('SMOKE OK: ' + text.replace(/\s+/g, ' ').slice(0, 80)); app.exit(0); }
+        else fail('empty UI');
+      } catch (e) { fail(e.message); }
+    }, 3000));
+  }
   win.webContents.on('did-fail-load', (_e, code, desc, url) => log('load failed', code, desc, url));
   win.webContents.on('console-message', (e) => { const m = e.message ?? e; if ((e.level === 'error' || e.level === 3) && typeof m === 'string') log('console', m.slice(0, 300)); });
   win.on('unresponsive', () => log('window unresponsive'));
