@@ -94,7 +94,14 @@
             <div class="row"><span class="lbl">Box art size</span><div class="seg"><button v-for="s in sizes" :key="s.v" data-focus :class="{ on: ui.gridSize === s.v }" @click="saveConfig({ ui: { gridSize: s.v } })">{{ s.l }}</button></div></div>
             <div class="row"><span class="lbl">Background</span><div class="seg"><button v-for="b in bgs" :key="b.v" data-focus :class="{ on: (ui.bgStyle || 'waves') === b.v }" @click="saveConfig({ ui: { bgStyle: b.v } })">{{ b.l }}</button></div></div>
             <Toggle :model-value="ui.mediaBar !== false" label="Media bar" desc="Show artwork of the highlighted game at the top of Home" @update:model-value="(v) => saveConfig({ ui: { mediaBar: v } })" />
-            <Toggle :model-value="ui.logos !== false" label="Game logos" desc="Show the game's logo instead of its name when RomM has one (ScreenScraper logo media)" @update:model-value="(v) => saveConfig({ ui: { logos: v } })" />
+            <Toggle :model-value="ui.logos !== false" label="Game logos" desc="Show the game's logo instead of its name on Home and game pages" @update:model-value="(v) => saveConfig({ ui: { logos: v } })" />
+            <template v-if="ui.logos !== false">
+              <div class="row" style="align-items: flex-end; gap: 12px">
+                <TextField v-model="sgdbKey" label="SteamGridDB API key" placeholder="Paste your key" password icon="mdiKeyVariant" style="flex: 1" />
+                <button class="btn" data-focus :disabled="sgdbBusy" @click="saveSgdb"><Icon name="mdiCheck" :size="18" />{{ sgdbBusy ? 'Checking…' : 'Save key' }}</button>
+              </div>
+              <p class="muted small" style="margin-top: -6px">Logos come from your RomM server when it has them (ScreenScraper "logo" media). For everything else, add a free key from steamgriddb.com → Preferences → API. {{ store.config.sgdbKey ? 'Key saved.' : '' }}</p>
+            </template>
             <div class="row"><span class="lbl">Touch &amp; mouse</span><div class="seg"><button v-for="p in pointers" :key="p.v" data-focus :class="{ on: (ui.pointer || 'auto') === p.v }" @click="setPointer(p.v)">{{ p.l }}</button></div></div>
             <p class="muted small" style="margin-top: -6px">Auto hides the cursor when you tap the screen and shows it when a mouse moves. Touch never shows a cursor.</p>
             <Toggle :model-value="ui.sounds !== false" label="UI sounds" desc="Soft clicks when you move and select" @update:model-value="setSounds" />
@@ -134,7 +141,7 @@
                 </div>
               </div>
             </div>
-            <p class="muted small">Tip: keep the AppImage where it is after adding it. If you move it, add it again.</p>
+            <p class="muted small">Added before 0.2.1? Press Add to Steam once more: Steam now starts Cartridge through a launch script that makes it open reliably, and logs each launch to ~/.config/Cartridge/steam-launch.log. Keep the AppImage where it is; if you move it, add it again.</p>
           </template>
 
           <template v-else>
@@ -158,7 +165,7 @@
 
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue';
-import { store, call, go, saveConfig, pickFolder, choose, confirm, toast, bytes, ago, resync, scanServer, allRoms } from '../store.js';
+import { store, call, go, saveConfig, pickFolder, choose, confirm, toast, bytes, ago, resync, scanServer, allRoms, resetLogos } from '../store.js';
 import { useView } from '../useView.js';
 import { input, focusFirst, setPointerPref } from '../nav.js';
 import { THEMES } from '../themes.js';
@@ -166,6 +173,7 @@ import { setSoundEnabled } from '../sfx.js';
 import Icon from '../components/Icon.vue';
 import Logo from '../components/Logo.vue';
 import Toggle from '../components/Toggle.vue';
+import TextField from '../components/TextField.vue';
 import PIcon from '../components/PIcon.vue';
 
 const el = ref(null);
@@ -188,6 +196,21 @@ const space = ref(null);
 const srv = computed(() => store.config.server);
 const dls = computed(() => store.config.downloads);
 const ui = computed(() => store.config.ui);
+const sgdbKey = ref(store.config.sgdbKey || '');
+const sgdbBusy = ref(false);
+async function saveSgdb() {
+  const key = sgdbKey.value.trim();
+  sgdbBusy.value = true;
+  try {
+    if (key) {
+      const r = await call('logo:test', { key }).catch(() => ({ ok: false, status: 0 }));
+      if (!r.ok) { toast(r.status === 401 || r.status === 403 ? 'SteamGridDB rejected that key' : "Couldn't reach SteamGridDB", 'error', 4200); return; }
+    }
+    await saveConfig({ sgdbKey: key });
+    resetLogos();
+    toast(key ? 'SteamGridDB key saved. Logos will appear as you browse.' : 'SteamGridDB key removed', 'ok', 3400, 'mdiCheck');
+  } finally { sgdbBusy.value = false; }
+}
 const busy = computed(() => ['running', 'scanning'].includes(store.sync.state));
 const total = computed(() => allRoms().length);
 const modes = [{ v: 'auto', l: 'Auto' }, { v: 'local', l: 'Local' }, { v: 'remote', l: 'Remote' }];

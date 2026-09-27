@@ -42,6 +42,7 @@ const DEFAULT_CONFIG = {
   downloads: { concurrency: 2, esdeM3uFolders: true, flattenSingleFile: true },
   ui: { gridSize: 'md', hideEmpty: true, sounds: true, bgStyle: 'waves', theme: 'purple', mediaBar: true, logos: true, pointer: 'auto' },
   sync: { onLaunch: true, everyMinutes: 60 },
+  sgdbKey: '', // optional SteamGridDB API key for game logos
   graphics: 'auto', // auto (GPU, falls back on failure) | software
   configVersion: 2,
   configured: false,
@@ -97,7 +98,7 @@ const inGamescope = isGamescope();
 // "Running". 0.1.2 used software rendering everywhere and launched fine from Steam, so do that.
 function launchedBySteam() {
   const e = process.env;
-  return !!(e.SteamGameId || e.SteamAppId || e.SteamClientLaunch || e.SteamOverlayGameId || /gameoverlayrenderer/.test(e.LD_PRELOAD || ''));
+  return !!(e.CARTRIDGE_FROM_STEAM || e.SteamGameId || e.SteamAppId || e.SteamClientLaunch || e.SteamOverlayGameId || /gameoverlayrenderer/.test(e.LD_PRELOAD || ''));
 }
 const fromSteam = launchedBySteam();
 const forceSoftware = inGamescope || fromSteam || process.argv.includes('--disable-gpu') || process.env.CARTRIDGE_SAFE_GPU === '1';
@@ -105,6 +106,35 @@ const useGpu = !forceSoftware && config.graphics !== 'software';
 const startedAt = Date.now();
 if (!useGpu) app.disableHardwareAcceleration();
 log('start', app.getVersion(), 'gpu=' + (useGpu ? 'hardware' : 'software'), 'session=' + (process.env.XDG_SESSION_TYPE || '?'), 'desktop=' + (process.env.XDG_CURRENT_DESKTOP || '?'), 'appimage=' + (process.env.APPIMAGE || 'no'), 'gamescope=' + inGamescope, 'steam=' + fromSteam, 'overlay=' + /gameoverlayrenderer/.test(process.env.LD_PRELOAD || ''), 'wl=' + (process.env.WAYLAND_DISPLAY || '-'), 'x=' + (process.env.DISPLAY || '-'), 'gs=' + (process.env.GAMESCOPE_WAYLAND_DISPLAY || '-'));
+// Steam launches Cartridge through this script instead of the AppImage directly.
+// Steam adds its overlay (LD_PRELOAD) and its runtime libraries (LD_LIBRARY_PATH) to every
+// game, and Chromium can die during its sandbox setup under Steam before any app code runs.
+// The script drops both, starts without the Chromium sandbox, and writes everything to
+// steam-launch.log so a failed launch always leaves a trace.
+const STEAM_LAUNCHER = path.join(USER_DATA, 'steam-launch.sh');
+function writeSteamLauncher() {
+  const ai = process.env.APPIMAGE;
+  if (!ai) return null;
+  const q = (v) => "'" + String(v).replace(/'/g, "'\\''") + "'";
+  const body = `#!/bin/bash
+# Written by Cartridge. Steam's shortcut runs this; it is rewritten on every start.
+LOG=${q(path.join(USER_DATA, 'steam-launch.log'))}
+{
+  echo "=== $(date -Is) launched by Steam"
+  env | grep -E '^(LD_PRELOAD|LD_LIBRARY_PATH|SteamGameId|SteamAppId|SteamGamepadUI|XDG_SESSION_TYPE|XDG_CURRENT_DESKTOP|DISPLAY|WAYLAND_DISPLAY|GAMESCOPE_WAYLAND_DISPLAY)=' | cut -c1-300
+} > "$LOG" 2>&1
+unset LD_PRELOAD LD_LIBRARY_PATH
+export CARTRIDGE_FROM_STEAM=1
+exec ${q(ai)} --no-sandbox "$@" >> "$LOG" 2>&1
+`;
+  fs.mkdirSync(USER_DATA, { recursive: true });
+  fs.writeFileSync(STEAM_LAUNCHER, body, { mode: 0o755 });
+  fs.chmodSync(STEAM_LAUNCHER, 0o755);
+  return STEAM_LAUNCHER;
+}
+// keep the script pointing at wherever this AppImage lives now
+if (process.env.APPIMAGE && fs.existsSync(STEAM_LAUNCHER)) { try { writeSteamLauncher(); } catch {} }
+
 function relaunch() {
   const args = process.argv.slice(1).filter((a) => !a.startsWith('--disable-gpu'));
   if (process.env.APPIMAGE) app.relaunch({ execPath: process.env.APPIMAGE, args });
@@ -506,6 +536,54 @@ async function handleImage(request) {
   }
 }
 
+// ---------------------------------------------------------------- logos (SteamGridDB)
+// RomM only has logos when its ScreenScraper "logo" media is enabled. With a free SteamGridDB
+// key Cartridge looks them up itself: name search -> game -> logos. Results are cached.
+const LOGO_FILE = path.join(USER_DATA, 'logos.json');
+const logoCache = loadJson(LOGO_FILE, {}); // romId -> { url, t }
+let logoSaveT = null;
+function saveLogoCache() { clearTimeout(logoSaveT); logoSaveT = setTimeout(() => { try { fs.writeFileSync(LOGO_FILE, JSON.stringify(logoCache)); } catch {} }, 500); }
+const logoInflight = new Map();
+let logoChain = Promise.resolve();
+async function sgdb(pathname) {
+  const r = await fetch((process.env.CARTRIDGE_SGDB_BASE || 'https://www.steamgriddb.com/api/v2') + pathname, { headers: { Authorization: 'Bearer ' + config.sgdbKey }, signal: AbortSignal.timeout(12000) });
+  if (r.status === 401 || r.status === 403) throw Object.assign(new Error('SteamGridDB rejected the API key'), { auth: true });
+  if (!r.ok) return null;
+  const j = await r.json().catch(() => null);
+  return j && j.success ? j.data : null;
+}
+function cleanName(n) { return String(n || '').replace(/\s*[\(\[][^\)\]]*[\)\]]/g, '').replace(/\s+/g, ' ').trim(); }
+async function findLogo(name) {
+  const tries = [...new Set([cleanName(name), cleanName(name).split(/:| - /)[0].trim()])].filter((x) => x.length > 1);
+  for (const term of tries) {
+    const games = await sgdb('/search/autocomplete/' + encodeURIComponent(term));
+    for (const g of (games || []).slice(0, 2)) {
+      const logos = await sgdb(`/logos/game/${g.id}?types=static&nsfw=false&humor=false`);
+      if (!logos || !logos.length) continue;
+      const rank = (l) => (l.style === 'official' ? 0 : l.style === 'white' ? 2 : 1) + (l.mime === 'image/png' ? 0 : 0.5);
+      const best = [...logos].sort((a, b) => rank(a) - rank(b) || (b.score || 0) - (a.score || 0))[0];
+      if (best?.url) return best.url;
+    }
+  }
+  return '';
+}
+async function logoFor({ id, name }) {
+  if (!config.sgdbKey || !id) return null;
+  const c = logoCache[id];
+  if (c && (c.url || Date.now() - c.t < 7 * 864e5)) return c.url || null;
+  if (logoInflight.has(id)) return logoInflight.get(id);
+  const job = (logoChain = logoChain.then(async () => {
+    try {
+      const url = await findLogo(name);
+      logoCache[id] = { url, t: Date.now() }; saveLogoCache();
+      return url || null;
+    } catch (e) { log('logo', name, e.message); if (e.auth) throw e; return null; }
+  }));
+  logoChain = job.catch(() => {});
+  logoInflight.set(id, job);
+  try { return await job; } finally { logoInflight.delete(id); }
+}
+
 // ---------------------------------------------------------------- downloads
 const queue = []; // items
 let nextId = 1;
@@ -748,9 +826,15 @@ function createWindow() {
 
 const handlers = {
   'config:get': () => config,
+  'logo:get': (r) => logoFor(r),
+  'logo:test': async ({ key }) => {
+    const r = await fetch((process.env.CARTRIDGE_SGDB_BASE || 'https://www.steamgriddb.com/api/v2') + '/search/autocomplete/zelda', { headers: { Authorization: 'Bearer ' + key }, signal: AbortSignal.timeout(12000) });
+    return { ok: r.ok, status: r.status };
+  },
   'config:set': (patch) => {
     config = deepMerge(config, patch); saveConfig();
     if (patch.server) activeBase = null;
+    if ('sgdbKey' in patch) { for (const k of Object.keys(logoCache)) if (!logoCache[k].url) delete logoCache[k]; saveLogoCache(); }
     if ('romsRoot' in patch && library) { broadcast('library', publicLibrary()); computeInstalled(); }
     return config;
   },
@@ -852,7 +936,9 @@ const handlers = {
   },
   'steam:add': async ({ restartSteam } = {}) => {
     if (isGamescope()) throw new Error('Switch to Desktop Mode to add Cartridge to Steam (Steam has to restart).');
-    const r = await require('./steamArt').addToSteam({ exe: process.env.APPIMAGE, artDir: path.join(__dirname, '../steam-art'), restartSteam });
+    if (!process.env.APPIMAGE) throw new Error('This only works from the AppImage build.');
+    const launcher = writeSteamLauncher();
+    const r = await require('./steamArt').addToSteam({ exe: launcher, artDir: path.join(__dirname, '../steam-art'), restartSteam });
     log('steam add', JSON.stringify(r));
     return r;
   },

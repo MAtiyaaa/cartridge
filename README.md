@@ -71,7 +71,7 @@ Settings → Updates checks GitHub Releases and swaps in the new version on rest
 <td valign="top">
 
 **🎨 Make it yours**<br>
-PSP XMB-style animated waves in eight colors, a media bar with the highlighted game's artwork, game logos from RomM, and three box art sizes.
+PSP XMB-style animated waves in eight colors, a media bar with the highlighted game's artwork, game logos (from RomM or SteamGridDB), and three box art sizes.
 
 </td>
 <td valign="top">
@@ -122,7 +122,7 @@ This downloads the latest AppImage to `~/Applications`, makes it executable and 
 
 **Updating:** open **Settings → Updates → Check for updates**, or pick it from the Quick Menu. The new version downloads in the background and replaces the AppImage when you restart, so your Steam shortcut keeps working.
 
-> **Launched from Steam?** Cartridge renders in software when Steam or Game Mode starts it, and uses the GPU from the app menu. **Blank window?** It also switches to software rendering if the GPU process fails. You can also force it with **Settings → Look & feel → Rendering → Compatible**, or launch once with `./Cartridge-x86_64.AppImage --disable-gpu`. A log is kept at `~/.config/Cartridge/cartridge.log`.
+> **Won't start from Steam?** Press Settings → Steam → Add to Steam again after updating, so Steam uses Cartridge's launch script. Each Steam launch is logged to `~/.config/Cartridge/steam-launch.log`. **Blank window?** It also switches to software rendering if the GPU process fails. You can also force it with **Settings → Look & feel → Rendering → Compatible**, or launch once with `./Cartridge-x86_64.AppImage --disable-gpu`. A log is kept at `~/.config/Cartridge/cartridge.log`.
 
 <br>
 

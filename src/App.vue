@@ -17,7 +17,7 @@
       <div class="spacer" />
       <label class="top-search" :class="{ on: store.route.name === 'search' }">
         <Icon name="mdiMagnify" :size="18" />
-        <input ref="searchEl" data-focus data-key="top-search" :value="store.lastSearch" placeholder="Search games" autocomplete="off" spellcheck="false" @input="onSearch" />
+        <input ref="searchEl" data-focus data-nofirst data-key="top-search" :value="store.lastSearch" placeholder="Search games" autocomplete="off" spellcheck="false" @input="onSearch" />
         <button v-if="store.lastSearch" class="clear" tabindex="-1" @mousedown.prevent @click="clearSearch"><Icon name="mdiClose" :size="16" /></button>
         <Btn v-else b="Y" />
       </label>

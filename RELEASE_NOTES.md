@@ -1,10 +1,18 @@
+## Cartridge 0.2.1
+
+### Fixed
+- **Launching from Steam.** Add to Steam now points Steam at a small launch script instead of the AppImage. The script removes the Steam overlay and Steam's runtime libraries from Cartridge's environment and starts it without the Chromium sandbox, which could kill it under Steam before it even opened. Every Steam launch is logged to `~/.config/Cartridge/steam-launch.log`. **After updating, open Settings → Steam → Add to Steam once** so your shortcut uses the script.
+- **Game logos.** Logos now also come from SteamGridDB: add a free API key in Settings → Look & feel (steamgriddb.com → Preferences → API). RomM's own logos are still used first when your server has them.
+- **Sharper background.** The XMB waves are drawn at full resolution instead of being scaled up, with no change in frame rate.
+- **Starting focus.** Home opens on your games, not the search box.
+
 ## Cartridge 0.2.0
 
-The first big update. Everything since 0.1.0 is in here, so this is the only release you need.
+The first big update. Everything since 0.1.0 is in here.
 
 ### New
 - **Search box in the top bar.** Start typing from any screen and results filter as you type. Press Y to jump to it.
-- **Game logos.** Home and game pages show the game's logo instead of plain text when your RomM server has one. Turn it off in Settings → Look & feel → Game logos.
+- **Game logos.** Home and game pages show the game's logo instead of plain text. Turn it off in Settings → Look & feel → Game logos.
 - **Media bar.** The top of Home shows artwork of the highlighted game and swaps as you move.
 - **Background colors.** Eight PSP XMB-style colors in Settings → Look & feel: Purple, Blue, Red, Green, Orange, Pink, Teal and Midnight.
 - **Touch mode.** Tapping the screen no longer shows a mouse cursor. The cursor only appears when a real mouse moves. Pick Auto, Touch or Mouse in Look & feel.
@@ -20,12 +28,12 @@ The first big update. Everything since 0.1.0 is in here, so this is the only rel
 - **Smoother.** Scrolling and focus now hold 60fps on handhelds (up from roughly 25 to 30).
 
 ### Fixed
-- **Stuck on "Running" when launched from Steam** (Desktop and Game Mode). 0.1.3 switched to GPU rendering, which does not get along with Steam's overlay. Cartridge now uses software rendering whenever Steam or Game Mode launches it, the setup 0.1.2 launched fine with. Launching from the app menu still uses the GPU.
+- **Rendering under Steam.** Cartridge uses software rendering whenever Steam or Game Mode launches it. Launching from the app menu still uses the GPU.
 - **Blank grey window and no launch** on some handhelds (0.1.0 and 0.1.1).
 - **Duplicate "ready to play" messages** after a download finished.
 
 ### Update
-Already on 0.1.2 or later: open Cartridge in Desktop Mode, go to Settings → Updates → Check for updates, then restart. Or just close it and open it again.
+Already on 0.1.2 or later: open Cartridge from the app menu in Desktop Mode, go to Settings → Updates → Check for updates, then restart. Then press Settings → Steam → Add to Steam once.
 
 New install, in Desktop Mode → Konsole:
 ```bash

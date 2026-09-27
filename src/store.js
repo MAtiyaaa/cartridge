@@ -21,6 +21,7 @@ export const store = reactive({
   modal: null,
   quickMenu: false,
   lastSearch: '',
+  logos: {},
   manualSync: false,
   update: { state: 'idle' },
 });
@@ -196,10 +197,20 @@ export function romsOfCollection(id) {
   return c ? c.rom_ids.map((rid) => romIndex.get(rid)).filter(Boolean) : [];
 }
 
-// Game logo (transparent PNG) from RomM, if the server has one
+// Game logo (transparent PNG): RomM's own logo first, then SteamGridDB when a key is set.
+const logoAsked = new Set();
 export function logoOf(rom) {
   if (!rom) return '';
   if (rom.logo) return img(rom.logo);
   const p = rom.ss_metadata?.logo_path || rom.gamelist_metadata?.marquee_path;
-  return p ? img(p.startsWith('/') ? p : '/assets/romm/resources/' + p) : '';
+  if (p) return img(p.startsWith('/') ? p : '/assets/romm/resources/' + p);
+  if (!store.config?.sgdbKey || !rom.id) return '';
+  const got = store.logos[rom.id];
+  if (got !== undefined) return got ? img(got) : '';
+  if (!logoAsked.has(rom.id)) {
+    logoAsked.add(rom.id);
+    queueMicrotask(() => call('logo:get', { id: rom.id, name: rom.name }).then((u) => { store.logos[rom.id] = u || ''; }).catch(() => { store.logos[rom.id] = ''; }));
+  }
+  return '';
 }
+export function resetLogos() { logoAsked.clear(); for (const k of Object.keys(store.logos)) delete store.logos[k]; }

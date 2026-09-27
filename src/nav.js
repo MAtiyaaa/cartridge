@@ -36,7 +36,9 @@ export function focusFirst(scope, selector) {
   const layer = topLayer();
   const root = scope || layer?.el || document.body;
   const pref = selector ? root.querySelector(selector) : root.querySelector('[data-autofocus]');
-  const el = pref || focusables(root)[0];
+  const all = focusables(root);
+  // prefer content over the top-bar search box when nothing specific is asked for
+  const el = pref || all.find((e) => !e.hasAttribute('data-nofirst')) || all[0];
   if (el) { el.focus({ preventScroll: true }); el.scrollIntoView({ block: 'nearest', inline: 'nearest' }); }
   return el;
 }

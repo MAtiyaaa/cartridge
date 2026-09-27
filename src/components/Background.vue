@@ -29,12 +29,13 @@ const WAVES = [
   { a: 0.11, k: 1.1, s: 0.05, y: 0.55, h: 0.22, al: 0.06 },
   { a: 0.05, k: 3.1, s: 0.13, y: 0.64, h: 0.05, al: 0.12 },
 ];
-const SCALE = 0.4;
-const STEP = 12;
+// Drawn at full resolution (the old 0.4x canvas looked soft and pixelated when scaled up).
+const SCALE = Math.min(window.devicePixelRatio || 1, 1.5);
+const STEP = 18;
 let grads = [];
 function draw(t) {
   raf = requestAnimationFrame(draw);
-  if (t - last < 40) return; // ~25fps is plenty for a slow ambient drift
+  if (t - last < 33) return; // ~30fps is plenty for a slow ambient drift
   last = t;
   const c = cv.value;
   if (!c) return;
@@ -73,7 +74,7 @@ function draw(t) {
     g.beginPath();
     for (let i = 0; i < top.length; i += 2) (i ? g.lineTo(top[i], top[i + 1]) : g.moveTo(top[i], top[i + 1]));
     g.strokeStyle = `rgba(255,255,255,${wv.al * 1.6})`;
-    g.lineWidth = 0.8;
+    g.lineWidth = 1.5 * SCALE;
     g.stroke();
   });
 }
