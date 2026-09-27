@@ -17,7 +17,7 @@
       <div class="spacer" />
       <label class="top-search" :class="{ on: store.route.name === 'search' }">
         <Icon name="mdiMagnify" :size="18" />
-        <input ref="searchEl" data-focus data-nofirst data-key="top-search" :value="store.lastSearch" placeholder="Search games" autocomplete="off" spellcheck="false" @input="onSearch" />
+        <input ref="searchEl" data-focus data-nofirst data-key="top-search" :value="store.lastSearch" :readonly="builtinKb()" placeholder="Search games" autocomplete="off" spellcheck="false" @input="onSearch" @click="searchOsk" />
         <button v-if="store.lastSearch" class="clear" tabindex="-1" @mousedown.prevent @click="clearSearch"><Icon name="mdiClose" :size="16" /></button>
         <Btn v-else b="Y" />
       </label>
@@ -42,11 +42,24 @@
   </div>
 
   <QuickMenu v-if="store.quickMenu" />
-  <TextPrompt v-if="store.modal?.type === 'keyboard'" v-bind="store.modal.props" />
+  <Keyboard v-if="store.modal?.type === 'keyboard' && builtinKb()" v-bind="store.modal.props" />
+  <TextPrompt v-else-if="store.modal?.type === 'keyboard'" v-bind="store.modal.props" />
   <FolderPicker v-if="store.modal?.type === 'folder'" v-bind="store.modal.props" />
   <Menu v-if="store.modal?.type === 'menu'" v-bind="store.modal.props" />
   <ArtPicker v-if="store.modal?.type === 'art'" :key="store.modal.props.query || ''" v-bind="store.modal.props" />
 
+  <div class="pops">
+    <TransitionGroup name="pop">
+      <div v-for="p in store.pops" :key="p.id" class="pop glass">
+        <div class="pop-icon"><img v-if="p.icon" :src="p.icon" /><Grade v-else :g="p.grade" :size="40" /></div>
+        <div class="pop-body">
+          <div class="pop-kind"><Grade :g="p.grade" :size="16" />{{ p.grade ? GRADE[p.grade] + ' trophy unlocked' : 'Achievement unlocked' }}<template v-if="p.points"> · {{ p.points }} G</template></div>
+          <div class="pop-name">{{ p.name }}</div>
+          <div class="pop-game">{{ p.game }}</div>
+        </div>
+      </div>
+    </TransitionGroup>
+  </div>
   <div class="toasts" :class="{ shifted: store.quickMenu }">
     <div v-for="t in store.toasts" :key="t.id" class="toast" :class="t.kind"><span class="ti"><Icon :name="t.icon" :size="18" /></span>{{ t.msg }}</div>
   </div>
@@ -54,7 +67,7 @@
 
 <script setup>
 import { computed, onMounted, onBeforeUnmount, ref, watch, nextTick } from 'vue';
-import { store, loadConfig, loadLibrary, loadArt, back, tab, go, call, toast } from './store.js';
+import { store, loadConfig, loadLibrary, loadArt, back, tab, go, call, toast, builtinKb, askText, GRADE } from './store.js';
 import { pushLayer, focusFirst } from './nav.js';
 import { setSoundEnabled, sfx } from './sfx.js';
 import { applyTheme } from './themes.js';
@@ -65,6 +78,8 @@ import Logo from './components/Logo.vue';
 import Background from './components/Background.vue';
 import QuickMenu from './components/QuickMenu.vue';
 import TextPrompt from './components/TextPrompt.vue';
+import Keyboard from './components/Keyboard.vue';
+import Grade from './components/Grade.vue';
 import FolderPicker from './components/FolderPicker.vue';
 import Menu from './components/Menu.vue';
 import ArtPicker from './components/ArtPicker.vue';
@@ -78,8 +93,9 @@ import Settings from './views/Settings.vue';
 import Search from './views/Search.vue';
 import Achievements from './views/Achievements.vue';
 import RaGame from './views/RaGame.vue';
+import TrophyGame from './views/TrophyGame.vue';
 
-const views = { achievements: Achievements, 'ra-game': RaGame, home: Home, library: Gallery, consoles: Consoles, platform: Gallery, collection: Gallery, game: Game, downloads: Downloads, settings: Settings, search: Search };
+const views = { achievements: Achievements, 'ra-game': RaGame, 'trophy-game': TrophyGame, home: Home, library: Gallery, consoles: Consoles, platform: Gallery, collection: Gallery, game: Game, downloads: Downloads, settings: Settings, search: Search };
 const tabs = [
   { name: 'home', label: 'Home', icon: 'mdiHomeVariantOutline' },
   { name: 'library', label: 'Library', icon: 'mdiViewGridOutline' },
@@ -95,8 +111,18 @@ function onSearch(e) {
   store.lastSearch = e.target.value;
   if (store.route.name !== 'search' && e.target.value.trim()) go('search');
 }
+async function searchOsk() {
+  if (!builtinKb()) return;
+  const v = await askText({ title: 'Search games', value: store.lastSearch, placeholder: 'Game name' });
+  if (v == null) return;
+  store.lastSearch = v;
+  if (v.trim() && store.route.name !== 'search') go('search');
+  await nextTick();
+  toResults();
+}
 function clearSearch() { store.lastSearch = ''; searchEl.value?.focus(); }
 function focusSearch() {
+  if (builtinKb()) { searchOsk(); return; }
   if (store.route.name !== 'search') go('search');
   nextTick(() => { searchEl.value?.focus(); searchEl.value?.select(); });
 }
@@ -228,5 +254,16 @@ watch(viewKey, async () => {
 .backbtn { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; background: rgba(255, 255, 255, 0.08); margin-right: -6px; }
 .backbtn:active { background: rgba(255, 255, 255, 0.2); }
 .tab-badge { position: absolute; top: 2px; right: 6px; min-width: 16px; height: 16px; border-radius: 8px; background: var(--peach); color: #1a1022; font-size: 10px; font-weight: 700; display: grid; place-items: center; padding: 0 4px; }
+.pops { position: fixed; top: 76px; right: 24px; z-index: 80; display: flex; flex-direction: column; gap: 10px; pointer-events: none; }
+.pop { display: flex; gap: 14px; align-items: center; width: 380px; padding: 12px 16px 12px 12px; border-radius: 14px; background: rgba(18, 20, 32, 0.92); box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.12); }
+.pop-icon { width: 60px; height: 60px; border-radius: 10px; overflow: hidden; flex: none; display: grid; place-items: center; background: rgba(0, 0, 0, 0.35); }
+.pop-icon img { width: 100%; height: 100%; object-fit: cover; }
+.pop-body { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.pop-kind { display: flex; gap: 6px; align-items: center; font-size: 11.5px; letter-spacing: 0.04em; color: #cfd6e4; }
+.pop-name { font-family: var(--display); font-weight: 700; font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pop-game { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pop-enter-active, .pop-leave-active { transition: opacity 0.3s, transform 0.35s var(--ease); }
+.pop-enter-from { opacity: 0; transform: translateX(40px); }
+.pop-leave-to { opacity: 0; transform: translateY(-12px); }
 .sync-pill { padding: 5px 12px; border-radius: 999px; background: rgba(139, 116, 232, 0.18); color: #cfc4ff; }
 </style>

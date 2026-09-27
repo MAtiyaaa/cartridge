@@ -1,7 +1,7 @@
 {
   "name": "cartridge",
   "productName": "Cartridge",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Controller-first RomM client for SteamOS and Bazzite",
   "main": "electron/main.js",
   "author": "abdu2304",
@@ -20,6 +20,7 @@
       "dist/**",
       "electron/**",
       "build/icon.png",
+      "build/syslogos/**",
       "package.json",
       "steam-art/**"
     ],
@@ -47,7 +48,7 @@
       }
     ],
     "releaseInfo": {
-      "releaseName": "Cartridge 0.3.0 · The RetroAchievements Update",
+      "releaseName": "Cartridge 0.4.0 · The All Achievements Update",
       "releaseNotesFile": "RELEASE_NOTES.md"
     }
   },

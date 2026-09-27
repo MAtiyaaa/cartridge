@@ -26,6 +26,11 @@ export const store = reactive({
   logoJob: null,
   manualSync: false,
   update: { state: 'idle' },
+  achTab: 'ra', // Achievements tab: 'ra' | 'others'
+  trophyVer: 0, // bumps whenever emulator trophies change
+  trophySync: { state: 'idle' },
+  trophyScan: null,
+  pops: [], // "Trophy unlocked" pop-ups
 });
 
 // ---------------- routing
@@ -62,6 +67,11 @@ export function closeModal(value) {
   m?.resolve(value);
 }
 export const askText = (props) => openModal('keyboard', props);
+// Built-in on-screen keyboard: always, never (Steam keyboard), or Auto = in Game Mode only
+export function builtinKb() {
+  const k = store.config?.ui?.keyboard || 'auto';
+  return k === 'builtin' || (k === 'auto' && !!store.info?.gamescope);
+}
 export const pickFolder = (props) => openModal('folder', props);
 export const choose = (props) => openModal('menu', props);
 export const confirm = (title, message, okLabel = 'Confirm', danger = false) =>
@@ -187,6 +197,26 @@ rd.on('logos-progress', (p) => {
   if (p.state === 'error') toast('SteamGridDB rejected the API key', 'error', 4000);
 });
 rd.on('connection', (c) => { store.connection = c; });
+rd.on('trophies', () => { store.trophyVer++; });
+rd.on('trophies-sync', (s) => { store.trophySync = s; });
+rd.on('trophies-scan', (s) => { store.trophyScan = s.state === 'running' ? s : null; });
+let popId = 1;
+rd.on('trophy-unlocked', (t) => {
+  const p = { ...t, id: popId++ };
+  store.pops.push(p);
+  if (store.pops.length > 3) store.pops.shift();
+  setTimeout(() => { const i = store.pops.indexOf(p); if (i >= 0) store.pops.splice(i, 1); }, 6500);
+});
+export const GRADE = { P: 'Platinum', G: 'Gold', S: 'Silver', B: 'Bronze' };
+export function when(ms) {
+  if (!ms) return '';
+  const s = (Date.now() - ms) / 1000;
+  if (s < 60) return 'just now';
+  if (s < 3600) return `${Math.round(s / 60)} min ago`;
+  if (s < 86400) return `${Math.round(s / 3600)} h ago`;
+  if (s < 86400 * 30) return `${Math.round(s / 86400)} d ago`;
+  return new Date(ms).toLocaleDateString();
+}
 rd.on('library', (lib) => setLib(lib));
 rd.on('installed', (m) => { store.installed = m; });
 rd.on('sync', (s) => { store.sync = s; });

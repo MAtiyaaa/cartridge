@@ -5,6 +5,7 @@
       <div class="prompt-field">
         <input ref="inp" v-model="text" class="prompt-input" data-focus :type="password && !reveal ? 'password' : 'text'" :inputmode="mode === 'url' ? 'url' : 'text'" :placeholder="placeholder" autocomplete="off" autocapitalize="off" spellcheck="false" />
         <button v-if="password" type="button" class="reveal" data-focus @click="reveal = !reveal"><Icon :name="reveal ? 'mdiEyeOff' : 'mdiEye'" :size="20" /></button>
+        <button type="button" class="btn small" data-focus style="margin-left: 8px" @click="paste"><Icon name="mdiContentPaste" :size="17" />Paste</button>
       </div>
       <p class="prompt-tip"><Icon name="mdiKeyboardOutline" :size="16" />Type with any keyboard. In Game Mode, press <b>Steam + X</b> for the Steam keyboard.</p>
       <div class="prompt-actions">
@@ -18,7 +19,7 @@
 <script setup>
 import { onMounted, onBeforeUnmount, ref, nextTick } from 'vue';
 import { pushLayer } from '../nav.js';
-import { closeModal } from '../store.js';
+import { closeModal, call } from '../store.js';
 import Icon from './Icon.vue';
 
 // Plain text prompt. Typing comes from a real keyboard or the Steam keyboard (Steam + X).
@@ -34,6 +35,7 @@ const inp = ref(null);
 const text = ref(props.value || '');
 const reveal = ref(false);
 function done() { closeModal(text.value); }
+async function paste() { try { const t = await call('clip:read'); if (t) text.value = t.trim(); } catch {} inp.value?.focus(); }
 
 let layer;
 onMounted(async () => {
@@ -55,7 +57,7 @@ onBeforeUnmount(() => layer?.pop?.());
 .prompt-field { position: relative; display: flex; align-items: center; }
 .prompt-input { width: 100%; font: inherit; font-size: 20px; color: var(--text); background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.14); border-radius: 8px; padding: 14px 16px; outline: none; }
 .prompt-input:focus { border-color: var(--primary-l); box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 45%, transparent); }
-.prompt-field .reveal { position: absolute; right: 8px; background: none; border: 0; color: var(--muted); padding: 8px; border-radius: 6px; }
+.prompt-field .reveal { position: absolute; right: 96px; background: none; border: 0; color: var(--muted); padding: 8px; border-radius: 6px; }
 .prompt-tip { margin: 0; color: var(--muted); font-size: 13px; display: flex; align-items: center; gap: 8px; }
 .prompt-actions { display: flex; justify-content: flex-end; gap: 10px; }
 </style>

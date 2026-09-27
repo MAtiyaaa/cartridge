@@ -26,7 +26,7 @@
           </template>
 
           <template v-else-if="sec === 'sync'">
-            <h1>Library &amp; sync</h1>
+            <h1>Library &amp; Sync</h1>
             <div class="card-s glass">
               <div class="kv"><span>Last sync</span><span>{{ ago(store.lib?.syncedAt) }}</span></div>
               <div class="kv"><span>Library</span><span>{{ total }} games · {{ store.lib?.platforms.filter((p) => p.rom_count).length || 0 }} systems</span></div>
@@ -59,7 +59,7 @@
           </template>
 
           <template v-else-if="sec === 'folders'">
-            <h1>Console folders</h1>
+            <h1>Console Folders</h1>
             <div class="row" style="justify-content: space-between">
               <p class="muted small" style="margin: 0; max-width: 520px">Matched inside your ROMs folder using ES-DE folder names. Pick any system to point it somewhere else.</p>
               <div class="seg">
@@ -85,7 +85,7 @@
           </template>
 
           <template v-else-if="sec === 'ui'">
-            <h1>Look &amp; feel</h1>
+            <h1>Look &amp; Feel</h1>
             <div class="row"><span class="lbl">Color</span>
               <div class="swatches">
                 <button v-for="(t, k) in THEMES" :key="k" class="swatch" data-focus :class="{ on: (ui.theme || 'purple') === k }" :style="{ background: `linear-gradient(135deg, ${t.grad[0]}, ${t.grad[2]} 60%, ${t.grad[4]})` }" :title="t.label" @click="saveConfig({ ui: { theme: k } })"><span>{{ t.label }}</span></button>
@@ -112,6 +112,8 @@
             </template>
             <div class="row"><span class="lbl">Touch &amp; mouse</span><div class="seg"><button v-for="p in pointers" :key="p.v" data-focus :class="{ on: (ui.pointer || 'auto') === p.v }" @click="setPointer(p.v)">{{ p.l }}</button></div></div>
             <p class="muted small" style="margin-top: -6px">Auto hides the cursor when you tap the screen and shows it when a mouse moves. Touch never shows a cursor.</p>
+            <div class="row"><span class="lbl">On-screen keyboard</span><div class="seg"><button v-for="k in keyboards" :key="k.v" data-focus :class="{ on: (ui.keyboard || 'auto') === k.v }" @click="saveConfig({ ui: { keyboard: k.v } })">{{ k.l }}</button></div></div>
+            <p class="muted small" style="margin-top: -6px">Auto uses the built-in keyboard in Game Mode and your real keyboard on the desktop. Steam leaves typing to the Steam keyboard (Steam + X).</p>
             <Toggle :model-value="ui.sounds !== false" label="UI sounds" desc="Soft clicks when you move and select" @update:model-value="setSounds" />
             <Toggle :model-value="ui.hideEmpty" label="Hide empty systems" @update:model-value="(v) => saveConfig({ ui: { hideEmpty: v } })" />
             <div class="row"><span class="lbl">Rendering</span><div class="seg"><button v-for="g in gfx" :key="g.v" data-focus :class="{ on: (store.config.graphics || 'auto') === g.v }" @click="setGraphics(g.v)">{{ g.l }}</button></div></div>
@@ -138,6 +140,7 @@
 
           <template v-else-if="sec === 'ra'">
             <h1>Achievements</h1>
+            <div class="subh"><img src="../assets/ra-logo.png" class="ra-mk" />RetroAchievements</div>
             <template v-if="!store.config.ra?.user">
               <p class="muted">Sign in to RetroAchievements to see your unlocks in the Achievements tab and on every game that supports them.</p>
               <div class="row" style="gap: 16px; align-items: flex-end">
@@ -159,6 +162,37 @@
               <Toggle :model-value="ui.raOnGames !== false" label="Achievements on game pages" desc="Show progress and badges on games that have RetroAchievements (PS3, PS4, Switch and other unsupported consoles never show them)" @update:model-value="(v) => saveConfig({ ui: { raOnGames: v } })" />
               <Toggle :model-value="ui.raOnHome !== false" label="Latest unlocks on Home" desc="Adds a row of your newest achievements to the Home screen" @update:model-value="(v) => saveConfig({ ui: { raOnHome: v } })" />
             </template>
+
+            <div class="subh" style="margin-top: 14px"><Grade g="G" :size="22" />Other sources</div>
+            <p class="muted small" style="margin-top: -8px">Trophies and achievements that emulators keep on this device. Cartridge reads each emulator's own settings first, then looks through your home, emulation and SD card folders. Nothing is ever written to the emulators' files.</p>
+            <div class="srcs">
+              <div v-for="s in trophySrc" :key="s.id" class="src glass">
+                <div class="src-top">
+                  <div><b>{{ s.name }}</b> <span class="muted small">{{ s.platform }}</span></div>
+                  <span class="chip" :class="s.state">{{ { found: 'Found', missing: 'Not found', off: 'Off' }[s.state] }}<template v-if="s.state === 'found'"> · {{ s.games }} {{ s.games === 1 ? 'game' : 'games' }}</template></span>
+                  <div class="spacer" />
+                  <button class="btn small" data-focus @click="chooseSrc(s)"><Icon name="mdiFolderOpen" :size="18" />Choose folder</button>
+                  <Toggle :model-value="s.enabled" compact @update:model-value="(v) => toggleSrc(s, v)" />
+                </div>
+                <div v-for="f in s.found" :key="f.dir" class="src-path">
+                  <span class="how">{{ { config: 'From settings', known: 'Known place', scan: 'Found by scan', chosen: 'Chosen by you' }[f.how] || f.how }}</span>
+                  <span class="mono">{{ f.dir }}</span>
+                  <button v-if="f.how === 'chosen' || f.how === 'scan'" class="btn small ghost" data-focus @click="removeDir(s, f.dir)"><Icon name="mdiClose" :size="16" /></button>
+                </div>
+              </div>
+            </div>
+            <div class="row wrap">
+              <button class="btn" data-focus :disabled="!!store.trophyScan" @click="scanTrophies"><Icon name="mdiRadar" />{{ store.trophyScan ? `Scanning… ${store.trophyScan.visited || ''}` : 'Scan again' }}</button>
+              <button class="btn" data-focus @click="openOthers"><Icon name="mdiTrophyOutline" />Open trophies</button>
+            </div>
+            <Toggle :model-value="tcfg.sync !== false" label="Sync across devices" desc="Keeps trophies from every device together, stored as private notes on your RomM games. Uses your RomM login, no extra account. Only adds unlocks, never removes them." @update:model-value="(v) => setT({ sync: v })" />
+            <p v-if="tcfg.sync !== false" class="muted small" style="margin-top: -6px">{{ syncLine }}</p>
+            <div v-if="tcfg.sync !== false" class="row" style="align-items: flex-end; gap: 12px">
+              <TextField v-model="deviceName" label="This device's name" :placeholder="store.info.hostname || 'Steam Deck'" icon="mdiDevices" style="flex: 1" />
+              <button class="btn" data-focus @click="setT({ device: deviceName.trim() })"><Icon name="mdiCheck" :size="18" />Save name</button>
+            </div>
+            <Toggle :model-value="tcfg.popups !== false" label="Trophy pop-ups" desc="Shows a pop-up when a trophy unlocks while Cartridge is open" @update:model-value="(v) => setT({ popups: v })" />
+            <Toggle :model-value="ui.trophyOnGames !== false" label="Trophies on game pages" desc="PS3, PS4, Xbox 360 and PS Vita games show their trophies" @update:model-value="(v) => saveConfig({ ui: { trophyOnGames: v } })" />
           </template>
 
           <template v-else-if="sec === 'steam'">
@@ -208,17 +242,18 @@ import Logo from '../components/Logo.vue';
 import Toggle from '../components/Toggle.vue';
 import TextField from '../components/TextField.vue';
 import PIcon from '../components/PIcon.vue';
+import Grade from '../components/Grade.vue';
 
 const el = ref(null);
 const paneEl = ref(null);
 const sec = ref(store.settingsSection || 'conn');
 const sections = [
   { id: 'conn', label: 'Connection', icon: 'mdiServerNetwork' },
-  { id: 'sync', label: 'Library & sync', icon: 'mdiSync' },
+  { id: 'sync', label: 'Library & Sync', icon: 'mdiSync' },
   { id: 'storage', label: 'Storage', icon: 'mdiHarddisk' },
-  { id: 'folders', label: 'Console folders', icon: 'mdiFolderMultipleOutline' },
+  { id: 'folders', label: 'Console Folders', icon: 'mdiFolderMultipleOutline' },
   { id: 'dl', label: 'Downloads', icon: 'mdiTrayArrowDown' },
-  { id: 'ui', label: 'Look & feel', icon: 'mdiPaletteOutline' },
+  { id: 'ui', label: 'Look & Feel', icon: 'mdiPaletteOutline' },
   { id: 'ra', label: 'Achievements', icon: 'mdiTrophyOutline' },
   { id: 'steam', label: 'Steam', icon: 'mdiSteam' },
   { id: 'updates', label: 'Updates', icon: 'mdiUpdate' },
@@ -280,6 +315,32 @@ const sizes = [{ v: 'sm', l: 'Small' }, { v: 'md', l: 'Medium' }, { v: 'lg', l: 
 const bgs = [{ v: 'waves', l: 'XMB waves' }, { v: 'art', l: 'Game artwork' }];
 const gfx = [{ v: 'auto', l: 'Auto (GPU)' }, { v: 'software', l: 'Compatible' }];
 const pointers = [{ v: 'auto', l: 'Auto' }, { v: 'touch', l: 'Touch' }, { v: 'mouse', l: 'Mouse' }];
+const keyboards = [{ v: 'auto', l: 'Auto' }, { v: 'builtin', l: 'Built-in' }, { v: 'steam', l: 'Steam' }];
+// Emulator trophies (Settings → Achievements → Other sources)
+const trophySrc = ref([]);
+const tcfg = computed(() => store.config.trophies || {});
+const deviceName = ref(store.config.trophies?.device || '');
+const loadSrc = () => call('trophies:sources').then((r) => (trophySrc.value = r)).catch(() => {});
+watch(() => store.trophyVer, loadSrc);
+loadSrc();
+async function setT(patch) { await saveConfig({ trophies: patch }); if ('sync' in patch || 'device' in patch) { call('trophies:sync').catch(() => {}); if ('device' in patch) toast('Device name saved', 'ok', 2000); } }
+async function toggleSrc(s, v) { trophySrc.value = await call('trophies:toggle', { src: s.id, enabled: v }); store.config = await call('config:get'); }
+async function chooseSrc(s) {
+  const dir = await pickFolder({ title: `Folder with ${s.name} data`, subtitle: 'Pick the emulator folder (or its user or trophy folder). Hidden folders are shown.', start: store.info.home, hidden: true });
+  if (!dir) return;
+  try { trophySrc.value = await call('trophies:choose', { src: s.id, dir }); store.config = await call('config:get'); toast(`${s.name} trophies found`, 'ok', 2600, 'mdiCheck'); }
+  catch (e) { toast(e.message, 'error', 4500); }
+}
+async function removeDir(s, dir) { trophySrc.value = await call('trophies:removeDir', { src: s.id, dir }); store.config = await call('config:get'); }
+async function scanTrophies() { trophySrc.value = await call('trophies:scan').catch((e) => (toast(e.message, 'error'), trophySrc.value)); store.config = await call('config:get'); }
+function openOthers() { store.achTab = 'others'; tab('achievements'); }
+const syncLine = computed(() => {
+  const s = store.trophySync;
+  if (s.state === 'ok') return `Last synced ${ago(s.at)}.`;
+  if (s.state === 'error') return 'Sync problem: ' + s.error;
+  if (s.state === 'running') return 'Syncing now…';
+  return 'Syncs when Cartridge starts and after each new unlock.';
+});
 const every = [{ v: 0, l: 'Off' }, { v: 30, l: '30 min' }, { v: 60, l: '1 h' }, { v: 180, l: '3 h' }];
 const folderList = computed(() => (store.libVersion, showAll.value ? supported.value : store.lib?.platforms || []));
 
@@ -408,5 +469,16 @@ onMounted(async () => { space.value = await call('fs:space', store.config.romsRo
 .fadeup-enter-active, .fadeup-leave-active { transition: opacity 0.15s, transform 0.2s var(--ease); }
 .fadeup-enter-from { opacity: 0; transform: translateX(10px); }
 .fadeup-leave-to { opacity: 0; }
+.subh { display: flex; align-items: center; gap: 10px; font-family: var(--display); font-size: 19px; font-weight: 700; margin-top: 4px; }
+.ra-mk { height: 20px; }
+.srcs { display: flex; flex-direction: column; gap: 10px; }
+.src { padding: 12px 16px; display: flex; flex-direction: column; gap: 8px; }
+.src-top { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.src-path { display: flex; align-items: center; gap: 12px; font-size: 12.5px; min-width: 0; }
+.src-path .how { color: var(--muted); width: 110px; flex: none; }
+.src-path .mono { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+.chip.found { background: rgba(80, 200, 120, 0.18); color: #9be8b4; }
+.chip.missing { background: rgba(255, 255, 255, 0.08); color: var(--muted); }
+.chip.off { background: rgba(255, 90, 90, 0.14); color: #ffaaaa; }
 .logo-prog { flex: 1; display: flex; flex-direction: column; gap: 6px; max-width: 360px; }
 </style>

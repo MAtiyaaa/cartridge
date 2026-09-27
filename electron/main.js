@@ -40,10 +40,11 @@ const DEFAULT_CONFIG = {
   biosPath: '',
   paths: {},
   downloads: { concurrency: 2, esdeM3uFolders: true, flattenSingleFile: true },
-  ui: { gridSize: 'md', hideEmpty: true, sounds: true, bgStyle: 'waves', theme: 'purple', mediaBar: true, logos: true, pointer: 'auto', scale: 'auto' },
+  ui: { gridSize: 'md', hideEmpty: true, sounds: true, bgStyle: 'waves', theme: 'purple', mediaBar: true, logos: true, pointer: 'auto', scale: 'auto', keyboard: 'auto' },
   sync: { onLaunch: true, everyMinutes: 60 },
   sgdbKey: '', // optional SteamGridDB API key for game logos
   ra: { user: '', key: '' }, // RetroAchievements username + web API key
+  trophies: { sources: {}, sync: true, popups: true, device: '' }, // PS3/PS4/Xbox 360/Vita trophies from emulators
   graphics: 'auto', // auto (GPU, falls back on failure) | software
   configVersion: 2,
   configured: false,
@@ -411,6 +412,7 @@ function slimRom(r) {
     shot: (r.merged_screenshots || [])[0] || null,
     logo: logoPath(r),
     ra_id: r.ra_id || null,
+    has_notes: !!(r.has_notes || r.all_user_notes?.length || r.rom_user?.note_raw_markdown),
     summary: (r.summary || '').slice(0, 400),
     regions: r.regions || [], files: (r.files || []).map((f) => ({ file_name: f.file_name })),
     year: md.first_release_date || null, genres: (md.genres || []).slice(0, 3),
@@ -555,8 +557,16 @@ async function scanServer() {
 async function handleImage(request) {
   const u = new URL(request.url);
   const sl = u.searchParams.get('sys');
+  if (sl && u.searchParams.get('png')) {
+    try { return new Response(await fsp.readFile(path.join(__dirname, '../build/syslogos', path.basename(sl) + '.png')), { headers: { 'Content-Type': 'image/png' } }); } catch { return new Response('nf', { status: 404 }); }
+  }
   if (sl) {
     try { return new Response(await fsp.readFile(path.join(SYSLOGO_DIR, path.basename(sl) + '.svg')), { headers: { 'Content-Type': 'image/svg+xml' } }); } catch { return new Response('nf', { status: 404 }); }
+  }
+  const tr = u.searchParams.get('tr');
+  if (tr) {
+    const p = trophySvc.iconPath(tr);
+    try { return new Response(await fsp.readFile(p), { headers: { 'Content-Type': 'image/png', 'Cache-Control': 'max-age=86400' } }); } catch { return new Response('nf', { status: 404 }); }
   }
   const lf = u.searchParams.get('f');
   if (lf) {
@@ -839,6 +849,8 @@ async function sysLogo({ slug, fs_slug }) {
   const names = [...new Set([...(PLATFORM_MAP[slug] || []), ...(PLATFORM_MAP[fs_slug] || []), fs_slug, slug].filter(Boolean))].filter((n) => /^[a-z0-9_-]+$/i.test(n));
   const key = names[0];
   if (!key) return null;
+  // bundled logos (PS5: the wordmark without the PlayStation symbol)
+  for (const n of [slug, fs_slug]) if (n && fs.existsSync(path.join(__dirname, '../build/syslogos', n + '.png'))) return 'romimg://img/?sys=' + encodeURIComponent(n) + '&png=1';
   const file = path.join(SYSLOGO_DIR, key + '.svg'), miss = file + '.none';
   if (fs.existsSync(file)) return 'romimg://img/?sys=' + encodeURIComponent(key);
   try { if (Date.now() - fs.statSync(miss).mtimeMs < 7 * 864e5) return null; } catch {}
@@ -1169,8 +1181,14 @@ function createWindow() {
   win.webContents.setWindowOpenHandler(({ url }) => { shell.openExternal(url); return { action: 'deny' }; });
 }
 
+const trophySvc = require('./trophyService')({
+  USER_DATA, api, broadcast: (c, d) => broadcast(c, d), log, loadJson,
+  getConfig: () => config, saveConfig: () => saveConfig(), getLibrary: () => library,
+});
 const handlers = {
+  ...trophySvc.handlers,
   'config:get': () => config,
+  'clip:read': async () => String((await require('electron').clipboard.readText()) || '').trim().slice(0, 4000),
   'logo:get': (r) => logoFor(r),
   'ra:signin': async ({ user, key }) => {
     const p = await raApi('GetUserProfile', {}, { user: user.trim(), key: key.trim() });
@@ -1291,10 +1309,11 @@ const handlers = {
   'bios:download': ({ platformId, slug }) => downloadBios(platformId, slug),
   'bios:list': ({ platformId }) => api('/api/firmware', { query: { platform_id: platformId } }),
   'fs:detect': () => detectRoots(),
-  'fs:list': async (dir) => {
-    const d = expandHome(dir || os.homedir());
+  'fs:list': async (arg) => {
+    const o = typeof arg === 'object' && arg ? arg : { dir: arg };
+    const d = expandHome(o.dir || os.homedir());
     const entries = await fsp.readdir(d, { withFileTypes: true }).catch(() => []);
-    const dirs = entries.filter((e) => (e.isDirectory() || e.isSymbolicLink()) && !e.name.startsWith('.')).map((e) => e.name).sort((a, b) => a.localeCompare(b));
+    const dirs = entries.filter((e) => (e.isDirectory() || e.isSymbolicLink()) && (o.hidden ? !['.', '..', '.cache', '.Trash-1000'].includes(e.name) : !e.name.startsWith('.'))).map((e) => e.name).sort((a, b) => a.localeCompare(b));
     return { path: path.resolve(d), parent: path.dirname(path.resolve(d)), dirs };
   },
   'fs:mkdir': async (dir) => { await fsp.mkdir(dir, { recursive: true }); return true; },
@@ -1303,10 +1322,12 @@ const handlers = {
     while (d && !isDir(d)) { const up = path.dirname(d); if (up === d) break; d = up; }
     try { const s = await fsp.statfs(d || '/'); return { free: s.bavail * s.bsize, total: s.blocks * s.bsize }; } catch { return null; }
   },
-  'fs:places': () => {
+  'fs:places': (o) => {
     const u = os.userInfo().username;
+    const extra = o?.hidden ? [{ label: 'Flatpak apps', path: path.join(os.homedir(), '.var', 'app') }, { label: '.config', path: path.join(os.homedir(), '.config') }, { label: '.local/share', path: path.join(os.homedir(), '.local', 'share') }] : [];
     return [
       { label: 'Home', path: os.homedir() },
+      ...extra,
       { label: 'External drives', path: isDir(`/run/media/${u}`) ? `/run/media/${u}` : '/run/media' },
       { label: 'Emulation (home)', path: path.join(os.homedir(), 'Emulation') },
       { label: 'Root', path: '/' },
@@ -1329,7 +1350,7 @@ const handlers = {
   'update:get': () => ({ ...updateState, current: app.getVersion(), supported: !!autoUpdater }),
   'update:check': async () => { if (!autoUpdater) throw new Error('Updates work in the AppImage build only'); await autoUpdater.checkForUpdates(); return updateState; },
   'update:install': () => { if (updateState.state === 'ready') autoUpdater.quitAndInstall(true, true); },
-  'app:info': () => ({ version: app.getVersion(), gamescope: isGamescope(), userData: USER_DATA, gpu: useGpu }),
+  'app:info': () => ({ version: app.getVersion(), gamescope: isGamescope(), userData: USER_DATA, gpu: useGpu, home: os.homedir(), hostname: os.hostname() }),
   'app:scale': () => { const [w, h] = win.getContentSize(); return { auto: autoZoom(), current: currentZoom(), w, h, display }; },
   'app:quit': () => app.quit(),
   'app:screenshot': async () => {
@@ -1359,6 +1380,7 @@ app.whenReady().then(() => {
   if (library) computeInstalled();
   win.webContents.once('did-finish-load', () => {
     if (config.configured && (config.sync.onLaunch || !library)) syncLibrary().catch(() => {});
+    setTimeout(() => trophySvc.start().catch((e) => log('trophies failed', e.message)), 1500);
   });
   setInterval(() => {
     const every = (config.sync.everyMinutes || 0) * 60e3;

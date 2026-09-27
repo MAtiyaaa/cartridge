@@ -1,10 +1,13 @@
 <template>
-  <button class="toggle" :class="{ on: modelValue }" data-focus @click="$emit('update:modelValue', !modelValue)">
-    <div><div>{{ label }}</div><div v-if="desc" class="desc">{{ desc }}</div></div>
+  <button class="toggle" :class="{ on: modelValue, compact }" data-focus :title="compact ? (modelValue ? 'On' : 'Off') : undefined" @click="$emit('update:modelValue', !modelValue)">
+    <div v-if="!compact"><div>{{ label }}</div><div v-if="desc" class="desc">{{ desc }}</div></div>
     <span class="sw" />
   </button>
 </template>
 <script setup>
-defineProps({ modelValue: Boolean, label: String, desc: String });
+defineProps({ modelValue: Boolean, label: String, desc: String, compact: Boolean });
 defineEmits(['update:modelValue']);
 </script>
+<style>
+.toggle.compact { width: auto; padding: 6px 8px; background: none; flex: none; }
+</style>

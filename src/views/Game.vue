@@ -2,10 +2,14 @@
   <div class="view game" data-scroll ref="el">
     <div v-if="!base" class="center"><div class="spinner" /></div>
     <template v-else>
+      <section class="g-banner">
+        <img v-if="banner.src" class="g-banner-img" :class="{ blur: banner.blur }" :src="banner.src" @error="bannerFail = true" />
+        <div class="g-banner-shade" />
+        <div class="g-banner-logo"><GameLogo :logo="store.config.ui.logos !== false ? logoOf(base) : null" :name="base.name" cls="g-title" :area="40000" :max-w="560" :max-h="150" /></div>
+      </section>
       <section class="g-hero">
         <div class="g-info">
           <div class="eyebrow row" style="gap: 8px"><PIcon :p="{ slug: base.platform_slug, fs_slug: base.platform_fs_slug }" :size="18" />{{ base.platform_display_name }}</div>
-          <GameLogo :logo="store.config.ui.logos !== false ? logoOf(base) : null" :name="base.name" cls="g-title" :area="44000" :max-w="520" :max-h="170" />
           <div class="g-meta">
             <span v-if="isNew(base)" class="chip new">NEW</span>
             <span v-if="yr">{{ yr }}</span>
@@ -73,6 +77,24 @@
             </div>
             <div v-if="raFocus" class="ra-focus"><b>{{ raFocus.title }}</b> · {{ raFocus.points }} pts<template v-if="!raFocus.earned && !raFocus.earnedHc"> · Locked</template><div class="muted">{{ raFocus.desc }}</div></div>
           </template>
+          <template v-if="tro">
+            <div class="shelf-title" style="margin-top: 22px"><Grade :g="tro.kind === 'gamerscore' ? null : 'G'" :size="20" />{{ tro.kind === 'gamerscore' ? 'Achievements' : 'Trophies' }}<span class="count">{{ tro.light.earned }} / {{ tro.light.total }}</span></div>
+            <div class="ra-sum">
+              <div class="bar ra-sum-bar tro-bar"><i :style="{ width: (tro.light.total ? Math.round((tro.light.earned / tro.light.total) * 100) : 0) + '%' }" /></div>
+              <span class="muted small tro-grades">
+                <template v-if="tro.kind === 'gamerscore'">{{ tro.light.score }} / {{ tro.light.possible }} G</template>
+                <template v-else><template v-for="k in ['P', 'G', 'S', 'B']" :key="k"><span v-if="tro.light.grades[k]"><Grade :g="k" :size="14" />{{ tro.light.grades[k] }}</span></template>{{ tro.light.total ? Math.round((tro.light.earned / tro.light.total) * 100) : 0 }}% complete</template>
+                <template v-if="tro.light.devices.length > 1"> · {{ tro.light.devices.length }} devices</template>
+              </span>
+              <button class="btn small" data-focus @click="go('trophy-game', { tkey: tro.key })"><Icon name="mdiTrophyVariantOutline" :size="18" />See all</button>
+            </div>
+            <div class="shelf ra-badges" data-hscroll>
+              <button v-for="t in troBadges" :key="t.id" class="ra-b" :class="{ locked: !t.unlocked }" data-focus @click="go('trophy-game', { tkey: tro.key })" @focus="troFocus = t">
+                <img v-if="t.icon && (t.unlocked || !t.hidden)" :src="t.icon" loading="lazy" /><span v-else class="tro-ph"><Grade :g="t.grade" :size="30" /></span>
+              </button>
+            </div>
+            <div v-if="troFocus" class="ra-focus"><Grade :g="troFocus.grade" :size="14" /> <b>{{ troFocus.hidden && !troFocus.unlocked ? 'Hidden trophy' : troFocus.name }}</b><template v-if="troFocus.points"> · {{ troFocus.points }} G</template><template v-if="!troFocus.unlocked"> · Locked</template><template v-else-if="troFocus.time"> · {{ new Date(troFocus.time).toLocaleDateString() }}</template><div class="muted">{{ troFocus.hidden && !troFocus.unlocked ? '' : troFocus.desc }}</div></div>
+          </template>
           <template v-if="shots.length">
             <div class="shelf-title" style="margin-top: 22px"><Icon name="mdiImageMultipleOutline" :size="20" />Screenshots</div>
             <div class="shelf shots" data-hscroll>
@@ -108,6 +130,7 @@ import Icon from '../components/Icon.vue';
 import Btn from '../components/Btn.vue';
 import PIcon from '../components/PIcon.vue';
 import GameLogo from '../components/GameLogo.vue';
+import Grade from '../components/Grade.vue';
 
 const props = defineProps({ romId: Number });
 const el = ref(null);
@@ -198,6 +221,39 @@ async function loadRa() {
     if (gameId) ra.value = await call('ra:game', { gameId });
   } catch {}
 }
+// Emulator trophies (PS3 / PS4 / Xbox 360 / Vita), read on this device and synced through RomM
+const TROPHY_SLUGS = ['ps3', 'ps4', 'xbox360', 'psvita'];
+const trophySystem = computed(() => TROPHY_SLUGS.includes(base.value?.platform_slug) || TROPHY_SLUGS.includes(base.value?.platform_fs_slug));
+const tro = ref(null);
+const troFocus = ref(null);
+const troBadges = computed(() => { const l = tro.value?.trophies || []; return [...l.filter((t) => t.unlocked).sort((a, b) => (b.time || 0) - (a.time || 0)), ...l.filter((t) => !t.unlocked)]; });
+async function loadTrophies() {
+  if (!trophySystem.value || store.config.ui.trophyOnGames === false) { tro.value = null; return; }
+  try { tro.value = await call('trophies:forRom', { romId: Number(props.romId) }); } catch { tro.value = null; }
+}
+watch(() => store.trophyVer, loadTrophies);
+async function linkTrophies() {
+  const list = await call('trophies:linkable', { slug: base.value.platform_slug, fs_slug: base.value.platform_fs_slug }).catch(() => []);
+  if (!list.length) { toast('No trophy data for this console yet. Check Settings → Achievements.', 'info', 4500, 'mdiTrophyOutline'); return; }
+  const opts = list.map((g) => ({ label: g.title, sub: `${g.earned}/${g.total} · ${g.short}${g.romId && g.romId !== Number(props.romId) ? ' · linked to another game' : ''}`, value: g.key, icon: 'mdiTrophyOutline', selected: tro.value?.key === g.key }));
+  if (tro.value) opts.push({ label: 'Unlink', sub: 'Show no trophies on this game', value: '__none', icon: 'mdiLinkOff' });
+  const v = await choose({ title: 'Link trophies to ' + base.value.name, options: opts });
+  if (!v) return;
+  if (v === '__none') await call('trophies:link', { key: tro.value.key, romId: null });
+  else await call('trophies:link', { key: v, romId: Number(props.romId) });
+  await loadTrophies();
+  toast(v === '__none' ? 'Trophies unlinked' : 'Trophies linked', 'ok', 2200, 'mdiLink');
+}
+// Header banner: your chosen background, else the first screenshot, else the cover (blurred)
+const bannerFail = ref(false);
+const banner = computed(() => {
+  if (!base.value) return {};
+  const h = artFor(props.romId).hero;
+  if (h) return { src: img(h) };
+  const shot = !bannerFail.value && (detail.value?.merged_screenshots?.[0] || cached.value?.shot);
+  if (shot) return { src: img(shot) };
+  return { src: cover(base.value, true), blur: true };
+});
 // More options: custom artwork from SteamGridDB, plus handy extras
 async function more() {
   const has = artFor(props.romId);
@@ -211,11 +267,13 @@ async function more() {
     if (marked.value) opts.push({ label: 'Unmark as installed', sub: 'Only removes the mark, no files are touched', value: 'unmark', icon: 'mdiCheckboxBlankOffOutline' });
     else if (!installedPath.value) opts.push({ label: 'Mark as installed', sub: 'For games you extracted yourself', value: 'mark', icon: 'mdiCheckboxMarkedCircleOutline' });
   }
+  if (trophySystem.value) opts.push({ label: tro.value ? 'Change linked trophies' : 'Link to trophies', sub: 'Pick which emulator trophy set belongs to this game', value: 'trophies', icon: 'mdiLinkVariant' });
   opts.push({ label: 'Refresh details from RomM', value: 'refresh', icon: 'mdiRefresh' });
   if (installedPath.value) opts.push({ label: 'Show file location', value: 'path', icon: 'mdiFolderOutline' });
   const v = await choose({ title: base.value.name, options: opts });
   if (!v) return;
   if (v === 'mark' || v === 'unmark') { await setMark(v === 'mark'); return; }
+  if (v === 'trophies') { await linkTrophies(); return; }
   if (v === 'path') { toast(installedPath.value, 'info', 5000, 'mdiFolder'); return; }
   if (v === 'refresh') { try { detail.value = await call('api:get', { path: `/api/roms/${props.romId}` }); resetLogos(props.romId); toast('Details refreshed', 'ok', 2000, 'mdiRefresh'); } catch (e) { toast(e.message, 'error'); } return; }
   if (v === 'reset') { store.art = { ...store.art }; delete store.art[props.romId]; await call('art:reset', { id: props.romId }); resetLogos(props.romId); toast('Artwork reset', 'ok', 2000, 'mdiRestore'); return; }
@@ -242,6 +300,7 @@ onMounted(async () => {
     if (!hero && detail.value.merged_screenshots?.[0]) setBg({ src: img(detail.value.merged_screenshots[0]) });
   } catch (e) { if (!cached.value) toast(e.message, 'error'); }
   loadRa();
+  loadTrophies();
   const p = platformById(base.value?.platform_id);
   if (p) call('fs:space', p.target?.path).then((s) => (space.value = s));
   await nextTick();
@@ -251,7 +310,12 @@ onMounted(async () => {
 
 <style scoped>
 .game { padding: 0 0 50px; }
-.g-hero { display: flex; align-items: flex-end; justify-content: space-between; gap: 40px; min-height: 64%; padding: 30px 56px 30px; }
+.g-banner { position: relative; margin: 18px 56px 0; height: clamp(190px, 34vh, 360px); border-radius: 16px; overflow: hidden; background: #141824; box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.07); }
+.g-banner-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.g-banner-img.blur { filter: blur(24px) saturate(1.3) brightness(0.8); transform: scale(1.15); }
+.g-banner-shade { position: absolute; inset: 0; background: linear-gradient(90deg, rgba(8, 8, 16, 0.78) 0%, rgba(8, 8, 16, 0.35) 45%, transparent 75%), linear-gradient(0deg, rgba(8, 8, 16, 0.7), transparent 55%); }
+.g-banner-logo { position: absolute; left: 32px; bottom: 26px; right: 330px; display: flex; align-items: flex-end; }
+.g-hero { position: relative; display: flex; align-items: flex-start; justify-content: space-between; gap: 40px; padding: 22px 56px 24px; }
 .g-info { display: flex; flex-direction: column; gap: 16px; max-width: 760px; min-width: 0; }
 .g-title { font-size: clamp(38px, 5vw, 68px); font-weight: 800; line-height: 1; letter-spacing: -0.025em; text-shadow: 0 8px 40px rgba(0, 0, 0, 0.55); }
 .g-meta { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; font-size: 15px; color: #d4d8e2; }
@@ -259,7 +323,7 @@ onMounted(async () => {
 .dlbox { width: 380px; padding: 12px 16px; display: flex; flex-direction: column; gap: 8px; }
 .dest { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); max-width: 700px; white-space: nowrap; min-width: 0; }
 .dest .mono { min-width: 0; }
-.g-cover { flex: none; width: 250px; aspect-ratio: 2/3; border-radius: 10px; overflow: hidden; box-shadow: 0 30px 80px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.08); transform: perspective(1000px) rotateY(-8deg); background: #161a25; }
+.g-cover { flex: none; width: 250px; margin-top: -190px; margin-right: 26px; z-index: 2; aspect-ratio: 2/3; border-radius: 10px; overflow: hidden; box-shadow: 0 30px 80px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.08); transform: perspective(1000px) rotateY(-8deg); background: #161a25; }
 .g-cover img { width: 100%; height: 100%; object-fit: cover; }
 .noart { height: 100%; display: grid; place-items: center; padding: 20px; text-align: center; font-family: var(--display); font-size: 20px; }
 .g-body { display: grid; grid-template-columns: minmax(0, 1fr) 250px; gap: 40px; padding: 16px 56px; background: linear-gradient(180deg, transparent, rgba(22, 8, 46, 0.45) 140px); }
@@ -277,7 +341,7 @@ onMounted(async () => {
 .viewer { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.94); z-index: 40; display: grid; place-items: center; animation: fade 0.2s; }
 .viewer img { max-width: 94vw; max-height: 84vh; border-radius: 7px; box-shadow: 0 30px 80px rgba(0, 0, 0, 0.7); }
 .vhint { position: absolute; bottom: 26px; display: flex; gap: 8px; align-items: center; color: var(--muted); font-size: 13px; }
-@media (max-width: 1100px) { .g-body { grid-template-columns: minmax(0, 1fr) 200px; gap: 28px; } .g-cover, .facts { width: 200px; } }
+@media (max-width: 1100px) { .g-body { grid-template-columns: minmax(0, 1fr) 200px; gap: 28px; } .g-cover, .facts { width: 200px; } .g-cover { margin-top: -150px; } .g-banner-logo { right: 270px; } }
 .ra-sum { display: flex; align-items: center; gap: 14px; margin: -2px 0 4px; }
 .ra-sum-bar { flex: 0 1 320px; height: 7px; }
 .ra-sum-bar i { background: linear-gradient(90deg, #f5c542, #ffdf80); }
@@ -287,5 +351,9 @@ onMounted(async () => {
 .ra-b img { width: 100%; height: 100%; display: block; }
 .ra-b.locked { opacity: 0.55; }
 .ra-b:focus { transform: scale(1.12); }
+.tro-bar i { background: linear-gradient(90deg, #7fa8ff, #cfe0ff); }
+.tro-grades { display: inline-flex; gap: 10px; align-items: center; }
+.tro-grades span { display: inline-flex; gap: 3px; align-items: center; }
+.tro-ph { width: 100%; height: 100%; display: grid; place-items: center; background: rgba(0, 0, 0, 0.35); }
 .ra-focus { font-size: 13px; margin: 2px 0 6px; max-width: 760px; }
 </style>

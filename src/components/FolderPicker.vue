@@ -31,14 +31,14 @@ import { closeModal, call, askText, store, toast } from '../store.js';
 import Icon from './Icon.vue';
 import Btn from './Btn.vue';
 
-const props = defineProps({ title: { type: String, default: 'Choose a folder' }, subtitle: String, start: String });
+const props = defineProps({ title: { type: String, default: 'Choose a folder' }, subtitle: String, start: String, hidden: Boolean });
 const el = ref(null);
 const cur = reactive({ path: '', parent: '', dirs: [] });
 const places = ref([]);
 const join = (a, b) => (a.endsWith('/') ? a + b : `${a}/${b}`);
 
 async function open(p) {
-  const r = await call('fs:list', p);
+  const r = await call('fs:list', props.hidden ? { dir: p, hidden: true } : p);
   Object.assign(cur, r);
   await nextTick();
   el.value?.querySelector('.list')?.scrollTo({ top: 0 });
@@ -63,7 +63,7 @@ onMounted(async () => {
     start: () => closeModal(cur.path),
     lb() {}, rb() {}, y() {}, select() {}, lt() {}, rt() {},
   });
-  places.value = await call('fs:places');
+  places.value = await call('fs:places', { hidden: props.hidden });
   await open(props.start || places.value[1]?.path || places.value[0]?.path);
 });
 onBeforeUnmount(() => layer.pop());

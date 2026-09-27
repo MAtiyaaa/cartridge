@@ -70,8 +70,8 @@ Settings → Updates checks GitHub Releases and swaps in the new version on rest
 <tr>
 <td valign="top">
 
-**🏆 RetroAchievements**<br>
-Sign in to see your latest unlocks, recently played games and full achievement lists, plus progress right on each supported game's page.
+**🏆 Achievements and trophies**<br>
+RetroAchievements for retro consoles, plus trophies from RPCS3, shadPS4, Xenia and Vita3K wherever they are installed. Trophies sync between your devices through private notes on your RomM server, and pop up as you unlock them.
 
 </td>
 <td valign="top">
@@ -178,10 +178,10 @@ npm run dist    # build release/Cartridge-x86_64.AppImage
 
 Bumping `version` in `package.json` on `main` builds the AppImage on GitHub Actions and publishes it as a release. Installed copies pick it up automatically.
 
-Settings and the library cache live in `~/.config/Cartridge/`.
-
 <br>
 
-Console logos come from the open-source [Art Book Next](https://github.com/anthonycaccese/art-book-next-es-de) theme for ES-DE and are downloaded on first use. All logos and trademarks belong to their owners.
+Settings and the library cache live in `~/.config/Cartridge/`. The full history of changes is in [CHANGELOG.md](CHANGELOG.md).
+
+Console logos come from the open-source [Art Book Next](https://github.com/anthonycaccese/art-book-next-es-de) theme for ES-DE and are downloaded on first use. The RetroAchievements logo belongs to RetroAchievements. Trophy data is read from RPCS3, shadPS4, Xenia and Vita3K using the file formats in their open-source code. All logos and trademarks belong to their owners.
 
 <div align="center"><sub>Cartridge is an unofficial client and isn't affiliated with the RomM project.</sub></div>
