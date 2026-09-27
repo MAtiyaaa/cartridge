@@ -6,7 +6,7 @@
     </div>
     <div class="cap">
       <Icon v-if="c.favorite" name="mdiStar" :size="15" style="color: var(--gold)" />
-      <Icon v-else-if="c.smart" name="mdiAutoFix" :size="15" style="color: #cfc4ff" />
+      <Icon v-else-if="c.smart" name="mdiAutoFix" :size="15" style="color: var(--primary-t)" />
       <span class="nm">{{ c.name }}</span><span class="muted">{{ c.rom_ids.length }}</span>
     </div>
   </button>
@@ -30,7 +30,7 @@ const arts = computed(() => {
 .mosaic { height: 150px; border-radius: 10px; overflow: hidden; display: grid; gap: 2px; background: #151924; box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45); transition: transform 0.22s var(--ease), box-shadow 0.22s; }
 .mosaic.n1 { grid-template-columns: 1fr; } .mosaic.n2 { grid-template-columns: 1fr 1fr; } .mosaic.n3 { grid-template-columns: 1fr 1fr 1fr; } .mosaic.n4 { grid-template-columns: repeat(4, 1fr); }
 .mosaic img { width: 100%; height: 100%; object-fit: cover; }
-.mosaic .ph { display: grid; place-items: center; color: #cfc4ff; background: linear-gradient(145deg, #2a2346, #12141d); }
+.mosaic .ph { display: grid; place-items: center; color: var(--primary-t); background: linear-gradient(145deg, #2a2346, #12141d); }
 .coll:focus .mosaic { transform: translateY(-5px) scale(1.04); box-shadow: var(--ring); }
 .cap { display: flex; align-items: center; gap: 8px; font-size: 14px; padding: 0 4px; }
 .cap .nm { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

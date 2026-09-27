@@ -176,9 +176,9 @@ onMounted(async () => { await nextTick(); focusFirst(el.value); });
 </script>
 
 <style scoped>
-.setup { position: relative; z-index: 1; height: 100%; overflow-y: auto; padding: 40px 20px 60px; display: flex; flex-direction: column; align-items: center; gap: 18px; background: radial-gradient(1200px 600px at 50% -10%, rgba(139, 116, 232, 0.22), transparent 60%); }
+.setup { position: relative; z-index: 1; height: 100%; overflow-y: auto; padding: 40px 20px 60px; display: flex; flex-direction: column; align-items: center; gap: 18px; background: radial-gradient(1200px 600px at 50% -10%, rgba(var(--primary-rgb), 0.22), transparent 60%); }
 .hero { text-align: center; display: flex; flex-direction: column; align-items: center; gap: 8px; }
-.hero .logo { width: 64px; height: 64px; border-radius: 12px; background: linear-gradient(135deg, var(--primary-l), var(--primary-d)); display: grid; place-items: center; box-shadow: 0 10px 40px rgba(139, 116, 232, 0.4); }
+.hero .logo { width: 64px; height: 64px; border-radius: 12px; background: linear-gradient(135deg, var(--primary-l), var(--primary-d)); display: grid; place-items: center; box-shadow: 0 10px 40px rgba(var(--primary-rgb), 0.4); }
 .hero h1 { font-size: 40px; font-weight: 800; letter-spacing: -0.02em; }
 .hero p { margin: 0; }
 .steps { display: flex; gap: 20px; color: var(--dim); font-size: 13px; }

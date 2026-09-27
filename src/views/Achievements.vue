@@ -32,6 +32,6 @@ function set(t) { store.achTab = t; }
 .ach-tab { display: inline-flex; align-items: center; gap: 10px; height: 44px; padding: 0 18px; border-radius: 999px; background: rgba(255, 255, 255, 0.06); border: 1px solid var(--line); color: var(--muted); font-family: var(--display); font-weight: 600; font-size: 15px; }
 .ach-tab.on { background: rgba(255, 255, 255, 0.14); color: var(--text); border-color: rgba(255, 255, 255, 0.28); }
 .ra-mark { height: 20px; width: auto; }
-.ach-sub { font-family: Roboto, sans-serif; font-weight: 400; font-size: 12px; color: var(--muted); }
+.ach-sub { font-family: var(--body); font-weight: 400; font-size: 12px; color: var(--muted); }
 @media (max-width: 1100px) { .ach-sub { display: none; } }
 </style>

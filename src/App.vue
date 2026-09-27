@@ -24,7 +24,7 @@
       <div class="sys">
         <div v-if="syncBusy" class="item sync-pill"><Icon name="mdiSync" :size="16" class="spin" />{{ syncLabel }}</div>
         <div v-if="activeDl.length" class="item">
-          <svg width="22" height="22" viewBox="0 0 36 36" class="ring"><circle cx="18" cy="18" r="15" fill="none" stroke="rgba(255,255,255,.12)" stroke-width="4" /><circle cx="18" cy="18" r="15" fill="none" stroke="url(#rg)" stroke-width="4" stroke-linecap="round" :stroke-dasharray="`${dlPct * 0.943} 100`" transform="rotate(-90 18 18)" /><defs><linearGradient id="rg"><stop offset="0" stop-color="#a18fff" /><stop offset="1" stop-color="#e1a38d" /></linearGradient></defs></svg>
+          <svg width="22" height="22" viewBox="0 0 36 36" class="ring"><circle cx="18" cy="18" r="15" fill="none" stroke="rgba(255,255,255,.12)" stroke-width="4" /><circle cx="18" cy="18" r="15" fill="none" stroke="url(#rg)" stroke-width="4" stroke-linecap="round" :stroke-dasharray="`${dlPct * 0.943} 100`" transform="rotate(-90 18 18)" /><defs><linearGradient id="rg"><stop offset="0" style="stop-color: var(--primary-l)" /><stop offset="1" style="stop-color: var(--peach)" /></linearGradient></defs></svg>
           {{ dlPct }}%
         </div>
         <div class="item" :title="store.connection.base"><span class="dot" :class="store.connection.route === 'local' ? 'ok' : store.connection.base ? 'remote' : 'bad'" />{{ store.connection.route === 'local' ? 'LAN' : store.connection.base ? 'Tunnel' : 'Offline' }}</div>
@@ -46,6 +46,7 @@
   <TextPrompt v-else-if="store.modal?.type === 'keyboard'" v-bind="store.modal.props" />
   <FolderPicker v-if="store.modal?.type === 'folder'" v-bind="store.modal.props" />
   <Menu v-if="store.modal?.type === 'menu'" v-bind="store.modal.props" />
+  <ColorPicker v-if="store.modal?.type === 'color'" v-bind="store.modal.props" />
   <ArtPicker v-if="store.modal?.type === 'art'" :key="store.modal.props.query || ''" v-bind="store.modal.props" />
 
   <div class="pops">
@@ -69,8 +70,8 @@
 import { computed, onMounted, onBeforeUnmount, ref, watch, nextTick } from 'vue';
 import { store, loadConfig, loadLibrary, loadArt, back, tab, go, call, toast, builtinKb, askText, GRADE } from './store.js';
 import { pushLayer, focusFirst } from './nav.js';
-import { setSoundEnabled, sfx } from './sfx.js';
-import { applyTheme } from './themes.js';
+import { setSoundEnabled, setSoundStyle, sfx } from './sfx.js';
+import { applyTheme, CARD_SIZES } from './themes.js';
 import { setPointerPref } from './nav.js';
 import Icon from './components/Icon.vue';
 import Btn from './components/Btn.vue';
@@ -83,6 +84,7 @@ import Grade from './components/Grade.vue';
 import FolderPicker from './components/FolderPicker.vue';
 import Menu from './components/Menu.vue';
 import ArtPicker from './components/ArtPicker.vue';
+import ColorPicker from './components/ColorPicker.vue';
 import Setup from './views/Setup.vue';
 import Home from './views/Home.vue';
 import Gallery from './views/Gallery.vue';
@@ -131,7 +133,7 @@ function toResults() {
   if (first) first.focus(); else searchEl.value?.blur();
 }
 const viewKey = computed(() => store.route.name + JSON.stringify(store.route.params));
-const cardW = computed(() => ({ sm: '128px', md: '152px', lg: '184px' }[store.config.ui.gridSize] || '152px'));
+const cardW = computed(() => (CARD_SIZES[store.config.ui.gridSize] || CARD_SIZES.md).w);
 const activeTab = computed(() => {
   const n = store.route.name;
   if (tabs.find((t) => t.name === n)) return n;
@@ -180,7 +182,8 @@ onMounted(async () => {
   }).catch(() => {});
   await loadConfig();
   setSoundEnabled(store.config.ui.sounds !== false);
-  applyTheme(store.config.ui.theme);
+  setSoundStyle(store.config.ui.soundPack, store.config.ui.volume);
+  applyTheme(store.config.ui);
   setPointerPref(store.config.ui.pointer);
   await loadLibrary();
   loadArt();
@@ -201,7 +204,7 @@ onMounted(async () => {
 });
 onBeforeUnmount(() => clearInterval(clockT));
 
-watch(() => store.config?.ui?.theme, (t) => applyTheme(t));
+watch(() => store.config?.ui && JSON.stringify(store.config.ui), () => { applyTheme(store.config.ui); setSoundStyle(store.config.ui.soundPack, store.config.ui.volume); });
 
 // sync result toasts
 watch(() => store.sync, (s) => {
@@ -253,7 +256,7 @@ watch(viewKey, async () => {
 .top-search .clear { background: none; border: 0; color: var(--muted); padding: 4px; display: grid; place-items: center; }
 .backbtn { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; background: rgba(255, 255, 255, 0.08); margin-right: -6px; }
 .backbtn:active { background: rgba(255, 255, 255, 0.2); }
-.tab-badge { position: absolute; top: 2px; right: 6px; min-width: 16px; height: 16px; border-radius: 8px; background: var(--peach); color: #1a1022; font-size: 10px; font-weight: 700; display: grid; place-items: center; padding: 0 4px; }
+.tab-badge { position: absolute; top: 2px; right: 6px; min-width: 16px; height: 16px; border-radius: 8px; background: var(--peach); color: var(--on-primary); font-size: 10px; font-weight: 700; display: grid; place-items: center; padding: 0 4px; }
 .pops { position: fixed; top: 76px; right: 24px; z-index: 80; display: flex; flex-direction: column; gap: 10px; pointer-events: none; }
 .pop { display: flex; gap: 14px; align-items: center; width: 380px; padding: 12px 16px 12px 12px; border-radius: 14px; background: rgba(18, 20, 32, 0.92); box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.12); }
 .pop-icon { width: 60px; height: 60px; border-radius: 10px; overflow: hidden; flex: none; display: grid; place-items: center; background: rgba(0, 0, 0, 0.35); }
@@ -265,5 +268,5 @@ watch(viewKey, async () => {
 .pop-enter-active, .pop-leave-active { transition: opacity 0.3s, transform 0.35s var(--ease); }
 .pop-enter-from { opacity: 0; transform: translateX(40px); }
 .pop-leave-to { opacity: 0; transform: translateY(-12px); }
-.sync-pill { padding: 5px 12px; border-radius: 999px; background: rgba(139, 116, 232, 0.18); color: #cfc4ff; }
+.sync-pill { padding: 5px 12px; border-radius: 999px; background: rgba(var(--primary-rgb), 0.18); color: var(--primary-t); }
 </style>

@@ -86,15 +86,40 @@
 
           <template v-else-if="sec === 'ui'">
             <h1>Look &amp; Feel</h1>
-            <div class="row"><span class="lbl">Color</span>
-              <div class="swatches">
-                <button v-for="(t, k) in THEMES" :key="k" class="swatch" data-focus :class="{ on: (ui.theme || 'purple') === k }" :style="{ background: `linear-gradient(135deg, ${t.grad[0]}, ${t.grad[2]} 60%, ${t.grad[4]})` }" :title="t.label" @click="saveConfig({ ui: { theme: k } })"><span>{{ t.label }}</span></button>
-              </div>
+
+            <div class="subh"><Icon name="mdiPaletteOutline" :size="20" />Colour</div>
+            <div class="swatches">
+              <button v-for="(t, k) in THEMES" :key="k" class="swatch" data-focus :class="{ on: (ui.theme || 'purple') === k }" :style="{ background: `linear-gradient(135deg, ${t.grad[0]}, ${t.grad[2]} 60%, ${t.grad[4]})` }" :title="t.label" @click="saveConfig({ ui: { theme: k } })"><i :style="{ background: t.accent[0] }" /><span>{{ t.label }}</span></button>
+              <button class="swatch custom" data-focus :class="{ on: ui.theme === 'custom' }" :style="ui.customColor ? { background: `linear-gradient(135deg, ${customT.grad[0]}, ${customT.grad[2]} 60%, ${customT.grad[4]})` } : {}" @click="pickColor"><Icon name="mdiEyedropperVariant" :size="18" /><span>Custom</span></button>
+            </div>
+            <div class="row"><span class="lbl">Panels</span><div class="seg"><button v-for="(v, k) in SURFACES" :key="k" data-focus :class="{ on: (ui.surface || 'glass') === k }" @click="saveConfig({ ui: { surface: k } })">{{ v.label }}</button></div></div>
+            <div class="row"><span class="lbl">Text</span><div class="seg"><button v-for="(v, k) in TEXTS" :key="k" data-focus :class="{ on: (ui.text || 'normal') === k }" @click="saveConfig({ ui: { text: k } })">{{ v.label }}</button></div></div>
+
+            <div class="subh"><Icon name="mdiWallpaper" :size="20" />Background</div>
+            <div class="bgs">
+              <button v-for="b in BACKGROUNDS" :key="b.v" class="bgtile" data-focus :class="['bgp-' + b.v, { on: (ui.bgStyle || 'waves') === b.v }]" @click="setBg(b.v)">
+                <span class="bgp"><i /><i /><i /></span>
+                <b>{{ b.l }}</b><small>{{ b.sub }}</small>
+              </button>
+            </div>
+            <div v-if="ui.bgStyle === 'wallpaper'" class="row wrap" style="gap: 12px">
+              <button class="btn" data-focus @click="chooseWallpaper"><Icon name="mdiImageSearchOutline" :size="18" />{{ ui.wallpaper ? 'Change image' : 'Choose image' }}</button>
+              <div class="seg"><button v-for="d in dims" :key="d.v" data-focus :class="{ on: (ui.wallDim || 'medium') === d.v }" @click="saveConfig({ ui: { wallDim: d.v } })">{{ d.l }}</button></div>
+              <button v-if="ui.wallpaper" class="btn" data-focus @click="clearWallpaper"><Icon name="mdiClose" :size="18" />Remove</button>
+            </div>
+
+            <div class="subh"><Icon name="mdiFormatFont" :size="20" />Text &amp; Size</div>
+            <div class="fonts">
+              <button v-for="(f, k) in FONTS" :key="k" class="fonttile" data-focus :class="{ on: (ui.font || 'outfit') === k }" :style="{ fontFamily: f.display }" @click="saveConfig({ ui: { font: k } })"><b>Aa</b><span>{{ f.label }}</span></button>
             </div>
             <div class="row"><span class="lbl">Interface size</span><div class="seg"><button v-for="z in scales" :key="z.v" data-focus :class="{ on: String(ui.scale || 'auto') === z.v }" @click="setScale(z.v)">{{ z.l }}</button></div></div>
             <p class="muted small" style="margin-top: -6px">{{ scaleNote }}</p>
-            <div class="row"><span class="lbl">Box art size</span><div class="seg"><button v-for="s in sizes" :key="s.v" data-focus :class="{ on: ui.gridSize === s.v }" @click="saveConfig({ ui: { gridSize: s.v } })">{{ s.l }}</button></div></div>
-            <div class="row"><span class="lbl">Background</span><div class="seg"><button v-for="b in bgs" :key="b.v" data-focus :class="{ on: (ui.bgStyle || 'waves') === b.v }" @click="saveConfig({ ui: { bgStyle: b.v } })">{{ b.l }}</button></div></div>
+
+            <div class="subh"><Icon name="mdiViewGridOutline" :size="20" />Games &amp; Cards</div>
+            <div class="row"><span class="lbl">Box art size</span><div class="seg"><button v-for="(v, k) in CARD_SIZES" :key="k" data-focus :class="{ on: (ui.gridSize || 'md') === k }" @click="saveConfig({ ui: { gridSize: k } })">{{ v.label }}</button></div></div>
+            <div class="row"><span class="lbl">Card corners</span><div class="seg"><button v-for="(v, k) in CARD_SHAPES" :key="k" data-focus :class="{ on: (ui.cardShape || 'rounded') === k }" @click="saveConfig({ ui: { cardShape: k } })">{{ v.label }}</button></div></div>
+            <div class="row"><span class="lbl">Spacing</span><div class="seg"><button v-for="(v, k) in DENSITIES" :key="k" data-focus :class="{ on: (ui.density || 'normal') === k }" @click="saveConfig({ ui: { density: k } })">{{ v.label }}</button></div></div>
+            <Toggle :model-value="ui.cardTitles !== false" label="Game names under box art" desc="Turn off for a clean wall of covers" @update:model-value="(v) => saveConfig({ ui: { cardTitles: v } })" />
             <Toggle :model-value="ui.mediaBar !== false" label="Media bar" desc="Show artwork of the highlighted game at the top of Home" @update:model-value="(v) => saveConfig({ ui: { mediaBar: v } })" />
             <Toggle :model-value="ui.logos !== false" label="Game logos" desc="Show the game's logo instead of its name on Home and game pages" @update:model-value="(v) => saveConfig({ ui: { logos: v } })" />
             <template v-if="ui.logos !== false">
@@ -110,15 +135,26 @@
               </div>
               <p class="muted small" style="margin-top: -6px">Logos come from your RomM server when it has them (ScreenScraper "logo" media). For everything else, add a free key from steamgriddb.com → Preferences → API. {{ store.config.sgdbKey ? 'Key saved.' : '' }}</p>
             </template>
+            <Toggle :model-value="ui.hideEmpty" label="Hide empty systems" @update:model-value="(v) => saveConfig({ ui: { hideEmpty: v } })" />
+
+            <div class="subh"><Icon name="mdiAnimationPlayOutline" :size="20" />Motion &amp; Sound</div>
+            <div class="row"><span class="lbl">Animations</span><div class="seg"><button v-for="m in motions" :key="m.v" data-focus :class="{ on: (ui.motion || 'normal') === m.v }" @click="saveConfig({ ui: { motion: m.v } })">{{ m.l }}</button></div></div>
+            <div class="row"><span class="lbl">Effects</span><div class="seg"><button v-for="m in effectsOpts" :key="m.v" data-focus :class="{ on: (ui.effects || 'auto') === m.v }" @click="saveConfig({ ui: { effects: m.v } })">{{ m.l }}</button></div></div>
+            <p class="muted small" style="margin-top: -6px">Reduced turns off movement, including the animated background, which then shows a still frame. Light effects draw backgrounds at a lower resolution and frame rate and skip blur. Auto uses light effects when the GPU is off (software rendering), so it stays smooth everywhere. {{ store.info.gpu === false ? 'The GPU is off right now, so Auto is using light effects.' : '' }}</p>
+            <Toggle :model-value="ui.sounds !== false" label="UI sounds" desc="Soft clicks when you move and select" @update:model-value="setSounds" />
+            <template v-if="ui.sounds !== false">
+              <div class="row"><span class="lbl">Sound style</span><div class="seg"><button v-for="p in SOUND_PACKS" :key="p.v" data-focus :class="{ on: (ui.soundPack || 'soft') === p.v }" @click="setPack(p.v)">{{ p.l }}</button></div></div>
+              <div class="row"><span class="lbl">Volume</span><div class="seg"><button v-for="v in volumes" :key="v.v" data-focus :class="{ on: (ui.volume || 'medium') === v.v }" @click="setVolume(v.v)">{{ v.l }}</button></div></div>
+            </template>
+
+            <div class="subh"><Icon name="mdiGamepadVariantOutline" :size="20" />Controls &amp; Display</div>
             <div class="row"><span class="lbl">Touch &amp; mouse</span><div class="seg"><button v-for="p in pointers" :key="p.v" data-focus :class="{ on: (ui.pointer || 'auto') === p.v }" @click="setPointer(p.v)">{{ p.l }}</button></div></div>
             <p class="muted small" style="margin-top: -6px">Auto hides the cursor when you tap the screen and shows it when a mouse moves. Touch never shows a cursor.</p>
             <div class="row"><span class="lbl">On-screen keyboard</span><div class="seg"><button v-for="k in keyboards" :key="k.v" data-focus :class="{ on: (ui.keyboard || 'auto') === k.v }" @click="saveConfig({ ui: { keyboard: k.v } })">{{ k.l }}</button></div></div>
             <p class="muted small" style="margin-top: -6px">Auto uses the built-in keyboard in Game Mode and your real keyboard on the desktop. Steam leaves typing to the Steam keyboard (Steam + X).</p>
-            <Toggle :model-value="ui.sounds !== false" label="UI sounds" desc="Soft clicks when you move and select" @update:model-value="setSounds" />
-            <Toggle :model-value="ui.hideEmpty" label="Hide empty systems" @update:model-value="(v) => saveConfig({ ui: { hideEmpty: v } })" />
             <div class="row"><span class="lbl">Rendering</span><div class="seg"><button v-for="g in gfx" :key="g.v" data-focus :class="{ on: (store.config.graphics || 'auto') === g.v }" @click="setGraphics(g.v)">{{ g.l }}</button></div></div>
             <p class="muted small" style="margin-top: -6px">Auto uses the GPU from the app menu and on big screens like TVs. On handheld-size screens launched from Steam or Game Mode it uses software rendering, which is proven there. If the GPU ever fails, Cartridge switches to Compatible by itself. Compatible never uses the GPU.</p>
-            <div class="row"><button class="btn" data-focus @click="call('app:fullscreen')"><Icon name="mdiFullscreen" />Toggle fullscreen</button><button class="btn" data-focus @click="clearCache"><Icon name="mdiImageRemove" />Clear image cache</button></div>
+            <div class="row"><button class="btn" data-focus @click="call('app:fullscreen')"><Icon name="mdiFullscreen" />Toggle fullscreen</button><button class="btn" data-focus @click="clearCache"><Icon name="mdiImageRemove" />Clear image cache</button><button class="btn" data-focus @click="resetLook"><Icon name="mdiRestore" />Reset Look &amp; Feel</button></div>
           </template>
 
           <template v-else-if="sec === 'updates'">
@@ -232,11 +268,12 @@
 
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue';
-import { store, call, go, tab, saveConfig, pickFolder, choose, confirm, toast, bytes, ago, resync, scanServer, allRoms, resetLogos } from '../store.js';
+import { store, call, go, tab, saveConfig, pickFolder, choose, confirm, toast, openModal, bytes, ago, resync, scanServer, allRoms, resetLogos } from '../store.js';
 import { useView } from '../useView.js';
 import { input, focusFirst, setPointerPref } from '../nav.js';
-import { THEMES } from '../themes.js';
-import { setSoundEnabled } from '../sfx.js';
+import { THEMES, SURFACES, TEXTS, FONTS, CARD_SHAPES, CARD_SIZES, DENSITIES, themeFrom } from '../themes.js';
+import { BACKGROUNDS } from '../bgRenderers.js';
+import { setSoundEnabled, setSoundStyle, previewSound, SOUND_PACKS } from '../sfx.js';
 import Icon from '../components/Icon.vue';
 import Logo from '../components/Logo.vue';
 import Toggle from '../components/Toggle.vue';
@@ -312,7 +349,31 @@ const busy = computed(() => ['running', 'scanning'].includes(store.sync.state));
 const total = computed(() => allRoms().length);
 const modes = [{ v: 'auto', l: 'Auto' }, { v: 'local', l: 'Local' }, { v: 'remote', l: 'Remote' }];
 const sizes = [{ v: 'sm', l: 'Small' }, { v: 'md', l: 'Medium' }, { v: 'lg', l: 'Large' }];
-const bgs = [{ v: 'waves', l: 'XMB waves' }, { v: 'art', l: 'Game artwork' }];
+const dims = [{ v: 'low', l: 'Bright' }, { v: 'medium', l: 'Dimmed' }, { v: 'high', l: 'Dark' }];
+const motions = [{ v: 'normal', l: 'Normal' }, { v: 'fast', l: 'Fast' }, { v: 'reduce', l: 'Reduced' }];
+const effectsOpts = [{ v: 'auto', l: 'Auto' }, { v: 'full', l: 'Full' }, { v: 'light', l: 'Light' }];
+const volumes = [{ v: 'low', l: 'Low' }, { v: 'medium', l: 'Medium' }, { v: 'high', l: 'High' }];
+const customT = computed(() => themeFrom(ui.value.customColor || '#8b74e8'));
+async function pickColor() {
+  const c = await openModal('color', { value: ui.value.customColor || THEMES[ui.value.theme]?.accent?.[0] || '#8b74e8' });
+  if (c) await saveConfig({ ui: { theme: 'custom', customColor: c } });
+}
+async function setBg(v) {
+  if (v === 'wallpaper' && !ui.value.wallpaper) { await chooseWallpaper(); return; }
+  await saveConfig({ ui: { bgStyle: v } });
+}
+async function chooseWallpaper() {
+  const file = await pickFolder({ title: 'Choose a wallpaper', subtitle: 'PNG, JPG or WebP', start: store.info.home, files: ['png', 'jpg', 'jpeg', 'webp'] });
+  if (!file) return;
+  try { store.config = await call('wallpaper:set', { file }); toast('Wallpaper set', 'ok', 2000, 'mdiWallpaper'); } catch (e) { toast(e.message, 'error', 4000); }
+}
+async function clearWallpaper() { store.config = await call('wallpaper:clear'); await saveConfig({ ui: { bgStyle: 'waves' } }); }
+async function setPack(v) { await saveConfig({ ui: { soundPack: v } }); setSoundStyle(v, ui.value.volume); previewSound(); }
+async function setVolume(v) { await saveConfig({ ui: { volume: v } }); setSoundStyle(ui.value.soundPack, v); previewSound(); }
+async function resetLook() {
+  if (!(await confirm('Reset Look & Feel?', 'Colour, background, fonts, cards, motion and sounds go back to the defaults.', 'Reset'))) return;
+  await saveConfig({ ui: { theme: 'purple', customColor: '', surface: 'glass', text: 'normal', font: 'outfit', cardShape: 'rounded', density: 'normal', cardTitles: true, gridSize: 'md', bgStyle: 'waves', motion: 'normal', effects: 'auto', soundPack: 'soft', volume: 'medium' } });
+}
 const gfx = [{ v: 'auto', l: 'Auto (GPU)' }, { v: 'software', l: 'Compatible' }];
 const pointers = [{ v: 'auto', l: 'Auto' }, { v: 'touch', l: 'Touch' }, { v: 'mouse', l: 'Mouse' }];
 const keyboards = [{ v: 'auto', l: 'Auto' }, { v: 'builtin', l: 'Built-in' }, { v: 'steam', l: 'Steam' }];
@@ -444,7 +505,7 @@ onMounted(async () => { space.value = await call('fs:space', store.config.romsRo
 .rail { display: flex; flex-direction: column; gap: 4px; padding-top: 10px; }
 .rail-item { display: flex; align-items: center; gap: 14px; padding: 13px 16px; border-radius: 8px; color: var(--muted); font-weight: 500; transition: background 0.15s, color 0.15s; }
 .rail-item.on { color: #fff; background: rgba(255, 255, 255, 0.06); }
-.rail-item:focus { background: rgba(139, 116, 232, 0.25); color: #fff; }
+.rail-item:focus { background: rgba(var(--primary-rgb), 0.25); color: #fff; }
 .pane { overflow-y: auto; padding: 6px 12px 60px 24px; }
 .pane-in { display: flex; flex-direction: column; gap: 16px; max-width: 860px; }
 .pane h1 { font-size: 34px; font-weight: 700; margin: 4px 0 6px; }
@@ -458,13 +519,41 @@ onMounted(async () => { space.value = await call('fs:space', store.config.romsRo
 .pathrow { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 18px; }
 .plist { display: flex; flex-direction: column; gap: 6px; }
 .prow { display: grid; grid-template-columns: 30px 210px 1fr auto; align-items: center; gap: 14px; padding: 10px 14px; border-radius: 8px; background: rgba(255, 255, 255, 0.045); }
-.prow:focus { background: rgba(139, 116, 232, 0.2); }
+.prow:focus { background: rgba(var(--primary-rgb), 0.2); }
 .pn { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pp { color: var(--muted); }
 .about { display: flex; align-items: center; gap: 22px; padding: 22px; }
 .swatches { display: flex; flex-wrap: wrap; gap: 10px; }
 .swatch { width: 74px; height: 50px; border-radius: 8px; display: flex; align-items: flex-end; padding: 6px 8px; font-size: 11px; font-weight: 600; color: #fff; text-shadow: 0 1px 4px rgba(0,0,0,.6); box-shadow: inset 0 0 0 1px rgba(255,255,255,.15); }
 .swatch.on { box-shadow: 0 0 0 2px #fff, 0 0 0 5px var(--primary); }
+.swatch { position: relative; }
+.swatch i { position: absolute; top: 6px; right: 6px; width: 12px; height: 12px; border-radius: 50%; box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.7); }
+.swatch.custom { background: conic-gradient(from 90deg, #f55, #fd5, #5f8, #5df, #85f, #f5c, #f55); flex-direction: column; justify-content: space-between; align-items: flex-start; }
+.bgs { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.bgtile { position: relative; display: flex; flex-direction: column; gap: 2px; padding: 10px; border-radius: 10px; background: rgba(255, 255, 255, 0.045); border: 1px solid var(--line); text-align: left; }
+.bgtile.on { border-color: var(--primary-l); background: rgba(var(--primary-rgb), 0.18); }
+.bgtile b { font-size: 13.5px; font-weight: 600; margin-top: 6px; }
+.bgtile small { font-size: 11px; color: var(--muted); }
+.bgp { position: relative; height: 54px; border-radius: 7px; overflow: hidden; background: var(--xmb); }
+.bgp i { position: absolute; display: block; }
+.bgp-waves .bgp i { left: -10%; right: -10%; height: 14px; border-radius: 50%; border-top: 1.5px solid rgba(255, 255, 255, 0.5); background: rgba(255, 255, 255, 0.08); }
+.bgp-waves .bgp i:nth-child(1) { top: 26px; transform: rotate(-6deg); } .bgp-waves .bgp i:nth-child(2) { top: 30px; transform: rotate(4deg); } .bgp-waves .bgp i:nth-child(3) { top: 34px; transform: rotate(-2deg); }
+.bgp-ribbons .bgp i { left: -10%; right: -10%; height: 30px; border-radius: 50%; border-top: 1px solid rgba(255, 255, 255, 0.45); }
+.bgp-ribbons .bgp i:nth-child(1) { top: 20px; } .bgp-ribbons .bgp i:nth-child(2) { top: 24px; transform: rotate(3deg); } .bgp-ribbons .bgp i:nth-child(3) { top: 28px; transform: rotate(-3deg); }
+.bgp-bokeh .bgp { background: linear-gradient(170deg, var(--g3), var(--g4)); } .bgp-bokeh .bgp i { width: 22px; height: 22px; border-radius: 50%; background: radial-gradient(circle, rgba(255, 255, 255, 0.55), transparent 70%); }
+.bgp-bokeh .bgp i:nth-child(1) { left: 14%; top: 10px; } .bgp-bokeh .bgp i:nth-child(2) { left: 55%; top: 24px; width: 34px; height: 34px; } .bgp-bokeh .bgp i:nth-child(3) { left: 78%; top: 4px; width: 14px; height: 14px; }
+.bgp-blades .bgp { background: linear-gradient(170deg, var(--g3), var(--g4)); } .bgp-blades .bgp i { top: -10px; bottom: -10px; width: 26px; transform: skewX(-25deg); background: linear-gradient(90deg, transparent, rgba(var(--primary-l-rgb), 0.35), transparent); }
+.bgp-blades .bgp i:nth-child(1) { left: 16%; } .bgp-blades .bgp i:nth-child(2) { left: 46%; width: 40px; } .bgp-blades .bgp i:nth-child(3) { left: 80%; }
+.bgp-dots .bgp { background: radial-gradient(circle, rgba(255, 255, 255, 0.35) 1.4px, transparent 1.8px) 0 0 / 10px 10px, linear-gradient(170deg, var(--g2), var(--g4)); } .bgp-dots .bgp i { display: none; }
+.bgp-glow .bgp { background: radial-gradient(60% 80% at 25% 30%, rgba(var(--primary-rgb), 0.6), transparent), radial-gradient(60% 80% at 80% 80%, var(--peach), transparent 70%), linear-gradient(170deg, var(--g3), var(--g4)); } .bgp-glow .bgp i { display: none; }
+.bgp-solid .bgp i, .bgp-art .bgp i, .bgp-wallpaper .bgp i { display: none; }
+.bgp-art .bgp { background: linear-gradient(90deg, rgba(0, 0, 0, 0.7), transparent), repeating-linear-gradient(45deg, #3a3f50 0 8px, #2a2e3b 8px 16px); }
+.bgp-wallpaper .bgp { background: linear-gradient(135deg, #3a4b6b, #6b4b3a); }
+.fonts { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 10px; }
+.fonttile { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 12px 8px; border-radius: 10px; background: rgba(255, 255, 255, 0.045); border: 1px solid var(--line); }
+.fonttile b { font-size: 28px; font-weight: 600; line-height: 1.1; }
+.fonttile span { font-size: 12px; color: var(--muted); }
+.fonttile.on { border-color: var(--primary-l); background: rgba(var(--primary-rgb), 0.18); }
 .steam-grid { width: 130px; border-radius: 7px; box-shadow: 0 14px 34px rgba(0, 0, 0, 0.5); flex: none; }
 .fadeup-enter-active, .fadeup-leave-active { transition: opacity 0.15s, transform 0.2s var(--ease); }
 .fadeup-enter-from { opacity: 0; transform: translateX(10px); }

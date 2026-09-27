@@ -76,9 +76,9 @@ onBeforeUnmount(() => layer.pop());
 .qm-item b { font-weight: 500; font-size: 14.5px; }
 .qm-item small { color: var(--muted); font-size: 12px; }
 .qm-item:hover { background: rgba(255, 255, 255, 0.06); }
-.qm-item:focus { background: rgba(139, 116, 232, 0.22); }
+.qm-item:focus { background: rgba(var(--primary-rgb), 0.22); }
 .qm-item.danger { color: #ffa39c; }
-.qm-item.upd { background: var(--grad); color: #150f25; }
+.qm-item.upd { background: var(--grad); color: var(--on-primary); }
 .qm-item.upd small { color: #2b1f45; }
 .qm-item[disabled] { opacity: 0.4; }
 </style>

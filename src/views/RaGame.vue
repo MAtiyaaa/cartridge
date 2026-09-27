@@ -96,7 +96,7 @@ onMounted(async () => { await load(); focusFirst(el.value); });
 .rg-badge { width: 64px; height: 64px; border-radius: 8px; flex: none; }
 .rg-a-body { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
 .rg-a-title { font-family: var(--display); font-weight: 600; font-size: 15px; display: flex; gap: 8px; align-items: center; }
-.rg-type { font-family: Roboto, sans-serif; font-weight: 500; font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); border: 1px solid var(--line-2); border-radius: 4px; padding: 1px 5px; }
+.rg-type { font-family: var(--body); font-weight: 500; font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); border: 1px solid var(--line-2); border-radius: 4px; padding: 1px 5px; }
 .rg-a-desc { font-size: 12.5px; color: #c3c9d4; }
 .rg-a-meta { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; font-size: 11.5px; color: var(--muted); }
 .rg-a-meta .pts { color: var(--gold); font-weight: 600; }

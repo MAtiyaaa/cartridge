@@ -98,7 +98,7 @@ DlRow.emits = ['act'];
 .big { font-size: 36px; font-weight: 700; margin: 6px 0 6px; }
 .empty-dl { display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 60px 0; text-align: center; }
 .empty-dl p { display: flex; gap: 6px; align-items: center; margin: 0; }
-.ring-empty { width: 110px; height: 110px; border-radius: 50%; display: grid; place-items: center; background: radial-gradient(circle, rgba(139, 116, 232, 0.25), transparent 70%); border: 1px solid rgba(161, 143, 255, 0.35); color: #cfc4ff; }
+.ring-empty { width: 110px; height: 110px; border-radius: 50%; display: grid; place-items: center; background: radial-gradient(circle, rgba(var(--primary-rgb), 0.25), transparent 70%); border: 1px solid rgba(var(--primary-l-rgb), 0.35); color: var(--primary-t); }
 .now { display: flex; flex-direction: column; gap: 14px; margin-bottom: 28px; }
 .now-card { display: flex; align-items: center; gap: 24px; padding: 18px 22px; width: 100%; }
 .now-art { width: 120px; aspect-ratio: 2/3; border-radius: 8px; overflow: hidden; background: #1a1e2a; flex: none; box-shadow: 0 14px 34px rgba(0, 0, 0, 0.55); }

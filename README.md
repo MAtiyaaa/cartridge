@@ -85,7 +85,7 @@ Extracted PS4/PS5 game folders are detected automatically, and anything else can
 <td valign="top">
 
 **🎨 Make it yours**<br>
-PSP XMB-style animated waves in eight colors, a media bar with the highlighted game's artwork, game logos (from RomM or SteamGridDB) sized evenly, custom covers, logos and backgrounds per game from SteamGridDB, and three box art sizes.
+14 colour themes or any colour you like, six animated backgrounds (inspired by the PSP, PS3, PS5, Xbox, Nintendo and Steam), a still one, game artwork or your own wallpaper, six fonts, OLED black, card sizes, corners and spacing, motion and sound styles. Custom covers, logos and backgrounds per game from SteamGridDB.
 
 </td>
 <td valign="top">
@@ -182,6 +182,6 @@ Bumping `version` in `package.json` on `main` builds the AppImage on GitHub Acti
 
 Settings and the library cache live in `~/.config/Cartridge/`. The full history of changes is in [CHANGELOG.md](CHANGELOG.md).
 
-Console logos come from the open-source [Art Book Next](https://github.com/anthonycaccese/art-book-next-es-de) theme for ES-DE and are downloaded on first use. The RetroAchievements logo belongs to RetroAchievements. Trophy data is read from RPCS3, shadPS4, Xenia and Vita3K using the file formats in their open-source code. All logos and trademarks belong to their owners.
+Console logos come from the open-source [Art Book Next](https://github.com/anthonycaccese/art-book-next-es-de) theme for ES-DE and are downloaded on first use. The RetroAchievements logo belongs to RetroAchievements. Trophy data is read from RPCS3, shadPS4, Xenia and Vita3K using the file formats in their open-source code. Fonts: Outfit, Roboto, Inter, Nunito, Rubik, Space Grotesk and Lexend, all under the SIL Open Font License. The backgrounds are original designs. All logos and trademarks belong to their owners.
 
 <div align="center"><sub>Cartridge is an unofficial client and isn't affiliated with the RomM project.</sub></div>

@@ -326,7 +326,7 @@ onMounted(async () => {
 .g-cover { flex: none; width: 250px; margin-top: -190px; margin-right: 26px; z-index: 2; aspect-ratio: 2/3; border-radius: 10px; overflow: hidden; box-shadow: 0 30px 80px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.08); transform: perspective(1000px) rotateY(-8deg); background: #161a25; }
 .g-cover img { width: 100%; height: 100%; object-fit: cover; }
 .noart { height: 100%; display: grid; place-items: center; padding: 20px; text-align: center; font-family: var(--display); font-size: 20px; }
-.g-body { display: grid; grid-template-columns: minmax(0, 1fr) 250px; gap: 40px; padding: 16px 56px; background: linear-gradient(180deg, transparent, rgba(22, 8, 46, 0.45) 140px); }
+.g-body { display: grid; grid-template-columns: minmax(0, 1fr) 250px; gap: 40px; padding: 16px 56px; background: linear-gradient(180deg, transparent, rgba(var(--tint-rgb), 0.45) 140px); }
 .col { min-width: 0; }
 .summary { margin: 0; line-height: 1.7; color: #cdd2dc; font-size: 15px; white-space: pre-line; max-width: 820px; }
 .shots { padding: 18px 20px 18px 56px; margin: -8px 0 0 -56px; scroll-padding: 0 56px; }

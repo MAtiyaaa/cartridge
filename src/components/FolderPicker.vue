@@ -12,14 +12,15 @@
       <div class="list" data-scroll>
         <button class="menu-item" data-focus data-autofocus @click="open(cur.parent)" v-if="cur.path !== '/'"><Icon name="mdiArrowUp" />..</button>
         <button v-for="d in cur.dirs" :key="d" class="menu-item" data-focus @click="open(join(cur.path, d))"><Icon name="mdiFolder" style="color: var(--primary-l)" />{{ d }}</button>
-        <div v-if="!cur.dirs.length" class="muted" style="padding: 12px">No subfolders</div>
+        <button v-for="f in cur.files || []" :key="'f' + f" class="menu-item" data-focus @click="closeModal(join(cur.path, f))"><Icon name="mdiImageOutline" style="color: var(--peach)" />{{ f }}</button>
+        <div v-if="!cur.dirs.length && !(cur.files || []).length" class="muted" style="padding: 12px">{{ files ? 'No images or subfolders here' : 'No subfolders' }}</div>
       </div>
       <div class="row" style="justify-content: flex-end">
-        <button class="btn" data-focus @click="newFolder"><Icon name="mdiFolderPlus" />New folder</button>
+        <button v-if="!files" class="btn" data-focus @click="newFolder"><Icon name="mdiFolderPlus" />New folder</button>
         <button class="btn" data-focus @click="closeModal(null)">Cancel</button>
-        <button class="btn primary" data-focus @click="closeModal(cur.path)"><Icon name="mdiCheck" />Use this folder</button>
+        <button v-if="!files" class="btn primary" data-focus @click="closeModal(cur.path)"><Icon name="mdiCheck" />Use this folder</button>
       </div>
-      <div class="kb-hints muted"><span class="hint"><Btn b="A" />Open</span><span class="hint"><Btn b="X" />Up a level</span><span class="hint"><Btn b="START" />Use this folder</span><span class="hint"><Btn b="B" />Cancel</span></div>
+      <div class="kb-hints muted"><span class="hint"><Btn b="A" />Open</span><span class="hint"><Btn b="X" />Up a level</span><span v-if="!files" class="hint"><Btn b="START" />Use this folder</span><span class="hint"><Btn b="B" />Cancel</span></div>
     </div>
   </div>
 </template>
@@ -31,14 +32,14 @@ import { closeModal, call, askText, store, toast } from '../store.js';
 import Icon from './Icon.vue';
 import Btn from './Btn.vue';
 
-const props = defineProps({ title: { type: String, default: 'Choose a folder' }, subtitle: String, start: String, hidden: Boolean });
+const props = defineProps({ title: { type: String, default: 'Choose a folder' }, subtitle: String, start: String, hidden: Boolean, files: Array });
 const el = ref(null);
-const cur = reactive({ path: '', parent: '', dirs: [] });
+const cur = reactive({ path: '', parent: '', dirs: [], files: [] });
 const places = ref([]);
 const join = (a, b) => (a.endsWith('/') ? a + b : `${a}/${b}`);
 
 async function open(p) {
-  const r = await call('fs:list', props.hidden ? { dir: p, hidden: true } : p);
+  const r = await call('fs:list', props.hidden || props.files ? { dir: p, hidden: props.hidden, files: props.files } : p);
   Object.assign(cur, r);
   await nextTick();
   el.value?.querySelector('.list')?.scrollTo({ top: 0 });
@@ -60,7 +61,7 @@ onMounted(async () => {
   layer = pushLayer(el.value, {
     back: () => closeModal(null),
     x: () => cur.path !== '/' && open(cur.parent),
-    start: () => closeModal(cur.path),
+    start: () => !props.files && closeModal(cur.path),
     lb() {}, rb() {}, y() {}, select() {}, lt() {}, rt() {},
   });
   places.value = await call('fs:places', { hidden: props.hidden });

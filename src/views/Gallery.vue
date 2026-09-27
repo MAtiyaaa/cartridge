@@ -226,7 +226,7 @@ onMounted(async () => {
 .ph-head { display: flex; align-items: center; justify-content: space-between; gap: 20px; margin: 6px 0 14px; }
 .sys-switch { display: flex; align-items: center; gap: 16px; min-width: 0; }
 .sys-switch h1 { font-size: 30px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.hicon { width: 52px; height: 52px; border-radius: 9px; display: grid; place-items: center; background: rgba(139, 116, 232, 0.2); color: #cfc4ff; flex: none; }
+.hicon { width: 52px; height: 52px; border-radius: 9px; display: grid; place-items: center; background: rgba(var(--primary-rgb), 0.2); color: var(--primary-t); flex: none; }
 .toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
 .body { display: grid; grid-template-columns: 1fr 340px; gap: 24px; min-height: 0; }
 .grid-pane { overflow-y: auto; padding: 22px 12px 60px; margin: 0 -12px; }

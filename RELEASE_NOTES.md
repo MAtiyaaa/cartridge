@@ -1,46 +1,33 @@
-## Cartridge 0.4.0 · The All Achievements Update
+## Cartridge 0.5.0 · The Customisation Update
 
 ### New
-- **Trophies from your emulators.** The Achievements tab now has two sections: **RetroAchievements** and **Others**. Switch with LB / RB or tap them. Others reads the trophies and achievements that these emulators keep on your device:
-  - **RPCS3** (PS3 trophies)
-  - **shadPS4** (PS4 trophies)
-  - **Xenia** (Xbox 360 achievements and gamerscore)
-  - **Vita3K** (PS Vita trophies)
-- **Others section:**
-  - A summary of your platinum, gold, silver and bronze trophies and your Xbox 360 gamerscore.
-  - **Latest unlocks** across every emulator, with the trophy icon, grade and date.
-  - **Games**, each with a progress bar and grade counts.
-  - Open a game to see every trophy, unlocked and locked, with its grade and unlock date. Hidden trophies stay hidden until you unlock them. Filter All / Unlocked / Locked with Y. **Open in library** jumps to the game.
-- **Trophies on game pages** for PS3, PS4, Xbox 360 and PS Vita games: a progress bar, grade counts, a row of trophy icons and **See all**. Games are matched by title ID (CUSA for PS4, the Xbox title ID in the file name) or by title. If the match is wrong or missing, open **More → Link to trophies** on the game page and pick the right set, or unlink it.
-- **Finds emulators wherever they are installed:** Flatpak, AppImage, EmuDeck, RetroDECK, native packages, or any mix of them. Three layers, in order:
-  1. Each emulator's own settings (RPCS3's `vfs.yml`, Vita3K's `config.yml`, shadPS4's and Xenia's usual folders, including Xenia inside Proton or Wine prefixes).
-  2. A short background scan of your home, emulation and SD card folders on the first run.
-  3. **Choose folder**: point Cartridge at the folder yourself. It checks the folder really holds trophy data before accepting it, and it also finds the right subfolder if you pick one level too high.
-- **Settings → Achievements → Other sources:**
-  - Each emulator shows **Found** (with its path and how it was found: from settings, known place, found by scan or chosen by you), **Not found** or **Off**.
-  - An on/off switch per emulator.
-  - **Choose folder** and **Scan again**. The folder picker shows hidden folders here, so Flatpak data under `.var` can be picked.
-- **Trophies sync across devices through RomM.**
-  - Trophies unlocked on your Deck, Ally or PC show up together on every device, with the name of the device that unlocked each one.
-  - They are stored as a private note on the game in RomM. No new account: it uses your RomM login.
-  - Unlocks are only ever added, never removed. If two devices unlocked the same trophy, the earlier date wins.
-  - Games you only played on another device show up too.
-  - Rename this device in Settings. Turn sync off there too.
-  - If your RomM version has no notes, or your login cannot write them, Cartridge says so and keeps working on this device.
-- **Trophy pop-ups.** When a trophy unlocks while Cartridge is open, a pop-up shows the trophy, its grade and the game. It can be turned off in Settings.
-- **Game page header banner.** A wide banner across the top of every game page with the game's logo on it. It uses the background you picked in More, otherwise the first screenshot, otherwise a blurred cover.
-- **The on-screen keyboard is back.** Settings → Look & Feel → On-screen keyboard:
-  - **Auto** (the default): the built-in keyboard in Game Mode, your real keyboard on the desktop.
-  - **Built-in**: always.
-  - **Steam**: leaves typing to the Steam keyboard (Steam + X).
-  - It opens from any text field and from the search box, and it has a Paste key.
-- **Paste buttons** on text fields, for pasting API keys and addresses.
+- **Colour themes that change everything.** A theme now colours the whole interface, not just the background: highlights, focus rings, buttons, tabs, chips, progress bars, panels and the background all follow it. Nothing is stuck on purple any more.
+  - 14 themes: Purple, Blue, Red, Green, Orange, Pink, Teal, Midnight, and new Gold, Crimson, Lime, Sky, Lavender and Graphite.
+  - **Custom colour:** pick any colour and Cartridge builds a full theme from it. Choose from 39 swatches with the controller, or use the full colour picker with a mouse or touch.
+  - **Panels:** Glass (see-through, the default), Solid, or OLED black (true black background and panels).
+  - **Text:** Standard, High contrast or Soft.
+- **New backgrounds.** Original designs, each loosely inspired by a console menu, drawn in your theme's colours:
+  - **XMB Waves** (inspired by the PSP, the original background)
+  - **Ribbons** (inspired by the PS3)
+  - **Bokeh** (inspired by the PS5)
+  - **Blades** (inspired by the Xbox)
+  - **Dots** (inspired by Nintendo)
+  - **Glow** (inspired by Steam)
+  - **Still:** a still gradient with no motion
+  - **Game artwork**, as before
+  - **Wallpaper:** any PNG, JPG or WebP image from your device, picked with the controller-friendly file browser, with Bright, Dimmed or Dark dimming.
+- **Fonts.** Six bundled open-source fonts: Outfit (the default), Inter, Nunito, Rubik, Space Grotesk and Lexend.
+- **Cards and grids:**
+  - Box art size: Small, Medium, Large and new Huge.
+  - Card corners: Rounded, Square, Soft or Extra round.
+  - Spacing: Compact, Normal or Spacious.
+  - Game names under box art can be turned off for a clean wall of covers.
+- **Motion:**
+  - **Animations:** Normal, Fast, or Reduced. Reduced turns off movement, and the background shows a still frame.
+  - **Effects:** Auto, Full or Light. Light draws backgrounds at a lower resolution and frame rate and skips blur. Auto picks Light when the GPU is off (software rendering, as in Game Mode on handhelds), so it stays smooth.
+- **Sounds:** three styles (Soft, Retro and Bubble) and three volumes (Low, Medium and High). You hear a preview when you pick one.
+- **Reset Look & Feel** puts every look option back to the defaults.
 
 ### Changed
-- **PS5 console logo.** The PS5 tile now shows a filled PS5 wordmark.
-- **Settings sidebar in Title Case:** Connection, Library & Sync, Storage, Console Folders, Downloads, Look & Feel, Achievements, Steam, Updates, About.
-- **Settings → Achievements** is split into RetroAchievements and Other sources. The RetroAchievements header and switcher use the RetroAchievements logo.
-
-### Notes
-- Cartridge only reads the emulators' files, and it never changes them. It does not touch saves.
-- Switch, Wii U, 3DS, original Xbox and PS5 emulators have no trophy or achievement system, so there is nothing to show for them.
+- **Settings → Look & Feel** is grouped into Colour, Background, Text & Size, Games & Cards, Motion & Sound, and Controls & Display, with small previews of each background and each font.
+- The first-run screen, dialogs, the Quick Menu, the keyboard and the download ring follow the theme too.

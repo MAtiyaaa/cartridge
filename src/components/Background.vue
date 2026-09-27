@@ -1,9 +1,15 @@
 <template>
-  <div class="bg-stage" :class="{ xmb: mode === 'waves' }">
-    <template v-if="mode === 'waves'">
+  <div class="bg-stage" :class="['bg-' + mode, { xmb: painted }]">
+    <template v-if="painted">
       <div class="xmb-grad" />
-      <canvas ref="cv" class="xmb-waves" />
+      <div v-if="DARK_BASE.has(mode)" class="bg-darken" />
+      <canvas v-if="RENDERERS[mode]" ref="cv" class="xmb-waves" />
       <div class="xmb-vignette" />
+    </template>
+    <template v-else-if="mode === 'wallpaper'">
+      <div v-if="wallUrl" class="layer on wall" :style="{ backgroundImage: `url('${wallUrl}')` }" />
+      <div v-else class="xmb-grad" />
+      <div class="wall-dim" :style="{ opacity: wallDim }" />
     </template>
     <template v-else>
       <div v-for="(l, i) in layers" :key="i" class="layer" :class="{ on: l.on, blur: l.blur }" :style="l.src ? { backgroundImage: `url('${l.src}')` } : {}" />
@@ -15,81 +21,70 @@
 <script setup>
 import { computed, reactive, ref, watch, onBeforeUnmount, nextTick } from 'vue';
 import { store } from '../store.js';
+import { RENDERERS, DARK_BASE } from '../bgRenderers.js';
+import { paletteOf, lightEffects } from '../themes.js';
 
-const mode = computed(() => store.config?.ui?.bgStyle || 'waves');
+const mode = computed(() => {
+  const m = store.config?.ui?.bgStyle || 'waves';
+  return RENDERERS[m] || ['solid', 'art', 'wallpaper'].includes(m) ? m : 'waves';
+});
+const painted = computed(() => !!RENDERERS[mode.value] || mode.value === 'solid');
+const light = computed(() => lightEffects(store.config?.ui, store.info));
+const reduce = computed(() => store.config?.ui?.motion === 'reduce');
+watch(light, (v) => document.body.classList.toggle('light-fx', v), { immediate: true });
 
-// ---------- PSP XMB style ribbons.
-// Drawn on a small canvas (scaled up by the compositor) with additive blending inside the
-// canvas itself, so there are no CSS filters or blend modes to recompute every frame.
+// ---------- animated canvas backgrounds
+// Drawn at full sharpness with the GPU. Without it (software rendering) they draw at a lower
+// resolution and frame rate so the rest of the interface stays smooth.
 const cv = ref(null);
-let raf = 0, last = 0, ctx = null;
-const WAVES = [
-  { a: 0.09, k: 1.6, s: 0.10, y: 0.58, h: 0.16, al: 0.10 },
-  { a: 0.07, k: 2.3, s: -0.07, y: 0.62, h: 0.10, al: 0.08 },
-  { a: 0.11, k: 1.1, s: 0.05, y: 0.55, h: 0.22, al: 0.06 },
-  { a: 0.05, k: 3.1, s: 0.13, y: 0.64, h: 0.05, al: 0.12 },
-];
-// Drawn at full resolution (the old 0.4x canvas looked soft and pixelated when scaled up).
-// On a big screen without the GPU (software rendering), a full-resolution canvas is too costly, so
-// draw at CSS size and let it scale; everywhere else draw sharp.
-const gpu = () => store.info?.gpu !== false;
-const scaleFor = () => { const dpr = window.devicePixelRatio || 1; return gpu() ? Math.min(dpr, 2) : innerWidth * dpr > 2600 ? 1 : Math.min(dpr, 1.5); };
-let SCALE = scaleFor();
-const STEP = 18;
-let grads = [];
-function draw(t) {
-  raf = requestAnimationFrame(draw);
-  if (t - last < (gpu() || innerWidth * (window.devicePixelRatio || 1) <= 2600 ? 33 : 50)) return; // ~30fps is plenty for a slow ambient drift
-  last = t;
-  const c = cv.value;
-  if (!c) return;
-  SCALE = scaleFor();
-  const w = Math.floor(innerWidth * SCALE), h = Math.floor(innerHeight * SCALE);
-  if (c.width !== w || c.height !== h || !ctx) {
-    c.width = w; c.height = h;
-    ctx = c.getContext('2d', { alpha: true, desynchronized: true });
-    grads = WAVES.map((wv) => {
-      const g = ctx.createLinearGradient(0, 0, w, 0);
-      g.addColorStop(0, 'rgba(255,255,255,0)');
-      g.addColorStop(0.3, `rgba(255,255,255,${wv.al})`);
-      g.addColorStop(0.7, `rgba(255,255,255,${wv.al * 1.3})`);
-      g.addColorStop(1, 'rgba(255,255,255,0)');
-      return g;
-    });
-  }
-  const g = ctx;
-  g.clearRect(0, 0, w, h);
-  g.globalCompositeOperation = 'lighter';
-  const time = t / 1000;
-  WAVES.forEach((wv, wi) => {
-    const top = [], bot = [];
-    for (let x = 0; x <= w + STEP; x += STEP) {
-      const u = x / w;
-      const base = wv.y * h + Math.sin(u * Math.PI * wv.k + time * wv.s * 6) * wv.a * h + Math.sin(u * Math.PI * wv.k * 0.5 - time * wv.s * 3) * wv.a * 0.5 * h;
-      const thick = wv.h * h * (0.55 + 0.45 * Math.sin(u * Math.PI * 1.3 + time * wv.s * 4));
-      top.push(x, base - thick / 2);
-      bot.push(x, base + thick / 2);
-    }
-    g.beginPath();
-    for (let i = 0; i < top.length; i += 2) (i ? g.lineTo(top[i], top[i + 1]) : g.moveTo(top[i], top[i + 1]));
-    for (let i = bot.length - 2; i >= 0; i -= 2) g.lineTo(bot[i], bot[i + 1]);
-    g.closePath();
-    g.fillStyle = grads[wi];
-    g.fill();
-    g.beginPath();
-    for (let i = 0; i < top.length; i += 2) (i ? g.lineTo(top[i], top[i + 1]) : g.moveTo(top[i], top[i + 1]));
-    g.strokeStyle = `rgba(255,255,255,${wv.al * 1.6})`;
-    g.lineWidth = 1.5 * SCALE;
-    g.stroke();
-  });
+let raf = 0, last = 0, ctx = null, frame = null, key = '';
+const t0 = performance.now();
+function scale() {
+  const dpr = window.devicePixelRatio || 1;
+  if (light.value) return innerWidth * dpr > 2600 ? 0.5 : 0.75;
+  return Math.min(dpr, 2);
 }
-function start() { cancelAnimationFrame(raf); last = 0; ctx = null; raf = requestAnimationFrame(draw); }
-watch(mode, async (m) => { cancelAnimationFrame(raf); if (m === 'waves') { await nextTick(); start(); } }, { immediate: true });
-const vis = () => (document.hidden ? cancelAnimationFrame(raf) : mode.value === 'waves' && start());
+function setup() {
+  const c = cv.value;
+  if (!c) return false;
+  const S = scale();
+  const w = Math.floor(innerWidth * S), h = Math.floor(innerHeight * S);
+  const pal = paletteOf(store.config?.ui);
+  const k = [mode.value, w, h, pal.accent, pal.warm, light.value].join('|');
+  if (k === key && frame) return true;
+  key = k;
+  c.width = w; c.height = h;
+  ctx = c.getContext('2d', { alpha: true, desynchronized: true });
+  frame = RENDERERS[mode.value](ctx, w, h, S, pal, light.value);
+  return true;
+}
+function loop(t) {
+  raf = requestAnimationFrame(loop);
+  const gap = light.value ? 50 : 33; // ~30fps (20 in light mode) is plenty for a slow ambient drift
+  if (t - last < gap) return;
+  last = t;
+  if (!setup()) return;
+  frame((t - t0) / 1000);
+}
+function start() {
+  cancelAnimationFrame(raf); last = 0; key = ''; frame = null;
+  if (!RENDERERS[mode.value]) return;
+  if (reduce.value) { nextTick(() => { if (setup()) frame(12); }); return; } // one still frame
+  raf = requestAnimationFrame(loop);
+}
+const restart = async () => { cancelAnimationFrame(raf); await nextTick(); start(); };
+watch([mode, reduce, light, () => store.config?.ui?.theme, () => store.config?.ui?.customColor, () => store.config?.ui?.surface], restart, { immediate: true });
+const onResize = () => { if (reduce.value) restart(); };
+window.addEventListener('resize', onResize);
+const vis = () => (document.hidden ? cancelAnimationFrame(raf) : start());
 document.addEventListener('visibilitychange', vis);
-onBeforeUnmount(() => { cancelAnimationFrame(raf); document.removeEventListener('visibilitychange', vis); });
+onBeforeUnmount(() => { cancelAnimationFrame(raf); document.removeEventListener('visibilitychange', vis); window.removeEventListener('resize', onResize); });
 
-// ---------- Game art mode: two layers crossfade on focus
+// ---------- your own wallpaper
+const wallUrl = computed(() => (store.config?.ui?.wallpaper ? 'romimg://img/?wp=1&t=' + store.config.ui.wallpaper : ''));
+const wallDim = computed(() => ({ low: 0.25, medium: 0.45, high: 0.65 }[store.config?.ui?.wallDim || 'medium']));
+
+// ---------- game art mode: two layers crossfade on focus
 const layers = reactive([{ src: '', on: false, blur: false }, { src: '', on: false, blur: false }]);
 let cur = 0;
 watch(() => [store.bg?.src, mode.value], () => {
@@ -108,6 +103,15 @@ watch(() => [store.bg?.src, mode.value], () => {
 <style>
 .bg-stage.xmb { background: var(--xmb-base, #170838); }
 .xmb-grad { position: absolute; inset: 0; background: var(--xmb); }
+.bg-darken { position: absolute; inset: 0; background: linear-gradient(170deg, rgba(var(--tint-rgb), 0.35), rgba(var(--tint-rgb), 0.8) 70%); }
+.bg-dots .bg-darken { background: linear-gradient(170deg, rgba(var(--tint-rgb), 0.15), rgba(var(--tint-rgb), 0.6) 80%); }
 .xmb-waves { position: absolute; inset: 0; width: 100%; height: 100%; }
-.xmb-vignette { position: absolute; inset: 0; background: radial-gradient(120% 100% at 50% 40%, transparent 55%, rgba(8, 3, 20, 0.5) 100%), linear-gradient(0deg, rgba(10, 4, 24, 0.5), transparent 35%); }
+.xmb-vignette { position: absolute; inset: 0; background: radial-gradient(120% 100% at 50% 40%, transparent 55%, rgba(var(--tint-rgb), 0.5) 100%), linear-gradient(0deg, rgba(var(--tint-rgb), 0.5), transparent 35%); }
+.surface-oled .xmb-vignette { background: radial-gradient(120% 100% at 50% 40%, transparent 45%, rgba(0, 0, 0, 0.85) 100%), linear-gradient(0deg, #000 2%, transparent 45%); }
+.bg-stage .layer.wall { inset: 0; transform: none; filter: none; }
+.wall-dim { position: absolute; inset: 0; background: linear-gradient(90deg, #000 0%, rgba(0, 0, 0, 0.6) 50%, rgba(0, 0, 0, 0.35) 100%); }
+</style>
+<style>
+.surface-oled .xmb-grad { opacity: 0.3; }
+.surface-oled .bg-stage .shade { background: linear-gradient(90deg, #000 0%, rgba(0, 0, 0, 0.8) 45%, rgba(0, 0, 0, 0.55) 100%), linear-gradient(0deg, #000 6%, transparent 60%); }
 </style>

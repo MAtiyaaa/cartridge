@@ -40,7 +40,9 @@ const DEFAULT_CONFIG = {
   biosPath: '',
   paths: {},
   downloads: { concurrency: 2, esdeM3uFolders: true, flattenSingleFile: true },
-  ui: { gridSize: 'md', hideEmpty: true, sounds: true, bgStyle: 'waves', theme: 'purple', mediaBar: true, logos: true, pointer: 'auto', scale: 'auto', keyboard: 'auto' },
+  ui: { gridSize: 'md', hideEmpty: true, sounds: true, bgStyle: 'waves', theme: 'purple', mediaBar: true, logos: true, pointer: 'auto', scale: 'auto', keyboard: 'auto',
+    customColor: '', surface: 'glass', text: 'normal', font: 'outfit', cardShape: 'rounded', density: 'normal', cardTitles: true,
+    motion: 'normal', effects: 'auto', soundPack: 'soft', volume: 'medium', wallpaper: '', wallDim: 'medium' },
   sync: { onLaunch: true, everyMinutes: 60 },
   sgdbKey: '', // optional SteamGridDB API key for game logos
   ra: { user: '', key: '' }, // RetroAchievements username + web API key
@@ -562,6 +564,12 @@ async function handleImage(request) {
   }
   if (sl) {
     try { return new Response(await fsp.readFile(path.join(SYSLOGO_DIR, path.basename(sl) + '.svg')), { headers: { 'Content-Type': 'image/svg+xml' } }); } catch { return new Response('nf', { status: 404 }); }
+  }
+  if (u.searchParams.get('wp')) {
+    const f = fs.readdirSync(USER_DATA).find((n) => /^wallpaper\.(png|jpe?g|webp)$/i.test(n));
+    if (!f) return new Response('nf', { status: 404 });
+    const type = { '.png': 'image/png', '.webp': 'image/webp' }[path.extname(f).toLowerCase()] || 'image/jpeg';
+    return new Response(await fsp.readFile(path.join(USER_DATA, f)), { headers: { 'Content-Type': type } });
   }
   const tr = u.searchParams.get('tr');
   if (tr) {
@@ -1188,6 +1196,17 @@ const trophySvc = require('./trophyService')({
 const handlers = {
   ...trophySvc.handlers,
   'config:get': () => config,
+  'wallpaper:set': async ({ file }) => {
+    const ext = path.extname(file || '').toLowerCase();
+    if (!['.png', '.jpg', '.jpeg', '.webp'].includes(ext)) throw new Error('Pick a PNG, JPG or WebP image');
+    const st = await fsp.stat(file);
+    if (st.size > 40 * 1024 * 1024) throw new Error('That image is too big (over 40 MB)');
+    for (const f of fs.readdirSync(USER_DATA)) if (/^wallpaper\./.test(f)) try { fs.rmSync(path.join(USER_DATA, f)); } catch {}
+    await fsp.copyFile(file, path.join(USER_DATA, 'wallpaper' + ext));
+    config.ui.wallpaper = String(Date.now()); config.ui.bgStyle = 'wallpaper'; saveConfig();
+    return config;
+  },
+  'wallpaper:clear': () => { for (const f of fs.readdirSync(USER_DATA)) if (/^wallpaper\./.test(f)) try { fs.rmSync(path.join(USER_DATA, f)); } catch {} config.ui.wallpaper = ''; saveConfig(); return config; },
   'clip:read': async () => String((await require('electron').clipboard.readText()) || '').trim().slice(0, 4000),
   'logo:get': (r) => logoFor(r),
   'ra:signin': async ({ user, key }) => {
@@ -1313,8 +1332,11 @@ const handlers = {
     const o = typeof arg === 'object' && arg ? arg : { dir: arg };
     const d = expandHome(o.dir || os.homedir());
     const entries = await fsp.readdir(d, { withFileTypes: true }).catch(() => []);
-    const dirs = entries.filter((e) => (e.isDirectory() || e.isSymbolicLink()) && (o.hidden ? !['.', '..', '.cache', '.Trash-1000'].includes(e.name) : !e.name.startsWith('.'))).map((e) => e.name).sort((a, b) => a.localeCompare(b));
-    return { path: path.resolve(d), parent: path.dirname(path.resolve(d)), dirs };
+    const isD = (e) => e.isDirectory() || (e.isSymbolicLink() && isDir(path.join(d, e.name)));
+    const dirs = entries.filter((e) => isD(e) && (o.hidden ? !['.', '..', '.cache', '.Trash-1000'].includes(e.name) : !e.name.startsWith('.'))).map((e) => e.name).sort((a, b) => a.localeCompare(b));
+    const exts = Array.isArray(o.files) ? o.files.map((x) => '.' + String(x).toLowerCase()) : null;
+    const files = exts ? entries.filter((e) => !isD(e) && !e.name.startsWith('.') && exts.includes(path.extname(e.name).toLowerCase())).map((e) => e.name).sort((a, b) => a.localeCompare(b)) : undefined;
+    return { path: path.resolve(d), parent: path.dirname(path.resolve(d)), dirs, files };
   },
   'fs:mkdir': async (dir) => { await fsp.mkdir(dir, { recursive: true }); return true; },
   'fs:space': async (dir) => {
