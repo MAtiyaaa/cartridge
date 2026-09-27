@@ -178,7 +178,7 @@ onMounted(async () => { await nextTick(); focusFirst(el.value); });
 <style scoped>
 .setup { position: relative; z-index: 1; height: 100%; overflow-y: auto; padding: 40px 20px 60px; display: flex; flex-direction: column; align-items: center; gap: 18px; background: radial-gradient(1200px 600px at 50% -10%, rgba(139, 116, 232, 0.22), transparent 60%); }
 .hero { text-align: center; display: flex; flex-direction: column; align-items: center; gap: 8px; }
-.hero .logo { width: 64px; height: 64px; border-radius: 18px; background: linear-gradient(135deg, var(--primary-l), var(--primary-d)); display: grid; place-items: center; box-shadow: 0 10px 40px rgba(139, 116, 232, 0.4); }
+.hero .logo { width: 64px; height: 64px; border-radius: 12px; background: linear-gradient(135deg, var(--primary-l), var(--primary-d)); display: grid; place-items: center; box-shadow: 0 10px 40px rgba(139, 116, 232, 0.4); }
 .hero h1 { font-size: 40px; font-weight: 800; letter-spacing: -0.02em; }
 .hero p { margin: 0; }
 .steps { display: flex; gap: 20px; color: var(--dim); font-size: 13px; }
@@ -193,7 +193,7 @@ onMounted(async () => { await nextTick(); focusFirst(el.value); });
 .toggle-adv { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 13px; padding: 6px; border-radius: 8px; align-self: flex-start; }
 .toggle-adv:focus { box-shadow: var(--ring); }
 .results { display: flex; flex-direction: column; gap: 8px; }
-.res { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 10px; font-size: 14px; }
+.res { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 7px; font-size: 14px; }
 .res.ok { background: rgba(63, 185, 80, 0.1); color: #7ee787; }
 .res.bad { background: rgba(218, 54, 51, 0.1); color: #ff9b95; }
 .mono { font-family: ui-monospace, monospace; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

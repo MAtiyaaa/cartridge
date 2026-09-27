@@ -74,7 +74,7 @@
 import { computed, onMounted, onBeforeUnmount, ref, nextTick, watch } from 'vue';
 import { store, go, back, platformById, romsOf, allRoms, collections, collectionById, romsOfCollection, askText, pickFolder, call, download, toast, choose, confirm, bytes, year, isNew, cover, setBg, backdropOf, downloadFor, visiblePlatforms, romById } from '../store.js';
 import { useView } from '../useView.js';
-import { ensureFocus, jump } from '../nav.js';
+import { ensureFocus } from '../nav.js';
 import Icon from '../components/Icon.vue';
 import Btn from '../components/Btn.vue';
 import PIcon from '../components/PIcon.vue';
@@ -154,7 +154,6 @@ useView(
   {
     lb: () => (mode.value === 'all' ? false : neighbor(-1)),
     rb: () => (mode.value === 'all' ? false : neighbor(1)),
-    lt: () => jump('up'), rt: () => jump('down'),
     y: () => search(),
     x: () => {
       const key = document.activeElement?.dataset?.key || '';
@@ -164,8 +163,9 @@ useView(
     },
     select: () => { filter.value = filters[(filters.findIndex((f) => f.v === filter.value) + 1) % filters.length].v; },
   },
-  () => [{ b: 'A', label: 'Details' }, { b: 'X', label: 'Download' }, { b: 'Y', label: 'Filter' }, { b: 'LT', label: '/ RT  Page' },
-    ...(mode.value === 'all' ? [{ b: 'LB', label: '/ RB  Tabs' }] : [{ b: 'LB', label: mode.value === 'platform' ? '/ RB  Console' : '/ RB  Collection' }, { b: 'B', label: 'Back' }])],
+  () => [{ b: 'A', label: 'Details' }, { b: 'X', label: 'Download' }, { b: 'Y', label: 'Filter' },
+    ...(mode.value === 'all' ? [] : [{ b: 'LB', label: mode.value === 'platform' ? '/ RB  Console' : '/ RB  Collection' }]),
+    { b: 'LT', label: '/ RT  Tabs' }, ...(mode.value === 'all' ? [] : [{ b: 'B', label: 'Back' }])],
 );
 
 function open(r) { go('game', { romId: r.id }); }
@@ -222,18 +222,18 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.plat-view { position: absolute; inset: 0; display: grid; grid-template-rows: auto auto 1fr; padding: 8px 36px 0; animation: viewIn 0.35s var(--ease); }
+.plat-view { position: absolute; inset: 0; display: grid; grid-template-rows: auto auto 1fr; padding: 8px 36px 0; animation: viewIn 0.16s ease-out; }
 .ph-head { display: flex; align-items: center; justify-content: space-between; gap: 20px; margin: 6px 0 14px; }
 .sys-switch { display: flex; align-items: center; gap: 16px; min-width: 0; }
 .sys-switch h1 { font-size: 30px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.hicon { width: 52px; height: 52px; border-radius: 14px; display: grid; place-items: center; background: rgba(139, 116, 232, 0.2); color: #cfc4ff; flex: none; }
+.hicon { width: 52px; height: 52px; border-radius: 9px; display: grid; place-items: center; background: rgba(139, 116, 232, 0.2); color: #cfc4ff; flex: none; }
 .toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
 .body { display: grid; grid-template-columns: 1fr 340px; gap: 24px; min-height: 0; }
 .grid-pane { overflow-y: auto; padding: 22px 12px 60px; margin: 0 -12px; }
 .more { display: grid; place-items: center; padding: 30px; }
 .detail { align-self: start; margin-top: 12px; padding: 18px; max-height: calc(100% - 30px); overflow: hidden; }
 .detail-in { display: flex; flex-direction: column; gap: 12px; }
-.d-cover { width: 150px; aspect-ratio: 3/4; border-radius: 12px; overflow: hidden; box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6); background: #1a1e2a; }
+.d-cover { width: 150px; aspect-ratio: 2/3; border-radius: 8px; overflow: hidden; box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6); background: #1a1e2a; }
 .d-cover img { width: 100%; height: 100%; object-fit: cover; }
 .noart { height: 100%; display: grid; place-items: center; padding: 10px; text-align: center; color: var(--muted); font-size: 13px; }
 .detail h2 { font-size: 22px; line-height: 1.15; }

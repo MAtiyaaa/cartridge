@@ -72,7 +72,7 @@ onBeforeUnmount(() => layer.pop());
 <style scoped>
 .picker { width: min(820px, 94vw); height: 82vh; }
 .places { display: flex; gap: 8px; flex-wrap: wrap; }
-.crumb { display: flex; gap: 8px; align-items: center; padding: 10px 14px; background: var(--bg); border-radius: 10px; font-family: ui-monospace, monospace; font-size: 13px; color: var(--muted); overflow: hidden; white-space: nowrap; }
+.crumb { display: flex; gap: 8px; align-items: center; padding: 10px 14px; background: var(--bg); border-radius: 7px; font-family: ui-monospace, monospace; font-size: 13px; color: var(--muted); overflow: hidden; white-space: nowrap; }
 .list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; padding: 4px; }
 .kb-hints { display: flex; gap: 18px; justify-content: center; font-size: 12px; }
 .hint { display: flex; align-items: center; gap: 6px; }

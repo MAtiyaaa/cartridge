@@ -64,6 +64,6 @@ onMounted(() => { if (!q.value) ask(); });
 </script>
 
 <style scoped>
-.searchbar { width: 100%; display: flex; align-items: center; gap: 16px; height: 68px; padding: 0 24px; border-radius: 18px; font-size: 20px; margin: 16px 0 26px; }
+.searchbar { width: 100%; display: flex; align-items: center; gap: 16px; height: 68px; padding: 0 24px; border-radius: 12px; font-size: 20px; margin: 16px 0 26px; }
 .qv { font-family: var(--display); font-weight: 500; }
 </style>

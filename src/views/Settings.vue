@@ -86,13 +86,38 @@
 
           <template v-else-if="sec === 'ui'">
             <h1>Look &amp; feel</h1>
+            <div class="row"><span class="lbl">Color</span>
+              <div class="swatches">
+                <button v-for="(t, k) in THEMES" :key="k" class="swatch" data-focus :class="{ on: (ui.theme || 'purple') === k }" :style="{ background: `linear-gradient(135deg, ${t.grad[0]}, ${t.grad[2]} 60%, ${t.grad[4]})` }" :title="t.label" @click="saveConfig({ ui: { theme: k } })"><span>{{ t.label }}</span></button>
+              </div>
+            </div>
             <div class="row"><span class="lbl">Box art size</span><div class="seg"><button v-for="s in sizes" :key="s.v" data-focus :class="{ on: ui.gridSize === s.v }" @click="saveConfig({ ui: { gridSize: s.v } })">{{ s.l }}</button></div></div>
             <div class="row"><span class="lbl">Background</span><div class="seg"><button v-for="b in bgs" :key="b.v" data-focus :class="{ on: (ui.bgStyle || 'waves') === b.v }" @click="saveConfig({ ui: { bgStyle: b.v } })">{{ b.l }}</button></div></div>
+            <Toggle :model-value="ui.mediaBar !== false" label="Media bar" desc="Show artwork of the highlighted game at the top of Home" @update:model-value="(v) => saveConfig({ ui: { mediaBar: v } })" />
+            <div class="row"><span class="lbl">Touch &amp; mouse</span><div class="seg"><button v-for="p in pointers" :key="p.v" data-focus :class="{ on: (ui.pointer || 'auto') === p.v }" @click="setPointer(p.v)">{{ p.l }}</button></div></div>
+            <p class="muted small" style="margin-top: -6px">Auto hides the cursor when you tap the screen and shows it when a mouse moves. Touch never shows a cursor.</p>
             <Toggle :model-value="ui.sounds !== false" label="UI sounds" desc="Soft clicks when you move and select" @update:model-value="setSounds" />
             <Toggle :model-value="ui.hideEmpty" label="Hide empty systems" @update:model-value="(v) => saveConfig({ ui: { hideEmpty: v } })" />
-            <div class="row"><span class="lbl">Rendering</span><div class="seg"><button v-for="g in gfx" :key="g.v" data-focus :class="{ on: (store.config.graphics || 'software') === g.v }" @click="setGraphics(g.v)">{{ g.l }}</button></div></div>
-            <p class="muted small" style="margin-top: -6px">Compatible works on every device. Hardware uses the GPU and can show a blank grey window on some handhelds.</p>
+            <div class="row"><span class="lbl">Rendering</span><div class="seg"><button v-for="g in gfx" :key="g.v" data-focus :class="{ on: (store.config.graphics || 'auto') === g.v }" @click="setGraphics(g.v)">{{ g.l }}</button></div></div>
+            <p class="muted small" style="margin-top: -6px">Auto uses the GPU for the smoothest scrolling and falls back by itself if the GPU fails. Compatible draws without the GPU.</p>
             <div class="row"><button class="btn" data-focus @click="call('app:fullscreen')"><Icon name="mdiFullscreen" />Toggle fullscreen</button><button class="btn" data-focus @click="clearCache"><Icon name="mdiImageRemove" />Clear image cache</button></div>
+          </template>
+
+          <template v-else-if="sec === 'updates'">
+            <h1>Updates</h1>
+            <div class="about glass">
+              <Logo :size="64" />
+              <div style="display: flex; flex-direction: column; gap: 6px; flex: 1">
+                <div style="font-family: var(--display); font-size: 22px; font-weight: 700">Cartridge {{ store.info.version }}</div>
+                <div class="muted small">{{ updText }}</div>
+                <div v-if="store.update.state === 'downloading'" class="bar" style="max-width: 360px"><i :style="{ width: (store.update.percent || 0) + '%' }" /></div>
+              </div>
+            </div>
+            <div class="row wrap">
+              <button v-if="store.update.state === 'ready'" class="btn primary" data-focus @click="call('update:install')"><Icon name="mdiRestart" />Restart and update to {{ store.update.version }}</button>
+              <button class="btn" :class="{ primary: store.update.state !== 'ready' }" data-focus :disabled="['checking', 'downloading'].includes(store.update.state)" @click="checkUpdates"><Icon name="mdiCloudDownloadOutline" />Check for updates</button>
+            </div>
+            <p class="muted small">New versions come from the GitHub Releases page. They download in the background and replace this AppImage in place, so your Steam shortcut and settings stay as they are.</p>
           </template>
 
           <template v-else-if="sec === 'steam'">
@@ -134,7 +159,8 @@
 import { computed, onMounted, ref, watch } from 'vue';
 import { store, call, go, saveConfig, pickFolder, choose, confirm, toast, bytes, ago, resync, scanServer, allRoms } from '../store.js';
 import { useView } from '../useView.js';
-import { input, focusFirst } from '../nav.js';
+import { input, focusFirst, setPointerPref } from '../nav.js';
+import { THEMES } from '../themes.js';
 import { setSoundEnabled } from '../sfx.js';
 import Icon from '../components/Icon.vue';
 import Logo from '../components/Logo.vue';
@@ -152,6 +178,7 @@ const sections = [
   { id: 'dl', label: 'Downloads', icon: 'mdiTrayArrowDown' },
   { id: 'ui', label: 'Look & feel', icon: 'mdiPaletteOutline' },
   { id: 'steam', label: 'Steam', icon: 'mdiSteam' },
+  { id: 'updates', label: 'Updates', icon: 'mdiUpdate' },
   { id: 'about', label: 'About', icon: 'mdiInformationOutline' },
 ];
 const showAll = ref(false);
@@ -165,12 +192,13 @@ const total = computed(() => allRoms().length);
 const modes = [{ v: 'auto', l: 'Auto' }, { v: 'local', l: 'Local' }, { v: 'remote', l: 'Remote' }];
 const sizes = [{ v: 'sm', l: 'Small' }, { v: 'md', l: 'Medium' }, { v: 'lg', l: 'Large' }];
 const bgs = [{ v: 'waves', l: 'XMB waves' }, { v: 'art', l: 'Game artwork' }];
-const gfx = [{ v: 'software', l: 'Compatible' }, { v: 'hardware', l: 'Hardware (GPU)' }];
+const gfx = [{ v: 'auto', l: 'Auto (GPU)' }, { v: 'software', l: 'Compatible' }];
+const pointers = [{ v: 'auto', l: 'Auto' }, { v: 'touch', l: 'Touch' }, { v: 'mouse', l: 'Mouse' }];
 const every = [{ v: 0, l: 'Off' }, { v: 30, l: '30 min' }, { v: 60, l: '1 h' }, { v: 180, l: '3 h' }];
 const folderList = computed(() => (store.libVersion, showAll.value ? supported.value : store.lib?.platforms || []));
 
 useView({ back: () => { if (!document.activeElement?.closest('.rail')) { focusFirst(el.value, `[data-key="sec-${sec.value}"]`); return; } return false; } },
-  [{ b: 'A', label: 'Select' }, { b: 'B', label: 'Back' }, { b: 'LB', label: '/ RB  Tabs' }]);
+  [{ b: 'A', label: 'Select' }, { b: 'B', label: 'Back' }, { b: 'LT', label: '/ RT  Tabs' }]);
 watch(sec, (v) => { store.settingsSection = v; });
 
 function enter() { focusFirst(paneEl.value); }
@@ -243,8 +271,15 @@ async function addToSteam() {
     toast(`Added to Steam${r.added.length > 1 ? ` for ${r.added.length} accounts` : ''} with artwork${r.restarted ? '. Steam is reopening.' : '. Open Steam to see it.'}`, 'ok', 6000, 'mdiSteam');
   } catch (e) { toast(e.message, 'error', 6000); }
 }
+const updText = computed(() => {
+  const u = store.update;
+  if (!store.update.supported && store.update.state === 'idle') return 'Updates work in the AppImage build.';
+  return { checking: 'Checking GitHub for a new version…', downloading: `Downloading ${u.version} · ${u.percent || 0}%`, ready: `Version ${u.version} is downloaded and ready.`, current: 'You have the latest version.', error: `Could not check for updates: ${u.error || ''}` }[u.state] || 'Checks automatically when Cartridge starts.';
+});
+async function checkUpdates() { try { await call('update:check'); } catch (e) { toast(e.message, 'info', 4000); } }
+async function setPointer(v) { await saveConfig({ ui: { pointer: v } }); setPointerPref(v); }
 async function setGraphics(v) {
-  if ((store.config.graphics || 'software') === v) return;
+  if ((store.config.graphics || 'auto') === v) return;
   await saveConfig({ graphics: v });
   if (await confirm('Restart Cartridge?', 'The rendering change takes effect after a restart.', 'Restart now')) call('app:relaunch');
 }
@@ -258,9 +293,9 @@ onMounted(async () => { space.value = await call('fs:space', store.config.romsRo
 </script>
 
 <style scoped>
-.set-view { position: absolute; inset: 0; display: grid; grid-template-columns: 270px 1fr; gap: 10px; padding: 16px 36px 0; animation: viewIn 0.35s var(--ease); }
+.set-view { position: absolute; inset: 0; display: grid; grid-template-columns: 270px 1fr; gap: 10px; padding: 16px 36px 0; animation: viewIn 0.16s ease-out; }
 .rail { display: flex; flex-direction: column; gap: 4px; padding-top: 10px; }
-.rail-item { display: flex; align-items: center; gap: 14px; padding: 13px 16px; border-radius: 12px; color: var(--muted); font-weight: 500; transition: background 0.15s, color 0.15s; }
+.rail-item { display: flex; align-items: center; gap: 14px; padding: 13px 16px; border-radius: 8px; color: var(--muted); font-weight: 500; transition: background 0.15s, color 0.15s; }
 .rail-item.on { color: #fff; background: rgba(255, 255, 255, 0.06); }
 .rail-item:focus { background: rgba(139, 116, 232, 0.25); color: #fff; }
 .pane { overflow-y: auto; padding: 6px 12px 60px 24px; }
@@ -275,12 +310,15 @@ onMounted(async () => { space.value = await call('fs:space', store.config.romsRo
 .wrap { flex-wrap: wrap; }
 .pathrow { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 18px; }
 .plist { display: flex; flex-direction: column; gap: 6px; }
-.prow { display: grid; grid-template-columns: 30px 210px 1fr auto; align-items: center; gap: 14px; padding: 10px 14px; border-radius: 12px; background: rgba(255, 255, 255, 0.045); }
+.prow { display: grid; grid-template-columns: 30px 210px 1fr auto; align-items: center; gap: 14px; padding: 10px 14px; border-radius: 8px; background: rgba(255, 255, 255, 0.045); }
 .prow:focus { background: rgba(139, 116, 232, 0.2); }
 .pn { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pp { color: var(--muted); }
 .about { display: flex; align-items: center; gap: 22px; padding: 22px; }
-.steam-grid { width: 130px; border-radius: 10px; box-shadow: 0 14px 34px rgba(0, 0, 0, 0.5); flex: none; }
+.swatches { display: flex; flex-wrap: wrap; gap: 10px; }
+.swatch { width: 74px; height: 50px; border-radius: 8px; display: flex; align-items: flex-end; padding: 6px 8px; font-size: 11px; font-weight: 600; color: #fff; text-shadow: 0 1px 4px rgba(0,0,0,.6); box-shadow: inset 0 0 0 1px rgba(255,255,255,.15); }
+.swatch.on { box-shadow: 0 0 0 2px #fff, 0 0 0 5px var(--primary); }
+.steam-grid { width: 130px; border-radius: 7px; box-shadow: 0 14px 34px rgba(0, 0, 0, 0.5); flex: none; }
 .fadeup-enter-active, .fadeup-leave-active { transition: opacity 0.15s, transform 0.2s var(--ease); }
 .fadeup-enter-from { opacity: 0; transform: translateX(10px); }
 .fadeup-leave-to { opacity: 0; }

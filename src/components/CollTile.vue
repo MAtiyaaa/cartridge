@@ -25,9 +25,9 @@ const arts = computed(() => {
 });
 </script>
 <style scoped>
-.coll { flex: none; width: 250px; display: flex; flex-direction: column; gap: 10px; border-radius: 16px; }
+.coll { flex: none; width: 250px; display: flex; flex-direction: column; gap: 10px; border-radius: 10px; }
 .coll:focus { box-shadow: none !important; }
-.mosaic { height: 150px; border-radius: 16px; overflow: hidden; display: grid; gap: 2px; background: #151924; box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45); transition: transform 0.22s var(--ease), box-shadow 0.22s; }
+.mosaic { height: 150px; border-radius: 10px; overflow: hidden; display: grid; gap: 2px; background: #151924; box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45); transition: transform 0.22s var(--ease), box-shadow 0.22s; }
 .mosaic.n1 { grid-template-columns: 1fr; } .mosaic.n2 { grid-template-columns: 1fr 1fr; } .mosaic.n3 { grid-template-columns: 1fr 1fr 1fr; } .mosaic.n4 { grid-template-columns: repeat(4, 1fr); }
 .mosaic img { width: 100%; height: 100%; object-fit: cover; }
 .mosaic .ph { display: grid; place-items: center; color: #cfc4ff; background: linear-gradient(145deg, #2a2346, #12141d); }

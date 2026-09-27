@@ -9,7 +9,8 @@
     </div>
     <template v-else>
       <section class="hero">
-        <Transition name="hero" mode="out-in">
+        <MediaBar v-if="store.config.ui.mediaBar !== false" :src="heroArt" />
+        <Transition name="hero">
           <div v-if="heroRom" :key="'r' + heroRom.id" class="hero-in">
             <div class="eyebrow row" style="gap: 8px"><PIcon :p="{ slug: heroRom.platform_slug, fs_slug: heroRom.platform_fs_slug }" :size="18" />{{ heroRom.platform_display_name }}</div>
             <h1 class="hero-title">{{ heroRom.name }}</h1>
@@ -69,7 +70,7 @@
 
 <script setup>
 import { computed, ref, nextTick, onMounted, watch } from 'vue';
-import { collections, store, go, allRoms, visiblePlatforms, romsOf, isNew, setBg, backdropOf, bytes, year, ago, rating, resync, downloadFor, download, romById, toast } from '../store.js';
+import { img, cover, collections, store, go, allRoms, visiblePlatforms, romsOf, isNew, setBg, backdropOf, bytes, year, ago, rating, resync, downloadFor, download, romById, toast } from '../store.js';
 import { useView } from '../useView.js';
 import { ensureFocus } from '../nav.js';
 import Icon from '../components/Icon.vue';
@@ -78,12 +79,21 @@ import PIcon from '../components/PIcon.vue';
 import GameCard from '../components/GameCard.vue';
 import SysTile from '../components/SysTile.vue';
 import CollTile from '../components/CollTile.vue';
+import MediaBar from '../components/MediaBar.vue';
 
 const el = ref(null);
 const shelvesEl = ref(null);
 const heroRom = ref(null);
 const heroSys = ref(null);
 const heroCol = ref(null);
+// Media bar art: a screenshot of the highlighted game (or its cover), or art from the highlighted console/collection
+const artOf = (r) => (r ? (r.shot ? img(r.shot) : cover(r, true)) : '');
+const heroArt = computed(() => {
+  if (heroRom.value) return artOf(heroRom.value);
+  if (heroSys.value) return artOf(romsOf(heroSys.value.id).find((r) => r.shot) || romsOf(heroSys.value.id)[0]);
+  if (heroCol.value) return artOf(heroCol.value.rom_ids.map((id) => romById(id)).find((r) => r && r.shot));
+  return '';
+});
 const syncing = computed(() => ['running', 'scanning'].includes(store.sync.state));
 const total = computed(() => allRoms().length);
 const totalSize = computed(() => allRoms().reduce((s, r) => s + (r.fs_size_bytes || 0), 0));
@@ -146,7 +156,7 @@ useView(
       if (r && !store.installed[r.id]) download(r); else if (r) toast('Already on this device', 'info', 1800);
     },
   },
-  [{ b: 'A', label: 'Open' }, { b: 'X', label: 'Download' }, { b: 'Y', label: 'Search' }, { b: 'LB', label: '/ RB  Tabs' }],
+  [{ b: 'A', label: 'Open' }, { b: 'X', label: 'Download' }, { b: 'Y', label: 'Search' }, { b: 'LT', label: '/ RT  Tabs' }],
 );
 
 watch(() => store.libVersion, async () => { await nextTick(); ensureFocus(el.value); });
@@ -154,19 +164,20 @@ onMounted(async () => { await nextTick(); ensureFocus(el.value); });
 </script>
 
 <style scoped>
-.home { position: absolute; inset: 0; display: grid; grid-template-rows: minmax(250px, 38%) 1fr; animation: viewIn 0.35s var(--ease); }
+.home { position: absolute; inset: 0; display: grid; grid-template-rows: minmax(250px, 38%) 1fr; animation: viewIn 0.16s ease-out; }
 .first-sync { grid-row: 1 / -1; align-content: center; }
 .first-sync h2 { font-size: 30px; color: var(--text); }
 .hero { position: relative; padding: 18px 44px 10px; display: flex; align-items: flex-end; }
-.hero-in { max-width: 900px; display: flex; flex-direction: column; gap: 12px; }
+.hero-in { position: relative; z-index: 1; max-width: 760px; display: flex; flex-direction: column; gap: 12px; }
+.hero-leave-active { left: 44px; bottom: 10px; }
 .hero-title { font-size: clamp(34px, 4.4vw, 58px); font-weight: 700; line-height: 1.02; letter-spacing: -0.02em; text-shadow: 0 6px 30px rgba(0, 0, 0, 0.5); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .meta { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; color: #cfd4de; font-size: 14px; }
 .meta > span:not(.chip):not(:first-child)::before { content: ''; }
 .summary { margin: 0; max-width: 720px; color: #c3c9d4; line-height: 1.55; font-size: 14.5px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-.shelves { position: relative; overflow-y: auto; padding: 0 44px 60vh; scroll-behavior: smooth; mask-image: linear-gradient(180deg, #000 calc(100% - 40px), transparent); }
+.shelves { position: relative; overflow-y: auto; padding: 0 44px 60vh; }
 .shelf-wrap { margin-bottom: 14px; }
 .shelf { padding: 22px 44px 18px; margin: -12px -44px 0; scroll-padding: 0 44px; }
-.hero-enter-active, .hero-leave-active { transition: opacity 0.22s, transform 0.3s var(--ease); }
-.hero-enter-from { opacity: 0; transform: translateY(10px); }
-.hero-leave-to { opacity: 0; transform: translateY(-6px); }
+.hero-enter-active { transition: opacity 0.14s ease-out; }
+.hero-leave-active { transition: opacity 0.1s ease-in; position: absolute; }
+.hero-enter-from, .hero-leave-to { opacity: 0; }
 </style>

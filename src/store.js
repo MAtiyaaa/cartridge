@@ -132,7 +132,7 @@ export function backdropOf(rom) {
 let bgTimer;
 export function setBg(b) {
   clearTimeout(bgTimer);
-  bgTimer = setTimeout(() => { store.bg = b || ''; }, 140);
+  bgTimer = setTimeout(() => { store.bg = b || ''; }, 40);
 }
 
 // ---------------- downloads

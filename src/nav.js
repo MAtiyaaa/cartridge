@@ -102,8 +102,7 @@ function scrollIntoViewSmart(el) {
 
 export function dispatch(action) {
   const layer = topLayer();
-  input.mode = 'pad';
-  document.body.classList.add('pad-mode');
+  setMode('pad');
   const h = layer?.handlers?.[action];
   if (action === 'accept') sfx.accept();
   else if (action === 'back') sfx.back();
@@ -133,15 +132,35 @@ window.addEventListener('keydown', (ev) => {
   ev.preventDefault();
   dispatch(a);
 });
-window.addEventListener('mousemove', () => {
-  if (input.mode !== 'mouse') { input.mode = 'mouse'; document.body.classList.remove('pad-mode'); }
+// ---------------- pointer: touch vs mouse
+// 'auto' follows whatever was used last; 'touch' never shows a cursor; 'mouse' always does.
+let pointerPref = 'auto';
+let lastTouch = 0;
+export function setPointerPref(p) { pointerPref = p || 'auto'; if (p === 'touch') setMode('touch'); if (p === 'mouse') setMode('mouse'); }
+function setMode(m) {
+  if (input.mode === m) return;
+  input.mode = m;
+  const b = document.body.classList;
+  b.toggle('pad-mode', m === 'pad');
+  b.toggle('touch-mode', m === 'touch');
+  b.toggle('mouse-mode', m === 'mouse');
+}
+window.addEventListener('pointerdown', (e) => {
+  if (e.pointerType === 'touch' || e.pointerType === 'pen') { lastTouch = performance.now(); if (pointerPref !== 'mouse') setMode('touch'); }
+  else if (pointerPref !== 'touch') setMode('mouse');
+}, { passive: true, capture: true });
+window.addEventListener('mousemove', (e) => {
+  if (pointerPref === 'touch') return;
+  if (performance.now() - lastTouch < 1000) return; // synthetic mouse events that follow a tap
+  if (e.movementX === 0 && e.movementY === 0) return;
+  setMode('mouse');
 }, { passive: true });
 
 // ---------------- gamepad
 const BTN = { 0: 'accept', 1: 'back', 2: 'x', 3: 'y', 4: 'lb', 5: 'rb', 6: 'lt', 7: 'rt', 8: 'select', 9: 'start', 12: 'up', 13: 'down', 14: 'left', 15: 'right' };
 const REPEATABLE = new Set(['up', 'down', 'left', 'right', 'lt', 'rt']);
 const state = {}; // key -> { down, next }
-const DELAY = 380, RATE = 85;
+const DELAY = 300, RATE = 70;
 
 function press(key, isDown, now) {
   const s = state[key] || (state[key] = { down: false, next: 0 });

@@ -24,6 +24,7 @@
       <button class="qm-item" data-focus @click="nav('downloads')"><Icon name="mdiDownload" /><div><b>Downloads</b><small>{{ activeCount ? `${activeCount} active` : 'Queue and history' }}</small></div></button>
       <button class="qm-item" data-focus @click="nav('settings')"><Icon name="mdiCog" /><div><b>Settings</b><small>Server, folders, sync</small></div></button>
       <button class="qm-item" data-focus @click="checkUpdate"><Icon name="mdiCloudDownloadOutline" /><div><b>Check for updates</b><small>{{ updLabel }}</small></div></button>
+      <button class="qm-item" data-focus @click="shot"><Icon name="mdiCamera" /><div><b>Take screenshot</b><small>Saved to Pictures/Cartridge</small></div></button>
       <button class="qm-item" data-focus @click="call('app:fullscreen')"><Icon name="mdiFullscreen" /><div><b>Toggle fullscreen</b></div></button>
       <button class="qm-item danger" data-focus @click="call('app:quit')"><Icon name="mdiPower" /><div><b>Quit Cartridge</b></div></button>
     </aside>
@@ -49,6 +50,11 @@ const updLabel = computed(() => {
   return { checking: 'Checking…', downloading: `Downloading ${u.version || ''} · ${u.percent || 0}%`, ready: `${u.version} ready`, current: `Up to date · ${store.info.version}`, error: 'Could not check' }[u.state] || `Version ${store.info.version}`;
 });
 async function checkUpdate() { try { await call('update:check'); } catch (e) { toast(e.message, 'info', 3000); } }
+async function shot() {
+  close();
+  await new Promise((r) => setTimeout(r, 450));
+  try { const f = await call('app:screenshot'); toast(`Screenshot saved: ${f.split('/').pop()}`, 'ok', 3000, 'mdiCamera'); } catch (e) { toast(e.message, 'error'); }
+}
 async function rescan() { await call('installed:rescan'); toast('Device rescanned', 'ok', 2000, 'mdiHarddisk'); }
 async function toggleSounds() { const v = !store.config.ui.sounds; await saveConfig({ ui: { sounds: v } }); setSoundEnabled(v); }
 let layer;
@@ -60,12 +66,12 @@ onBeforeUnmount(() => layer.pop());
 </script>
 <style scoped>
 .qm-scrim { position: fixed; inset: 0; z-index: 45; background: rgba(3, 4, 7, 0.5); animation: fade 0.2s; }
-.qm { position: absolute; top: 0; right: 0; bottom: 0; width: 400px; padding: 26px 20px; display: flex; flex-direction: column; gap: 8px; background: rgba(14, 16, 24, 0.94); border-left: 1px solid var(--line-2); backdrop-filter: blur(30px); box-shadow: -30px 0 80px rgba(0, 0, 0, 0.6); animation: slide 0.3s var(--ease); overflow-y: auto; }
+.qm { position: absolute; top: 0; right: 0; bottom: 0; width: 400px; padding: 26px 20px; display: flex; flex-direction: column; gap: 8px; background: rgba(14, 16, 24, 0.94); border-left: 1px solid var(--line-2); box-shadow: -30px 0 80px rgba(0, 0, 0, 0.6); animation: slide 0.3s var(--ease); overflow-y: auto; }
 @keyframes slide { from { transform: translateX(60px); opacity: 0; } }
 .qm-head { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
 .qm-title { font-family: var(--display); font-weight: 600; font-size: 20px; }
 .qm-sync { padding: 14px 16px; display: flex; flex-direction: column; gap: 8px; margin-bottom: 8px; }
-.qm-item { display: flex; align-items: center; gap: 14px; padding: 13px 14px; border-radius: 12px; transition: background 0.15s; }
+.qm-item { display: flex; align-items: center; gap: 14px; padding: 13px 14px; border-radius: 8px; transition: background 0.15s; }
 .qm-item div { display: flex; flex-direction: column; gap: 2px; }
 .qm-item b { font-weight: 500; font-size: 14.5px; }
 .qm-item small { color: var(--muted); font-size: 12px; }

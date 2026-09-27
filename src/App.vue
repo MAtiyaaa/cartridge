@@ -4,14 +4,15 @@
   <Setup v-else-if="!store.config.configured || store.route.name === 'setup'" />
   <div v-else class="shell" :style="{ '--card-w': cardW }">
     <header class="statusbar">
+      <button v-if="store.history.length" class="backbtn" aria-label="Back" @click="back()"><Icon name="mdiArrowLeft" :size="22" /></button>
       <div class="brand"><Logo :size="30" />Cartridge</div>
       <nav class="tabs">
-        <Btn b="LB" style="margin: 0 4px" />
+        <Btn b="LT" style="margin: 0 4px" />
         <button v-for="t in tabs" :key="t.name" class="tab" :class="{ active: activeTab === t.name }" @click="tab(t.name)">
           <Icon :name="t.icon" :size="18" />{{ t.label }}
           <span v-if="t.name === 'downloads' && activeDl.length" class="tab-badge">{{ activeDl.length }}</span>
         </button>
-        <Btn b="RB" style="margin: 0 4px" />
+        <Btn b="RT" style="margin: 0 4px" />
       </nav>
       <div class="spacer" />
       <div class="sys">
@@ -49,6 +50,8 @@ import { computed, onMounted, onBeforeUnmount, ref, watch, nextTick } from 'vue'
 import { store, loadConfig, loadLibrary, back, tab, go, call, toast } from './store.js';
 import { pushLayer, focusFirst } from './nav.js';
 import { setSoundEnabled, sfx } from './sfx.js';
+import { applyTheme } from './themes.js';
+import { setPointerPref } from './nav.js';
 import Icon from './components/Icon.vue';
 import Btn from './components/Btn.vue';
 import Logo from './components/Logo.vue';
@@ -76,7 +79,7 @@ const tabs = [
 ];
 const mainEl = ref(null);
 const viewKey = computed(() => store.route.name + JSON.stringify(store.route.params));
-const cardW = computed(() => ({ sm: '138px', md: '164px', lg: '200px' }[store.config.ui.gridSize] || '164px'));
+const cardW = computed(() => ({ sm: '128px', md: '152px', lg: '184px' }[store.config.ui.gridSize] || '152px'));
 const activeTab = computed(() => {
   const n = store.route.name;
   if (tabs.find((t) => t.name === n)) return n;
@@ -125,6 +128,8 @@ onMounted(async () => {
   }).catch(() => {});
   await loadConfig();
   setSoundEnabled(store.config.ui.sounds !== false);
+  applyTheme(store.config.ui.theme);
+  setPointerPref(store.config.ui.pointer);
   await loadLibrary();
   if (store.config.configured) call('server:status').then((c) => (store.connection = c)).catch(() => {});
   pushLayer(document.body, {
@@ -133,13 +138,16 @@ onMounted(async () => {
     rb: () => (viewHandler('rb') !== false ? undefined : cycleTab(1)),
     y: () => (viewHandler('y') !== false ? undefined : store.route.name !== 'search' && go('search')),
     x: () => viewHandler('x'),
-    lt: () => viewHandler('lt'),
-    rt: () => viewHandler('rt'),
+    // Triggers always move between the top tabs; bumpers belong to the page (consoles, collections)
+    lt: () => cycleTab(-1),
+    rt: () => cycleTab(1),
     select: () => (viewHandler('select') !== false ? undefined : tab('downloads')),
     start: () => { store.quickMenu = !store.quickMenu; },
   });
 });
 onBeforeUnmount(() => clearInterval(clockT));
+
+watch(() => store.config?.ui?.theme, (t) => applyTheme(t));
 
 // sync result toasts
 watch(() => store.sync, (s) => {
@@ -181,6 +189,8 @@ watch(viewKey, async () => {
 </script>
 
 <style scoped>
+.backbtn { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; background: rgba(255, 255, 255, 0.08); margin-right: -6px; }
+.backbtn:active { background: rgba(255, 255, 255, 0.2); }
 .tab-badge { position: absolute; top: 2px; right: 6px; min-width: 16px; height: 16px; border-radius: 8px; background: var(--peach); color: #1a1022; font-size: 10px; font-weight: 700; display: grid; place-items: center; padding: 0 4px; }
 .sync-pill { padding: 5px 12px; border-radius: 999px; background: rgba(139, 116, 232, 0.18); color: #cfc4ff; }
 </style>

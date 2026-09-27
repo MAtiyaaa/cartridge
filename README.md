@@ -29,7 +29,7 @@ Browse your whole library in Game Mode and pull games straight into your EmuDeck
 <td width="50%" valign="top">
 
 **🎮 Made for Game Mode**<br>
-Every screen works with a controller: D-pad navigation, an on-screen keyboard, button hints, a Quick Menu on Start, soft UI sounds and a PSP XMB-inspired background.
+Every screen works with a controller: D-pad navigation, an on-screen keyboard, button hints, a Quick Menu on Start and soft UI sounds. Tap the screen and it switches to a proper touch mode with no cursor.
 
 </td>
 <td width="50%" valign="top">
@@ -62,8 +62,22 @@ Settings → Steam adds Cartridge to your library as a non-Steam game, complete 
 </td>
 <td valign="top">
 
-**⬆️ Updates itself**<br>
-New versions download in the background from GitHub Releases. Restart from the Quick Menu to update.
+**⬆️ Updates in place**<br>
+Settings → Updates checks GitHub Releases and swaps in the new version on restart. Same file, same Steam shortcut, nothing to reinstall.
+
+</td>
+</tr>
+<tr>
+<td valign="top">
+
+**🎨 Make it yours**<br>
+PSP XMB-style animated waves in eight colors, a media bar that shows the highlighted game's artwork, and three box art sizes.
+
+</td>
+<td valign="top">
+
+**⚡ Smooth on handhelds**<br>
+GPU rendering with an automatic fallback, lazy-loaded grids and a cached image store keep it at 60fps on an Ally or a Deck.
 
 </td>
 </tr>
@@ -84,7 +98,11 @@ New versions download in the background from GitHub Releases. Restart from the Q
 </tr>
 <tr>
 <td><img src="docs/downloads.png" alt="Downloads"><p align="center"><b>Downloads</b> · queue, progress, pause and resume</p></td>
-<td><img src="docs/settings.png" alt="Settings"><p align="center"><b>Settings</b> · sync, folders, look &amp; feel</p></td>
+<td><img src="docs/settings.png" alt="Settings"><p align="center"><b>Look &amp; feel</b> · colors, media bar, touch mode</p></td>
+</tr>
+<tr>
+<td><img src="docs/quickmenu.png" alt="Quick Menu"><p align="center"><b>Quick Menu</b> · resync, scan, updates, screenshots</p></td>
+<td></td>
 </tr>
 </table>
 
@@ -102,7 +120,9 @@ This downloads the latest AppImage to `~/Applications`, makes it executable and 
 
 **Manual:** download [`Cartridge-x86_64.AppImage`](https://github.com/abdu2304/cartridge/releases/latest/download/Cartridge-x86_64.AppImage), right-click it → **Properties → Permissions → Is executable**, and double-click it. Keep the file name as it is, because updates replace it in place.
 
-> **Blank grey window?** Cartridge renders in software by default because the GPU path shows a grey window on some handhelds. If you switched **Settings → Look & feel → Rendering** to Hardware and hit this, launch once with `./Cartridge-x86_64.AppImage --disable-gpu` and switch it back. A log is kept at `~/.config/Cartridge/cartridge.log`.
+**Updating:** open **Settings → Updates → Check for updates**, or pick it from the Quick Menu. The new version downloads in the background and replaces the AppImage when you restart, so your Steam shortcut keeps working.
+
+> **Blank window?** Cartridge uses the GPU and switches itself to software rendering if the GPU process fails. You can also force it with **Settings → Look & feel → Rendering → Compatible**, or launch once with `./Cartridge-x86_64.AppImage --disable-gpu`. A log is kept at `~/.config/Cartridge/cartridge.log`.
 
 <br>
 
@@ -126,10 +146,11 @@ This downloads the latest AppImage to `~/Applications`, makes it executable and 
 | **B** | Back |
 | **X** | Download highlighted game |
 | **Y** | Search |
-| **LB / RB** | Switch tabs · inside a console or collection: previous / next |
-| **LT / RT** | Page up / down |
+| **LT / RT** | Switch tabs (Home, Library, Consoles, Downloads, Settings) |
+| **LB / RB** | Inside a console or collection: previous / next |
 | **Select** | Downloads · in a grid: cycle All / On device / Not downloaded / New |
-| **Start** | Quick Menu |
+| **Start** | Quick Menu (resync, scan, updates, screenshot) |
+| **Touch** | Tap anything. The cursor only appears when a mouse moves |
 
 <br>
 

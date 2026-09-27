@@ -40,9 +40,10 @@ const DEFAULT_CONFIG = {
   biosPath: '',
   paths: {},
   downloads: { concurrency: 2, esdeM3uFolders: true, flattenSingleFile: true },
-  ui: { gridSize: 'md', hideEmpty: true, sounds: true, bgStyle: 'waves' },
+  ui: { gridSize: 'md', hideEmpty: true, sounds: true, bgStyle: 'waves', theme: 'purple', mediaBar: true, pointer: 'auto' },
   sync: { onLaunch: true, everyMinutes: 60 },
-  graphics: 'software', // software | hardware
+  graphics: 'auto', // auto (GPU, falls back on failure) | software
+  configVersion: 2,
   configured: false,
 };
 
@@ -64,7 +65,15 @@ if (!fs.existsSync(CONFIG_FILE)) {
   }
 }
 let config = loadJson(CONFIG_FILE, {});
+const rawVersion = config.configVersion || 1;
 config = deepMerge(DEFAULT_CONFIG, config);
+if (rawVersion < 2) {
+  // 0.1.1/0.1.2 saved 'software' as a default, not a user choice: move everyone to Auto (GPU)
+  if (config.graphics !== 'hardware') config.graphics = 'auto';
+  if (config.graphics === 'hardware') config.graphics = 'auto';
+  config.configVersion = 2;
+  try { fs.mkdirSync(USER_DATA, { recursive: true }); fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2), { mode: 0o600 }); } catch {}
+}
 
 // ---------------------------------------------------------------- graphics
 // Chromium's GPU path shows a blank grey window on some Linux handhelds (AMD + KDE
@@ -76,7 +85,8 @@ function log(...a) {
 }
 try { if (fs.statSync(LOG_FILE).size > 512 * 1024) fs.renameSync(LOG_FILE, LOG_FILE + '.old'); } catch {}
 const forceSoftware = process.argv.includes('--disable-gpu') || process.env.CARTRIDGE_SAFE_GPU === '1';
-const useGpu = !forceSoftware && config.graphics === 'hardware';
+const useGpu = !forceSoftware && config.graphics !== 'software';
+const startedAt = Date.now();
 if (!useGpu) app.disableHardwareAcceleration();
 log('start', app.getVersion(), 'gpu=' + (useGpu ? 'hardware' : 'software'), 'session=' + (process.env.XDG_SESSION_TYPE || '?'), 'desktop=' + (process.env.XDG_CURRENT_DESKTOP || '?'), 'appimage=' + (process.env.APPIMAGE || 'no'));
 function relaunch() {
@@ -656,7 +666,7 @@ function setupUpdater() {
   try { ({ autoUpdater } = require('electron-updater')); } catch { return; }
   autoUpdater.autoDownload = true;
   autoUpdater.autoInstallOnAppQuit = true;
-  const set = (s) => { updateState = s; broadcast('update', s); };
+  const set = (s) => { updateState = s; broadcast('update', { ...s, supported: true }); };
   autoUpdater.on('checking-for-update', () => set({ state: 'checking' }));
   autoUpdater.on('update-available', (i) => set({ state: 'downloading', version: i.version, percent: 0 }));
   autoUpdater.on('download-progress', (p) => set({ ...updateState, state: 'downloading', percent: Math.round(p.percent) }));
@@ -834,6 +844,14 @@ const handlers = {
   'update:install': () => { if (updateState.state === 'ready') autoUpdater.quitAndInstall(true, true); },
   'app:info': () => ({ version: app.getVersion(), gamescope: isGamescope(), userData: USER_DATA }),
   'app:quit': () => app.quit(),
+  'app:screenshot': async () => {
+    const dir = path.join(app.getPath('pictures'), 'Cartridge');
+    await fsp.mkdir(dir, { recursive: true });
+    const imgShot = await win.webContents.capturePage();
+    const file = path.join(dir, `cartridge-${new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)}.png`);
+    await fsp.writeFile(file, imgShot.toPNG());
+    return file;
+  },
   'app:relaunch': () => relaunch(),
   'app:graphics': () => ({ mode: useGpu ? 'hardware' : 'software', setting: config.graphics, status: app.getGPUFeatureStatus?.() }),
   'app:fullscreen': () => win.setFullScreen(!win.isFullScreen()),
@@ -861,5 +879,14 @@ app.whenReady().then(() => {
   win.on('focus', () => { if (library) computeInstalled(); });
   setupUpdater();
 });
-app.on('child-process-gone', (_e, d) => log('child gone', d.type, d.reason, d.exitCode));
+app.on('child-process-gone', (_e, d) => {
+  log('child gone', d.type, d.reason, d.exitCode);
+  // If the GPU dies early, remember it and restart without the GPU so the window is never blank
+  if (d.type === 'GPU' && useGpu && d.reason !== 'clean-exit' && Date.now() - startedAt < 20000) {
+    config.graphics = 'software';
+    try { saveConfig(); } catch {}
+    log('gpu failed at startup, relaunching in software mode');
+    relaunch();
+  }
+});
 app.on('window-all-closed', () => app.quit());
