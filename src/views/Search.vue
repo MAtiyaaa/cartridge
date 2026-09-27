@@ -1,13 +1,11 @@
 <template>
   <div class="view" data-scroll ref="el">
-    <button class="searchbar glass" data-focus data-autofocus @click="ask">
-      <Icon name="mdiMagnify" :size="28" />
-      <span v-if="q" class="qv">{{ q }}</span><span v-else class="muted">Search every system…</span>
-      <span style="margin-left: auto" class="row muted" ><Btn b="Y" />Type</span>
-    </button>
-    <div v-if="q && !results.length" class="empty">Nothing matches “{{ q }}”.</div>
-    <template v-else-if="results.length">
-      <div class="shelf-title">Results<span class="count">{{ results.length }}{{ results.length === LIMIT ? '+' : '' }}</span></div>
+    <div class="eyebrow" style="margin-top: 14px">Search</div>
+    <h1 class="s-title">{{ q ? `Results for “${q}”` : 'Search your library' }}</h1>
+    <p v-if="!q" class="muted s-tip">Type in the search box at the top with any keyboard. In Game Mode, press <b>Steam + X</b> for the Steam keyboard.</p>
+    <div v-else-if="!results.length" class="empty">Nothing matches “{{ q }}”.</div>
+    <template v-else>
+      <div class="shelf-title">Games<span class="count">{{ results.length }}{{ results.length === LIMIT ? '+' : '' }}</span></div>
       <div class="game-grid" style="padding-top: 10px"><GameCard v-for="r in results" :key="r.id" :rom="r" show-platform @open="(r) => go('game', { romId: r.id })" @focused="(r) => setBg(backdropOf(r))" /></div>
     </template>
   </div>
@@ -15,7 +13,7 @@
 
 <script setup>
 import { computed, onMounted, ref, nextTick } from 'vue';
-import { store, askText, go, allRoms, download, setBg, backdropOf, romById } from '../store.js';
+import { store, go, allRoms, download, setBg, backdropOf, romById } from '../store.js';
 import { useView } from '../useView.js';
 import { focusFirst } from '../nav.js';
 import Icon from '../components/Icon.vue';
@@ -24,7 +22,7 @@ import GameCard from '../components/GameCard.vue';
 
 const LIMIT = 150;
 const el = ref(null);
-const q = ref(store.lastSearch || '');
+const q = computed(() => (store.lastSearch || '').trim());
 const norm = (s) => (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
 const results = computed(() => {
   const t = norm(q.value);
@@ -52,18 +50,10 @@ useView(
   [{ b: 'A', label: 'Open' }, { b: 'X', label: 'Download' }, { b: 'Y', label: 'Search' }, { b: 'B', label: 'Back' }],
 );
 
-async function ask() {
-  const v = await askText({ title: 'Search your library', value: q.value, placeholder: 'Game or system name' });
-  if (v === null || v === undefined) return;
-  q.value = v.trim();
-  store.lastSearch = q.value;
-  await nextTick();
-  if (results.value.length) focusFirst(el.value, '.card');
-}
-onMounted(() => { if (!q.value) ask(); });
+function ask() { document.querySelector('.top-search input')?.focus(); }
 </script>
 
 <style scoped>
-.searchbar { width: 100%; display: flex; align-items: center; gap: 16px; height: 68px; padding: 0 24px; border-radius: 12px; font-size: 20px; margin: 16px 0 26px; }
-.qv { font-family: var(--display); font-weight: 500; }
+.s-title { font-family: var(--display); font-size: 34px; margin: 4px 0 10px; }
+.s-tip { font-size: 15px; }
 </style>

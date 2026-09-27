@@ -195,3 +195,11 @@ export function romsOfCollection(id) {
   const c = collectionById(id);
   return c ? c.rom_ids.map((rid) => romIndex.get(rid)).filter(Boolean) : [];
 }
+
+// Game logo (transparent PNG) from RomM, if the server has one
+export function logoOf(rom) {
+  if (!rom) return '';
+  if (rom.logo) return img(rom.logo);
+  const p = rom.ss_metadata?.logo_path || rom.gamelist_metadata?.marquee_path;
+  return p ? img(p.startsWith('/') ? p : '/assets/romm/resources/' + p) : '';
+}

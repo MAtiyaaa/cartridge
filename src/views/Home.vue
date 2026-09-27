@@ -13,7 +13,7 @@
         <Transition name="hero">
           <div v-if="heroRom" :key="'r' + heroRom.id" class="hero-in">
             <div class="eyebrow row" style="gap: 8px"><PIcon :p="{ slug: heroRom.platform_slug, fs_slug: heroRom.platform_fs_slug }" :size="18" />{{ heroRom.platform_display_name }}</div>
-            <h1 class="hero-title">{{ heroRom.name }}</h1>
+            <GameLogo :src="store.config.ui.logos !== false ? logoOf(heroRom) : ''" :name="heroRom.name" cls="hero-title" />
             <div class="meta">
               <span v-if="isNew(heroRom)" class="chip new">NEW</span>
               <span v-if="store.installed[heroRom.id]" class="chip green"><Icon name="mdiCheckCircle" :size="14" />On this device</span>
@@ -70,7 +70,7 @@
 
 <script setup>
 import { computed, ref, nextTick, onMounted, watch } from 'vue';
-import { img, cover, collections, store, go, allRoms, visiblePlatforms, romsOf, isNew, setBg, backdropOf, bytes, year, ago, rating, resync, downloadFor, download, romById, toast } from '../store.js';
+import { img, cover, collections, store, go, allRoms, visiblePlatforms, romsOf, isNew, setBg, backdropOf, bytes, year, ago, rating, resync, downloadFor, download, romById, toast, logoOf } from '../store.js';
 import { useView } from '../useView.js';
 import { ensureFocus } from '../nav.js';
 import Icon from '../components/Icon.vue';
@@ -79,6 +79,7 @@ import PIcon from '../components/PIcon.vue';
 import GameCard from '../components/GameCard.vue';
 import SysTile from '../components/SysTile.vue';
 import CollTile from '../components/CollTile.vue';
+import GameLogo from '../components/GameLogo.vue';
 import MediaBar from '../components/MediaBar.vue';
 
 const el = ref(null);

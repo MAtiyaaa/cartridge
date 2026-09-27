@@ -55,7 +55,9 @@ img { -webkit-user-drag: none; }
 
 /* ---------- shell ---------- */
 .shell { position: relative; z-index: 1; display: grid; grid-template-rows: 68px 1fr 46px; height: 100%; }
-.statusbar { display: flex; align-items: center; gap: 20px; padding: 0 28px; }
+.statusbar { display: flex; align-items: center; gap: 16px; padding: 0 28px; }
+.statusbar .spacer { min-width: 0; }
+.sys, .brand, .tabs { flex-shrink: 0; }
 .brand { display: flex; align-items: center; gap: 10px; font-family: var(--display); font-weight: 700; font-size: 20px; letter-spacing: 0.02em; }
 .tabs { display: flex; align-items: center; gap: 4px; margin-left: 18px; padding: 4px; border-radius: 999px; background: rgba(255, 255, 255, 0.04); border: 1px solid var(--line); }
 .tab { position: relative; display: flex; align-items: center; gap: 8px; padding: 8px 18px; border-radius: 999px; color: var(--muted); font-weight: 500; font-size: 14px; transition: color 0.2s, background 0.2s; }

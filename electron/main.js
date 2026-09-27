@@ -40,7 +40,7 @@ const DEFAULT_CONFIG = {
   biosPath: '',
   paths: {},
   downloads: { concurrency: 2, esdeM3uFolders: true, flattenSingleFile: true },
-  ui: { gridSize: 'md', hideEmpty: true, sounds: true, bgStyle: 'waves', theme: 'purple', mediaBar: true, pointer: 'auto' },
+  ui: { gridSize: 'md', hideEmpty: true, sounds: true, bgStyle: 'waves', theme: 'purple', mediaBar: true, logos: true, pointer: 'auto' },
   sync: { onLaunch: true, everyMinutes: 60 },
   graphics: 'auto', // auto (GPU, falls back on failure) | software
   configVersion: 2,
@@ -92,11 +92,19 @@ function isGamescope() {
 // Game Mode (gamescope) always renders in software: the GPU path gives a blank or missing
 // window there, and 0.1.2 proved software is reliable in Game Mode. Desktop Mode uses the GPU.
 const inGamescope = isGamescope();
-const forceSoftware = inGamescope || process.argv.includes('--disable-gpu') || process.env.CARTRIDGE_SAFE_GPU === '1';
+// Launched from Steam (Desktop or Game Mode): Steam injects its overlay into every process,
+// and the overlay hooking Chromium's GPU process leaves a hung, windowless app stuck on
+// "Running". 0.1.2 used software rendering everywhere and launched fine from Steam, so do that.
+function launchedBySteam() {
+  const e = process.env;
+  return !!(e.SteamGameId || e.SteamAppId || e.SteamClientLaunch || e.SteamOverlayGameId || /gameoverlayrenderer/.test(e.LD_PRELOAD || ''));
+}
+const fromSteam = launchedBySteam();
+const forceSoftware = inGamescope || fromSteam || process.argv.includes('--disable-gpu') || process.env.CARTRIDGE_SAFE_GPU === '1';
 const useGpu = !forceSoftware && config.graphics !== 'software';
 const startedAt = Date.now();
 if (!useGpu) app.disableHardwareAcceleration();
-log('start', app.getVersion(), 'gpu=' + (useGpu ? 'hardware' : 'software'), 'session=' + (process.env.XDG_SESSION_TYPE || '?'), 'desktop=' + (process.env.XDG_CURRENT_DESKTOP || '?'), 'appimage=' + (process.env.APPIMAGE || 'no'), 'gamescope=' + inGamescope, 'wl=' + (process.env.WAYLAND_DISPLAY || '-'), 'x=' + (process.env.DISPLAY || '-'), 'gs=' + (process.env.GAMESCOPE_WAYLAND_DISPLAY || '-'));
+log('start', app.getVersion(), 'gpu=' + (useGpu ? 'hardware' : 'software'), 'session=' + (process.env.XDG_SESSION_TYPE || '?'), 'desktop=' + (process.env.XDG_CURRENT_DESKTOP || '?'), 'appimage=' + (process.env.APPIMAGE || 'no'), 'gamescope=' + inGamescope, 'steam=' + fromSteam, 'overlay=' + /gameoverlayrenderer/.test(process.env.LD_PRELOAD || ''), 'wl=' + (process.env.WAYLAND_DISPLAY || '-'), 'x=' + (process.env.DISPLAY || '-'), 'gs=' + (process.env.GAMESCOPE_WAYLAND_DISPLAY || '-'));
 function relaunch() {
   const args = process.argv.slice(1).filter((a) => !a.startsWith('--disable-gpu'));
   if (process.env.APPIMAGE) app.relaunch({ execPath: process.env.APPIMAGE, args });
@@ -315,6 +323,12 @@ let library = loadJson(LIBRARY_FILE, null); // { platforms, roms: {pid: [...]}, 
 let syncing = null;
 let installedMap = {};
 
+// Transparent game logo from RomM (ScreenScraper "logo" media, or an ES-DE gamelist marquee)
+function logoPath(r) {
+  const p = r.ss_metadata?.logo_path || r.gamelist_metadata?.marquee_path || null;
+  if (!p) return null;
+  return /^(https?:)?\/\//.test(p) || p.startsWith('/assets/') ? p : '/assets/romm/resources/' + p.replace(/^\//, '');
+}
 function slimRom(r) {
   const md = r.metadatum || {};
   return {
@@ -323,6 +337,7 @@ function slimRom(r) {
     platform_display_name: r.platform_display_name, fs_size_bytes: r.fs_size_bytes,
     path_cover_small: r.path_cover_small, path_cover_large: r.path_cover_large, url_cover: r.url_cover,
     shot: (r.merged_screenshots || [])[0] || null,
+    logo: logoPath(r),
     summary: (r.summary || '').slice(0, 400),
     regions: r.regions || [], files: (r.files || []).map((f) => ({ file_name: f.file_name })),
     year: md.first_release_date || null, genres: (md.genres || []).slice(0, 3),
@@ -720,6 +735,7 @@ function createWindow() {
       } catch (e) { fail(e.message); }
     }, 3000));
   }
+  win.webContents.once('did-finish-load', () => log('ui loaded', Date.now() - startedAt + 'ms'));
   win.webContents.on('did-fail-load', (_e, code, desc, url) => log('load failed', code, desc, url));
   win.webContents.on('console-message', (e) => { const m = e.message ?? e; if ((e.level === 'error' || e.level === 3) && typeof m === 'string') log('console', m.slice(0, 300)); });
   win.on('unresponsive', () => log('window unresponsive'));
@@ -889,7 +905,7 @@ app.whenReady().then(() => {
 app.on('child-process-gone', (_e, d) => {
   log('child gone', d.type, d.reason, d.exitCode);
   // If the GPU dies early, remember it and restart without the GPU so the window is never blank
-  if (d.type === 'GPU' && useGpu && !inGamescope && d.reason !== 'clean-exit' && Date.now() - startedAt < 20000) {
+  if (d.type === 'GPU' && useGpu && !inGamescope && !fromSteam && d.reason !== 'clean-exit' && Date.now() - startedAt < 20000) {
     config.graphics = 'software';
     try { saveConfig(); } catch {}
     log('gpu failed at startup, relaunching in software mode');

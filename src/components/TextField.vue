@@ -1,21 +1,27 @@
 <template>
   <div class="field">
     <label v-if="label">{{ label }}</label>
-    <button class="box" data-focus :data-key="fkey" @click="edit">
+    <div class="box input-box" @click="inp?.focus()">
       <Icon v-if="icon" :name="icon" :size="18" style="color: var(--muted)" />
-      <span v-if="modelValue" class="val">{{ password ? '•'.repeat(Math.min(modelValue.length, 16)) : modelValue }}</span>
-      <span v-else class="ph">{{ placeholder }}</span>
-      <Icon name="mdiPencil" :size="16" style="margin-left: auto; color: var(--dim)" />
-    </button>
+      <input ref="inp" class="tf-input" data-focus :data-key="fkey" :value="modelValue" :type="password && !reveal ? 'password' : 'text'" :inputmode="mode === 'url' ? 'url' : 'text'" :placeholder="placeholder" autocomplete="off" autocapitalize="off" spellcheck="false" @input="(e) => emit('update:modelValue', e.target.value)" @change="(e) => emit('update:modelValue', e.target.value.trim())" />
+      <button v-if="password" type="button" class="tf-reveal" tabindex="-1" @click.stop="reveal = !reveal"><Icon :name="reveal ? 'mdiEyeOff' : 'mdiEye'" :size="18" /></button>
+    </div>
   </div>
 </template>
 <script setup>
-import { askText } from '../store.js';
+import { ref } from 'vue';
 import Icon from './Icon.vue';
-const props = defineProps({ modelValue: String, label: String, placeholder: String, password: Boolean, mode: String, icon: String, fkey: String });
+// A real text input: type with any keyboard, or the Steam keyboard (Steam + X) in Game Mode.
+defineProps({ modelValue: String, label: String, placeholder: String, password: Boolean, mode: String, icon: String, fkey: String });
 const emit = defineEmits(['update:modelValue']);
-async function edit() {
-  const v = await askText({ title: props.label || props.placeholder, value: props.modelValue || '', placeholder: props.placeholder, password: props.password, mode: props.mode });
-  if (v !== null && v !== undefined) emit('update:modelValue', v.trim());
-}
+const inp = ref(null);
+const reveal = ref(false);
 </script>
+<style>
+.input-box { cursor: text; }
+.input-box:focus-within { border-color: var(--primary-l); box-shadow: var(--ring); }
+.tf-input { flex: 1; min-width: 0; height: 48px; font: inherit; color: var(--text); background: none; border: 0; outline: none; padding: 0; }
+.tf-input:focus { box-shadow: none !important; }
+.tf-input::placeholder { color: var(--dim); }
+.tf-reveal { background: none; border: 0; color: var(--muted); padding: 4px; margin-left: auto; }
+</style>

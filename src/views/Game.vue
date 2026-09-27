@@ -5,7 +5,7 @@
       <section class="g-hero">
         <div class="g-info">
           <div class="eyebrow row" style="gap: 8px"><PIcon :p="{ slug: base.platform_slug, fs_slug: base.platform_fs_slug }" :size="18" />{{ base.platform_display_name }}</div>
-          <h1 class="g-title">{{ base.name }}</h1>
+          <GameLogo :src="store.config.ui.logos !== false ? logoOf(base) : ''" :name="base.name" cls="g-title" style="--logo-h: 128px" />
           <div class="g-meta">
             <span v-if="isNew(base)" class="chip new">NEW</span>
             <span v-if="yr">{{ yr }}</span>
@@ -81,12 +81,13 @@
 
 <script setup>
 import { computed, onMounted, ref, nextTick, watch } from 'vue';
-import { store, call, img, cover, bytes, year, rating, toast, confirm, download, downloadFor, romById, platformById, isNew, setBg } from '../store.js';
+import { store, call, img, cover, bytes, year, rating, toast, confirm, download, downloadFor, romById, platformById, isNew, setBg, logoOf } from '../store.js';
 import { useView } from '../useView.js';
 import { ensureFocus, focusFirst } from '../nav.js';
 import Icon from '../components/Icon.vue';
 import Btn from '../components/Btn.vue';
 import PIcon from '../components/PIcon.vue';
+import GameLogo from '../components/GameLogo.vue';
 
 const props = defineProps({ romId: Number });
 const el = ref(null);

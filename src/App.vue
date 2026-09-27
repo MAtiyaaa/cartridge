@@ -15,6 +15,12 @@
         <Btn b="RT" style="margin: 0 4px" />
       </nav>
       <div class="spacer" />
+      <label class="top-search" :class="{ on: store.route.name === 'search' }">
+        <Icon name="mdiMagnify" :size="18" />
+        <input ref="searchEl" data-focus data-key="top-search" :value="store.lastSearch" placeholder="Search games" autocomplete="off" spellcheck="false" @input="onSearch" />
+        <button v-if="store.lastSearch" class="clear" tabindex="-1" @mousedown.prevent @click="clearSearch"><Icon name="mdiClose" :size="16" /></button>
+        <Btn v-else b="Y" />
+      </label>
       <div class="sys">
         <div v-if="syncBusy" class="item sync-pill"><Icon name="mdiSync" :size="16" class="spin" />{{ syncLabel }}</div>
         <div v-if="activeDl.length" class="item">
@@ -36,7 +42,7 @@
   </div>
 
   <QuickMenu v-if="store.quickMenu" />
-  <Keyboard v-if="store.modal?.type === 'keyboard'" v-bind="store.modal.props" />
+  <TextPrompt v-if="store.modal?.type === 'keyboard'" v-bind="store.modal.props" />
   <FolderPicker v-if="store.modal?.type === 'folder'" v-bind="store.modal.props" />
   <Menu v-if="store.modal?.type === 'menu'" v-bind="store.modal.props" />
 
@@ -57,7 +63,7 @@ import Btn from './components/Btn.vue';
 import Logo from './components/Logo.vue';
 import Background from './components/Background.vue';
 import QuickMenu from './components/QuickMenu.vue';
-import Keyboard from './components/Keyboard.vue';
+import TextPrompt from './components/TextPrompt.vue';
 import FolderPicker from './components/FolderPicker.vue';
 import Menu from './components/Menu.vue';
 import Setup from './views/Setup.vue';
@@ -78,6 +84,21 @@ const tabs = [
   { name: 'settings', label: 'Settings', icon: 'mdiCogOutline' },
 ];
 const mainEl = ref(null);
+const searchEl = ref(null);
+// Search box in the top bar: typing jumps to the Search view and filters live
+function onSearch(e) {
+  store.lastSearch = e.target.value;
+  if (store.route.name !== 'search' && e.target.value.trim()) go('search');
+}
+function clearSearch() { store.lastSearch = ''; searchEl.value?.focus(); }
+function focusSearch() {
+  if (store.route.name !== 'search') go('search');
+  nextTick(() => { searchEl.value?.focus(); searchEl.value?.select(); });
+}
+function toResults() {
+  const first = mainEl.value?.querySelector('.card[data-focus]');
+  if (first) first.focus(); else searchEl.value?.blur();
+}
 const viewKey = computed(() => store.route.name + JSON.stringify(store.route.params));
 const cardW = computed(() => ({ sm: '128px', md: '152px', lg: '184px' }[store.config.ui.gridSize] || '152px'));
 const activeTab = computed(() => {
@@ -136,7 +157,8 @@ onMounted(async () => {
     back: () => { if (viewHandler('back') !== false) return; back(); },
     lb: () => (viewHandler('lb') !== false ? undefined : cycleTab(-1)),
     rb: () => (viewHandler('rb') !== false ? undefined : cycleTab(1)),
-    y: () => (viewHandler('y') !== false ? undefined : store.route.name !== 'search' && go('search')),
+    y: () => (viewHandler('y') !== false ? undefined : focusSearch()),
+    accept: (a) => (a === searchEl.value ? toResults() : false),
     x: () => viewHandler('x'),
     // Triggers always move between the top tabs; bumpers belong to the page (consoles, collections)
     lt: () => cycleTab(-1),
@@ -174,6 +196,7 @@ watch(() => store.downloads.map((d) => d.id + d.status).join(), () => {
 watch(viewKey, async () => {
   store.viewHandlers = {};
   await nextTick();
+  if (document.activeElement === searchEl.value) return;
   const key = store.route.focusKey;
   const root = mainEl.value;
   if (!root) return;
@@ -189,6 +212,13 @@ watch(viewKey, async () => {
 </script>
 
 <style scoped>
+.top-search { display: flex; align-items: center; gap: 8px; flex: 0 1 260px; min-width: 130px; height: 40px; padding: 0 10px 0 14px; border-radius: 999px; background: rgba(255, 255, 255, 0.06); border: 1px solid var(--line); color: var(--muted); cursor: text; transition: border-color 0.14s, background 0.14s; }
+.top-search.on, .top-search:focus-within { background: rgba(255, 255, 255, 0.1); border-color: var(--primary-l); color: var(--text); }
+.top-search:focus-within { box-shadow: var(--ring); }
+.top-search input { flex: 1; min-width: 0; height: 100%; font: inherit; font-size: 14px; color: var(--text); background: none; border: 0; outline: none; }
+.top-search input:focus { box-shadow: none !important; }
+.top-search input::placeholder { color: var(--muted); }
+.top-search .clear { background: none; border: 0; color: var(--muted); padding: 4px; display: grid; place-items: center; }
 .backbtn { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; background: rgba(255, 255, 255, 0.08); margin-right: -6px; }
 .backbtn:active { background: rgba(255, 255, 255, 0.2); }
 .tab-badge { position: absolute; top: 2px; right: 6px; min-width: 16px; height: 16px; border-radius: 8px; background: var(--peach); color: #1a1022; font-size: 10px; font-weight: 700; display: grid; place-items: center; padding: 0 4px; }

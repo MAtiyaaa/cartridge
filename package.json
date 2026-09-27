@@ -1,7 +1,7 @@
 {
   "name": "cartridge",
   "productName": "Cartridge",
-  "version": "0.1.4",
+  "version": "0.2.0",
   "description": "Controller-first RomM client for SteamOS and Bazzite",
   "main": "electron/main.js",
   "author": "abdu2304",
@@ -45,7 +45,11 @@
         "repo": "cartridge",
         "releaseType": "release"
       }
-    ]
+    ],
+    "releaseInfo": {
+      "releaseName": "Cartridge 0.2.0",
+      "releaseNotesFile": "RELEASE_NOTES.md"
+    }
   },
   "dependencies": {
     "@fontsource-variable/outfit": "^5.3.0",
