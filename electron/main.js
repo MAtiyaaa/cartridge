@@ -8,8 +8,9 @@ const { Readable } = require('stream');
 const { pipeline } = require('stream/promises');
 const PLATFORM_MAP = require('./platformMap');
 
-// AppImages cannot ship a SUID chrome-sandbox, so run without it.
-app.commandLine.appendSwitch('no-sandbox');
+// Note: never add 'no-sandbox' here. Appending it at runtime (after Chromium has
+// started its zygote) makes renderers crash with "/dev/shm ... No such process".
+// The AppImage launcher already passes --no-sandbox when user namespaces are missing.
 app.commandLine.appendSwitch('enable-features', 'OverlayScrollbar');
 app.setName('Cartridge');
 
@@ -77,7 +78,6 @@ try { if (fs.statSync(LOG_FILE).size > 512 * 1024) fs.renameSync(LOG_FILE, LOG_F
 const forceSoftware = process.argv.includes('--disable-gpu') || process.env.CARTRIDGE_SAFE_GPU === '1';
 const useGpu = !forceSoftware && config.graphics === 'hardware';
 if (!useGpu) app.disableHardwareAcceleration();
-if (!process.env.CARTRIDGE_WAYLAND) app.commandLine.appendSwitch('ozone-platform', 'x11');
 log('start', app.getVersion(), 'gpu=' + (useGpu ? 'hardware' : 'software'), 'session=' + (process.env.XDG_SESSION_TYPE || '?'), 'desktop=' + (process.env.XDG_CURRENT_DESKTOP || '?'), 'appimage=' + (process.env.APPIMAGE || 'no'));
 function relaunch() {
   const args = process.argv.slice(1).filter((a) => !a.startsWith('--disable-gpu'));

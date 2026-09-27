@@ -92,13 +92,15 @@ New versions download in the background from GitHub Releases. Restart from the Q
 
 ## ✦ Install
 
-1. In **Desktop Mode**, download [`Cartridge-x86_64.AppImage`](https://github.com/abdu2304/cartridge/releases/latest/download/Cartridge-x86_64.AppImage) and move it somewhere permanent, like `~/Applications/`.
-   Keep the file name as it is, because updates replace it in place.
-2. Right-click it → **Properties → Permissions → Is executable**.
-3. Double-click to launch it, sign in to RomM, and choose your `roms` folder. EmuDeck and ES-DE setups are detected automatically.
-4. Go to **Settings → Steam → Add to Steam**. Steam closes and reopens with Cartridge in your library, artwork included.
+**One line** (Desktop Mode → Konsole):
 
-Then switch to Game Mode and play.
+```bash
+curl -fsSL https://raw.githubusercontent.com/abdu2304/cartridge/main/install.sh | bash
+```
+
+This downloads the latest AppImage to `~/Applications`, makes it executable and adds Cartridge to your app menu. Then open Cartridge and use **Settings → Steam → Add to Steam** to get it into Game Mode, with its cover, banner, logo and icon.
+
+**Manual:** download [`Cartridge-x86_64.AppImage`](https://github.com/abdu2304/cartridge/releases/latest/download/Cartridge-x86_64.AppImage), right-click it → **Properties → Permissions → Is executable**, and double-click it. Keep the file name as it is, because updates replace it in place.
 
 > **Blank grey window?** Cartridge renders in software by default because the GPU path shows a grey window on some handhelds. If you switched **Settings → Look & feel → Rendering** to Hardware and hit this, launch once with `./Cartridge-x86_64.AppImage --disable-gpu` and switch it back. A log is kept at `~/.config/Cartridge/cartridge.log`.
 

@@ -27,7 +27,8 @@ jobs:
         run: |
           sudo apt-get update -q && sudo apt-get install -y -q xvfb libfuse2t64 || sudo apt-get install -y -q xvfb libfuse2
           cd release
-          CARTRIDGE_SMOKE=1 APPIMAGE_EXTRACT_AND_RUN=1 timeout 90 xvfb-run -a ./Cartridge-x86_64.AppImage --no-sandbox 2>&1 | tee smoke.log
+          # Launched exactly like a user would: normal user, no extra flags
+          CARTRIDGE_SMOKE=1 APPIMAGE_EXTRACT_AND_RUN=1 timeout 90 xvfb-run -a ./Cartridge-x86_64.AppImage 2>&1 | tee smoke.log
           grep -q "SMOKE OK" smoke.log
       - name: Publish AppImage
         run: npm run release
