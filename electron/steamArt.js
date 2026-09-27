@@ -91,7 +91,23 @@ function applySteamArt(artDir) {
   return done;
 }
 
+// Steam saves its own copy of shortcuts.vdf when it exits, so writing while it runs gets undone.
+// Look at every process (name and command line) plus Steam's pid file, not just one pgrep pattern.
 function steamRunning() {
+  const me = String(process.pid);
+  try {
+    for (const pid of fs.readdirSync('/proc')) {
+      if (!/^\d+$/.test(pid) || pid === me) continue;
+      let comm = '', cmd = '';
+      try { comm = fs.readFileSync(`/proc/${pid}/comm`, 'utf8').trim(); } catch { continue; }
+      if (comm === 'steam' || comm === 'steamwebhelper' || comm === 'steam.sh') return true;
+      try { cmd = fs.readFileSync(`/proc/${pid}/cmdline`, 'utf8').split('\0')[0]; } catch {}
+      if (/(ubuntu12_32|ubuntu12_64)\/steam(webhelper)?$|\/steam\.sh$/.test(cmd)) return true;
+    }
+  } catch {}
+  for (const f of [path.join(os.homedir(), '.steam/steam.pid'), path.join(os.homedir(), '.var/app/com.valvesoftware.Steam/.steam/steam.pid')]) {
+    try { const pid = parseInt(fs.readFileSync(f, 'utf8'), 10); if (pid > 1) { process.kill(pid, 0); return true; } } catch {}
+  }
   try { execSync('pgrep -x steam || pgrep -x steamwebhelper', { stdio: 'ignore' }); return true; } catch { return false; }
 }
 function waitForSteamExit(ms) {
