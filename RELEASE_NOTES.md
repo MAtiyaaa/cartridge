@@ -1,3 +1,19 @@
+## Cartridge 0.3.0 · The RetroAchievements Update
+
+### New
+- **Achievements tab** (between Consoles and Downloads):
+  - Your RetroAchievements profile: avatar, points, softcore and true points, and what you are playing right now.
+  - **Latest unlocks** from the last 30 days, with badge, points, a hardcore tag and when you got them.
+  - **Recently played** games with a progress bar, achievements and points earned, and a crown on mastered games. Games that are in your RomM library are marked "In your library".
+  - Open any game to see **every achievement**, unlocked and locked, with points, type (progression, win condition, missable), the unlock date, a hardcore tag and how rare it is. Filter All / Unlocked / Locked with Y. **Open in library** jumps to the game in Cartridge.
+  - X refreshes. The last results are kept, so the tab still shows something offline.
+- **Achievements on every game page that supports them.** Shows a progress bar, a row of badges (unlocked first, then locked) and **See all**. Games are matched by RomM's RetroAchievements ID or, if RomM has none, by an exact title match on RetroAchievements' list for that console. Consoles RetroAchievements does not support (PS3, PS4, PS5, Vita, Switch, 3DS, Xbox, Xbox 360) never show the section.
+- **Latest achievements row on Home.**
+- **Settings → Achievements:** sign in with your RetroAchievements username and web API key (retroachievements.org → Settings → Authentication; your password is never needed), open the tab, sign out, and turn achievements on game pages or the Home row on or off.
+
+### Changed
+- **Top bar at Steam Deck width:** with six tabs, inactive tabs show only their icon below about 1560px wide. The tab you are on keeps its label.
+
 ## Cartridge 0.2.5 · console overhaul
 
 ### Changed

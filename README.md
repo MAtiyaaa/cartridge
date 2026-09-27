@@ -70,6 +70,20 @@ Settings → Updates checks GitHub Releases and swaps in the new version on rest
 <tr>
 <td valign="top">
 
+**🏆 RetroAchievements**<br>
+Sign in to see your latest unlocks, recently played games and full achievement lists, plus progress right on each supported game's page.
+
+</td>
+<td valign="top">
+
+**🎮 PS4 and PS5 friendly**<br>
+Extracted PS4/PS5 game folders are detected automatically, and anything else can be marked as installed.
+
+</td>
+</tr>
+<tr>
+<td valign="top">
+
 **🎨 Make it yours**<br>
 PSP XMB-style animated waves in eight colors, a media bar with the highlighted game's artwork, game logos (from RomM or SteamGridDB) sized evenly, custom covers, logos and backgrounds per game from SteamGridDB, and three box art sizes.
 

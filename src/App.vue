@@ -9,7 +9,7 @@
       <nav class="tabs">
         <Btn b="LT" style="margin: 0 4px" />
         <button v-for="t in tabs" :key="t.name" class="tab" :class="{ active: activeTab === t.name }" @click="tab(t.name)">
-          <Icon :name="t.icon" :size="18" />{{ t.label }}
+          <Icon :name="t.icon" :size="18" /><span class="tab-label">{{ t.label }}</span>
           <span v-if="t.name === 'downloads' && activeDl.length" class="tab-badge">{{ activeDl.length }}</span>
         </button>
         <Btn b="RT" style="margin: 0 4px" />
@@ -76,12 +76,15 @@ import Game from './views/Game.vue';
 import Downloads from './views/Downloads.vue';
 import Settings from './views/Settings.vue';
 import Search from './views/Search.vue';
+import Achievements from './views/Achievements.vue';
+import RaGame from './views/RaGame.vue';
 
-const views = { home: Home, library: Gallery, consoles: Consoles, platform: Gallery, collection: Gallery, game: Game, downloads: Downloads, settings: Settings, search: Search };
+const views = { achievements: Achievements, 'ra-game': RaGame, home: Home, library: Gallery, consoles: Consoles, platform: Gallery, collection: Gallery, game: Game, downloads: Downloads, settings: Settings, search: Search };
 const tabs = [
   { name: 'home', label: 'Home', icon: 'mdiHomeVariantOutline' },
   { name: 'library', label: 'Library', icon: 'mdiViewGridOutline' },
   { name: 'consoles', label: 'Consoles', icon: 'mdiGamepadSquareOutline' },
+  { name: 'achievements', label: 'Achievements', icon: 'mdiTrophyOutline' },
   { name: 'downloads', label: 'Downloads', icon: 'mdiTrayArrowDown' },
   { name: 'settings', label: 'Settings', icon: 'mdiCogOutline' },
 ];

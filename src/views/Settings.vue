@@ -136,6 +136,31 @@
             <p class="muted small">New versions come from the GitHub Releases page. They download in the background and replace this AppImage in place, so your Steam shortcut and settings stay as they are.</p>
           </template>
 
+          <template v-else-if="sec === 'ra'">
+            <h1>Achievements</h1>
+            <template v-if="!store.config.ra?.user">
+              <p class="muted">Sign in to RetroAchievements to see your unlocks in the Achievements tab and on every game that supports them.</p>
+              <div class="row" style="gap: 16px; align-items: flex-end">
+                <TextField v-model="raUser" label="Username" placeholder="Your RetroAchievements username" icon="mdiAccount" style="flex: 1" />
+                <TextField v-model="raKey" label="Web API key" placeholder="Paste your web API key" password icon="mdiKeyVariant" style="flex: 1" />
+              </div>
+              <p class="muted small">Find the web API key on retroachievements.org → Settings → Authentication. It only lets Cartridge read your profile. Your password is never needed.</p>
+              <div class="row"><button class="btn primary" data-focus :disabled="raBusy || !raUser || !raKey" @click="raSignIn"><Icon name="mdiLogin" />{{ raBusy ? 'Checking…' : 'Sign in' }}</button></div>
+            </template>
+            <template v-else>
+              <div class="about glass" style="align-items: center">
+                <div style="display: flex; flex-direction: column; gap: 6px; flex: 1">
+                  <div class="eyebrow">Signed in to RetroAchievements</div>
+                  <div style="font-family: var(--display); font-size: 22px; font-weight: 700">{{ store.config.ra.user }}</div>
+                </div>
+                <button class="btn" data-focus @click="tab('achievements')"><Icon name="mdiTrophyOutline" />Open Achievements</button>
+                <button class="btn" data-focus @click="raSignOut"><Icon name="mdiLogout" />Sign out</button>
+              </div>
+              <Toggle :model-value="ui.raOnGames !== false" label="Achievements on game pages" desc="Show progress and badges on games that have RetroAchievements (PS3, PS4, Switch and other unsupported consoles never show them)" @update:model-value="(v) => saveConfig({ ui: { raOnGames: v } })" />
+              <Toggle :model-value="ui.raOnHome !== false" label="Latest unlocks on Home" desc="Adds a row of your newest achievements to the Home screen" @update:model-value="(v) => saveConfig({ ui: { raOnHome: v } })" />
+            </template>
+          </template>
+
           <template v-else-if="sec === 'steam'">
             <h1>Steam</h1>
             <div class="about glass">
@@ -173,7 +198,7 @@
 
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue';
-import { store, call, go, saveConfig, pickFolder, choose, confirm, toast, bytes, ago, resync, scanServer, allRoms, resetLogos } from '../store.js';
+import { store, call, go, tab, saveConfig, pickFolder, choose, confirm, toast, bytes, ago, resync, scanServer, allRoms, resetLogos } from '../store.js';
 import { useView } from '../useView.js';
 import { input, focusFirst, setPointerPref } from '../nav.js';
 import { THEMES } from '../themes.js';
@@ -194,6 +219,7 @@ const sections = [
   { id: 'folders', label: 'Console folders', icon: 'mdiFolderMultipleOutline' },
   { id: 'dl', label: 'Downloads', icon: 'mdiTrayArrowDown' },
   { id: 'ui', label: 'Look & feel', icon: 'mdiPaletteOutline' },
+  { id: 'ra', label: 'Achievements', icon: 'mdiTrophyOutline' },
   { id: 'steam', label: 'Steam', icon: 'mdiSteam' },
   { id: 'updates', label: 'Updates', icon: 'mdiUpdate' },
   { id: 'about', label: 'About', icon: 'mdiInformationOutline' },
@@ -223,6 +249,17 @@ async function fetchAll() {
   store.logoJob = { done: 0, total: 0, found: 0 };
   call('logo:fetchAll').catch((e) => { store.logoJob = null; toast(e.message, 'error', 4000); });
 }
+// RetroAchievements account
+const raUser = ref(store.config.ra?.user || '');
+const raKey = ref('');
+const raBusy = ref(false);
+async function raSignIn() {
+  raBusy.value = true;
+  try { const r = await call('ra:signin', { user: raUser.value, key: raKey.value }); store.config = await call('config:get'); raKey.value = ''; toast(`Signed in as ${r.user}`, 'ok', 2600, 'mdiTrophy'); }
+  catch (e) { toast(e.message, 'error', 5000); }
+  raBusy.value = false;
+}
+async function raSignOut() { await call('ra:signout'); store.config = await call('config:get'); toast('Signed out of RetroAchievements', 'info', 2200); }
 async function saveSgdb() {
   const key = sgdbKey.value.trim();
   sgdbBusy.value = true;

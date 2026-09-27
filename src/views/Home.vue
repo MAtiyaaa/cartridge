@@ -55,6 +55,14 @@
             <template v-if="s.type === 'sys'">
               <SysTile v-for="p in s.items" :key="p.id" :p="p" @open="openSys" @focused="focusSys" />
             </template>
+            <template v-else-if="s.type === 'ra'">
+              <button v-for="a in s.items" :key="a.id + a.date" class="ra-home glass" data-focus @click="go('ra-game', { gameId: a.gameId })" @focus="focusRa(a)">
+                <img :src="img(a.badge)" loading="lazy" />
+                <div class="ra-home-t">{{ a.title }}</div>
+                <div class="ra-home-g">{{ a.game }}</div>
+                <div class="ra-home-p">{{ a.points }} pts<template v-if="a.hardcore"> · HC</template></div>
+              </button>
+            </template>
             <template v-else-if="s.type === 'col'">
               <CollTile v-for="c in s.items" :key="c.id" :c="c" @open="(c) => go('collection', { collectionId: c.id })" @focused="focusCol" />
             </template>
@@ -70,7 +78,7 @@
 
 <script setup>
 import { computed, ref, nextTick, onMounted, watch } from 'vue';
-import { img, cover, collections, store, go, allRoms, visiblePlatforms, romsOf, isNew, setBg, backdropOf, bytes, year, ago, rating, resync, downloadFor, download, romById, toast, logoOf } from '../store.js';
+import { img, cover, collections, store, go, allRoms, visiblePlatforms, romsOf, isNew, setBg, backdropOf, bytes, year, ago, rating, resync, downloadFor, download, romById, toast, logoOf, call } from '../store.js';
 import { useView } from '../useView.js';
 import { ensureFocus } from '../nav.js';
 import Icon from '../components/Icon.vue';
@@ -107,6 +115,15 @@ const heroDl = computed(() => {
 const sysOnDevice = (p) => romsOf(p.id).filter((r) => store.installed[r.id]).length;
 
 let discoverSeed = null;
+// RetroAchievements: newest unlocks as a Home row (when signed in and enabled)
+const raRecent = ref([]);
+if (store.config.ra?.user && store.config.ui.raOnHome !== false) {
+  call('ra:overview').then((o) => { raRecent.value = (o.recent || []).slice(0, 20); }).catch(() => {});
+}
+function focusRa(a) {
+  heroRom.value = a.romId ? romById(a.romId) : null; heroSys.value = null; heroCol.value = null;
+  if (heroRom.value) setBg(backdropOf(heroRom.value));
+}
 const shelves = computed(() => {
   const roms = allRoms();
   const out = [];
@@ -123,6 +140,7 @@ const shelves = computed(() => {
   if (onDevice.length) out.push({ id: 'device', title: 'On this device', icon: 'mdiCheckCircleOutline', count: onDevice.length, items: onDevice.slice(0, 40) });
   const fresh = roms.filter(isNew).sort((a, b) => (store.lib.firstSeen[b.id] || 0) - (store.lib.firstSeen[a.id] || 0));
   if (fresh.length) out.push({ id: 'new', title: 'New since last sync', icon: 'mdiNewBox', count: fresh.length, items: fresh.slice(0, 40) });
+  if (raRecent.value.length) out.push({ id: 'ra', type: 'ra', title: 'Latest achievements', icon: 'mdiTrophyOutline', count: '', items: raRecent.value });
   if (collections().length) out.push({ id: 'col', type: 'col', title: 'Collections', icon: 'mdiBookmarkMultipleOutline', count: collections().length, items: collections() });
   out.push({ id: 'sys', type: 'sys', title: 'Consoles', icon: 'mdiGamepadSquareOutline', count: visiblePlatforms().length, items: visiblePlatforms() });
   return out;
@@ -182,4 +200,10 @@ onMounted(async () => { await nextTick(); ensureFocus(el.value); });
 .hero-enter-active { transition: opacity 0.14s ease-out; }
 .hero-leave-active { transition: opacity 0.1s ease-in; position: absolute; }
 .hero-enter-from, .hero-leave-to { opacity: 0; }
+.ra-home { flex: none; width: 150px; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 14px 10px 12px; border-radius: 12px; text-align: center; transition: transform 0.14s ease-out; }
+.ra-home:focus { transform: scale(1.05); }
+.ra-home img { width: 72px; height: 72px; border-radius: 10px; box-shadow: 0 6px 16px rgba(0, 0, 0, 0.45); }
+.ra-home-t { font-family: var(--display); font-weight: 600; font-size: 13.5px; line-height: 1.2; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.ra-home-g { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.ra-home-p { font-size: 11px; color: var(--gold); font-weight: 600; }
 </style>

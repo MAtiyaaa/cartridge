@@ -43,6 +43,7 @@ const DEFAULT_CONFIG = {
   ui: { gridSize: 'md', hideEmpty: true, sounds: true, bgStyle: 'waves', theme: 'purple', mediaBar: true, logos: true, pointer: 'auto', scale: 'auto' },
   sync: { onLaunch: true, everyMinutes: 60 },
   sgdbKey: '', // optional SteamGridDB API key for game logos
+  ra: { user: '', key: '' }, // RetroAchievements username + web API key
   graphics: 'auto', // auto (GPU, falls back on failure) | software
   configVersion: 2,
   configured: false,
@@ -409,6 +410,7 @@ function slimRom(r) {
     path_cover_small: r.path_cover_small, path_cover_large: r.path_cover_large, url_cover: r.url_cover,
     shot: (r.merged_screenshots || [])[0] || null,
     logo: logoPath(r),
+    ra_id: r.ra_id || null,
     summary: (r.summary || '').slice(0, 400),
     regions: r.regions || [], files: (r.files || []).map((f) => ({ file_name: f.file_name })),
     year: md.first_release_date || null, genres: (md.genres || []).slice(0, 3),
@@ -697,6 +699,136 @@ async function logoFor({ id, name, romm }) {
   logoInflight.set(id, job);
   try { return await job; } finally { logoInflight.delete(id); }
 }
+// ---------------------------------------------------------------- RetroAchievements
+// Web API (retroachievements.org/API) with the user's username + web API key.
+// Docs: github.com/RetroAchievements/api-docs. Results are cached briefly (and on disk, so the
+// tab still shows something offline).
+const RA_BASE = () => process.env.CARTRIDGE_RA_BASE || 'https://retroachievements.org';
+const RA_MEDIA = () => process.env.CARTRIDGE_RA_MEDIA || 'https://media.retroachievements.org';
+const RA_CACHE_FILE = path.join(USER_DATA, 'retroachievements.json');
+const raCache = loadJson(RA_CACHE_FILE, {});
+const raMem = new Map();
+async function raApi(name, params = {}, auth = config.ra) {
+  if (!auth?.user || !auth?.key) throw new Error('Sign in to RetroAchievements first');
+  const q = new URLSearchParams({ y: auth.key, u: auth.user, ...params });
+  const r = await fetch(`${RA_BASE()}/API/API_${name}.php?${q}`, { headers: { 'User-Agent': `Cartridge/${app.getVersion()}` }, signal: AbortSignal.timeout(15000) });
+  if (r.status === 401 || r.status === 403) throw Object.assign(new Error('RetroAchievements rejected the username or web API key'), { auth: true });
+  if (r.status === 429) throw new Error('RetroAchievements is rate limiting, try again in a minute');
+  if (!r.ok) throw new Error('RetroAchievements error ' + r.status);
+  const j = await r.json();
+  if (j && typeof j === 'object' && !Array.isArray(j) && (j.error || j.Error)) throw Object.assign(new Error(String(j.error || j.Error)), { auth: /key|user|auth/i.test(String(j.error || j.Error)) });
+  return j;
+}
+const raMedia = (p) => (!p ? '' : /^https?:/.test(p) ? p : RA_MEDIA() + (p.startsWith('/') ? '' : '/') + p);
+const raBadge = (b, locked) => (b ? `${RA_MEDIA()}/Badge/${b}${locked ? '_lock' : ''}.png` : '');
+async function raCached(key, ttl, fn) {
+  const m = raMem.get(key);
+  if (m && Date.now() - m.t < ttl) return m.v;
+  try {
+    const v = await fn();
+    raMem.set(key, { t: Date.now(), v });
+    raCache[key] = { t: Date.now(), v };
+    try { fs.writeFileSync(RA_CACHE_FILE, JSON.stringify(raCache)); } catch {}
+    return v;
+  } catch (e) {
+    if (!e.auth && raCache[key]) return { ...raCache[key].v, offline: true };
+    throw e;
+  }
+}
+// Links a RetroAchievements game to a library ROM: RomM's ra_id first, then an exact title
+// match among ROMs on consoles RetroAchievements supports (only when the title is unique).
+function raRomIndex() {
+  const byId = new Map(), byTitle = new Map();
+  for (const r of library ? Object.values(library.roms).flat() : []) {
+    if (r.ra_id) byId.set(Number(r.ra_id), r.id);
+    if (RA_CONSOLES[r.platform_slug] ?? RA_CONSOLES[r.platform_fs_slug]) {
+      const k = raNorm(r.name);
+      byTitle.set(k, byTitle.has(k) ? null : r.id);
+    }
+  }
+  return { get: (gameId, title) => byId.get(Number(gameId)) || (title ? byTitle.get(raNorm(title)) : null) || null };
+}
+// RetroAchievements system IDs for the consoles it supports (RomM slug -> RA console ID).
+// Consoles missing here (PS3, PS4, PS5, Vita, Switch, 3DS, Xbox...) have no RetroAchievements.
+const RA_CONSOLES = {
+  'genesis-slash-megadrive': 1, genesis: 1, megadrive: 1, n64: 2, snes: 3, sfam: 3, gb: 4, gba: 5, gbc: 6, nes: 7, famicom: 7,
+  tg16: 8, 'pc-engine': 8, pcengine: 8, segacd: 9, sega32: 10, 'sega-32x': 10, sms: 11, psx: 12, lynx: 13, ngp: 14, ngpc: 14,
+  gamegear: 15, ngc: 16, jaguar: 17, nds: 18, ps2: 21, 'pokemon-mini': 24, atari2600: 25, arcade: 27, virtualboy: 28, msx: 29,
+  sg1000: 33, saturn: 39, dc: 40, psp: 41, '3do': 43, colecovision: 44, intellivision: 45, vectrex: 46, atari7800: 51,
+  wonderswan: 53, 'wonderswan-color': 53, 'neo-geo-cd': 56, 'turbografx-cd': 76, 'pc-engine-cd': 76, 'nintendo-dsi': 78,
+};
+const raNorm = (t) => String(t || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+  .replace(/\s*[\(\[][^\)\]]*[\)\]]/g, '').replace(/^the\s+|,\s*the\b/g, '').replace(/&/g, 'and').replace(/[^a-z0-9]+/g, ' ').trim();
+async function raGameList(consoleId) {
+  const key = 'list:' + consoleId;
+  const c = raCache[key];
+  if (c && Date.now() - c.t < 7 * 864e5) return c.v;
+  const list = await raApi('GetGameList', { i: consoleId, f: 1 });
+  const v = (Array.isArray(list) ? list : []).map((g) => [raNorm(g.Title), g.ID]);
+  raCache[key] = { t: Date.now(), v };
+  try { fs.writeFileSync(RA_CACHE_FILE, JSON.stringify(raCache)); } catch {}
+  return v;
+}
+async function raForRom({ ra_id, name, slug, fs_slug }) {
+  if (!config.ra?.user || !config.ra?.key) return null;
+  const consoleId = RA_CONSOLES[slug] ?? RA_CONSOLES[fs_slug];
+  if (!consoleId) return null; // no RetroAchievements for this console
+  if (ra_id) return Number(ra_id);
+  const n = raNorm(name);
+  if (!n) return null;
+  const list = await raGameList(consoleId);
+  const exact = list.find(([t]) => t === n);
+  if (exact) return exact[1];
+  const base = raNorm(String(name).split(/:| - /)[0]);
+  const partial = list.filter(([t]) => t === base || t.startsWith(n + ' ') || n.startsWith(t + ' '));
+  return partial.length === 1 ? partial[0][1] : null;
+}
+async function raOverview({ force } = {}) {
+  if (force) raMem.clear();
+  return raCached('overview:' + config.ra.user, 120000, async () => {
+    const [profile, recent, played] = await Promise.all([
+      raApi('GetUserProfile'),
+      raApi('GetUserRecentAchievements', { m: 60 * 24 * 30 }).catch(() => []),
+      raApi('GetUserRecentlyPlayedGames', { c: 30 }).catch(() => []),
+    ]);
+    const idx = raRomIndex();
+    return {
+      user: profile.User || config.ra.user,
+      avatar: raMedia(profile.UserPic),
+      points: profile.TotalPoints || 0,
+      softPoints: profile.TotalSoftcorePoints || 0,
+      truePoints: profile.TotalTruePoints || 0,
+      presence: profile.RichPresenceMsg || '',
+      memberSince: profile.MemberSince || '',
+      recent: (Array.isArray(recent) ? recent : []).map((a) => ({
+        id: a.AchievementID, title: a.Title, desc: a.Description, points: a.Points, date: a.Date, hardcore: !!a.HardcoreMode,
+        badge: raMedia(a.BadgeURL) || raBadge(a.BadgeName), game: a.GameTitle, gameId: a.GameID, console: a.ConsoleName, gameIcon: raMedia(a.GameIcon), romId: idx.get(a.GameID, a.GameTitle),
+      })),
+      played: (Array.isArray(played) ? played : []).map((g) => ({
+        gameId: g.GameID, title: g.Title, console: g.ConsoleName, icon: raMedia(g.ImageIcon), boxart: raMedia(g.ImageBoxArt), lastPlayed: g.LastPlayed,
+        total: g.NumPossibleAchievements ?? g.AchievementsTotal ?? 0, earned: g.NumAchieved || 0, earnedHc: g.NumAchievedHardcore || 0,
+        score: g.ScoreAchieved || 0, possible: g.PossibleScore || 0, romId: idx.get(g.GameID, g.Title),
+      })),
+    };
+  });
+}
+async function raGame({ gameId, force }) {
+  if (force) raMem.delete(`game:${config.ra.user}:${gameId}`);
+  return raCached(`game:${config.ra.user}:${gameId}`, 120000, async () => {
+    const g = await raApi('GetGameInfoAndUserProgress', { g: gameId, a: 1 });
+    const list = Object.values(g.Achievements || {}).map((a) => ({
+      id: a.ID, title: a.Title, desc: a.Description, points: a.Points, type: a.type || null, order: a.DisplayOrder || 0,
+      earned: a.DateEarned || null, earnedHc: a.DateEarnedHardcore || null, rarity: g.NumDistinctPlayers ? Math.round((a.NumAwarded / g.NumDistinctPlayers) * 1000) / 10 : null,
+      badge: raBadge(a.BadgeName, !(a.DateEarned || a.DateEarnedHardcore)),
+    })).sort((a, b) => a.order - b.order || a.id - b.id);
+    return {
+      gameId: g.ID, title: g.Title, console: g.ConsoleName, icon: raMedia(g.ImageIcon), boxart: raMedia(g.ImageBoxArt), ingame: raMedia(g.ImageIngame),
+      total: g.NumAchievements || list.length, earned: g.NumAwardedToUser || 0, earnedHc: g.NumAwardedToUserHardcore || 0,
+      completion: g.UserCompletion || '', award: g.HighestAwardKind || null, achievements: list, romId: raRomIndex().get(g.ID, g.Title),
+    };
+  });
+}
+
 // Console logos: white SVG wordmarks from the open-source Art Book Next theme for ES-DE
 // (github.com/anthonycaccese/art-book-next-es-de), fetched on first use and cached. Logos are
 // trademarks of their owners. Anything missing falls back to the console's name.
@@ -1040,6 +1172,17 @@ function createWindow() {
 const handlers = {
   'config:get': () => config,
   'logo:get': (r) => logoFor(r),
+  'ra:signin': async ({ user, key }) => {
+    const p = await raApi('GetUserProfile', {}, { user: user.trim(), key: key.trim() });
+    if (!p || !p.User) throw new Error('RetroAchievements did not recognise that account');
+    config.ra = { user: p.User, key: key.trim() }; saveConfig(); raMem.clear();
+    return { user: p.User };
+  },
+  'ra:signout': () => { config.ra = { user: '', key: '' }; saveConfig(); raMem.clear(); return true; },
+  'ra:overview': (o) => raOverview(o),
+  'ra:game': (o) => raGame(o),
+  'ra:forRom': (o) => raForRom(o),
+  'ra:supported': ({ slug, fs_slug }) => !!(RA_CONSOLES[slug] ?? RA_CONSOLES[fs_slug]),
   'syslogo:get': (p) => sysLogo(p),
   'logo:fetchAll': () => fetchAllLogos(),
   'logo:stopAll': () => { if (fetchAll) fetchAll.stop = true; return true; },

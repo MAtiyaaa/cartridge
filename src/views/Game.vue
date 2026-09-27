@@ -59,6 +59,20 @@
             <div class="shelf-title"><Icon name="mdiTextBoxOutline" :size="20" />About</div>
             <p class="summary">{{ summary }}</p>
           </template>
+          <template v-if="ra">
+            <div class="shelf-title" style="margin-top: 22px"><Icon name="mdiTrophyOutline" :size="20" />Achievements<span class="count">{{ ra.earned }} / {{ ra.total }}</span></div>
+            <div class="ra-sum">
+              <div class="bar ra-sum-bar"><i :style="{ width: (ra.total ? Math.round((ra.earned / ra.total) * 100) : 0) + '%' }" /></div>
+              <span class="muted small">{{ ra.total ? Math.round((ra.earned / ra.total) * 100) : 0 }}% complete<template v-if="ra.earnedHc"> · {{ ra.earnedHc }} hardcore</template><template v-if="ra.award === 'mastered'"> · Mastered</template></span>
+              <button class="btn small" data-focus @click="go('ra-game', { gameId: ra.gameId })"><Icon name="mdiTrophyVariantOutline" :size="18" />See all</button>
+            </div>
+            <div class="shelf ra-badges" data-hscroll>
+              <button v-for="a in raBadges" :key="a.id" class="ra-b" :class="{ locked: !a.earned && !a.earnedHc }" data-focus :title="a.title" @click="go('ra-game', { gameId: ra.gameId })" @focus="raFocus = a">
+                <img :src="img(a.badge)" loading="lazy" />
+              </button>
+            </div>
+            <div v-if="raFocus" class="ra-focus"><b>{{ raFocus.title }}</b> · {{ raFocus.points }} pts<template v-if="!raFocus.earned && !raFocus.earnedHc"> · Locked</template><div class="muted">{{ raFocus.desc }}</div></div>
+          </template>
           <template v-if="shots.length">
             <div class="shelf-title" style="margin-top: 22px"><Icon name="mdiImageMultipleOutline" :size="20" />Screenshots</div>
             <div class="shelf shots" data-hscroll>
@@ -87,7 +101,7 @@
 
 <script setup>
 import { computed, onMounted, ref, nextTick, watch } from 'vue';
-import { store, call, img, cover, bytes, year, rating, toast, confirm, download, downloadFor, romById, platformById, isNew, setBg, logoOf, resetLogos, artFor, choose, openModal } from '../store.js';
+import { store, call, img, go, cover, bytes, year, rating, toast, confirm, download, downloadFor, romById, platformById, isNew, setBg, logoOf, resetLogos, artFor, choose, openModal } from '../store.js';
 import { useView } from '../useView.js';
 import { ensureFocus, focusFirst } from '../nav.js';
 import Icon from '../components/Icon.vue';
@@ -169,6 +183,21 @@ async function setMark(on) {
     toast(on ? 'Marked as installed' : 'Mark removed', 'ok', 2200, on ? 'mdiCheckCircle' : 'mdiCheckboxBlankOffOutline');
   } catch (e) { toast(e.message, 'error'); }
 }
+// RetroAchievements for this game (only for consoles RA supports, and only when signed in)
+const ra = ref(null);
+const raFocus = ref(null);
+const raBadges = computed(() => {
+  const l = ra.value?.achievements || [];
+  return [...l.filter((a) => a.earned || a.earnedHc), ...l.filter((a) => !a.earned && !a.earnedHc)];
+});
+async function loadRa() {
+  if (!store.config.ra?.user || store.config.ui.raOnGames === false || !base.value) return;
+  try {
+    const b = base.value;
+    const gameId = await call('ra:forRom', { ra_id: b.ra_id || detail.value?.ra_id || null, name: b.name, slug: b.platform_slug, fs_slug: b.platform_fs_slug });
+    if (gameId) ra.value = await call('ra:game', { gameId });
+  } catch {}
+}
 // More options: custom artwork from SteamGridDB, plus handy extras
 async function more() {
   const has = artFor(props.romId);
@@ -212,6 +241,7 @@ onMounted(async () => {
     detail.value = await call('api:get', { path: `/api/roms/${props.romId}` });
     if (!hero && detail.value.merged_screenshots?.[0]) setBg({ src: img(detail.value.merged_screenshots[0]) });
   } catch (e) { if (!cached.value) toast(e.message, 'error'); }
+  loadRa();
   const p = platformById(base.value?.platform_id);
   if (p) call('fs:space', p.target?.path).then((s) => (space.value = s));
   await nextTick();
@@ -248,4 +278,14 @@ onMounted(async () => {
 .viewer img { max-width: 94vw; max-height: 84vh; border-radius: 7px; box-shadow: 0 30px 80px rgba(0, 0, 0, 0.7); }
 .vhint { position: absolute; bottom: 26px; display: flex; gap: 8px; align-items: center; color: var(--muted); font-size: 13px; }
 @media (max-width: 1100px) { .g-body { grid-template-columns: minmax(0, 1fr) 200px; gap: 28px; } .g-cover, .facts { width: 200px; } }
+.ra-sum { display: flex; align-items: center; gap: 14px; margin: -2px 0 4px; }
+.ra-sum-bar { flex: 0 1 320px; height: 7px; }
+.ra-sum-bar i { background: linear-gradient(90deg, #f5c542, #ffdf80); }
+.small { font-size: 13px; }
+.ra-badges { gap: 10px; padding: 12px 20px 12px 56px; margin: 0 0 0 -56px; }
+.ra-b { flex: none; width: 60px; height: 60px; border-radius: 8px; overflow: hidden; transition: transform 0.14s ease-out; box-shadow: 0 6px 14px rgba(0, 0, 0, 0.4); }
+.ra-b img { width: 100%; height: 100%; display: block; }
+.ra-b.locked { opacity: 0.55; }
+.ra-b:focus { transform: scale(1.12); }
+.ra-focus { font-size: 13px; margin: 2px 0 6px; max-width: 760px; }
 </style>
