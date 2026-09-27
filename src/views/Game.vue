@@ -5,7 +5,7 @@
       <section class="g-hero">
         <div class="g-info">
           <div class="eyebrow row" style="gap: 8px"><PIcon :p="{ slug: base.platform_slug, fs_slug: base.platform_fs_slug }" :size="18" />{{ base.platform_display_name }}</div>
-          <GameLogo :src="store.config.ui.logos !== false ? logoOf(base) : ''" :name="base.name" cls="g-title" style="--logo-h: 128px" />
+          <GameLogo :logo="store.config.ui.logos !== false ? logoOf(base) : null" :name="base.name" cls="g-title" :area="44000" :max-w="520" :max-h="170" />
           <div class="g-meta">
             <span v-if="isNew(base)" class="chip new">NEW</span>
             <span v-if="yr">{{ yr }}</span>
@@ -37,6 +37,7 @@
             <template v-else>
               <button class="btn primary xl" data-focus data-autofocus @click="dlNow"><Icon name="mdiDownload" :size="22" />{{ dl?.status === 'cancelled' ? 'Resume' : 'Download' }} · {{ bytes(base.fs_size_bytes) }}</button>
             </template>
+            <button class="btn icon-btn" data-focus title="More options" @click="more"><Icon name="mdiDotsHorizontal" :size="22" /><span>More</span></button>
           </div>
           <div v-if="dl && dl.status === 'error'" class="chip red" style="align-self: flex-start">Last attempt failed: {{ dl.error }}</div>
           <div class="dest"><Icon name="mdiFolderArrowDownOutline" :size="16" /><span class="mono">{{ installedPath || target?.path || 'No folder set for this system' }}</span><span v-if="space" class="muted">· {{ bytes(space.free) }} free</span></div>
@@ -81,7 +82,7 @@
 
 <script setup>
 import { computed, onMounted, ref, nextTick, watch } from 'vue';
-import { store, call, img, cover, bytes, year, rating, toast, confirm, download, downloadFor, romById, platformById, isNew, setBg, logoOf } from '../store.js';
+import { store, call, img, cover, bytes, year, rating, toast, confirm, download, downloadFor, romById, platformById, isNew, setBg, logoOf, resetLogos, artFor, choose, openModal } from '../store.js';
 import { useView } from '../useView.js';
 import { ensureFocus, focusFirst } from '../nav.js';
 import Icon from '../components/Icon.vue';
@@ -139,8 +140,9 @@ useView(
     lb: () => { if (viewer.value !== null) viewer.value = (viewer.value - 1 + shots.value.length) % shots.value.length; },
     rb: () => { if (viewer.value !== null) viewer.value = (viewer.value + 1) % shots.value.length; },
     x: () => { if (!installedPath.value && !['queued', 'downloading'].includes(dl.value?.status)) dlNow(); },
+    y: () => more(),
   },
-  [{ b: 'A', label: 'Select' }, { b: 'X', label: 'Download' }, { b: 'B', label: 'Back' }],
+  [{ b: 'A', label: 'Select' }, { b: 'X', label: 'Download' }, { b: 'Y', label: 'More' }, { b: 'B', label: 'Back' }],
 );
 
 async function dlNow() { await download(base.value); }
@@ -153,16 +155,43 @@ async function remove() {
   if (!(await confirm(`Delete ${base.value.name}?`, `Removes it from this device:\n${installedPath.value}\n\nIt stays on your RomM server.`, 'Delete', true))) return;
   try { await call('roms:delete', { romId: props.romId, path: installedPath.value }); toast('Deleted from this device', 'ok', 2400, 'mdiDeleteOutline'); } catch (e) { toast(e.message, 'error'); }
 }
+// More options: custom artwork from SteamGridDB, plus handy extras
+async function more() {
+  const has = artFor(props.romId);
+  const opts = [
+    { label: 'Change cover', sub: 'SteamGridDB', value: 'grid', icon: 'mdiImageEditOutline' },
+    { label: 'Change logo', sub: 'SteamGridDB', value: 'logo', icon: 'mdiFormatTitle' },
+    { label: 'Change background', sub: 'SteamGridDB', value: 'hero', icon: 'mdiPanoramaVariantOutline' },
+  ];
+  if (Object.keys(has).length) opts.push({ label: 'Reset artwork', sub: 'Back to RomM and automatic logo', value: 'reset', icon: 'mdiRestore' });
+  opts.push({ label: 'Refresh details from RomM', value: 'refresh', icon: 'mdiRefresh' });
+  if (installedPath.value) opts.push({ label: 'Show file location', value: 'path', icon: 'mdiFolderOutline' });
+  const v = await choose({ title: base.value.name, options: opts });
+  if (!v) return;
+  if (v === 'path') { toast(installedPath.value, 'info', 5000, 'mdiFolder'); return; }
+  if (v === 'refresh') { try { detail.value = await call('api:get', { path: `/api/roms/${props.romId}` }); resetLogos(props.romId); toast('Details refreshed', 'ok', 2000, 'mdiRefresh'); } catch (e) { toast(e.message, 'error'); } return; }
+  if (v === 'reset') { store.art = { ...store.art }; delete store.art[props.romId]; await call('art:reset', { id: props.romId }); resetLogos(props.romId); toast('Artwork reset', 'ok', 2000, 'mdiRestore'); return; }
+  if (!store.config.sgdbKey) { toast('Add a SteamGridDB API key in Settings → Look & feel first', 'error', 4500); return; }
+  const url = await openModal('art', { kind: v, romName: base.value.name });
+  if (!url) return;
+  const o = await call('art:set', { id: props.romId, kind: v, url });
+  store.art = { ...store.art, [props.romId]: o };
+  if (v === 'logo') resetLogos(props.romId);
+  if (v === 'hero') setBg({ src: img(url) });
+  toast({ grid: 'Cover', logo: 'Logo', hero: 'Background' }[v] + ' updated', 'ok', 2000, 'mdiCheck');
+}
 function goVersion(id) { store.route = { ...store.route, params: { romId: id } }; }
 
 watch([installedPath, () => dl.value?.status], async () => { await nextTick(); ensureFocus(el.value); });
 onMounted(async () => {
-  if (cached.value) setBg(cached.value.shot ? { src: img(cached.value.shot) } : { src: cover(cached.value, true), blur: true });
+  const hero = artFor(props.romId).hero;
+  if (hero) setBg({ src: img(hero) });
+  else if (cached.value) setBg(cached.value.shot ? { src: img(cached.value.shot) } : { src: cover(cached.value, true), blur: true });
   await nextTick();
   focusFirst(el.value);
   try {
     detail.value = await call('api:get', { path: `/api/roms/${props.romId}` });
-    if (detail.value.merged_screenshots?.[0]) setBg({ src: img(detail.value.merged_screenshots[0]) });
+    if (!hero && detail.value.merged_screenshots?.[0]) setBg({ src: img(detail.value.merged_screenshots[0]) });
   } catch (e) { if (!cached.value) toast(e.message, 'error'); }
   const p = platformById(base.value?.platform_id);
   if (p) call('fs:space', p.target?.path).then((s) => (space.value = s));
@@ -184,19 +213,20 @@ onMounted(async () => {
 .g-cover { flex: none; width: 250px; aspect-ratio: 2/3; border-radius: 10px; overflow: hidden; box-shadow: 0 30px 80px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.08); transform: perspective(1000px) rotateY(-8deg); background: #161a25; }
 .g-cover img { width: 100%; height: 100%; object-fit: cover; }
 .noart { height: 100%; display: grid; place-items: center; padding: 20px; text-align: center; font-family: var(--display); font-size: 20px; }
-.g-body { display: grid; grid-template-columns: 1fr 320px; gap: 30px; padding: 16px 56px; background: linear-gradient(180deg, transparent, rgba(22, 8, 46, 0.45) 140px); }
+.g-body { display: grid; grid-template-columns: minmax(0, 1fr) 250px; gap: 40px; padding: 16px 56px; background: linear-gradient(180deg, transparent, rgba(22, 8, 46, 0.45) 140px); }
 .col { min-width: 0; }
 .summary { margin: 0; line-height: 1.7; color: #cdd2dc; font-size: 15px; white-space: pre-line; max-width: 820px; }
-.shots { padding: 18px 56px; margin: -8px -56px 0; }
+.shots { padding: 18px 20px 18px 56px; margin: -8px 0 0 -56px; scroll-padding: 0 56px; }
 .shot { flex: none; width: 340px; aspect-ratio: 16/9; border-radius: 8px; overflow: hidden; background: #161a25; transition: transform 0.2s var(--ease), box-shadow 0.2s; }
 .shot img { width: 100%; height: 100%; object-fit: cover; }
 .shot:focus { transform: scale(1.04); }
-.facts { padding: 18px 20px; display: flex; flex-direction: column; gap: 12px; align-self: start; }
+.facts { width: 250px; padding: 16px 18px; display: flex; flex-direction: column; gap: 12px; align-self: start; box-sizing: border-box; }
+.icon-btn span { font-size: 14px; }
 .fact { display: flex; flex-direction: column; gap: 3px; word-break: break-word; }
 .fact span { font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
 .fact b { font-weight: 400; font-size: 13.5px; }
 .viewer { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.94); z-index: 40; display: grid; place-items: center; animation: fade 0.2s; }
 .viewer img { max-width: 94vw; max-height: 84vh; border-radius: 7px; box-shadow: 0 30px 80px rgba(0, 0, 0, 0.7); }
 .vhint { position: absolute; bottom: 26px; display: flex; gap: 8px; align-items: center; color: var(--muted); font-size: 13px; }
-@media (max-width: 1100px) { .g-body { grid-template-columns: 1fr; } .g-cover { width: 200px; } }
+@media (max-width: 1100px) { .g-body { grid-template-columns: minmax(0, 1fr) 200px; gap: 28px; } .g-cover, .facts { width: 200px; } }
 </style>

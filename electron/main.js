@@ -511,6 +511,10 @@ async function scanServer() {
 // ---------------------------------------------------------------- image protocol (auth + disk cache)
 async function handleImage(request) {
   const u = new URL(request.url);
+  const lf = u.searchParams.get('f');
+  if (lf) {
+    try { return new Response(await fsp.readFile(path.join(LOGO_DIR, path.basename(lf))), { headers: { 'Content-Type': 'image/png' } }); } catch { return new Response('nf', { status: 404 }); }
+  }
   const target = u.searchParams.get('u');
   if (!target) return new Response('bad', { status: 400 });
   const key = crypto.createHash('sha1').update(target).digest('hex');
@@ -536,52 +540,138 @@ async function handleImage(request) {
   }
 }
 
-// ---------------------------------------------------------------- logos (SteamGridDB)
-// RomM only has logos when its ScreenScraper "logo" media is enabled. With a free SteamGridDB
-// key Cartridge looks them up itself: name search -> game -> logos. Results are cached.
+// ---------------------------------------------------------------- logos + custom artwork
+// Logos come from (in order) a logo the user picked, RomM's own logo, or SteamGridDB (free key).
+// Every logo is prepared here: transparent padding trimmed so sizes can be evened out on screen,
+// and near-black logos detected so a white version is picked (or the black one drawn white).
 const LOGO_FILE = path.join(USER_DATA, 'logos.json');
-const logoCache = loadJson(LOGO_FILE, {}); // romId -> { url, t }
+const LOGO_DIR = path.join(USER_DATA, 'logos');
+const ART_FILE = path.join(USER_DATA, 'artwork.json');
+const LOGO_VERSION = 2;
+const logoCache = loadJson(LOGO_FILE, {}); // romId -> { v, file, w, h, dark, src, t }
+const artOverrides = loadJson(ART_FILE, {}); // romId -> { grid, logo, hero }
 let logoSaveT = null;
 function saveLogoCache() { clearTimeout(logoSaveT); logoSaveT = setTimeout(() => { try { fs.writeFileSync(LOGO_FILE, JSON.stringify(logoCache)); } catch {} }, 500); }
+function saveArt() { try { fs.writeFileSync(ART_FILE, JSON.stringify(artOverrides, null, 1)); } catch {} }
 const logoInflight = new Map();
 let logoChain = Promise.resolve();
+const SGDB_BASE = () => process.env.CARTRIDGE_SGDB_BASE || 'https://www.steamgriddb.com/api/v2';
 async function sgdb(pathname) {
-  const r = await fetch((process.env.CARTRIDGE_SGDB_BASE || 'https://www.steamgriddb.com/api/v2') + pathname, { headers: { Authorization: 'Bearer ' + config.sgdbKey }, signal: AbortSignal.timeout(12000) });
+  const r = await fetch(SGDB_BASE() + pathname, { headers: { Authorization: 'Bearer ' + config.sgdbKey }, signal: AbortSignal.timeout(12000) });
   if (r.status === 401 || r.status === 403) throw Object.assign(new Error('SteamGridDB rejected the API key'), { auth: true });
   if (!r.ok) return null;
   const j = await r.json().catch(() => null);
   return j && j.success ? j.data : null;
 }
 function cleanName(n) { return String(n || '').replace(/\s*[\(\[][^\)\]]*[\)\]]/g, '').replace(/\s+/g, ' ').trim(); }
-async function findLogo(name) {
+async function sgdbGames(name) {
   const tries = [...new Set([cleanName(name), cleanName(name).split(/:| - /)[0].trim()])].filter((x) => x.length > 1);
   for (const term of tries) {
     const games = await sgdb('/search/autocomplete/' + encodeURIComponent(term));
-    for (const g of (games || []).slice(0, 2)) {
-      const logos = await sgdb(`/logos/game/${g.id}?types=static&nsfw=false&humor=false`);
-      if (!logos || !logos.length) continue;
-      const rank = (l) => (l.style === 'official' ? 0 : l.style === 'white' ? 2 : 1) + (l.mime === 'image/png' ? 0 : 0.5);
-      const best = [...logos].sort((a, b) => rank(a) - rank(b) || (b.score || 0) - (a.score || 0))[0];
-      if (best?.url) return best.url;
+    if (games && games.length) return games.slice(0, 6).map((g) => ({ id: g.id, name: g.name, year: g.release_date ? new Date(g.release_date * 1000).getFullYear() : null }));
+  }
+  return [];
+}
+const logoRank = (l) => (l.style === 'official' ? 0 : l.style === 'white' ? 1 : l.style === 'custom' ? 2 : 3) + (l.mime === 'image/png' ? 0 : 0.5);
+
+async function fetchImage(src) {
+  let url = src, headers = {};
+  if (!/^https?:\/\//.test(src)) { url = (await resolveBase()) + (src.startsWith('/') ? '' : '/') + src; headers = authHeaders(); delete headers.Accept; }
+  const r = await fetch(url, { headers, signal: AbortSignal.timeout(20000) });
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  return Buffer.from(await r.arrayBuffer());
+}
+// Trim transparent edges, measure brightness, save a PNG. Returns null if it isn't a usable image.
+function prepareLogo(buf, key) {
+  const { nativeImage } = require('electron');
+  let im = nativeImage.createFromBuffer(buf);
+  if (im.isEmpty()) return null;
+  let { width: W, height: H } = im.getSize();
+  if (W > 900) { im = im.resize({ width: 900, quality: 'best' }); ({ width: W, height: H } = im.getSize()); }
+  const px = im.toBitmap(); // BGRA
+  let x0 = W, y0 = H, x1 = -1, y1 = -1, lum = 0, sat = 0, wsum = 0;
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      const i = (y * W + x) * 4, a = px[i + 3];
+      if (a < 24) continue;
+      if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y;
+      const b = px[i], g = px[i + 1], r = px[i + 2], w = a / 255;
+      const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
+      lum += w * (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+      sat += w * (mx ? (mx - mn) / mx : 0);
+      wsum += w;
     }
   }
-  return '';
+  if (x1 < 0 || x1 - x0 < 8 || y1 - y0 < 4) return null;
+  const crop = im.crop({ x: x0, y: y0, width: x1 - x0 + 1, height: y1 - y0 + 1 });
+  fs.mkdirSync(LOGO_DIR, { recursive: true });
+  const file = `${key}.png`;
+  fs.writeFileSync(path.join(LOGO_DIR, file), crop.toPNG());
+  const L = wsum ? lum / wsum : 1, S = wsum ? sat / wsum : 1;
+  return { file, w: x1 - x0 + 1, h: y1 - y0 + 1, dark: L < 0.22 && S < 0.35, lum: +L.toFixed(3) };
 }
-async function logoFor({ id, name }) {
-  if (!config.sgdbKey || !id) return null;
+async function logoFromSgdb(id, name) {
+  const games = await sgdbGames(name);
+  for (const g of games.slice(0, 2)) {
+    const logos = await sgdb(`/logos/game/${g.id}?types=static&nsfw=false&humor=false`);
+    if (!logos || !logos.length) continue;
+    const list = [...logos].sort((a, b) => logoRank(a) - logoRank(b) || (b.score || 0) - (a.score || 0)).slice(0, 5);
+    let firstDark = null;
+    for (const [i, l] of list.entries()) {
+      try {
+        const got = prepareLogo(await fetchImage(l.url), `${id}-s${i}`);
+        if (!got) continue;
+        if (!got.dark) return { ...got, src: l.url };
+        firstDark ||= { ...got, src: l.url };
+      } catch {}
+    }
+    if (firstDark) return firstDark; // only black versions exist: the app draws it white
+  }
+  return null;
+}
+function logoPublic(c) { return c && c.file ? { url: 'romimg://img/?f=' + encodeURIComponent(c.file) + '&t=' + c.t, w: c.w, h: c.h, dark: c.dark } : null; }
+async function logoFor({ id, name, romm }) {
+  if (!id) return null;
+  const pick = artOverrides[id]?.logo || '';
   const c = logoCache[id];
-  if (c && (c.url || Date.now() - c.t < 7 * 864e5)) return c.url || null;
+  const want = pick ? 'pick:' + pick : romm ? 'romm:' + romm : 'sgdb';
+  if (c && c.v === LOGO_VERSION && c.want === want && (c.file || Date.now() - c.t < 3 * 864e5)) return logoPublic(c);
+  if (want === 'sgdb' && !config.sgdbKey) return null;
   if (logoInflight.has(id)) return logoInflight.get(id);
   const job = (logoChain = logoChain.then(async () => {
+    let got = null;
     try {
-      const url = await findLogo(name);
-      logoCache[id] = { url, t: Date.now() }; saveLogoCache();
-      return url || null;
-    } catch (e) { log('logo', name, e.message); if (e.auth) throw e; return null; }
+      if (pick) got = prepareLogo(await fetchImage(pick), `${id}-p`);
+      else if (romm) { try { got = prepareLogo(await fetchImage(romm), `${id}-r`); } catch {} }
+      if (!got && !pick && config.sgdbKey) got = await logoFromSgdb(id, name);
+    } catch (e) { log('logo', name, e.message); if (e.auth) throw e; }
+    logoCache[id] = { v: LOGO_VERSION, want, t: Date.now(), ...(got || {}) }; saveLogoCache();
+    return logoPublic(logoCache[id]);
   }));
   logoChain = job.catch(() => {});
   logoInflight.set(id, job);
   try { return await job; } finally { logoInflight.delete(id); }
+}
+// Artwork picker: SteamGridDB images of one kind for a game (by name, or a chosen SGDB game id)
+async function sgdbArt({ name, kind, gameId }) {
+  if (!config.sgdbKey) throw new Error('Add a SteamGridDB API key in Settings → Look & feel first.');
+  const games = await sgdbGames(name);
+  const gid = gameId || games[0]?.id;
+  if (!gid) return { games, gameId: null, images: [] };
+  const ep = kind === 'grid' ? `/grids/game/${gid}?dimensions=600x900,342x482,660x930&types=static&nsfw=false&humor=false`
+    : kind === 'hero' ? `/heroes/game/${gid}?types=static&nsfw=false&humor=false`
+    : `/logos/game/${gid}?types=static&nsfw=false&humor=false`;
+  const imgs = (await sgdb(ep)) || [];
+  const sorted = kind === 'logo' ? [...imgs].sort((a, b) => logoRank(a) - logoRank(b) || (b.score || 0) - (a.score || 0)) : [...imgs].sort((a, b) => (b.score || 0) - (a.score || 0));
+  return { games, gameId: gid, images: sorted.slice(0, 40).map((i) => ({ url: i.url, thumb: i.thumb || i.url, w: i.width, h: i.height, style: i.style })) };
+}
+async function setArt({ id, kind, url }) {
+  const o = artOverrides[id] || (artOverrides[id] = {});
+  if (url) o[kind] = url; else delete o[kind];
+  if (!Object.keys(o).length) delete artOverrides[id];
+  saveArt();
+  if (kind === 'logo') delete logoCache[id];
+  return artOverrides[id] || {};
 }
 
 // ---------------------------------------------------------------- downloads
@@ -827,14 +917,18 @@ function createWindow() {
 const handlers = {
   'config:get': () => config,
   'logo:get': (r) => logoFor(r),
+  'art:all': () => artOverrides,
+  'art:search': (q) => sgdbArt(q),
+  'art:set': (q) => setArt(q),
+  'art:reset': ({ id }) => { delete artOverrides[id]; delete logoCache[id]; saveArt(); saveLogoCache(); return {}; },
   'logo:test': async ({ key }) => {
-    const r = await fetch((process.env.CARTRIDGE_SGDB_BASE || 'https://www.steamgriddb.com/api/v2') + '/search/autocomplete/zelda', { headers: { Authorization: 'Bearer ' + key }, signal: AbortSignal.timeout(12000) });
+    const r = await fetch(SGDB_BASE() + '/search/autocomplete/zelda', { headers: { Authorization: 'Bearer ' + key }, signal: AbortSignal.timeout(12000) });
     return { ok: r.ok, status: r.status };
   },
   'config:set': (patch) => {
     config = deepMerge(config, patch); saveConfig();
     if (patch.server) activeBase = null;
-    if ('sgdbKey' in patch) { for (const k of Object.keys(logoCache)) if (!logoCache[k].url) delete logoCache[k]; saveLogoCache(); }
+    if ('sgdbKey' in patch) { for (const k of Object.keys(logoCache)) if (!logoCache[k].file) delete logoCache[k]; saveLogoCache(); }
     if ('romsRoot' in patch && library) { broadcast('library', publicLibrary()); computeInstalled(); }
     return config;
   },

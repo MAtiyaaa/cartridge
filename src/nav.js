@@ -197,3 +197,75 @@ export function ensureFocus(root) {
   focusFirst(root);
 }
 export function jump(dir, n = 4) { for (let i = 0; i < n; i++) move(dir); }
+
+// ---------------- drag to scroll (touch, pen, and touch that arrives as a mouse)
+// Native touch scrolling fought with focus-driven scrolling and never worked when Game Mode
+// delivers touches as mouse clicks. So every swipe is handled here: pick the axis after a few
+// pixels, scroll the nearest scroller on that axis, keep momentum on release, and swallow the
+// click that ends a drag. Real mouse users keep normal clicks; dragging with a mouse also scrolls.
+const DRAG_START = 8;
+let drag = null, glide = 0;
+function scrollerFor(el, axis) {
+  for (let n = el; n && n !== document.documentElement; n = n.parentElement) {
+    const cs = getComputedStyle(n);
+    if (axis === 'x' && /(auto|scroll)/.test(cs.overflowX) && n.scrollWidth > n.clientWidth + 1) return n;
+    if (axis === 'y' && /(auto|scroll)/.test(cs.overflowY) && n.scrollHeight > n.clientHeight + 1) return n;
+  }
+  return null;
+}
+function stopGlide() { cancelAnimationFrame(glide); glide = 0; }
+window.addEventListener('pointerdown', (e) => {
+  stopGlide();
+  if (e.button !== 0 || e.target.closest('input, textarea, [data-nodrag]')) { drag = null; return; }
+  drag = { id: e.pointerId, x: e.clientX, y: e.clientY, lx: e.clientX, ly: e.clientY, axis: null, sc: null, target: e.target, hist: [] };
+}, { capture: true, passive: true });
+window.addEventListener('pointermove', (e) => {
+  if (!drag || e.pointerId !== drag.id) return;
+  const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+  if (!drag.axis) {
+    if (Math.abs(dx) < DRAG_START && Math.abs(dy) < DRAG_START) return;
+    const want = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y';
+    drag.axis = want;
+    drag.sc = scrollerFor(drag.target, want) || scrollerFor(drag.target, want === 'x' ? 'y' : 'x');
+    if (drag.sc && !scrollerFor(drag.target, want)) drag.axis = want === 'x' ? 'y' : 'x';
+    if (!drag.sc) { drag = null; return; }
+    drag.sc.style.scrollBehavior = 'auto';
+    document.body.classList.add('dragging');
+  }
+  const mx = drag.lx - e.clientX, my = drag.ly - e.clientY;
+  drag.lx = e.clientX; drag.ly = e.clientY;
+  if (drag.axis === 'x') drag.sc.scrollLeft += mx; else drag.sc.scrollTop += my;
+  const now = performance.now();
+  drag.hist.push([now, drag.axis === 'x' ? mx : my]);
+  while (drag.hist.length && now - drag.hist[0][0] > 90) drag.hist.shift();
+}, { capture: true, passive: true });
+function endDrag(e) {
+  if (!drag || e.pointerId !== drag.id) return;
+  const d = drag; drag = null;
+  if (!d.axis) return;
+  document.body.classList.remove('dragging');
+  // swallow the click that the browser sends at the end of a drag
+  const eat = (ev) => { ev.preventDefault(); ev.stopPropagation(); };
+  window.addEventListener('click', eat, { capture: true, once: true });
+  setTimeout(() => window.removeEventListener('click', eat, { capture: true }), 60);
+  // momentum
+  const span = d.hist.length > 1 ? d.hist[d.hist.length - 1][0] - d.hist[0][0] : 0;
+  let v = span > 0 ? d.hist.reduce((s, h) => s + h[1], 0) / span : 0; // px per ms
+  if (Math.abs(v) < 0.1) return;
+  v = Math.max(-4, Math.min(4, v));
+  let last = performance.now();
+  const step = (t) => {
+    const dt = Math.min(32, t - last); last = t;
+    if (d.axis === 'x') d.sc.scrollLeft += v * dt; else d.sc.scrollTop += v * dt;
+    v *= Math.pow(0.95, dt / 16);
+    glide = Math.abs(v) > 0.02 ? requestAnimationFrame(step) : 0;
+  };
+  glide = requestAnimationFrame(step);
+}
+window.addEventListener('pointerup', endDrag, { capture: true, passive: true });
+window.addEventListener('pointercancel', endDrag, { capture: true, passive: true });
+window.addEventListener('wheel', stopGlide, { passive: true });
+// With touch, a tap should open things without also yanking the view around to "focus" them.
+window.addEventListener('mousedown', (e) => {
+  if (input.mode === 'touch' && !e.target.closest('input, textarea')) e.preventDefault();
+}, { capture: true });

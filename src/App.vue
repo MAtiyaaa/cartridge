@@ -3,9 +3,9 @@
   <div v-if="!store.config" class="center" style="height: 100%"><div class="spinner" /></div>
   <Setup v-else-if="!store.config.configured || store.route.name === 'setup'" />
   <div v-else class="shell" :style="{ '--card-w': cardW }">
-    <header class="statusbar">
+    <header class="statusbar" :class="{ 'has-back': store.history.length }">
       <button v-if="store.history.length" class="backbtn" aria-label="Back" @click="back()"><Icon name="mdiArrowLeft" :size="22" /></button>
-      <div class="brand"><Logo :size="30" />Cartridge</div>
+      <div class="brand"><Logo :size="30" /><span class="brand-word">Cartridge</span></div>
       <nav class="tabs">
         <Btn b="LT" style="margin: 0 4px" />
         <button v-for="t in tabs" :key="t.name" class="tab" :class="{ active: activeTab === t.name }" @click="tab(t.name)">
@@ -45,6 +45,7 @@
   <TextPrompt v-if="store.modal?.type === 'keyboard'" v-bind="store.modal.props" />
   <FolderPicker v-if="store.modal?.type === 'folder'" v-bind="store.modal.props" />
   <Menu v-if="store.modal?.type === 'menu'" v-bind="store.modal.props" />
+  <ArtPicker v-if="store.modal?.type === 'art'" :key="store.modal.props.query || ''" v-bind="store.modal.props" />
 
   <div class="toasts" :class="{ shifted: store.quickMenu }">
     <div v-for="t in store.toasts" :key="t.id" class="toast" :class="t.kind"><span class="ti"><Icon :name="t.icon" :size="18" /></span>{{ t.msg }}</div>
@@ -53,7 +54,7 @@
 
 <script setup>
 import { computed, onMounted, onBeforeUnmount, ref, watch, nextTick } from 'vue';
-import { store, loadConfig, loadLibrary, back, tab, go, call, toast } from './store.js';
+import { store, loadConfig, loadLibrary, loadArt, back, tab, go, call, toast } from './store.js';
 import { pushLayer, focusFirst } from './nav.js';
 import { setSoundEnabled, sfx } from './sfx.js';
 import { applyTheme } from './themes.js';
@@ -66,6 +67,7 @@ import QuickMenu from './components/QuickMenu.vue';
 import TextPrompt from './components/TextPrompt.vue';
 import FolderPicker from './components/FolderPicker.vue';
 import Menu from './components/Menu.vue';
+import ArtPicker from './components/ArtPicker.vue';
 import Setup from './views/Setup.vue';
 import Home from './views/Home.vue';
 import Gallery from './views/Gallery.vue';
@@ -152,6 +154,7 @@ onMounted(async () => {
   applyTheme(store.config.ui.theme);
   setPointerPref(store.config.ui.pointer);
   await loadLibrary();
+  loadArt();
   if (store.config.configured) call('server:status').then((c) => (store.connection = c)).catch(() => {});
   pushLayer(document.body, {
     back: () => { if (viewHandler('back') !== false) return; back(); },

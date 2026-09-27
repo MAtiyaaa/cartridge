@@ -13,7 +13,7 @@
         <Transition name="hero">
           <div v-if="heroRom" :key="'r' + heroRom.id" class="hero-in">
             <div class="eyebrow row" style="gap: 8px"><PIcon :p="{ slug: heroRom.platform_slug, fs_slug: heroRom.platform_fs_slug }" :size="18" />{{ heroRom.platform_display_name }}</div>
-            <GameLogo :src="store.config.ui.logos !== false ? logoOf(heroRom) : ''" :name="heroRom.name" cls="hero-title" />
+            <GameLogo :logo="store.config.ui.logos !== false ? logoOf(heroRom) : null" :name="heroRom.name" cls="hero-title" :area="32000" :max-w="420" :max-h="140" />
             <div class="meta">
               <span v-if="isNew(heroRom)" class="chip new">NEW</span>
               <span v-if="store.installed[heroRom.id]" class="chip green"><Icon name="mdiCheckCircle" :size="14" />On this device</span>
@@ -88,7 +88,7 @@ const heroRom = ref(null);
 const heroSys = ref(null);
 const heroCol = ref(null);
 // Media bar art: a screenshot of the highlighted game (or its cover), or art from the highlighted console/collection
-const artOf = (r) => (r ? (r.shot ? img(r.shot) : cover(r, true)) : '');
+const artOf = (r) => (r ? (store.art?.[r.id]?.hero ? img(store.art[r.id].hero) : r.shot ? img(r.shot) : cover(r, true)) : '');
 const heroArt = computed(() => {
   if (heroRom.value) return artOf(heroRom.value);
   if (heroSys.value) return artOf(romsOf(heroSys.value.id).find((r) => r.shot) || romsOf(heroSys.value.id)[0]);
@@ -145,6 +145,7 @@ function openSys(p) { go('platform', { platformId: p.id }); }
 function onShelfFocus(e) {
   const wrap = e.target.closest('.shelf-wrap');
   if (!wrap || !shelvesEl.value) return;
+  if (!document.body.classList.contains('pad-mode')) return; // only snap rows when using a controller
   shelvesEl.value.scrollTo({ top: wrap.offsetTop - 4, behavior: 'smooth' });
 }
 

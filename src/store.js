@@ -22,6 +22,7 @@ export const store = reactive({
   quickMenu: false,
   lastSearch: '',
   logos: {},
+  art: {},
   manualSync: false,
   update: { state: 'idle' },
 });
@@ -121,11 +122,15 @@ export function img(p) {
   return 'romimg://img/?u=' + encodeURIComponent(p);
 }
 export function cover(rom, large = false) {
+  const o = store.art?.[rom.id]?.grid;
+  if (o) return img(o);
   const p = (large ? rom.path_cover_large || rom.path_cover_small : rom.path_cover_small || rom.path_cover_large) || rom.url_cover;
   return img(p);
 }
 export function backdropOf(rom) {
   if (!rom) return '';
+  const h = store.art?.[rom.id]?.hero;
+  if (h) return { src: img(h), blur: false };
   if (rom.shot) return { src: img(rom.shot), blur: false };
   const c = cover(rom, true);
   return c ? { src: c, blur: true } : '';
@@ -197,20 +202,29 @@ export function romsOfCollection(id) {
   return c ? c.rom_ids.map((rid) => romIndex.get(rid)).filter(Boolean) : [];
 }
 
-// Game logo (transparent PNG): RomM's own logo first, then SteamGridDB when a key is set.
+// Game logo, prepared by the main process: { url, w, h, dark } or null.
+// Order: a logo picked in "Change artwork", RomM's own logo, then SteamGridDB (when a key is set).
 const logoAsked = new Set();
-export function logoOf(rom) {
-  if (!rom) return '';
-  if (rom.logo) return img(rom.logo);
+function rommLogo(rom) {
+  if (rom.logo) return rom.logo;
   const p = rom.ss_metadata?.logo_path || rom.gamelist_metadata?.marquee_path;
-  if (p) return img(p.startsWith('/') ? p : '/assets/romm/resources/' + p);
-  if (!store.config?.sgdbKey || !rom.id) return '';
+  return p ? (p.startsWith('/') ? p : '/assets/romm/resources/' + p) : '';
+}
+export function logoOf(rom) {
+  if (!rom || !rom.id) return null;
   const got = store.logos[rom.id];
-  if (got !== undefined) return got ? img(got) : '';
+  if (got !== undefined) return got;
   if (!logoAsked.has(rom.id)) {
     logoAsked.add(rom.id);
-    queueMicrotask(() => call('logo:get', { id: rom.id, name: rom.name }).then((u) => { store.logos[rom.id] = u || ''; }).catch(() => { store.logos[rom.id] = ''; }));
+    queueMicrotask(() => call('logo:get', { id: rom.id, name: rom.name, romm: rommLogo(rom) }).then((u) => { store.logos[rom.id] = u || null; }).catch(() => { store.logos[rom.id] = null; }));
   }
-  return '';
+  return null;
 }
-export function resetLogos() { logoAsked.clear(); for (const k of Object.keys(store.logos)) delete store.logos[k]; }
+export function resetLogos(id) {
+  if (id != null) { logoAsked.delete(id); delete store.logos[id]; return; }
+  logoAsked.clear(); for (const k of Object.keys(store.logos)) delete store.logos[k];
+}
+
+// ---------------- custom artwork (Change artwork on a game page)
+export async function loadArt() { store.art = await call('art:all').catch(() => ({})) || {}; }
+export function artFor(id) { return store.art?.[id] || {}; }

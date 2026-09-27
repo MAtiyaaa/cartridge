@@ -33,6 +33,11 @@ body {
   overflow: hidden; user-select: none; -webkit-font-smoothing: antialiased;
 }
 body.pad-mode, body.touch-mode, body.touch-mode * { cursor: none !important; }
+/* swipes are handled in nav.js, so the browser must not also pan (it fought the custom scroll) */
+html, body { touch-action: none; }
+input, textarea { touch-action: manipulation; }
+body.dragging * { pointer-events: none; }
+body.dragging { user-select: none; }
 body.touch-mode .card:hover .art, body.touch-mode .systile:hover { transform: none; }
 body.touch-mode .btn:hover, body.touch-mode .menu-item:hover { background: inherit; }
 button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; padding: 0; text-align: left; }
@@ -80,7 +85,11 @@ img { -webkit-user-drag: none; }
 
 .hintbar { display: flex; align-items: center; gap: 24px; padding: 0 28px; color: #d6cdee; font-size: 13px; background: linear-gradient(0deg, rgba(14, 5, 32, 0.7), transparent); }
 .hintbar .left { flex: 1; display: flex; gap: 10px; align-items: center; color: var(--dim); }
-.hint { display: flex; align-items: center; gap: 8px; }
+.hint { display: flex; align-items: center; gap: 8px; white-space: nowrap; flex-shrink: 0; }
+.hintbar { gap: 18px; }
+.hintbar .left { min-width: 0; overflow: hidden; white-space: nowrap; }
+/* narrow screens (Steam Deck 1280px): make room for the back button */
+@media (max-width: 1400px) { .statusbar.has-back .brand-word { display: none; } }
 .padbtn { display: inline-grid; place-items: center; min-width: 24px; height: 24px; padding: 0 6px; border-radius: 12px; font: 700 11px Roboto, sans-serif; color: #0b0d12; background: #d9dee8; box-shadow: 0 2px 0 rgba(0, 0, 0, 0.35); }
 .padbtn.b-a { background: #57d364; } .padbtn.b-b { background: #ff6b61; } .padbtn.b-x { background: #5aa2ff; } .padbtn.b-y { background: #ffd35c; }
 .padbtn.b-lb, .padbtn.b-rb, .padbtn.b-lt, .padbtn.b-rt, .padbtn.b-start, .padbtn.b-select { border-radius: 7px; background: #c7cdd8; font-size: 10px; }

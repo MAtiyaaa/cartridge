@@ -71,7 +71,7 @@ Settings → Updates checks GitHub Releases and swaps in the new version on rest
 <td valign="top">
 
 **🎨 Make it yours**<br>
-PSP XMB-style animated waves in eight colors, a media bar with the highlighted game's artwork, game logos (from RomM or SteamGridDB), and three box art sizes.
+PSP XMB-style animated waves in eight colors, a media bar with the highlighted game's artwork, game logos (from RomM or SteamGridDB) sized evenly, custom covers, logos and backgrounds per game from SteamGridDB, and three box art sizes.
 
 </td>
 <td valign="top">
@@ -145,7 +145,7 @@ This downloads the latest AppImage to `~/Applications`, makes it executable and 
 | **A** | Select |
 | **B** | Back |
 | **X** | Download highlighted game |
-| **Y** | Search box (type with any keyboard, or Steam + X in Game Mode) |
+| **Y** | Search box (type with any keyboard, or Steam + X in Game Mode) · on a game page: More (custom artwork) |
 | **LT / RT** | Switch tabs (Home, Library, Consoles, Downloads, Settings) |
 | **LB / RB** | Inside a console or collection: previous / next |
 | **Select** | Downloads · in a grid: cycle All / On device / Not downloaded / New |
