@@ -74,16 +74,17 @@ onBeforeUnmount(() => layer.pop());
 .ap-games { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .chipbtn { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border-radius: 999px; background: rgba(255, 255, 255, 0.07); border: 1px solid var(--line-2); font-size: 13px; color: var(--text); }
 .chipbtn.on { background: var(--primary); border-color: var(--primary-l); color: #fff; }
-.ap-grid { flex: 1; min-height: 0; overflow-y: auto; display: grid; gap: 14px; padding: 6px; align-content: start; }
+.ap-grid { flex: 1 1 auto; min-height: 0; overflow-y: auto; display: grid; gap: 16px; padding: 8px; align-content: start; grid-auto-rows: max-content; }
 .ap-grid.grid { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); }
-.ap-grid.grid .ap-item { aspect-ratio: 2 / 3; }
+.ap-grid.grid .ap-item img { aspect-ratio: 2 / 3; }
 .ap-grid.hero { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
-.ap-grid.hero .ap-item { aspect-ratio: 96 / 31; }
+.ap-grid.hero .ap-item img { aspect-ratio: 96 / 31; }
 .ap-grid.logo { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
-.ap-grid.logo .ap-item { aspect-ratio: 16 / 7; background: rgba(0, 0, 0, 0.35); padding: 12px; }
+.ap-grid.logo .ap-item { background: repeating-conic-gradient(#2a2e3a 0% 25%, #20232d 0% 50%) 50% / 20px 20px; padding: 14px; }
+.ap-grid.logo .ap-item img { aspect-ratio: 16 / 7; }
 .ap-grid.logo .ap-item img { object-fit: contain; }
-.ap-item { position: relative; border-radius: 6px; overflow: hidden; background: #161a25; transition: transform 0.14s ease-out; }
-.ap-item img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.ap-item { position: relative; display: block; width: 100%; min-height: 0; border-radius: 6px; overflow: hidden; background: #161a25; transition: transform 0.14s ease-out; }
+.ap-item img { width: 100%; height: auto; object-fit: cover; display: block; }
 .ap-item:focus { transform: scale(1.04); }
 .ap-style { position: absolute; left: 6px; bottom: 6px; font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; padding: 2px 6px; border-radius: 4px; background: rgba(0, 0, 0, 0.6); color: #cfd3dc; }
 .ap-foot { display: flex; align-items: center; gap: 6px; justify-content: flex-end; }

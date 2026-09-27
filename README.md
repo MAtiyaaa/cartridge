@@ -76,8 +76,8 @@ PSP XMB-style animated waves in eight colors, a media bar with the highlighted g
 </td>
 <td valign="top">
 
-**⚡ Smooth on handhelds**<br>
-A lightweight renderer, lazy-loaded grids and a cached image store keep it at 60fps on an Ally or a Deck.
+**⚡ Handheld to TV**<br>
+The interface sizes itself to your screen on every launch, from a Steam Deck to a 4K TV, and uses the GPU on big screens. Lazy-loaded grids and a cached image store keep it smooth.
 
 </td>
 </tr>

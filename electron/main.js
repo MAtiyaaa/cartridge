@@ -40,7 +40,7 @@ const DEFAULT_CONFIG = {
   biosPath: '',
   paths: {},
   downloads: { concurrency: 2, esdeM3uFolders: true, flattenSingleFile: true },
-  ui: { gridSize: 'md', hideEmpty: true, sounds: true, bgStyle: 'waves', theme: 'purple', mediaBar: true, logos: true, pointer: 'auto' },
+  ui: { gridSize: 'md', hideEmpty: true, sounds: true, bgStyle: 'waves', theme: 'purple', mediaBar: true, logos: true, pointer: 'auto', scale: 'auto' },
   sync: { onLaunch: true, everyMinutes: 60 },
   sgdbKey: '', // optional SteamGridDB API key for game logos
   graphics: 'auto', // auto (GPU, falls back on failure) | software
@@ -101,11 +101,31 @@ function launchedBySteam() {
   return !!(e.CARTRIDGE_FROM_STEAM || e.SteamGameId || e.SteamAppId || e.SteamClientLaunch || e.SteamOverlayGameId || /gameoverlayrenderer/.test(e.LD_PRELOAD || ''));
 }
 const fromSteam = launchedBySteam();
-const forceSoftware = inGamescope || fromSteam || process.argv.includes('--disable-gpu') || process.env.CARTRIDGE_SAFE_GPU === '1';
+// Biggest connected display, read from the kernel before Chromium starts (the screen API only
+// works after startup, too late to pick a renderer). A 4K TV is far too many pixels to draw in
+// software, so big screens get the GPU even under Steam; handheld-size screens keep the
+// software path that is proven to launch there.
+function biggestDisplay() {
+  let best = { w: 0, h: 0 };
+  try {
+    for (const d of fs.readdirSync('/sys/class/drm')) {
+      if (!/^card\d+-/.test(d)) continue;
+      try {
+        if (fs.readFileSync(`/sys/class/drm/${d}/status`, 'utf8').trim() !== 'connected') continue;
+        const m = fs.readFileSync(`/sys/class/drm/${d}/modes`, 'utf8').split('\n')[0].match(/(\d+)x(\d+)/);
+        if (m && +m[1] * +m[2] > best.w * best.h) best = { w: +m[1], h: +m[2] };
+      } catch {}
+    }
+  } catch {}
+  return best;
+}
+const display = biggestDisplay();
+const bigScreen = display.w >= 2560 || display.h >= 1440 || process.env.CARTRIDGE_BIG === '1';
+const forceSoftware = ((inGamescope || fromSteam) && !bigScreen) || process.argv.includes('--disable-gpu') || process.env.CARTRIDGE_SAFE_GPU === '1';
 const useGpu = !forceSoftware && config.graphics !== 'software';
 const startedAt = Date.now();
 if (!useGpu) app.disableHardwareAcceleration();
-log('start', app.getVersion(), 'gpu=' + (useGpu ? 'hardware' : 'software'), 'session=' + (process.env.XDG_SESSION_TYPE || '?'), 'desktop=' + (process.env.XDG_CURRENT_DESKTOP || '?'), 'appimage=' + (process.env.APPIMAGE || 'no'), 'gamescope=' + inGamescope, 'steam=' + fromSteam, 'overlay=' + /gameoverlayrenderer/.test(process.env.LD_PRELOAD || ''), 'wl=' + (process.env.WAYLAND_DISPLAY || '-'), 'x=' + (process.env.DISPLAY || '-'), 'gs=' + (process.env.GAMESCOPE_WAYLAND_DISPLAY || '-'));
+log('start', app.getVersion(), 'gpu=' + (useGpu ? 'hardware' : 'software'), 'session=' + (process.env.XDG_SESSION_TYPE || '?'), 'desktop=' + (process.env.XDG_CURRENT_DESKTOP || '?'), 'appimage=' + (process.env.APPIMAGE || 'no'), 'display=' + (display.w ? display.w + 'x' + display.h : '?'), 'gamescope=' + inGamescope, 'steam=' + fromSteam, 'overlay=' + /gameoverlayrenderer/.test(process.env.LD_PRELOAD || ''), 'wl=' + (process.env.WAYLAND_DISPLAY || '-'), 'x=' + (process.env.DISPLAY || '-'), 'gs=' + (process.env.GAMESCOPE_WAYLAND_DISPLAY || '-'));
 // Steam launches Cartridge through this script instead of the AppImage directly.
 // Steam adds its overlay (LD_PRELOAD) and its runtime libraries (LD_LIBRARY_PATH) to every
 // game, and Chromium can die during its sandbox setup under Steam before any app code runs.
@@ -874,6 +894,25 @@ let win;
 
 function broadcast(ch, data) { if (win && !win.isDestroyed()) win.webContents.send(ch, data); }
 
+// Interface size. The UI is laid out for 1920x1080 (what the Ally shows in Game Mode). Bigger
+// windows, like a 4K TV, zoom in by the same ratio so text and art keep their size on screen.
+// Smaller windows (Steam Deck 1280x800) stay at 100%, which is what they were designed around.
+function autoZoom() {
+  if (!win || win.isDestroyed()) return 1;
+  const [w, h] = win.getContentSize();
+  const z = Math.min(w / 1920, h / 1080);
+  return Math.max(1, Math.min(3, Math.round(z * 20) / 20));
+}
+function currentZoom() {
+  const s = config.ui.scale;
+  return !s || s === 'auto' ? autoZoom() : Math.max(0.75, Math.min(3, Number(s) || 1));
+}
+let zoomT = null;
+function applyZoom() {
+  if (!win || win.isDestroyed()) return;
+  const z = currentZoom();
+  if (Math.abs(win.webContents.getZoomFactor() - z) > 0.001) win.webContents.setZoomFactor(z);
+}
 function createWindow() {
   const fullscreen = isGamescope() || process.argv.includes('--fullscreen');
   win = new BrowserWindow({
@@ -903,7 +942,11 @@ function createWindow() {
       } catch (e) { fail(e.message); }
     }, 3000));
   }
-  win.webContents.once('did-finish-load', () => log('ui loaded', Date.now() - startedAt + 'ms'));
+  win.webContents.once('did-finish-load', () => log('ui loaded', Date.now() - startedAt + 'ms', 'window=' + win.getContentSize().join('x'), 'zoom=' + currentZoom()));
+  win.webContents.on('did-finish-load', applyZoom);
+  win.on('resize', () => { clearTimeout(zoomT); zoomT = setTimeout(applyZoom, 150); });
+  win.on('enter-full-screen', () => setTimeout(applyZoom, 200));
+  win.on('leave-full-screen', () => setTimeout(applyZoom, 200));
   win.webContents.on('did-fail-load', (_e, code, desc, url) => log('load failed', code, desc, url));
   win.webContents.on('console-message', (e) => { const m = e.message ?? e; if ((e.level === 'error' || e.level === 3) && typeof m === 'string') log('console', m.slice(0, 300)); });
   win.on('unresponsive', () => log('window unresponsive'));
@@ -928,6 +971,7 @@ const handlers = {
   'config:set': (patch) => {
     config = deepMerge(config, patch); saveConfig();
     if (patch.server) activeBase = null;
+    if (patch.ui && 'scale' in patch.ui) applyZoom();
     if ('sgdbKey' in patch) { for (const k of Object.keys(logoCache)) if (!logoCache[k].file) delete logoCache[k]; saveLogoCache(); }
     if ('romsRoot' in patch && library) { broadcast('library', publicLibrary()); computeInstalled(); }
     return config;
@@ -1045,7 +1089,8 @@ const handlers = {
   'update:get': () => ({ ...updateState, current: app.getVersion(), supported: !!autoUpdater }),
   'update:check': async () => { if (!autoUpdater) throw new Error('Updates work in the AppImage build only'); await autoUpdater.checkForUpdates(); return updateState; },
   'update:install': () => { if (updateState.state === 'ready') autoUpdater.quitAndInstall(true, true); },
-  'app:info': () => ({ version: app.getVersion(), gamescope: isGamescope(), userData: USER_DATA }),
+  'app:info': () => ({ version: app.getVersion(), gamescope: isGamescope(), userData: USER_DATA, gpu: useGpu }),
+  'app:scale': () => { const [w, h] = win.getContentSize(); return { auto: autoZoom(), current: currentZoom(), w, h, display }; },
   'app:quit': () => app.quit(),
   'app:screenshot': async () => {
     const dir = path.join(app.getPath('pictures'), 'Cartridge');
@@ -1081,11 +1126,18 @@ app.whenReady().then(() => {
   }, 60e3);
   win.on('focus', () => { if (library) computeInstalled(); });
   setupUpdater();
+  // Safety net if the display could not be read up front: a big window drawn in software is
+  // unusably slow, so restart once with the GPU. A user or crash-chosen "software" is respected.
+  setTimeout(() => {
+    if (useGpu || config.graphics === 'software' || process.env.CARTRIDGE_BIG === '1' || process.argv.includes('--disable-gpu')) return;
+    const [w, h] = win.getContentSize();
+    if (w >= 2500 || h >= 1400) { log('big window in software mode', w + 'x' + h, 'restarting with the GPU'); process.env.CARTRIDGE_BIG = '1'; relaunch(); }
+  }, 2500);
 });
 app.on('child-process-gone', (_e, d) => {
   log('child gone', d.type, d.reason, d.exitCode);
   // If the GPU dies early, remember it and restart without the GPU so the window is never blank
-  if (d.type === 'GPU' && useGpu && !inGamescope && !fromSteam && d.reason !== 'clean-exit' && Date.now() - startedAt < 20000) {
+  if (d.type === 'GPU' && useGpu && d.reason !== 'clean-exit' && Date.now() - startedAt < 20000) {
     config.graphics = 'software';
     try { saveConfig(); } catch {}
     log('gpu failed at startup, relaunching in software mode');

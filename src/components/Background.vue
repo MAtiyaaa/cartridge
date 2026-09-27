@@ -30,15 +30,20 @@ const WAVES = [
   { a: 0.05, k: 3.1, s: 0.13, y: 0.64, h: 0.05, al: 0.12 },
 ];
 // Drawn at full resolution (the old 0.4x canvas looked soft and pixelated when scaled up).
-const SCALE = Math.min(window.devicePixelRatio || 1, 1.5);
+// On a big screen without the GPU (software rendering), a full-resolution canvas is too costly, so
+// draw at CSS size and let it scale; everywhere else draw sharp.
+const gpu = () => store.info?.gpu !== false;
+const scaleFor = () => { const dpr = window.devicePixelRatio || 1; return gpu() ? Math.min(dpr, 2) : innerWidth * dpr > 2600 ? 1 : Math.min(dpr, 1.5); };
+let SCALE = scaleFor();
 const STEP = 18;
 let grads = [];
 function draw(t) {
   raf = requestAnimationFrame(draw);
-  if (t - last < 33) return; // ~30fps is plenty for a slow ambient drift
+  if (t - last < (gpu() || innerWidth * (window.devicePixelRatio || 1) <= 2600 ? 33 : 50)) return; // ~30fps is plenty for a slow ambient drift
   last = t;
   const c = cv.value;
   if (!c) return;
+  SCALE = scaleFor();
   const w = Math.floor(innerWidth * SCALE), h = Math.floor(innerHeight * SCALE);
   if (c.width !== w || c.height !== h || !ctx) {
     c.width = w; c.height = h;

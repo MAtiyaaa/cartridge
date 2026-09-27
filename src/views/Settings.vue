@@ -91,6 +91,8 @@
                 <button v-for="(t, k) in THEMES" :key="k" class="swatch" data-focus :class="{ on: (ui.theme || 'purple') === k }" :style="{ background: `linear-gradient(135deg, ${t.grad[0]}, ${t.grad[2]} 60%, ${t.grad[4]})` }" :title="t.label" @click="saveConfig({ ui: { theme: k } })"><span>{{ t.label }}</span></button>
               </div>
             </div>
+            <div class="row"><span class="lbl">Interface size</span><div class="seg"><button v-for="z in scales" :key="z.v" data-focus :class="{ on: String(ui.scale || 'auto') === z.v }" @click="setScale(z.v)">{{ z.l }}</button></div></div>
+            <p class="muted small" style="margin-top: -6px">{{ scaleNote }}</p>
             <div class="row"><span class="lbl">Box art size</span><div class="seg"><button v-for="s in sizes" :key="s.v" data-focus :class="{ on: ui.gridSize === s.v }" @click="saveConfig({ ui: { gridSize: s.v } })">{{ s.l }}</button></div></div>
             <div class="row"><span class="lbl">Background</span><div class="seg"><button v-for="b in bgs" :key="b.v" data-focus :class="{ on: (ui.bgStyle || 'waves') === b.v }" @click="saveConfig({ ui: { bgStyle: b.v } })">{{ b.l }}</button></div></div>
             <Toggle :model-value="ui.mediaBar !== false" label="Media bar" desc="Show artwork of the highlighted game at the top of Home" @update:model-value="(v) => saveConfig({ ui: { mediaBar: v } })" />
@@ -107,7 +109,7 @@
             <Toggle :model-value="ui.sounds !== false" label="UI sounds" desc="Soft clicks when you move and select" @update:model-value="setSounds" />
             <Toggle :model-value="ui.hideEmpty" label="Hide empty systems" @update:model-value="(v) => saveConfig({ ui: { hideEmpty: v } })" />
             <div class="row"><span class="lbl">Rendering</span><div class="seg"><button v-for="g in gfx" :key="g.v" data-focus :class="{ on: (store.config.graphics || 'auto') === g.v }" @click="setGraphics(g.v)">{{ g.l }}</button></div></div>
-            <p class="muted small" style="margin-top: -6px">Auto uses the GPU when you open Cartridge from the app menu, and software rendering when Steam or Game Mode launches it. Compatible never uses the GPU.</p>
+            <p class="muted small" style="margin-top: -6px">Auto uses the GPU from the app menu and on big screens like TVs. On handheld-size screens launched from Steam or Game Mode it uses software rendering, which is proven there. If the GPU ever fails, Cartridge switches to Compatible by itself. Compatible never uses the GPU.</p>
             <div class="row"><button class="btn" data-focus @click="call('app:fullscreen')"><Icon name="mdiFullscreen" />Toggle fullscreen</button><button class="btn" data-focus @click="clearCache"><Icon name="mdiImageRemove" />Clear image cache</button></div>
           </template>
 
@@ -196,6 +198,17 @@ const space = ref(null);
 const srv = computed(() => store.config.server);
 const dls = computed(() => store.config.downloads);
 const ui = computed(() => store.config.ui);
+const scales = [{ v: 'auto', l: 'Auto' }, ...[1, 1.25, 1.5, 1.75, 2, 2.5, 3].map((z) => ({ v: String(z), l: Math.round(z * 100) + '%' }))];
+const scaleInfo = ref(null);
+const refreshScale = () => call('app:scale').then((r) => (scaleInfo.value = r)).catch(() => {});
+refreshScale();
+const scaleNote = computed(() => {
+  const r = scaleInfo.value;
+  if (!r) return 'Auto sizes the interface for your screen every time Cartridge starts.';
+  const scr = r.display?.w ? ` on your ${r.display.w}×${r.display.h} display` : '';
+  return `Auto sizes the interface for your screen every time Cartridge starts. Right now that is ${Math.round(r.auto * 100)}% for a ${r.w}×${r.h} window${scr}. 100% is sized for a 1080p handheld.`;
+});
+async function setScale(v) { await saveConfig({ ui: { scale: v } }); setTimeout(refreshScale, 300); }
 const sgdbKey = ref(store.config.sgdbKey || '');
 const sgdbBusy = ref(false);
 async function saveSgdb() {
