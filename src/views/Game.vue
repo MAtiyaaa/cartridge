@@ -29,6 +29,11 @@
               <button class="btn xl" data-focus data-autofocus disabled><Icon name="mdiClockOutline" />Queued</button>
               <button class="btn danger" data-focus @click="call('dl:cancel', dl.id)"><Icon name="mdiClose" />Cancel</button>
             </template>
+            <template v-else-if="installedPath && marked">
+              <button class="btn ok xl" data-focus data-autofocus @click="toast('You marked this game as installed', 'info', 3000, 'mdiCheckCircle')"><Icon name="mdiCheckCircle" />Marked as installed</button>
+              <button class="btn" data-focus @click="dlNow"><Icon name="mdiDownload" />Download zip</button>
+              <button class="btn" data-focus @click="setMark(false)"><Icon name="mdiCheckboxBlankOffOutline" />Unmark</button>
+            </template>
             <template v-else-if="installedPath">
               <button class="btn ok xl" data-focus data-autofocus @click="toast(installedPath, 'info', 4000, 'mdiFolder')"><Icon name="mdiCheckCircle" />Ready to play</button>
               <button class="btn" data-focus @click="redownload"><Icon name="mdiRefresh" />Re-download</button>
@@ -40,7 +45,7 @@
             <button class="btn icon-btn" data-focus title="More options" @click="more"><Icon name="mdiDotsHorizontal" :size="22" /><span>More</span></button>
           </div>
           <div v-if="dl && dl.status === 'error'" class="chip red" style="align-self: flex-start">Last attempt failed: {{ dl.error }}</div>
-          <div class="dest"><Icon name="mdiFolderArrowDownOutline" :size="16" /><span class="mono">{{ installedPath || target?.path || 'No folder set for this system' }}</span><span v-if="space" class="muted">· {{ bytes(space.free) }} free</span></div>
+          <div class="dest"><Icon name="mdiFolderArrowDownOutline" :size="16" /><span class="mono">{{ marked ? 'Marked as installed by you. Extract the zip into ' + (target?.path || 'your folder') + ' when it finishes downloading.' : installedPath || target?.path || 'No folder set for this system' }}</span><span v-if="space" class="muted">· {{ bytes(space.free) }} free</span></div>
         </div>
         <div class="g-cover">
           <img v-if="coverSrc && !coverFail" :src="coverSrc" @error="coverFail = true" />
@@ -155,6 +160,15 @@ async function remove() {
   if (!(await confirm(`Delete ${base.value.name}?`, `Removes it from this device:\n${installedPath.value}\n\nIt stays on your RomM server.`, 'Delete', true))) return;
   try { await call('roms:delete', { romId: props.romId, path: installedPath.value }); toast('Deleted from this device', 'ok', 2400, 'mdiDeleteOutline'); } catch (e) { toast(e.message, 'error'); }
 }
+// PS4 / PS5: games come as zips you extract yourself, so let the user mark them as installed
+const folderSystem = computed(() => ['ps4', 'ps5'].includes(base.value?.platform_slug) || ['ps4', 'ps5'].includes(base.value?.platform_fs_slug));
+const marked = computed(() => installedPath.value === '(marked as installed)');
+async function setMark(on) {
+  try {
+    await call('roms:mark', { romId: Number(props.romId), on });
+    toast(on ? 'Marked as installed' : 'Mark removed', 'ok', 2200, on ? 'mdiCheckCircle' : 'mdiCheckboxBlankOffOutline');
+  } catch (e) { toast(e.message, 'error'); }
+}
 // More options: custom artwork from SteamGridDB, plus handy extras
 async function more() {
   const has = artFor(props.romId);
@@ -164,10 +178,15 @@ async function more() {
     { label: 'Change background', sub: 'SteamGridDB', value: 'hero', icon: 'mdiPanoramaVariantOutline' },
   ];
   if (Object.keys(has).length) opts.push({ label: 'Reset artwork', sub: 'Back to RomM and automatic logo', value: 'reset', icon: 'mdiRestore' });
+  if (folderSystem.value) {
+    if (marked.value) opts.push({ label: 'Unmark as installed', sub: 'Only removes the mark, no files are touched', value: 'unmark', icon: 'mdiCheckboxBlankOffOutline' });
+    else if (!installedPath.value) opts.push({ label: 'Mark as installed', sub: 'For games you extracted yourself', value: 'mark', icon: 'mdiCheckboxMarkedCircleOutline' });
+  }
   opts.push({ label: 'Refresh details from RomM', value: 'refresh', icon: 'mdiRefresh' });
   if (installedPath.value) opts.push({ label: 'Show file location', value: 'path', icon: 'mdiFolderOutline' });
   const v = await choose({ title: base.value.name, options: opts });
   if (!v) return;
+  if (v === 'mark' || v === 'unmark') { await setMark(v === 'mark'); return; }
   if (v === 'path') { toast(installedPath.value, 'info', 5000, 'mdiFolder'); return; }
   if (v === 'refresh') { try { detail.value = await call('api:get', { path: `/api/roms/${props.romId}` }); resetLogos(props.romId); toast('Details refreshed', 'ok', 2000, 'mdiRefresh'); } catch (e) { toast(e.message, 'error'); } return; }
   if (v === 'reset') { store.art = { ...store.art }; delete store.art[props.romId]; await call('art:reset', { id: props.romId }); resetLogos(props.romId); toast('Artwork reset', 'ok', 2000, 'mdiRestore'); return; }

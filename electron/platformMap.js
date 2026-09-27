@@ -67,6 +67,7 @@ module.exports = {
   'ps2': ['ps2'],
   'ps3': ['ps3'],
   'ps4': ['ps4'],
+  'ps5': ['ps5'],
   'psp': ['psp'],
   'psvita': ['psvita'],
   'saturn': ['saturn'],

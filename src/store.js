@@ -23,6 +23,7 @@ export const store = reactive({
   lastSearch: '',
   logos: {},
   art: {},
+  logoJob: null,
   manualSync: false,
   update: { state: 'idle' },
 });
@@ -179,6 +180,12 @@ export function rating(r) { return r ? (r <= 10 ? `${r.toFixed(1)}` : `${Math.ro
 
 // ---------------- live events
 rd.on('downloads', (list) => { store.downloads = list; });
+rd.on('logos-progress', (p) => {
+  store.logoJob = p.state === 'running' ? p : null;
+  if (p.state === 'done') { resetLogos(); toast(`Logos ready: ${p.found} of ${p.total} games have one`, 'ok', 4000, 'mdiCheck'); }
+  if (p.state === 'stopped') { resetLogos(); toast(`Stopped · ${p.found} logos fetched`, 'info', 3000); }
+  if (p.state === 'error') toast('SteamGridDB rejected the API key', 'error', 4000);
+});
 rd.on('connection', (c) => { store.connection = c; });
 rd.on('library', (lib) => setLib(lib));
 rd.on('installed', (m) => { store.installed = m; });

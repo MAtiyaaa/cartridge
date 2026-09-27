@@ -102,6 +102,12 @@
                 <TextField v-model="sgdbKey" label="SteamGridDB API key" placeholder="Paste your key" password icon="mdiKeyVariant" style="flex: 1" />
                 <button class="btn" data-focus :disabled="sgdbBusy" @click="saveSgdb"><Icon name="mdiCheck" :size="18" />{{ sgdbBusy ? 'Checking…' : 'Save key' }}</button>
               </div>
+              <div class="row" style="gap: 12px; align-items: center">
+                <button v-if="!logoJob" class="btn" data-focus @click="fetchAll"><Icon name="mdiDownloadMultiple" :size="18" />Fetch all logos</button>
+                <button v-else class="btn" data-focus @click="call('logo:stopAll')"><Icon name="mdiStop" :size="18" />Stop</button>
+                <div v-if="logoJob" class="logo-prog"><div class="bar"><i :style="{ width: (logoJob.total ? (logoJob.done / logoJob.total) * 100 : 0) + '%' }" /></div><span class="muted small">{{ logoJob.done }} / {{ logoJob.total }} games · {{ logoJob.found }} logos</span></div>
+                <span v-else class="muted small">Gets the logo for every game now, instead of as you browse.</span>
+              </div>
               <p class="muted small" style="margin-top: -6px">Logos come from your RomM server when it has them (ScreenScraper "logo" media). For everything else, add a free key from steamgriddb.com → Preferences → API. {{ store.config.sgdbKey ? 'Key saved.' : '' }}</p>
             </template>
             <div class="row"><span class="lbl">Touch &amp; mouse</span><div class="seg"><button v-for="p in pointers" :key="p.v" data-focus :class="{ on: (ui.pointer || 'auto') === p.v }" @click="setPointer(p.v)">{{ p.l }}</button></div></div>
@@ -211,6 +217,12 @@ const scaleNote = computed(() => {
 async function setScale(v) { await saveConfig({ ui: { scale: v } }); setTimeout(refreshScale, 300); }
 const sgdbKey = ref(store.config.sgdbKey || '');
 const sgdbBusy = ref(false);
+// Fetch all logos: progress lives in the store (one listener for the whole app)
+const logoJob = computed(() => store.logoJob);
+async function fetchAll() {
+  store.logoJob = { done: 0, total: 0, found: 0 };
+  call('logo:fetchAll').catch((e) => { store.logoJob = null; toast(e.message, 'error', 4000); });
+}
 async function saveSgdb() {
   const key = sgdbKey.value.trim();
   sgdbBusy.value = true;
@@ -359,4 +371,5 @@ onMounted(async () => { space.value = await call('fs:space', store.config.romsRo
 .fadeup-enter-active, .fadeup-leave-active { transition: opacity 0.15s, transform 0.2s var(--ease); }
 .fadeup-enter-from { opacity: 0; transform: translateX(10px); }
 .fadeup-leave-to { opacity: 0; }
+.logo-prog { flex: 1; display: flex; flex-direction: column; gap: 6px; max-width: 360px; }
 </style>

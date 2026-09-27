@@ -352,19 +352,40 @@ function candidatesFor(rom) {
   return names.filter(Boolean);
 }
 
+// PS4 / PS5 games live on RomM as zips but are played from an extracted folder, so the zip
+// never shows up on disk. They are matched by folder name (zip name without .zip) or by the
+// PlayStation title ID (CUSA12345 / PPSA12345), and can also be marked by hand.
+const FOLDER_SYSTEMS = new Set(['ps4', 'ps5']);
+const isFolderSystem = (r) => FOLDER_SYSTEMS.has(r.platform_slug) || FOLDER_SYSTEMS.has(r.platform_fs_slug);
+const MARKS_FILE = path.join(USER_DATA, 'marked.json');
+const marks = loadJson(MARKS_FILE, {}); // romId -> { at }
+function saveMarks() { try { fs.writeFileSync(MARKS_FILE, JSON.stringify(marks, null, 1)); } catch {} }
+const titleId = (s) => (String(s || '').match(/\b(CUSA|PPSA)\d{5}\b/i) || [])[0]?.toUpperCase() || '';
 function installedState(roms, platform) {
   const dir = platformPath(platform).path;
   let entries = new Set();
   if (dir) { try { entries = new Set(fs.readdirSync(dir)); } catch {} }
   const out = {};
+  let ids = null;
   for (const rom of roms) {
     const m = manifest[rom.id];
     if (m && fs.existsSync(m.path)) { out[rom.id] = m.path; continue; }
     const hit = candidatesFor(rom).find((n) => entries.has(n));
-    if (hit) out[rom.id] = path.join(dir, hit);
+    if (hit) { out[rom.id] = path.join(dir, hit); continue; }
+    if (isFolderSystem(rom) && dir) {
+      const stem = String(rom.fs_name || '').replace(/\.(zip|7z|rar)$/i, '');
+      if (stem && entries.has(stem)) { out[rom.id] = path.join(dir, stem); continue; }
+      const tid = titleId(rom.fs_name) || titleId(rom.name);
+      if (tid) {
+        ids ||= new Map([...entries].map((e) => [titleId(e), e]).filter(([k]) => k));
+        if (ids.has(tid)) { out[rom.id] = path.join(dir, ids.get(tid)); continue; }
+      }
+    }
+    if (marks[rom.id]) out[rom.id] = MARKED;
   }
   return out;
 }
+const MARKED = '(marked as installed)';
 
 // ---------------------------------------------------------------- library cache + sync
 // The whole library is mirrored locally (Argosy-style): instant startup, offline browsing,
@@ -672,6 +693,28 @@ async function logoFor({ id, name, romm }) {
   logoInflight.set(id, job);
   try { return await job; } finally { logoInflight.delete(id); }
 }
+// Fetch all: prepare logos for the whole library in the background, reporting progress.
+let fetchAll = null; // { done, total, found, stop }
+async function fetchAllLogos() {
+  if (fetchAll) return { running: true };
+  const roms = library ? Object.values(library.roms).flat() : [];
+  fetchAll = { done: 0, total: roms.length, found: 0, stop: false };
+  const report = (state) => broadcast('logos-progress', { state, done: fetchAll.done, total: fetchAll.total, found: fetchAll.found });
+  report('running');
+  let last = 0;
+  try {
+    for (const r of roms) {
+      if (fetchAll.stop) break;
+      const romm = r.logo || '';
+      try { if (await logoFor({ id: r.id, name: r.name, romm })) fetchAll.found++; } catch (e) { if (e.auth) { report('error'); throw e; } }
+      fetchAll.done++;
+      if (Date.now() - last > 250) { last = Date.now(); report('running'); }
+    }
+    report(fetchAll.stop ? 'stopped' : 'done');
+    return { done: fetchAll.done, found: fetchAll.found };
+  } finally { fetchAll = null; }
+}
+
 // Artwork picker: SteamGridDB images of one kind for a game (by name, or a chosen SGDB game id)
 async function sgdbArt({ name, kind, gameId }) {
   if (!config.sgdbKey) throw new Error('Add a SteamGridDB API key in Settings → Look & feel first.');
@@ -960,6 +1003,8 @@ function createWindow() {
 const handlers = {
   'config:get': () => config,
   'logo:get': (r) => logoFor(r),
+  'logo:fetchAll': () => fetchAllLogos(),
+  'logo:stopAll': () => { if (fetchAll) fetchAll.stop = true; return true; },
   'art:all': () => artOverrides,
   'art:search': (q) => sgdbArt(q),
   'art:set': (q) => setArt(q),
@@ -1027,9 +1072,23 @@ const handlers = {
   },
   'platforms:paths': (list) => Object.fromEntries(list.map((p) => [p.slug, platformPath(p)])),
   'roms:installed': ({ roms, platform }) => installedState(roms, platform),
+  'roms:mark': ({ romId, on }) => {
+    if (on) marks[romId] = { at: Date.now() }; else delete marks[romId];
+    saveMarks();
+    computeInstalled();
+    return Object.keys(marks);
+  },
+  'roms:marks': () => Object.keys(marks),
   'roms:delete': async ({ romId, path: p }) => {
-    const target = p || manifest[romId]?.path;
+    let target = p || manifest[romId]?.path;
+    // a hand-made mark has no files of its own: only remove the mark, never touch folders
+    if (target === MARKED || (marks[romId] && !manifest[romId] && (!target || target === MARKED))) {
+      delete marks[romId]; saveMarks(); computeInstalled(); return true;
+    }
     if (!target) throw new Error('Nothing to delete');
+    // never delete a whole console folder or the ROMs root
+    const roots = new Set([config.romsRoot, ...(library?.platforms || []).map((pl) => platformPath(pl).path)].filter(Boolean).map((x) => path.resolve(x)));
+    if (roots.has(path.resolve(target))) throw new Error('Refusing to delete a whole console folder');
     await fsp.rm(target, { recursive: true, force: true });
     delete manifest[romId];
     saveManifest();
