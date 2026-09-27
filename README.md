@@ -168,4 +168,6 @@ Settings and the library cache live in `~/.config/Cartridge/`.
 
 <br>
 
+Console logos come from the open-source [Art Book Next](https://github.com/anthonycaccese/art-book-next-es-de) theme for ES-DE and are downloaded on first use. All logos and trademarks belong to their owners.
+
 <div align="center"><sub>Cartridge is an unofficial client and isn't affiliated with the RomM project.</sub></div>

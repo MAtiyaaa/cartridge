@@ -552,6 +552,10 @@ async function scanServer() {
 // ---------------------------------------------------------------- image protocol (auth + disk cache)
 async function handleImage(request) {
   const u = new URL(request.url);
+  const sl = u.searchParams.get('sys');
+  if (sl) {
+    try { return new Response(await fsp.readFile(path.join(SYSLOGO_DIR, path.basename(sl) + '.svg')), { headers: { 'Content-Type': 'image/svg+xml' } }); } catch { return new Response('nf', { status: 404 }); }
+  }
   const lf = u.searchParams.get('f');
   if (lf) {
     try { return new Response(await fsp.readFile(path.join(LOGO_DIR, path.basename(lf))), { headers: { 'Content-Type': 'image/png' } }); } catch { return new Response('nf', { status: 404 }); }
@@ -693,6 +697,39 @@ async function logoFor({ id, name, romm }) {
   logoInflight.set(id, job);
   try { return await job; } finally { logoInflight.delete(id); }
 }
+// Console logos: white SVG wordmarks from the open-source Art Book Next theme for ES-DE
+// (github.com/anthonycaccese/art-book-next-es-de), fetched on first use and cached. Logos are
+// trademarks of their owners. Anything missing falls back to the console's name.
+const SYSLOGO_DIR = path.join(USER_DATA, 'syslogos');
+const SYSLOGO_BASE = 'https://raw.githubusercontent.com/anthonycaccese/art-book-next-es-de/main/_inc/systems/logos/';
+const sysLogoInflight = new Map();
+async function sysLogo({ slug, fs_slug }) {
+  const names = [...new Set([...(PLATFORM_MAP[slug] || []), ...(PLATFORM_MAP[fs_slug] || []), fs_slug, slug].filter(Boolean))].filter((n) => /^[a-z0-9_-]+$/i.test(n));
+  const key = names[0];
+  if (!key) return null;
+  const file = path.join(SYSLOGO_DIR, key + '.svg'), miss = file + '.none';
+  if (fs.existsSync(file)) return 'romimg://img/?sys=' + encodeURIComponent(key);
+  try { if (Date.now() - fs.statSync(miss).mtimeMs < 7 * 864e5) return null; } catch {}
+  if (sysLogoInflight.has(key)) return sysLogoInflight.get(key);
+  const job = (async () => {
+    for (const n of names) {
+      try {
+        const r = await fetch(SYSLOGO_BASE + n + '.svg', { signal: AbortSignal.timeout(10000) });
+        if (!r.ok) continue;
+        const svg = await r.text();
+        if (!/<svg[\s>]/i.test(svg)) continue;
+        fs.mkdirSync(SYSLOGO_DIR, { recursive: true });
+        fs.writeFileSync(file, svg);
+        return 'romimg://img/?sys=' + encodeURIComponent(key);
+      } catch {}
+    }
+    try { fs.mkdirSync(SYSLOGO_DIR, { recursive: true }); fs.writeFileSync(miss, ''); } catch {}
+    return null;
+  })();
+  sysLogoInflight.set(key, job);
+  try { return await job; } finally { sysLogoInflight.delete(key); }
+}
+
 // Fetch all: prepare logos for the whole library in the background, reporting progress.
 let fetchAll = null; // { done, total, found, stop }
 async function fetchAllLogos() {
@@ -1003,6 +1040,7 @@ function createWindow() {
 const handlers = {
   'config:get': () => config,
   'logo:get': (r) => logoFor(r),
+  'syslogo:get': (p) => sysLogo(p),
   'logo:fetchAll': () => fetchAllLogos(),
   'logo:stopAll': () => { if (fetchAll) fetchAll.stop = true; return true; },
   'art:all': () => artOverrides,

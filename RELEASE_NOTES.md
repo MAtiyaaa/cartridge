@@ -1,3 +1,11 @@
+## Cartridge 0.2.5 · console overhaul
+
+### Changed
+- **Console tiles redesigned** (Consoles tab and the Consoles shelf on Home):
+  - **Official console logos** replace the plain names: Dreamcast, Game Boy, PlayStation, Xbox, Switch and the rest. They are white wordmarks from the open-source Art Book Next theme for ES-DE, downloaded once and cached in `~/.config/Cartridge/syslogos`. A console without a logo (like PS5) keeps its name.
+  - **Each console in its own colours** instead of the same purple and pink everywhere: orange for Dreamcast, green for Xbox, red and blue for Switch, deep blue for PS2 and PS4, and so on. The colour sits in a dark glass gradient with a thin colour strip along the bottom, so it still matches the rest of Cartridge.
+  - The tilting console pictures stay as they were, and the logo grows slightly on focus.
+
 ## Cartridge 0.2.4
 
 ### New
