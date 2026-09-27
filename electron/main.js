@@ -84,11 +84,19 @@ function log(...a) {
   try { fs.mkdirSync(USER_DATA, { recursive: true }); fs.appendFileSync(LOG_FILE, `[${new Date().toISOString()}] ${a.join(' ')}\n`); } catch {}
 }
 try { if (fs.statSync(LOG_FILE).size > 512 * 1024) fs.renameSync(LOG_FILE, LOG_FILE + '.old'); } catch {}
-const forceSoftware = process.argv.includes('--disable-gpu') || process.env.CARTRIDGE_SAFE_GPU === '1';
+function isGamescope() {
+  const e = process.env;
+  const de = ((e.XDG_CURRENT_DESKTOP || '') + ' ' + (e.XDG_SESSION_DESKTOP || '') + ' ' + (e.DESKTOP_SESSION || '')).toLowerCase();
+  return !!(e.GAMESCOPE_WAYLAND_DISPLAY || e.SteamGamepadUI || e.SteamOS === '1' && !e.KDE_FULL_SESSION || de.includes('gamescope'));
+}
+// Game Mode (gamescope) always renders in software: the GPU path gives a blank or missing
+// window there, and 0.1.2 proved software is reliable in Game Mode. Desktop Mode uses the GPU.
+const inGamescope = isGamescope();
+const forceSoftware = inGamescope || process.argv.includes('--disable-gpu') || process.env.CARTRIDGE_SAFE_GPU === '1';
 const useGpu = !forceSoftware && config.graphics !== 'software';
 const startedAt = Date.now();
 if (!useGpu) app.disableHardwareAcceleration();
-log('start', app.getVersion(), 'gpu=' + (useGpu ? 'hardware' : 'software'), 'session=' + (process.env.XDG_SESSION_TYPE || '?'), 'desktop=' + (process.env.XDG_CURRENT_DESKTOP || '?'), 'appimage=' + (process.env.APPIMAGE || 'no'));
+log('start', app.getVersion(), 'gpu=' + (useGpu ? 'hardware' : 'software'), 'session=' + (process.env.XDG_SESSION_TYPE || '?'), 'desktop=' + (process.env.XDG_CURRENT_DESKTOP || '?'), 'appimage=' + (process.env.APPIMAGE || 'no'), 'gamescope=' + inGamescope, 'wl=' + (process.env.WAYLAND_DISPLAY || '-'), 'x=' + (process.env.DISPLAY || '-'), 'gs=' + (process.env.GAMESCOPE_WAYLAND_DISPLAY || '-'));
 function relaunch() {
   const args = process.argv.slice(1).filter((a) => !a.startsWith('--disable-gpu'));
   if (process.env.APPIMAGE) app.relaunch({ execPath: process.env.APPIMAGE, args });
@@ -680,7 +688,6 @@ function setupUpdater() {
 
 // ---------------------------------------------------------------- window + ipc
 let win;
-const isGamescope = () => !!(process.env.GAMESCOPE_WAYLAND_DISPLAY || process.env.SteamGamepadUI || process.env.SteamDeck === '1' || (process.env.XDG_CURRENT_DESKTOP || '').toLowerCase().includes('gamescope'));
 
 function broadcast(ch, data) { if (win && !win.isDestroyed()) win.webContents.send(ch, data); }
 
@@ -882,7 +889,7 @@ app.whenReady().then(() => {
 app.on('child-process-gone', (_e, d) => {
   log('child gone', d.type, d.reason, d.exitCode);
   // If the GPU dies early, remember it and restart without the GPU so the window is never blank
-  if (d.type === 'GPU' && useGpu && d.reason !== 'clean-exit' && Date.now() - startedAt < 20000) {
+  if (d.type === 'GPU' && useGpu && !inGamescope && d.reason !== 'clean-exit' && Date.now() - startedAt < 20000) {
     config.graphics = 'software';
     try { saveConfig(); } catch {}
     log('gpu failed at startup, relaunching in software mode');
