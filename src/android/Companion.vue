@@ -143,7 +143,7 @@
             </button>
           </div>
           <div class="sticks">
-            <div class="dpad glass">
+            <div class="dpad">
               <button v-for="d in DIRS" :key="d.a" class="k" :class="d.a" :aria-label="d.a" @pointerdown.prevent="hold(d.a)" @pointerup="release" @pointerleave="release" @pointercancel="release"><Icon :name="d.icon" :size="30" /></button>
             </div>
             <div class="face" :class="nintendoFace ? 'nin' : 'xbox'">
@@ -411,8 +411,14 @@ html, body { touch-action: pan-x pan-y; }
 .shoulders { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; }
 .pill { height: 44px; border-radius: 12px; font-size: 14px; }
 .sticks { flex: 1; display: flex; align-items: center; justify-content: space-between; padding: 0 10px; }
-.dpad { display: grid; grid-template: repeat(3, 60px) / repeat(3, 60px); border-radius: 20px; padding: 4px; }
-.dpad .k { border-radius: 14px; }
+.dpad { display: grid; grid-template: repeat(3, 60px) / repeat(3, 60px); filter: drop-shadow(0 6px 14px rgba(0, 0, 0, 0.3)); }
+/* one plus-shaped pad: arms meet in a filled centre, only the outer ends are rounded */
+.dpad::before { content: ''; grid-area: 2 / 2; background: rgba(255, 255, 255, 0.07); }
+.dpad .k { border-radius: 0; }
+.dpad .up { border-radius: 14px 14px 0 0; border-bottom: 0; }
+.dpad .down { border-radius: 0 0 14px 14px; border-top: 0; }
+.dpad .left { border-radius: 14px 0 0 14px; border-right: 0; }
+.dpad .right { border-radius: 0 14px 14px 0; border-left: 0; }
 .dpad .up { grid-area: 1 / 2; } .dpad .left { grid-area: 2 / 1; } .dpad .right { grid-area: 2 / 3; } .dpad .down { grid-area: 3 / 2; }
 .face { display: grid; grid-template: repeat(3, 60px) / repeat(3, 60px); }
 .face .k { border-radius: 50%; box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3); }
