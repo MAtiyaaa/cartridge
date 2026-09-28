@@ -2,6 +2,29 @@
 
 Every Cartridge release, newest first. Each GitHub release only lists its own changes.
 
+## Cartridge 0.6.0 · The Android Update
+
+### New
+- **Cartridge for Android.** Every release now also comes as `Cartridge-android.apk`, built from the same code as the AppImage, so Android gets every update at the same time. Same look, same controls, same features.
+- **Your ROM folders are found for you.** Cartridge looks on internal storage and SD cards for `ROMs`, `Emulation/roms` and the ES-DE ROM folder, and saves each game into its console folder (`nds`, `n3ds`, `psp`, `ps2`, `switch` and the rest). A console folder somewhere else, like `NDS` at the top of the SD card, is picked up too.
+- **Controllers and touch.** Built-in and Bluetooth controllers work like on the Deck, including held directions and triggers. Everything can also be tapped and swiped, and the Android back gesture goes back.
+- **Dual screen on the AYN Thor.** On dual-screen devices the bottom screen becomes a touch companion: the highlighted game with its cover and a Download button, live download progress, a touch d-pad and quick tabs. Single-screen devices never see it.
+- **Settings → Android.** File access, found ROM folders, dual screen, downloads that keep going in the background, full screen and in-app updates. These settings only exist in the Android app.
+
+### Also in this release
+- Everything from 0.5.5 (smoother held D-pad scrolling, Home fixes, LT / RT switch tabs).
+
+## Cartridge 0.5.5 · Fixes
+
+### Fixed
+- **Home could not scroll down right after launch.** Moving down to the next row (like Picks for you) left it half hidden behind the bottom bar until you touched the screen or used a mouse. Cartridge now starts in controller mode properly, so rows scroll into place from the first press.
+- **Holding the D-pad now keeps up.** When you held a direction, the selection moved faster than the page scrolled, so it ran off screen. While a direction is held, the page now follows the selection instantly. Single presses still scroll smoothly.
+- **The top of the Home header was clipped** on some games (the console name went under the top bar), when a tall logo and a long info line did not fit. The logo now shrinks to fit, and the info line stays on one line.
+- **The end of a row no longer jumps to the search box.** Pressing right on the last item of a row now stays on it.
+
+### Changed
+- **LB / RB no longer switch the top tabs.** LT / RT switch tabs. The bumpers only switch sections inside a page, like RetroAchievements / Others on the Achievements tab.
+
 ## Cartridge 0.5.0 · The Customisation Update
 
 ### New

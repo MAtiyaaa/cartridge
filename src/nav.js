@@ -5,6 +5,13 @@ import { reactive } from 'vue';
 import { sfx } from './sfx.js';
 
 export const input = reactive({ mode: 'pad', padName: '' }); // 'pad' | 'mouse'
+document.body.classList.add('pad-mode'); // the starting mode needs its class too (row snapping relies on it)
+// While a direction is held down, focus jumps several times a second. Smooth scrolling can't keep
+// up with that (each new animation restarts the last), so scroll instantly during a hold.
+let lastRepeat = 0;
+export const scrollMode = () => (performance.now() - lastRepeat < 250 ? 'auto' : 'smooth');
+// For input that repeats held directions itself (the Android app reads controllers natively)
+export function markRepeat() { lastRepeat = performance.now(); }
 const layers = [];
 
 export function pushLayer(el, handlers = {}) {
@@ -56,6 +63,7 @@ function move(dir) {
   let best = null, bestScore = Infinity;
   for (const el of focusables(scope)) {
     if (el === cur) continue;
+    if ((dir === 'left' || dir === 'right') && el.hasAttribute('data-nofirst') && !cur.hasAttribute('data-nofirst')) continue; // the end of a row never jumps up to the search box
     const r = el.getBoundingClientRect();
     const x = r.left + r.width / 2, y = r.top + r.height / 2;
     let primary, secondary;
@@ -74,7 +82,7 @@ function move(dir) {
   } else if (dir === 'up' || dir === 'down') {
     // Nothing further: scroll the container so hidden content becomes reachable
     const sc = cur.closest('[data-scroll]');
-    if (sc) sc.scrollBy({ top: dir === 'down' ? 200 : -200, behavior: 'smooth' });
+    if (sc) sc.scrollBy({ top: dir === 'down' ? 200 : -200, behavior: scrollMode() });
   }
 }
 
@@ -91,15 +99,15 @@ function scrollIntoViewSmart(el) {
   if (row) {
     const rr = row.getBoundingClientRect();
     const pad = Math.min(160, rr.width * 0.18);
-    if (r.left < rr.left + pad) row.scrollBy({ left: r.left - rr.left - pad, behavior: 'smooth' });
-    else if (r.right > rr.right - pad) row.scrollBy({ left: r.right - rr.right + pad, behavior: 'smooth' });
+    if (r.left < rr.left + pad) row.scrollBy({ left: r.left - rr.left - pad, behavior: scrollMode() });
+    else if (r.right > rr.right - pad) row.scrollBy({ left: r.right - rr.right + pad, behavior: scrollMode() });
   }
   const sc = el.closest('[data-scroll]');
   if (!sc) return;
   const s = sc.getBoundingClientRect();
   const vpad = Math.min(120, s.height * 0.2);
-  if (r.top < s.top + vpad) sc.scrollBy({ top: r.top - s.top - vpad, behavior: 'smooth' });
-  else if (r.bottom > s.bottom - vpad) sc.scrollBy({ top: r.bottom - s.bottom + vpad, behavior: 'smooth' });
+  if (r.top < s.top + vpad) sc.scrollBy({ top: r.top - s.top - vpad, behavior: scrollMode() });
+  else if (r.bottom > s.bottom - vpad) sc.scrollBy({ top: r.bottom - s.bottom + vpad, behavior: scrollMode() });
 }
 
 export function dispatch(action) {
@@ -132,6 +140,7 @@ window.addEventListener('keydown', (ev) => {
   const a = KEYMAP[ev.key];
   if (!a) return;
   ev.preventDefault();
+  if (ev.repeat) lastRepeat = performance.now();
   dispatch(a);
 });
 // ---------------- pointer: touch vs mouse
@@ -167,7 +176,7 @@ const DELAY = 300, RATE = 70;
 function press(key, isDown, now) {
   const s = state[key] || (state[key] = { down: false, next: 0 });
   if (isDown && !s.down) { s.down = true; s.next = now + DELAY; dispatch(key); }
-  else if (isDown && s.down && REPEATABLE.has(key) && now >= s.next) { s.next = now + RATE; dispatch(key); }
+  else if (isDown && s.down && REPEATABLE.has(key) && now >= s.next) { s.next = now + RATE; lastRepeat = now; dispatch(key); }
   else if (!isDown) s.down = false;
 }
 

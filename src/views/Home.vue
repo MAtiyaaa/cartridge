@@ -8,12 +8,12 @@
       <button v-if="!syncing" class="btn primary xl" data-focus @click="resync()"><Icon name="mdiSync" />Sync now</button>
     </div>
     <template v-else>
-      <section class="hero">
+      <section class="hero" ref="heroEl">
         <MediaBar v-if="store.config.ui.mediaBar !== false" :src="heroArt" />
         <Transition name="hero">
           <div v-if="heroRom" :key="'r' + heroRom.id" class="hero-in">
             <div class="eyebrow row" style="gap: 8px"><PIcon :p="{ slug: heroRom.platform_slug, fs_slug: heroRom.platform_fs_slug }" :size="18" />{{ heroRom.platform_display_name }}</div>
-            <GameLogo :logo="store.config.ui.logos !== false ? logoOf(heroRom) : null" :name="heroRom.name" cls="hero-title" :area="32000" :max-w="420" :max-h="140" />
+            <GameLogo :logo="store.config.ui.logos !== false ? logoOf(heroRom) : null" :name="heroRom.name" cls="hero-title" :area="32000" :max-w="420" :max-h="logoMaxH" />
             <div class="meta">
               <span v-if="isNew(heroRom)" class="chip new">NEW</span>
               <span v-if="store.installed[heroRom.id]" class="chip green"><Icon name="mdiCheckCircle" :size="14" />On this device</span>
@@ -77,10 +77,10 @@
 </template>
 
 <script setup>
-import { computed, ref, nextTick, onMounted, watch } from 'vue';
+import { computed, ref, nextTick, onMounted, onBeforeUnmount, watch } from 'vue';
 import { img, cover, collections, store, go, allRoms, visiblePlatforms, romsOf, isNew, setBg, backdropOf, bytes, year, ago, rating, resync, downloadFor, download, romById, toast, logoOf, call } from '../store.js';
 import { useView } from '../useView.js';
-import { ensureFocus } from '../nav.js';
+import { ensureFocus, scrollMode } from '../nav.js';
 import Icon from '../components/Icon.vue';
 import Logo from '../components/Logo.vue';
 import PIcon from '../components/PIcon.vue';
@@ -92,6 +92,28 @@ import MediaBar from '../components/MediaBar.vue';
 
 const el = ref(null);
 const shelvesEl = ref(null);
+// The hero sits in a fixed-height row. A tall logo plus a wrapped info line could push the top of
+// it (the console name) up under the top bar, so the logo shrinks until everything fits.
+const heroEl = ref(null);
+const logoMaxH = ref(140);
+function fitHero() {
+  const h = heroEl.value, inner = h?.querySelector('.hero-in:not(.hero-leave-active)');
+  if (!h || !inner) return;
+  const cs = getComputedStyle(h);
+  const avail = h.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+  const logo = inner.querySelector('.game-logo, .hero-title');
+  const logoH = logo ? logo.getBoundingClientRect().height / (parseFloat(getComputedStyle(document.body).zoom) || 1) : 0;
+  const over = inner.scrollHeight - avail;
+  if (over > 0) logoMaxH.value = Math.max(48, Math.floor(Math.min(logoMaxH.value, logoH) - over - 2));
+  else if (over < -12 && logoMaxH.value < 140) logoMaxH.value = Math.min(140, logoMaxH.value + Math.floor(-over - 8));
+}
+let ro;
+watch(() => [heroRom.value?.id, heroSys.value?.id, heroCol.value?.id, heroRom.value && store.logos[heroRom.value.id]], async () => {
+  await nextTick();
+  for (const t of [0, 180, 600]) setTimeout(() => requestAnimationFrame(fitHero), t);
+});
+onMounted(() => { if (window.ResizeObserver) { ro = new ResizeObserver(() => requestAnimationFrame(fitHero)); if (heroEl.value) ro.observe(heroEl.value); } });
+onBeforeUnmount(() => ro?.disconnect());
 const heroRom = ref(null);
 const heroSys = ref(null);
 const heroCol = ref(null);
@@ -164,7 +186,7 @@ function onShelfFocus(e) {
   const wrap = e.target.closest('.shelf-wrap');
   if (!wrap || !shelvesEl.value) return;
   if (!document.body.classList.contains('pad-mode')) return; // only snap rows when using a controller
-  shelvesEl.value.scrollTo({ top: wrap.offsetTop - 4, behavior: 'smooth' });
+  shelvesEl.value.scrollTo({ top: wrap.offsetTop - 4, behavior: scrollMode() });
 }
 
 useView(
@@ -187,11 +209,11 @@ onMounted(async () => { await nextTick(); ensureFocus(el.value); });
 .home { position: absolute; inset: 0; display: grid; grid-template-rows: minmax(250px, 38%) 1fr; animation: viewIn 0.16s ease-out; }
 .first-sync { grid-row: 1 / -1; align-content: center; }
 .first-sync h2 { font-size: 30px; color: var(--text); }
-.hero { position: relative; padding: 18px 44px 10px; display: flex; align-items: flex-end; }
+.hero { position: relative; padding: 18px 44px 10px; display: flex; align-items: flex-end; min-height: 0; overflow: hidden; }
 .hero-in { position: relative; z-index: 1; max-width: 760px; display: flex; flex-direction: column; gap: 12px; }
 .hero-leave-active { left: 44px; bottom: 10px; }
 .hero-title { font-size: clamp(34px, 4.4vw, 58px); font-weight: 700; line-height: 1.02; letter-spacing: -0.02em; text-shadow: 0 6px 30px rgba(0, 0, 0, 0.5); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-.meta { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; color: #cfd4de; font-size: 14px; }
+.meta { display: flex; align-items: center; gap: 14px; flex-wrap: nowrap; white-space: nowrap; overflow: hidden; min-width: 0; color: #cfd4de; font-size: 14px; }
 .meta > span:not(.chip):not(:first-child)::before { content: ''; }
 .summary { margin: 0; max-width: 720px; color: #c3c9d4; line-height: 1.55; font-size: 14.5px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .shelves { position: relative; overflow-y: auto; padding: 0 44px 60vh; }

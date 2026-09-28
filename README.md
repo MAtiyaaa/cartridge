@@ -4,15 +4,16 @@
 
 ### Your RomM library, on the couch.
 
-A controller-first [RomM](https://github.com/rommapp/romm) client for **SteamOS** and **Bazzite**.<br>
-Browse your whole library in Game Mode and pull games straight into your EmuDeck / ES-DE folders.
+A controller-first [RomM](https://github.com/rommapp/romm) client for **SteamOS**, **Bazzite** and **Android**.<br>
+Browse your whole library from the couch and pull games straight into your EmuDeck / ES-DE folders, on a Steam Deck or an Android handheld.
 
 [![Latest release](https://img.shields.io/github/v/release/abdu2304/cartridge?style=for-the-badge&color=8b74e8&label=release)](https://github.com/abdu2304/cartridge/releases/latest)
 [![Downloads](https://img.shields.io/github/downloads/abdu2304/cartridge/total?style=for-the-badge&color=a18fff)](https://github.com/abdu2304/cartridge/releases)
-[![Platform](https://img.shields.io/badge/SteamOS%20%7C%20Bazzite-AppImage-e1a38d?style=for-the-badge&logo=steamdeck&logoColor=white)](#install)
+[![Platform](https://img.shields.io/badge/SteamOS%20%7C%20Bazzite%20%7C%20Android-AppImage%20%2B%20APK-e1a38d?style=for-the-badge&logo=steamdeck&logoColor=white)](#install)
 [![License](https://img.shields.io/badge/license-MIT-6043c8?style=for-the-badge)](LICENSE)
 
-<a href="https://github.com/abdu2304/cartridge/releases/latest/download/Cartridge-x86_64.AppImage"><img src="https://img.shields.io/badge/Download-Cartridge--x86__64.AppImage-8b74e8?style=for-the-badge&logo=linux&logoColor=white" height="42" alt="Download"></a>
+<a href="https://github.com/abdu2304/cartridge/releases/latest/download/Cartridge-x86_64.AppImage"><img src="https://img.shields.io/badge/Download-Cartridge--x86__64.AppImage-8b74e8?style=for-the-badge&logo=linux&logoColor=white" height="42" alt="Download the AppImage"></a>
+<a href="https://github.com/abdu2304/cartridge/releases/latest/download/Cartridge-android.apk"><img src="https://img.shields.io/badge/Download-Cartridge--android.apk-8b74e8?style=for-the-badge&logo=android&logoColor=white" height="42" alt="Download the APK"></a>
 
 <br><br>
 
@@ -92,6 +93,20 @@ Extracted PS4/PS5 game folders are detected automatically, and anything else can
 
 **⚡ Handheld to TV**<br>
 The interface sizes itself to your screen on every launch, from a Steam Deck to a 4K TV, and uses the GPU on big screens. Lazy-loaded grids and a cached image store keep it smooth.
+
+</td>
+</tr>
+<tr>
+<td valign="top">
+
+**🤖 Android too**<br>
+The same app as an APK, built from the same code on every release, so Android gets each update the day it ships. It finds your ROM folders on internal storage and SD cards and saves each game into its console folder. Controllers, touch and the back gesture all work.
+
+</td>
+<td valign="top">
+
+**🖥 Dual screen**<br>
+On the AYN Thor and other dual-screen Android devices, the bottom screen becomes a touch companion: the highlighted game with a Download button, live download progress and a touch d-pad for the top screen.
 
 </td>
 </tr>
@@ -176,6 +191,7 @@ The Android-only settings live in **Settings → Android** and only exist in the
 | **Select** | Downloads · in a grid: cycle All / On device / Not downloaded / New |
 | **Start** | Quick Menu (resync, scan, updates, screenshot) |
 | **Touch** | Tap anything. The cursor only appears when a mouse moves |
+| **Android back** | Back (the button or the gesture) |
 
 <br>
 
