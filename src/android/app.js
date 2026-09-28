@@ -56,7 +56,8 @@ async function checkUpdate() {
 // { action, down } using the same action names as nav.js. Held directions repeat like nav.js.
 const REPEATABLE = new Set(['up', 'down', 'left', 'right', 'lt', 'rt']);
 const held = new Map(); // action -> repeat timer (null for buttons that do not repeat)
-function pad({ dispatch, markRepeat }, { action, down }) {
+function pad({ dispatch, markRepeat, input }, { action, down }) {
+  input.kb = false;
   if (down && held.has(action)) return; // d-pads that report both keys and hat axes
   clearTimeout(held.get(action));
   held.delete(action);
@@ -100,6 +101,7 @@ export async function afterMount() {
   const nav = await import('../nav.js');
   const { dispatch } = nav;
   const { watch } = await import('vue');
+  const prompts = await import('../prompts.js');
   const readSettings = () => { settings = store.config?.android || {}; };
   readSettings();
   watch(() => store.config?.android, readSettings, { deep: true });
@@ -153,7 +155,12 @@ export async function afterMount() {
   const readLayout = async () => {
     const pick = store.config?.android?.buttonLayout || 'auto';
     let detected = 'xbox';
-    try { const { names = [] } = await Native.controllers(); store.androidPads = names; if (names.some((n) => NINTENDO.test(n))) detected = 'nintendo'; } catch {}
+    try {
+      const { names = [] } = await Native.controllers();
+      store.androidPads = names;
+      nav.input.padName = names[0] || ''; // for the button icons
+      if (names.some((n) => NINTENDO.test(n))) detected = 'nintendo';
+    } catch {}
     store.androidLayoutDetected = detected;
     const next = pick === 'auto' ? detected : pick;
     if (next !== layout) { layout = next; publish(); }
@@ -176,6 +183,9 @@ export async function afterMount() {
       else if (r.name === 'platform') st.platformId = Number(p.platformId);
       else if (r.name === 'collection') st.collectionId = p.collectionId;
       st.layout = layout;
+      // Icons for the second screen's touch buttons: the controller's, never keyboard keys
+      const fam = prompts.promptFamily.value;
+      st.family = layout === 'nintendo' ? 'nintendo' : fam === 'keyboard' ? prompts.familyOf(nav.input.padName) : fam;
       call('android:companion:state', st).catch(() => {});
     }, 100);
   };
@@ -186,6 +196,7 @@ export async function afterMount() {
     publish();
   });
   watch(() => [store.route.name, JSON.stringify(store.route.params)], () => { focused = {}; publish(); });
+  watch(() => prompts.promptFamily.value, publish);
 
   cart.on('android:companion:cmd', (c) => {
     if (c.pad) return dispatch(c.pad);

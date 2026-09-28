@@ -105,6 +105,7 @@ img { -webkit-user-drag: none; }
 .padbtn { display: inline-grid; place-items: center; min-width: 24px; height: 24px; padding: 0 6px; border-radius: 12px; font: 700 11px var(--body), sans-serif; color: #0b0d12; background: #d9dee8; box-shadow: 0 2px 0 rgba(0, 0, 0, 0.35); }
 .padbtn.b-a { background: #57d364; } .padbtn.b-b { background: #ff6b61; } .padbtn.b-x { background: #5aa2ff; } .padbtn.b-y { background: #ffd35c; }
 .padbtn.b-lb, .padbtn.b-rb, .padbtn.b-lt, .padbtn.b-rt, .padbtn.b-start, .padbtn.b-select { border-radius: 7px; background: #c7cdd8; font-size: 10px; }
+.padbtn.glyph { width: 30px; height: 30px; min-width: 0; padding: 0; margin: -3px 0; background: none; box-shadow: none; border-radius: 0; object-fit: contain; filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.4)); }
 
 /* ---------- type + common ---------- */
 .eyebrow { font-size: 12px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
