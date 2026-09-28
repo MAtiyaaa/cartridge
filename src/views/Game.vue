@@ -24,7 +24,7 @@
                 <div class="row" style="justify-content: space-between; font-size: 13px">
                   <b>Downloading</b><span class="muted">{{ pct }}% · {{ bytes(dl.speed) }}/s</span>
                 </div>
-                <div class="bar"><i :style="{ width: pct + '%' }" /></div>
+                <div class="bar live"><i :style="{ width: pct + '%' }" /></div>
                 <div class="muted mono" style="font-size: 11.5px">{{ dl.currentFile || bytes(dl.received) + ' of ' + bytes(dl.total) }}</div>
               </div>
               <button class="btn danger" data-focus data-autofocus @click="call('dl:cancel', dl.id)"><Icon name="mdiPause" />Pause</button>

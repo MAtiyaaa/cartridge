@@ -1,8 +1,8 @@
 <template>
   <div class="scrim" ref="el" @click.self="closeModal(null)">
     <div class="dialog cp">
-      <h2>Custom colour</h2>
-      <p class="muted" style="margin: 0; font-size: 13px">Pick any colour. Cartridge builds the whole theme from it: highlights, buttons and the background.</p>
+      <h2>{{ title || 'Custom colour' }}</h2>
+      <p class="muted" style="margin: 0; font-size: 13px">{{ note || 'Pick any colour. Cartridge builds the whole theme from it: highlights, buttons and the background.' }}</p>
       <div class="cp-grid">
         <button v-for="c in CUSTOM_SWATCHES" :key="c" class="cp-sw" data-focus :class="{ on: c === cur }" :style="{ background: c }" @click="cur = c" @dblclick="closeModal(c)" />
       </div>
@@ -10,6 +10,7 @@
         <label class="cp-native"><input type="color" :value="cur" @input="(e) => (cur = e.target.value)" /><span>Any colour…</span></label>
         <div class="cp-prev" :style="{ background: `linear-gradient(135deg, ${t.grad[0]}, ${t.grad[2]} 60%, ${t.grad[4]})` }"><span class="chip" :style="{ background: t.accent[0], color: '#fff' }">{{ cur }}</span></div>
         <div class="spacer" />
+        <button v-if="allowReset" class="btn" data-focus @click="closeModal('__theme')"><Icon name="mdiRestore" />Use theme</button>
         <button class="btn" data-focus @click="closeModal(null)">Cancel</button>
         <button class="btn primary" data-focus @click="closeModal(cur)"><Icon name="mdiCheck" />Use colour</button>
       </div>
@@ -23,7 +24,7 @@ import { closeModal } from '../store.js';
 import { CUSTOM_SWATCHES, themeFrom } from '../themes.js';
 import Icon from './Icon.vue';
 // Custom theme colour: swatches for the controller, a full colour picker for mouse and touch
-const props = defineProps({ value: String });
+const props = defineProps({ value: String, title: String, note: String, allowReset: Boolean });
 const el = ref(null);
 const cur = ref(/^#[0-9a-f]{6}$/i.test(props.value || '') ? props.value : '#8b74e8');
 const t = computed(() => themeFrom(cur.value));

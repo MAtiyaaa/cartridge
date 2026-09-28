@@ -84,9 +84,22 @@ export function themeOf(ui) {
 
 export function applyTheme(uiOrName) {
   const ui = typeof uiOrName === 'string' ? { theme: uiOrName } : uiOrName || {};
-  const t = themeOf(ui);
+  const col = ui.colors || {};
+  const ok = (c) => /^#[0-9a-f]{6}$/i.test(c || '');
+  let t = themeOf(ui);
+  // fine-tuned colours on top of the theme: background, highlights, buttons and bars
+  if (ok(col.background)) t = { ...t, grad: themeFrom(col.background).grad };
   const r = document.documentElement.style;
-  const [a, al, ad] = t.accent;
+  const [a, al, ad] = ok(col.highlight) ? themeFrom(col.highlight).accent : t.accent;
+  const lum = (h) => { const [x, y, z] = hex2rgb(h); return (0.299 * x + 0.587 * y + 0.114 * z) / 255; };
+  if (ok(col.buttons)) {
+    const [b, bl, bd] = themeFrom(col.buttons).accent;
+    r.setProperty('--btn', `linear-gradient(120deg, ${bl} 0%, ${b} 55%, ${bd} 100%)`);
+    r.setProperty('--on-btn', lum(b) > 0.6 ? '#141018' : '#ffffff');
+  } else { r.removeProperty('--btn'); r.removeProperty('--on-btn'); }
+  if (ok(col.bars)) { const [b, bl] = themeFrom(col.bars).accent; r.setProperty('--bar', `linear-gradient(90deg, ${b}, ${bl})`); }
+  else r.removeProperty('--bar');
+  document.body.classList.toggle('custom-bars', ok(col.bars));
   const surf = SURFACES[ui.surface] || SURFACES.glass;
   const tx = TEXTS[ui.text] || TEXTS.normal;
   const g = t.grad;
@@ -129,7 +142,9 @@ export function applyTheme(uiOrName) {
 }
 // Colours the animated backgrounds draw with
 export function paletteOf(ui) {
-  const t = themeOf(ui);
+  let t = themeOf(ui);
+  if (/^#[0-9a-f]{6}$/i.test(ui?.colors?.background || '')) t = { ...t, grad: themeFrom(ui.colors.background).grad };
+  if (/^#[0-9a-f]{6}$/i.test(ui?.colors?.highlight || '')) t = { ...t, accent: themeFrom(ui.colors.highlight).accent };
   return { accent: t.accent[0], light: t.accent[1], warm: t.warm, grad: t.grad, black: !!(SURFACES[ui?.surface] || {}).black };
 }
 // "Light effects" when the GPU is off (software rendering), unless the user picked otherwise

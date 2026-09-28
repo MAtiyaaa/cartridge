@@ -120,7 +120,7 @@ onBeforeUnmount(() => { window.removeEventListener('keydown', onKey, true); laye
 .key.wide { flex: 1.6; font-size: 14px; }
 .key.space { flex: 4; font-size: 14px; }
 .key.on { background: rgba(var(--primary-rgb), 0.25); border-color: var(--primary); }
-.key.done { background: var(--grad); border: 0; color: var(--on-primary); font-weight: 700; }
+.key.done { background: var(--btn, var(--grad)); border: 0; color: var(--on-btn, var(--on-primary)); font-weight: 700; }
 .key:focus { box-shadow: var(--ring); transform: scale(1.06); z-index: 1; }
 .key:hover { background: rgba(255,255,255,.12); }
 .kb-hints { display: flex; gap: 18px; justify-content: center; color: var(--muted); font-size: 12px; }

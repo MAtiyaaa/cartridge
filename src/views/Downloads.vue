@@ -22,7 +22,7 @@
         <div class="now-body">
           <div class="eyebrow">{{ d.platformName }}</div>
           <h2>{{ d.name }}</h2>
-          <div class="bar big-bar"><i :style="{ width: pct(d) + '%' }" /></div>
+          <div class="bar big-bar live"><i :style="{ width: pct(d) + '%' }" /></div>
           <div class="row stats">
             <span class="pct grad-text">{{ pct(d) }}%</span>
             <span>{{ bytes(d.received) }} / {{ bytes(d.total) }}</span>
