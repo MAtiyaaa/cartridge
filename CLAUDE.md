@@ -94,5 +94,10 @@ LT/RT switch top tabs. LB/RB only switch sections inside a page. A select, B bac
 - `styled()` returns the real path when no learned path style applies.
 - The session tested detection with fake homes for EmuDeck, Flatpak-only, distro packages, AppImages + Steam RetroArch, and nothing installed (not in the repo).
 
+## 0.7.10
+- `electron/emulators.js` is the emulator database (all known, from EmuDeck's SRM parsers and SRM's `files/presets`): `EMU` (sources, args, `argsBy` per install kind, ares `system` names, `for` consoles), `CORES`, `RA_FIRST`. Only installed ones are offered. Add emulators there, not in steamManager.
+- An EmuDeck launcher that runs a Flatpak or an AppImage in ~/Applications hides that copy (the script text is read). RetroArch's Flatpak is hidden when EmuDeck's retroarch.sh wraps it.
+- Launch placeholders: `{ROM}`, `{SERIAL}`, `{DIR}` (game folder), `{NAME}` (file name without extension, for MAME).
+
 ## Releases (full steps: HANDOFF D8)
 Only when the owner asks. Bump `version` and `build.releaseInfo.releaseName` ("Cartridge X.Y.Z") in `package.json`, put only this version's notes in `RELEASE_NOTES.md` (heading `## Cartridge X.Y.Z · Title`), add them to the top of `CHANGELOG.md`, grouped as New / Changed / Fixed with bold lead-ins. CI builds, launch-checks and publishes.
