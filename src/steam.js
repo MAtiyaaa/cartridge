@@ -35,6 +35,24 @@ export async function addGame(rom) {
   await call('steam:queueAdd', [{ romId: rom.id, collections: cols }]);
   await afterQueue(`${rom.name} is ready to add`);
 }
+// Select many (Library): installed games only, one collections pick for all of them
+export async function addGames(roms) {
+  const env = await call('steam:forRom', { romId: roms[0]?.id }).catch(() => null);
+  if (!env?.steam) { toast('Steam was not found, or no account has signed in yet.', 'error', 5000); return false; }
+  const ready = [];
+  let skipped = 0;
+  for (const r of roms) {
+    const info = await call('steam:forRom', { romId: r.id }).catch(() => null);
+    if (info?.installed && !info.needsFolder && !info.inSteam && !info.queued) ready.push(r); else skipped++;
+  }
+  if (!ready.length) { toast('None of these can be added: download them first (PS3 and PS4 games need their folder set on the game page).', 'info', 5000, 'mdiSteam'); return false; }
+  const cols = await pickCollections(null, [], true);
+  if (cols === null || cols === undefined) return false;
+  await call('steam:queueAdd', ready.map((r) => ({ romId: r.id, collections: cols })));
+  if (skipped) toast(`${skipped} skipped: not downloaded, already in Steam, or needs its folder set`, 'info', 4000, 'mdiSteam');
+  await afterQueue(`${ready.length} game${ready.length === 1 ? '' : 's'} ready to add`);
+  return true;
+}
 export async function removeGame(rom, appid) {
   await call('steam:queueRemove', [appid]);
   await afterQueue(`${rom.name} will be removed from Steam`);

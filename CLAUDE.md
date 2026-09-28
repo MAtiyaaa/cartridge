@@ -14,7 +14,7 @@ This file is the short version every session needs. The full handoff (history, e
 - User data lives in `~/.config/Cartridge/` (list in HANDOFF E4).
 
 ## How to work in this repo
-- Work on the session's branch, never directly on `main`. The owner reviews and merges.
+- Work on the session's branch, never directly on `main`. **Standing instruction from the owner:** when an update is finished, built and launch-checked, open the PR and merge it to `main` to release it without asking again. Problems get fixed together afterwards.
 - **Never change `version` in `package.json` unless the owner asks for a release.** A version change on `main` builds and publishes a release to every user automatically.
 - Check every change builds: `npm ci --ignore-scripts && npx vite build` (the cloud container can't download Electron, so the full `npm run dist` may not work here).
 - There are no automated tests in the repo. Say plainly what was checked and what the owner must test on a device (controller, Game Mode, Steam, TV size).
@@ -59,6 +59,14 @@ LT/RT switch top tabs. LB/RB only switch sections inside a page. A select, B bac
 - Look presets: `config.lookPresets` (up to 5, `LOOK_KEYS` in `Settings.vue`).
 - QR pairing: RomM's device flow `/api/auth/device/init` and `/token` (`server:qrStart`, `server:qrPoll`), `config.deviceId`, the `qrcode` package in `Setup.vue`.
 - A mock RomM and Playwright checks for these were used in the session; they are not in the repo.
+
+## 0.7.0 (The Library Update)
+- slimRom adds `igdb_id`, `series`, `modes`, `players`, `votes`, `hours` (HLTB), `similar`, `user` (RomM `rom_user`: status, backlog, playing, hidden, played).
+- Collections: `col:*`, `fav:set`, `rom:user` in `main.js` (`colHandlers`, `apiForm` multipart). Automatic lists, series and genres are built in `store.js` (`autoCollections`, `genres`). QR pairing asks for `collections.write`.
+- Top bar tabs: `config.ui.tabs`, `TAB_DEFS`/`activeTabs()` in `store.js`; Settings always shown.
+- PS4/PS5 zips: `unzipGame` (yauzl) after `checkFiles`; unpacks to `<name>.partial`, flattens one top folder, then deletes the zip.
+- Queue: `dl:move`, `dl:pauseAll`, `dl:resumeAll`, `config.downloads.limitMBs` (`rateWait`). `it.running` stops a resumed item starting a second run before the stopped one ends.
+- Recently played: `steam:played` (shortcuts LastPlayTime). Select many: Gallery `selecting`, `addGames` in `steam.js`.
 
 ## Releases (full steps: HANDOFF D8)
 Only when the owner asks. Bump `version` and `build.releaseInfo.releaseName` ("Cartridge X.Y.Z") in `package.json`, put only this version's notes in `RELEASE_NOTES.md` (heading `## Cartridge X.Y.Z · Title`), add them to the top of `CHANGELOG.md`, grouped as New / Changed / Fixed with bold lead-ins. CI builds, launch-checks and publishes.

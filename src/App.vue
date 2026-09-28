@@ -72,7 +72,7 @@
 
 <script setup>
 import { computed, onMounted, onBeforeUnmount, ref, watch, nextTick } from 'vue';
-import { store, loadConfig, loadLibrary, loadArt, back, tab, go, call, toast, builtinKb, askText, GRADE } from './store.js';
+import { store, loadConfig, loadLibrary, loadArt, back, tab, go, call, toast, builtinKb, askText, GRADE, activeTabs, TAB_DEFS } from './store.js';
 import { pushLayer, focusFirst } from './nav.js';
 import { setSoundEnabled, setSoundStyle, sfx } from './sfx.js';
 import { applyTheme, CARD_SIZES } from './themes.js';
@@ -105,16 +105,12 @@ import Search from './views/Search.vue';
 import Achievements from './views/Achievements.vue';
 import RaGame from './views/RaGame.vue';
 import TrophyGame from './views/TrophyGame.vue';
+import Genres from './views/Genres.vue';
+import Collections from './views/Collections.vue';
 
-const views = { achievements: Achievements, 'ra-game': RaGame, 'trophy-game': TrophyGame, home: Home, library: Gallery, consoles: Consoles, platform: Gallery, collection: Gallery, game: Game, downloads: Downloads, settings: Settings, search: Search };
-const tabs = [
-  { name: 'home', label: 'Home', icon: 'mdiHomeVariantOutline' },
-  { name: 'library', label: 'Library', icon: 'mdiViewGridOutline' },
-  { name: 'consoles', label: 'Consoles', icon: 'mdiGamepadSquareOutline' },
-  { name: 'achievements', label: 'Achievements', icon: 'mdiTrophyOutline' },
-  { name: 'downloads', label: 'Downloads', icon: 'mdiTrayArrowDown' },
-  { name: 'settings', label: 'Settings', icon: 'mdiCogOutline' },
-];
+const views = { achievements: Achievements, 'ra-game': RaGame, 'trophy-game': TrophyGame, home: Home, library: Gallery, consoles: Consoles, platform: Gallery, collection: Gallery, genre: Gallery, genres: Genres, collections: Collections, game: Game, downloads: Downloads, settings: Settings, search: Search };
+// the tabs you picked in Look & Feel → Top bar, in your order
+const tabs = computed(() => activeTabs().map((name) => ({ name, ...TAB_DEFS[name] })));
 const mainEl = ref(null);
 const searchEl = ref(null);
 // Search box in the top bar: typing jumps to the Search view and filters live
@@ -145,8 +141,8 @@ const viewKey = computed(() => store.route.name + JSON.stringify(store.route.par
 const cardW = computed(() => (CARD_SIZES[store.config.ui.gridSize] || CARD_SIZES.md).w);
 const activeTab = computed(() => {
   const n = store.route.name;
-  if (tabs.find((t) => t.name === n)) return n;
-  return store.history.find((h) => tabs.find((t) => t.name === h.name))?.name || '';
+  if (tabs.value.find((t) => t.name === n)) return n;
+  return store.history.find((h) => tabs.value.find((t) => t.name === h.name))?.name || '';
 });
 const activeDl = computed(() => store.downloads.filter((d) => d.status === 'downloading' || d.status === 'queued'));
 const dlPct = computed(() => {
@@ -174,8 +170,10 @@ let clockT;
 function tick() { clock.value = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); }
 
 function cycleTab(dir) {
-  const i = Math.max(0, tabs.findIndex((t) => t.name === activeTab.value));
-  tab(tabs[(i + dir + tabs.length) % tabs.length].name);
+  const list = tabs.value;
+  const i = list.findIndex((t) => t.name === activeTab.value);
+  // on a page whose tab is switched off, RT goes to the first tab and LT to the last
+  tab(list[i < 0 ? (dir > 0 ? 0 : list.length - 1) : (i + dir + list.length) % list.length].name);
 }
 function viewHandler(action) {
   const h = store.viewHandlers[action];
@@ -197,6 +195,8 @@ onMounted(async () => {
   setPointerPref(store.config.ui.pointer);
   await loadLibrary();
   loadArt();
+  // Home can be taken off the top bar: start on the first tab instead
+  if (store.route.name === 'home' && !activeTabs().includes('home')) tab(activeTabs()[0]);
   // opened from a Steam shortcut whose game is gone (--game <id>), or a second launch handing over
   const openGame = (id) => { if (id && store.lib) { store.quickMenu = false; go('game', { romId: Number(id) }); } };
   call('app:startGame').then(openGame).catch(() => {});

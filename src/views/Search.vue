@@ -13,7 +13,7 @@
 
 <script setup>
 import { computed, onMounted, ref, nextTick } from 'vue';
-import { store, go, allRoms, download, setBg, backdropOf, romById } from '../store.js';
+import { store, go, allRoms, download, setBg, backdropOf, romById, visible } from '../store.js';
 import { useView } from '../useView.js';
 import { focusFirst } from '../nav.js';
 import Icon from '../components/Icon.vue';
@@ -30,6 +30,7 @@ const results = computed(() => {
   const words = t.split(' ');
   const scored = [];
   for (const r of allRoms()) {
+    if (!visible(r)) continue; // hidden in RomM
     const hay = norm(r.name) + ' ' + norm(r.fs_name) + ' ' + norm(r.platform_display_name);
     if (!words.every((w) => hay.includes(w))) continue;
     const n = norm(r.name);
