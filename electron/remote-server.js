@@ -50,7 +50,7 @@ module.exports = function createRemoteServer(opts) {
   const FILE = path.join(dataDir, 'remote.json');
   let st = {};
   try { st = JSON.parse(fs.readFileSync(FILE, 'utf8')); } catch {}
-  st = { id: st.id || rand(8), name: st.name || defaultName(), enabled: !!st.enabled, port: st.port || 47280, phones: st.phones || {} };
+  st = { id: st.id || rand(8), name: st.name || defaultName(), enabled: !!st.enabled, port: st.port || 47280, phones: st.phones || {}, login: st.login || null };
   const save = () => { try { fs.writeFileSync(FILE, JSON.stringify(st, null, 2)); } catch (e) { log('remote save failed', e.message); } };
   save();
 
@@ -134,8 +134,40 @@ module.exports = function createRemoteServer(opts) {
     for (const [id, p] of Object.entries(st.phones)) if (p.hash === h) return { id, p };
     return null;
   }
+  // Sign-in for phones (Settings → Phone remote): with a username and password set, every phone signs
+  // in with them instead of a code or QR, so the device can sit behind a tunnel like Cloudflare.
+  // The password is kept only as a salted scrypt hash; wrong tries lock sign-in for a minute.
+  const pwHash = (pass, salt) => crypto.scryptSync(String(pass), salt, 32).toString('hex');
+  let loginFails = 0;
+  function pairLogin({ phoneId, name, user, pass }) {
+    if (!st.enabled) throw new Error('Phone remote is off on this device');
+    if (!st.login) throw new Error('This device uses a code instead');
+    if (Date.now() < pairLockUntil) throw new Error('Too many wrong tries. Wait a minute and try again.');
+    if (!phoneId) throw new Error('Missing phone id');
+    const a = Buffer.from(pwHash(pass || '', st.login.salt), 'hex'), b = Buffer.from(st.login.hash, 'hex');
+    const ok = String(user || '').trim().toLowerCase() === st.login.user.toLowerCase() && crypto.timingSafeEqual(a, b);
+    if (!ok) {
+      if (++loginFails >= 5) { loginFails = 0; pairLockUntil = Date.now() + 60e3; log('remote: sign-in locked after wrong tries'); }
+      throw new Error('Wrong username or password');
+    }
+    loginFails = 0;
+    return { token: issueToken(String(phoneId).slice(0, 64), name), id: st.id, name: st.name };
+  }
+  function setLogin(l) {
+    if (!l || l.off) st.login = null;
+    else {
+      const user = String(l.user || '').trim().slice(0, 40), pass = String(l.pass || '');
+      if (!user) throw new Error('Choose a username');
+      if (pass.length < 6) throw new Error('Use at least 6 characters for the password');
+      const salt = rand(16);
+      st.login = { user, salt, hash: pwHash(pass, salt) };
+    }
+    return removePhones('all'); // every phone signs in again with the new rule
+  }
+
   function pairStart({ phoneId, name }) {
     if (!st.enabled) throw new Error('Phone remote is off on this device');
+    if (st.login) throw new Error('This device asks for a username and password');
     if (Date.now() < pairLockUntil) throw new Error('Too many wrong codes. Try again in a minute.');
     if (!phoneId) throw new Error('Missing phone id');
     const code = String(crypto.randomInt(0, 1e6)).padStart(6, '0');
@@ -155,6 +187,7 @@ module.exports = function createRemoteServer(opts) {
     return { token, id: st.id, name: st.name };
   }
   function pairQr({ phoneId, name, secret }) {
+    if (st.login) throw new Error('This device asks for a username and password');
     const exp = qrSecrets.get(secret);
     if (!exp || Date.now() > exp) throw new Error('This QR code expired. Show a new one on the device.');
     qrSecrets.delete(secret);
@@ -164,7 +197,7 @@ module.exports = function createRemoteServer(opts) {
     const secret = rand(12);
     qrSecrets.set(secret, Date.now() + 5 * 60e3);
     const host = addresses()[0];
-    return { secret, url: host ? `http://${host}:${st.port}/remote/?pair=${secret}` : '', expires: Date.now() + 5 * 60e3 };
+    return { secret, url: host ? `http://${host}:${st.port}/remote/${st.login ? '' : `?pair=${secret}`}` : '', expires: Date.now() + 5 * 60e3 }; // with sign-in on, the QR only opens the page
   }
 
   // ------------------------------------------------------------- settings (device only)
@@ -173,6 +206,7 @@ module.exports = function createRemoteServer(opts) {
       enabled: st.enabled, name: st.name, port: st.port, id: st.id, addresses: addresses(), listening: !!lan,
       phones: Object.entries(st.phones).map(([id, p]) => ({ id, name: p.name, pairedAt: p.pairedAt, lastSeen: p.lastSeen })),
       online: phonesOnline(),
+      login: st.login ? { user: st.login.user } : null,
     };
   }
   async function setSettings(patch = {}) {
@@ -198,6 +232,7 @@ module.exports = function createRemoteServer(opts) {
     'remote:settings': () => settingsView(),
     'remote:set': (p) => setSettings(p),
     'remote:qr': () => newQr(),
+    'remote:login:set': (l) => setLogin(l),
     'remote:phones:remove': (id) => removePhones(id),
     'remote:pair:deny': () => { pairing = null; send('remote:pair:done', { ok: false, denied: true }); return true; },
     'remote:battery': (b) => { battery = b && typeof b.level === 'number' ? { level: b.level, charging: !!b.charging } : null; return true; },
@@ -261,11 +296,11 @@ module.exports = function createRemoteServer(opts) {
       if (phone) { phone.p.lastSeen = Date.now(); }
       try {
         // public on the network: who is this, who else is around, pairing, the phone app
-        if (isLan && url.pathname === '/hello') return json(res, 200, { app: 'cartridge', id: st.id, name: st.name, kind, version, paired: !!phone, pairing: st.enabled });
+        if (isLan && url.pathname === '/hello') return json(res, 200, { app: 'cartridge', id: st.id, name: st.name, kind, version, paired: !!phone, pairing: st.enabled, login: !!st.login });
         if (isLan && url.pathname === '/peers') return json(res, 200, peers());
         if (isLan && url.pathname.startsWith('/pair/')) {
           const body = JSON.parse((await readBody(req)) || '{}');
-          const fn = { '/pair/start': pairStart, '/pair/finish': pairFinish, '/pair/qr': pairQr }[url.pathname];
+          const fn = { '/pair/start': pairStart, '/pair/finish': pairFinish, '/pair/qr': pairQr, '/pair/login': pairLogin }[url.pathname];
           if (!fn) { res.writeHead(404); return res.end(); }
           try { return json(res, 200, { ok: true, data: fn(body) }); } catch (e) { return json(res, 200, { ok: false, error: e.message }); }
         }

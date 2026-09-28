@@ -9,7 +9,7 @@
         <button v-for="d in devices" :key="d.id" class="dev" :class="{ on: d.id === hub.selected, off: !d.online, unpaired: !d.token }" @click="tapDevice(d)">
           <Icon :name="kindIcon(d.kind)" :size="18" />
           <span class="dev-n">{{ d.name }}</span>
-          <span v-if="!d.token" class="dev-c">Connect</span>
+          <span v-if="!d.token" class="dev-c">{{ d.login ? 'Sign in' : 'Connect' }}</span>
           <span v-else-if="d.info?.battery" class="dev-b"><Icon :name="batteryIcon(d.info.battery)" :size="14" />{{ d.info.battery.level }}%</span>
           <i v-if="d.info?.downloading" class="dev-p" :style="{ width: pct(d.info.downloading) + '%' }" />
         </button>
@@ -18,8 +18,12 @@
     </header>
 
     <main class="main">
+      <!-- Opened through a tunnel (or on a device with sign-in on): sign in first -->
+      <section v-if="!selectedDevice && loginHere" class="signin-page">
+        <SignIn :device="loginHere" page @done="signedIn(loginHere)" />
+      </section>
       <!-- Nothing connected yet -->
-      <section v-if="!selectedDevice" class="welcome">
+      <section v-else-if="!selectedDevice" class="welcome">
         <div class="halo"><Icon name="mdiCellphoneLink" :size="46" /></div>
         <h1>Connect to Cartridge</h1>
         <p>Pick a device on your Wi-Fi. A code appears on its screen; enter it here once and this phone is remembered.</p>
@@ -27,7 +31,7 @@
           <button v-for="d in devices" :key="d.id" class="found-d" @click="tapDevice(d)">
             <Icon :name="kindIcon(d.kind)" :size="24" />
             <div><b>{{ d.name }}</b><small>{{ d.online ? d.address : 'Offline' }}</small></div>
-            <span class="pill small">{{ d.token ? 'Open' : 'Connect' }}</span>
+            <span class="pill small">{{ d.token ? 'Open' : d.login ? 'Sign in' : 'Connect' }}</span>
           </button>
           <p v-if="!devices.length" class="muted">Looking for devices… Turn on <b>Settings → Phone remote</b> on your Cartridge.</p>
         </div>
@@ -69,6 +73,13 @@
           <button class="pill primary wide" :disabled="code.length !== 6 || busy" @click="finish">{{ busy ? 'Connecting…' : 'Connect' }}</button>
           <button class="textbtn" @click="pairing = null">Cancel</button>
         </div>
+      </div>
+    </Transition>
+
+    <!-- Sign in to a device that asks for a username and password -->
+    <Transition name="sheet">
+      <div v-if="signing" class="scrim" @click.self="signing = null">
+        <div class="sheet"><div class="grab" /><SignIn :device="signing" @done="signedIn(signing)" @cancel="signing = null" /></div>
       </div>
     </Transition>
 
@@ -121,6 +132,7 @@ import Companion from '../android/Companion.vue';
 import LibraryView from './LibraryView.vue';
 import DownloadsView from './DownloadsView.vue';
 import DevicesView from './DevicesView.vue';
+import SignIn from './SignIn.vue';
 
 setPointerPref('touch');
 const TABS = [
@@ -140,8 +152,13 @@ const code = ref('');
 const codeEl = ref(null);
 const pairErr = ref('');
 const busy = ref(false);
+const signing = ref(null);
+// the device that served this page, when it wants a sign-in and this phone has none yet
+const loginHere = computed(() => { const d = hub.devices[hub.here]; return d && d.login && !d.token ? d : null; });
+function signedIn(d) { signing.value = null; toast(`Signed in to ${d.name}`, 'ok', 2500, 'mdiCheck'); tab.value = 'now'; }
 async function tapDevice(d) {
   if (d.token) { select(d.id); return; }
+  if (d.login) { signing.value = d; return; }
   pairErr.value = ''; code.value = '';
   try {
     await pairStart(d.id);
@@ -186,7 +203,7 @@ onMounted(async () => {
   store.companion = store.companion || { route: 'home' };
   const params = new URLSearchParams(location.search);
   const secret = params.get('pair');
-  if (secret) {
+  if (secret && !hub.devices[hub.here]?.login) {
     history.replaceState(null, '', location.pathname);
     try { await pairWithQr(secret); toast('Connected', 'ok', 2000, 'mdiCheck'); } catch (e) { toast(e.message, 'error', 5000); }
   }
@@ -229,6 +246,7 @@ html, body { touch-action: pan-x pan-y; overscroll-behavior: none; }
 .now { display: flex; flex-direction: column; }
 .now-seg { align-self: center; margin: 2px 0 8px; z-index: 2; }
 .now-body { position: relative; flex: 1; min-height: 0; }
+.signin-page { position: absolute; inset: 0; overflow-y: auto; display: flex; padding: 16px 16px calc(env(safe-area-inset-bottom) + 24px); }
 .welcome { position: absolute; inset: 0; overflow-y: auto; display: flex; flex-direction: column; align-items: center; text-align: center; padding: 30px 22px 40px; gap: 10px; }
 .welcome h1 { font-family: var(--display); font-size: 28px; font-weight: 800; margin: 6px 0 0; }
 .welcome p { color: var(--muted); font-size: 14.5px; line-height: 1.5; max-width: 360px; margin: 0; }

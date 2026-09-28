@@ -250,12 +250,24 @@ async function resolveBase(force = false) {
   if (s.mode === 'local') activeBase = local;
   else if (s.mode === 'remote') activeBase = remote;
   else {
-    const l = local ? await probe(local, s, 1500) : null;
+    // local only when it answers as RomM with these credentials, otherwise the remote address
+    const l = local ? await probe(local, s, 2500) : null;
     activeBase = l?.ok ? local : (remote || local);
   }
   broadcast('connection', { base: activeBase, route: activeBase === trimUrl(s.localUrl) ? 'local' : 'remote' });
   return activeBase;
 }
+// Auto mode keeps checking: coming home switches to local, leaving (local gone) switches to remote.
+setInterval(async () => {
+  const s = config.server;
+  if (!config.configured || s.mode !== 'auto' || !activeBase || !s.localUrl || !s.remoteUrl) return;
+  const local = trimUrl(s.localUrl);
+  const want = (await probe(local, s, 2500))?.ok ? local : trimUrl(s.remoteUrl);
+  if (want === activeBase) return;
+  log('connection switched to', want === local ? 'local' : 'remote');
+  activeBase = want;
+  broadcast('connection', { base: activeBase, route: want === local ? 'local' : 'remote' });
+}, 30e3).unref?.();
 
 async function api(pathname, { query, method = 'GET', body, retry = true, srv, base } = {}) {
   const b = base || (await resolveBase());
@@ -1121,7 +1133,62 @@ function publicItem(it) {
   const { abort, ...rest } = it;
   return rest;
 }
-function emitQueue() { broadcast('downloads', queue.map(publicItem)); }
+function emitQueue() { broadcast('downloads', queue.map(publicItem)); saveQueue(); }
+
+// The queue survives closing the app: saved at most once a second, restored on start. Downloading
+// items go back to the queue and continue from their .part files (Range requests pick up the bytes).
+const QUEUE_FILE = path.join(USER_DATA, 'downloads.json');
+let queueSaveT = null;
+function writeQueue() {
+  clearTimeout(queueSaveT); queueSaveT = null;
+  try { saveJson(QUEUE_FILE, { nextId, items: queue.map(({ abort, running, speed, currentFile, retryAt, switched, ...rest }) => rest) }, false); } catch (e) { log('queue save failed', e.message); }
+}
+function saveQueue() { if (!queueSaveT) queueSaveT = setTimeout(writeQueue, 1000); }
+function restoreQueue() {
+  const saved = loadJson(QUEUE_FILE, null);
+  if (saved?.items) {
+    for (const it of saved.items) { if (it.status === 'downloading') it.status = 'queued'; it.speed = 0; it.retryAt = 0; queue.push(it); }
+    nextId = Math.max(saved.nextId || 1, ...queue.map((q) => q.id + 1));
+  } else recoverPartials(); // first start with this version: pick up downloads that were cut off before
+  const waiting = queue.filter((q) => q.status === 'queued').length;
+  if (waiting) log('downloads restored', waiting, 'to continue');
+  emitQueue();
+  setTimeout(pump, 3000); // give the connection a moment
+}
+// Before the queue was saved, a closed app left its unfinished downloads as .part files in the console
+// folders. Match them to games in the library (file name, or the folder of a multi-file game) and queue them.
+function recoverPartials() {
+  if (!library) return;
+  const hasPart = (dir, depth) => {
+    try {
+      for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+        if (e.isFile() && e.name.endsWith('.part')) return true;
+        if (e.isDirectory() && depth > 0 && hasPart(path.join(dir, e.name), depth - 1)) return true;
+      }
+    } catch {}
+    return false;
+  };
+  const found = new Map();
+  for (const p of library.platforms || []) {
+    const target = platformPath(p).path;
+    if (!target || !isDir(target)) continue;
+    const roms = library.roms[p.id] || [];
+    const byName = new Map();
+    for (const r of roms) for (const n of [r.fs_name, ...(r.files || []).map((f) => f.file_name)]) if (n) byName.set(n, r);
+    let entries = [];
+    try { entries = fs.readdirSync(target, { withFileTypes: true }); } catch {}
+    for (const e of entries) {
+      const r = e.isFile() && e.name.endsWith('.part') ? byName.get(e.name.slice(0, -5))
+        : e.isDirectory() ? roms.find((x) => x.fs_name === e.name && hasPart(path.join(target, e.name), 3)) : null;
+      if (r) found.set(r.id, r);
+    }
+  }
+  for (const r of found.values()) {
+    queue.push({ id: nextId++, status: 'queued', received: 0, total: r.fs_size_bytes || 0, speed: 0, error: null, addedAt: Date.now(),
+      romId: r.id, name: r.name, platformSlug: r.platform_slug, platformName: r.platform_display_name, size: r.fs_size_bytes, cover: r.path_cover_small || r.url_cover });
+  }
+  if (found.size) log('recovered unfinished downloads', found.size);
+}
 let emitTimer = null;
 function emitQueueThrottled() {
   if (emitTimer) return;
@@ -1148,10 +1215,15 @@ function enqueue(job) {
   return it.id;
 }
 
+let pumpT = null;
 function pump() {
   const running = queue.filter((q) => q.status === 'downloading' || q.running).length;
   const free = Math.max(1, config.downloads.concurrency || 1) - running;
-  queue.filter((q) => q.status === 'queued' && !q.running).slice(0, Math.max(0, free)).forEach((it) => runJob(it));
+  const now = Date.now();
+  queue.filter((q) => q.status === 'queued' && !q.running && !(q.retryAt > now)).slice(0, Math.max(0, free)).forEach((it) => runJob(it));
+  // something waiting for the connection: come back when its next try is due
+  const next = Math.min(...queue.filter((q) => q.status === 'queued' && q.retryAt > now).map((q) => q.retryAt));
+  if (isFinite(next)) { clearTimeout(pumpT); pumpT = setTimeout(pump, next - now + 50); }
   updatePowerBlock();
 }
 
@@ -1374,6 +1446,7 @@ async function runJob(it) {
       }
     }
     it.status = 'done';
+    it.switched = false; it.retryAt = 0;
     it.received = it.total;
     it.path = finalPath;
     manifest[rom.id] = { path: finalPath, platformSlug: rom.platform_slug, name: rom.name || rom.fs_name, at: Date.now() };
@@ -1384,6 +1457,14 @@ async function runJob(it) {
   } catch (e) {
     // stopped on purpose: keep a status set since (paused, or queued again by Resume)
     if (ac.signal.aborted) { if (!['paused', 'queued'].includes(it.status)) it.status = 'cancelled'; }
+    else if (/fetch failed|terminated|ECONN|ETIMEDOUT|ENOTFOUND|EHOSTUNREACH|ENETUNREACH|EAI_AGAIN|socket|reach server|Timed out/i.test(`${e.message} ${e.cause?.code || ''}`)) {
+      // The connection went away (left home, Wi-Fi dropped, app opened offline): never fail for that.
+      // Auto picks local or remote again and tries straight away, then every 20 s, continuing from the .part file.
+      if (config.server.mode === 'auto') await resolveBase(true).catch(() => {});
+      it.status = 'queued'; it.notice = 'waiting';
+      it.retryAt = it.switched ? Date.now() + 20e3 : 0;
+      it.switched = true;
+    }
     else { it.status = 'error'; it.error = e.message; }
   }
   it.running = false;
@@ -1817,7 +1898,7 @@ const handlers = {
     else if (it.status === 'queued') it.status = 'cancelled';
     emitQueue(); pump();
   },
-  'dl:retry': (id) => { const it = queue.find((q) => q.id === id); if (it) { it.status = 'queued'; it.error = null; emitQueue(); pump(); } },
+  'dl:retry': (id) => { const it = queue.find((q) => q.id === id); if (it) { it.status = 'queued'; it.error = null; it.retryAt = 0; emitQueue(); pump(); } },
   // Queue controls: move a waiting game up or down, pause or resume everything
   'dl:move': ({ id, dir }) => {
     const waiting = queue.filter((q) => q.status === 'queued');
@@ -1952,6 +2033,7 @@ app.whenReady().then(() => {
   protocol.handle('romimg', handleImage);
   createWindow();
   if (library) computeInstalled();
+  restoreQueue();
   win.webContents.once('did-finish-load', () => {
     if (config.configured && (config.sync.onLaunch || !library)) syncLibrary().catch(() => {});
     setTimeout(() => trophySvc.start().catch((e) => log('trophies failed', e.message)), 1500);
@@ -1981,3 +2063,4 @@ app.on('child-process-gone', (_e, d) => {
   }
 });
 app.on('window-all-closed', () => app.quit());
+app.on('will-quit', () => writeQueue()); // keep the latest progress for the next start

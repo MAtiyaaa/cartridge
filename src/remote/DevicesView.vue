@@ -17,7 +17,7 @@
           <div v-if="d.info?.downloading" class="dv-now">
             <div class="dv-now-t"><Icon name="mdiDownload" :size="15" /><span>{{ d.info.downloading.name }}</span><em>{{ pct(d.info.downloading) }}%</em></div>
             <i class="dv-bar"><b :style="{ width: pct(d.info.downloading) + '%' }" /></i>
-            <small v-if="d.info.downloading.count > 1">{{ d.info.downloading.count - 1 }} more queued</small>
+            <small v-if="d.info.downloading.count > 1 || queueLeft(d.dls).time">{{ d.info.downloading.count > 1 ? `${d.info.downloading.count - 1} more queued` : '' }}{{ d.info.downloading.count > 1 && queueLeft(d.dls).time ? ' · ' : '' }}{{ queueLeft(d.dls).time ? `about ${queueLeft(d.dls).time} left for everything` : '' }}</small>
           </div>
 
           <div v-if="d.info?.storage?.length" class="dv-st">
@@ -48,7 +48,7 @@
 
 <script setup>
 import { computed, ref } from 'vue';
-import { bytes, ago, toast } from '../store.js';
+import { bytes, ago, toast, queueLeft } from '../store.js';
 import { hub, phoneName, select, disconnect, kindIcon, kindLabel, batteryIcon, pct } from './hub.js';
 import Icon from '../components/Icon.vue';
 

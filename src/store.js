@@ -199,6 +199,22 @@ async function roomFor(rom, p) {
 }
 
 // ---------------- formatting
+// Time left: one download (its own speed) or the whole queue (everything still to fetch at the combined speed)
+export function duration(sec) {
+  if (!isFinite(sec) || sec <= 0) return '';
+  const s = Math.round(sec);
+  if (s < 60) return `${s}s`;
+  if (s < 3600) return `${Math.round(s / 60)} min`;
+  return `${Math.floor(s / 3600)}h ${Math.round((s % 3600) / 60)}m`;
+}
+export function queueLeft(list = store.downloads) {
+  const active = (list || []).filter((d) => d.status === 'downloading' || d.status === 'queued');
+  const left = active.reduce((n, d) => n + Math.max(0, (d.total || 0) - (d.received || 0)), 0);
+  const speed = active.reduce((n, d) => n + (d.status === 'downloading' ? d.speed || 0 : 0), 0);
+  return { count: active.length, left, speed, time: speed ? duration(left / speed) : '' };
+}
+export function itemLeft(d) { return d?.speed && d.total ? duration((d.total - (d.received || 0)) / d.speed) : ''; }
+
 export function bytes(n) {
   if (!n && n !== 0) return '';
   const u = ['B', 'KB', 'MB', 'GB', 'TB'];

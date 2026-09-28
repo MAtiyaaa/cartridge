@@ -1,21 +1,11 @@
-## Cartridge 0.7.3 · The Library Update
+## Cartridge 0.7.4 · Security & Resume
 
-### New: abdu2304's 0.7.0
-Everything from the original Cartridge's Library Update is now part of this build:
-- **Collections.** Your own collections saved in RomM, plus Top rated, Hidden gems, Couch multiplayer, Short games and every series, on Home and a Collections page.
-- **Genres** on Home and a Genres page.
-- **Customise the top bar** in Look & Feel → Top bar: show, hide and reorder tabs. LT and RT follow your order.
-- **Play status and favourites, synced with RomM.** Playing now, Backlog, Finished, Completed 100%, Gave up, Not for me, or hide a game. Home gets Continue playing, Backlog, Favourites and Recently played rows.
-- **Game page:** "About N h to beat" from HowLongToBeat, plus More in this series and Similar games.
-- **PS4 and PS5 zips unpack themselves** after downloading, on Android too.
-- **Better Library filters** (genre, decade, couch multiplayer, rating, play status, hidden games), sort by Rating, and **Surprise me**.
-- **Select many games** in the Library to download them or add them to a collection in one go.
-- **Download queue controls:** move waiting games up or down, Pause all, Resume all, and a Speed limit in Settings → Downloads.
-
-### Phone remote
-- **Queue controls on your phone.** Each device's downloads get Pause all or Resume all, and waiting games can be moved up or down.
-- **Hidden games stay hidden** in the phone's Library too.
+### New
+- **Sign-in for phones.** Settings → Phone remote → Sign-in for phones sets a username and password. Every phone then has to sign in with them, with no codes or QR shortcuts, so you can put the device behind a Cloudflare tunnel (or any other) safely. Phones get a clean sign-in screen. The password is stored only as a salted hash, five wrong tries lock sign-in for a minute, and changing or turning it off signs out every phone.
+- **Phones work through a tunnel.** Open the device's https address on your phone and everything works over it: sign-in, library, downloads, controls and live updates.
+- **Downloads pick up where they left off.** Close Cartridge (or restart the device) in the middle of a download and it carries on from the same byte when you open it again, with the rest of the queue and paused games as they were. Unfinished downloads from before this update are found in your console folders and continue too.
+- **How long is left for everything.** The Downloads page, the second screen and the phone show the time left for each game and for the whole queue.
 
 ### Changed
-- On Android, Library → Select → Add to Steam only shows when Settings → Android → Steam & PC game apps is on, like the other Steam options.
-- Pairing with RomM by code or QR now asks for permission to change collections. Paired before? Pair again to use collections and play status.
+- **Auto connection is smarter.** Cartridge uses your local address only when RomM actually answers there, otherwise the remote one, and keeps checking every 30 seconds: coming home switches to local, leaving switches to remote.
+- **Downloads never fail because the connection dropped.** They wait ("Waiting for the server") and continue by themselves when RomM is reachable again, on whichever address works.

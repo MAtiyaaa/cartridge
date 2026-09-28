@@ -12,7 +12,7 @@
             <b>{{ g.d.name }}</b>
             <small>
               <template v-if="!g.d.online">Offline</template>
-              <template v-else-if="g.active">{{ g.active }} active</template>
+              <template v-else-if="g.active">{{ g.active }} active<template v-if="g.all.time"> · {{ g.all.time }} left</template></template>
               <template v-else>Idle</template>
               <template v-if="g.d.info?.battery"> · <Icon :name="batteryIcon(g.d.info.battery)" :size="12" />{{ g.d.info.battery.level }}%</template>
             </small>
@@ -47,7 +47,7 @@
 
 <script setup>
 import { computed } from 'vue';
-import { bytes, toast } from '../store.js';
+import { bytes, toast, queueLeft, itemLeft } from '../store.js';
 import { hub, pairedDevices, callOn, kindIcon, batteryIcon, pct, imgOn } from './hub.js';
 import Icon from '../components/Icon.vue';
 
@@ -61,6 +61,7 @@ const groups = computed(() => pairedDevices.value
     const waiting = items.filter((x) => x.status === 'queued');
     return {
       d, items,
+      all: queueLeft(items),
       queued: waiting.length, firstQueued: waiting[0], lastQueued: waiting[waiting.length - 1],
       paused: items.some((x) => x.status === 'cancelled'),
       active: items.filter((x) => x.status === 'downloading' || x.status === 'queued').length,
@@ -69,8 +70,8 @@ const groups = computed(() => pairedDevices.value
   }));
 
 function line(it) {
-  if (it.status === 'downloading') return `${pct(it)}% · ${bytes(it.received)} of ${bytes(it.total)}${it.speed ? ` · ${bytes(it.speed)}/s` : ''}`;
-  if (it.status === 'queued') return `Queued · ${bytes(it.total)}`;
+  if (it.status === 'downloading') return `${pct(it)}% · ${bytes(it.received)} of ${bytes(it.total)}${it.speed ? ` · ${bytes(it.speed)}/s` : ''}${itemLeft(it) ? ` · ${itemLeft(it)} left` : ''}`;
+  if (it.status === 'queued') return `${it.notice === 'waiting' ? 'Waiting for the server' : 'Queued'} · ${bytes(it.total)}`;
   if (it.status === 'error') return it.error || 'Failed';
   if (it.status === 'cancelled') return 'Cancelled';
   if (it.status === 'paused') return 'Paused';

@@ -13,10 +13,10 @@
         </div>
         <div class="how">
           <div class="subh"><Icon name="mdiQrcodeScan" :size="20" />Scan with your phone's camera</div>
-          <p class="muted small">Connects straight away, no code needed. This code works once and for 5 minutes.</p>
+          <p class="muted small">{{ s.login ? 'Opens Cartridge on the phone, which then asks for the username and password below.' : 'Connects straight away, no code needed. This code works once and for 5 minutes.' }}</p>
           <div class="or">or open this on your phone</div>
           <div class="addr mono">{{ addr || 'Finding address…' }}</div>
-          <p class="muted small">You'll be asked for a code that appears on this screen. Other Cartridge devices on your Wi-Fi show up on the phone too.</p>
+          <p class="muted small">{{ s.login ? 'Phones sign in with the username and password below.' : "You'll be asked for a code that appears on this screen." }} Other Cartridge devices on your Wi-Fi show up on the phone too.</p>
           <button class="btn small" data-focus @click="newQr"><Icon name="mdiRefresh" />New QR code</button>
         </div>
       </div>
@@ -25,6 +25,17 @@
         <span class="lbl">Device name</span>
         <button class="btn small" data-focus @click="rename"><Icon name="mdiPencil" />{{ s.name }}</button>
         <span class="muted small">How this device appears on phones</span>
+      </div>
+
+      <div class="subh"><Icon name="mdiShieldAccountOutline" :size="20" />Sign-in for phones</div>
+      <div class="login glass">
+        <Icon :name="s.login ? 'mdiLockCheckOutline' : 'mdiLockOpenVariantOutline'" :size="26" :class="{ on: s.login }" />
+        <div class="ph-t">
+          <b>{{ s.login ? `On · username ${s.login.user}` : 'Off · phones use a code or the QR code' }}</b>
+          <span class="muted small">Every phone must sign in with this username and password, including over the internet (for example through a Cloudflare tunnel to port {{ s.port }}). Changing it signs out all phones.</span>
+        </div>
+        <button class="btn small" data-focus @click="setLogin"><Icon name="mdiKeyVariant" />{{ s.login ? 'Change' : 'Set up' }}</button>
+        <button v-if="s.login" class="btn small" data-focus @click="clearLogin"><Icon name="mdiLockOpenVariantOutline" />Turn off</button>
       </div>
 
       <div class="subh"><Icon name="mdiCellphone" :size="20" />Paired phones <span class="muted small" style="font-weight: 500">· {{ s.online }} connected now</span></div>
@@ -43,12 +54,12 @@
 
 <script setup>
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
-import { call, askText, ago, toast } from '../store.js';
+import { call, askText, ago, toast, confirm } from '../store.js';
 import Toggle from '../components/Toggle.vue';
 import Icon from '../components/Icon.vue';
 import QrCode from '../components/QrCode.vue';
 
-const s = reactive({ enabled: false, name: '', phones: [], online: 0, addresses: [], port: 47280 });
+const s = reactive({ enabled: false, name: '', phones: [], online: 0, addresses: [], port: 47280, login: null });
 const qr = ref({ url: '' });
 const addr = computed(() => (s.addresses?.[0] ? `${s.addresses[0]}:${s.port}` : ''));
 
@@ -60,6 +71,20 @@ async function set(patch) {
 async function rename() {
   const v = await askText({ title: 'Device name', value: s.name, placeholder: 'Living room Deck' });
   if (v && v.trim()) set({ name: v.trim() });
+}
+async function setLogin() {
+  const user = await askText({ title: 'Username for phones', value: s.login?.user || '', placeholder: 'player1' });
+  if (!user || !user.trim()) return;
+  const pass = await askText({ title: 'Password for phones (6 or more characters)', password: true });
+  if (!pass) return;
+  const again = await askText({ title: 'Type the password again', password: true });
+  if (again !== pass) { toast("The passwords didn't match", 'error', 3500); return; }
+  try { Object.assign(s, await call('remote:login:set', { user: user.trim(), pass })); newQr(); toast('Phones now sign in with this username and password', 'ok', 3500, 'mdiLockCheckOutline'); }
+  catch (e) { toast(e.message, 'error', 4000); }
+}
+async function clearLogin() {
+  if (!(await confirm('Turn off sign-in?', 'Phones go back to a code shown on this screen, or the QR code. All phones are signed out.', 'Turn off'))) return;
+  Object.assign(s, await call('remote:login:set', { off: true })); newQr();
 }
 async function remove(id) { Object.assign(s, await call('remote:phones:remove', id)); }
 
@@ -77,6 +102,10 @@ onBeforeUnmount(() => { off?.(); clearInterval(timer); });
 h1 { font-size: 34px; font-weight: 700; margin: 4px 0 0; }
 .lead { margin: -6px 0 0; max-width: 640px; line-height: 1.5; font-size: 14px; }
 .subh { display: flex; align-items: center; gap: 10px; font-family: var(--display); font-size: 18px; font-weight: 700; }
+.login { display: flex; align-items: center; gap: 14px; padding: 16px 18px; flex-wrap: wrap; }
+.login > .icon { color: var(--muted); flex: none; }
+.login > .icon.on { color: var(--green-l); }
+.login .ph-t { flex: 1; min-width: 240px; display: flex; flex-direction: column; gap: 3px; }
 .connect { display: flex; gap: 24px; padding: 22px; align-items: center; flex-wrap: wrap; }
 .qr-wrap { width: 210px; flex: none; }
 .qr-none { aspect-ratio: 1; border-radius: 12px; display: grid; place-content: center; justify-items: center; gap: 8px; color: var(--muted); background: rgba(255, 255, 255, 0.04); }

@@ -14,11 +14,12 @@ export const hub = reactive({
   devices: saved.devices || {}, // id -> { id, name, kind, address, port, token, online, info, dls, lastSeen }
   selected: saved.selected || '',
   ready: false,
+  here: '', // the device that served this page
   link: null, // { title, url, code, from }: a device asked this phone to open a link
 });
 function persist() {
   const devices = {};
-  for (const [id, d] of Object.entries(hub.devices)) devices[id] = { id, name: d.name, kind: d.kind, address: d.address, port: d.port, token: d.token || '' };
+  for (const [id, d] of Object.entries(hub.devices)) devices[id] = { id, name: d.name, kind: d.kind, address: d.address, port: d.port, base: d.base || '', token: d.token || '' };
   try { localStorage.setItem(LS, JSON.stringify({ phoneId, devices, selected: hub.selected })); } catch {}
 }
 
@@ -29,7 +30,10 @@ export const phoneName = (() => {
   return br ? `${dev} · ${br}` : dev;
 })();
 
-const baseOf = (d) => `http://${d.address}:${d.port}`;
+// A device opened through a tunnel (https://cartridge.example.com) is reached at that address;
+// the others on the Wi-Fi at http://<ip>:<port>.
+const baseOf = (d) => d.base || `http://${d.address}:${d.port}`;
+const HERE = () => ({ address: location.hostname, port: Number(location.port) || (location.protocol === 'https:' ? 443 : 80), base: location.origin });
 export const selectedDevice = computed(() => hub.devices[hub.selected] || null);
 export const pairedDevices = computed(() => Object.values(hub.devices).filter((d) => d.token));
 
@@ -90,27 +94,32 @@ export const cart = {
 
 // ------------------------------------------------------------- finding devices
 // with this phone's token, so the device can say whether it still knows us
-async function hello(address, port, token = '') {
-  const r = await fetch(`http://${address}:${port}/hello${token ? `?_k=${encodeURIComponent(token)}` : ''}`, { signal: AbortSignal.timeout(4000) });
+async function hello(address, port, token = '', base = '') {
+  const r = await fetch(`${base || `http://${address}:${port}`}/hello${token ? `?_k=${encodeURIComponent(token)}` : ''}`, { signal: AbortSignal.timeout(4000) });
   return r.json();
 }
 function upsert(p) {
   const d = hub.devices[p.id] || (hub.devices[p.id] = { id: p.id, token: '', online: false, info: null, dls: [] });
   Object.assign(d, { name: p.name, kind: p.kind || d.kind, address: p.address || d.address, port: p.port || d.port, lastSeen: Date.now() });
+  if (p.base) d.base = p.base;
+  if ('login' in p) d.login = !!p.login; // this device asks for a username and password
   return d;
 }
 export async function discover() {
   // the device that served this page, then everyone it knows about
-  const here = { address: location.hostname, port: Number(location.port) || 80 };
+  const here = HERE();
   try {
-    const me = await hello(here.address, here.port);
+    const known = Object.values(hub.devices).find((d) => d.base === here.base);
+    const me = await hello(here.address, here.port, known?.token || '', here.base);
     upsert({ ...me, ...here });
-    const peers = await (await fetch('/peers')).json();
+    hub.here = me.id;
+    // through a tunnel (https) the other devices' Wi-Fi addresses can't be reached, so only this one is listed
+    const peers = location.protocol === 'https:' ? [] : await (await fetch('/peers')).json();
     for (const p of peers) if (!p.self) upsert(p);
   } catch {}
   // devices remembered from before, maybe on another address now: check they answer
   await Promise.all(Object.values(hub.devices).map(async (d) => {
-    try { const h = await hello(d.address, d.port, d.token); upsert({ ...h, address: d.address, port: d.port }); d.online = true; if (!h.paired && d.token) forgetToken(d.id); }
+    try { const h = await hello(d.address, d.port, d.token, d.base); upsert({ ...h, address: d.address, port: d.port }); d.online = true; if (!h.paired && d.token) forgetToken(d.id); }
     catch { d.online = false; }
   }));
   for (const d of Object.values(hub.devices)) if (d.token && d.online) openStream(d.id);
@@ -119,10 +128,14 @@ export async function discover() {
   hub.ready = true;
 }
 export async function addByAddress(text) {
-  const [address, port] = String(text).trim().replace(/^https?:\/\//, '').split('/')[0].split(':');
-  const h = await hello(address, Number(port) || 47280);
+  const t = String(text).trim();
+  // a full https address (a tunnel) is used as is; a bare ip or name gets the usual port
+  const u = new URL(/^https?:\/\//i.test(t) ? t : `http://${t.includes(':') ? t : t + ':47280'}`);
+  const base = u.origin;
+  const port = Number(u.port) || (u.protocol === 'https:' ? 443 : 80);
+  const h = await hello(u.hostname, port, '', base);
   if (h.app !== 'cartridge') throw new Error('No Cartridge there');
-  const d = upsert({ ...h, address, port: Number(port) || 47280 });
+  const d = upsert({ ...h, address: u.hostname, port, base: /^https:/.test(base) || !u.port ? base : '' });
   d.online = true;
   persist();
   return d;
@@ -140,10 +153,14 @@ export async function pairFinish(id, code) {
   const res = await post(hub.devices[id], '/pair/finish', { phoneId, code });
   connected(id, res.token);
 }
+export async function pairLogin(id, user, pass) {
+  const res = await post(hub.devices[id], '/pair/login', { phoneId, name: phoneName, user, pass });
+  connected(id, res.token);
+}
 export async function pairWithQr(secret) {
-  const here = { address: location.hostname, port: Number(location.port) || 80 };
+  const here = HERE();
   const res = await post(here, '/pair/qr', { phoneId, name: phoneName, secret });
-  const me = await hello(here.address, here.port);
+  const me = await hello(here.address, here.port, '', here.base);
   upsert({ ...me, ...here });
   connected(res.id, res.token);
 }

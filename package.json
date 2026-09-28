@@ -1,7 +1,7 @@
 {
   "name": "cartridge",
   "productName": "Cartridge",
-  "version": "0.7.3",
+  "version": "0.7.4",
   "description": "Controller-first RomM client for SteamOS, Bazzite and Android",
   "main": "electron/main.js",
   "author": "abdu2304",
@@ -51,7 +51,7 @@
       }
     ],
     "releaseInfo": {
-      "releaseName": "Cartridge 0.7.3 · The Library Update",
+      "releaseName": "Cartridge 0.7.4 · Security & Resume",
       "releaseNotesFile": "RELEASE_NOTES.md"
     }
   },
