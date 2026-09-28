@@ -1,7 +1,7 @@
 {
   "name": "cartridge",
   "productName": "Cartridge",
-  "version": "0.5.5",
+  "version": "0.6.0",
   "description": "Controller-first RomM client for SteamOS and Bazzite",
   "main": "electron/main.js",
   "author": "abdu2304",
@@ -50,7 +50,7 @@
       }
     ],
     "releaseInfo": {
-      "releaseName": "Cartridge 0.5.5 · Fixes",
+      "releaseName": "Cartridge 0.6.0 · The Android Update",
       "releaseNotesFile": "RELEASE_NOTES.md"
     }
   },

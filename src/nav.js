@@ -10,6 +10,8 @@ document.body.classList.add('pad-mode'); // the starting mode needs its class to
 // up with that (each new animation restarts the last), so scroll instantly during a hold.
 let lastRepeat = 0;
 export const scrollMode = () => (performance.now() - lastRepeat < 250 ? 'auto' : 'smooth');
+// For input that repeats held directions itself (the Android app reads controllers natively)
+export function markRepeat() { lastRepeat = performance.now(); }
 const layers = [];
 
 export function pushLayer(el, handlers = {}) {

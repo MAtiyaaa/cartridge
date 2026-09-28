@@ -56,7 +56,7 @@ async function checkUpdate() {
 // { action, down } using the same action names as nav.js. Held directions repeat like nav.js.
 const REPEATABLE = new Set(['up', 'down', 'left', 'right', 'lt', 'rt']);
 const held = new Map(); // action -> repeat timer (null for buttons that do not repeat)
-function pad(dispatch, { action, down }) {
+function pad({ dispatch, markRepeat }, { action, down }) {
   if (down && held.has(action)) return; // d-pads that report both keys and hat axes
   clearTimeout(held.get(action));
   held.delete(action);
@@ -64,7 +64,7 @@ function pad(dispatch, { action, down }) {
   held.set(action, null);
   dispatch(action);
   if (!REPEATABLE.has(action)) return;
-  const again = (ms) => held.set(action, setTimeout(() => { dispatch(action); again(70); }, ms));
+  const again = (ms) => held.set(action, setTimeout(() => { markRepeat(); dispatch(action); again(70); }, ms));
   again(300);
 }
 
@@ -90,14 +90,15 @@ export function beforeMount() {
 
 export async function afterMount() {
   const { store, call, go, tab, download, allRoms, cover, confirm } = await import('../store.js');
-  const { dispatch } = await import('../nav.js');
+  const nav = await import('../nav.js');
+  const { dispatch } = nav;
   const { watch } = await import('vue');
   const readSettings = () => { settings = store.config?.android || {}; };
   readSettings();
   watch(() => store.config?.android, readSettings, { deep: true });
 
   Native.setImmersive({ on: opt('immersive') }).catch(() => {});
-  Native.addListener('pad', (e) => pad(dispatch, e));
+  Native.addListener('pad', (e) => pad(nav, e));
   App.addListener('backButton', () => dispatch('back'));
   App.addListener('resume', () => { call('android:resume').catch(() => {}); });
 
