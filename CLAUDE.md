@@ -74,5 +74,10 @@ LT/RT switch top tabs. LB/RB only switch sections inside a page. A select, B bac
 - `nav.js`: focusing the first item in a `[data-scroll]` scrolls it to the top. Scrolling lists need `data-scroll` and `flex: none` rows (Menu, SteamCollections).
 - `CollTile` `wide` for collections and series; SysTile clips its strip and glyph in `.sys-clip`.
 
+## 0.7.6
+- Live Steam changes: `electron/steamLive.js` talks to Steam's CEF port 127.0.0.1:8080 (open when `.cef-enable-remote-debugging` is in the Steam root, which Decky creates) and runs `SteamClient.Apps.AddShortcut` etc. in `SharedJSContext`. `apply()` uses it when available, else the helper. Steam picks the appid, so the registry moves to it; `reg[id].live` counts it as in Steam before Steam saves shortcuts.vdf. `restartSteam` uses `SteamClient.User.StartRestart(false)`. `CARTRIDGE_CEF_PORT` for tests.
+- Helper in Game Mode polls every 100 ms and writes at once (Game Mode restarts Steam immediately).
+- Game page More: artwork options grouped under "Change metadata".
+
 ## Releases (full steps: HANDOFF D8)
 Only when the owner asks. Bump `version` and `build.releaseInfo.releaseName` ("Cartridge X.Y.Z") in `package.json`, put only this version's notes in `RELEASE_NOTES.md` (heading `## Cartridge X.Y.Z · Title`), add them to the top of `CHANGELOG.md`, grouped as New / Changed / Fixed with bold lead-ins. CI builds, launch-checks and publishes.

@@ -339,11 +339,8 @@ async function more() {
     { label: 'Play status', sub: statusText.value || 'None', value: 'status', icon: 'mdiProgressCheck' },
     { label: 'Add to a collection', sub: 'Yours in RomM, or a new one', value: 'col', icon: 'mdiBookmarkPlusOutline' },
     { label: u?.hidden ? 'Unhide game' : 'Hide game', sub: u?.hidden ? 'Show it in lists again' : 'Keep it out of Home, Library and Search', value: 'hide', icon: u?.hidden ? 'mdiEyeOutline' : 'mdiEyeOffOutline' },
-    { label: 'Change cover', sub: 'SteamGridDB', value: 'grid', icon: 'mdiImageEditOutline' },
-    { label: 'Change logo', sub: 'SteamGridDB', value: 'logo', icon: 'mdiFormatTitle' },
-    { label: 'Change background', sub: 'SteamGridDB', value: 'hero', icon: 'mdiPanoramaVariantOutline' },
+    { label: 'Change metadata', sub: 'Cover, logo and background from SteamGridDB', value: 'art', icon: 'mdiImageEditOutline' },
   ];
-  if (Object.keys(has).length) opts.push({ label: 'Reset artwork', sub: 'Back to RomM and automatic logo', value: 'reset', icon: 'mdiRestore' });
   if (folderSystem.value) {
     if (marked.value) opts.push({ label: 'Unmark as installed', sub: 'Only removes the mark, no files are touched', value: 'unmark', icon: 'mdiCheckboxBlankOffOutline' });
     else if (!installedPath.value) opts.push({ label: 'Mark as installed', sub: 'For games you extracted yourself', value: 'mark', icon: 'mdiCheckboxMarkedCircleOutline' });
@@ -360,8 +357,18 @@ async function more() {
   }
   opts.push({ label: 'Refresh details from RomM', value: 'refresh', icon: 'mdiRefresh' });
   if (installedPath.value) opts.push({ label: 'Show file location', value: 'path', icon: 'mdiFolderOutline' });
-  const v = await choose({ title: base.value.name, options: opts });
+  let v = await choose({ title: base.value.name, options: opts });
   if (!v) return;
+  // artwork choices in their own list, so More stays short
+  if (v === 'art') {
+    v = await choose({ title: 'Change metadata', message: base.value.name, options: [
+      { label: 'Change cover', sub: 'SteamGridDB', value: 'grid', icon: 'mdiImageEditOutline' },
+      { label: 'Change logo', sub: 'SteamGridDB', value: 'logo', icon: 'mdiFormatTitle' },
+      { label: 'Change background', sub: 'SteamGridDB', value: 'hero', icon: 'mdiPanoramaVariantOutline' },
+      ...(Object.keys(has).length ? [{ label: 'Reset artwork', sub: 'Back to RomM and automatic logo', value: 'reset', icon: 'mdiRestore' }] : []),
+    ] });
+    if (!v) return;
+  }
   if (v === 'fav') {
     const on = !fav.value;
     try { await call('fav:set', { romId: Number(props.romId), on }); toast(on ? 'Added to favourites' : 'Removed from favourites', 'ok', 2200, 'mdiHeartOutline'); } catch (e) { toast(e.message, 'error', 6000); }

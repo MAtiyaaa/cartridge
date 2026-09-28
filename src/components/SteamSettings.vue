@@ -7,6 +7,7 @@
         <div class="card-s glass">
           <div class="kv"><span>Steam account</span><span>{{ ov.steam.account }}<span v-if="ov.steam.accounts.length > 1" class="muted small"> · the one that signed in last ({{ ov.steam.accounts.length }} on this device)</span></span></div>
           <div class="kv"><span>Steam</span><span>{{ ov.steam.running ? 'Running' : 'Closed' }}{{ ov.steam.flatpak ? ' · Flatpak' : '' }}</span></div>
+          <div class="kv"><span>Live changes</span><span>{{ liveTxt }}<button v-if="live && !live.flag" class="btn small" data-focus style="margin-left: 12px" @click="enableLive"><Icon name="mdiFlash" :size="16" />Turn on</button></span></div>
           <div class="kv"><span>Your games</span><span>{{ inSteam }} of {{ ov.games.length }} downloaded games are in Steam · {{ ov.ours }} added by Cartridge</span></div>
         </div>
 
@@ -81,6 +82,16 @@ async function load() {
 }
 watch(() => steam.queue.total, () => { if (ov.value && !steam.busy) load(); });
 watch(() => steam.busy, (b) => { if (!b && ov.value) load(); });
+// Live changes: Steam's own interface is reachable (Decky Loader turns this on), so games are added
+// while Steam runs. Without it Steam has to close, which Game Mode makes unreliable.
+const live = ref(null);
+const liveTxt = computed(() => !live.value ? '…' : live.value.on ? 'On. Games go straight into Steam, no restart.' : live.value.flag ? 'Turned on. Restart Steam once to use it.' : 'Off. Steam restarts for every change.');
+async function loadLive() { live.value = await call('steam:liveInfo').catch(() => ({ on: false, flag: false })); }
+async function enableLive() {
+  if (!(await confirm('Turn on live Steam changes?', "Cartridge adds a small file to Steam's folder that opens Steam's interface to apps on this device only, the same thing Decky Loader does. Steam then takes new games without closing. Restart Steam once afterwards (Steam menu → Power → Restart Steam).", 'Turn on'))) return;
+  try { await call('steam:liveEnable'); toast('Live changes turned on. Restart Steam once to use them.', 'ok', 5000, 'mdiSteam'); } catch (e) { toast(e.message, 'error'); }
+  loadLive();
+}
 async function setC(patch) { store.config.steam = await call('steam:setConfig', patch); }
 async function apply() { if (await applyChanges()) load(); }
 async function clearQueue() { steam.queue = await call('steam:queueClear'); load(); }
@@ -106,7 +117,7 @@ async function removeAll() {
 async function fixCols() {
   try { await call('steam:fixCollections'); toast('Steam is closing to fix the collections.', 'info', 5000, 'mdiSteam'); } catch (e) { toast(e.message, 'error'); }
 }
-onMounted(load);
+onMounted(() => { load(); loadLive(); });
 </script>
 <style scoped>
 .ss { display: flex; flex-direction: column; gap: 16px; }
