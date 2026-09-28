@@ -1,5 +1,6 @@
 // Entry point of the Android build (index.html is pointed here by vite.config.mjs in android mode)
 import { ready, isCompanion } from './android/bridge.js';
+import './android/android.css';
 
 ready.then(async () => {
   if (isCompanion) {

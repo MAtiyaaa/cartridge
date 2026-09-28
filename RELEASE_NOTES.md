@@ -1,10 +1,13 @@
-## Cartridge 0.6.4 · Controls & Speed
+## Cartridge 0.6.5 · Polish
 
 ### New
-- **Button icons match your controller** everywhere in the app: Xbox (and Xbox-style handhelds like the ROG Ally, Legion Go and MSI Claw), PlayStation, Nintendo, Steam Deck, or keyboard keys when you use a keyboard. Cartridge switches automatically as you change what you hold; **Settings → Look & Feel → Button icons** can pin one. The second screen's touch buttons use the same icons.
-- **The second screen's buttons match your controller.** Its touch A / B / X / Y follow a Nintendo layout (A on the right) or an Xbox layout (A at the bottom), picked from your controller. If it guesses wrong, set it in **Settings → Android → Button layout**.
+- **Settings on the second screen.** A small gear in the second screen's dock opens all of Settings there, laid out for the smaller screen; changes show on the top screen right away. Turning the second screen off lives there too.
+- **A redesigned second screen.** Artwork now fills the top edge to edge and fades into your background, with the cover, logo and details over it, and big pill buttons. Downloads show the current game large, with its percent, speed and what's left; an empty queue gets a friendly screen with a shortcut to your library. The tabs moved into a small floating dock at the bottom.
 
 ### Fixed
-- **Faster downloads on Android.** Games are written to storage in large blocks instead of many small pieces, which Android's shared storage and SD cards handle much faster.
-- **The Quick Menu scrolls** to follow the selection, so every item is reachable with the D-pad.
-- **The Home header no longer ends up cut off** after scrolling down a list and back up on a touchscreen.
+- **Settings kept jumping back to the first section** when you moved right into a section with the D-pad or stick while it was still switching.
+
+### Changed
+- **The clock and status icons on Android sit in a pill** like the tabs next to them, instead of floating over the background.
+- **The second screen's D-pad is one cross-shaped pad,** without the dark box behind it.
+- **Downloads on Android go back to the 0.6.3 method,** which was faster.

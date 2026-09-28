@@ -102,6 +102,8 @@ export async function afterMount() {
   const { dispatch } = nav;
   const { watch } = await import('vue');
   const prompts = await import('../prompts.js');
+  // Settings changed on the second screen show up here right away
+  cart.on('android:config', (c) => { if (c && JSON.stringify(c) !== JSON.stringify(store.config)) store.config = c; });
   const readSettings = () => { settings = store.config?.android || {}; };
   readSettings();
   watch(() => store.config?.android, readSettings, { deep: true });

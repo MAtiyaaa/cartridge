@@ -1,0 +1,20 @@
+/* Android build only (imported by main-android.js): tweaks for the handheld screen */
+
+/* Status area (connection, battery, downloads, clock) sits in the same pill as the tabs, so the
+   clock reads as part of the bar instead of text floating over the background */
+header .sys {
+  padding: 6px 16px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--line);
+  backdrop-filter: blur(12px);
+  gap: 14px;
+}
+.sys .clock {
+  font-family: var(--body);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}

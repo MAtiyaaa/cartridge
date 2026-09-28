@@ -25,32 +25,6 @@ state.dataDir = process.env.CARTRIDGE_DATA || (bridge ? path.join(bridge.getData
 fs.mkdirSync(state.dataDir, { recursive: true });
 try { state.version = require('./package.json').version; } catch {}
 
-// Faster downloads: Android's shared storage (/storage/emulated, SD cards) goes through a slow
-// FUSE layer where every small write costs a lot. Downloads (*.part files) are written in 4 MB
-// blocks instead of the ~16-64 KB network chunks.
-const { Writable } = require('stream');
-const origCreateWriteStream = fs.createWriteStream;
-fs.createWriteStream = function (p, opts) {
-  const inner = origCreateWriteStream.call(fs, p, opts);
-  if (typeof p !== 'string' || !p.endsWith('.part')) return inner;
-  const LIMIT = 4 << 20;
-  let parts = [], size = 0;
-  const flush = (cb) => {
-    if (!size) return cb();
-    const block = Buffer.concat(parts, size);
-    parts = []; size = 0;
-    if (inner.write(block)) cb(); else inner.once('drain', () => cb());
-  };
-  const w = new Writable({
-    highWaterMark: LIMIT,
-    write(chunk, _enc, cb) { parts.push(chunk); size += chunk.length; if (size >= LIMIT) flush(cb); else cb(); },
-    final(cb) { flush(() => { inner.once('close', () => cb()); inner.end(); }); },
-    destroy(err, cb) { inner.destroy(); cb(err); },
-  });
-  inner.on('error', (e) => w.destroy(e));
-  return w;
-};
-
 require('./electron/main.js');
 const PLATFORM_MAP = require('./electron/platformMap.js');
 

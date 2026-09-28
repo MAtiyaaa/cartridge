@@ -36,6 +36,7 @@ function focusables(scope, withRects = false) {
   const out = [];
   for (const el of scope.querySelectorAll('[data-focus]')) {
     if (el.disabled) continue;
+    if (el.closest('[class*="-leave-active"]')) continue; // on its way out (view transitions): focus would be lost
     const r = el.getBoundingClientRect();
     if (r.width > 0 && r.height > 0) out.push(withRects ? [el, r] : el);
   }
