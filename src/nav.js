@@ -4,7 +4,7 @@
 import { reactive } from 'vue';
 import { sfx } from './sfx.js';
 
-export const input = reactive({ mode: 'pad', padName: '' }); // 'pad' | 'mouse'
+export const input = reactive({ mode: 'pad', padName: '', kb: false }); // mode 'pad' | 'mouse'; kb: last used a keyboard (for button icons)
 document.body.classList.add('pad-mode'); // the starting mode needs its class too (row snapping relies on it)
 // While a direction is held down, focus jumps several times a second. Smooth scrolling can't keep
 // up with that (each new animation restarts the last), so scroll instantly during a hold.
@@ -157,6 +157,7 @@ window.addEventListener('keydown', (ev) => {
   if (!a) return;
   ev.preventDefault();
   if (ev.repeat) lastRepeat = performance.now();
+  input.kb = true;
   dispatch(a);
 });
 // ---------------- pointer: touch vs mouse
@@ -191,7 +192,7 @@ const DELAY = 300, RATE = 70;
 
 function press(key, isDown, now) {
   const s = state[key] || (state[key] = { down: false, next: 0 });
-  if (isDown && !s.down) { s.down = true; s.next = now + DELAY; dispatch(key); }
+  if (isDown && !s.down) { s.down = true; s.next = now + DELAY; input.kb = false; dispatch(key); }
   else if (isDown && s.down && REPEATABLE.has(key) && now >= s.next) { s.next = now + RATE; lastRepeat = now; dispatch(key); }
   else if (!isDown) s.down = false;
 }

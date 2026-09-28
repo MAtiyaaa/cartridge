@@ -30,6 +30,14 @@
     <div class="subh"><Icon name="mdiMonitorScreenshot" :size="22" />Dual screen</div>
     <Toggle :model-value="opt('dualScreen')" label="Use the second screen" :desc="displays.secondary ? `Shows the highlighted game, your downloads and touch controls on ${displays.secondary.name || 'the second screen'}. Turn off to leave it free for other apps.` : 'No second screen found right now. On dual-screen devices like the AYN Thor, the bottom screen shows the highlighted game, your downloads and touch controls.'" @update:model-value="(v) => set({ dualScreen: v })" />
 
+    <div class="subh"><Icon name="mdiGamepadVariantOutline" :size="22" />Controller</div>
+    <div class="row wrap"><span class="lbl">Button layout</span>
+      <div class="seg">
+        <button v-for="o in layouts" :key="o.v" data-focus :class="{ on: (store.config.android?.buttonLayout || 'auto') === o.v }" @click="set({ buttonLayout: o.v })">{{ o.l }}</button>
+      </div>
+    </div>
+    <p class="muted small">Sets where A, B, X and Y sit on the second screen's touch controls. Auto follows your controller{{ store.androidPads?.length ? ' (' + store.androidPads.join(', ') + ')' : '' }}: {{ store.androidLayoutDetected === 'nintendo' ? 'Nintendo, A on the right' : 'Xbox, A at the bottom' }}.</p>
+
     <div class="subh"><Icon name="mdiCellphoneCog" :size="22" />System</div>
     <Toggle :model-value="opt('backgroundDownloads')" label="Keep downloading in the background" desc="Shows a notification while games download so Android does not stop them" @update:model-value="(v) => set({ backgroundDownloads: v })" />
     <Toggle :model-value="opt('immersive')" label="Full screen" desc="Hides the status and navigation bars" @update:model-value="setImmersive" />
@@ -51,6 +59,7 @@ const scanning = ref(false);
 const displays = computed(() => store.androidDisplays || { secondary: null });
 const opt = (k) => store.config.android?.[k] !== false;
 const set = (patch) => saveConfig({ android: patch });
+const layouts = [{ v: 'auto', l: 'Auto' }, { v: 'xbox', l: 'Xbox (A bottom)' }, { v: 'nintendo', l: 'Nintendo (A right)' }];
 
 async function refreshStorage() { storage.value = await Native.storageStatus().catch(() => ({ granted: true })); }
 async function scan() {
@@ -96,4 +105,5 @@ h1 { font-size: 34px; font-weight: 700; margin: 4px 0 6px; }
 .root-t { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .use { font-size: 13px; font-weight: 600; color: var(--primary-t); padding: 6px 12px; border-radius: 999px; background: rgba(var(--primary-rgb), 0.16); }
 .wrap { flex-wrap: wrap; }
+.lbl { width: 130px; color: var(--muted); font-size: 13.5px; flex: none; }
 </style>

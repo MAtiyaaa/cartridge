@@ -158,6 +158,8 @@
             <div class="row"><span class="lbl">Touch &amp; mouse</span><div class="seg"><button v-for="p in pointers" :key="p.v" data-focus :class="{ on: (ui.pointer || 'auto') === p.v }" @click="setPointer(p.v)">{{ p.l }}</button></div></div>
             <p class="muted small" style="margin-top: -6px">Auto hides the cursor when you tap the screen and shows it when a mouse moves. Touch never shows a cursor.</p>
             <div class="row"><span class="lbl">On-screen keyboard</span><div class="seg"><button v-for="k in keyboards" :key="k.v" data-focus :class="{ on: (ui.keyboard || 'auto') === k.v }" @click="saveConfig({ ui: { keyboard: k.v } })">{{ k.l }}</button></div></div>
+            <div class="row"><span class="lbl">Button icons</span><div class="seg"><button v-for="f in FAMILIES" :key="f.v" data-focus :class="{ on: (ui.prompts || 'auto') === f.v }" @click="saveConfig({ ui: { prompts: f.v } })">{{ f.l }}</button></div></div>
+            <p class="muted small" style="margin-top: -6px">Auto shows the buttons of the controller you're using{{ input.padName ? ' (' + input.padName.replace(/\s*\(.*$/, '') + ')' : '' }}, or keyboard keys when you use a keyboard.</p>
             <p class="muted small" style="margin-top: -6px">Auto uses the built-in keyboard in Game Mode and your real keyboard on the desktop. Steam leaves typing to the Steam keyboard (Steam + X).</p>
             <div class="row"><span class="lbl">Rendering</span><div class="seg"><button v-for="g in gfx" :key="g.v" data-focus :class="{ on: (store.config.graphics || 'auto') === g.v }" @click="setGraphics(g.v)">{{ g.l }}</button></div></div>
             <p class="muted small" style="margin-top: -6px">Auto uses the GPU from the app menu and on big screens like TVs. On handheld-size screens launched from Steam or Game Mode it uses software rendering, which is proven there. If the GPU ever fails, Cartridge switches to Compatible by itself. Compatible never uses the GPU.</p>
@@ -283,6 +285,7 @@ import { computed, defineAsyncComponent, onMounted, ref, watch } from 'vue';
 import { store, call, go, tab, saveConfig, pickFolder, choose, confirm, toast, openModal, bytes, ago, resync, scanServer, allRoms, resetLogos } from '../store.js';
 import { useView } from '../useView.js';
 import { input, focusFirst, setPointerPref } from '../nav.js';
+import { FAMILIES } from '../prompts.js';
 import { THEMES, SURFACES, TEXTS, FONTS, CARD_SHAPES, CARD_SIZES, DENSITIES, themeFrom } from '../themes.js';
 import { BACKGROUNDS } from '../bgRenderers.js';
 import { setSoundEnabled, setSoundStyle, previewSound, SOUND_PACKS } from '../sfx.js';

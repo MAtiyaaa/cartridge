@@ -1,6 +1,6 @@
 <template>
   <div class="qm-scrim" @click.self="close">
-    <aside class="qm" ref="el">
+    <aside class="qm" ref="el" data-scroll>
       <div class="qm-head">
         <Logo :size="34" />
         <div>

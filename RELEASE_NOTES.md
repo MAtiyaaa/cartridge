@@ -1,13 +1,10 @@
-## Cartridge 0.6.3 · Second Screen Polish
+## Cartridge 0.6.4 · Controls & Speed
 
-### Changed
-- **The second screen looks like the first.** It is rebuilt from the same pieces as the top screen:
-  - **Games:** a banner with the game's artwork and logo, the cover art on top, then the same details line as the Home header, Open and Download, and the description with Show more.
-  - **Consoles:** a banner in the console's own colours with its logo, how many games are on your server and on this device, and its ROM folder.
-  - **Collections and Favourites:** a banner of their covers, the name and how many games they hold.
-  - **Downloads:** cover, name, live progress and speed, with cancel and retry.
-  - The top screen's tabs, buttons and panels.
-- **The second screen's background stays still.** It uses the same theme, colours, background style and wallpaper as the top screen, without the animation.
+### New
+- **Button icons match your controller** everywhere in the app: Xbox (and Xbox-style handhelds like the ROG Ally, Legion Go and MSI Claw), PlayStation, Nintendo, Steam Deck, or keyboard keys when you use a keyboard. Cartridge switches automatically as you change what you hold; **Settings → Look & Feel → Button icons** can pin one. The second screen's touch buttons use the same icons.
+- **The second screen's buttons match your controller.** Its touch A / B / X / Y follow a Nintendo layout (A on the right) or an Xbox layout (A at the bottom), picked from your controller. If it guesses wrong, set it in **Settings → Android → Button layout**.
 
 ### Fixed
-- **Game art loads reliably and fast on both screens.** Images now load over several connections at once without depending on special addresses, and each one fades in once it is ready instead of popping in or showing as broken.
+- **Faster downloads on Android.** Games are written to storage in large blocks instead of many small pieces, which Android's shared storage and SD cards handle much faster.
+- **The Quick Menu scrolls** to follow the selection, so every item is reachable with the D-pad.
+- **The Home header no longer ends up cut off** after scrolling down a list and back up on a touchscreen.

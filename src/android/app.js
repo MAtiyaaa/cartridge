@@ -56,7 +56,8 @@ async function checkUpdate() {
 // { action, down } using the same action names as nav.js. Held directions repeat like nav.js.
 const REPEATABLE = new Set(['up', 'down', 'left', 'right', 'lt', 'rt']);
 const held = new Map(); // action -> repeat timer (null for buttons that do not repeat)
-function pad({ dispatch, markRepeat }, { action, down }) {
+function pad({ dispatch, markRepeat, input }, { action, down }) {
+  input.kb = false;
   if (down && held.has(action)) return; // d-pads that report both keys and hat axes
   clearTimeout(held.get(action));
   held.delete(action);
@@ -86,8 +87,11 @@ export function beforeMount() {
   applyViewport();
   const css = document.createElement('style');
   // Real touch on Android: let the WebView scroll natively (smooth, with momentum) and tap cleanly
-  css.textContent = 'html, body { touch-action: pan-x pan-y; } [data-scroll] { overscroll-behavior: contain; } * { -webkit-tap-highlight-color: transparent; }';
+  // The page itself never scrolls: a swipe that reached the end of a list used to carry on and
+  // push the whole window up, leaving the Home header cut off after scrolling back.
+  css.textContent = 'html, body { touch-action: pan-x pan-y; overflow: hidden; overscroll-behavior: none; } [data-scroll] { overscroll-behavior-y: contain; } * { -webkit-tap-highlight-color: transparent; }';
   document.head.appendChild(css);
+  addEventListener('scroll', () => { if (scrollX || scrollY) scrollTo(0, 0); }, { passive: true });
   addEventListener('resize', () => { applyViewport(); cart.call('android:size', { w: innerWidth, h: innerHeight }).catch(() => {}); });
   return cart.call('android:hello', { w: innerWidth, h: innerHeight }).then((h) => { cart.version = h.version; zoom = h.zoom || 1; applyViewport(); });
 }
@@ -97,6 +101,7 @@ export async function afterMount() {
   const nav = await import('../nav.js');
   const { dispatch } = nav;
   const { watch } = await import('vue');
+  const prompts = await import('../prompts.js');
   const readSettings = () => { settings = store.config?.android || {}; };
   readSettings();
   watch(() => store.config?.android, readSettings, { deep: true });
@@ -143,6 +148,27 @@ export async function afterMount() {
   watch(() => store.config?.android?.dualScreen, refreshCompanion);
   refreshCompanion();
 
+  // Face button layout for the second screen's touch controls: Nintendo (A on the right) or
+  // Xbox (A at the bottom). Auto goes by the controller's name; Settings → Android can override.
+  let layout = 'xbox';
+  const NINTENDO = /nintendo|switch|pro controller|joy-?con|\bns\b/i;
+  const readLayout = async () => {
+    const pick = store.config?.android?.buttonLayout || 'auto';
+    let detected = 'xbox';
+    try {
+      const { names = [] } = await Native.controllers();
+      store.androidPads = names;
+      nav.input.padName = names[0] || ''; // for the button icons
+      if (names.some((n) => NINTENDO.test(n))) detected = 'nintendo';
+    } catch {}
+    store.androidLayoutDetected = detected;
+    const next = pick === 'auto' ? detected : pick;
+    if (next !== layout) { layout = next; publish(); }
+  };
+  watch(() => store.config?.android?.buttonLayout, readLayout);
+  Native.addListener('controllers', readLayout);
+  readLayout();
+
   // The companion has its own copy of the library; it only needs to know what the top screen shows
   let focused = {}, t = null;
   const publish = () => {
@@ -156,6 +182,10 @@ export async function afterMount() {
       else if (focused.collectionId) st.collectionId = focused.collectionId;
       else if (r.name === 'platform') st.platformId = Number(p.platformId);
       else if (r.name === 'collection') st.collectionId = p.collectionId;
+      st.layout = layout;
+      // Icons for the second screen's touch buttons: the controller's, never keyboard keys
+      const fam = prompts.promptFamily.value;
+      st.family = layout === 'nintendo' ? 'nintendo' : fam === 'keyboard' ? prompts.familyOf(nav.input.padName) : fam;
       call('android:companion:state', st).catch(() => {});
     }, 100);
   };
@@ -166,6 +196,7 @@ export async function afterMount() {
     publish();
   });
   watch(() => [store.route.name, JSON.stringify(store.route.params)], () => { focused = {}; publish(); });
+  watch(() => prompts.promptFamily.value, publish);
 
   cart.on('android:companion:cmd', (c) => {
     if (c.pad) return dispatch(c.pad);

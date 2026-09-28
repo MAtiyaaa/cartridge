@@ -138,22 +138,18 @@
         <!-- Controls -->
         <section v-else key="pad" class="view pad">
           <div class="shoulders">
-            <button class="k pill" @pointerdown.prevent="press('lt')">LT</button>
-            <button class="k pill" @pointerdown.prevent="press('lb')">LB</button>
-            <button class="k pill" aria-label="Select" @pointerdown.prevent="press('select')"><Icon name="mdiTrayArrowDown" :size="18" /></button>
-            <button class="k pill" aria-label="Start" @pointerdown.prevent="press('start')"><Icon name="mdiMenu" :size="18" /></button>
-            <button class="k pill" @pointerdown.prevent="press('rb')">RB</button>
-            <button class="k pill" @pointerdown.prevent="press('rt')">RT</button>
+            <button v-for="k in SHOULDERS" :key="k.b" class="k pill" :aria-label="k.b" @pointerdown.prevent="press(k.a)">
+              <img v-if="glyph(k.b)" :src="glyph(k.b)" class="gl" alt="" /><template v-else>{{ k.b }}</template>
+            </button>
           </div>
           <div class="sticks">
             <div class="dpad glass">
               <button v-for="d in DIRS" :key="d.a" class="k" :class="d.a" :aria-label="d.a" @pointerdown.prevent="hold(d.a)" @pointerup="release" @pointerleave="release" @pointercancel="release"><Icon :name="d.icon" :size="30" /></button>
             </div>
-            <div class="face">
-              <button class="k y" aria-label="Y" @pointerdown.prevent="press('y')">Y</button>
-              <button class="k x" aria-label="X" @pointerdown.prevent="press('x')">X</button>
-              <button class="k b" aria-label="B" @pointerdown.prevent="press('back')">B</button>
-              <button class="k a" aria-label="A" @pointerdown.prevent="press('accept')">A</button>
+            <div class="face" :class="nintendoFace ? 'nin' : 'xbox'">
+              <button v-for="k in FACE" :key="k.b" class="k" :class="[k.b.toLowerCase(), { glyphed: !!glyph(k.b) }]" :aria-label="k.b" @pointerdown.prevent="press(k.a)">
+                <img v-if="glyph(k.b)" :src="glyph(k.b)" class="gl face-gl" alt="" /><template v-else>{{ k.b }}</template>
+              </button>
             </div>
           </div>
           <div class="jump">
@@ -169,6 +165,7 @@
 import { computed, onMounted, ref, watch } from 'vue';
 import { store, call, loadConfig, loadLibrary, loadArt, romById, platformById, collectionById, romsOf, romsOfCollection, cover, backdropOf, logoOf, bytes, year, rating, img, downloadFor, download } from '../store.js';
 import { applyTheme } from '../themes.js';
+import { promptIcon } from '../prompts.js';
 import Background from '../components/Background.vue';
 import GameLogo from '../components/GameLogo.vue';
 import PIcon from '../components/PIcon.vue';
@@ -190,6 +187,11 @@ const JUMPS = [
   { id: 'downloads', label: 'Downloads', icon: 'mdiTrayArrowDown' },
   { id: 'settings', label: 'Settings', icon: 'mdiCogOutline' },
 ];
+const SHOULDERS = [{ b: 'LT', a: 'lt' }, { b: 'LB', a: 'lb' }, { b: 'SELECT', a: 'select' }, { b: 'START', a: 'start' }, { b: 'RB', a: 'rb' }, { b: 'RT', a: 'rt' }];
+const FACE = [{ b: 'Y', a: 'y' }, { b: 'X', a: 'x' }, { b: 'B', a: 'back' }, { b: 'A', a: 'accept' }];
+// The same button icons as the top screen, for the controller in use
+const glyph = (b) => promptIcon(b, store.companion.family || 'xbox');
+const nintendoFace = computed(() => store.companion.layout === 'nintendo' || store.companion.family === 'nintendo');
 const DIRS = [
   { a: 'up', icon: 'mdiChevronUp' }, { a: 'left', icon: 'mdiChevronLeft' },
   { a: 'right', icon: 'mdiChevronRight' }, { a: 'down', icon: 'mdiChevronDown' },
@@ -414,7 +416,12 @@ html, body { touch-action: pan-x pan-y; }
 .dpad .up { grid-area: 1 / 2; } .dpad .left { grid-area: 2 / 1; } .dpad .right { grid-area: 2 / 3; } .dpad .down { grid-area: 3 / 2; }
 .face { display: grid; grid-template: repeat(3, 60px) / repeat(3, 60px); }
 .face .k { border-radius: 50%; box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3); }
+.gl { width: 30px; height: 30px; object-fit: contain; pointer-events: none; }
+.face-gl { width: 46px; height: 46px; }
+.face .k.glyphed { background: rgba(255, 255, 255, 0.05); }
 .face .y { grid-area: 1 / 2; } .face .x { grid-area: 2 / 1; } .face .b { grid-area: 2 / 3; }
+/* Nintendo layout: X top, Y left, A right, B bottom */
+.face.nin .x { grid-area: 1 / 2; } .face.nin .y { grid-area: 2 / 1; } .face.nin .a { grid-area: 2 / 3; } .face.nin .b { grid-area: 3 / 2; }
 .face .a { grid-area: 3 / 2; background: var(--grad); border-color: transparent; color: var(--on-primary); }
 .jump { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .jbtn { display: flex; align-items: center; justify-content: center; gap: 7px; height: 44px; border-radius: 999px; border: 1px solid var(--line); background: rgba(255, 255, 255, 0.04); color: var(--muted); font: 500 13.5px var(--body); transition: background 0.15s, color 0.15s; }
