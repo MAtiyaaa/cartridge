@@ -14,6 +14,7 @@ export const hub = reactive({
   devices: saved.devices || {}, // id -> { id, name, kind, address, port, token, online, info, dls, lastSeen }
   selected: saved.selected || '',
   ready: false,
+  link: null, // { title, url, code, from }: a device asked this phone to open a link
 });
 function persist() {
   const devices = {};
@@ -65,6 +66,7 @@ function openStream(id) {
     let m; try { m = JSON.parse(e.data); } catch { return; }
     const data = rewrite(d, m.data);
     if (m.ch === 'downloads') d.dls = data;
+    if (m.ch === 'remote:link' && data?.url) hub.link = { ...data, from: d.name };
     if (id === hub.selected) for (const fn of listeners.get(m.ch) || []) { try { fn(data); } catch (err) { console.error(err); } }
   };
   es.onopen = () => { d.online = true; };

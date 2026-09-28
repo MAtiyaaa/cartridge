@@ -87,6 +87,21 @@
       </div>
     </Transition>
 
+    <!-- A device sent a link to open here (RomM's QR sign-in approval page) -->
+    <Transition name="sheet">
+      <div v-if="hub.link" class="scrim" @click.self="hub.link = null">
+        <div class="sheet">
+          <div class="grab" />
+          <div class="sh-ic"><Icon name="mdiShieldCheckOutline" :size="28" /></div>
+          <h2>{{ hub.link.title || 'Open a link' }}</h2>
+          <p class="muted">Sent from {{ hub.link.from }}. Sign in if RomM asks, then approve. {{ hub.link.from }} carries on by itself.</p>
+          <p v-if="hub.link.code" class="link-code">{{ hub.link.code }}</p>
+          <a class="pill primary wide" :href="hub.link.url" target="_blank" rel="noopener" @click="hub.link = null"><Icon name="mdiOpenInNew" :size="18" />Open</a>
+          <button class="textbtn" @click="hub.link = null">Not now</button>
+        </div>
+      </div>
+    </Transition>
+
     <div class="toasts rm-toasts">
       <div v-for="t in store.toasts" :key="t.id" class="toast" :class="t.kind"><span class="ti"><Icon :name="t.icon" :size="18" /></span>{{ t.msg }}</div>
     </div>
@@ -242,6 +257,8 @@ html, body { touch-action: pan-x pan-y; overscroll-behavior: none; }
 .addr-in { font-size: 18px; letter-spacing: 0.02em; font-weight: 500; }
 .code-in:focus, .addr-in:focus { border-color: rgba(var(--primary-l-rgb), 0.7); box-shadow: 0 0 0 4px rgba(var(--primary-rgb), 0.2); }
 .err { color: #ffa39c; }
+.link-code { font: 700 26px var(--display); letter-spacing: 0.14em; margin: 4px 0 !important; }
+a.pill { text-decoration: none; }
 .muted { color: var(--muted); }
 .rm-toasts { top: auto; bottom: calc(env(safe-area-inset-bottom) + 90px); right: 12px; left: 12px; align-items: center; }
 </style>

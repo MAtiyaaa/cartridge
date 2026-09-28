@@ -48,7 +48,10 @@
             <p class="muted small">Sign in to RomM on your phone and approve Cartridge. This screen continues by itself.</p>
             <p class="small">Or open <span class="mono">{{ qr.url.replace(/\?.*$/, '') }}</span> and enter <b class="qr-code">{{ qr.userCode }}</b></p>
             <p class="muted small qr-wait"><Icon name="mdiSync" :size="14" class="spin" />Waiting for approval…</p>
-            <button class="btn small" data-focus @click="stopQr"><Icon name="mdiClose" :size="18" />Cancel</button>
+            <div class="row" style="gap: 10px">
+              <button v-if="phonesOnline" class="btn small primary" data-focus @click="sendToPhone"><Icon name="mdiCellphoneArrowDown" :size="18" />Send to my phone</button>
+              <button class="btn small" data-focus @click="stopQr"><Icon name="mdiClose" :size="18" />Cancel</button>
+            </div>
           </div>
         </div>
         <button v-else class="btn" data-focus style="align-self: flex-start" :disabled="busy || !hasUrl" @click="startQr"><Icon name="mdiQrcodeScan" />Pair with a QR code instead</button>
@@ -187,6 +190,17 @@ async function startQr() {
   } catch (e) { toast(e.message, 'error', 5000); }
 }
 onBeforeUnmount(stopQr);
+// A phone connected through Phone remote can open the approval page itself: no camera needed
+const phonesOnline = ref(0);
+call('remote:settings').then((s) => { phonesOnline.value = s?.online || 0; }).catch(() => {});
+const offRemote = window.cart.on?.('remote:settings', (s) => { phonesOnline.value = s?.online || 0; });
+onBeforeUnmount(() => offRemote?.());
+async function sendToPhone() {
+  try {
+    const n = await call('remote:link', { title: 'Approve Cartridge in RomM', url: qr.value.url, code: qr.value.userCode });
+    toast(n ? 'Sent. Open it on your phone and approve Cartridge.' : 'No phone is connected right now', n ? 'ok' : 'error', 4000, 'mdiCellphoneArrowDown');
+  } catch (e) { toast(e.message, 'error'); }
+}
 watch(authMode, (m) => { if (m !== 'pair') stopQr(); });
 
 async function saveServer() {
