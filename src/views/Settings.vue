@@ -2,7 +2,7 @@
   <div class="set-view" ref="el">
     <nav class="rail">
       <div class="eyebrow" style="padding: 0 14px 10px">Settings</div>
-      <button v-for="s in sections" :key="s.id" class="rail-item" :class="{ on: sec === s.id }" data-focus :data-key="'sec-' + s.id" @focus="sec = s.id" @click="enter">
+      <button v-for="s in sections" :key="s.id" class="rail-item" :class="{ on: sec === s.id }" data-focus :data-key="'sec-' + s.id" @focus="sec = s.id" @click="pick(s.id)">
         <Icon :name="s.icon" :size="20" />{{ s.label }}
       </button>
     </nav>
@@ -439,6 +439,8 @@ useView({ back: () => { if (!document.activeElement?.closest('.rail')) { focusFi
 watch(sec, (v) => { store.settingsSection = v; });
 
 function enter() { focusFirst(paneEl.value); }
+// A tap switches the section right away (touch never focuses the rail); a controller also moves into it
+function pick(id) { sec.value = id; if (input.mode !== 'touch') enter(); }
 async function setMode(mode) { await saveConfig({ server: { mode } }); reconnect(); }
 async function reconnect() {
   try { const r = await call('server:reconnect'); toast(`Connected · ${r.base}`, 'ok', 2600, 'mdiLanConnect'); } catch (e) { toast(e.message, 'error'); }

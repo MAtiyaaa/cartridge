@@ -3,7 +3,7 @@ import vue from '@vitejs/plugin-vue';
 
 // `vite build --mode android` builds the same UI for the Android app (see scripts/build-android.mjs).
 // Everything Android-only sits behind import.meta.env.MODE === 'android' and is dropped from the desktop build.
-const ANDROID_CSP = "default-src 'self' http://127.0.0.1:*; img-src 'self' http://127.0.0.1:* data: blob:; connect-src 'self' http://127.0.0.1:* https://api.github.com; style-src 'self' 'unsafe-inline'; font-src 'self' data:";
+const ANDROID_CSP = "default-src 'self' http://127.0.0.1:*; img-src 'self' http://127.0.0.1:* http://*.localhost:* data: blob:; connect-src 'self' http://127.0.0.1:* https://api.github.com; style-src 'self' 'unsafe-inline'; font-src 'self' data:";
 
 export default defineConfig(({ mode }) => ({
   plugins: [

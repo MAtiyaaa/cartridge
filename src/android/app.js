@@ -144,25 +144,35 @@ export async function afterMount() {
   refreshCompanion();
 
   // The companion has its own copy of the library; it only needs to know what the top screen shows
-  let focusedId = null, t = null;
+  let focused = {}, t = null;
   const publish = () => {
     clearTimeout(t);
     t = setTimeout(() => {
-      const romId = store.route.name === 'game' ? Number(store.route.params.romId) : focusedId;
-      call('android:companion:state', { route: store.route.name, romId: romId || null }).catch(() => {});
+      const r = store.route, p = r.params || {};
+      const st = { route: r.name, romId: null, platformId: null, collectionId: null };
+      if (r.name === 'game') st.romId = Number(p.romId);
+      else if (focused.romId) st.romId = focused.romId;
+      else if (focused.platformId) st.platformId = focused.platformId;
+      else if (focused.collectionId) st.collectionId = focused.collectionId;
+      else if (r.name === 'platform') st.platformId = Number(p.platformId);
+      else if (r.name === 'collection') st.collectionId = p.collectionId;
+      call('android:companion:state', st).catch(() => {});
     }, 100);
   };
   document.addEventListener('focusin', (e) => {
-    const m = /^rom-(\d+)$/.exec(e.target?.dataset?.key || '');
-    focusedId = m ? +m[1] : store.route.name === 'game' ? focusedId : null;
+    const m = /^(rom|sys|col)-(.+)$/.exec(e.target?.dataset?.key || '');
+    if (!m) return; // buttons and tabs keep showing the last highlighted item
+    focused = m[1] === 'rom' ? { romId: +m[2] } : m[1] === 'sys' ? { platformId: +m[2] } : { collectionId: isNaN(+m[2]) ? m[2] : +m[2] };
     publish();
   });
-  watch(() => [store.route.name, store.route.params.romId], publish);
+  watch(() => [store.route.name, JSON.stringify(store.route.params)], () => { focused = {}; publish(); });
 
   cart.on('android:companion:cmd', (c) => {
     if (c.pad) return dispatch(c.pad);
     if (c.tab) return c.tab === 'search' ? go('search') : tab(c.tab);
     if (c.open && c.romId) go('game', { romId: c.romId });
+    if (c.open && c.platformId) go('platform', { platformId: c.platformId });
+    if (c.open && c.collectionId) go('collection', { collectionId: c.collectionId });
     if (c.dualScreen === false) saveConfig({ android: { dualScreen: false } });
   });
   cart.on('android:reconnected', () => call('library:get').then(() => {}).catch(() => {}));

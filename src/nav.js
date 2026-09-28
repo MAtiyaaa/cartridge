@@ -64,6 +64,7 @@ function move(dir) {
   const c = cur.getBoundingClientRect();
   const cx = c.left + c.width / 2, cy = c.top + c.height / 2;
   let best = null, bestScore = Infinity;
+  const cands = [];
   for (const [el, r] of focusables(scope, true)) {
     if (el === cur) continue;
     if ((dir === 'left' || dir === 'right') && el.hasAttribute('data-nofirst') && !cur.hasAttribute('data-nofirst')) continue; // the end of a row never jumps up to the search box
@@ -74,6 +75,18 @@ function move(dir) {
     else if (dir === 'down') { if (r.top < c.bottom - 4 && y <= cy + 1) continue; primary = y - cy; secondary = overlapGap(c.left, c.right, r.left, r.right); }
     else { if (r.bottom > c.top + 4 && y >= cy - 1) continue; primary = cy - y; secondary = overlapGap(c.left, c.right, r.left, r.right); }
     if (primary <= 0) continue;
+    cands.push({ el, r, primary, secondary });
+  }
+  // Up / down go to the nearest row first. Without this, a row scrolled sideways (nothing directly
+  // above) lost to a far-away button that happened to line up, like the top bar.
+  let pool = cands;
+  if (dir === 'up' || dir === 'down') {
+    const gap = (k) => Math.max(0, dir === 'down' ? k.r.top - c.bottom : c.top - k.r.bottom);
+    const nearest = Math.min(...cands.map(gap));
+    const band = Math.max(24, c.height * 0.5);
+    pool = cands.filter((k) => gap(k) <= nearest + band);
+  }
+  for (const { el, primary, secondary } of pool) {
     const score = primary + secondary * 3 + (secondary > 0 ? 5000 : 0); // prefer aligned targets
     if (score < bestScore) { bestScore = score; best = el; }
   }

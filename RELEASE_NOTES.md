@@ -1,14 +1,15 @@
-## Cartridge 0.6.1 · Android Fixes
-
-### New
-- **A second screen that matches the first.** On the AYN Thor and other dual-screen devices, the bottom screen now uses your theme, background, fonts and game logos. It has three tabs:
-  - **Game:** artwork, cover, logo, year, rating, size, genres, the description and live download progress, with Open, Download and Cancel.
-  - **Downloads:** your whole queue with live progress; cancel, retry or clear finished.
-  - **Controls:** a touch D-pad (hold to repeat), A / B / X / Y, shoulder buttons, Select / Start and shortcuts that jump the top screen to Home, Library, Consoles, Search, Downloads or Settings.
-- **Turn the second screen off** from Settings → Android → Use the second screen, or with the button on the second screen itself.
+## Cartridge 0.6.2 · The Android Hotfix
 
 ### Fixed
-- **Downloads on the second screen and in the notification stayed at 0%.** They now show live progress.
-- **Touch scrolling and tapping on Android.** Lists now scroll smoothly with momentum, and taps register properly.
-- **The search box no longer traps the D-pad on Android.** Android's keyboard used to open and grab the D-pad; the built-in on-screen keyboard is used instead (change it under Look & Feel → On-screen keyboard).
-- **Releases include the AppImage again,** next to the APK.
+- **Tapping a section in Settings now opens it.** On a touchscreen the list on the left ignored taps.
+- **Game art loads much faster,** on both screens. Images now load many at a time instead of six at once, which also fixes covers that showed on the top screen but not the bottom one. An image that fails to load gets one more try.
+- **Look & Feel changes show on the second screen right away:** theme, colours, fonts, panels, background and wallpaper.
+- **Moving up from the second row goes to the row above,** not the top bar, even when that row is scrolled sideways. The same fix applies to moving down.
+- **Long game descriptions on the second screen** show four lines, with More to read the rest.
+
+### New
+- **Consoles and collections on the second screen.** Highlight a console and the bottom screen shows its tile, how many games it has, how many are on this device and its ROM folder. Collections show their covers and counts. Both have Open on top screen.
+- **Bigger touch targets** on the second screen.
+
+### Also in this release
+- **Everything from Cartridge 0.5.6:** square game icons on the trophy pages, fine-tuned colours for highlights, buttons, progress bars and the background, shadPS4 trophy fixes, and smoother performance.

@@ -140,6 +140,15 @@ wrap('platforms:paths', async (list, orig) => {
   return res;
 });
 
+// Settings changed on one screen reach the other (theme, colours, background, wallpaper...)
+for (const ch of ['config:set', 'config:setPath', 'wallpaper:set', 'wallpaper:clear']) {
+  wrap(ch, async (_arg, orig) => {
+    const out = await orig();
+    invoke('config:get').then((c) => send('android:config', c)).catch(() => {});
+    return out;
+  });
+}
+
 // ---------------------------------------------------------------- Android-only channels
 let companion = null;
 let loaded = false;
@@ -239,6 +248,8 @@ const server = http.createServer(async (req, res) => {
 const PORT = Number(process.env.CARTRIDGE_PORT || 0);
 server.listen(PORT, '127.0.0.1', () => {
   const info = { port: server.address().port, token: TOKEN, version: state.version };
+  // Image hosts (i0-i7.localhost) may resolve to IPv6 loopback: answer there too
+  http.createServer(server.listeners('request')[0]).on('error', () => {}).listen(info.port, '::1');
   console.log('CARTRIDGE SERVER ' + JSON.stringify(info));
   if (bridge) {
     bridge.channel.send('server', info);
