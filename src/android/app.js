@@ -84,12 +84,16 @@ export function beforeMount() {
   cart.on('android:reload', () => location.reload());
   cart.on('android:fullscreen', (on) => Native.setImmersive({ on }));
   applyViewport();
+  const css = document.createElement('style');
+  // Real touch on Android: let the WebView scroll natively (smooth, with momentum) and tap cleanly
+  css.textContent = 'html, body { touch-action: pan-x pan-y; } [data-scroll] { overscroll-behavior: contain; } * { -webkit-tap-highlight-color: transparent; }';
+  document.head.appendChild(css);
   addEventListener('resize', () => { applyViewport(); cart.call('android:size', { w: innerWidth, h: innerHeight }).catch(() => {}); });
   return cart.call('android:hello', { w: innerWidth, h: innerHeight }).then((h) => { cart.version = h.version; zoom = h.zoom || 1; applyViewport(); });
 }
 
 export async function afterMount() {
-  const { store, call, go, tab, download, allRoms, cover, confirm } = await import('../store.js');
+  const { store, call, go, tab, confirm, saveConfig } = await import('../store.js');
   const nav = await import('../nav.js');
   const { dispatch } = nav;
   const { watch } = await import('vue');
@@ -108,7 +112,7 @@ export async function afterMount() {
   const note = () => {
     const active = store.downloads.filter((d) => ['queued', 'downloading'].includes(d.status));
     const cur = active.find((d) => d.status === 'downloading');
-    const pct = cur && cur.total ? Math.round((cur.done / cur.total) * 100) : 0;
+    const pct = cur && cur.total ? Math.round((cur.received / cur.total) * 100) : 0;
     return { busy: active.length > 0, title: active.length > 1 ? `Downloading ${active.length} games` : `Downloading ${cur?.name || active[0]?.name || ''}`, percent: pct };
   };
   cart.on('android:busy', (b) => { busy = b; if (opt('backgroundDownloads') || !b) Native.setBusy({ ...note(), busy: b }).catch(() => {}); });
@@ -136,39 +140,30 @@ export async function afterMount() {
     else Native.hideCompanion().catch(() => {});
   };
   Native.addListener('displays', refreshCompanion);
-  watch(() => opt('dualScreen'), refreshCompanion);
+  watch(() => store.config?.android?.dualScreen, refreshCompanion);
   refreshCompanion();
 
-  let romMap = null, mapVer = -1;
-  const romById = (id) => {
-    if (mapVer !== store.libVersion) { romMap = new Map(allRoms().map((r) => [r.id, r])); mapVer = store.libVersion; }
-    return romMap.get(id);
-  };
+  // The companion has its own copy of the library; it only needs to know what the top screen shows
   let focusedId = null, t = null;
   const publish = () => {
     clearTimeout(t);
     t = setTimeout(() => {
-      const id = store.route.name === 'game' ? store.route.params.romId : focusedId;
-      const rom = id ? romById(id) : null;
-      call('android:companion:state', {
-        route: store.route.name,
-        rom: rom && { id: rom.id, name: rom.name, platform: rom.platform_display_name, cover: cover(rom, true), size: rom.fs_size_bytes, summary: (rom.summary || '').slice(0, 600), year: rom.first_release_date || null, installed: !!store.installed[rom.id] },
-      }).catch(() => {});
-    }, 120);
+      const romId = store.route.name === 'game' ? Number(store.route.params.romId) : focusedId;
+      call('android:companion:state', { route: store.route.name, romId: romId || null }).catch(() => {});
+    }, 100);
   };
   document.addEventListener('focusin', (e) => {
-    const k = e.target?.dataset?.key || '';
-    const m = /^rom-(\d+)$/.exec(k);
-    if (m) { focusedId = +m[1]; publish(); }
+    const m = /^rom-(\d+)$/.exec(e.target?.dataset?.key || '');
+    focusedId = m ? +m[1] : store.route.name === 'game' ? focusedId : null;
+    publish();
   });
-  watch(() => [store.route.name, store.route.params.romId, store.installed, store.libVersion], publish);
+  watch(() => [store.route.name, store.route.params.romId], publish);
 
   cart.on('android:companion:cmd', (c) => {
     if (c.pad) return dispatch(c.pad);
     if (c.tab) return c.tab === 'search' ? go('search') : tab(c.tab);
-    const rom = c.romId ? romById(c.romId) : null;
-    if (c.open && rom) go('game', { romId: rom.id });
-    if (c.download && rom) download(rom);
+    if (c.open && c.romId) go('game', { romId: c.romId });
+    if (c.dualScreen === false) saveConfig({ android: { dualScreen: false } });
   });
   cart.on('android:reconnected', () => call('library:get').then(() => {}).catch(() => {}));
 }

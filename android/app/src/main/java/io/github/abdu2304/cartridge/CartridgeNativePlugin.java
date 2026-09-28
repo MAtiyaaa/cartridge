@@ -153,6 +153,10 @@ public class CartridgeNativePlugin extends Plugin {
             s.setJavaScriptEnabled(true);
             s.setDomStorageEnabled(true);
             s.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
+            // The companion page asks for a 600px wide canvas; scale it to the bottom screen
+            s.setUseWideViewPort(true);
+            s.setLoadWithOverviewMode(true);
+            s.setMediaPlaybackRequiresUserGesture(false);
             web.setWebViewClient(new WebViewClient());
             setContentView(web, new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
             web.loadUrl(url);

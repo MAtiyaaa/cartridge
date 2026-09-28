@@ -28,10 +28,7 @@
     <Toggle :model-value="opt('autoSystemFolders')" label="Find system folders anywhere" desc="If a console has its own folder somewhere else (like NDS or PS2 at the top of your SD card), downloads for it go there" @update:model-value="(v) => set({ autoSystemFolders: v })" />
 
     <div class="subh"><Icon name="mdiMonitorScreenshot" :size="22" />Dual screen</div>
-    <template v-if="displays.secondary">
-      <Toggle :model-value="opt('dualScreen')" label="Companion on the second screen" :desc="`Uses ${displays.secondary.name || 'the second screen'} for the highlighted game, download progress and touch controls`" @update:model-value="(v) => set({ dualScreen: v })" />
-    </template>
-    <p v-else class="muted small">No second screen found. On dual-screen devices like the AYN Thor, the bottom screen becomes a touch companion: the highlighted game, live downloads and a touch d-pad for the top screen.</p>
+    <Toggle :model-value="opt('dualScreen')" label="Use the second screen" :desc="displays.secondary ? `Shows the highlighted game, your downloads and touch controls on ${displays.secondary.name || 'the second screen'}. Turn off to leave it free for other apps.` : 'No second screen found right now. On dual-screen devices like the AYN Thor, the bottom screen shows the highlighted game, your downloads and touch controls.'" @update:model-value="(v) => set({ dualScreen: v })" />
 
     <div class="subh"><Icon name="mdiCellphoneCog" :size="22" />System</div>
     <Toggle :model-value="opt('backgroundDownloads')" label="Keep downloading in the background" desc="Shows a notification while games download so Android does not stop them" @update:model-value="(v) => set({ backgroundDownloads: v })" />

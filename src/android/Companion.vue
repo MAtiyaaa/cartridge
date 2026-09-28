@@ -1,150 +1,321 @@
 <template>
-  <div class="cmp">
-    <section class="game" :class="{ empty: !rom }">
-      <template v-if="rom">
-        <div class="cover">
-          <img v-if="rom.cover && !coverFailed" :src="rom.cover" alt="" @error="coverFailed = true" />
-          <Icon v-else name="mdiGamepadVariantOutline" :size="40" />
-        </div>
-        <div class="meta">
-          <div class="plat">{{ rom.platform }}</div>
-          <h1>{{ rom.name }}</h1>
-          <div class="facts">
-            <span v-if="year">{{ year }}</span>
-            <span v-if="rom.size">{{ size(rom.size) }}</span>
-            <span v-if="rom.installed" class="ok"><Icon name="mdiCheckCircle" :size="14" />Installed</span>
-          </div>
-          <p v-if="rom.summary" class="sum">{{ rom.summary }}</p>
-          <div class="acts">
-            <button class="b primary" @click="cmd({ open: true, romId: rom.id })"><Icon name="mdiOpenInNew" :size="18" />Open</button>
-            <button v-if="!rom.installed" class="b" :disabled="!!dlFor(rom.id)" @click="cmd({ download: true, romId: rom.id })">
-              <Icon :name="dlFor(rom.id) ? 'mdiProgressDownload' : 'mdiDownload'" :size="18" />{{ dlFor(rom.id) ? 'Queued' : 'Download' }}
-            </button>
-          </div>
-        </div>
-      </template>
-      <div v-else class="idle">
-        <Icon name="mdiGamepadSquare" :size="36" />
-        <div>Highlight a game on the top screen</div>
-      </div>
-    </section>
+  <div class="cmp" :class="{ ready: !!store.config }">
+    <Background v-if="store.config" />
 
-    <section v-if="current" class="dl">
-      <div class="dl-top"><Icon name="mdiDownload" :size="16" /><span class="dl-name">{{ current.name }}</span><span class="dl-pct">{{ pct }}%</span></div>
-      <div class="bar"><i :style="{ width: pct + '%' }" /></div>
-      <div v-if="queued > 0" class="dl-more">{{ queued }} more in the queue</div>
-    </section>
-
-    <section class="pad">
-      <div class="dpad">
-        <button class="k up" aria-label="Up" @pointerdown.prevent="press('up')"><Icon name="mdiChevronUp" :size="26" /></button>
-        <button class="k left" aria-label="Left" @pointerdown.prevent="press('left')"><Icon name="mdiChevronLeft" :size="26" /></button>
-        <button class="k right" aria-label="Right" @pointerdown.prevent="press('right')"><Icon name="mdiChevronRight" :size="26" /></button>
-        <button class="k down" aria-label="Down" @pointerdown.prevent="press('down')"><Icon name="mdiChevronDown" :size="26" /></button>
-      </div>
-      <nav class="ctabs">
-        <button v-for="t in tabs" :key="t.id" class="ctab" :class="{ on: route === t.id }" @click="cmd({ tab: t.id })"><Icon :name="t.icon" :size="20" /><span>{{ t.label }}</span></button>
+    <header class="cbar">
+      <div class="where"><Logo :size="22" /><span>{{ routeLabel }}</span></div>
+      <nav class="seg tabs">
+        <button v-for="t in TABS" :key="t.id" :class="{ on: tab === t.id }" @click="tab = t.id">
+          <Icon :name="t.icon" :size="17" />{{ t.label }}<b v-if="t.id === 'dl' && active.length" class="count">{{ active.length }}</b>
+        </button>
       </nav>
-      <div class="face">
-        <button class="k b-back" aria-label="Back" @pointerdown.prevent="press('back')"><Icon name="mdiArrowLeft" :size="24" /></button>
-        <button class="k b-ok" aria-label="Select" @pointerdown.prevent="press('accept')"><Icon name="mdiCheck" :size="26" /></button>
-      </div>
-    </section>
+      <button class="icon-btn" :class="{ warn: offArmed }" :aria-label="offArmed ? 'Tap again to turn off' : 'Turn off second screen'" @click="turnOff">
+        <Icon name="mdiMonitorOff" :size="19" /><span v-if="offArmed">Tap again</span>
+      </button>
+    </header>
+
+    <main class="body">
+      <Transition name="fadeup" mode="out-in">
+        <!-- Game -->
+        <section v-if="tab === 'game' && rom" :key="'g' + rom.id" class="game">
+          <div class="hero">
+            <img v-if="heroSrc" :src="heroSrc" class="hero-img" :class="{ blur: hero?.blur }" alt="" />
+            <div class="hero-fade" />
+          </div>
+          <div class="g-main">
+            <div class="cover glass">
+              <img v-if="coverSrc && !coverFailed" :src="coverSrc" alt="" @error="coverFailed = true" />
+              <Icon v-else name="mdiGamepadVariantOutline" :size="40" />
+            </div>
+            <div class="meta">
+              <div class="plat"><PIcon v-if="platform" :p="platform" :size="20" />{{ rom.platform_display_name || platform?.display_name }}</div>
+              <GameLogo :logo="store.config.ui.logos !== false ? logoOf(rom) : null" :name="rom.name" cls="g-title" :area="16000" :max-w="330" :max-h="84" />
+              <div class="chips">
+                <span v-if="yr" class="chip">{{ yr }}</span>
+                <span v-if="info.rating" class="chip gold"><Icon name="mdiStar" :size="14" />{{ rating(info.rating) }}</span>
+                <span v-if="rom.fs_size_bytes" class="chip">{{ bytes(rom.fs_size_bytes) }}</span>
+                <span v-if="installed" class="chip green"><Icon name="mdiCheckCircle" :size="14" />Installed</span>
+              </div>
+              <div v-if="info.genres" class="genres muted">{{ info.genres }}</div>
+            </div>
+          </div>
+
+          <div v-if="dl && ['queued', 'downloading'].includes(dl.status)" class="dlcard glass">
+            <div class="row between"><b>{{ dl.status === 'queued' ? 'Queued' : 'Downloading' }}</b><span class="muted num">{{ pctOf(dl) }}%<template v-if="dl.speed"> · {{ bytes(dl.speed) }}/s</template></span></div>
+            <div class="bar-p"><i :style="{ width: pctOf(dl) + '%' }" /></div>
+            <div class="muted small num">{{ bytes(dl.received) }} of {{ bytes(dl.total) }}</div>
+          </div>
+
+          <div class="acts">
+            <button class="btn primary" @click="cmd({ open: true, romId: rom.id })"><Icon name="mdiOpenInNew" />Open on top screen</button>
+            <button v-if="!installed && !dlActive" class="btn" :disabled="busyDl" @click="startDl"><Icon name="mdiDownload" />Download</button>
+            <button v-else-if="dlActive" class="btn" @click="call('dl:cancel', dl.id)"><Icon name="mdiClose" />Cancel</button>
+          </div>
+
+          <p v-if="summary" class="summary">{{ summary }}</p>
+        </section>
+
+        <section v-else-if="tab === 'game'" key="idle" class="idle">
+          <Logo :size="54" />
+          <div class="idle-t">{{ routeLabel }}</div>
+          <div class="muted">{{ libLine }}</div>
+          <div class="muted small">Highlight a game on the top screen to see it here</div>
+          <div v-if="current" class="dlcard glass wide">
+            <div class="row between"><b class="ell">{{ current.name }}</b><span class="muted num">{{ pctOf(current) }}%</span></div>
+            <div class="bar-p"><i :style="{ width: pctOf(current) + '%' }" /></div>
+          </div>
+        </section>
+
+        <!-- Downloads -->
+        <section v-else-if="tab === 'dl'" key="dl" class="dls" data-scroll>
+          <div v-if="!store.downloads.length" class="idle">
+            <Icon name="mdiTrayArrowDown" :size="44" />
+            <div class="idle-t">No downloads</div>
+            <div class="muted small">Games you download show up here with live progress</div>
+          </div>
+          <template v-else>
+            <div v-for="d in sortedDl" :key="d.id" class="dl glass">
+              <div class="thumb"><img v-if="d.cover" :src="img(d.cover)" alt="" /><Icon v-else name="mdiGamepadVariantOutline" :size="22" /></div>
+              <div class="dl-t">
+                <div class="row between"><b class="ell">{{ d.name }}</b><span class="st" :class="d.status">{{ statusText(d) }}</span></div>
+                <div class="muted small ell">{{ d.platformName }}</div>
+                <div v-if="['queued', 'downloading'].includes(d.status)" class="bar-p"><i :style="{ width: pctOf(d) + '%' }" /></div>
+              </div>
+              <button v-if="['queued', 'downloading'].includes(d.status)" class="icon-btn" aria-label="Cancel" @click="call('dl:cancel', d.id)"><Icon name="mdiClose" :size="18" /></button>
+              <button v-else-if="['error', 'cancelled'].includes(d.status)" class="icon-btn" aria-label="Retry" @click="call('dl:retry', d.id)"><Icon name="mdiRefresh" :size="18" /></button>
+            </div>
+            <button v-if="finished" class="btn small clear" @click="call('dl:clear')"><Icon name="mdiNotificationClearAll" />Clear finished</button>
+          </template>
+        </section>
+
+        <!-- Controls -->
+        <section v-else key="pad" class="pad">
+          <div class="shoulders">
+            <button class="k pill" @pointerdown.prevent="press('lt')">LT<small>Tab</small></button>
+            <button class="k pill" @pointerdown.prevent="press('lb')">LB</button>
+            <button class="k pill" @pointerdown.prevent="press('select')"><Icon name="mdiTrayArrowDown" :size="16" /></button>
+            <button class="k pill" @pointerdown.prevent="press('start')"><Icon name="mdiMenu" :size="16" /></button>
+            <button class="k pill" @pointerdown.prevent="press('rb')">RB</button>
+            <button class="k pill" @pointerdown.prevent="press('rt')">RT<small>Tab</small></button>
+          </div>
+          <div class="sticks">
+            <div class="dpad">
+              <button v-for="d in DIRS" :key="d.a" class="k" :class="d.a" :aria-label="d.a" @pointerdown.prevent="hold(d.a)" @pointerup="release" @pointerleave="release" @pointercancel="release"><Icon :name="d.icon" :size="30" /></button>
+            </div>
+            <div class="face">
+              <button class="k y" aria-label="Y" @pointerdown.prevent="press('y')">Y</button>
+              <button class="k x" aria-label="X" @pointerdown.prevent="press('x')">X</button>
+              <button class="k b" aria-label="B" @pointerdown.prevent="press('back')">B</button>
+              <button class="k a" aria-label="A" @pointerdown.prevent="press('accept')">A</button>
+            </div>
+          </div>
+          <div class="jump">
+            <button v-for="t in JUMPS" :key="t.id" class="chip-btn" :class="{ on: store.companion?.route === t.id }" @click="cmd({ tab: t.id })"><Icon :name="t.icon" :size="18" />{{ t.label }}</button>
+          </div>
+        </section>
+      </Transition>
+    </main>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue';
-import Icon from '../components/Icon.vue';
+import { computed, onMounted, ref, watch } from 'vue';
+import { store, call, loadConfig, loadLibrary, loadArt, romById, platformById, cover, backdropOf, logoOf, bytes, year, rating, img, downloadFor, download } from '../store.js';
 import { applyTheme } from '../themes.js';
+import Background from '../components/Background.vue';
+import GameLogo from '../components/GameLogo.vue';
+import PIcon from '../components/PIcon.vue';
+import Logo from '../components/Logo.vue';
+import Icon from '../components/Icon.vue';
 
 const cart = window.cart;
-const state = ref({ route: 'home', rom: null });
-const downloads = ref([]);
-const coverFailed = ref(false);
-const rom = computed(() => state.value?.rom || null);
-const route = computed(() => state.value?.route || 'home');
-const tabs = [
+const TABS = [
+  { id: 'game', label: 'Game', icon: 'mdiCardsOutline' },
+  { id: 'dl', label: 'Downloads', icon: 'mdiTrayArrowDown' },
+  { id: 'pad', label: 'Controls', icon: 'mdiGamepadVariantOutline' },
+];
+const JUMPS = [
   { id: 'home', label: 'Home', icon: 'mdiHomeVariantOutline' },
+  { id: 'library', label: 'Library', icon: 'mdiViewGridOutline' },
+  { id: 'consoles', label: 'Consoles', icon: 'mdiGamepadSquareOutline' },
   { id: 'search', label: 'Search', icon: 'mdiMagnify' },
-  { id: 'downloads', label: 'Downloads', icon: 'mdiDownloadOutline' },
+  { id: 'downloads', label: 'Downloads', icon: 'mdiTrayArrowDown' },
   { id: 'settings', label: 'Settings', icon: 'mdiCogOutline' },
 ];
+const DIRS = [
+  { a: 'up', icon: 'mdiChevronUp' }, { a: 'left', icon: 'mdiChevronLeft' },
+  { a: 'right', icon: 'mdiChevronRight' }, { a: 'down', icon: 'mdiChevronDown' },
+];
+const ROUTES = { home: 'Home', library: 'Library', consoles: 'Consoles', platform: 'Console', collection: 'Collection', game: 'Game', downloads: 'Downloads', settings: 'Settings', search: 'Search', achievements: 'Achievements', 'ra-game': 'Achievements', 'trophy-game': 'Trophies', setup: 'Setup' };
 
-const year = computed(() => {
-  const y = rom.value?.year;
-  if (!y) return '';
-  const d = new Date(typeof y === 'number' && y < 1e11 ? y * 1000 : y);
-  return isNaN(d) ? '' : d.getFullYear();
+const tab = ref('game');
+store.companion = { route: 'home', romId: null };
+const routeLabel = computed(() => ROUTES[store.companion.route] || 'Cartridge');
+
+// ---------------- highlighted game
+const rom = computed(() => (store.companion.romId ? romById(store.companion.romId) : null));
+const platform = computed(() => rom.value && platformById(rom.value.platform_id));
+const details = new Map(); // romId -> RomM detail, fetched once
+const detail = ref(null);
+let detailT = null;
+watch(() => rom.value?.id, (id) => {
+  coverFailed.value = false;
+  detail.value = details.get(id) || null;
+  clearTimeout(detailT);
+  if (!id || details.has(id)) return;
+  detailT = setTimeout(async () => {
+    try { const d = await call('api:get', { path: `/api/roms/${id}` }); details.set(id, d); if (rom.value?.id === id) detail.value = d; } catch {}
+  }, 350); // wait until the highlight settles so scrolling the top screen doesn't flood the server
 });
-const active = computed(() => downloads.value.filter((d) => ['queued', 'downloading'].includes(d.status)));
-const current = computed(() => active.value.find((d) => d.status === 'downloading') || null);
-const queued = computed(() => active.value.length - (current.value ? 1 : 0));
-const pct = computed(() => (current.value?.total ? Math.min(100, Math.round((current.value.done / current.value.total) * 100)) : 0));
-const dlFor = (id) => active.value.find((d) => d.romId === id);
+const info = computed(() => {
+  const md = detail.value?.metadatum || {};
+  return { rating: md.average_rating || rom.value?.rating, genres: (md.genres || rom.value?.genres || []).slice(0, 3).join(' · '), year: md.first_release_date || rom.value?.year };
+});
+const yr = computed(() => year(info.value.year));
+const summary = computed(() => detail.value?.summary || rom.value?.summary || '');
+const coverFailed = ref(false);
+const coverSrc = computed(() => rom.value && cover(rom.value, true));
+const hero = computed(() => rom.value && backdropOf(detail.value ? { ...rom.value, shot: detail.value.merged_screenshots?.[0] || rom.value.shot } : rom.value));
+const heroSrc = computed(() => hero.value?.src || '');
+const installed = computed(() => rom.value && !!store.installed[rom.value.id]);
 
-function size(n) {
-  const u = ['B', 'KB', 'MB', 'GB', 'TB'];
-  let i = 0;
-  while (n >= 1024 && i < u.length - 1) { n /= 1024; i++; }
-  return `${n.toFixed(i > 1 ? 1 : 0)} ${u[i]}`;
+// ---------------- downloads
+const active = computed(() => store.downloads.filter((d) => ['queued', 'downloading'].includes(d.status)));
+const current = computed(() => active.value.find((d) => d.status === 'downloading') || active.value[0] || null);
+const finished = computed(() => store.downloads.some((d) => !['queued', 'downloading'].includes(d.status)));
+const ORDER = { downloading: 0, queued: 1, error: 2, cancelled: 3, done: 4 };
+const sortedDl = computed(() => [...store.downloads].sort((a, b) => (ORDER[a.status] ?? 5) - (ORDER[b.status] ?? 5) || b.addedAt - a.addedAt));
+const dl = computed(() => rom.value && downloadFor(rom.value.id));
+const dlActive = computed(() => dl.value && ['queued', 'downloading'].includes(dl.value.status));
+const pctOf = (d) => (d?.total ? Math.min(100, Math.round((d.received / d.total) * 100)) : 0);
+function statusText(d) {
+  if (d.status === 'downloading') return pctOf(d) + '%' + (d.speed ? ' · ' + bytes(d.speed) + '/s' : '');
+  return { queued: 'Queued', done: 'Done', error: 'Failed', cancelled: 'Cancelled' }[d.status] || d.status;
 }
-const cmd = (c) => cart.call('android:companion:cmd', c).catch(() => {});
-function press(action) {
-  navigator.vibrate?.(8);
-  cmd({ pad: action });
+const busyDl = ref(false);
+async function startDl() {
+  busyDl.value = true;
+  try { await download(rom.value); } catch {}
+  busyDl.value = false;
+}
+const libLine = computed(() => {
+  const l = store.lib;
+  if (!l) return 'Loading your library…';
+  const games = Object.values(l.roms).reduce((s, r) => s + r.length, 0);
+  const systems = l.platforms.filter((p) => p.rom_count).length;
+  return `${games} ${games === 1 ? 'game' : 'games'} · ${systems} ${systems === 1 ? 'system' : 'systems'}`;
+});
+
+// ---------------- top-screen control
+const cmd = (c) => call('android:companion:cmd', c).catch(() => {});
+function press(action) { navigator.vibrate?.(8); cmd({ pad: action }); }
+let holdT = null;
+function hold(action) {
+  press(action);
+  clearTimeout(holdT);
+  const again = (ms) => { holdT = setTimeout(() => { cmd({ pad: action }); again(80); }, ms); };
+  again(320);
+}
+function release() { clearTimeout(holdT); holdT = null; }
+
+const offArmed = ref(false);
+let offT = null;
+function turnOff() {
+  if (!offArmed.value) { offArmed.value = true; clearTimeout(offT); offT = setTimeout(() => (offArmed.value = false), 2500); return; }
+  cmd({ dualScreen: false });
 }
 
+// ---------------- startup
+cart.on('android:companion:state', (s) => { if (s) store.companion = s; });
 onMounted(async () => {
-  cart.on('android:companion:state', (s) => { if (s?.rom?.id !== state.value?.rom?.id) coverFailed.value = false; state.value = s || {}; });
-  cart.on('downloads', (l) => { downloads.value = l || []; });
-  cart.on('config', (c) => c?.ui && applyTheme(c.ui));
-  try { applyTheme((await cart.call('config:get')).ui); } catch {}
-  try { state.value = (await cart.call('android:companion:get')) || state.value; } catch {}
-  try { downloads.value = await cart.call('dl:list'); } catch {}
+  await loadConfig();
+  applyTheme(store.config.ui);
+  watch(() => JSON.stringify(store.config?.ui || {}), () => applyTheme(store.config.ui));
+  // Config changes made on the top screen reach this screen through the library broadcast
+  cart.on('library', () => loadConfig().catch(() => {}));
+  try { store.companion = (await call('android:companion:get')) || store.companion; } catch {}
+  await loadLibrary().catch(() => {});
+  loadArt();
+  try { store.downloads = await call('dl:list'); } catch {}
 });
 </script>
 
+<style>
+html, body { touch-action: pan-x pan-y; }
+.fadeup-enter-active, .fadeup-leave-active { transition: opacity 0.15s, transform 0.2s var(--ease); }
+.fadeup-enter-from { opacity: 0; transform: translateY(6px); }
+.fadeup-leave-to { opacity: 0; }
+* { -webkit-tap-highlight-color: transparent; }
+</style>
 <style scoped>
-.cmp {
-  height: 100%; display: flex; flex-direction: column; gap: 12px; padding: 16px;
-  background: radial-gradient(120% 90% at 0% 0%, rgba(var(--primary-rgb), 0.18), transparent 60%), var(--bg);
-  touch-action: manipulation;
-}
-.game { flex: 1; min-height: 0; display: flex; gap: 16px; padding: 14px; border-radius: 16px; background: var(--glass); border: 1px solid var(--line); }
-.cover { flex: 0 0 auto; width: 34%; max-width: 180px; aspect-ratio: 3 / 4; border-radius: 10px; overflow: hidden; background: var(--glass-hi); display: grid; place-items: center; color: var(--dim); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45); }
+.cmp { position: fixed; inset: 0; display: flex; flex-direction: column; overflow: hidden; opacity: 0; transition: opacity 0.3s var(--ease); }
+.cmp.ready { opacity: 1; }
+.cbar { position: relative; z-index: 2; display: flex; align-items: center; gap: 10px; padding: 12px 14px 8px; }
+.where { display: flex; align-items: center; gap: 8px; font-family: var(--display); font-weight: 700; font-size: 16px; min-width: 0; flex: 1; }
+.where span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tabs { flex: none; }
+.tabs button { display: inline-flex; align-items: center; gap: 6px; }
+.count { min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: var(--primary); color: var(--on-primary); font-size: 11px; display: inline-grid; place-items: center; }
+.icon-btn { flex: none; display: inline-flex; align-items: center; gap: 6px; height: 38px; min-width: 38px; padding: 0 10px; justify-content: center; border-radius: 10px; border: 1px solid var(--line-2); background: var(--glass-2); color: var(--muted); font: 500 13px var(--body); transition: background 0.15s, color 0.15s; }
+.icon-btn:active { transform: scale(0.95); }
+.icon-btn.warn { color: #ffa39c; border-color: rgba(255, 107, 97, 0.5); background: rgba(255, 107, 97, 0.14); }
+.body { position: relative; z-index: 1; flex: 1; min-height: 0; padding: 4px 14px 14px; }
+.body > section { height: 100%; }
+
+.game { display: flex; flex-direction: column; gap: 12px; overflow-y: auto; overscroll-behavior: contain; }
+.hero { position: absolute; inset: -60px -14px auto; height: 300px; z-index: -1; pointer-events: none; }
+.hero-img { width: 100%; height: 100%; object-fit: cover; opacity: 0.55; }
+.hero-img.blur { filter: blur(24px) saturate(1.2); transform: scale(1.15); }
+.hero-fade { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(var(--tint-rgb), 0.2) 0%, var(--bg) 96%); }
+.g-main { display: flex; gap: 16px; align-items: flex-end; }
+.cover { flex: none; width: 150px; aspect-ratio: 3 / 4; border-radius: var(--card-r, 8px); overflow: hidden; display: grid; place-items: center; color: var(--dim); box-shadow: 0 16px 40px rgba(0, 0, 0, 0.55); }
 .cover img { width: 100%; height: 100%; object-fit: cover; }
-.meta { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
-.plat { font-size: 12px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: var(--primary-t); }
-h1 { margin: 0; font-family: var(--display); font-size: 22px; line-height: 1.15; font-weight: 700; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-.facts { display: flex; flex-wrap: wrap; gap: 6px; }
-.facts span { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; padding: 3px 8px; border-radius: 999px; background: var(--glass-hi); color: var(--muted); }
-.facts .ok { color: var(--green-l); }
-.sum { margin: 2px 0 0; font-size: 13px; line-height: 1.45; color: var(--muted); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
-.acts { margin-top: auto; display: flex; gap: 8px; }
-.b { display: inline-flex; align-items: center; gap: 6px; height: 40px; padding: 0 16px; border-radius: 10px; border: 1px solid var(--line-2); background: var(--glass-2); color: var(--text); font: 500 14px var(--body); transition: transform 0.12s var(--ease), background 0.12s; }
-.b:active { transform: scale(0.96); }
-.b.primary { background: var(--primary); border-color: transparent; color: var(--on-primary); }
-.b:disabled { opacity: 0.6; }
-.idle { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; color: var(--dim); font-size: 14px; }
-.dl { padding: 10px 14px; border-radius: 14px; background: var(--glass); border: 1px solid var(--line); }
-.dl-top { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
-.dl-name { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text); }
-.dl-pct { font-variant-numeric: tabular-nums; }
-.bar { margin-top: 8px; height: 6px; border-radius: 3px; background: var(--glass-hi); overflow: hidden; }
-.bar i { display: block; height: 100%; background: var(--grad); transition: width 0.4s var(--ease); }
-.dl-more { margin-top: 6px; font-size: 12px; color: var(--dim); }
-.pad { display: grid; grid-template-columns: 132px minmax(0, 1fr) 56px; align-items: center; gap: 14px; }
-.k { display: grid; place-items: center; border: 1px solid var(--line-2); background: var(--glass-2); color: var(--text); transition: transform 0.1s var(--ease), background 0.1s; }
-.k:active { transform: scale(0.92); background: rgba(var(--primary-rgb), 0.45); }
-.dpad { display: grid; grid-template: repeat(3, 44px) / repeat(3, 44px); gap: 0; }
-.dpad .k { border-radius: 10px; }
-.up { grid-area: 1 / 2; } .left { grid-area: 2 / 1; } .right { grid-area: 2 / 3; } .down { grid-area: 3 / 2; }
-.ctabs { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }
-.ctab { display: flex; align-items: center; justify-content: center; gap: 6px; height: 40px; border-radius: 10px; border: 1px solid var(--line); background: var(--glass); color: var(--muted); font: 500 13px var(--body); }
-.ctab.on { color: var(--text); border-color: rgba(var(--primary-rgb), 0.6); background: rgba(var(--primary-rgb), 0.18); }
-.face { display: flex; flex-direction: column; gap: 10px; }
-.face .k { width: 56px; height: 56px; border-radius: 50%; }
-.b-ok { background: var(--primary); border-color: transparent; color: var(--on-primary); }
-@media (max-width: 420px) { .ctabs span { display: none; } }
+.meta { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+.plat { display: flex; align-items: center; gap: 8px; font-size: 12.5px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--primary-t); }
+.meta :deep(.g-title) { font-family: var(--display); font-size: 26px; line-height: 1.1; font-weight: 700; margin: 0; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip.gold { color: var(--gold); }
+.genres { font-size: 13px; }
+.dlcard { padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; }
+.dlcard.wide { width: 100%; max-width: 420px; margin-top: 10px; }
+.bar-p { height: 6px; border-radius: 3px; background: rgba(255, 255, 255, 0.08); overflow: hidden; }
+.bar-p i { display: block; height: 100%; background: var(--grad); border-radius: 3px; transition: width 0.5s var(--ease); }
+.acts { display: flex; gap: 10px; flex-wrap: wrap; }
+.acts .btn { height: 46px; padding: 0 18px; }
+.summary { margin: 0; font-size: 14px; line-height: 1.55; color: var(--muted); }
+.row.between { justify-content: space-between; gap: 10px; }
+.ell { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.small { font-size: 12.5px; }
+.num { font-variant-numeric: tabular-nums; }
+
+.idle { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; text-align: center; color: var(--muted); }
+.idle-t { font-family: var(--display); font-size: 24px; font-weight: 700; color: var(--text); }
+
+.dls { overflow-y: auto; overscroll-behavior: contain; display: flex; flex-direction: column; gap: 8px; }
+.dl { display: flex; align-items: center; gap: 12px; padding: 10px 12px; }
+.thumb { flex: none; width: 44px; height: 58px; border-radius: 6px; overflow: hidden; background: var(--glass-hi); display: grid; place-items: center; color: var(--dim); }
+.thumb img { width: 100%; height: 100%; object-fit: cover; }
+.dl-t { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 5px; }
+.st { flex: none; font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.st.done { color: var(--green-l); }
+.st.error { color: var(--red); }
+.clear { align-self: center; margin-top: 4px; }
+
+.pad { display: flex; flex-direction: column; justify-content: space-between; gap: 12px; }
+.k { display: grid; place-items: center; border: 1px solid var(--line-2); background: var(--glass-2); color: var(--text); font: 700 18px var(--display); transition: transform 0.08s var(--ease), background 0.1s; touch-action: none; }
+.k:active { transform: scale(0.92); background: rgba(var(--primary-rgb), 0.5); }
+.shoulders { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; }
+.pill { height: 44px; border-radius: 12px; font-size: 14px; display: flex; flex-direction: column; gap: 0; line-height: 1.05; }
+.pill small { font: 500 10px var(--body); color: var(--muted); }
+.sticks { flex: 1; display: flex; align-items: center; justify-content: space-between; padding: 0 12px; }
+.dpad { display: grid; grid-template: repeat(3, 62px) / repeat(3, 62px); }
+.dpad .k { border-radius: 14px; }
+.dpad .up { grid-area: 1 / 2; } .dpad .left { grid-area: 2 / 1; } .dpad .right { grid-area: 2 / 3; } .dpad .down { grid-area: 3 / 2; }
+.face { display: grid; grid-template: repeat(3, 62px) / repeat(3, 62px); }
+.face .k { border-radius: 50%; }
+.face .y { grid-area: 1 / 2; } .face .x { grid-area: 2 / 1; } .face .b { grid-area: 2 / 3; } .face .a { grid-area: 3 / 2; background: var(--primary); border-color: transparent; color: var(--on-primary); }
+.jump { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.chip-btn { display: flex; align-items: center; justify-content: center; gap: 7px; height: 42px; border-radius: 10px; border: 1px solid var(--line); background: var(--glass-bg); color: var(--muted); font: 500 13.5px var(--body); }
+.chip-btn.on { color: var(--text); border-color: rgba(var(--primary-l-rgb), 0.5); background: rgba(var(--primary-rgb), 0.2); }
+.chip-btn:active { transform: scale(0.96); }
 </style>
