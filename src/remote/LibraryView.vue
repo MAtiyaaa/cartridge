@@ -91,7 +91,7 @@
 
 <script setup>
 import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue';
-import { store, visiblePlatforms, romsOf, allRoms, platformById, cover, bytes, year, toast } from '../store.js';
+import { store, visiblePlatforms, romsOf, allRoms, visible, platformById, cover, bytes, year, toast } from '../store.js';
 import { hub, pairedDevices, callOn, kindIcon, batteryIcon, pct } from './hub.js';
 import Icon from '../components/Icon.vue';
 
@@ -103,7 +103,7 @@ const scroller = ref(null);
 const platforms = computed(() => visiblePlatforms().filter((p) => p.rom_count > 0));
 const total = computed(() => platforms.value.reduce((n, p) => n + (p.rom_count || 0), 0));
 const list = computed(() => {
-  const base = pid.value ? romsOf(pid.value) : allRoms();
+  const base = (pid.value ? romsOf(pid.value) : allRoms()).filter(visible); // games hidden in RomM stay out, like the device's Library
   const s = q.value.trim().toLowerCase();
   const out = s ? base.filter((r) => r.name?.toLowerCase().includes(s)) : base.slice();
   return out.sort((a, b) => a.name.localeCompare(b.name));

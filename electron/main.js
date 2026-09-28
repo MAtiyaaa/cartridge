@@ -455,7 +455,20 @@ function slimRom(r) {
     year: md.first_release_date || null, genres: (md.genres || []).slice(0, 3),
     developer: (md.developers?.[0] || md.companies?.[0] || ''), rating: md.average_rating || null,
     created_at: r.created_at, has_file_on_disk: r.has_file_on_disk !== false,
+    // 0.7: series, modes, popularity and length for the automatic collections and filters
+    igdb_id: r.igdb_id || null, series: (md.franchises || []).slice(0, 2), modes: md.game_modes || [], players: md.player_count || '',
+    votes: r.igdb_metadata?.total_rating_count || 0, hours: hltbHours(r.hltb_metadata?.main_story),
+    similar: (r.igdb_metadata?.similar_games || []).slice(0, 12).map((g) => g.id),
+    user: userOf(r.rom_user),
   };
+}
+// HowLongToBeat keeps times in seconds
+const hltbHours = (v) => (v > 0 ? Math.round((v > 1000 ? v / 3600 : v) * 10) / 10 : null);
+// the signed-in user's own fields for a game in RomM (play status, backlog, playing now, hidden)
+function userOf(u) {
+  if (!u) return null;
+  const o = { status: u.status || null, backlog: !!u.backlogged, playing: !!u.now_playing, hidden: !!u.hidden, played: u.last_played ? Date.parse(u.last_played) || null : null };
+  return o.status || o.backlog || o.playing || o.hidden || o.played ? o : null;
 }
 
 function publicLibrary() {
@@ -525,12 +538,15 @@ async function syncLibrary() {
       const count = Object.values(roms).reduce((s, l) => s + l.length, 0);
       broadcast('sync', { state: 'running', label: 'Collections', done: withGames.length, total: withGames.length + 1 });
       const collections = [];
+      const me = await api('/api/users/me').then((u) => u.id).catch(() => null);
       for (const [kind, ep] of [['user', '/api/collections'], ['smart', '/api/collections/smart']]) {
         try {
           for (const c of await api(ep)) {
             const ids = [...(c.rom_ids || [])];
-            if (!ids.length) continue;
-            collections.push({ id: `${kind}-${c.id}`, name: c.name, description: c.description || '', rom_ids: ids, favorite: !!c.is_favorite, smart: kind === 'smart',
+            // your own collections show even while empty (you just made one in Cartridge)
+            const mine = kind === 'user' && (me == null || c.user_id == null || c.user_id === me);
+            if (!ids.length && !mine) continue;
+            collections.push({ id: `${kind}-${c.id}`, rid: c.id, mine, name: c.name, description: c.description || '', rom_ids: ids, favorite: !!c.is_favorite, smart: kind === 'smart',
               covers: (c.path_covers_small || []).slice(0, 4), cover: c.path_cover_large || c.url_cover || null });
           }
         } catch {}
@@ -552,6 +568,69 @@ async function syncLibrary() {
   })();
   return syncing;
 }
+
+// ---------------------------------------------------------------- collections, favourites, play status (0.7)
+// Your own collections live in RomM, so every device and RomM's web page see the same ones. RomM
+// takes collection changes as form fields, with the games as a JSON list.
+async function apiForm(pathname, { method = 'POST', query, fields = {} } = {}) {
+  const b = await resolveBase();
+  const url = new URL(b + pathname);
+  for (const [k, v] of Object.entries(query || {})) url.searchParams.set(k, v);
+  const fd = new FormData();
+  for (const [k, v] of Object.entries(fields)) if (v !== undefined && v !== null) fd.append(k, typeof v === 'string' ? v : JSON.stringify(v));
+  const headers = authHeaders();
+  const r = await fetch(url, { method, headers, body: fd, signal: AbortSignal.timeout(30000) });
+  if (r.status === 401 || r.status === 403) throw new Error("Your RomM sign-in can't change collections. Sign in with your password, or pair again so Cartridge can ask for collection access.");
+  if (!r.ok) throw new Error(`RomM error ${r.status} on ${pathname}`);
+  return r.status === 204 ? null : r.json().catch(() => null);
+}
+function saveLib() { saveJson(LIBRARY_FILE, library, false); broadcast('library', publicLibrary()); }
+function colById(rid) { return library?.collections?.find((c) => c.rid === rid && !c.smart) || null; }
+async function setColRoms(c, ids) {
+  const out = await apiForm(`/api/collections/${c.rid}`, { method: 'PUT', fields: { rom_ids: JSON.stringify([...new Set(ids)]), name: c.name } });
+  c.rom_ids = out?.rom_ids ? [...out.rom_ids] : [...new Set(ids)];
+  saveLib();
+  return c;
+}
+async function newCollection(name, favorite = false) {
+  const out = await apiForm('/api/collections', { query: favorite ? { is_favorite: 'true' } : {}, fields: { name, description: favorite ? '' : 'Made in Cartridge' } });
+  if (!out?.id) throw new Error('RomM did not create the collection');
+  const c = { id: `user-${out.id}`, rid: out.id, mine: true, name: out.name || name, description: out.description || '', rom_ids: [], favorite, smart: false, covers: [], cover: null };
+  library.collections = [...(library.collections || []), c].sort((a, b) => (b.favorite - a.favorite) || a.name.localeCompare(b.name));
+  saveLib();
+  return c;
+}
+const colHandlers = {
+  'col:create': async ({ name, romIds }) => { const c = await newCollection(String(name).trim().slice(0, 80)); return romIds?.length ? setColRoms(c, romIds) : c; },
+  'col:add': async ({ rid, romIds }) => { const c = colById(rid); if (!c) throw new Error('Collection not found'); return setColRoms(c, [...c.rom_ids, ...romIds]); },
+  'col:remove': async ({ rid, romIds }) => { const c = colById(rid); if (!c) throw new Error('Collection not found'); const drop = new Set(romIds); return setColRoms(c, c.rom_ids.filter((x) => !drop.has(x))); },
+  'col:rename': async ({ rid, name }) => { const c = colById(rid); if (!c) throw new Error('Collection not found'); c.name = String(name).trim().slice(0, 80); return setColRoms(c, c.rom_ids); },
+  'col:delete': async ({ rid }) => {
+    const b = await resolveBase();
+    const r = await fetch(`${b}/api/collections/${rid}`, { method: 'DELETE', headers: authHeaders(), signal: AbortSignal.timeout(20000) });
+    if (!r.ok && r.status !== 404) throw new Error(r.status === 401 || r.status === 403 ? "Your RomM sign-in can't change collections" : `RomM error ${r.status}`);
+    library.collections = library.collections.filter((c) => c.rid !== rid || c.smart); saveLib(); return true;
+  },
+  // Favourites are RomM's own favourite collection (made on first use)
+  'fav:set': async ({ romId, on }) => {
+    let c = library?.collections?.find((x) => x.favorite && !x.smart && x.mine);
+    if (!c) { if (!on) return false; c = await newCollection('Favourites', true); }
+    await setColRoms(c, on ? [...c.rom_ids, romId] : c.rom_ids.filter((x) => x !== romId));
+    return on;
+  },
+  // Play status, backlog, playing now and hidden: RomM's per-user fields for a game
+  'rom:user': async ({ romId, data }) => {
+    const b = await resolveBase();
+    // newer RomM reads the fields at the top level, older RomM under "data": send both
+    const r = await fetch(`${b}/api/roms/${romId}/props`, { method: 'PUT', headers: { ...authHeaders(), 'Content-Type': 'application/json' }, body: JSON.stringify({ ...data, data }), signal: AbortSignal.timeout(20000) });
+    if (r.status === 401 || r.status === 403) throw new Error("Your RomM sign-in can't change play status. Sign in with your password or pair again.");
+    if (!r.ok) throw new Error(`RomM error ${r.status}`);
+    const u = await r.json().catch(() => null);
+    const rom = library && Object.values(library.roms).flat().find((x) => x.id === romId);
+    if (rom) { rom.user = userOf(u || { ...rom.user, status: data.status ?? rom.user?.status, backlogged: data.backlogged ?? rom.user?.backlog, now_playing: data.now_playing ?? rom.user?.playing, hidden: data.hidden ?? rom.user?.hidden }); saveLib(); }
+    return rom?.user || null;
+  },
+};
 
 // Ask RomM to scan its folders for new files (needs a password login: scans use a web session)
 const SCAN_SOURCES = {
@@ -1070,10 +1149,20 @@ function enqueue(job) {
 }
 
 function pump() {
-  const running = queue.filter((q) => q.status === 'downloading').length;
+  const running = queue.filter((q) => q.status === 'downloading' || q.running).length;
   const free = Math.max(1, config.downloads.concurrency || 1) - running;
-  queue.filter((q) => q.status === 'queued').slice(0, Math.max(0, free)).forEach((it) => runJob(it));
+  queue.filter((q) => q.status === 'queued' && !q.running).slice(0, Math.max(0, free)).forEach((it) => runJob(it));
   updatePowerBlock();
+}
+
+// Speed limit (Settings → Downloads), shared by every download running at once
+let rateNext = 0; // when the bytes sent so far would have finished at the limit
+async function rateWait(n) {
+  const lim = (config.downloads.limitMBs || 0) * 1048576;
+  if (!lim) return;
+  const now = Date.now();
+  rateNext = Math.max(rateNext, now) + (n / lim) * 1000;
+  if (rateNext - now > 5) await new Promise((r) => setTimeout(r, rateNext - now));
 }
 
 async function downloadTo(url, dest, it, onBytes) {
@@ -1091,8 +1180,7 @@ async function downloadTo(url, dest, it, onBytes) {
   if (resumed) onBytes(start);
   const ws = fs.createWriteStream(part, { flags: resumed ? 'a' : 'w' });
   const body = Readable.fromWeb(r.body);
-  body.on('data', (chunk) => onBytes(chunk.length));
-  await pipeline(body, ws);
+  await pipeline(body, async function* (src) { for await (const chunk of src) { await rateWait(chunk.length); onBytes(chunk.length); yield chunk; } }, ws);
   await fsp.rename(part, dest);
 }
 
@@ -1137,9 +1225,68 @@ async function checkFiles(pairs, it) {
   throw new Error(`Damaged download: ${path.basename(bad[0][0])}${bad.length > 1 ? ` and ${bad.length - 1} more` : ''} didn't match RomM's checksum. Retry to download again.`);
 }
 
+// PS4/PS5 zips: unpacked into <console folder>/<zip name>/, which is also how installed games are
+// recognised. When everything in the zip sits in one folder, its contents go straight in (no
+// folder inside a folder). Unpacking goes to a ".partial" folder first, and the zip is deleted
+// only once every file is out. yauzl reads zip64, which games over 4 GB need.
+function openZip(file) { return new Promise((ok, bad) => require('yauzl').open(file, { lazyEntries: true, autoClose: false }, (e, z) => (e ? bad(e) : ok(z)))); }
+function zipEntries(z) {
+  return new Promise((ok, bad) => {
+    const list = [];
+    z.on('entry', (e) => { list.push(e); z.readEntry(); });
+    z.on('end', () => ok(list));
+    z.on('error', bad);
+    z.readEntry();
+  });
+}
+async function unzipGame(zipPath, target, it) {
+  const dest = path.join(target, path.basename(zipPath).replace(/\.zip$/i, ''));
+  const tmp = dest + '.partial';
+  const z = await openZip(zipPath);
+  try {
+    const entries = await zipEntries(z);
+    const names = entries.map((e) => e.fileName).filter((n) => !/^__MACOSX\//.test(n));
+    const tops = new Set(names.map((n) => n.split('/')[0]));
+    const strip = tops.size === 1 && names.every((n) => n.includes('/')) ? [...tops][0] + '/' : '';
+    const total = entries.reduce((s, e) => s + (e.uncompressedSize || 0), 0);
+    const free = await fsp.statfs(target).then((st) => st.bavail * st.bsize).catch(() => Infinity);
+    if (total > free) throw new Error(`Not enough space to unpack: it needs ${Math.ceil(total / 1e9)} GB and the drive has ${Math.floor(free / 1e9)} GB free. The zip is kept, so free up space and press Retry.`);
+    await fsp.rm(tmp, { recursive: true, force: true });
+    await fsp.mkdir(tmp, { recursive: true });
+    let done = 0, lastPct = -1;
+    for (const e of entries) {
+      if (it.abort.signal.aborted) throw new Error('aborted');
+      if (/^__MACOSX\//.test(e.fileName)) continue;
+      const rel = strip && e.fileName.startsWith(strip) ? e.fileName.slice(strip.length) : e.fileName;
+      if (!rel) continue;
+      const out = path.join(tmp, rel);
+      if (!path.resolve(out).startsWith(path.resolve(tmp) + path.sep)) throw new Error('Unsafe file path in zip');
+      if (/\/$/.test(e.fileName)) { await fsp.mkdir(out, { recursive: true }); continue; }
+      await fsp.mkdir(path.dirname(out), { recursive: true });
+      const rs = await new Promise((ok, bad) => z.openReadStream(e, (err, s) => (err ? bad(err) : ok(s))));
+      rs.on('data', (c) => {
+        done += c.length;
+        const pct = total ? Math.floor((done / total) * 100) : 0;
+        if (pct !== lastPct) { lastPct = pct; it.currentFile = `Extracting ${pct}%`; emitQueueThrottled(); }
+      });
+      await pipeline(rs, fs.createWriteStream(out), { signal: it.abort.signal });
+    }
+  } catch (e) {
+    await fsp.rm(tmp, { recursive: true, force: true }).catch(() => {});
+    throw e;
+  } finally { z.close(); }
+  await fsp.rm(dest, { recursive: true, force: true });
+  await fsp.rename(tmp, dest);
+  await fsp.rm(zipPath, { force: true });
+  it.currentFile = null;
+  log('unpacked', path.basename(zipPath));
+  return dest;
+}
+
 async function runJob(it) {
   it.status = 'downloading';
-  it.abort = new AbortController();
+  it.running = true; // until this run has fully stopped: Resume must not start a second run on the same files
+  const ac = (it.abort = new AbortController());
   it.error = null;
   it.notice = null;
   emitQueue();
@@ -1171,12 +1318,19 @@ async function runJob(it) {
       const url = files[0]
         ? `${base}/api/roms/${files[0].id}/files/content/${encodeURIComponent(fname)}`
         : `${base}/api/roms/${rom.id}/content/${encodeURIComponent(fname)}`;
-      try { await downloadTo(url, finalPath, it, onBytes); }
-      catch (e) {
-        if (!files[0] || !/not found|404/.test(e.message)) throw e;
-        await downloadTo(`${base}/api/roms/${rom.id}/content/${encodeURIComponent(fname)}`, finalPath, it, onBytes);
+      // already here and complete (a retry after unpacking failed): don't download it again
+      const have = await fsp.stat(finalPath).catch(() => null);
+      if (have && files[0]?.file_size_bytes && have.size === files[0].file_size_bytes) onBytes(have.size);
+      else {
+        try { await downloadTo(url, finalPath, it, onBytes); }
+        catch (e) {
+          if (!files[0] || !/not found|404/.test(e.message)) throw e;
+          await downloadTo(`${base}/api/roms/${rom.id}/content/${encodeURIComponent(fname)}`, finalPath, it, onBytes);
+        }
       }
       await checkFiles([[finalPath, files[0]]], it);
+      // PS4 and PS5 games come as zips and are played from a folder: unpack, then drop the zip
+      if (isFolderSystem(rom) && /\.zip$/i.test(finalPath)) finalPath = await unzipGame(finalPath, target, it);
     } else {
       // Multi-file: mirror the server folder, one file at a time (resumable)
       const folder = path.join(target, rom.fs_name);
@@ -1228,9 +1382,11 @@ async function runJob(it) {
     broadcast('installed-changed', { romId: rom.id, path: finalPath });
     try { if (steamMgr.onDownloaded(rom.id)) broadcast('steam-auto', { romId: rom.id, name: rom.name, action: 'add' }); } catch (e) { log('steam auto add', e.message); }
   } catch (e) {
-    if (it.abort.signal.aborted) { it.status = it.status === 'paused' ? 'paused' : 'cancelled'; }
+    // stopped on purpose: keep a status set since (paused, or queued again by Resume)
+    if (ac.signal.aborted) { if (!['paused', 'queued'].includes(it.status)) it.status = 'cancelled'; }
     else { it.status = 'error'; it.error = e.message; }
   }
+  it.running = false;
   it.speed = 0;
   emitQueue();
   pump();
@@ -1498,6 +1654,7 @@ const steamMgr = require('./steamManager')({
 });
 const handlers = {
   ...trophySvc.handlers,
+  ...colHandlers,
   'config:get': () => config,
   'wallpaper:set': async ({ file }) => {
     const ext = path.extname(file || '').toLowerCase();
@@ -1592,7 +1749,7 @@ const handlers = {
     const r = await fetch(`${b}/api/auth/device/init`, {
       method: 'POST', headers: { ...authHeaders({ ...config.server, auth: 'none', username: '' }), 'Content-Type': 'application/json' }, signal: AbortSignal.timeout(15000),
       body: JSON.stringify({ client_device_identifier: config.deviceId, name: `Cartridge on ${os.hostname()}`.slice(0, 255), client: 'Cartridge', platform: 'linux', client_version: app.getVersion(),
-        requested_scopes: ['me.read', 'roms.read', 'roms.user.read', 'roms.user.write', 'platforms.read', 'assets.read', 'firmware.read', 'collections.read'] }),
+        requested_scopes: ['me.read', 'roms.read', 'roms.user.read', 'roms.user.write', 'platforms.read', 'assets.read', 'firmware.read', 'collections.read', 'collections.write'] }),
     });
     if (r.status === 404 || r.status === 405) throw new Error('This RomM version has no QR pairing. Use a pairing code instead.');
     if (r.status === 429) throw new Error('RomM is limiting pairing requests. Try again in a minute.');
@@ -1661,6 +1818,20 @@ const handlers = {
     emitQueue(); pump();
   },
   'dl:retry': (id) => { const it = queue.find((q) => q.id === id); if (it) { it.status = 'queued'; it.error = null; emitQueue(); pump(); } },
+  // Queue controls: move a waiting game up or down, pause or resume everything
+  'dl:move': ({ id, dir }) => {
+    const waiting = queue.filter((q) => q.status === 'queued');
+    const i = waiting.findIndex((q) => q.id === id), other = waiting[i + dir];
+    if (i < 0 || !other) return false;
+    const a = queue.indexOf(waiting[i]), b = queue.indexOf(other);
+    [queue[a], queue[b]] = [queue[b], queue[a]];
+    emitQueue(); return true;
+  },
+  'dl:pauseAll': () => {
+    for (const it of queue) if (it.status === 'downloading' || it.status === 'queued') { const was = it.status; it.status = 'cancelled'; if (was === 'downloading') it.abort?.abort(); }
+    emitQueue(); pump();
+  },
+  'dl:resumeAll': () => { for (const it of queue) if (it.status === 'cancelled') { it.status = 'queued'; it.error = null; } emitQueue(); pump(); },
   'dl:clear': () => { for (let i = queue.length - 1; i >= 0; i--) if (!['queued', 'downloading'].includes(queue[i].status)) queue.splice(i, 1); emitQueue(); },
   'bios:download': ({ platformId, slug }) => downloadBios(platformId, slug),
   'bios:list': ({ platformId }) => api('/api/firmware', { query: { platform_id: platformId } }),
@@ -1726,6 +1897,7 @@ const handlers = {
   'steam:report': () => steamMgr.startupReport(),
   'steam:last': () => steamMgr.lastStatus(),
   'steam:forRom': ({ romId }) => steamMgr.forRom(Number(romId)),
+  'steam:played': () => { try { return steamMgr.played(); } catch { return {}; } },
   'steam:setConfig': (patch) => { config.steam = { ...(config.steam || {}), ...patch }; saveConfig(); return config.steam; },
   'steam:setPath': ({ romId, path: p }) => { if (!isDir(p) && !fs.existsSync(p)) throw new Error('That folder does not exist'); marks[romId] = { ...(marks[romId] || { at: Date.now() }), path: p }; saveMarks(); return true; },
   'app:startGame': () => { const g = startGame; startGame = null; return g; },

@@ -36,7 +36,7 @@
             </div>
           </div>
           <div v-else-if="heroCol" :key="'c' + heroCol.id" class="hero-in">
-            <div class="eyebrow">{{ heroCol.smart ? 'Smart collection' : 'Collection' }}</div>
+            <div class="eyebrow">{{ heroCol.genre ? 'Genre' : heroCol.series ? 'Series' : heroCol.auto ? 'Made by Cartridge' : heroCol.smart ? 'Smart collection' : 'Collection' }}</div>
             <h1 class="hero-title">{{ heroCol.name }}</h1>
             <div class="meta"><span>{{ heroCol.rom_ids.length }} games</span><span v-if="heroCol.description">{{ heroCol.description }}</span></div>
           </div>
@@ -64,7 +64,7 @@
               </button>
             </template>
             <template v-else-if="s.type === 'col'">
-              <CollTile v-for="c in s.items" :key="c.id" :c="c" @open="(c) => go('collection', { collectionId: c.id })" @focused="focusCol" />
+              <CollTile v-for="c in s.items" :key="c.id" :c="c" @open="openCol" @focused="focusCol" />
             </template>
             <template v-else>
               <GameCard v-for="r in s.items" :key="r.id" :rom="r" :show-platform="true" @open="openGame" @focused="focusRom" />
@@ -78,7 +78,7 @@
 
 <script setup>
 import { computed, ref, nextTick, onMounted, onBeforeUnmount, watch } from 'vue';
-import { img, cover, collections, store, go, allRoms, visiblePlatforms, romsOf, isNew, setBg, backdropOf, bytes, year, ago, rating, resync, downloadFor, download, romById, toast, logoOf, call, GRADE } from '../store.js';
+import { img, cover, collections, autoLists, seriesLists, genres, visible, store, go, allRoms, visiblePlatforms, romsOf, isNew, setBg, backdropOf, bytes, year, ago, rating, resync, downloadFor, download, romById, toast, logoOf, call, GRADE } from '../store.js';
 import { useView } from '../useView.js';
 import { ensureFocus, scrollMode } from '../nav.js';
 import Icon from '../components/Icon.vue';
@@ -160,10 +160,18 @@ function focusRa(a) {
   heroRom.value = a.romId ? romById(a.romId) : null; heroSys.value = null; heroCol.value = null;
   if (heroRom.value) setBg(backdropOf(heroRom.value));
 }
+// Last played times from Steam's shortcuts (games added to Steam by Cartridge or matched to it)
+const played = ref({});
+const lastPlay = (r) => Math.max(played.value[r.id] || 0, r.user?.played || 0); // Steam or RomM, whichever is newer
+call('steam:played').then((m) => { played.value = m || {}; }).catch(() => {});
 const shelves = computed(() => {
-  const roms = allRoms();
+  const roms = allRoms().filter(visible);
   const out = [];
   // Mirrors RomM's home: recently added, random picks, then your stuff
+  const playing = roms.filter((r) => r.user?.playing || r.user?.status === 'incomplete').sort((a, b) => lastPlay(b) - lastPlay(a));
+  if (playing.length) out.push({ id: 'playing', title: 'Continue playing', icon: 'mdiPlayCircleOutline', count: playing.length, items: playing.slice(0, 30) });
+  const lastPlayed = roms.filter(lastPlay).sort((a, b) => lastPlay(b) - lastPlay(a));
+  if (lastPlayed.length) out.push({ id: 'played', title: 'Recently played', icon: 'mdiHistory', count: '', items: lastPlayed.slice(0, 30) });
   const recent = [...roms].sort((a, b) => (b.created_at || '').localeCompare(a.created_at || '')).slice(0, 30);
   out.push({ id: 'recent', title: 'Recently added', icon: 'mdiClockOutline', count: '', items: recent });
   if (!discoverSeed || discoverSeed.v !== store.libVersion) {
@@ -177,7 +185,15 @@ const shelves = computed(() => {
   const fresh = roms.filter(isNew).sort((a, b) => (store.lib.firstSeen[b.id] || 0) - (store.lib.firstSeen[a.id] || 0));
   if (fresh.length) out.push({ id: 'new', title: 'New since last sync', icon: 'mdiNewBox', count: fresh.length, items: fresh.slice(0, 40) });
   if (raRecent.value.length) out.push({ id: 'ra', type: 'ra', title: 'Latest achievements', icon: 'mdiTrophyOutline', count: '', items: raRecent.value });
-  if (collections().length) out.push({ id: 'col', type: 'col', title: 'Collections', icon: 'mdiBookmarkMultipleOutline', count: collections().length, items: collections() });
+  const backlog = roms.filter((r) => r.user?.backlog).sort((a, b) => a.name.localeCompare(b.name));
+  if (backlog.length) out.push({ id: 'backlog', title: 'Backlog', icon: 'mdiBookClockOutline', count: backlog.length, items: backlog.slice(0, 40) });
+  const fav = collections().find((c) => c.favorite && c.mine && !c.smart);
+  const favRoms = fav ? fav.rom_ids.map((id) => romById(id)).filter((r) => r && visible(r)) : [];
+  if (favRoms.length) out.push({ id: 'fav', title: 'Favourites', icon: 'mdiHeartOutline', count: favRoms.length, items: favRoms.slice(0, 40) });
+  const cols = [...collections().filter((c) => c !== fav), ...autoLists()];
+  if (cols.length) out.push({ id: 'col', type: 'col', title: 'Collections', icon: 'mdiBookmarkMultipleOutline', count: cols.length, items: cols });
+  if (genres().length) out.push({ id: 'genres', type: 'col', title: 'Genres', icon: 'mdiTagMultipleOutline', count: genres().length, items: genres() });
+  if (seriesLists().length) out.push({ id: 'series', type: 'col', title: 'Series', icon: 'mdiBookshelf', count: seriesLists().length, items: seriesLists().slice(0, 30) });
   out.push({ id: 'sys', type: 'sys', title: 'Consoles', icon: 'mdiGamepadSquareOutline', count: visiblePlatforms().length, items: visiblePlatforms() });
   return out;
 });
@@ -194,6 +210,7 @@ function focusCol(c) {
   setBg(backdropOf(r));
 }
 function openGame(r) { go('game', { romId: r.id }); }
+function openCol(c) { if (c.genre) go('genre', { genre: c.name }); else go('collection', { collectionId: c.id }); }
 function openSys(p) { go('platform', { platformId: p.id }); }
 
 function onShelfFocus(e) {

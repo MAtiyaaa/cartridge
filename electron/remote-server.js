@@ -20,7 +20,7 @@ const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.
 // What a paired phone may call. Everything else is refused on the network listener.
 const LAN_CHANNELS = new Set([
   'config:get', 'app:info', 'library:get', 'installed:get', 'art:all', 'logo:get', 'syslogo:get', 'icon:get',
-  'platforms:paths', 'dl:list', 'dl:add', 'dl:cancel', 'dl:retry', 'dl:clear', 'api:get',
+  'platforms:paths', 'dl:list', 'dl:add', 'dl:cancel', 'dl:retry', 'dl:clear', 'dl:move', 'dl:pauseAll', 'dl:resumeAll', 'api:get',
   'remote:info', 'remote:get', 'remote:cmd', 'remote:unpair',
 ]);
 // Events a phone receives (the rest stay on the device)

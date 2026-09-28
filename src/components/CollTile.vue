@@ -2,11 +2,12 @@
   <button class="coll" data-focus :data-key="'col-' + c.id" @click="$emit('open', c)" @focus="$emit('focused', c)">
     <div class="mosaic" :class="'n' + arts.length">
       <img v-for="(a, i) in arts" :key="i" :src="a" loading="lazy" />
-      <div v-if="!arts.length" class="ph"><Icon :name="c.favorite ? 'mdiStar' : 'mdiBookmarkMultipleOutline'" :size="40" /></div>
+      <div v-if="!arts.length" class="ph"><Icon :name="c.favorite ? 'mdiStar' : c.icon || 'mdiBookmarkMultipleOutline'" :size="40" /></div>
     </div>
     <div class="cap">
       <Icon v-if="c.favorite" name="mdiStar" :size="15" style="color: var(--gold)" />
       <Icon v-else-if="c.smart" name="mdiAutoFix" :size="15" style="color: var(--primary-t)" />
+      <Icon v-else-if="c.icon" :name="c.icon" :size="15" style="color: var(--primary-t)" />
       <span class="nm">{{ c.name }}</span><span class="muted">{{ c.rom_ids.length }}</span>
     </div>
   </button>

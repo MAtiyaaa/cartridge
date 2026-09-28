@@ -17,6 +17,8 @@
               <template v-if="g.d.info?.battery"> · <Icon :name="batteryIcon(g.d.info.battery)" :size="12" />{{ g.d.info.battery.level }}%</template>
             </small>
           </div>
+          <button v-if="g.active" class="dd-clear" @click="act(g.d, 'dl:pauseAll')"><Icon name="mdiPause" :size="15" />Pause all</button>
+          <button v-else-if="g.paused" class="dd-clear" @click="act(g.d, 'dl:resumeAll')"><Icon name="mdiPlay" :size="15" />Resume all</button>
           <button v-if="g.finished" class="dd-clear" @click="clear(g.d)">Clear finished</button>
         </header>
 
@@ -29,6 +31,10 @@
               <small>{{ line(it) }}</small>
               <i v-if="it.status === 'downloading' || it.status === 'queued'" class="dd-bar"><em :style="{ width: pct(it) + '%' }" /></i>
             </div>
+            <template v-if="it.status === 'queued' && g.queued > 1">
+              <button class="dd-act small" aria-label="Move up" :disabled="it === g.firstQueued" @click="act(g.d, 'dl:move', { id: it.id, dir: -1 })"><Icon name="mdiChevronUp" :size="18" /></button>
+              <button class="dd-act small" aria-label="Move down" :disabled="it === g.lastQueued" @click="act(g.d, 'dl:move', { id: it.id, dir: 1 })"><Icon name="mdiChevronDown" :size="18" /></button>
+            </template>
             <button v-if="it.status === 'downloading' || it.status === 'queued'" class="dd-act" aria-label="Cancel" @click="act(g.d, 'dl:cancel', it.id)"><Icon name="mdiClose" :size="18" /></button>
             <button v-else-if="it.status === 'error' || it.status === 'cancelled'" class="dd-act" aria-label="Retry" @click="act(g.d, 'dl:retry', it.id)"><Icon name="mdiRefresh" :size="18" /></button>
             <span v-else-if="it.status === 'done'" class="dd-ok"><Icon name="mdiCheck" :size="18" /></span>
@@ -50,9 +56,13 @@ const groups = computed(() => pairedDevices.value
   .slice()
   .sort((a, b) => (a.id === hub.selected ? -1 : b.id === hub.selected ? 1 : a.name.localeCompare(b.name)))
   .map((d) => {
-    const items = (d.dls || []).slice().sort((a, b) => (ORDER[a.status] ?? 5) - (ORDER[b.status] ?? 5) || b.addedAt - a.addedAt);
+    // waiting games keep the device's queue order (they can be moved); finished ones newest first
+    const items = (d.dls || []).slice().sort((a, b) => (ORDER[a.status] ?? 5) - (ORDER[b.status] ?? 5) || (a.status === 'queued' ? 0 : b.addedAt - a.addedAt));
+    const waiting = items.filter((x) => x.status === 'queued');
     return {
       d, items,
+      queued: waiting.length, firstQueued: waiting[0], lastQueued: waiting[waiting.length - 1],
+      paused: items.some((x) => x.status === 'cancelled'),
       active: items.filter((x) => x.status === 'downloading' || x.status === 'queued').length,
       finished: items.some((x) => !['downloading', 'queued'].includes(x.status)),
     };
@@ -81,7 +91,7 @@ const clear = (d) => act(d, 'dl:clear');
 .dd-hb { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .dd-hb b { font: 700 16px var(--display); }
 .dd-hb small { display: inline-flex; align-items: center; gap: 3px; color: var(--muted); font-size: 12.5px; font-variant-numeric: tabular-nums; }
-.dd-clear { flex: none; height: 32px; padding: 0 12px; border-radius: 999px; background: rgba(255, 255, 255, 0.06); border: 1px solid var(--line-2); color: var(--text); font: 600 12px var(--body); }
+.dd-clear { flex: none; display: inline-flex; align-items: center; gap: 5px; height: 32px; padding: 0 12px; border-radius: 999px; background: rgba(255, 255, 255, 0.06); border: 1px solid var(--line-2); color: var(--text); font: 600 12px var(--body); }
 .dd-list { display: flex; flex-direction: column; gap: 8px; }
 .dd-none { padding: 16px; border-radius: 16px; border: 1px dashed var(--line-2); color: var(--dim); font-size: 13px; text-align: center; }
 .dd-it { display: flex; align-items: center; gap: 12px; padding: 10px 10px 10px 10px; border-radius: 16px; background: rgba(255, 255, 255, 0.05); border: 1px solid var(--line); }
@@ -96,6 +106,8 @@ const clear = (d) => act(d, 'dl:clear');
 .dd-bar em { display: block; height: 100%; background: var(--grad); transition: width 0.4s; }
 .dd-act { flex: none; width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; background: rgba(255, 255, 255, 0.07); color: var(--text); }
 .dd-act:active { transform: scale(0.94); }
+.dd-act.small { width: 32px; height: 32px; background: rgba(255, 255, 255, 0.04); }
+.dd-act:disabled { opacity: 0.3; }
 .dd-ok { flex: none; width: 38px; display: grid; place-items: center; color: var(--green-l); }
 .dd-empty { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 70px 20px; color: var(--muted); }
 .dd-empty p { margin: 0; font-size: 14px; }

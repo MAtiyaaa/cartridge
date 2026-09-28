@@ -6,9 +6,9 @@
         <div class="sys-switch">
           <Btn v-if="mode !== 'all'" b="LB" />
           <PIcon v-if="mode === 'platform'" :p="platform" :size="52" />
-          <div v-else class="hicon"><Icon :name="mode === 'all' ? 'mdiViewGridOutline' : collection?.favorite ? 'mdiStar' : 'mdiBookmarkMultipleOutline'" :size="30" /></div>
+          <div v-else class="hicon"><Icon :name="headIcon" :size="30" /></div>
           <div style="min-width: 0">
-            <div v-if="mode !== 'platform'" class="eyebrow">{{ mode === 'all' ? 'Library' : collection?.smart ? 'Smart collection' : 'Collection' }}</div>
+            <div v-if="mode !== 'platform'" class="eyebrow">{{ eyebrow }}</div>
             <h1>{{ title }}</h1>
             <div class="muted row" style="gap: 8px; font-size: 13px">
               <span>{{ source.length }} games</span><span>·</span><span style="color: var(--green-l)">{{ installedCount }} on device</span>
@@ -25,7 +25,11 @@
             <button v-if="bios.length" class="btn small" data-focus @click="getBios"><Icon name="mdiChip" :size="18" />BIOS · {{ bios.length }}</button>
           </template>
           <button v-if="mode === 'all'" class="btn small" data-focus @click="pickConsole"><Icon name="mdiGamepadSquareOutline" :size="18" />{{ consoleFilter ? platformById(consoleFilter)?.display_name : 'All consoles' }}</button>
-          <button v-if="mode === 'all' && collections().length" class="btn small" data-focus @click="pickCollection"><Icon name="mdiBookmarkMultipleOutline" :size="18" />Collections</button>
+          <button v-if="mode === 'all' && allCollections().length" class="btn small" data-focus @click="pickCollection"><Icon name="mdiBookmarkMultipleOutline" :size="18" />Collections</button>
+          <template v-if="collection?.mine && !collection.smart">
+            <button class="btn small" data-focus @click="renameCol"><Icon name="mdiPencil" :size="18" />Rename</button>
+            <button v-if="!collection.favorite" class="btn small" data-focus @click="deleteCol"><Icon name="mdiDeleteOutline" :size="18" />Delete</button>
+          </template>
         </div>
       </header>
 
@@ -34,15 +38,28 @@
         <div class="seg"><button v-for="s in sorts" :key="s.v" data-focus :class="{ on: sort === s.v }" @click="sort = s.v">{{ s.l }}</button></div>
         <button class="btn small" data-focus @click="search"><Icon name="mdiMagnify" :size="18" />{{ q ? `“${q}”` : 'Filter' }}</button>
         <button v-if="q" class="btn small" data-focus @click="q = ''"><Icon name="mdiClose" :size="18" /></button>
+        <button class="btn small" :class="{ primary: nFilters }" data-focus @click="moreFilters"><Icon name="mdiFilterVariant" :size="18" />{{ nFilters ? `Filters · ${nFilters}` : 'Filters' }}</button>
         <div style="flex: 1" />
-        <button v-if="missingCount && filter !== 'installed' && mode !== 'all'" class="btn small" data-focus @click="downloadAll"><Icon name="mdiDownloadMultiple" :size="18" />Get all {{ missingCount }}</button>
+        <template v-if="selecting">
+          <span class="muted small">{{ picked.size }} selected</span>
+          <button class="btn small" data-focus :disabled="!picked.size" @click="bulk('download')"><Icon name="mdiDownload" :size="18" />Download</button>
+          <button class="btn small" data-focus :disabled="!picked.size" @click="bulk('collection')"><Icon name="mdiBookmarkPlusOutline" :size="18" />Add to collection</button>
+          <button v-if="collection?.mine && !collection.smart" class="btn small" data-focus :disabled="!picked.size" @click="bulk('uncollect')"><Icon name="mdiBookmarkRemoveOutline" :size="18" />Remove</button>
+          <button v-if="steamOn" class="btn small" data-focus :disabled="!picked.size" @click="bulk('steam')"><Icon name="mdiSteam" :size="18" />Add to Steam</button>
+          <button class="btn small" data-focus @click="stopSelect"><Icon name="mdiCheck" :size="18" />Done</button>
+        </template>
+        <template v-else>
+          <button v-if="list.length" class="btn small" data-focus @click="surprise"><Icon name="mdiDiceMultipleOutline" :size="18" />Surprise me</button>
+          <button v-if="list.length" class="btn small" data-focus @click="selecting = true"><Icon name="mdiCheckboxMultipleMarkedOutline" :size="18" />Select</button>
+          <button v-if="missingCount && filter !== 'installed' && mode !== 'all'" class="btn small" data-focus @click="downloadAll"><Icon name="mdiDownloadMultiple" :size="18" />Get all {{ missingCount }}</button>
+        </template>
       </div>
 
       <div class="body">
         <div class="grid-pane" data-scroll ref="gridEl">
           <div v-if="!list.length" class="empty">No games match.</div>
           <div v-else class="game-grid">
-            <GameCard v-for="r in shown" :key="r.id" :rom="r" :show-platform="mode !== 'platform'" @open="open" @focused="focusRom" />
+            <GameCard v-for="r in shown" :key="r.id" :rom="r" :show-platform="mode !== 'platform'" :selected="selecting ? picked.has(r.id) : null" @open="open" @focused="focusRom" />
           </div>
           <div v-if="shown.length < list.length" ref="moreEl" class="more"><div class="spinner" /></div>
         </div>
@@ -72,7 +89,11 @@
 
 <script setup>
 import { computed, onMounted, onBeforeUnmount, ref, nextTick, watch } from 'vue';
-import { store, go, back, platformById, romsOf, allRoms, collections, collectionById, romsOfCollection, askText, pickFolder, call, download, toast, choose, confirm, bytes, year, isNew, cover, setBg, backdropOf, downloadFor, visiblePlatforms, romById } from '../store.js';
+import { store, go, back, platformById, romsOf, allRoms, collections, allCollections, collectionById, romsOfCollection, romsOfGenre, genres, visible, score, addToCollection, askText, pickFolder, call, download, toast, choose, confirm, bytes, year, isNew, cover, setBg, backdropOf, downloadFor, visiblePlatforms, romById } from '../store.js';
+import { addGames } from '../steam.js';
+import { IS_ANDROID } from '../platform.js';
+// Android: Steam only when Settings → Android → Steam & PC game apps is on
+const steamOn = computed(() => !IS_ANDROID || store.config?.android?.steamApps === true);
 import { useView } from '../useView.js';
 import { ensureFocus } from '../nav.js';
 import Icon from '../components/Icon.vue';
@@ -80,8 +101,8 @@ import Btn from '../components/Btn.vue';
 import PIcon from '../components/PIcon.vue';
 import GameCard from '../components/GameCard.vue';
 
-const props = defineProps({ platformId: Number, collectionId: String });
-const mode = computed(() => (props.platformId ? 'platform' : props.collectionId ? 'collection' : 'all'));
+const props = defineProps({ platformId: Number, collectionId: String, genre: String });
+const mode = computed(() => (props.platformId ? 'platform' : props.collectionId ? 'collection' : props.genre ? 'genre' : 'all'));
 const el = ref(null);
 const gridEl = ref(null);
 const moreEl = ref(null);
@@ -94,20 +115,71 @@ const consoleFilter = ref(null);
 const PAGE = 120;
 const limit = ref(PAGE);
 const filters = [{ v: 'all', l: 'All' }, { v: 'installed', l: 'On device' }, { v: 'missing', l: 'Not downloaded' }, { v: 'new', l: 'New' }];
-const sorts = [{ v: 'name', l: 'A–Z' }, { v: 'new', l: 'Recently added' }, { v: 'year', l: 'Release' }, { v: 'size', l: 'Size' }];
+const sorts = [{ v: 'name', l: 'A–Z' }, { v: 'new', l: 'Recently added' }, { v: 'year', l: 'Release' }, { v: 'rating', l: 'Rating' }, { v: 'size', l: 'Size' }];
 
 const platform = computed(() => platformById(props.platformId));
 const collection = computed(() => collectionById(props.collectionId));
-const title = computed(() => (mode.value === 'platform' ? platform.value?.display_name : mode.value === 'collection' ? collection.value?.name || 'Collection' : 'All games'));
+const title = computed(() => (mode.value === 'platform' ? platform.value?.display_name : mode.value === 'collection' ? collection.value?.name || 'Collection' : mode.value === 'genre' ? props.genre : 'All games'));
+const eyebrow = computed(() => {
+  if (mode.value === 'all') return 'Library';
+  if (mode.value === 'genre') return 'Genre';
+  const c = collection.value;
+  return c?.series ? 'Series' : c?.auto ? 'Made by Cartridge' : c?.smart ? 'Smart collection' : 'Collection';
+});
+const headIcon = computed(() => (mode.value === 'all' ? 'mdiViewGridOutline' : mode.value === 'genre' ? 'mdiTagOutline' : collection.value?.favorite ? 'mdiStar' : collection.value?.icon || 'mdiBookmarkMultipleOutline'));
 const source = computed(() => {
   if (mode.value === 'platform') return romsOf(props.platformId);
   if (mode.value === 'collection') return romsOfCollection(props.collectionId);
+  if (mode.value === 'genre') return romsOfGenre(props.genre);
   const all = allRoms();
   return consoleFilter.value ? all.filter((r) => r.platform_id === consoleFilter.value) : all;
 });
+// ---------- extra filters (Filters button): genre, decade, players, rating, play status, hidden
+const ext = ref({ genre: '', decade: 0, couch: false, rated: false, status: '', hidden: false });
+const nFilters = computed(() => ['genre', 'decade', 'couch', 'rated', 'status', 'hidden'].filter((k) => ext.value[k]).length);
+const decadeOf = (r) => { const y = Number(year(r.year)); return y ? Math.floor(y / 10) * 10 : 0; };
+const STATUS = [
+  { v: 'backlog', l: 'Backlog', test: (u) => u?.backlog }, { v: 'playing', l: 'Playing', test: (u) => u?.playing || u?.status === 'incomplete' },
+  { v: 'finished', l: 'Finished', test: (u) => u?.status === 'finished' }, { v: 'completed_100', l: 'Completed 100%', test: (u) => u?.status === 'completed_100' },
+  { v: 'none', l: 'No status yet', test: (u) => !u || (!u.backlog && !u.playing && !u.status) },
+];
+function extFilter(items) {
+  const e = ext.value;
+  if (!e.hidden) items = items.filter(visible);
+  if (e.genre) items = items.filter((r) => (r.genres || []).includes(e.genre));
+  if (e.decade) items = items.filter((r) => decadeOf(r) === e.decade);
+  if (e.couch) items = items.filter((r) => (r.modes || []).some((m) => /split screen|co-operative|^multiplayer$/i.test(m)));
+  if (e.rated) items = items.filter((r) => score(r) >= 80);
+  if (e.status) { const t = STATUS.find((x) => x.v === e.status).test; items = items.filter((r) => t(r.user)); }
+  return items;
+}
+async function moreFilters() {
+  const e = ext.value;
+  const v = await choose({
+    title: 'Filters',
+    options: [
+      { label: 'Genre', sub: e.genre || 'Any', value: 'genre', icon: 'mdiTagOutline' },
+      { label: 'Decade', sub: e.decade ? `${e.decade}s` : 'Any', value: 'decade', icon: 'mdiCalendarRange' },
+      { label: 'Couch multiplayer only', sub: e.couch ? 'On' : 'Off', value: 'couch', icon: 'mdiAccountGroupOutline', selected: e.couch },
+      { label: 'Rated 80 or higher', sub: e.rated ? 'On' : 'Off', value: 'rated', icon: 'mdiStarOutline', selected: e.rated },
+      { label: 'Play status', sub: STATUS.find((x) => x.v === e.status)?.l || 'Any', value: 'status', icon: 'mdiProgressCheck' },
+      { label: 'Show hidden games', sub: e.hidden ? 'On' : 'Off', value: 'hidden', icon: 'mdiEyeOffOutline', selected: e.hidden },
+      ...(nFilters.value ? [{ label: 'Clear all filters', value: 'clear', icon: 'mdiClose' }] : []),
+    ],
+  });
+  if (v == null) return;
+  if (v === 'clear') { ext.value = { genre: '', decade: 0, couch: false, rated: false, status: '', hidden: false }; return; }
+  if (['couch', 'rated', 'hidden'].includes(v)) { ext.value = { ...e, [v]: !e[v] }; return moreFilters(); }
+  let pick;
+  if (v === 'genre') pick = await choose({ title: 'Genre', options: [{ label: 'Any genre', value: '', selected: !e.genre }, ...genres().map((g) => ({ label: g.name, sub: `${g.rom_ids.length}`, value: g.name, selected: e.genre === g.name }))] });
+  if (v === 'decade') { const ds = [...new Set(source.value.map(decadeOf).filter(Boolean))].sort(); pick = await choose({ title: 'Decade', options: [{ label: 'Any decade', value: 0, selected: !e.decade }, ...ds.map((d) => ({ label: `${d}s`, value: d, selected: e.decade === d }))] }); }
+  if (v === 'status') pick = await choose({ title: 'Play status', options: [{ label: 'Any', value: '', selected: !e.status }, ...STATUS.map((x) => ({ label: x.l, value: x.v, selected: e.status === x.v }))] });
+  if (pick !== null && pick !== undefined) ext.value = { ...e, [v]: pick };
+  return moreFilters();
+}
 const installedCount = computed(() => source.value.filter((r) => store.installed[r.id]).length);
 const list = computed(() => {
-  let items = source.value;
+  let items = extFilter(source.value);
   if (filter.value === 'installed') items = items.filter((r) => store.installed[r.id]);
   if (filter.value === 'missing') items = items.filter((r) => !store.installed[r.id]);
   if (filter.value === 'new') items = items.filter(isNew);
@@ -117,11 +189,12 @@ const list = computed(() => {
   if (sort.value === 'new') items.sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
   if (sort.value === 'year') items.sort((a, b) => (a.year || 9e15) - (b.year || 9e15));
   if (sort.value === 'size') items.sort((a, b) => (b.fs_size_bytes || 0) - (a.fs_size_bytes || 0));
+  if (sort.value === 'rating') items.sort((a, b) => score(b) - score(a) || a.name.localeCompare(b.name));
   return items;
 });
 // Render in pages so a 5,000-game library stays smooth on the Deck
 const shown = computed(() => list.value.slice(0, limit.value));
-watch([filter, sort, q, consoleFilter], () => { limit.value = PAGE; gridEl.value?.scrollTo({ top: 0 }); });
+watch([filter, sort, q, consoleFilter, ext], () => { limit.value = PAGE; gridEl.value?.scrollTo({ top: 0 }); });
 let io;
 watch(moreEl, (m) => { io?.disconnect(); if (m) { io = new IntersectionObserver((e) => { if (e[0].isIntersecting) limit.value += PAGE; }, { root: gridEl.value, rootMargin: '600px' }); io.observe(m); } });
 onBeforeUnmount(() => io?.disconnect());
@@ -142,8 +215,13 @@ function neighbor(dir) {
     const i = vis.findIndex((p) => p.id === props.platformId);
     const n = vis[(i + dir + vis.length) % vis.length];
     if (n) store.route = { ...store.route, params: { platformId: n.id } };
+  } else if (mode.value === 'genre') {
+    const gs = genres();
+    const i = gs.findIndex((g) => g.name === props.genre);
+    const n = gs[(i + dir + gs.length) % gs.length];
+    if (n) store.route = { ...store.route, params: { genre: n.name } };
   } else {
-    const cs = collections();
+    const cs = allCollections();
     const i = cs.findIndex((c) => c.id === props.collectionId);
     const n = cs[(i + dir + cs.length) % cs.length];
     if (n) store.route = { ...store.route, params: { collectionId: n.id } };
@@ -162,13 +240,50 @@ useView(
       if (r && !store.installed[r.id]) download(r); else if (r) toast('Already on this device', 'info', 1800);
     },
     select: () => { filter.value = filters[(filters.findIndex((f) => f.v === filter.value) + 1) % filters.length].v; },
+    back: () => { if (selecting.value) { stopSelect(); return; } return false; },
   },
   () => [{ b: 'A', label: 'Details' }, { b: 'X', label: 'Download' }, { b: 'Y', label: 'Filter' },
-    ...(mode.value === 'all' ? [] : [{ b: 'LB', label: mode.value === 'platform' ? '/ RB  Console' : '/ RB  Collection' }]),
+    ...(mode.value === 'all' ? [] : [{ b: 'LB', label: mode.value === 'platform' ? '/ RB  Console' : mode.value === 'genre' ? '/ RB  Genre' : '/ RB  Collection' }]),
     { b: 'LT+RT', label: 'Tabs' }, ...(mode.value === 'all' ? [] : [{ b: 'B', label: 'Back' }])],
 );
 
-function open(r) { go('game', { romId: r.id }); }
+function open(r) {
+  if (selecting.value) { const s = new Set(picked.value); s.has(r.id) ? s.delete(r.id) : s.add(r.id); picked.value = s; return; }
+  go('game', { romId: r.id });
+}
+// ---------- select many (Select button): A picks games, then act on all of them at once
+const selecting = ref(false);
+const picked = ref(new Set());
+function stopSelect() { selecting.value = false; picked.value = new Set(); }
+async function bulk(what) {
+  const roms = [...picked.value].map((id) => romById(id)).filter(Boolean);
+  if (what === 'download') {
+    const todo = roms.filter((r) => !store.installed[r.id]);
+    if (!todo.length) { toast('Those are all on this device already', 'info', 2200); return; }
+    const size = todo.reduce((s, r) => s + (r.fs_size_bytes || 0), 0);
+    if (!(await confirm(`Download ${todo.length} game${todo.length === 1 ? '' : 's'}?`, `${bytes(size)} total`, 'Download'))) return;
+    for (const r of todo) await download(r, { checkSpace: todo.length === 1 });
+  }
+  if (what === 'collection' && !(await addToCollection(roms.map((r) => r.id)))) return;
+  if (what === 'uncollect') {
+    try { await call('col:remove', { rid: collection.value.rid, romIds: roms.map((r) => r.id) }); toast(`Removed ${roms.length} from ${collection.value.name}`, 'ok', 2400); } catch (e) { toast(e.message, 'error', 5000); return; }
+  }
+  if (what === 'steam' && !(await addGames(roms))) return;
+  stopSelect();
+}
+// ---------- Surprise me: a random game from what's shown
+function surprise() { const l = list.value; if (l.length) go('game', { romId: l[Math.floor(Math.random() * l.length)].id }); }
+// ---------- your own collection: rename or delete
+async function renameCol() {
+  const n = await askText({ title: 'Rename collection', value: collection.value.name });
+  if (!n || !n.trim()) return;
+  try { await call('col:rename', { rid: collection.value.rid, name: n.trim() }); } catch (e) { toast(e.message, 'error', 5000); }
+}
+async function deleteCol() {
+  const c = collection.value;
+  if (!(await confirm(`Delete ${c.name}?`, 'The collection is removed from RomM. The games themselves stay.', 'Delete', true))) return;
+  try { await call('col:delete', { rid: c.rid }); toast(`${c.name} deleted`, 'ok', 2200); back(); } catch (e) { toast(e.message, 'error', 5000); }
+}
 async function search() {
   const v = await askText({ title: `Filter ${title.value}`, value: q.value, placeholder: 'Game name' });
   if (v !== null && v !== undefined) q.value = v.trim();
@@ -178,7 +293,7 @@ async function pickConsole() {
   if (v !== null && v !== undefined) consoleFilter.value = v || null;
 }
 async function pickCollection() {
-  const v = await choose({ title: 'Collections', options: collections().map((c) => ({ label: c.name, sub: `${c.rom_ids.length}`, value: c.id, icon: c.favorite ? 'mdiStar' : c.smart ? 'mdiAutoFix' : 'mdiBookmarkOutline' })) });
+  const v = await choose({ title: 'Collections', options: allCollections().map((c) => ({ label: c.name, sub: `${c.rom_ids.length}`, value: c.id, icon: c.favorite ? 'mdiStar' : c.smart ? 'mdiAutoFix' : c.icon || 'mdiBookmarkOutline' })) });
   if (v) go('collection', { collectionId: v });
 }
 async function changeFolder() {
@@ -228,6 +343,7 @@ onMounted(async () => {
 .sys-switch h1 { font-size: 30px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .hicon { width: 52px; height: 52px; border-radius: 9px; display: grid; place-items: center; background: rgba(var(--primary-rgb), 0.2); color: var(--primary-t); flex: none; }
 .toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
+.small { font-size: 12.5px; }
 .body { display: grid; grid-template-columns: 1fr 340px; gap: 24px; min-height: 0; }
 .grid-pane { overflow-y: auto; padding: 22px 12px 60px; margin: 0 -12px; }
 .more { display: grid; place-items: center; padding: 30px; }

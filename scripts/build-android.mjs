@@ -15,7 +15,7 @@ const stageArg = args.includes('--stage') ? path.resolve(args[args.indexOf('--st
 const run = (cmd) => execSync(cmd, { cwd: ROOT, stdio: 'inherit' });
 const rootPkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
 const WEB = path.join(ROOT, 'android-dist');
-const NODE_DEPS = ['socket.io-client', 'pngjs', 'jpeg-js', 'multicast-dns'];
+const NODE_DEPS = ['socket.io-client', 'pngjs', 'jpeg-js', 'multicast-dns', 'yauzl']; // yauzl: PS4/PS5 zips unpack after download
 
 if (!stageArg && !flag('--skip-web')) { run('npx vite build --mode android'); run('npx vite build --mode remote'); }
 
