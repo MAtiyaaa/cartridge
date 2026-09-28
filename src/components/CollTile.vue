@@ -18,7 +18,7 @@
       <Icon v-if="c.favorite" name="mdiStar" :size="15" style="color: var(--gold)" />
       <Icon v-else-if="c.smart" name="mdiAutoFix" :size="15" style="color: var(--primary-t)" />
       <Icon v-else-if="c.icon" :name="c.icon" :size="15" style="color: var(--primary-t)" />
-      <span class="nm">{{ c.name }}</span><span class="muted">{{ c.rom_ids.length }}</span>
+      <span class="nm">{{ c.name }}</span><span class="muted">{{ new Set(c.rom_ids).size }}</span>
     </div>
   </button>
 </template>

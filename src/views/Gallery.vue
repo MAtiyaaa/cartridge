@@ -58,6 +58,15 @@
       <div class="body">
         <div class="grid-pane" data-scroll ref="gridEl">
           <div v-if="!list.length" class="empty">No games match.</div>
+          <!-- collections, series and genres that span consoles: one section per console -->
+          <template v-else-if="groups">
+            <section v-for="g in groups" :key="g.key" class="con-sec">
+              <div class="con-head"><PIcon :p="g.p" :size="30" /><b>{{ g.name }}</b><span class="count">{{ g.items.length }}</span></div>
+              <div class="game-grid">
+                <GameCard v-for="r in g.items" :key="r.id" :rom="r" :selected="selecting ? picked.has(r.id) : null" @open="open" @focused="focusRom" />
+              </div>
+            </section>
+          </template>
           <div v-else class="game-grid">
             <GameCard v-for="r in shown" :key="r.id" :rom="r" :show-platform="mode !== 'platform'" :selected="selecting ? picked.has(r.id) : null" @open="open" @focused="focusRom" />
           </div>
@@ -191,6 +200,17 @@ const list = computed(() => {
 });
 // Render in pages so a 5,000-game library stays smooth on the Deck
 const shown = computed(() => list.value.slice(0, limit.value));
+// sections by console, biggest first, keeping the chosen sort inside each (only when there are 2+ consoles)
+const groups = computed(() => {
+  if (!['collection', 'genre'].includes(mode.value)) return null;
+  const by = new Map();
+  for (const r of shown.value) {
+    const k = r.platform_id;
+    if (!by.has(k)) by.set(k, { key: k, name: r.platform_display_name, p: { slug: r.platform_slug, fs_slug: r.platform_fs_slug }, items: [] });
+    by.get(k).items.push(r);
+  }
+  return by.size > 1 ? [...by.values()].sort((a, b) => b.items.length - a.items.length || a.name.localeCompare(b.name)) : null;
+});
 watch([filter, sort, q, consoleFilter, ext], () => { limit.value = PAGE; gridEl.value?.scrollTo({ top: 0 }); });
 let io;
 watch(moreEl, (m) => { io?.disconnect(); if (m) { io = new IntersectionObserver((e) => { if (e[0].isIntersecting) limit.value += PAGE; }, { root: gridEl.value, rootMargin: '600px' }); io.observe(m); } });
@@ -356,4 +376,8 @@ onMounted(async () => {
 .fadeup-enter-from { opacity: 0; transform: translateY(8px); }
 .fadeup-leave-to { opacity: 0; }
 @media (max-width: 1100px) { .body { grid-template-columns: 1fr; } .detail { display: none; } }
+.con-sec { margin-bottom: 26px; }
+.con-head { display: flex; align-items: center; gap: 12px; margin: 4px 0 14px; font-family: var(--display); font-size: 18px; }
+.con-head b { font-weight: 700; }
+.con-head .count { color: var(--muted); font-size: 13px; font-family: var(--font); }
 </style>

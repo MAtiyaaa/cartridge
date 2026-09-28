@@ -63,8 +63,11 @@
                 <div class="ra-home-p" :class="'k-' + a.kind"><template v-if="a.kind === 'ra'">{{ a.pts }}</template><template v-else-if="a.grade">{{ GRADE[a.grade] }}</template><template v-else>{{ a.pts }}</template></div>
               </button>
             </template>
+            <template v-else-if="s.type === 'genre'">
+              <GenreTile v-for="c in s.items" :key="c.id" :g="c" @open="openCol" @focused="focusCol" />
+            </template>
             <template v-else-if="s.type === 'col'">
-              <CollTile v-for="c in s.items" :key="c.id" :c="c" :wide="s.id !== 'genres'" @open="openCol" @focused="focusCol" />
+              <CollTile v-for="c in s.items" :key="c.id" :c="c" wide @open="openCol" @focused="focusCol" />
             </template>
             <template v-else>
               <GameCard v-for="r in s.items" :key="r.id" :rom="r" :show-platform="true" @open="openGame" @focused="focusRom" />
@@ -87,6 +90,7 @@ import PIcon from '../components/PIcon.vue';
 import GameCard from '../components/GameCard.vue';
 import SysTile from '../components/SysTile.vue';
 import CollTile from '../components/CollTile.vue';
+import GenreTile from '../components/GenreTile.vue';
 import GameLogo from '../components/GameLogo.vue';
 import Grade from '../components/Grade.vue';
 import raLogo from '../assets/ra-logo.png';
@@ -192,7 +196,7 @@ const shelves = computed(() => {
   if (favRoms.length) out.push({ id: 'fav', title: 'Favourites', icon: 'mdiHeartOutline', count: favRoms.length, items: favRoms.slice(0, 40) });
   const cols = [...collections().filter((c) => c !== fav), ...autoLists()];
   if (cols.length) out.push({ id: 'col', type: 'col', title: 'Collections', icon: 'mdiBookmarkMultipleOutline', count: cols.length, items: cols });
-  if (genres().length) out.push({ id: 'genres', type: 'col', title: 'Genres', icon: 'mdiTagMultipleOutline', count: genres().length, items: genres() });
+  if (genres().length) out.push({ id: 'genres', type: 'genre', title: 'Genres', icon: 'mdiTagMultipleOutline', count: genres().length, items: genres() });
   if (seriesLists().length) out.push({ id: 'series', type: 'col', title: 'Series', icon: 'mdiBookshelf', count: seriesLists().length, items: seriesLists().slice(0, 30) });
   out.push({ id: 'sys', type: 'sys', title: 'Consoles', icon: 'mdiGamepadSquareOutline', count: visiblePlatforms().length, items: visiblePlatforms() });
   return out;

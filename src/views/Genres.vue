@@ -9,7 +9,7 @@
     </header>
     <div v-if="!list.length" class="empty">No genres yet. RomM adds them when it matches your games with IGDB or ScreenScraper.</div>
     <div v-else class="tile-grid">
-      <CollTile v-for="g in list" :key="g.id" :c="g" @open="(g) => go('genre', { genre: g.name })" @focused="focus" />
+      <GenreTile v-for="g in list" :key="g.id" :g="g" @open="(g) => go('genre', { genre: g.name })" @focused="focus" />
     </div>
   </div>
 </template>
@@ -19,7 +19,7 @@ import { computed, onMounted, nextTick, ref, watch } from 'vue';
 import { store, go, genres, romById, setBg, backdropOf } from '../store.js';
 import { useView } from '../useView.js';
 import { ensureFocus } from '../nav.js';
-import CollTile from '../components/CollTile.vue';
+import GenreTile from '../components/GenreTile.vue';
 
 const el = ref(null);
 const list = computed(() => (store.libVersion, genres()));
@@ -32,6 +32,6 @@ watch(() => store.libVersion, async () => { await nextTick(); ensureFocus(el.val
 <style scoped>
 .lib-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; margin: 18px 0 26px; }
 .big { font-size: 36px; font-weight: 700; margin: 6px 0 8px; }
-.tile-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 22px 18px; padding-bottom: 40px; }
-.tile-grid :deep(.coll) { width: auto; }
+.tile-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 22px 18px; padding-bottom: 40px; }
+.tile-grid :deep(.genre) { width: auto; }
 </style>
