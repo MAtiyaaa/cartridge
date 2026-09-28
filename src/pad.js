@@ -1,14 +1,17 @@
 // Which controller is in your hands, so buttons can be drawn the way they look on it.
 // Steam Input hands every app a virtual Xbox 360 pad, so the browser can't tell. The main process
 // reads the real devices from Linux (/proc/bus/input/devices) instead.
-import { ref, computed } from 'vue';
+import { ref, computed, watch } from 'vue';
 import { store, call } from './store.js';
+import { input } from './nav.js';
 
 const detected = ref('xbox');
 export const padInfo = ref(null);
 export const padKind = computed(() => {
   const pref = store.config?.ui?.buttons || 'auto';
-  return pref === 'auto' ? detected.value : pref;
+  if (pref !== 'auto') return pref;
+  if (store.config?.android?.buttonLayout === 'nintendo') return 'nintendo'; // Settings → Android → Button layout
+  return detected.value;
 });
 function fromId(id) {
   const s = String(id || '').toLowerCase();
@@ -25,8 +28,12 @@ export async function detectPad() {
   } catch {}
   const pads = navigator.getGamepads ? [...navigator.getGamepads()].filter(Boolean) : [];
   for (const p of pads) { const k = fromId(p.id); if (k) { detected.value = k; return; } }
+  // Android: the controller names come from the system (input.padName), not from /proc
+  const k = fromId(input.padName);
+  if (k) { detected.value = k; return; }
   detected.value = 'xbox';
 }
 window.addEventListener('gamepadconnected', () => setTimeout(detectPad, 400));
 window.addEventListener('gamepaddisconnected', () => setTimeout(detectPad, 400));
 setInterval(detectPad, 30000);
+watch(() => input.padName, () => detectPad());

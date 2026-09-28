@@ -1,5 +1,5 @@
 import { reactive, markRaw } from 'vue';
-import { romimg, IS_ANDROID } from './platform.js';
+import { romimg, IS_ANDROID, IS_REMOTE } from './platform.js';
 
 const rd = window.cart;
 export const call = (ch, arg) => rd.call(ch, arg ? JSON.parse(JSON.stringify(arg)) : arg);
@@ -84,6 +84,12 @@ export const confirm = (title, message, okLabel = 'Confirm', danger = false) =>
 export async function loadConfig() {
   store.config = await call('config:get');
   store.info = await call('app:info');
+  // 0.6.4 to 0.6.5 kept the button icon choice in ui.prompts; ui.buttons (abdu2304's) replaced it
+  const old = store.config?.ui?.prompts;
+  if (old && !store.config.ui.buttons && !IS_REMOTE) {
+    const buttons = { xbox: 'xbox', ps: 'playstation', nintendo: 'nintendo', steamdeck: 'steam' }[old] || 'auto';
+    saveConfig({ ui: { buttons, prompts: '' } }).catch(() => {});
+  }
 }
 export async function saveConfig(patch) {
   store.config = await call('config:set', patch);

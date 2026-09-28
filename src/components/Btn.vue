@@ -15,8 +15,9 @@ import { computed } from 'vue';
 import { padKind } from '../pad.js';
 // A controller button drawn for the controller you actually hold: Xbox, PlayStation, Nintendo
 // or Steam (Deck / Steam Controller). Every glyph is the same height, sized to sit in a line of text.
-const props = defineProps({ b: String });
-const kind = computed(() => padKind.value);
+// kind: draw for another device's controller (the second screen and phone remote pass the main screen's)
+const props = defineProps({ b: String, kind: String });
+const kind = computed(() => props.kind || padKind.value);
 const face = computed(() => ['A', 'B', 'X', 'Y'].includes(props.b));
 const PS = {
   A: 'M5.5 5.5l9 9M14.5 5.5l-9 9', // cross (bottom)
