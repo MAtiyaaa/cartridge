@@ -80,5 +80,12 @@ LT/RT switch top tabs. LB/RB only switch sections inside a page. A select, B bac
 - Helper in Game Mode polls every 100 ms and writes at once (Game Mode restarts Steam immediately).
 - Game page More: artwork options grouped under "Change metadata".
 
+## 0.7.8
+- Emulators per console: `EMUS` (standalone, args copied from EmuDeck's SRM parsers) and `CORES` in `steamManager.js`; `candidates(key)` lists what is installed. RetroArch cores go by name (`-L snes9x_libretro.so`), never a full path (Flatpak RetroArch on /var/home can't see /home paths). Xbox: `xemu-emu.sh -full-screen -dvd_path`. Xbox 360: `"Z:{ROM}"`.
+- `templateFor`: yours > picked (`config.steam.emus[key]`) > learned > first candidate. Shortcuts store `sig`; `outdated` counts ours with another sig; `steam:refresh` re-adds them.
+- `readShortcuts` splits args out of Exe (SRM `appendArgsToExecutable`) into `%command% <args>`; `Z:` paths understood.
+- Icons: `<appid>_icon.png` in grid (SGDB icon via `gameIconPng`, else cover cropped); live `SetShortcutIcon`, helper sets `icon`.
+- Library: series merged by word subset (`STOP` words), games de-duplicated; Gallery `groups` splits collection/genre by console; `GenreTile.vue`.
+
 ## Releases (full steps: HANDOFF D8)
 Only when the owner asks. Bump `version` and `build.releaseInfo.releaseName` ("Cartridge X.Y.Z") in `package.json`, put only this version's notes in `RELEASE_NOTES.md` (heading `## Cartridge X.Y.Z · Title`), add them to the top of `CHANGELOG.md`, grouped as New / Changed / Fixed with bold lead-ins. CI builds, launch-checks and publishes.

@@ -453,7 +453,7 @@ function slimRom(r) {
     developer: (md.developers?.[0] || md.companies?.[0] || ''), rating: md.average_rating || null,
     created_at: r.created_at, has_file_on_disk: r.has_file_on_disk !== false,
     // 0.7: series, modes, popularity and length for the automatic collections and filters
-    igdb_id: r.igdb_id || null, series: (md.franchises || []).slice(0, 2), modes: md.game_modes || [], players: md.player_count || '',
+    igdb_id: r.igdb_id || null, series: [...new Set(md.franchises || [])].slice(0, 3), modes: md.game_modes || [], players: md.player_count || '',
     votes: r.igdb_metadata?.total_rating_count || 0, hours: hltbHours(r.hltb_metadata?.main_story),
     similar: (r.igdb_metadata?.similar_games || []).slice(0, 12).map((g) => g.id),
     user: userOf(r.rom_user),
@@ -1643,6 +1643,8 @@ const steamMgr = require('./steamManager')({
   artFor: (id) => artOverrides[id] || null,
   fetchImage: async (src) => asPng(await fetchImage(src)),
   sgdbImage, cropTo: coverCrop,
+  // the square icon Cartridge shows for the game (SteamGridDB), as PNG bytes, or null
+  gameIconPng: async (rom) => { if (!rom) return null; const u = await gameIcon({ key: 'rom-' + rom.id, name: rom.name, year: rom.year ? new Date(rom.year > 1e11 ? rom.year : rom.year * 1000).getFullYear() : null }).catch(() => null); return u ? asPng(await fetchImage(u)) : null; },
   logoFile: async (rom) => { if (!rom) return null; await logoFor({ id: rom.id, name: rom.name, romm: rom.logo }).catch(() => null); const c = logoCache[rom.id]; return c?.file ? path.join(LOGO_DIR, c.file) : null; },
   emulationRoots: () => { const emu = readEmuDeckSettings(); return require('./trophies').emulationRoots([emu.emulationPath, config.romsRoot && path.dirname(config.romsRoot)].filter(Boolean)); },
   isGamescope,
@@ -1879,6 +1881,8 @@ const handlers = {
   'steam:undo': () => steamMgr.undo(),
   'steam:restart': () => steamMgr.restartSteam(),
   'steam:liveInfo': () => steamMgr.liveInfo(),
+  'steam:setEmu': ({ key, id }) => steamMgr.setEmu(key, id),
+  'steam:refresh': ({ key }) => steamMgr.refresh(key),
   'steam:liveEnable': () => steamMgr.liveEnable(),
   'steam:queueAdd': (items) => steamMgr.queueAdd(items),
   'steam:queueRemove': (ids) => steamMgr.queueRemove(ids),

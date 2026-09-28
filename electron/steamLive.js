@@ -71,6 +71,12 @@ module.exports = function steamLive({ log = () => {} } = {}) {
         return true;
       })()`).catch((e) => log('steam live logo position', e.message));
     }
+    // icon: Steam keeps a path to it, so it gets its own copy named after Steam's appid
+    const icon = art && path.join(art.dir, `${art.id}_icon.png`);
+    if (icon && fs.existsSync(icon)) {
+      const mine = path.join(art.dir, `${appid >>> 0}_icon.png`);
+      try { if (mine !== icon) fs.copyFileSync(icon, mine); await run(`SteamClient.Apps.SetShortcutIcon(${appid}, ${J(mine)}), true`); } catch (e) { log('steam live icon', e.message); }
+    }
     if (collections?.length) await addToCollections(appid, collections).catch((e) => log('steam live collections', e.message));
     return appid >>> 0;
   }
