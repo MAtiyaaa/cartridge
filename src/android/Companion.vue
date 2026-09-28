@@ -53,20 +53,23 @@
           </div>
         </section>
 
-        <!-- Console -->
+        <!-- Console: presented like the top screen's Home header (a screenshot from that console) -->
         <section v-else-if="tab === 'game' && selPlat" :key="'p' + selPlat.id" class="view" data-scroll>
-          <div class="banner sys" :style="sysStyle">
-            <div class="glyph"><PIcon :p="selPlat" :size="190" /></div>
-            <div class="banner-logo">
-              <img v-if="sysLogo" class="sys-logo" :src="sysLogo" :alt="selPlat.display_name" />
-              <div v-else class="b-title">{{ selPlat.display_name }}</div>
-            </div>
+          <div class="banner short">
+            <Art v-if="platArt" class="fill" :src="platArt.src" :blur="platArt.blur" />
+            <div class="shade" />
+            <div v-if="sysLogo" class="banner-logo"><img class="sys-logo" :src="sysLogo" :alt="selPlat.display_name" /></div>
           </div>
-          <div class="eyebrow">System</div>
-          <div class="h-title">{{ selPlat.display_name || selPlat.name }}</div>
+          <div class="head">
+            <div class="eyebrow">System</div>
+            <div class="h-title">{{ selPlat.display_name || selPlat.name }}</div>
+          </div>
           <div class="meta">
             <span>{{ selPlat.rom_count || 0 }} {{ selPlat.rom_count === 1 ? 'game' : 'games' }} on your server</span>
             <span v-if="platOnDevice" class="chip green">{{ platOnDevice }} on this device</span>
+          </div>
+          <div v-if="platStrip.length" class="strip">
+            <button v-for="r in platStrip" :key="r.id" class="s-cover" :aria-label="r.name" @click="cmd({ open: true, romId: r.id })"><Art class="fill" :src="r.src" /></button>
           </div>
           <div class="folder glass">
             <Icon name="mdiFolderOutline" :size="20" />
@@ -76,21 +79,22 @@
           <div class="acts"><button class="btn primary" @click="cmd({ open: true, platformId: selPlat.id })"><Icon name="mdiOpenInNew" />Open</button></div>
         </section>
 
-        <!-- Collection -->
+        <!-- Collection / Favourites: same pattern -->
         <section v-else-if="tab === 'game' && selColl" :key="'c' + selColl.id" class="view" data-scroll>
-          <div class="banner coll">
-            <Art v-if="collArts[0]" class="fill" :src="collArts[0]" blur />
+          <div class="banner short">
+            <Art v-if="collArt" class="fill" :src="collArt.src" :blur="collArt.blur" />
             <div class="shade" />
-            <div class="covers" :class="'n' + collArts.length">
-              <Art v-for="(a, i) in collArts" :key="a + i" class="c-art" :src="a" />
-              <div v-if="!collArts.length" class="c-ph"><Icon :name="selColl.favorite ? 'mdiStar' : 'mdiBookmarkMultipleOutline'" :size="48" /></div>
-            </div>
           </div>
-          <div class="eyebrow">{{ selColl.favorite ? 'Favourites' : selColl.smart ? 'Smart collection' : 'Collection' }}</div>
-          <div class="h-title">{{ selColl.name }}</div>
+          <div class="head">
+            <div class="eyebrow">{{ selColl.favorite ? 'Favourites' : selColl.smart ? 'Smart collection' : 'Collection' }}</div>
+            <div class="h-title">{{ selColl.name }}</div>
+          </div>
           <div class="meta">
             <span>{{ collCount }} {{ collCount === 1 ? 'game' : 'games' }}</span>
             <span v-if="collOnDevice" class="chip green">{{ collOnDevice }} on this device</span>
+          </div>
+          <div v-if="collStrip.length" class="strip">
+            <button v-for="r in collStrip" :key="r.id" class="s-cover" :aria-label="r.name" @click="cmd({ open: true, romId: r.id })"><Art class="fill" :src="r.src" /></button>
           </div>
           <p v-if="selColl.description" class="summary">{{ selColl.description }}</p>
           <div class="acts"><button class="btn primary" @click="cmd({ open: true, collectionId: selColl.id })"><Icon name="mdiOpenInNew" />Open</button></div>
@@ -170,7 +174,6 @@ import GameLogo from '../components/GameLogo.vue';
 import PIcon from '../components/PIcon.vue';
 import Logo from '../components/Logo.vue';
 import Art from './Art.vue';
-import { consoleColors } from '../consoleColors.js';
 import Icon from '../components/Icon.vue';
 
 const cart = window.cart;
@@ -234,21 +237,25 @@ watch(selPlat, (p) => {
   if (sysLogos.has(p.slug)) { sysLogo.value = sysLogos.get(p.slug); return; }
   call('syslogo:get', { slug: p.slug, fs_slug: p.fs_slug }).then((u) => { sysLogos.set(p.slug, u || ''); if (selPlat.value?.slug === p.slug) sysLogo.value = u || ''; }).catch(() => {});
 }, { immediate: true });
-const sysStyle = computed(() => {
-  const p = selPlat.value;
-  const c = p && consoleColors(p);
-  if (!c) return { background: 'linear-gradient(145deg, rgba(var(--primary-rgb), .55), rgba(14,16,24,.94) 70%)' };
-  const [a, b] = c;
-  return { background: `radial-gradient(120% 90% at 0% 0%, ${a}e6 0%, ${a}8c 38%, transparent 70%), linear-gradient(150deg, ${a}66 0%, ${b}59 60%, rgba(12,13,20,.92) 100%), rgba(14,16,24,.9)` };
-});
-// Collection banner: up to four covers, like its tile on the top screen
-const collArts = computed(() => {
-  const c = selColl.value;
-  if (!c) return [];
-  if (c.covers?.length) return c.covers.slice(0, 4).map(img);
-  const fromRoms = romsOfCollection(c.id).slice(0, 4).map((r) => cover(r, true)).filter(Boolean);
-  return fromRoms.length ? fromRoms : c.cover ? [img(c.cover)] : [];
-});
+// Art for a console or collection, like the top screen's Home header: a screenshot from one of its
+// games, else a blurred cover, else nothing (the theme background shows through)
+function groupArt(roms) {
+  const withShot = roms.find((r) => r.shot);
+  if (withShot) return { src: img(withShot.shot), blur: false };
+  const first = roms.find((r) => cover(r, true));
+  return first ? { src: cover(first, true), blur: true } : null;
+}
+// A few covers to tap, games on this device first
+function strip(roms) {
+  return [...roms].sort((a, b) => (store.installed[b.id] ? 1 : 0) - (store.installed[a.id] ? 1 : 0)).slice(0, 6)
+    .map((r) => ({ id: r.id, name: r.name, src: cover(r) })).filter((r) => r.src);
+}
+const platRoms = computed(() => (selPlat.value ? romsOf(selPlat.value.id) : []));
+const platArt = computed(() => groupArt(platRoms.value));
+const platStrip = computed(() => strip(platRoms.value));
+const collRoms = computed(() => (selColl.value ? romsOfCollection(selColl.value.id) : []));
+const collArt = computed(() => groupArt(collRoms.value));
+const collStrip = computed(() => strip(collRoms.value));
 const collOnDevice = computed(() => (selColl.value ? romsOfCollection(selColl.value.id).filter((r) => store.installed[r.id]).length : 0));
 const coverSrc = computed(() => rom.value && cover(rom.value, true));
 const hero = computed(() => rom.value && backdropOf(detail.value ? { ...rom.value, shot: detail.value.merged_screenshots?.[0] || rom.value.shot } : rom.value));
@@ -345,6 +352,7 @@ html, body { touch-action: pan-x pan-y; }
 
 /* banner: the Game page's */
 .banner { position: relative; flex: none; height: 214px; border-radius: 16px; overflow: hidden; background: #141824; box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.07); }
+.banner.short { height: 164px; }
 .fill { position: absolute; inset: 0; }
 .shade { position: absolute; inset: 0; background: linear-gradient(90deg, rgba(8, 8, 16, 0.78) 0%, rgba(8, 8, 16, 0.35) 45%, transparent 75%), linear-gradient(0deg, rgba(8, 8, 16, 0.72), transparent 55%); }
 .banner-logo { position: absolute; left: 22px; bottom: 20px; right: 150px; display: flex; align-items: flex-end; }
@@ -352,17 +360,12 @@ html, body { touch-action: pan-x pan-y; }
 .cover { position: absolute; right: 18px; bottom: 18px; width: 112px; height: 150px; border-radius: var(--card-r, 8px); background: #1b2030; box-shadow: 0 14px 34px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.12); }
 .cover-ph, .thumb-ph { position: absolute; inset: 0; display: grid; place-items: center; color: var(--dim); }
 
-.sys .glyph { position: absolute; right: -24px; bottom: -34px; opacity: 0.16; color: #fff; }
-.sys .banner-logo { right: 22px; top: 0; bottom: 0; align-items: center; }
-.sys-logo { max-width: 62%; max-height: 70px; object-fit: contain; filter: drop-shadow(0 6px 20px rgba(0, 0, 0, 0.4)); }
-.coll .covers { position: absolute; inset: 22px; display: grid; gap: 10px; }
-.covers.n1 { grid-template-columns: 124px; justify-content: center; }
-.covers.n2 { grid-template-columns: repeat(2, 124px); justify-content: center; }
-.covers.n3 { grid-template-columns: repeat(3, 124px); justify-content: center; }
-.covers.n4 { grid-template-columns: repeat(4, 1fr); }
-.c-art { border-radius: var(--card-r, 8px); background: #1b2030; box-shadow: 0 12px 30px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.1); }
-.c-ph { grid-column: 1 / -1; display: grid; place-items: center; color: var(--gold); }
-.h-title { font-family: var(--display); font-size: 28px; font-weight: 800; line-height: 1.05; letter-spacing: -0.02em; margin-top: -6px; }
+.sys-logo { max-height: 44px; max-width: 240px; object-fit: contain; object-position: left bottom; filter: drop-shadow(0 3px 10px rgba(0, 0, 0, 0.55)); }
+.head { display: flex; flex-direction: column; gap: 4px; }
+.h-title { font-family: var(--display); font-size: 28px; font-weight: 800; line-height: 1.05; letter-spacing: -0.02em; text-shadow: 0 4px 20px rgba(0, 0, 0, 0.4); }
+.strip { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; }
+.s-cover { position: relative; aspect-ratio: 3 / 4; border-radius: var(--card-r, 8px); overflow: hidden; background: #1b2030; box-shadow: 0 10px 24px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.08); transition: transform 0.12s var(--ease); }
+.s-cover:active { transform: scale(0.95); }
 
 /* the Home hero's meta line */
 .meta { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 14px; color: #cfd4de; font-size: 14px; }
