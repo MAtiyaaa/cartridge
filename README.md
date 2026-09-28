@@ -164,6 +164,16 @@ Every release also ships **`Cartridge-android.apk`** on the [Releases page](http
 
 The Android-only settings live in **Settings → Android** and only exist in the APK; the desktop app is unchanged.
 
+### Phone remote
+
+Use any phone on your Wi-Fi as a remote and second screen for every Cartridge in the house (Android and Deck/desktop). No app to install.
+
+1. On the device, open **Settings → Phone remote** (or **Quick Menu → Connect a phone**) and turn it on.
+2. Scan the QR code with your phone's camera, or open the address shown there (like `http://192.168.1.20:47280`) in the phone's browser.
+3. The phone lists every Cartridge on the network. Tap one, type the 6-digit code shown on its screen, and the phone is remembered. The QR code skips the code.
+
+From the phone you can see what's on screen, use touch controls, browse the library, choose which device a game downloads to (with its folder and free space), follow every device's downloads, and see battery and storage per device. Phones can't change settings or delete anything, and each device can remove paired phones at any time. The phone and the device need to be on the same network.
+
 <br>
 
 ## ✦ Connecting to RomM

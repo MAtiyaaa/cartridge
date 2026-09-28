@@ -15,9 +15,9 @@ const stageArg = args.includes('--stage') ? path.resolve(args[args.indexOf('--st
 const run = (cmd) => execSync(cmd, { cwd: ROOT, stdio: 'inherit' });
 const rootPkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
 const WEB = path.join(ROOT, 'android-dist');
-const NODE_DEPS = ['socket.io-client', 'pngjs', 'jpeg-js'];
+const NODE_DEPS = ['socket.io-client', 'pngjs', 'jpeg-js', 'multicast-dns'];
 
-if (!stageArg && !flag('--skip-web')) run('npx vite build --mode android');
+if (!stageArg && !flag('--skip-web')) { run('npx vite build --mode android'); run('npx vite build --mode remote'); }
 
 const out = stageArg || path.join(WEB, 'nodejs');
 fs.rmSync(out, { recursive: true, force: true });
@@ -60,6 +60,8 @@ if (stageArg) { console.log('Staged Android backend in ' + out); process.exit(0)
 
 // The UI again inside the Node project, served to the second-screen WebView
 for (const f of fs.readdirSync(WEB)) if (f !== 'nodejs') fs.cpSync(path.join(WEB, f), path.join(out, 'ui', f), { recursive: true });
+// The phone remote page (same build as desktop's)
+if (fs.existsSync(path.join(ROOT, 'remote-dist'))) fs.cpSync(path.join(ROOT, 'remote-dist'), path.join(out, 'ui', 'remote'), { recursive: true });
 
 if (!flag('--no-sync')) run('npx cap sync android');
 console.log('Android web + backend ready (version ' + rootPkg.version + ')');

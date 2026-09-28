@@ -101,9 +101,8 @@ export async function afterMount() {
   const nav = await import('../nav.js');
   const { dispatch } = nav;
   const { watch } = await import('vue');
-  const prompts = await import('../prompts.js');
   // Settings changed on the second screen show up here right away
-  cart.on('android:config', (c) => { if (c && JSON.stringify(c) !== JSON.stringify(store.config)) store.config = c; });
+  cart.on('remote:config', (c) => { if (c && JSON.stringify(c) !== JSON.stringify(store.config)) store.config = c; });
   const readSettings = () => { settings = store.config?.android || {}; };
   readSettings();
   watch(() => store.config?.android, readSettings, { deep: true });
@@ -153,6 +152,7 @@ export async function afterMount() {
   // Face button layout for the second screen's touch controls: Nintendo (A on the right) or
   // Xbox (A at the bottom). Auto goes by the controller's name; Settings → Android can override.
   let layout = 'xbox';
+  let publish = () => {};
   const NINTENDO = /nintendo|switch|pro controller|joy-?con|\bns\b/i;
   const readLayout = async () => {
     const pick = store.config?.android?.buttonLayout || 'auto';
@@ -171,42 +171,22 @@ export async function afterMount() {
   Native.addListener('controllers', readLayout);
   readLayout();
 
-  // The companion has its own copy of the library; it only needs to know what the top screen shows
-  let focused = {}, t = null;
-  const publish = () => {
-    clearTimeout(t);
-    t = setTimeout(() => {
-      const r = store.route, p = r.params || {};
-      const st = { route: r.name, romId: null, platformId: null, collectionId: null };
-      if (r.name === 'game') st.romId = Number(p.romId);
-      else if (focused.romId) st.romId = focused.romId;
-      else if (focused.platformId) st.platformId = focused.platformId;
-      else if (focused.collectionId) st.collectionId = focused.collectionId;
-      else if (r.name === 'platform') st.platformId = Number(p.platformId);
-      else if (r.name === 'collection') st.collectionId = p.collectionId;
-      st.layout = layout;
-      // Icons for the second screen's touch buttons: the controller's, never keyboard keys
-      const fam = prompts.promptFamily.value;
-      st.family = layout === 'nintendo' ? 'nintendo' : fam === 'keyboard' ? prompts.familyOf(nav.input.padName) : fam;
-      call('android:companion:state', st).catch(() => {});
-    }, 100);
-  };
-  document.addEventListener('focusin', (e) => {
-    const m = /^(rom|sys|col)-(.+)$/.exec(e.target?.dataset?.key || '');
-    if (!m) return; // buttons and tabs keep showing the last highlighted item
-    focused = m[1] === 'rom' ? { romId: +m[2] } : m[1] === 'sys' ? { platformId: +m[2] } : { collectionId: isNaN(+m[2]) ? m[2] : +m[2] };
-    publish();
+  // What the top screen shows, for the second screen and phones (src/remote/publish.js)
+  const remotePub = await import('../remote/publish.js');
+  publish = remotePub.publish;
+  remotePub.startPublisher({
+    extra: () => ({ layout, family: layout === 'nintendo' ? 'nintendo' : undefined }),
+    onCmd: (c) => { if (c.dualScreen === false) saveConfig({ android: { dualScreen: false } }); },
   });
-  watch(() => [store.route.name, JSON.stringify(store.route.params)], () => { focused = {}; publish(); });
-  watch(() => prompts.promptFamily.value, publish);
 
-  cart.on('android:companion:cmd', (c) => {
-    if (c.pad) return dispatch(c.pad);
-    if (c.tab) return c.tab === 'search' ? go('search') : tab(c.tab);
-    if (c.open && c.romId) go('game', { romId: c.romId });
-    if (c.open && c.platformId) go('platform', { platformId: c.platformId });
-    if (c.open && c.collectionId) go('collection', { collectionId: c.collectionId });
-    if (c.dualScreen === false) saveConfig({ android: { dualScreen: false } });
-  });
+  // Phone remote: Android's Node can't always see the Wi-Fi address, and discovery needs a multicast lock
+  const remoteNet = async () => {
+    try { const { address } = await Native.wifiAddress(); if (address) call('remote:address', address).catch(() => {}); } catch {}
+    try { const s = await call('remote:settings'); Native.setDiscovery({ on: !!s.enabled }).catch(() => {}); } catch {}
+  };
+  cart.on('remote:settings', (s) => { Native.setDiscovery({ on: !!s?.enabled }).catch(() => {}); remoteNet(); });
+  App.addListener('resume', remoteNet);
+  remoteNet();
+
   cart.on('android:reconnected', () => call('library:get').then(() => {}).catch(() => {}));
 }

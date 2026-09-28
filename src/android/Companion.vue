@@ -1,6 +1,6 @@
 <template>
-  <div class="cmp" :class="{ ready: !!store.config }">
-    <Background v-if="store.config" still />
+  <div class="cmp" :class="{ ready: !!store.config, embedded }">
+    <Background v-if="store.config && !embedded" still />
 
     <main class="body">
       <Transition name="cfade" mode="out-in">
@@ -88,7 +88,7 @@
           <div class="halo"><Logo :size="58" /></div>
           <div class="c-title">{{ routeLabel }}</div>
           <div class="c-sub">{{ libLine }}</div>
-          <div class="c-hint">Highlight a game or console on the top screen</div>
+          <div class="c-hint">Highlight a game or console on the {{ embedded ? "device" : "top screen" }}</div>
           <div v-if="current" class="mini">
             <Art class="mini-cover" :src="current.cover ? img(current.cover) : ''" />
             <div class="mini-t">
@@ -156,15 +156,15 @@
             </div>
           </div>
           <div class="jump">
-            <button v-for="t in JUMPS" :key="t.id" class="jbtn" :class="{ on: store.companion?.route === t.id }" @click="cmd({ tab: t.id })"><Icon :name="t.icon" :size="18" />{{ t.label }}</button>
+            <button v-for="t in (embedded ? JUMPS.filter((j) => j.id !== 'settings') : JUMPS)" :key="t.id" class="jbtn" :class="{ on: store.companion?.route === t.id }" @click="cmd({ tab: t.id })"><Icon :name="t.icon" :size="18" />{{ t.label }}</button>
           </div>
         </section>
       </Transition>
     </main>
 
     <!-- Floating dock: the only chrome on this screen -->
-    <nav class="dock">
-      <button v-for="t in TABS" :key="t.id" class="d-tab" :class="{ on: tab === t.id }" @click="tab = t.id">
+    <nav v-if="!embedded" class="dock">
+      <button v-for="t in TABS" :key="t.id" class="d-tab" :class="{ on: tab === t.id }" @click="tabSel = t.id">
         <Icon :name="t.icon" :size="19" /><span>{{ t.label }}</span>
         <b v-if="t.id === 'dl' && active.length" class="badge">{{ active.length }}</b>
       </button>
@@ -173,7 +173,7 @@
     </nav>
 
     <Transition name="cfade">
-      <CompanionSettings v-if="showSettings" @close="showSettings = false" @off="turnOff" />
+      <CompanionSettings v-if="showSettings && !embedded" @close="showSettings = false" @off="turnOff" />
     </Transition>
   </div>
 </template>
@@ -216,7 +216,10 @@ const DIRS = [
 ];
 const ROUTES = { home: 'Home', library: 'Library', consoles: 'Consoles', platform: 'Console', collection: 'Collection', game: 'Game', downloads: 'Downloads', settings: 'Settings', search: 'Search', achievements: 'Achievements', 'ra-game': 'Achievements', 'trophy-game': 'Trophies', setup: 'Setup' };
 
-const tab = ref('game');
+// embedded: inside the phone remote, which has its own navigation and picks the view
+const props = defineProps({ embedded: Boolean, view: { type: String, default: 'game' } });
+const tabSel = ref('game');
+const tab = computed(() => (props.embedded ? props.view : tabSel.value));
 const showSettings = ref(false);
 store.companion = { route: 'home', romId: null, platformId: null, collectionId: null };
 const routeLabel = computed(() => ROUTES[store.companion.route] || 'Cartridge');
@@ -312,7 +315,7 @@ const libLine = computed(() => {
 });
 
 // ---------------- top-screen control
-const cmd = (c) => call('android:companion:cmd', c).catch(() => {});
+const cmd = (c) => call('remote:cmd', c).catch(() => {});
 function press(action) { navigator.vibrate?.(8); cmd({ pad: action }); }
 let holdT = null;
 function hold(action) {
@@ -326,14 +329,14 @@ function release() { clearTimeout(holdT); holdT = null; }
 function turnOff() { showSettings.value = false; cmd({ dualScreen: false }); }
 
 // ---------------- startup
-cart.on('android:companion:state', (s) => { if (s) store.companion = s; });
+cart.on('remote:state', (s) => { if (s) store.companion = s; });
 // Look & Feel changed on the top screen: theme, colours, fonts, background and wallpaper follow here
-cart.on('android:config', (c) => { if (c) store.config = c; });
+cart.on('remote:config', (c) => { if (c) store.config = c; });
 onMounted(async () => {
   await loadConfig();
   applyTheme(store.config.ui);
   watch(() => JSON.stringify(store.config?.ui || {}), () => applyTheme(store.config.ui));
-  try { store.companion = (await call('android:companion:get')) || store.companion; } catch {}
+  try { store.companion = (await call('remote:get')) || store.companion; } catch {}
   await loadLibrary().catch(() => {});
   loadArt();
   try { store.downloads = await call('dl:list'); } catch {}
@@ -350,6 +353,7 @@ html, body { touch-action: pan-x pan-y; }
 <style scoped>
 .cmp { position: fixed; inset: 0; overflow: hidden; opacity: 0; transition: opacity 0.3s var(--ease); }
 .cmp.ready { opacity: 1; }
+.cmp.embedded { position: absolute; }
 .body { position: absolute; inset: 0; z-index: 1; }
 .view { position: absolute; inset: 0; overflow-y: auto; overscroll-behavior: contain; padding: 0 18px 92px; display: flex; flex-direction: column; gap: 14px; }
 .row { display: flex; align-items: center; gap: 6px; }
@@ -465,4 +469,13 @@ html, body { touch-action: pan-x pan-y; }
 .d-sep { width: 1px; height: 22px; background: var(--line-2); margin: 0 2px; }
 .d-gear { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; color: var(--dim); transition: color 0.15s; }
 .d-gear:active { color: var(--text); transform: scale(0.94); }
+/* narrow phones */
+@media (max-width: 440px) {
+  .dpad, .face { grid-template: repeat(3, 52px) / repeat(3, 52px); }
+  .face-gl { width: 40px; height: 40px; }
+  .strip { grid-template-columns: repeat(4, 1fr); }
+  .strip .s-cover:nth-child(n + 5) { display: none; }
+  .head-t :deep(.t-title), .t-title { font-size: 24px; }
+  .cover { width: 104px; height: 140px; }
+}
 </style>

@@ -257,6 +257,10 @@
             <p class="muted small">Added before 0.2.1? Press Add to Steam once more: Steam now starts Cartridge through a launch script that makes it open reliably, and logs each launch to ~/.config/Cartridge/steam-launch.log. Keep the AppImage where it is; if you move it, add it again.</p>
           </template>
 
+          <template v-else-if="sec === 'remote'">
+            <PhoneRemote />
+          </template>
+
           <template v-else-if="sec === 'android'">
             <AndroidSettings />
           </template>
@@ -289,6 +293,7 @@ import { FAMILIES } from '../prompts.js';
 import { THEMES, SURFACES, TEXTS, FONTS, CARD_SHAPES, CARD_SIZES, DENSITIES, themeFrom } from '../themes.js';
 import { BACKGROUNDS } from '../bgRenderers.js';
 import { setSoundEnabled, setSoundStyle, previewSound, SOUND_PACKS } from '../sfx.js';
+import PhoneRemote from './PhoneRemote.vue';
 import Icon from '../components/Icon.vue';
 import Logo from '../components/Logo.vue';
 import Toggle from '../components/Toggle.vue';
@@ -312,6 +317,7 @@ const sections = [
   { id: 'ui', label: 'Look & Feel', icon: 'mdiPaletteOutline' },
   { id: 'ra', label: 'Achievements', icon: 'mdiTrophyOutline' },
   { id: 'steam', label: 'Steam', icon: 'mdiSteam' },
+  { id: 'remote', label: 'Phone remote', icon: 'mdiCellphoneLink' },
   { id: 'android', label: 'Android', icon: 'mdiAndroid' },
   { id: 'updates', label: 'Updates', icon: 'mdiUpdate' },
   { id: 'about', label: 'About', icon: 'mdiInformationOutline' },

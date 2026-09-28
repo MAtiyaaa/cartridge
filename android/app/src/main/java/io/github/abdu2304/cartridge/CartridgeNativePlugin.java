@@ -8,7 +8,12 @@ import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.hardware.display.DisplayManager;
 import android.hardware.input.InputManager;
+import android.net.ConnectivityManager;
+import android.net.LinkAddress;
+import android.net.LinkProperties;
+import android.net.Network;
 import android.net.Uri;
+import android.net.wifi.WifiManager;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
@@ -70,6 +75,44 @@ public class CartridgeNativePlugin extends Plugin {
         displays.registerDisplayListener(displayListener, main);
         inputs = (InputManager) getContext().getSystemService(Context.INPUT_SERVICE);
         inputs.registerInputDeviceListener(inputListener, main);
+    }
+
+    // ------------------------------------------------------------ phone remote
+    private WifiManager.MulticastLock multicast;
+
+    /** This device's IPv4 address on the current network (Node can't always read it on Android). */
+    @PluginMethod
+    public void wifiAddress(PluginCall call) {
+        String ip = "";
+        try {
+            ConnectivityManager cm = (ConnectivityManager) getContext().getSystemService(Context.CONNECTIVITY_SERVICE);
+            Network n = cm.getActiveNetwork();
+            LinkProperties lp = n == null ? null : cm.getLinkProperties(n);
+            if (lp != null) for (LinkAddress a : lp.getLinkAddresses()) {
+                if (a.getAddress() instanceof java.net.Inet4Address && !a.getAddress().isLoopbackAddress()) { ip = a.getAddress().getHostAddress(); break; }
+            }
+        } catch (Exception ignored) {}
+        JSObject o = new JSObject();
+        o.put("address", ip);
+        call.resolve(o);
+    }
+
+    /** Android drops broadcast/multicast packets unless an app holds this lock (device discovery). */
+    @PluginMethod
+    public void setDiscovery(PluginCall call) {
+        boolean on = call.getBoolean("on", false);
+        try {
+            if (on && multicast == null) {
+                WifiManager wm = (WifiManager) getContext().getApplicationContext().getSystemService(Context.WIFI_SERVICE);
+                multicast = wm.createMulticastLock("cartridge-remote");
+                multicast.setReferenceCounted(false);
+                multicast.acquire();
+            } else if (!on && multicast != null) {
+                multicast.release();
+                multicast = null;
+            }
+        } catch (Exception ignored) {}
+        call.resolve();
     }
 
     /** Names of connected controllers (built-in and Bluetooth), used to guess Nintendo vs Xbox button layout. */

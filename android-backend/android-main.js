@@ -4,11 +4,9 @@
 //   GET  /events          Server-Sent Events carrying every webContents.send(channel, data)
 //   GET  /romimg/?...     the romimg:// image protocol
 //   GET  /ui/...          the built UI, for the second-screen WebView
-const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
-const crypto = require('crypto');
 
 let bridge = null;
 try { bridge = require('bridge'); } catch {} // provided by capacitor-nodejs on the device
@@ -140,17 +138,7 @@ wrap('platforms:paths', async (list, orig) => {
   return res;
 });
 
-// Settings changed on one screen reach the other (theme, colours, background, wallpaper...)
-for (const ch of ['config:set', 'config:setPath', 'wallpaper:set', 'wallpaper:clear']) {
-  wrap(ch, async (_arg, orig) => {
-    const out = await orig();
-    invoke('config:get').then((c) => send('android:config', c)).catch(() => {});
-    return out;
-  });
-}
-
 // ---------------------------------------------------------------- Android-only channels
-let companion = null;
 let loaded = false;
 handle('android:hello', (o = {}) => {
   if (o.w && o.h) state.size = [Math.round(o.w), Math.round(o.h)];
@@ -165,94 +153,25 @@ handle('android:size', ({ w, h }) => {
 });
 handle('android:resume', () => { electron.__android.window()?.emit('focus'); return true; });
 handle('android:roots', () => ({ volumes: volumes(), roots: scanRomRoots() }));
-handle('android:companion:state', (s) => { companion = s; send('android:companion:state', s); return true; });
-handle('android:companion:get', () => companion);
-handle('android:companion:cmd', (c) => { send('android:companion:cmd', c); return true; });
 
-// ---------------------------------------------------------------- HTTP server
-const TOKEN = process.env.CARTRIDGE_TOKEN || crypto.randomBytes(18).toString('hex');
-const UI_DIR = path.join(__dirname, 'ui');
-const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.svg': 'image/svg+xml', '.woff2': 'font/woff2', '.woff': 'font/woff', '.json': 'application/json', '.jpg': 'image/jpeg', '.webp': 'image/webp', '.ico': 'image/x-icon', '.mp3': 'audio/mpeg', '.ogg': 'audio/ogg', '.wav': 'audio/wav' };
-const clients = new Set();
-bus.on('send', (ch, data) => {
-  let msg;
-  try { msg = `data: ${JSON.stringify({ ch, data: data === undefined ? null : data })}\n\n`; } catch { return; }
-  for (const res of clients) res.write(msg);
+// ---------------------------------------------------------------- server (shared with desktop)
+// Loopback API for the two screens, and the phone remote on the network when it's turned on.
+const remote = require('./electron/remote-server.js')({
+  invoke: (ch, arg) => (handlers.get(ch) ? handlers.get(ch)(null, arg) : Promise.resolve({ ok: false, error: 'Unknown channel ' + ch })),
+  handleImage: (req) => schemes.get('romimg')(req),
+  uiDir: path.join(__dirname, 'ui'),
+  remoteDir: path.join(__dirname, 'ui', 'remote'),
+  dataDir: state.dataDir,
+  version: state.version,
+  kind: 'android',
+  localToken: process.env.CARTRIDGE_TOKEN,
+  log: (...a) => console.log('[remote]', ...a),
 });
-setInterval(() => { for (const res of clients) res.write(': ping\n\n'); }, 20000).unref();
+electron.__android.remote = remote; // main.js saveConfig -> remote.configChanged
+for (const [ch, fn] of Object.entries(remote.handlers)) handle(ch, fn);
+bus.on('send', (ch, data) => remote.send(ch, data));
 
-function cors(res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Headers', 'content-type, x-cart-token');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-}
-function readBody(req) {
-  return new Promise((resolve, reject) => {
-    const chunks = [];
-    req.on('data', (c) => chunks.push(c));
-    req.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
-    req.on('error', reject);
-  });
-}
-
-const server = http.createServer(async (req, res) => {
-  cors(res);
-  if (req.method === 'OPTIONS') { res.writeHead(204); return res.end(); }
-  const url = new URL(req.url, 'http://127.0.0.1');
-  const authed = req.headers['x-cart-token'] === TOKEN || url.searchParams.get('_k') === TOKEN;
-  try {
-    if (url.pathname.startsWith('/ipc/')) {
-      if (!authed) { res.writeHead(403); return res.end(); }
-      const ch = decodeURIComponent(url.pathname.slice(5));
-      const fn = handlers.get(ch);
-      const body = await readBody(req);
-      const arg = body ? JSON.parse(body).arg : undefined;
-      const out = fn ? await fn(null, arg) : { ok: false, error: 'Unknown channel ' + ch };
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      return res.end(JSON.stringify(out === undefined ? { ok: true, data: null } : out));
-    }
-    if (url.pathname === '/events') {
-      if (!authed) { res.writeHead(403); return res.end(); }
-      res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' });
-      res.write(': hi\n\n');
-      clients.add(res);
-      req.on('close', () => clients.delete(res));
-      return;
-    }
-    if (url.pathname === '/romimg/') {
-      if (!authed) { res.writeHead(403); return res.end(); }
-      const fn = schemes.get('romimg');
-      url.searchParams.delete('_k');
-      const r = await fn(new Request('http://img/?' + url.searchParams.toString(), { headers: req.headers['range'] ? { range: req.headers['range'] } : {} }));
-      const headers = {};
-      r.headers.forEach((v, k) => { headers[k] = v; });
-      headers['Access-Control-Allow-Origin'] = '*';
-      if (!headers['cache-control']) headers['Cache-Control'] = 'max-age=86400';
-      res.writeHead(r.status, headers);
-      return res.end(Buffer.from(await r.arrayBuffer()));
-    }
-    if (url.pathname.startsWith('/ui/')) {
-      const rel = path.normalize(decodeURIComponent(url.pathname.slice(4)) || 'index.html').replace(/^(\.\.[/\\])+/, '');
-      let file = path.join(UI_DIR, rel);
-      if (!file.startsWith(UI_DIR) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) file = path.join(UI_DIR, 'index.html');
-      res.writeHead(200, { 'Content-Type': MIME[path.extname(file)] || 'application/octet-stream' });
-      return fs.createReadStream(file).pipe(res);
-    }
-    res.writeHead(404); res.end();
-  } catch (e) {
-    if (!res.headersSent) res.writeHead(500, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ ok: false, error: e.message || String(e) }));
-  }
-});
-
-const PORT = Number(process.env.CARTRIDGE_PORT || 0);
-// The WebView opens at most 6 connections per host:port, shared by both screens. Images are
-// spread over 8 ports on the same address so dozens load at once instead of queueing.
-const listenOn = (srv, port) => new Promise((resolve) => srv.once('error', () => resolve(null)).listen(port, '127.0.0.1', () => resolve(srv.address().port)));
-server.listen(PORT, '127.0.0.1', async () => {
-  const handler = server.listeners('request')[0];
-  const extra = await Promise.all(Array.from({ length: 7 }, () => listenOn(http.createServer(handler), 0)));
-  const info = { port: server.address().port, ports: [server.address().port, ...extra.filter(Boolean)], token: TOKEN, version: state.version };
+remote.startLocal(Number(process.env.CARTRIDGE_PORT || 0)).then((info) => {
   console.log('CARTRIDGE SERVER ' + JSON.stringify(info));
   if (bridge) {
     bridge.channel.send('server', info);

@@ -42,6 +42,7 @@
   </div>
 
   <QuickMenu v-if="store.quickMenu" />
+  <PairOverlay />
   <Keyboard v-if="store.modal?.type === 'keyboard' && builtinKb()" v-bind="store.modal.props" />
   <TextPrompt v-else-if="store.modal?.type === 'keyboard'" v-bind="store.modal.props" />
   <FolderPicker v-if="store.modal?.type === 'folder'" v-bind="store.modal.props" />
@@ -85,6 +86,8 @@ import FolderPicker from './components/FolderPicker.vue';
 import Menu from './components/Menu.vue';
 import ArtPicker from './components/ArtPicker.vue';
 import ColorPicker from './components/ColorPicker.vue';
+import PairOverlay from './components/PairOverlay.vue';
+import { IS_ANDROID } from './platform.js';
 import Setup from './views/Setup.vue';
 import Home from './views/Home.vue';
 import Gallery from './views/Gallery.vue';
@@ -186,6 +189,12 @@ onMounted(async () => {
   applyTheme(store.config.ui);
   setPointerPref(store.config.ui.pointer);
   await loadLibrary();
+  // Phone remote on desktop: tell phones what's on screen while it's turned on (Android always does)
+  if (!IS_ANDROID) {
+    const pub = () => import('./remote/publish.js').then((m) => m.startPublisher());
+    call('remote:settings').then((r) => r?.enabled && pub()).catch(() => {});
+    window.cart.on('remote:settings', (r) => r?.enabled && pub());
+  }
   loadArt();
   if (store.config.configured) call('server:status').then((c) => (store.connection = c)).catch(() => {});
   pushLayer(document.body, {
