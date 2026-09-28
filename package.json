@@ -2,7 +2,7 @@
   "name": "cartridge",
   "productName": "Cartridge",
   "version": "0.6.0",
-  "description": "Controller-first RomM client for SteamOS and Bazzite",
+  "description": "Controller-first RomM client for SteamOS, Bazzite and Android",
   "main": "electron/main.js",
   "author": "abdu2304",
   "license": "MIT",
