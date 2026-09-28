@@ -38,6 +38,13 @@
     </div>
     <p class="muted small">Sets where A, B, X and Y sit on the second screen's touch controls. Auto follows your controller{{ store.androidPads?.length ? ' (' + store.androidPads.join(', ') + ')' : '' }}: {{ store.androidLayoutDetected === 'nintendo' ? 'Nintendo, A on the right' : 'Xbox, A at the bottom' }}.</p>
 
+    <div class="subh"><Icon name="mdiMicrosoftWindows" :size="22" />Steam &amp; PC game apps</div>
+    <Toggle :model-value="store.config.android?.steamApps === true" label="Show Steam and PC game app options" desc="Off by default. Adds Settings → Steam, and Open in a PC game app to Windows games, for GameNative, GameHub or Winlator" @update:model-value="setSteamApps" />
+    <p v-if="store.config.android?.steamApps" class="muted small">
+      {{ pcApps.length ? 'Found: ' + pcApps.map((a) => a.label).join(', ') + '.' : 'None of GameNative, GameHub or Winlator is installed yet.' }}
+      Those apps keep their game lists to themselves, so Cartridge downloads the game, opens the app and tells you which folder to add. Steam itself doesn't run on Android, so Settings → Steam only works on a Deck or PC.
+    </p>
+
     <div class="subh"><Icon name="mdiCellphoneCog" :size="22" />System</div>
     <Toggle :model-value="opt('backgroundDownloads')" label="Keep downloading in the background" desc="Shows a notification while games download so Android does not stop them" @update:model-value="(v) => set({ backgroundDownloads: v })" />
     <Toggle :model-value="opt('immersive')" label="Full screen" desc="Hides the status and navigation bars" @update:model-value="setImmersive" />
@@ -58,6 +65,10 @@ const roots = ref([]);
 const scanning = ref(false);
 const displays = computed(() => store.androidDisplays || { secondary: null });
 const opt = (k) => store.config.android?.[k] !== false;
+const pcApps = ref([]);
+async function loadPcApps() { const { pcApps: find } = await import('./pcApps.js'); pcApps.value = await find(); }
+async function setSteamApps(v) { await set({ steamApps: v }); if (v) loadPcApps(); }
+if (store.config.android?.steamApps) loadPcApps();
 const set = (patch) => saveConfig({ android: patch });
 const layouts = [{ v: 'auto', l: 'Auto' }, { v: 'xbox', l: 'Xbox (A bottom)' }, { v: 'nintendo', l: 'Nintendo (A right)' }];
 

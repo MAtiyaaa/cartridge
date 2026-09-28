@@ -210,7 +210,7 @@ onMounted(async () => {
   const openGame = (id) => { if (id && store.lib) { store.quickMenu = false; go('game', { romId: Number(id) }); } };
   call('app:startGame').then(openGame).catch(() => {});
   window.cart.on('open-game', openGame);
-  setTimeout(steamReport, 2500);
+  if (!IS_ANDROID || store.config?.android?.steamApps) setTimeout(steamReport, 2500); // Android: only when Steam options are on
   if (store.config.configured) call('server:status').then((c) => (store.connection = c)).catch(() => {});
   pushLayer(document.body, {
     back: () => { if (viewHandler('back') !== false) return; back(); },

@@ -126,6 +126,7 @@ import { addGame, removeGame, applyChanges } from '../steam.js';
 import { computed, onMounted, ref, nextTick, watch } from 'vue';
 import { store, call, img, go, cover, bytes, year, rating, toast, confirm, download, downloadFor, romById, platformById, isNew, setBg, logoOf, resetLogos, artFor, choose, openModal } from '../store.js';
 import { useView } from '../useView.js';
+import { IS_ANDROID } from '../platform.js';
 import { ensureFocus, focusFirst } from '../nav.js';
 import Icon from '../components/Icon.vue';
 import Btn from '../components/Btn.vue';
@@ -257,6 +258,7 @@ const banner = computed(() => {
 });
 // More options: custom artwork from SteamGridDB, plus handy extras
 let steamInfo = null;
+const PC_SLUGS = /^(win|windows|win3x|pc|dos)$/i; // PC games (Android: open in GameNative, GameHub or Winlator)
 async function more() {
   const has = artFor(props.romId);
   const opts = [
@@ -270,7 +272,10 @@ async function more() {
     else if (!installedPath.value) opts.push({ label: 'Mark as installed', sub: 'For games you extracted yourself', value: 'mark', icon: 'mdiCheckboxMarkedCircleOutline' });
   }
   if (trophySystem.value) opts.push({ label: tro.value ? 'Change linked trophies' : 'Link to trophies', sub: 'Pick which emulator trophy set belongs to this game', value: 'trophies', icon: 'mdiLinkVariant' });
-  if (installedPath.value) {
+  // Android: Steam options only when Settings → Android → Steam & PC game apps is on
+  const steamOn = !IS_ANDROID || store.config.android?.steamApps === true;
+  if (IS_ANDROID && steamOn && PC_SLUGS.test(base.value.platform_slug || '')) opts.push({ label: 'Open in a PC game app', sub: installedPath.value ? 'GameNative, GameHub or Winlator' : 'Downloads it first', value: 'pcapp', icon: 'mdiMicrosoftWindows' });
+  if (installedPath.value && steamOn) {
     const st = await call('steam:forRom', { romId: Number(props.romId) }).catch(() => null);
     if (st?.steam) {
       if (st.queued === 'add') opts.push({ label: 'Waiting to be added to Steam', sub: 'Apply from Settings → Steam', value: 'steamapply', icon: 'mdiSteam' });
@@ -283,6 +288,7 @@ async function more() {
   if (installedPath.value) opts.push({ label: 'Show file location', value: 'path', icon: 'mdiFolderOutline' });
   const v = await choose({ title: base.value.name, options: opts });
   if (!v) return;
+  if (import.meta.env.MODE === 'android' && v === 'pcapp') { const { openInPcApp } = await import('../android/pcApps.js'); await openInPcApp({ ...base.value, id: Number(props.romId) }, installedPath.value); return; }
   if (v === 'steamadd') { await addGame({ ...base.value, id: Number(props.romId) }); return; }
   if (v === 'steamrm') {
     if (!steamInfo.ours && !(await confirm('Remove from Steam?', 'Cartridge did not add this shortcut. Remove it anyway?', 'Remove', true))) return;

@@ -46,6 +46,13 @@
 
     <!-- Permissions -->
 
+    <!-- Android 11+: lets Cartridge see launchable apps, to find GameNative, GameHub or Winlator -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+    </queries>
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <!-- Phone remote: find other Cartridge devices on the Wi-Fi -->

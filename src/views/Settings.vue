@@ -326,7 +326,7 @@ const AndroidSettings = import.meta.env.MODE === 'android' ? defineAsyncComponen
 const el = ref(null);
 const paneEl = ref(null);
 const sec = ref(store.settingsSection || 'conn');
-const sections = [
+const ALL_SECTIONS = [
   { id: 'conn', label: 'Connection', icon: 'mdiServerNetwork' },
   { id: 'sync', label: 'Library & Sync', icon: 'mdiSync' },
   { id: 'storage', label: 'Storage', icon: 'mdiHarddisk' },
@@ -339,7 +339,9 @@ const sections = [
   { id: 'android', label: 'Android', icon: 'mdiAndroid' },
   { id: 'updates', label: 'Updates', icon: 'mdiUpdate' },
   { id: 'about', label: 'About', icon: 'mdiInformationOutline' },
-].filter((s) => (IS_ANDROID ? s.id !== 'steam' : s.id !== 'android'));
+];
+// Android: Steam shows only when Settings → Android → Steam & PC game apps is on
+const sections = computed(() => ALL_SECTIONS.filter((s) => (IS_ANDROID ? s.id !== 'steam' || store.config.android?.steamApps === true : s.id !== 'android')));
 const showAll = ref(false);
 const supported = ref([]);
 const space = ref(null);
