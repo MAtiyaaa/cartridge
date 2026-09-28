@@ -1722,6 +1722,7 @@ async function sgdbImage(name, kind) {
   return null;
 }
 const romIndexMain = () => { const m = new Map(); for (const list of Object.values(library?.roms || {})) for (const r of list) m.set(r.id, r); return m; };
+const hltbSvc = require('./hltb')({ file: path.join(USER_DATA, 'hltb.json'), log });
 const steamMgr = require('./steamManager')({
   USER_DATA, log, PLATFORM_MAP, getConfig: () => config, saveConfig: () => saveConfig(), broadcast: (c, d) => broadcast(c, d), getLibrary: () => library,
   installed: () => installedMap, MARKED, markedPath: (r) => marks[r.id]?.path || null,
@@ -1964,6 +1965,8 @@ const handlers = {
   'steam:apply': (o) => steamMgr.apply(o || {}),
   'steam:undo': () => steamMgr.undo(),
   'steam:restart': () => steamMgr.restartSteam(),
+  'steam:liveInfo': () => steamMgr.liveInfo(),
+  'steam:liveEnable': () => steamMgr.liveEnable(),
   'steam:queueAdd': (items) => steamMgr.queueAdd(items),
   'steam:queueRemove': (ids) => steamMgr.queueRemove(ids),
   'steam:queueClear': () => steamMgr.queueClear(),
@@ -1978,6 +1981,8 @@ const handlers = {
   'steam:report': () => steamMgr.startupReport(),
   'steam:last': () => steamMgr.lastStatus(),
   'steam:forRom': ({ romId }) => steamMgr.forRom(Number(romId)),
+  // HowLongToBeat times when RomM has none: name plus release year, cached in hltb.json
+  'hltb:lookup': ({ name, year }) => hltbSvc.forGame({ name: String(name || ''), year: Number(year) || null }),
   'steam:played': () => { try { return steamMgr.played(); } catch { return {}; } },
   'steam:setConfig': (patch) => { config.steam = { ...(config.steam || {}), ...patch }; saveConfig(); return config.steam; },
   'steam:setPath': ({ romId, path: p }) => { if (!isDir(p) && !fs.existsSync(p)) throw new Error('That folder does not exist'); marks[romId] = { ...(marks[romId] || { at: Date.now() }), path: p }; saveMarks(); return true; },

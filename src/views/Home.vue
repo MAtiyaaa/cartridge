@@ -64,7 +64,7 @@
               </button>
             </template>
             <template v-else-if="s.type === 'col'">
-              <CollTile v-for="c in s.items" :key="c.id" :c="c" @open="openCol" @focused="focusCol" />
+              <CollTile v-for="c in s.items" :key="c.id" :c="c" :wide="s.id !== 'genres'" @open="openCol" @focused="focusCol" />
             </template>
             <template v-else>
               <GameCard v-for="r in s.items" :key="r.id" :rom="r" :show-platform="true" @open="openGame" @focused="focusRom" />

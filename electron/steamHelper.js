@@ -72,7 +72,10 @@ async function closeSteam() {
   const tries = job.flatpakSteam ? [['flatpak', ['run', 'com.valvesoftware.Steam', '-shutdown']]] : [];
   tries.push(['steam', ['-shutdown']]);
   for (const [cmd, args] of tries) { try { spawn(cmd, args, { detached: true, stdio: 'ignore' }).unref(); } catch {} }
-  for (let i = 0; i < 90; i++) { await sleep(500); if (!steamRunning()) { await sleep(1500); return true; } }
+  // Game Mode starts Steam again the moment it exits, so look often and write straight away:
+  // the new Steam reads shortcuts.vdf a few seconds after it starts
+  const gm = !!job.gamescope, step = gm ? 100 : 500;
+  for (let i = 0; i < 45000 / step; i++) { await sleep(step); if (!steamRunning()) { if (!gm) await sleep(1500); return true; } }
   log('Steam did not close in 45 s');
   return false;
 }

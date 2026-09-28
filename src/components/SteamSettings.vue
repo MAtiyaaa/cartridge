@@ -7,6 +7,7 @@
         <div class="card-s glass">
           <div class="kv"><span>Steam account</span><span>{{ ov.steam.account }}<span v-if="ov.steam.accounts.length > 1" class="muted small"> · the one that signed in last ({{ ov.steam.accounts.length }} on this device)</span></span></div>
           <div class="kv"><span>Steam</span><span>{{ ov.steam.running ? 'Running' : 'Closed' }}{{ ov.steam.flatpak ? ' · Flatpak' : '' }}</span></div>
+          <div class="kv"><span>Live changes</span><span>{{ liveTxt }}<button v-if="live && !live.flag" class="btn small" data-focus style="margin-left: 12px" @click="enableLive"><Icon name="mdiFlash" :size="16" />Turn on</button></span></div>
           <div class="kv"><span>Your games</span><span>{{ inSteam }} of {{ ov.games.length }} downloaded games are in Steam · {{ ov.ours }} added by Cartridge</span></div>
         </div>
 
@@ -23,19 +24,19 @@
         </div>
 
         <div class="subh"><Icon name="mdiGamepadVariantOutline" :size="20" />Emulators</div>
-        <p class="muted small" style="margin-top: -8px">Cartridge copies Target, Start in and Launch options from shortcuts you already have (Steam ROM Manager, EmuDeck or your own), minus frame generation wrappers. Consoles with no shortcut yet use the emulator it finds: EmuDeck, then AppImages, then Flatpaks.</p>
+        <p class="muted small" style="margin-top: -8px">Pick a console to see its games in Steam and how they start. Cartridge copies Target, Start in and Launch options from shortcuts you already have (Steam ROM Manager, EmuDeck or your own), minus frame generation wrappers. Consoles with no shortcut yet use the emulator it finds: EmuDeck, then AppImages, then Flatpaks.</p>
         <div class="ss-emus">
-          <button v-for="c in ov.consoles" :key="c.key" class="ss-emu" data-focus :data-key="'emu-' + c.key" @click="emuMenu(c)">
-            <div class="ss-e-top">
-              <b>{{ c.label }}</b>
+          <button v-for="c in ov.consoles" :key="c.key" class="ss-emu" data-focus :data-key="'emu-' + c.key" @click="go('steam-console', { ckey: c.key })">
+            <div class="ss-e-logo"><PIcon :p="platOf(c)" :size="44" /></div>
+            <div class="ss-e-mid">
+              <b>{{ c.platform }}</b>
               <span class="muted small">{{ c.games }} game{{ c.games === 1 ? '' : 's' }} · {{ c.inSteam }} in Steam</span>
-              <div class="spacer" />
-              <span v-if="c.mode === 'script'" class="chip">Script</span>
-              <span class="chip" :class="c.template ? 'how-' + c.template.how : 'none'">{{ c.template ? HOW[c.template.how] : 'Not set' }}</span>
+              <div class="row" style="gap: 6px; margin-top: 2px">
+                <span class="chip" :class="c.template ? 'how-' + c.template.how : 'none'">{{ c.template ? HOW[c.template.how] : 'Not set' }}</span>
+                <span v-if="c.mode === 'script'" class="chip">Script</span>
+              </div>
             </div>
-            <div v-if="c.template" class="ss-e-p mono">{{ c.template.exe }}</div>
-            <div v-if="c.template" class="ss-e-p mono dim">{{ c.template.lo }}</div>
-            <div v-else class="ss-e-p muted small">No emulator found. Press to set one.</div>
+            <Icon name="mdiChevronRight" :size="22" class="muted" />
           </button>
         </div>
 
@@ -61,10 +62,11 @@
 
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue';
-import { store, call, choose, confirm, toast, openModal } from '../store.js';
+import { store, call, confirm, toast, go, romById } from '../store.js';
 import { steam, applyChanges, restartSteam, pickCollections } from '../steam.js';
 import Icon from './Icon.vue';
 import Toggle from './Toggle.vue';
+import PIcon from './PIcon.vue';
 
 const ov = ref(null);
 const missingCols = ref([]);
@@ -80,6 +82,16 @@ async function load() {
 }
 watch(() => steam.queue.total, () => { if (ov.value && !steam.busy) load(); });
 watch(() => steam.busy, (b) => { if (!b && ov.value) load(); });
+// Live changes: Steam's own interface is reachable (Decky Loader turns this on), so games are added
+// while Steam runs. Without it Steam has to close, which Game Mode makes unreliable.
+const live = ref(null);
+const liveTxt = computed(() => !live.value ? '…' : live.value.on ? 'On. Games go straight into Steam, no restart.' : live.value.flag ? 'Turned on. Restart Steam once to use it.' : 'Off. Steam restarts for every change.');
+async function loadLive() { live.value = await call('steam:liveInfo').catch(() => ({ on: false, flag: false })); }
+async function enableLive() {
+  if (!(await confirm('Turn on live Steam changes?', "Cartridge adds a small file to Steam's folder that opens Steam's interface to apps on this device only, the same thing Decky Loader does. Steam then takes new games without closing. Restart Steam once afterwards (Steam menu → Power → Restart Steam).", 'Turn on'))) return;
+  try { await call('steam:liveEnable'); toast('Live changes turned on. Restart Steam once to use them.', 'ok', 5000, 'mdiSteam'); } catch (e) { toast(e.message, 'error'); }
+  loadLive();
+}
 async function setC(patch) { store.config.steam = await call('steam:setConfig', patch); }
 async function apply() { if (await applyChanges()) load(); }
 async function clearQueue() { steam.queue = await call('steam:queueClear'); load(); }
@@ -91,25 +103,8 @@ async function addMissing() {
   steam.queue = await call('steam:queueAdd', list.map((g) => ({ romId: g.romId, collections: cols })));
   await apply();
 }
-async function emuMenu(c) {
-  const v = await choose({
-    title: c.label, message: c.template ? `${HOW[c.template.how]}${c.template.from ? ' · ' + c.template.from : ''}` : 'No emulator set',
-    options: [
-      { label: 'Edit Target, Start in and Launch options', value: 'edit', icon: 'mdiPencil' },
-      { label: 'Test', sub: 'Checks the Target exists and can run', value: 'test', icon: 'mdiPlayCircleOutline' },
-      { label: 'Start games directly', sub: 'Steam runs the emulator itself (recommended)', value: 'direct', icon: 'mdiRocketLaunchOutline', selected: c.mode !== 'script' },
-      { label: 'Start games through Cartridge', sub: 'A small script: if the game is gone, Cartridge opens on it', value: 'script', icon: 'mdiScriptTextOutline', selected: c.mode === 'script' },
-    ],
-  });
-  if (v === 'test') { const r = await call('steam:test', { key: c.key }); toast(r.ok ? r.note : r.error, r.ok ? 'ok' : 'error', 4500); return; }
-  if (v === 'direct' || v === 'script') { await call('steam:setMode', { key: c.key, mode: v }); toast(v === 'script' ? 'New shortcuts start through Cartridge' : 'New shortcuts start the emulator directly', 'ok', 3000); load(); return; }
-  if (v !== 'edit') return;
-  const t = c.template || { exe: '', start: '', lo: '%command% "{ROM}"' };
-  const r = await openModal('steam-emu', { ckey: c.key, label: c.label, how: t.how, exe: t.exe, start: t.start, lo: t.lo });
-  if (r === 'reset') { await call('steam:setTemplate', { key: c.key, template: null }); toast(`${c.label} back to automatic`, 'ok', 2500); }
-  else if (r) { await call('steam:setTemplate', { key: c.key, template: r }); toast(`${c.label} saved`, 'ok', 2500); }
-  load();
-}
+// console logo: RomM's icon for the platform of any of its games
+const platOf = (c) => { const r = (ov.value?.games || []).filter((g) => g.console === c.key).map((g) => romById(g.romId)).find(Boolean); return r ? { slug: r.platform_slug, fs_slug: r.platform_fs_slug } : { slug: c.key }; };
 async function undo() {
   if (!(await confirm('Undo the last Steam change?', 'Steam closes for a moment and its shortcuts go back to how they were before the last change.', 'Undo'))) return;
   try { await call('steam:undo'); toast('Steam is closing to undo the change.', 'info', 5000, 'mdiSteam'); } catch (e) { toast(e.message, 'error'); }
@@ -122,7 +117,7 @@ async function removeAll() {
 async function fixCols() {
   try { await call('steam:fixCollections'); toast('Steam is closing to fix the collections.', 'info', 5000, 'mdiSteam'); } catch (e) { toast(e.message, 'error'); }
 }
-onMounted(load);
+onMounted(() => { load(); loadLive(); });
 </script>
 <style scoped>
 .ss { display: flex; flex-direction: column; gap: 16px; }
@@ -130,13 +125,12 @@ onMounted(load);
 .ss-queue { display: flex; align-items: center; gap: 14px; padding: 14px 18px; border-radius: 12px; background: rgba(var(--primary-rgb), 0.2); border: 1px solid rgba(var(--primary-l-rgb), 0.5); }
 .ss-q-t { display: flex; flex-direction: column; flex: 1; min-width: 0; }
 .ss-q-t small { color: var(--muted); font-size: 12.5px; }
-.ss-emus { display: flex; flex-direction: column; gap: 6px; }
-.ss-emu { display: flex; flex-direction: column; gap: 4px; padding: 12px 14px; border-radius: 10px; background: rgba(255, 255, 255, 0.045); border: 1px solid var(--line); text-align: left; min-width: 0; }
-.ss-emu:focus { border-color: var(--primary-l); box-shadow: var(--ring); }
-.ss-e-top { display: flex; align-items: center; gap: 10px; }
-.ss-e-top b { font-size: 15px; }
-.ss-e-p { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
-.ss-e-p.dim { color: var(--muted); }
+.ss-emus { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; padding: 4px; margin: -4px; }
+.ss-emu { display: flex; align-items: center; gap: 14px; padding: 14px 16px; border-radius: 12px; background: rgba(255, 255, 255, 0.045); border: 1px solid var(--line); text-align: left; min-width: 0; }
+.ss-emu:focus { border-color: var(--primary-l); background: rgba(var(--primary-rgb), 0.16); }
+.ss-e-logo { width: 60px; height: 60px; border-radius: 12px; display: grid; place-items: center; background: rgba(255, 255, 255, 0.06); flex: none; }
+.ss-e-mid { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.ss-e-mid b { font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .chip.how-learned { background: rgba(80, 200, 120, 0.18); color: #9be8b4; }
 .chip.how-yours { background: rgba(var(--primary-rgb), 0.25); }
 .chip.none { background: rgba(245, 197, 66, 0.18); color: #ffd978; }

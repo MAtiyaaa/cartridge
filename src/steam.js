@@ -60,10 +60,11 @@ export async function removeGame(rom, appid) {
 async function afterQueue(what) {
   steam.queue = await call('steam:overview').then((o) => o.queue).catch(() => steam.queue);
   const n = steam.queue.total;
+  const liveOn = (await call('steam:liveInfo').catch(() => null))?.on;
   const v = await choose({
-    title: what, message: `Steam has to close for a moment to take ${n > 1 ? `these ${n} changes` : 'the change'}. Cartridge closes too if Steam started it${store.info.gamescope ? ' and Game Mode brings Steam back' : ''}.`,
+    title: what, message: liveOn ? `Steam takes ${n > 1 ? `these ${n} changes` : 'the change'} while it runs. No restart needed.` : `Steam has to close for a moment to take ${n > 1 ? `these ${n} changes` : 'the change'}. Cartridge closes too if Steam started it${store.info.gamescope ? ' and Game Mode brings Steam back' : ''}.`,
     options: [
-      { label: 'Apply now', sub: 'Steam restarts', value: 'now', icon: 'mdiSteam' },
+      { label: 'Apply now', sub: liveOn ? 'Straight into Steam' : 'Steam restarts', value: 'now', icon: 'mdiSteam' },
       { label: 'Later', sub: 'Keep it waiting, apply from Settings → Steam', value: 'later', icon: 'mdiClockOutline' },
     ],
   });
