@@ -7,12 +7,12 @@
       <button v-if="store.history.length" class="backbtn" aria-label="Back" @click="back()"><Icon name="mdiArrowLeft" :size="22" /></button>
       <div class="brand"><Logo :size="30" /><span class="brand-word">Cartridge</span></div>
       <nav class="tabs">
-        <Btn b="LT" style="margin: 0 4px" />
+        <Btn b="LT" class="tab-trig" />
         <button v-for="t in tabs" :key="t.name" class="tab" :class="{ active: activeTab === t.name }" @click="tab(t.name)">
           <Icon :name="t.icon" :size="18" /><span class="tab-label">{{ t.label }}</span>
           <span v-if="t.name === 'downloads' && activeDl.length" class="tab-badge">{{ activeDl.length }}</span>
         </button>
-        <Btn b="RT" style="margin: 0 4px" />
+        <Btn b="RT" class="tab-trig" />
       </nav>
       <div class="spacer" />
       <label class="top-search" :class="{ on: store.route.name === 'search' }">
@@ -36,7 +36,7 @@
       <component :is="views[store.route.name]" :key="viewKey" v-bind="store.route.params" />
     </main>
     <footer class="hintbar">
-      <div class="left"><Btn b="START" />Menu<Btn b="SELECT" style="margin-left: 10px" />Downloads</div>
+      <div class="left"><span class="hint"><Btn b="START" />Menu</span><span class="hint"><Btn b="SELECT" />Downloads</span></div>
       <span v-for="h in store.hints" :key="h.b + h.label" class="hint"><Btn :b="h.b" />{{ h.label }}</span>
     </footer>
   </div>
@@ -47,6 +47,9 @@
   <FolderPicker v-if="store.modal?.type === 'folder'" v-bind="store.modal.props" />
   <Menu v-if="store.modal?.type === 'menu'" v-bind="store.modal.props" />
   <ColorPicker v-if="store.modal?.type === 'color'" v-bind="store.modal.props" />
+  <SteamCollections v-if="store.modal?.type === 'steam-collections'" :key="JSON.stringify(store.modal.props.selected) + (store.modal.props.extra || []).join()" v-bind="store.modal.props" />
+  <SteamPreview v-if="store.modal?.type === 'steam-preview'" v-bind="store.modal.props" />
+  <SteamEmu v-if="store.modal?.type === 'steam-emu'" :key="JSON.stringify(store.modal.props)" v-bind="store.modal.props" />
   <ArtPicker v-if="store.modal?.type === 'art'" :key="store.modal.props.query || ''" v-bind="store.modal.props" />
 
   <div class="pops">
@@ -73,6 +76,7 @@ import { pushLayer, focusFirst } from './nav.js';
 import { setSoundEnabled, setSoundStyle, sfx } from './sfx.js';
 import { applyTheme, CARD_SIZES } from './themes.js';
 import { setPointerPref } from './nav.js';
+import { detectPad } from './pad.js';
 import Icon from './components/Icon.vue';
 import Btn from './components/Btn.vue';
 import Logo from './components/Logo.vue';
@@ -84,6 +88,10 @@ import Grade from './components/Grade.vue';
 import FolderPicker from './components/FolderPicker.vue';
 import Menu from './components/Menu.vue';
 import ArtPicker from './components/ArtPicker.vue';
+import SteamCollections from './components/SteamCollections.vue';
+import SteamPreview from './components/SteamPreview.vue';
+import SteamEmu from './components/SteamEmu.vue';
+import { steamReport } from './steam.js';
 import ColorPicker from './components/ColorPicker.vue';
 import Setup from './views/Setup.vue';
 import Home from './views/Home.vue';
@@ -184,9 +192,15 @@ onMounted(async () => {
   setSoundEnabled(store.config.ui.sounds !== false);
   setSoundStyle(store.config.ui.soundPack, store.config.ui.volume);
   applyTheme(store.config.ui);
+  detectPad();
   setPointerPref(store.config.ui.pointer);
   await loadLibrary();
   loadArt();
+  // opened from a Steam shortcut whose game is gone (--game <id>), or a second launch handing over
+  const openGame = (id) => { if (id && store.lib) { store.quickMenu = false; go('game', { romId: Number(id) }); } };
+  call('app:startGame').then(openGame).catch(() => {});
+  window.cart.on('open-game', openGame);
+  setTimeout(steamReport, 2500);
   if (store.config.configured) call('server:status').then((c) => (store.connection = c)).catch(() => {});
   pushLayer(document.body, {
     back: () => { if (viewHandler('back') !== false) return; back(); },
@@ -248,6 +262,7 @@ watch(viewKey, async () => {
 </script>
 
 <style scoped>
+.tab-trig { margin: 0 4px; }
 .top-search { display: flex; align-items: center; gap: 8px; flex: 0 1 260px; min-width: 130px; height: 40px; padding: 0 10px 0 14px; border-radius: 999px; background: rgba(255, 255, 255, 0.06); border: 1px solid var(--line); color: var(--muted); cursor: text; transition: border-color 0.14s, background 0.14s; }
 .top-search.on, .top-search:focus-within { background: rgba(255, 255, 255, 0.1); border-color: var(--primary-l); color: var(--text); }
 .top-search:focus-within { box-shadow: var(--ring); }

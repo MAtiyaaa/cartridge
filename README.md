@@ -56,8 +56,8 @@ Your library is mirrored locally, so it opens instantly and works offline. Resyn
 <tr>
 <td valign="top">
 
-**🚂 One-click Add to Steam**<br>
-Settings → Steam adds Cartridge to your library as a non-Steam game, complete with cover, banner, logo and icon.
+**🚂 Your games in Steam**<br>
+Adds downloaded games to Steam with artwork and collections, launching exactly like the shortcuts you already have (Steam ROM Manager, EmuDeck or your own). Preview first, undo any time. Cartridge itself goes in with one click too.
 
 </td>
 <td valign="top">

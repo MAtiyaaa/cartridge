@@ -1,7 +1,7 @@
 {
   "name": "cartridge",
   "productName": "Cartridge",
-  "version": "0.5.6",
+  "version": "0.6.0",
   "description": "Controller-first RomM client for SteamOS and Bazzite",
   "main": "electron/main.js",
   "author": "abdu2304",
@@ -48,7 +48,7 @@
       }
     ],
     "releaseInfo": {
-      "releaseName": "Cartridge 0.5.6",
+      "releaseName": "Cartridge 0.6.0",
       "releaseNotesFile": "RELEASE_NOTES.md"
     }
   },

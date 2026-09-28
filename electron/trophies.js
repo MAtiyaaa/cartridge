@@ -209,23 +209,50 @@ function parseVita3k(root) {
 //   builds in between: <home>/<uid>/trophy/<ID>/ (a folder with the XML inside)
 //   <=0.15:  <user>/game_data/<CUSA…>/TrophyFiles/trophy00/Xml/TROP.XML (unlocks inline)
 // <home> is <user>/home unless the settings (config.json "home_dir") point somewhere else.
-const APP_DIRS = () => [path.join(HOME, 'Applications'), path.join(HOME, 'AppImages'), path.join(HOME, 'Downloads'), path.join(HOME, '.local', 'bin'), path.join(HOME, 'Games'), ...emulationRoots().map((r) => path.join(r, 'tools'))];
+const APP_DIRS = () => [path.join(HOME, 'Documents', 'Apps'), path.join(HOME, 'Applications'), path.join(HOME, 'AppImages'), path.join(HOME, 'Downloads'), path.join(HOME, '.local', 'bin'), path.join(HOME, 'Games'), path.join(HOME, 'Emulators'), ...emulationRoots().map((r) => path.join(r, 'tools'))];
 function shadps4Roots() {
   const found = [];
-  const users = [
-    path.join(XDG_DATA, 'shadPS4'), path.join(XDG_DATA, 'shadPS4QtLauncher'),
-    path.join(HOME, '.local', 'share', 'shadPS4'), path.join(HOME, '.local', 'share', 'shadPS4QtLauncher'),
-    path.join(HOME, '.var/app/net.shadps4.shadPS4/data/shadPS4'), path.join(HOME, '.var/app/net.shadps4.shadPS4QtLauncher/data/shadPS4'),
-  ];
+  // The emulator's own user folder only (the Qt launcher's folder just holds emulator versions)
+  const users = [path.join(XDG_DATA, 'shadPS4'), path.join(HOME, '.local', 'share', 'shadPS4'), path.join(HOME, '.var/app/net.shadps4.shadPS4/data/shadPS4')];
   for (const r of emulationRoots()) users.push(path.join(r, 'storage', 'shadps4'), path.join(r, 'storage', 'shadPS4'));
-  // portable installs keep a "user" folder next to the AppImage or inside the launcher's versions
+  // portable installs keep a "user" folder next to the program
   for (const d of APP_DIRS()) {
     users.push(path.join(d, 'user'));
-    for (const n of ls(d)) if (/shadps4/i.test(n) && isDir(path.join(d, n))) users.push(path.join(d, n, 'user'), path.join(d, n));
+    for (const n of ls(d)) if (/shadps4/i.test(n) && !/qtlauncher/i.test(n) && isDir(path.join(d, n))) users.push(path.join(d, n, 'user'));
   }
-  for (const v of ls(path.join(XDG_DATA, 'shadPS4QtLauncher', 'versions'))) users.push(path.join(XDG_DATA, 'shadPS4QtLauncher', 'versions', v, 'user'));
-  for (const u of [...new Set(users)]) if (shadps4Games(u).length) found.push({ dir: u, how: /\/user$/.test(u) ? 'known' : 'config' });
+  for (const u of [...new Set(users)]) if (isShadUser(u)) found.push({ dir: u, how: /\/user$/.test(u) ? 'known' : 'config' });
   return found;
+}
+// Is this shadPS4's user folder? It is, even before any trophies exist (no trophy key yet).
+function isShadUser(u) {
+  if (!isDir(u)) return false;
+  if (shadps4Games(u).length) return true;
+  const has = (n) => exists(path.join(u, n));
+  const marks = ['config.json', 'config.toml', 'keys.json', 'home', 'trophy', 'game_data', 'shader', 'sys_modules', 'custom_trophy'].filter(has).length;
+  return marks >= 2 || (has('log') && has('home'));
+}
+// The trophy key lives in keys.json (older builds: config.toml [Keys] TrophyKey). Without it,
+// shadPS4 cannot read a game's trophy file, so no trophies are ever written.
+function shadKeyState(u) {
+  const k = readText(path.join(u, 'keys.json'));
+  if (k) {
+    try {
+      const j = JSON.parse(k);
+      const v = j?.TrophyKeySet?.ReleaseTrophyKey;
+      if ((Array.isArray(v) && v.length) || (typeof v === 'string' && v.trim())) return 'set';
+    } catch {}
+  }
+  const t = readText(path.join(u, 'config.toml'));
+  if (t && /^\s*TrophyKey\s*=\s*["'][0-9a-fA-F]{8,}["']/m.test(t)) return 'set';
+  return k || t ? 'missing' : 'unknown';
+}
+// Where Cartridge looks for trophies inside a found folder (shown in Settings)
+function watchPaths(src, dir) {
+  if (src !== 'shadps4') return [dir];
+  const out = [];
+  for (const h of shadHomes(dir)) { const uids = ls(h).filter((x) => isDir(path.join(h, x))); out.push(...(uids.length ? uids : ['1000']).map((uid) => path.join(h, uid, 'trophy'))); }
+  out.push(path.join(dir, 'trophy'));
+  return [...new Set(out)];
 }
 // home folders for a user folder: the default plus any custom "home_dir" in its settings
 function shadHomes(userDir) {
@@ -448,7 +475,9 @@ function validateAt(src, dir) {
     return null;
   }
   if (src === 'shadps4') {
-    for (const d of [...tryDirs, path.join(dir, 'user'), path.join(dir, 'shadPS4')]) if (shadps4Games(d).length) return d;
+    const c = [...tryDirs, path.join(dir, 'user'), path.join(dir, 'shadPS4')];
+    for (const d of c) if (shadps4Games(d).length) return d;
+    for (const d of c) if (isShadUser(d)) return d;
     return null;
   }
   if (src === 'xenia') {
@@ -538,4 +567,4 @@ function signature(dirs) {
   return s;
 }
 
-module.exports = { SOURCES, DETECT, validate, scan, readSource, signature, iconPath, setIconCacheDir, readTropusrPS3, readTropusrVita, parseTrophyXml, parseGpd, readXdbf };
+module.exports = { APP_DIRS, emulationRoots, registerIcon: iconToken, shadKeyState, watchPaths, SOURCES, DETECT, validate, scan, readSource, signature, iconPath, setIconCacheDir, readTropusrPS3, readTropusrVita, parseTrophyXml, parseGpd, readXdbf };
