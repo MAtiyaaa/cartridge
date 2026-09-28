@@ -138,6 +138,17 @@ This downloads the latest AppImage to `~/Applications`, makes it executable and 
 
 > **Won't start from Steam?** Press Settings → Steam → Add to Steam again after updating, so Steam uses Cartridge's launch script. Each Steam launch is logged to `~/.config/Cartridge/steam-launch.log`. **Blank window?** It also switches to software rendering if the GPU process fails. You can also force it with **Settings → Look & feel → Rendering → Compatible**, or launch once with `./Cartridge-x86_64.AppImage --disable-gpu`. A log is kept at `~/.config/Cartridge/cartridge.log`.
 
+### Android
+
+Every release also ships **`Cartridge-android.apk`** on the [Releases page](https://github.com/abdu2304/cartridge/releases/latest), built from the same code as the AppImage. Install it (allow installs from your browser or file manager), open Cartridge and press **Settings → Android → Allow access to all files** so games can be saved straight into your ROM folders.
+
+- **ROM folders are found for you.** Cartridge looks on internal storage and SD cards for `ROMs`, `Emulation/roms` and the ES-DE ROM directory, and uses per-console folders like `nds`, `n3ds`, `psp`, `ps2` or `switch` inside it. A console folder that sits somewhere else (like `NDS` at the top of the SD card) is picked up too.
+- **Same controls, plus touch.** Built-in and Bluetooth controllers work exactly like on the Deck; the whole interface is also touch friendly. The back button/gesture goes back.
+- **Dual screen (AYN Thor and other dual-screen devices).** The bottom screen becomes a touch companion: the highlighted game with its cover and a Download button, live download progress, and a touch d-pad for the top screen. On single-screen devices this never shows up.
+- **Downloads keep going in the background** with a notification, and **updates** download from GitHub Releases in-app (Android asks before installing).
+
+The Android-only settings live in **Settings → Android** and only exist in the APK; the desktop app is unchanged.
+
 <br>
 
 ## ✦ Connecting to RomM
@@ -177,6 +188,8 @@ npm run dist    # build release/Cartridge-x86_64.AppImage
 ```
 
 Bumping `version` in `package.json` on `main` builds the AppImage on GitHub Actions and publishes it as a release. Installed copies pick it up automatically.
+
+**Android APK:** `npm run build:android` builds the UI in Android mode and packs the unchanged `electron/` backend with a small Electron stand-in (`android-backend/`) that runs on the Node.js runtime embedded in the app. Then `cd android && ./gradlew assembleRelease` (JDK 21 + Android SDK). The release workflow does this for every version and attaches the APK to the same release. To sign release APKs with your own key (so updates install over each other), add these repository secrets: `ANDROID_KEYSTORE_BASE64` (`base64 -w0 your.jks`), `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` and optionally `ANDROID_KEY_PASSWORD`. Without them the APK is debug-signed.
 
 <br>
 

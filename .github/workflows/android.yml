@@ -1,0 +1,45 @@
+name: Android
+
+# Builds the APK for pull requests so Android breakage shows up before a release.
+# The APK is kept as a workflow artifact for testing on a device.
+on:
+  pull_request:
+    paths: ['src/**', 'electron/**', 'android/**', 'android-backend/**', 'scripts/**', 'package.json', 'package-lock.json', 'vite.config.mjs', 'capacitor.config.json', 'index.html']
+  workflow_dispatch:
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@v4
+      - run: npm ci
+      - name: Desktop UI still builds without Android code
+        run: |
+          npm run build:ui
+          ! grep -l "CartridgeNative\\|android:companion" dist/assets/*.js
+      - name: Android backend starts on Node 18 (the runtime inside the APK)
+        run: |
+          npm run build:android -- --no-sync
+          cd android-dist/nodejs
+          mkdir -p "$RUNNER_TEMP/sd/ROMs/nds" "$RUNNER_TEMP/data"
+          CARTRIDGE_STORAGE="$RUNNER_TEMP/sd" CARTRIDGE_DATA="$RUNNER_TEMP/data" CARTRIDGE_PORT=47100 CARTRIDGE_TOKEN=ci npx -y node@18 android-main.js > "$RUNNER_TEMP/node.log" 2>&1 &
+          for i in $(seq 1 20); do curl -sf -XPOST -H 'x-cart-token: ci' localhost:47100/ipc/fs:detect > "$RUNNER_TEMP/detect.json" && break; sleep 1; done
+          cat "$RUNNER_TEMP/detect.json"
+          grep -q '"ROMs"\|/ROMs' "$RUNNER_TEMP/detect.json"
+      - run: npx cap sync android
+      - name: Build APK
+        working-directory: android
+        run: ./gradlew assembleRelease --no-daemon
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Cartridge-android
+          path: android/app/build/outputs/apk/release/app-release.apk

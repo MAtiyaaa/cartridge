@@ -1,0 +1,8 @@
+{
+  "appId": "io.github.abdu2304.cartridge",
+  "appName": "Cartridge",
+  "webDir": "android-dist",
+  "server": { "androidScheme": "http", "cleartext": true },
+  "android": { "allowMixedContent": true, "backgroundColor": "#06070b" },
+  "plugins": { "CapacitorNodeJS": { "nodeDir": "nodejs", "startMode": "auto" } }
+}

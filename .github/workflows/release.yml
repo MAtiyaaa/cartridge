@@ -2,6 +2,7 @@ name: Release
 
 # Bumping "version" in package.json on main builds the AppImage and publishes
 # it as release v<version>. Installed copies of Cartridge pick it up on their own.
+# The same commit is also built as the Android APK and attached to that release.
 on:
   push:
     branches: [main]
@@ -34,3 +35,53 @@ jobs:
         run: npm run release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  apk:
+    # Built from the same commit as the AppImage. Runs even if the AppImage job fails,
+    # so a desktop publishing problem never holds back the Android build.
+    needs: appimage
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@v4
+      - run: npm ci
+      - name: Build UI + backend for Android
+        run: npm run build:android
+        env:
+          VITE_CART_REPO: ${{ github.repository }}
+      - name: Signing key
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/cartridge.jks"
+            echo "CARTRIDGE_KEYSTORE=$RUNNER_TEMP/cartridge.jks" >> "$GITHUB_ENV"
+          else
+            echo "::warning::ANDROID_KEYSTORE_BASE64 is not set, so this APK is debug-signed and cannot update an APK signed with a different key. See README (Android)."
+          fi
+      - name: Build APK
+        working-directory: android
+        env:
+          CARTRIDGE_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          CARTRIDGE_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          CARTRIDGE_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: ./gradlew assembleRelease --no-daemon
+      - name: Publish APK
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          V=$(node -p "require('./package.json').version")
+          cp android/app/build/outputs/apk/release/app-release.apk Cartridge-android.apk
+          NAME=$(node -p "require('./package.json').build.releaseInfo.releaseName")
+          gh release view "v$V" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 \
+            || gh release create "v$V" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "$NAME" --notes-file RELEASE_NOTES.md
+          gh release upload "v$V" Cartridge-android.apk --repo "$GITHUB_REPOSITORY" --clobber

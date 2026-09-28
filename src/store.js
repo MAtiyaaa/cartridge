@@ -1,4 +1,5 @@
 import { reactive, markRaw } from 'vue';
+import { romimg } from './platform.js';
 
 const rd = window.cart;
 export const call = (ch, arg) => rd.call(ch, arg ? JSON.parse(JSON.stringify(arg)) : arg);
@@ -130,7 +131,7 @@ export async function scanServer() {
 // ---------------- images / backgrounds
 export function img(p) {
   if (!p) return '';
-  return 'romimg://img/?u=' + encodeURIComponent(p);
+  return romimg('u=' + encodeURIComponent(p));
 }
 export function cover(rom, large = false) {
   const o = store.art?.[rom.id]?.grid;
