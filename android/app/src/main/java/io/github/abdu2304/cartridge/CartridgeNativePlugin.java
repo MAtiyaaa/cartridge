@@ -7,6 +7,7 @@ import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.hardware.display.DisplayManager;
+import android.hardware.input.InputManager;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -15,6 +16,7 @@ import android.os.Handler;
 import android.os.Looper;
 import android.provider.Settings;
 import android.view.Display;
+import android.view.InputDevice;
 import android.view.ViewGroup;
 import android.view.WindowManager;
 import android.webkit.WebSettings;
@@ -25,6 +27,7 @@ import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import androidx.core.content.FileProvider;
 
+import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
@@ -54,15 +57,40 @@ public class CartridgeNativePlugin extends Plugin {
         private void changed() { notifyListeners("displays", describe()); }
     };
 
+    private InputManager inputs;
+    private final InputManager.InputDeviceListener inputListener = new InputManager.InputDeviceListener() {
+        @Override public void onInputDeviceAdded(int id) { notifyListeners("controllers", new JSObject()); }
+        @Override public void onInputDeviceRemoved(int id) { notifyListeners("controllers", new JSObject()); }
+        @Override public void onInputDeviceChanged(int id) {}
+    };
+
     @Override
     public void load() {
         displays = (DisplayManager) getContext().getSystemService(Context.DISPLAY_SERVICE);
         displays.registerDisplayListener(displayListener, main);
+        inputs = (InputManager) getContext().getSystemService(Context.INPUT_SERVICE);
+        inputs.registerInputDeviceListener(inputListener, main);
+    }
+
+    /** Names of connected controllers (built-in and Bluetooth), used to guess Nintendo vs Xbox button layout. */
+    @PluginMethod
+    public void controllers(PluginCall call) {
+        JSArray names = new JSArray();
+        for (int id : InputDevice.getDeviceIds()) {
+            InputDevice d = InputDevice.getDevice(id);
+            if (d == null || d.isVirtual()) continue;
+            int s = d.getSources();
+            if ((s & InputDevice.SOURCE_GAMEPAD) == InputDevice.SOURCE_GAMEPAD || (s & InputDevice.SOURCE_JOYSTICK) == InputDevice.SOURCE_JOYSTICK) names.put(d.getName());
+        }
+        JSObject o = new JSObject();
+        o.put("names", names);
+        call.resolve(o);
     }
 
     @Override
     protected void handleOnDestroy() {
         displays.unregisterDisplayListener(displayListener);
+        inputs.unregisterInputDeviceListener(inputListener);
         hide();
     }
 

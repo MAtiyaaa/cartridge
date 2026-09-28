@@ -86,8 +86,11 @@ export function beforeMount() {
   applyViewport();
   const css = document.createElement('style');
   // Real touch on Android: let the WebView scroll natively (smooth, with momentum) and tap cleanly
-  css.textContent = 'html, body { touch-action: pan-x pan-y; } [data-scroll] { overscroll-behavior: contain; } * { -webkit-tap-highlight-color: transparent; }';
+  // The page itself never scrolls: a swipe that reached the end of a list used to carry on and
+  // push the whole window up, leaving the Home header cut off after scrolling back.
+  css.textContent = 'html, body { touch-action: pan-x pan-y; overflow: hidden; overscroll-behavior: none; } [data-scroll] { overscroll-behavior-y: contain; } * { -webkit-tap-highlight-color: transparent; }';
   document.head.appendChild(css);
+  addEventListener('scroll', () => { if (scrollX || scrollY) scrollTo(0, 0); }, { passive: true });
   addEventListener('resize', () => { applyViewport(); cart.call('android:size', { w: innerWidth, h: innerHeight }).catch(() => {}); });
   return cart.call('android:hello', { w: innerWidth, h: innerHeight }).then((h) => { cart.version = h.version; zoom = h.zoom || 1; applyViewport(); });
 }
@@ -143,6 +146,22 @@ export async function afterMount() {
   watch(() => store.config?.android?.dualScreen, refreshCompanion);
   refreshCompanion();
 
+  // Face button layout for the second screen's touch controls: Nintendo (A on the right) or
+  // Xbox (A at the bottom). Auto goes by the controller's name; Settings → Android can override.
+  let layout = 'xbox';
+  const NINTENDO = /nintendo|switch|pro controller|joy-?con|\bns\b/i;
+  const readLayout = async () => {
+    const pick = store.config?.android?.buttonLayout || 'auto';
+    let detected = 'xbox';
+    try { const { names = [] } = await Native.controllers(); store.androidPads = names; if (names.some((n) => NINTENDO.test(n))) detected = 'nintendo'; } catch {}
+    store.androidLayoutDetected = detected;
+    const next = pick === 'auto' ? detected : pick;
+    if (next !== layout) { layout = next; publish(); }
+  };
+  watch(() => store.config?.android?.buttonLayout, readLayout);
+  Native.addListener('controllers', readLayout);
+  readLayout();
+
   // The companion has its own copy of the library; it only needs to know what the top screen shows
   let focused = {}, t = null;
   const publish = () => {
@@ -156,6 +175,7 @@ export async function afterMount() {
       else if (focused.collectionId) st.collectionId = focused.collectionId;
       else if (r.name === 'platform') st.platformId = Number(p.platformId);
       else if (r.name === 'collection') st.collectionId = p.collectionId;
+      st.layout = layout;
       call('android:companion:state', st).catch(() => {});
     }, 100);
   };

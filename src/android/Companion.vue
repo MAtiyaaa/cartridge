@@ -149,7 +149,7 @@
             <div class="dpad glass">
               <button v-for="d in DIRS" :key="d.a" class="k" :class="d.a" :aria-label="d.a" @pointerdown.prevent="hold(d.a)" @pointerup="release" @pointerleave="release" @pointercancel="release"><Icon :name="d.icon" :size="30" /></button>
             </div>
-            <div class="face">
+            <div class="face" :class="store.companion.layout === 'nintendo' ? 'nin' : 'xbox'">
               <button class="k y" aria-label="Y" @pointerdown.prevent="press('y')">Y</button>
               <button class="k x" aria-label="X" @pointerdown.prevent="press('x')">X</button>
               <button class="k b" aria-label="B" @pointerdown.prevent="press('back')">B</button>
@@ -415,6 +415,8 @@ html, body { touch-action: pan-x pan-y; }
 .face { display: grid; grid-template: repeat(3, 60px) / repeat(3, 60px); }
 .face .k { border-radius: 50%; box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3); }
 .face .y { grid-area: 1 / 2; } .face .x { grid-area: 2 / 1; } .face .b { grid-area: 2 / 3; }
+/* Nintendo layout: X top, Y left, A right, B bottom */
+.face.nin .x { grid-area: 1 / 2; } .face.nin .y { grid-area: 2 / 1; } .face.nin .a { grid-area: 2 / 3; } .face.nin .b { grid-area: 3 / 2; }
 .face .a { grid-area: 3 / 2; background: var(--grad); border-color: transparent; color: var(--on-primary); }
 .jump { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .jbtn { display: flex; align-items: center; justify-content: center; gap: 7px; height: 44px; border-radius: 999px; border: 1px solid var(--line); background: rgba(255, 255, 255, 0.04); color: var(--muted); font: 500 13.5px var(--body); transition: background 0.15s, color 0.15s; }
