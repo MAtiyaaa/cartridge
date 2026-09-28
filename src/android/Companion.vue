@@ -149,7 +149,7 @@
             <div class="dpad">
               <button v-for="d in DIRS" :key="d.a" class="k" :class="d.a" :aria-label="d.a" @pointerdown.prevent="hold(d.a)" @pointerup="release" @pointerleave="release" @pointercancel="release"><Icon :name="d.icon" :size="30" /></button>
             </div>
-            <div class="face" :class="nintendoFace ? 'nin' : 'xbox'">
+            <div class="facepad" :class="nintendoFace ? 'nin' : 'xbox'">
               <button v-for="k in FACE" :key="k.b" class="k glyphed" :class="k.b.toLowerCase()" :aria-label="k.b" @pointerdown.prevent="press(k.a)">
                 <Btn :b="nintendoFace ? NIN_POS[k.b] : k.b" :kind="padKindHere" class="gl face-gl" />
               </button>
@@ -453,12 +453,12 @@ html, body { touch-action: pan-x pan-y; }
 .dpad .down { grid-area: 3 / 2; border-radius: 0 0 14px 14px; border-top: 0; }
 .dpad .left { grid-area: 2 / 1; border-radius: 14px 0 0 14px; border-right: 0; }
 .dpad .right { grid-area: 2 / 3; border-radius: 0 14px 14px 0; border-left: 0; }
-.face { display: grid; grid-template: repeat(3, 60px) / repeat(3, 60px); }
-.face .k { border-radius: 50%; box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3); }
-.face .y { grid-area: 1 / 2; } .face .x { grid-area: 2 / 1; } .face .b { grid-area: 2 / 3; } .face .a { grid-area: 3 / 2; }
-.face.nin .x { grid-area: 1 / 2; } .face.nin .y { grid-area: 2 / 1; } .face.nin .a { grid-area: 2 / 3; } .face.nin .b { grid-area: 3 / 2; }
-.face .k:not(.glyphed).a { background: var(--grad); border-color: transparent; color: var(--on-primary); }
-.face .k.glyphed { background: rgba(255, 255, 255, 0.05); }
+.facepad { display: grid; grid-template: repeat(3, 60px) / repeat(3, 60px); }
+.facepad .k { border-radius: 50%; box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3); }
+.facepad .y { grid-area: 1 / 2; } .facepad .x { grid-area: 2 / 1; } .facepad .b { grid-area: 2 / 3; } .facepad .a { grid-area: 3 / 2; }
+.facepad.nin .x { grid-area: 1 / 2; } .facepad.nin .y { grid-area: 2 / 1; } .facepad.nin .a { grid-area: 2 / 3; } .facepad.nin .b { grid-area: 3 / 2; }
+.facepad .k:not(.glyphed).a { background: var(--grad); border-color: transparent; color: var(--on-primary); }
+.facepad .k.glyphed { background: rgba(255, 255, 255, 0.05); }
 .face-gl { transform: scale(2); }
 .jump { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .jbtn { display: flex; align-items: center; justify-content: center; gap: 7px; height: 44px; border-radius: 14px; border: 1px solid var(--line); background: rgba(255, 255, 255, 0.04); color: var(--muted); font: 500 13.5px var(--body); transition: background 0.15s, color 0.15s; }
@@ -475,7 +475,7 @@ html, body { touch-action: pan-x pan-y; }
 .d-gear:active { color: var(--text); transform: scale(0.94); }
 /* narrow phones */
 @media (max-width: 440px) {
-  .dpad, .face { grid-template: repeat(3, 52px) / repeat(3, 52px); }
+  .dpad, .facepad { grid-template: repeat(3, 52px) / repeat(3, 52px); }
   .face-gl { transform: scale(1.75); }
   .strip { grid-template-columns: repeat(4, 1fr); }
   .strip .s-cover:nth-child(n + 5) { display: none; }

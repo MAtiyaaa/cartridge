@@ -256,7 +256,9 @@
 
           <template v-else-if="sec === 'steam'">
             <h1>Steam</h1>
+            <p v-if="IS_ANDROID" class="muted small">Steam doesn't run on Android, so these tools work on a Deck or PC. For Windows games on this device, open a game and pick More → Open in a PC game app (GameNative, GameHub or Winlator).</p>
             <SteamSettings />
+            <template v-if="!IS_ANDROID">
             <div class="subh" style="margin-top: 10px"><Icon name="mdiApplicationOutline" :size="20" />Cartridge itself</div>
             <div class="about glass">
               <img src="../../steam-art/grid.png" class="steam-grid" />
@@ -270,6 +272,7 @@
               </div>
             </div>
             <p class="muted small">Added before 0.2.1? Press Add to Steam once more: Steam now starts Cartridge through a launch script that makes it open reliably, and logs each launch to ~/.config/Cartridge/steam-launch.log. Keep the AppImage where it is; if you move it, add it again.</p>
+            </template>
           </template>
 
           <template v-else-if="sec === 'remote'">

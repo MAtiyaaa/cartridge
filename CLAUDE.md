@@ -62,3 +62,9 @@ LT/RT switch top tabs. LB/RB only switch sections inside a page. A select, B bac
 
 ## Releases (full steps: HANDOFF D8)
 Only when the owner asks. Bump `version` and `build.releaseInfo.releaseName` ("Cartridge X.Y.Z") in `package.json`, put only this version's notes in `RELEASE_NOTES.md` (heading `## Cartridge X.Y.Z · Title`), add them to the top of `CHANGELOG.md`, grouped as New / Changed / Fixed with bold lead-ins. CI builds, launch-checks and publishes.
+
+## This fork (MAtiyaaa/cartridge)
+- Builds from one codebase: desktop (`vite build`), Android (`vite build --mode android`, Capacitor + nodejs-mobile running `electron/main.js` behind `android-backend/electron-shim.js`) and the phone remote page (`vite build --mode remote`, `remote.html`). `src/platform.js` has `IS_ANDROID` / `IS_REMOTE`; Android-only code must stay behind them so the desktop bundle never carries it.
+- Phone remote: `electron/remote-server.js` (LAN server, pairing, allowlist), `electron/remote-discovery.js`, `src/remote/` (phone app, publisher). Android native bits live in `CartridgeNativePlugin.java`.
+- Upstream (abdu2304/cartridge) is merged with merge commits; where both sides built the same feature, upstream's version is kept.
+- Releases here publish from this repository (AppImage and a signed APK); versions follow this fork's own numbering.
