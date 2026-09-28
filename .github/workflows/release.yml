@@ -22,6 +22,16 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: Publish to this repository
+        # package.json names abdu2304/cartridge; a fork publishes to (and updates from) its own releases instead
+        run: |
+          node -e "
+            const fs = require('fs'), p = require('./package.json');
+            const [owner, repo] = process.env.GITHUB_REPOSITORY.split('/');
+            p.build.publish = p.build.publish.map((x) => ({ ...x, owner, repo }));
+            fs.writeFileSync('package.json', JSON.stringify(p, null, 2) + '\n');
+          "
+          grep -A4 '"publish"' package.json
       - name: Build AppImage
         run: npm run dist
       - name: Launch check (must open and render before anything is published)
