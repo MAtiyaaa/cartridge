@@ -1,0 +1,116 @@
+<template>
+  <div class="sm">
+    <div class="subh"><Icon name="mdiHarddisk" :size="20" />Storage manager</div>
+    <div v-if="!ov" class="muted small"><Icon name="mdiSync" :size="16" class="spin" /> Measuring games…</div>
+    <template v-else>
+      <div v-if="ov.drives.length > 1" class="seg sm-drives">
+        <button v-for="d in ov.drives" :key="d.mount" data-focus :class="{ on: drive === d.mount }" @click="pick(d.mount)">{{ d.label }}</button>
+      </div>
+      <div v-if="cur" class="sm-card glass">
+        <div class="sm-top"><b>{{ cur.label }}</b><span class="muted small mono">{{ cur.mount }}</span><div class="spacer" /><span>{{ bytes(cur.free) }} free of {{ bytes(cur.total) }}</span></div>
+        <div class="sm-bar">
+          <i class="g" :style="{ width: pct(cur.games) + '%' }" />
+          <i class="o" :style="{ width: pct(other) + '%' }" />
+        </div>
+        <div class="sm-legend">
+          <span><i class="dot-g" />Games from Cartridge · {{ bytes(cur.games) }}</span>
+          <span><i class="dot-o" />Everything else · {{ bytes(other) }}</span>
+          <span><i class="dot-f" />Free · {{ bytes(cur.free) }}</span>
+        </div>
+      </div>
+
+      <div class="row wrap sm-tools">
+        <div class="seg"><button v-for="s in sorts" :key="s.v" data-focus :class="{ on: sort === s.v }" @click="sort = s.v">{{ s.l }}</button></div>
+        <div class="spacer" />
+        <button v-if="picked.size" class="btn small" data-focus @click="picked = new Set()"><Icon name="mdiClose" :size="18" />Clear selection</button>
+        <button class="btn small danger" data-focus :disabled="!picked.size || busy" @click="remove"><Icon name="mdiDeleteOutline" :size="18" />{{ picked.size ? `Delete ${picked.size} · ${bytes(pickedSize)}` : 'Delete' }}</button>
+      </div>
+
+      <div v-if="!list.length" class="muted small">No games from Cartridge on this drive.</div>
+      <div class="sm-list">
+        <button v-for="g in list" :key="g.romId" class="sm-row" :class="{ on: picked.has(g.romId) }" data-focus :data-key="'st-' + g.romId" @click="toggle(g)">
+          <Icon :name="picked.has(g.romId) ? 'mdiCheckboxMarked' : 'mdiCheckboxBlankOutline'" :size="22" class="sm-ck" />
+          <div class="sm-thumb"><img v-if="g.cover" :src="img(g.cover)" loading="lazy" /></div>
+          <div class="sm-mid"><b>{{ g.name }}</b><span class="muted">{{ g.platform }}<template v-if="g.at"> · added {{ ago(g.at) }}</template></span></div>
+          <span class="sm-size">{{ bytes(g.size) }}</span>
+        </button>
+      </div>
+    </template>
+  </div>
+</template>
+
+<script setup>
+import { computed, onMounted, ref } from 'vue';
+import { call, img, bytes, ago, confirm, toast } from '../store.js';
+import Icon from './Icon.vue';
+
+// Settings → Storage: one drive at a time, like Steam's storage manager. A picks games, Delete removes
+// them from this device (they stay on the RomM server).
+const ov = ref(null);
+const drive = ref('');
+const sort = ref('size');
+const sorts = [{ v: 'size', l: 'Size' }, { v: 'name', l: 'Name' }, { v: 'added', l: 'Recently added' }];
+const picked = ref(new Set());
+const busy = ref(false);
+const cur = computed(() => ov.value?.drives.find((d) => d.mount === drive.value) || ov.value?.drives[0] || null);
+const other = computed(() => (cur.value ? Math.max(0, cur.value.total - cur.value.free - cur.value.games) : 0));
+const pct = (n) => (cur.value?.total ? Math.min(100, (n / cur.value.total) * 100) : 0);
+const list = computed(() => {
+  const g = (ov.value?.games || []).filter((x) => x.drive === cur.value?.mount);
+  if (sort.value === 'name') return [...g].sort((a, b) => a.name.localeCompare(b.name));
+  if (sort.value === 'added') return [...g].sort((a, b) => b.at - a.at);
+  return [...g].sort((a, b) => b.size - a.size);
+});
+const pickedSize = computed(() => (ov.value?.games || []).filter((g) => picked.value.has(g.romId)).reduce((s, g) => s + g.size, 0));
+function pick(m) { drive.value = m; picked.value = new Set(); }
+function toggle(g) { const s = new Set(picked.value); s.has(g.romId) ? s.delete(g.romId) : s.add(g.romId); picked.value = s; }
+async function load() {
+  try { ov.value = await call('storage:overview'); if (!ov.value.drives.some((d) => d.mount === drive.value)) drive.value = ov.value.drives[0]?.mount || ''; }
+  catch (e) { toast(e.message, 'error'); ov.value = { drives: [], games: [] }; }
+}
+async function remove() {
+  const games = ov.value.games.filter((g) => picked.value.has(g.romId));
+  const names = games.slice(0, 6).map((g) => `${g.name}  ·  ${bytes(g.size)}`).join('\n') + (games.length > 6 ? `\n…and ${games.length - 6} more` : '');
+  if (!(await confirm(`Delete ${games.length} game${games.length === 1 ? '' : 's'}?`, `Frees ${bytes(pickedSize.value)} on this device:\n${names}\n\nThey stay on your RomM server.`, 'Delete', true))) return;
+  busy.value = true;
+  let n = 0;
+  for (const g of games) { try { await call('roms:delete', { romId: g.romId, path: g.path }); n++; } catch (e) { toast(`${g.name}: ${e.message}`, 'error', 4000); } }
+  busy.value = false;
+  picked.value = new Set();
+  toast(`Deleted ${n} game${n === 1 ? '' : 's'} from this device`, 'ok', 2600, 'mdiDeleteOutline');
+  load();
+}
+onMounted(load);
+</script>
+
+<style scoped>
+.sm { display: flex; flex-direction: column; gap: 14px; }
+.subh { display: flex; align-items: center; gap: 10px; font-family: var(--display); font-size: 19px; font-weight: 700; margin-top: 4px; }
+.small { font-size: 12.5px; }
+.wrap { flex-wrap: wrap; }
+.spacer { flex: 1; }
+.sm-drives { align-self: flex-start; }
+.sm-card { padding: 16px 18px; display: flex; flex-direction: column; gap: 10px; }
+.sm-top { display: flex; align-items: baseline; gap: 12px; font-size: 14px; min-width: 0; }
+.sm-top b { font-size: 16px; }
+.sm-bar { display: flex; height: 14px; border-radius: 7px; overflow: hidden; background: rgba(255, 255, 255, 0.08); }
+.sm-bar i { display: block; height: 100%; }
+.sm-bar .g, .dot-g { background: var(--bar, var(--grad)); }
+.sm-bar .o, .dot-o { background: rgba(255, 255, 255, 0.28); }
+.dot-f { background: rgba(255, 255, 255, 0.08); box-shadow: inset 0 0 0 1px var(--line-2); }
+.sm-legend { display: flex; gap: 18px; flex-wrap: wrap; font-size: 12.5px; color: var(--muted); }
+.sm-legend span { display: inline-flex; align-items: center; gap: 7px; }
+.sm-legend i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+.sm-list { display: flex; flex-direction: column; gap: 6px; }
+.sm-row { display: flex; align-items: center; gap: 14px; padding: 8px 14px; border-radius: 9px; background: rgba(255, 255, 255, 0.045); border: 1px solid transparent; text-align: left; min-width: 0; }
+.sm-row:focus { background: rgba(var(--primary-rgb), 0.2); }
+.sm-row.on { border-color: rgba(var(--primary-l-rgb), 0.5); }
+.sm-ck { color: var(--muted); }
+.sm-row.on .sm-ck { color: var(--primary-l); }
+.sm-thumb { width: 34px; height: 46px; border-radius: 5px; overflow: hidden; background: #1a1e2a; flex: none; }
+.sm-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.sm-mid { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.sm-mid b { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sm-mid span { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sm-size { font-family: var(--display); font-weight: 600; font-size: 14px; flex: none; }
+</style>

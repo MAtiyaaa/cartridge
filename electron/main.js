@@ -1093,10 +1093,52 @@ async function downloadTo(url, dest, it, onBytes) {
   await fsp.rename(part, dest);
 }
 
+// Checksums: RomM keeps a size, md5 and sha1 for every file. Archives (zip, 7z, rar) are hashed by
+// their unpacked contents and CHDs by their own embedded hash, so those only get the size check.
+// Consoles RomM doesn't hash (PS4, Switch...) have no hashes and also only get the size check.
+const HASH_BY_CONTENTS = new Set(['zip', '7z', 'rar', 'chd']);
+async function checkFile(file, f, it) {
+  if (!f) return null;
+  const st = await fsp.stat(file).catch(() => null);
+  if (!st) return { why: 'missing', got: 'missing' };
+  if (f.file_size_bytes && st.size !== f.file_size_bytes) return { why: 'size', got: 'size:' + st.size };
+  const want = f.md5_hash ? ['md5', f.md5_hash] : f.sha1_hash ? ['sha1', f.sha1_hash] : null;
+  if (!want || HASH_BY_CONTENTS.has(path.extname(file).slice(1).toLowerCase())) return null;
+  it.currentFile = 'Checking ' + path.basename(file);
+  emitQueueThrottled();
+  const h = crypto.createHash(want[0]);
+  for await (const chunk of fs.createReadStream(file, { highWaterMark: 1 << 20 })) {
+    if (it.abort.signal.aborted) throw new Error('aborted');
+    h.update(chunk);
+  }
+  const got = h.digest('hex');
+  return got === String(want[1]).toLowerCase() ? null : { why: 'hash', got };
+}
+// Damaged files are deleted, so Retry downloads them again instead of skipping them as complete.
+// If the retry brings exactly the same file, the server has it that way and RomM's checksum is out
+// of date (the file changed after RomM scanned it): keep it and say so instead of failing forever.
+const lastBad = new Map(); // file -> what the previous attempt got
+async function checkFiles(pairs, it) {
+  const bad = [];
+  for (const [file, f] of pairs) {
+    const r = await checkFile(file, f, it);
+    if (!r) { lastBad.delete(file); continue; }
+    if (r.why !== 'missing' && lastBad.get(file) === r.got) { lastBad.delete(file); it.notice = 'stale'; log('download kept, RomM checksum out of date', path.basename(file)); continue; }
+    lastBad.set(file, r.got);
+    bad.push([file, r.why]);
+  }
+  it.currentFile = null;
+  if (!bad.length) return;
+  for (const [file] of bad) await fsp.rm(file, { force: true }).catch(() => {});
+  log('download damaged', bad.map(([f, w]) => path.basename(f) + ':' + w).join(', '));
+  throw new Error(`Damaged download: ${path.basename(bad[0][0])}${bad.length > 1 ? ` and ${bad.length - 1} more` : ''} didn't match RomM's checksum. Retry to download again.`);
+}
+
 async function runJob(it) {
   it.status = 'downloading';
   it.abort = new AbortController();
   it.error = null;
+  it.notice = null;
   emitQueue();
   const base = await resolveBase();
   let lastT = Date.now(), lastB = 0;
@@ -1131,6 +1173,7 @@ async function runJob(it) {
         if (!files[0] || !/not found|404/.test(e.message)) throw e;
         await downloadTo(`${base}/api/roms/${rom.id}/content/${encodeURIComponent(fname)}`, finalPath, it, onBytes);
       }
+      await checkFiles([[finalPath, files[0]]], it);
     } else {
       // Multi-file: mirror the server folder, one file at a time (resumable)
       const folder = path.join(target, rom.fs_name);
@@ -1145,6 +1188,7 @@ async function runJob(it) {
         await downloadTo(`${base}/api/roms/${f.id}/files/content/${encodeURIComponent(f.file_name)}`, dest, it, onBytes);
       }
       it.currentFile = null;
+      await checkFiles(files.map((f) => [path.join(folder, f.full_path.startsWith(romPrefix) ? f.full_path.slice(romPrefix.length) : f.file_name), f]), it);
       finalPath = folder;
       // Multi-disc: generate an .m3u if the server has none
       const exts = files.map((f) => (f.file_name.split('.').pop() || '').toLowerCase());
@@ -1204,6 +1248,69 @@ async function downloadBios(platformId, slug) {
     done.push({ name: f.file_name });
   }
   return { count: list.length, files: done, dir };
+}
+
+// ---------------------------------------------------------------- storage manager
+// Like Steam's: each drive with what Cartridge's games use, what else uses it and what is free, and
+// every game on this device by size. Sizes are measured on disk (folders walked) and cached by mtime.
+const sizeCache = new Map(); // path -> { m, size }
+async function sizeOnDisk(p) {
+  const st = await fsp.stat(p).catch(() => null);
+  if (!st) return 0;
+  if (!st.isDirectory()) return st.size;
+  const c = sizeCache.get(p);
+  if (c && c.m === st.mtimeMs) return c.size;
+  let size = 0;
+  const walk = async (d, depth) => {
+    for (const e of await fsp.readdir(d, { withFileTypes: true }).catch(() => [])) {
+      const q = path.join(d, e.name);
+      if (e.isDirectory() && depth < 12) await walk(q, depth + 1);
+      else if (e.isFile()) size += (await fsp.stat(q).catch(() => ({ size: 0 }))).size;
+    }
+  };
+  await walk(p, 0);
+  sizeCache.set(p, { m: st.mtimeMs, size });
+  return size;
+}
+function mounts() {
+  try {
+    return fs.readFileSync('/proc/mounts', 'utf8').split('\n').map((l) => l.split(' ')[1]).filter(Boolean)
+      .map((m) => m.replace(/\\040/g, ' ')).sort((a, b) => b.length - a.length);
+  } catch { return ['/']; }
+}
+function driveOf(p, list) {
+  let real; try { real = fs.realpathSync(p); } catch { real = p; }
+  const mount = list.find((m) => real === m || real.startsWith(m.endsWith('/') ? m : m + '/')) || '/';
+  const name = path.basename(mount);
+  const internal = mount === '/' || /^\/(home|var|var\/home|sysroot)$/.test(mount);
+  return { mount, label: internal ? 'This device' : name || mount };
+}
+async function storageOverview() {
+  const list = mounts();
+  const drives = new Map();
+  const addDrive = async (p) => {
+    if (!p) return null;
+    let d = p; while (d && !isDir(d)) { const up = path.dirname(d); if (up === d) break; d = up; }
+    const dv = driveOf(d || '/', list);
+    if (!drives.has(dv.mount)) {
+      let free = 0, total = 0;
+      try { const st = await fsp.statfs(dv.mount); free = st.bavail * st.bsize; total = st.blocks * st.bsize; } catch {}
+      drives.set(dv.mount, { ...dv, free, total, games: 0, count: 0 });
+    }
+    return drives.get(dv.mount);
+  };
+  await addDrive(config.romsRoot);
+  const roms = new Map(library ? Object.values(library.roms).flat().map((r) => [r.id, r]) : []);
+  const games = [];
+  for (const [id, p] of Object.entries(installedMap)) {
+    if (!p || p === MARKED) continue;
+    const r = roms.get(Number(id));
+    const dv = await addDrive(p);
+    const size = await sizeOnDisk(p);
+    dv.games += size; dv.count++;
+    games.push({ romId: Number(id), name: r?.name || path.basename(p), platform: r?.platform_display_name || '', cover: r ? r.path_cover_small || r.url_cover || null : null, path: p, size, at: manifest[id]?.at || 0, drive: dv.mount });
+  }
+  return { drives: [...drives.values()].sort((a, b) => ((b.label === 'This device') - (a.label === 'This device')) || b.total - a.total), games };
 }
 
 // ---------------------------------------------------------------- self-update (GitHub Releases)
@@ -1470,6 +1577,35 @@ const handlers = {
     const j = await r.json();
     return j.raw_token;
   },
+  // QR pairing: RomM's device sign-in (/api/auth/device, newer RomM). Cartridge asks for a short
+  // code, shows it as a QR code linking to RomM's /pair/device page, and polls until it's approved
+  // on the phone. Older RomM has no such endpoint: the UI falls back to a typed pairing code.
+  'server:qrStart': async ({ base, link }) => {
+    const b = trimUrl(base);
+    if (!config.deviceId) { config.deviceId = crypto.randomUUID(); saveConfig(); }
+    const r = await fetch(`${b}/api/auth/device/init`, {
+      method: 'POST', headers: { ...authHeaders({ ...config.server, auth: 'none', username: '' }), 'Content-Type': 'application/json' }, signal: AbortSignal.timeout(15000),
+      body: JSON.stringify({ client_device_identifier: config.deviceId, name: `Cartridge on ${os.hostname()}`.slice(0, 255), client: 'Cartridge', platform: 'linux', client_version: app.getVersion(),
+        requested_scopes: ['me.read', 'roms.read', 'roms.user.read', 'roms.user.write', 'platforms.read', 'assets.read', 'firmware.read', 'collections.read'] }),
+    });
+    if (r.status === 404 || r.status === 405) throw new Error('This RomM version has no QR pairing. Use a pairing code instead.');
+    if (r.status === 429) throw new Error('RomM is limiting pairing requests. Try again in a minute.');
+    if (!r.ok) throw new Error(`QR pairing failed (HTTP ${r.status})`);
+    const j = await r.json();
+    return { userCode: j.user_code, deviceCode: j.device_code, interval: j.interval || 5, expiresIn: j.expires_in || 600, url: trimUrl(link || base) + j.verification_path_complete };
+  },
+  'server:qrPoll': async ({ base, deviceCode }) => {
+    const r = await fetch(`${trimUrl(base)}/api/auth/device/token`, {
+      method: 'POST', headers: { ...authHeaders({ ...config.server, auth: 'none', username: '' }), 'Content-Type': 'application/json' }, signal: AbortSignal.timeout(15000),
+      body: JSON.stringify({ device_code: deviceCode }),
+    });
+    if (r.ok) return { token: (await r.json()).access_token };
+    const detail = (await r.json().catch(() => ({}))).detail || '';
+    if (detail === 'authorization_pending' || detail === 'slow_down' || r.status === 429) return { pending: true, slow: detail === 'slow_down' };
+    if (detail === 'access_denied') throw new Error('Pairing was declined in RomM');
+    if (detail === 'expired_token') throw new Error('The QR code expired. Start again.');
+    throw new Error(`Pairing failed (HTTP ${r.status})`);
+  },
   'server:reconnect': async () => ({ base: await resolveBase(true) }),
   'server:status': async () => ({ base: await resolveBase(), route: activeBase === trimUrl(config.server.localUrl) ? 'local' : 'remote' }),
   'api:get': ({ path: p, query }) => api(p, { query }),
@@ -1534,6 +1670,7 @@ const handlers = {
     return { path: path.resolve(d), parent: path.dirname(path.resolve(d)), dirs, files };
   },
   'fs:mkdir': async (dir) => { await fsp.mkdir(dir, { recursive: true }); return true; },
+  'storage:overview': () => storageOverview(),
   'fs:space': async (dir) => {
     let d = dir;
     while (d && !isDir(d)) { const up = path.dirname(d); if (up === d) break; d = up; }

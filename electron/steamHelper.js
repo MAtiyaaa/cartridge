@@ -91,6 +91,8 @@ function backup(file) {
   const dir = job.backupDir;
   fs.mkdirSync(dir, { recursive: true });
   const b = path.join(dir, `${path.basename(file)}.${job.stamp}`);
+  // never replace a backup: a second run of the same job would save the already-changed file over it
+  if (fs.existsSync(b)) return b;
   fs.copyFileSync(file, b);
   return b;
 }
@@ -165,6 +167,13 @@ function writeCollections() {
   fs.writeFileSync(job.cloudFile, JSON.stringify(arr));
   log('collections written', Object.keys(want).join(', '));
 }
+
+// One run per job. Cartridge starts the helper as a user service and, if that stays silent for 5 s,
+// directly as well, so a slow service start could otherwise run the same job twice.
+const lockFile = jobFile + '.' + job.stamp + '.lock';
+// The lock is kept after the job ends (each job has its own stamp), so a late second copy stops too.
+try { fs.writeFileSync(lockFile, String(process.pid), { flag: 'wx' }); } catch { log('job', job.id, 'already ran, this copy stops'); process.exit(0); }
+try { for (const f of fs.readdirSync(path.dirname(jobFile))) { const p = path.join(path.dirname(jobFile), f); if (f.endsWith('.lock') && Date.now() - fs.statSync(p).mtimeMs > 7 * 864e5) fs.rmSync(p, { force: true }); } } catch {}
 
 (async () => {
   log('=== job', job.id, (job.add || []).length, 'to add,', (job.remove || []).length, 'to remove');

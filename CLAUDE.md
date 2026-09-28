@@ -47,13 +47,18 @@ LT/RT switch top tabs. LB/RB only switch sections inside a page. A select, B bac
 - Single modal slot: nested dialogs save `store.modal.resolve` and reopen themselves (see FolderPicker, SteamCollections, SteamEmu).
 - Square-only game icons (`iconOpaque`), `sgScore` match ranking.
 
-## Known issues at 0.6.0 (details: HANDOFF Part B, "Other bugs" list, and F4/F7)
+## Known issues (details: HANDOFF Part B, "Other bugs" list, and F4)
 - The Steam manager has never run against a real Steam client. Treat real-device reports about it as expected beta issues. The least tested parts are listed in HANDOFF F6.
-- Steam helper backup can be overwritten if two helper copies run (F7). Fix before relying on Undo.
 - `steam-games.json` is written before the helper finishes (F4).
-- `steamArt.addToSteam` can reuse a shortcut key when Steam's numbering has gaps (B2).
-- Y on the Search page doesn't open the built-in keyboard (B1).
 - Small cleanups: duplicate CSS in `Achievements.vue`, unused `.padbtn` rules, the out-of-date graphics comment at the top of `main.js`, the two migration lines.
+
+## Since the handoff (0.6.1)
+- Fixed: helper backup overwrite (per-job lock in `steamHelper.js`, backups never replaced), `addToSteam` key gap, Y on Search, Steam apply progress (`steam-progress` broadcast, top bar pill).
+- Download checksums in `main.js` (`checkFile`/`checkFiles`): size for every file, md5/sha1 except zip/7z/rar/chd (RomM hashes their contents). Damaged files are deleted; an identical repeat means RomM's checksum is stale and the file is kept (`notice: 'stale'`).
+- Storage manager: `storage:overview` in `main.js`, `src/components/StorageManager.vue`; space check before downloads in `store.download` (`roomFor`).
+- Look presets: `config.lookPresets` (up to 5, `LOOK_KEYS` in `Settings.vue`).
+- QR pairing: RomM's device flow `/api/auth/device/init` and `/token` (`server:qrStart`, `server:qrPoll`), `config.deviceId`, the `qrcode` package in `Setup.vue`.
+- A mock RomM and Playwright checks for these were used in the session; they are not in the repo.
 
 ## Releases (full steps: HANDOFF D8)
 Only when the owner asks. Bump `version` and `build.releaseInfo.releaseName` ("Cartridge X.Y.Z") in `package.json`, put only this version's notes in `RELEASE_NOTES.md` (heading `## Cartridge X.Y.Z · Title`), add them to the top of `CHANGELOG.md`, grouped as New / Changed / Fixed with bold lead-ins. CI builds, launch-checks and publishes.

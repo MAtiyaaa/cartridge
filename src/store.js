@@ -158,12 +158,33 @@ export function downloadFor(romId) {
   for (let i = store.downloads.length - 1; i >= 0; i--) if (store.downloads[i].romId === romId) return store.downloads[i];
   return null;
 }
-export async function download(rom) {
+export async function download(rom, { checkSpace = true } = {}) {
   const p = platformById(rom.platform_id);
   if (p && !p.target?.path) { toast(`Set a folder for ${p.display_name} first`, 'error'); return false; }
+  if (checkSpace && p?.target?.path && rom.fs_size_bytes && !(await roomFor(rom, p))) return false;
   await call('dl:add', { romId: rom.id, name: rom.name, platformSlug: rom.platform_slug, platformName: rom.platform_display_name, size: rom.fs_size_bytes, cover: rom.path_cover_small || rom.url_cover });
   toast(`Downloading ${rom.name}`, 'info', 2000, 'mdiDownload');
   return true;
+}
+
+// Before a download: will it fit? Counts what is still downloading to the same folder too.
+async function roomFor(rom, p) {
+  const sp = await call('fs:space', p.target.path).catch(() => null);
+  if (!sp) return true;
+  const same = (d) => ['queued', 'downloading'].includes(d.status) && store.lib?.platforms.find((x) => x.slug === d.platformSlug)?.target?.path === p.target.path;
+  const pending = store.downloads.filter(same).reduce((s, d) => s + Math.max(0, (d.total || 0) - (d.received || 0)), 0);
+  if (rom.fs_size_bytes + pending <= sp.free) return true;
+  const v = await choose({
+    title: `Not enough space for ${rom.name}`,
+    message: `It needs ${bytes(rom.fs_size_bytes)}${pending ? `, plus ${bytes(pending)} still downloading there` : ''}. That drive has ${bytes(sp.free)} free.`,
+    options: [
+      { label: 'Free up space', sub: 'Open the storage manager', value: 'storage', icon: 'mdiHarddisk' },
+      { label: 'Download anyway', value: 'go', icon: 'mdiDownload' },
+      { label: 'Cancel', value: null, icon: 'mdiClose' },
+    ],
+  });
+  if (v === 'storage') { store.settingsSection = 'storage'; tab('settings'); }
+  return v === 'go';
 }
 
 // ---------------- formatting

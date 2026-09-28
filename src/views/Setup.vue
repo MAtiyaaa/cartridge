@@ -41,6 +41,17 @@
           <button class="btn primary" data-focus :disabled="!pairCode || busy" @click="pair" style="align-self: flex-end"><Icon name="mdiLinkVariant" />Pair</button>
         </div>
         <p v-if="srv.token" class="chip green" style="align-self: flex-start"><Icon name="mdiCheck" :size="14" />Paired, token saved</p>
+        <div v-if="qr" class="qr glass">
+          <div class="qr-img" v-html="qr.svg" />
+          <div class="qr-t">
+            <b>Scan with your phone</b>
+            <p class="muted small">Sign in to RomM on your phone and approve Cartridge. This screen continues by itself.</p>
+            <p class="small">Or open <span class="mono">{{ qr.url.replace(/\?.*$/, '') }}</span> and enter <b class="qr-code">{{ qr.userCode }}</b></p>
+            <p class="muted small qr-wait"><Icon name="mdiSync" :size="14" class="spin" />Waiting for approval…</p>
+            <button class="btn small" data-focus @click="stopQr"><Icon name="mdiClose" :size="18" />Cancel</button>
+          </div>
+        </div>
+        <button v-else class="btn" data-focus style="align-self: flex-start" :disabled="busy || !hasUrl" @click="startQr"><Icon name="mdiQrcodeScan" />Pair with a QR code instead</button>
       </div>
       <div v-else class="stack">
         <TextField v-model="srv.token" label="API token" placeholder="rmm_…" password icon="mdiKeyVariant" />
@@ -93,7 +104,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref, nextTick, watch } from 'vue';
+import { computed, onMounted, onBeforeUnmount, reactive, ref, nextTick, watch } from 'vue';
 import { store, call, saveConfig, toast, pickFolder, tab, back } from '../store.js';
 import Logo from '../components/Logo.vue';
 import { focusFirst } from '../nav.js';
@@ -146,6 +157,38 @@ async function pair() {
   } catch (e) { toast(e.message, 'error'); }
   busy.value = false;
 }
+// QR pairing (RomM's device sign-in): show a QR code, poll until the phone approves it
+const qr = ref(null);
+let qrT = null;
+function stopQr() { clearTimeout(qrT); qrT = null; qr.value = null; }
+async function startQr() {
+  stopQr();
+  const s = srvPayload();
+  const base = s.localUrl || s.remoteUrl;
+  try {
+    // the phone opens the link: the remote address works away from home, the local one on your Wi-Fi
+    const r = await call('server:qrStart', { base, link: s.remoteUrl || s.localUrl });
+    const QRCode = (await import('qrcode')).default;
+    const svg = await QRCode.toString(r.url, { type: 'svg', margin: 1, errorCorrectionLevel: 'M', color: { dark: '#000000', light: '#ffffff' } });
+    qr.value = { ...r, svg };
+    const until = Date.now() + r.expiresIn * 1000;
+    let wait = r.interval * 1000;
+    const poll = async () => {
+      if (!qr.value || qr.value.deviceCode !== r.deviceCode) return;
+      if (Date.now() > until) { stopQr(); toast('The QR code expired. Start again.', 'error', 4000); return; }
+      try {
+        const t = await call('server:qrPoll', { base, deviceCode: r.deviceCode });
+        if (t.token) { stopQr(); srv.token = t.token; authMode.value = 'pair'; toast('Paired with RomM', 'ok'); await test(); return; }
+        if (t.slow) wait += 2000;
+      } catch (e) { stopQr(); toast(e.message, 'error', 5000); return; }
+      qrT = setTimeout(poll, wait);
+    };
+    qrT = setTimeout(poll, wait);
+  } catch (e) { toast(e.message, 'error', 5000); }
+}
+onBeforeUnmount(stopQr);
+watch(authMode, (m) => { if (m !== 'pair') stopQr(); });
+
 async function saveServer() {
   await saveConfig({ server: srvPayload() });
   step.value = 2;
@@ -198,4 +241,12 @@ onMounted(async () => { await nextTick(); focusFirst(el.value); });
 .res.bad { background: rgba(218, 54, 51, 0.1); color: #ff9b95; }
 .mono { font-family: ui-monospace, monospace; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 h3 { font-size: 15px; }
+.qr { display: flex; gap: 20px; align-items: center; padding: 16px; }
+.qr-img { width: 190px; height: 190px; flex: none; background: #fff; border-radius: 10px; padding: 8px; }
+.qr-img :deep(svg) { width: 100%; height: 100%; display: block; }
+.qr-t { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; min-width: 0; }
+.qr-t .mono { white-space: normal; word-break: break-all; }
+
+.qr-wait { display: flex; align-items: center; gap: 6px; }
+.qr-code { font-family: ui-monospace, monospace; font-size: 16px; letter-spacing: 0.08em; }
 </style>

@@ -582,8 +582,11 @@ module.exports = function createSteamManager(ctx) {
     if (!p.entries.length && !p.removing.length) throw new Error('Nothing to apply');
     const f = files(p.account);
     const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-    // artwork can be written while Steam runs (it reads the grid folder when it starts)
-    for (const e of p.entries) await writeArt(e, f.grid);
+    // artwork can be written while Steam runs (it reads the grid folder when it starts). It comes
+    // over the network one game at a time, so report progress: with many games this takes a while
+    const prog = (o) => ctx.broadcast('steam-progress', o);
+    for (const [i, e] of p.entries.entries()) { prog({ step: 'art', done: i, total: p.entries.length, name: e.name }); await writeArt(e, f.grid); }
+    prog({ step: 'steam', done: p.entries.length, total: p.entries.length });
     const collections = {};
     for (const e of p.entries) for (const c of e.collections || []) (collections[c] ||= []).push(e.appid >>> 0);
     const add = p.entries.map((e) => ({

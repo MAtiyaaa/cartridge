@@ -23,6 +23,7 @@
       </label>
       <div class="sys">
         <div v-if="syncBusy" class="item sync-pill"><Icon name="mdiSync" :size="16" class="spin" />{{ syncLabel }}</div>
+        <div v-if="steam.progress" class="item sync-pill"><Icon name="mdiSteam" :size="16" />{{ steamProgressLabel(steam.progress) }}</div>
         <div v-if="activeDl.length" class="item">
           <svg width="22" height="22" viewBox="0 0 36 36" class="ring"><circle cx="18" cy="18" r="15" fill="none" stroke="rgba(255,255,255,.12)" stroke-width="4" /><circle cx="18" cy="18" r="15" fill="none" stroke="url(#rg)" stroke-width="4" stroke-linecap="round" :stroke-dasharray="`${dlPct * 0.943} 100`" transform="rotate(-90 18 18)" /><defs><linearGradient id="rg"><stop offset="0" style="stop-color: var(--primary-l)" /><stop offset="1" style="stop-color: var(--peach)" /></linearGradient></defs></svg>
           {{ dlPct }}%
@@ -91,7 +92,7 @@ import ArtPicker from './components/ArtPicker.vue';
 import SteamCollections from './components/SteamCollections.vue';
 import SteamPreview from './components/SteamPreview.vue';
 import SteamEmu from './components/SteamEmu.vue';
-import { steamReport } from './steam.js';
+import { steamReport, steam, steamProgressLabel } from './steam.js';
 import ColorPicker from './components/ColorPicker.vue';
 import Setup from './views/Setup.vue';
 import Home from './views/Home.vue';
@@ -237,7 +238,11 @@ watch(() => store.downloads.map((d) => d.id + d.status).join(), () => {
   for (const d of store.downloads) {
     if (d.status !== 'done' || announced.has(d.id)) continue;
     announced.add(d.id);
-    if (dlPrimed) { toast(`${d.name} is ready to play`, 'ok', 3800, 'mdiCheckCircle'); sfx.done(); }
+    if (dlPrimed) {
+      if (d.notice === 'stale') toast(`${d.name} is ready. RomM's checksum for it looks out of date, so a rescan in RomM would fix that.`, 'info', 6000, 'mdiCheckCircle');
+      else toast(`${d.name} is ready to play`, 'ok', 3800, 'mdiCheckCircle');
+      sfx.done();
+    }
   }
   dlPrimed = true;
 });

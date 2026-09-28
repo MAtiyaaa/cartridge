@@ -2,8 +2,14 @@
 import { reactive } from 'vue';
 import { store, call, choose, confirm, toast, openModal, pickFolder } from './store.js';
 
-export const steam = reactive({ queue: { add: 0, remove: 0, total: 0 }, busy: false });
+export const steam = reactive({ queue: { add: 0, remove: 0, total: 0 }, busy: false, progress: null });
 window.cart.on('steam-queue', (q) => { steam.queue = q; });
+// Apply progress for the top bar: artwork per game, then waiting for Steam to close and write
+window.cart.on('steam-progress', (p) => { if (steam.busy) steam.progress = p; });
+export function steamProgressLabel(p) {
+  if (!p) return '';
+  return p.step === 'art' ? `Steam artwork ${p.done + 1}/${p.total}` : 'Waiting for Steam…';
+}
 window.cart.on('steam-auto', (e) => {
   toast(e.action === 'add' ? `${e.name || 'Game'} is waiting to be added to Steam. Apply from Settings → Steam.` : 'Removed game is waiting to come off Steam. Apply from Settings → Steam.', 'info', 4500, 'mdiSteam');
 });
@@ -56,6 +62,7 @@ export async function applyChanges() {
       if (!ok) return false;
     }
     steam.busy = true;
+    steam.progress = { step: 'art', done: 0, total: 1 };
     const t0 = Date.now();
     const r = await call('steam:apply', { restart: true });
     // wait for the helper to finish writing (Steam may take a while to close)
@@ -71,7 +78,7 @@ export async function applyChanges() {
     else toast('Still waiting for Steam to close. The change finishes by itself once it does.', 'info', 6000, 'mdiSteam');
     return true;
   } catch (e) { toast(e.message, 'error', 6000); return false; }
-  finally { steam.busy = false; }
+  finally { steam.busy = false; steam.progress = null; }
 }
 export async function restartSteam() {
   if (!(await confirm('Restart Steam?', 'Anything open in Steam closes, including Cartridge if Steam started it.', 'Restart Steam'))) return;
