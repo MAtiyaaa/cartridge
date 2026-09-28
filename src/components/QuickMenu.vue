@@ -22,6 +22,7 @@
       <button class="qm-item" data-focus @click="rescan"><Icon name="mdiHarddisk" /><div><b>Rescan this device</b><small>Refresh which games are installed</small></div></button>
       <button class="qm-item" data-focus @click="toggleSounds"><Icon :name="store.config.ui.sounds ? 'mdiVolumeHigh' : 'mdiVolumeOff'" /><div><b>UI sounds</b><small>{{ store.config.ui.sounds ? 'On' : 'Off' }}</small></div></button>
       <button class="qm-item" data-focus @click="nav('downloads')"><Icon name="mdiDownload" /><div><b>Downloads</b><small>{{ activeCount ? `${activeCount} active` : 'Queue and history' }}</small></div></button>
+      <button class="qm-item" data-focus @click="phone"><Icon name="mdiCellphoneLink" /><div><b>Connect a phone</b><small>Use your phone as a remote and second screen</small></div></button>
       <button class="qm-item" data-focus @click="nav('settings')"><Icon name="mdiCog" /><div><b>Settings</b><small>Server, folders, sync</small></div></button>
       <button class="qm-item" data-focus @click="checkUpdate"><Icon name="mdiCloudDownloadOutline" /><div><b>Check for updates</b><small>{{ updLabel }}</small></div></button>
       <button class="qm-item" data-focus @click="shot"><Icon name="mdiCamera" /><div><b>Take screenshot</b><small>Saved to Pictures/Cartridge</small></div></button>
@@ -45,6 +46,7 @@ const activeCount = computed(() => store.downloads.filter((d) => ['queued', 'dow
 const close = () => (store.quickMenu = false);
 function run(fn) { close(); fn(); }
 function nav(n) { close(); tab(n); }
+function phone() { store.settingsSection = 'remote'; nav('settings'); }
 const updLabel = computed(() => {
   const u = store.update;
   return { checking: 'Checking…', downloading: `Downloading ${u.version || ''} · ${u.percent || 0}%`, ready: `${u.version} ready`, current: `Up to date · ${store.info.version}`, error: 'Could not check' }[u.state] || `Version ${store.info.version}`;

@@ -177,7 +177,10 @@ function saveJson(file, data, pretty = true) {
   fs.writeFileSync(tmp, JSON.stringify(data, null, pretty ? 2 : 0), { mode: 0o600 });
   fs.renameSync(tmp, file);
 }
-const saveConfig = () => saveJson(CONFIG_FILE, config);
+// Phone remote (electron/remote-server.js). On Android the backend creates it; here on desktop.
+let remoteServer = null;
+const remoteHub = () => remoteServer || require('electron').__android?.remote || null;
+const saveConfig = () => { saveJson(CONFIG_FILE, config); remoteHub()?.configChanged(config); };
 const saveManifest = () => saveJson(MANIFEST_FILE, manifest);
 
 // ---------------------------------------------------------------- server / api
@@ -1153,7 +1156,10 @@ function setupUpdater() {
 // ---------------------------------------------------------------- window + ipc
 let win;
 
-function broadcast(ch, data) { if (win && !win.isDestroyed()) win.webContents.send(ch, data); }
+function broadcast(ch, data) {
+  if (win && !win.isDestroyed()) win.webContents.send(ch, data);
+  remoteServer?.send(ch, data, false); // phones connected to this device
+}
 
 // Interface size. The UI is laid out for 1920x1080 (what the Ally shows in Game Mode). Bigger
 // windows, like a 4K TV, zoom in by the same ratio so text and art keep their size on screen.
@@ -1418,6 +1424,26 @@ const handlers = {
   'app:fullscreen': () => win.setFullScreen(!win.isFullScreen()),
   'app:clearCache': async () => { await fsp.rm(IMG_CACHE, { recursive: true, force: true }); return true; },
 };
+
+// Desktop: the phone remote server (off until turned on in Settings → Phone remote)
+if (!require('electron').__android) {
+  remoteServer = require('./remote-server')({
+    invoke: async (ch, arg) => {
+      const fn = handlers[ch];
+      if (!fn) return { ok: false, error: 'Unknown channel ' + ch };
+      try { return { ok: true, data: await fn(arg) }; } catch (e) { return { ok: false, error: e.message || String(e) }; }
+    },
+    handleImage: (req) => handleImage(req),
+    uiDir: path.join(__dirname, '../dist'),
+    remoteDir: path.join(__dirname, '../remote-dist'),
+    dataDir: USER_DATA,
+    version: app.getVersion(),
+    kind: isGamescope() || /steamdeck/i.test(os.hostname()) ? 'deck' : 'pc',
+    emitLocal: (ch, data) => { if (win && !win.isDestroyed()) win.webContents.send(ch, data); },
+    log,
+  });
+  Object.assign(handlers, remoteServer.handlers);
+}
 
 for (const [ch, fn] of Object.entries(handlers)) {
   ipcMain.handle(ch, async (_e, arg) => {

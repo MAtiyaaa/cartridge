@@ -20,7 +20,9 @@ export default defineConfig(({ mode }) => ({
   ],
   base: './',
   build: {
-    outDir: mode === 'android' ? 'android-dist' : 'dist',
+    // 'remote' builds the phone remote page (remote.html) served by devices to phones
+    outDir: mode === 'android' ? 'android-dist' : mode === 'remote' ? 'remote-dist' : 'dist',
+    ...(mode === 'remote' && { rollupOptions: { input: 'remote.html', output: { codeSplitting: false } } }),
     emptyOutDir: true,
     chunkSizeWarningLimit: 4000,
     // One bundle on Android too: the lazy imports there only order startup, they are not for size

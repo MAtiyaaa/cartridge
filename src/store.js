@@ -231,7 +231,7 @@ rd.on('installed-changed', ({ romId, path }) => {
   if (path) store.installed[romId] = path;
   else delete store.installed[romId];
 });
-call('dl:list').then((l) => { store.downloads = l; });
+call('dl:list').then((l) => { store.downloads = l; }).catch(() => {});
 
 // ---------------- collections
 export function collections() { return (store.libVersion, store.lib?.collections || []); }

@@ -4,3 +4,4 @@ release/
 *.AppImage
 .DS_Store
 android-dist/
+remote-dist/
