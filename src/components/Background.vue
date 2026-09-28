@@ -21,6 +21,7 @@
 <script setup>
 import { computed, reactive, ref, watch, onBeforeUnmount, nextTick } from 'vue';
 import { store } from '../store.js';
+import { romimg } from '../platform.js';
 import { RENDERERS, DARK_BASE } from '../bgRenderers.js';
 import { paletteOf, lightEffects } from '../themes.js';
 
@@ -81,7 +82,7 @@ document.addEventListener('visibilitychange', vis);
 onBeforeUnmount(() => { cancelAnimationFrame(raf); document.removeEventListener('visibilitychange', vis); window.removeEventListener('resize', onResize); });
 
 // ---------- your own wallpaper
-const wallUrl = computed(() => (store.config?.ui?.wallpaper ? 'romimg://img/?wp=1&t=' + store.config.ui.wallpaper : ''));
+const wallUrl = computed(() => (store.config?.ui?.wallpaper ? romimg('wp=1&t=' + store.config.ui.wallpaper) : ''));
 const wallDim = computed(() => ({ low: 0.25, medium: 0.45, high: 0.65 }[store.config?.ui?.wallDim || 'medium']));
 
 // ---------- game art mode: two layers crossfade on focus

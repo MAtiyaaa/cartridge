@@ -171,7 +171,8 @@
               <button v-if="store.update.state === 'ready'" class="btn primary" data-focus @click="call('update:install')"><Icon name="mdiRestart" />Restart and update to {{ store.update.version }}</button>
               <button class="btn" :class="{ primary: store.update.state !== 'ready' }" data-focus :disabled="['checking', 'downloading'].includes(store.update.state)" @click="checkUpdates"><Icon name="mdiCloudDownloadOutline" />Check for updates</button>
             </div>
-            <p class="muted small">New versions come from the GitHub Releases page. They download in the background and replace this AppImage in place, so your Steam shortcut and settings stay as they are.</p>
+            <p v-if="IS_ANDROID" class="muted small">New versions come from the GitHub Releases page. The APK downloads in the background, then Android asks you to confirm the install. Your settings and games stay as they are.</p>
+            <p v-else class="muted small">New versions come from the GitHub Releases page. They download in the background and replace this AppImage in place, so your Steam shortcut and settings stay as they are.</p>
           </template>
 
           <template v-else-if="sec === 'ra'">
@@ -247,6 +248,10 @@
             <p class="muted small">Added before 0.2.1? Press Add to Steam once more: Steam now starts Cartridge through a launch script that makes it open reliably, and logs each launch to ~/.config/Cartridge/steam-launch.log. Keep the AppImage where it is; if you move it, add it again.</p>
           </template>
 
+          <template v-else-if="sec === 'android'">
+            <AndroidSettings />
+          </template>
+
           <template v-else>
             <h1>About</h1>
             <div class="about glass">
@@ -254,7 +259,7 @@
               <div><div style="font-family: var(--display); font-size: 26px; font-weight: 700">Cartridge</div><div class="muted">Version {{ store.info.version }} · a RomM client for the couch</div></div>
             </div>
             <div class="card-s glass">
-              <div class="kv"><span>Game Mode</span><span>{{ store.info.gamescope ? 'Yes (gamescope)' : 'No (desktop)' }}</span></div>
+              <div v-if="!IS_ANDROID" class="kv"><span>Game Mode</span><span>{{ store.info.gamescope ? 'Yes (gamescope)' : 'No (desktop)' }}</span></div>
               <div class="kv"><span>Controller</span><span>{{ input.padName || 'Press any button' }}</span></div>
               <div class="kv"><span>Data</span><span class="mono">{{ store.info.userData }}</span></div>
             </div>
@@ -267,7 +272,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, defineAsyncComponent, onMounted, ref, watch } from 'vue';
 import { store, call, go, tab, saveConfig, pickFolder, choose, confirm, toast, openModal, bytes, ago, resync, scanServer, allRoms, resetLogos } from '../store.js';
 import { useView } from '../useView.js';
 import { input, focusFirst, setPointerPref } from '../nav.js';
@@ -281,6 +286,10 @@ import TextField from '../components/TextField.vue';
 import PIcon from '../components/PIcon.vue';
 import Grade from '../components/Grade.vue';
 
+// Android build only: the Android section replaces Steam. In the desktop build this is dropped.
+const IS_ANDROID = import.meta.env.MODE === 'android';
+const AndroidSettings = import.meta.env.MODE === 'android' ? defineAsyncComponent(() => import('../android/AndroidSettings.vue')) : null;
+
 const el = ref(null);
 const paneEl = ref(null);
 const sec = ref(store.settingsSection || 'conn');
@@ -293,9 +302,10 @@ const sections = [
   { id: 'ui', label: 'Look & Feel', icon: 'mdiPaletteOutline' },
   { id: 'ra', label: 'Achievements', icon: 'mdiTrophyOutline' },
   { id: 'steam', label: 'Steam', icon: 'mdiSteam' },
+  { id: 'android', label: 'Android', icon: 'mdiAndroid' },
   { id: 'updates', label: 'Updates', icon: 'mdiUpdate' },
   { id: 'about', label: 'About', icon: 'mdiInformationOutline' },
-];
+].filter((s) => (IS_ANDROID ? s.id !== 'steam' : s.id !== 'android'));
 const showAll = ref(false);
 const supported = ref([]);
 const space = ref(null);
