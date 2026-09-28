@@ -16,6 +16,10 @@
             <span v-if="dev">{{ dev }}</span>
             <span v-if="genres">{{ genres }}</span>
             <span v-if="base.rating" class="row" style="gap: 4px; color: var(--gold)"><Icon name="mdiStar" :size="16" />{{ rating(base.rating) }}</span>
+            <span v-if="cached?.hours" class="row" style="gap: 4px"><Icon name="mdiTimerOutline" :size="16" />About {{ cached.hours }} h to beat</span>
+            <span v-if="fav" class="chip primary"><Icon name="mdiHeart" :size="14" />Favourite</span>
+            <span v-if="statusText" class="chip"><Icon name="mdiProgressCheck" :size="14" />{{ statusText }}</span>
+            <span v-if="cached?.user?.hidden" class="chip"><Icon name="mdiEyeOffOutline" :size="14" />Hidden</span>
           </div>
 
           <div class="g-actions">
@@ -35,7 +39,7 @@
             </template>
             <template v-else-if="installedPath && marked">
               <button class="btn ok xl" data-focus data-autofocus @click="toast('You marked this game as installed', 'info', 3000, 'mdiCheckCircle')"><Icon name="mdiCheckCircle" />Marked as installed</button>
-              <button class="btn" data-focus @click="dlNow"><Icon name="mdiDownload" />Download zip</button>
+              <button class="btn" data-focus @click="dlNow"><Icon name="mdiDownload" />Download</button>
               <button class="btn" data-focus @click="setMark(false)"><Icon name="mdiCheckboxBlankOffOutline" />Unmark</button>
             </template>
             <template v-else-if="installedPath">
@@ -49,7 +53,7 @@
             <button class="btn icon-btn" data-focus title="More options" @click="more"><Icon name="mdiDotsHorizontal" :size="22" /><span>More</span></button>
           </div>
           <div v-if="dl && dl.status === 'error'" class="chip red" style="align-self: flex-start">Last attempt failed: {{ dl.error }}</div>
-          <div class="dest"><Icon name="mdiFolderArrowDownOutline" :size="16" /><span class="mono">{{ marked ? 'Marked as installed by you. Extract the zip into ' + (target?.path || 'your folder') + ' when it finishes downloading.' : installedPath || target?.path || 'No folder set for this system' }}</span><span v-if="space" class="muted">· {{ bytes(space.free) }} free</span></div>
+          <div class="dest"><Icon name="mdiFolderArrowDownOutline" :size="16" /><span class="mono">{{ marked ? 'Marked as installed by you' : installedPath || target?.path || 'No folder set for this system' }}</span><span v-if="space" class="muted">· {{ bytes(space.free) }} free</span></div>
         </div>
         <div class="g-cover">
           <img v-if="coverSrc && !coverFail" :src="coverSrc" @error="coverFail = true" />
@@ -107,6 +111,12 @@
               <button v-for="s in detail.sibling_roms" :key="s.id" class="btn small" data-focus @click="goVersion(s.id)">{{ s.fs_name_no_ext }}</button>
             </div>
           </template>
+          <template v-for="row in related" :key="row.id">
+            <div class="shelf-title" style="margin-top: 16px"><Icon :name="row.icon" :size="20" />{{ row.title }}<span class="count">{{ row.items.length }}</span></div>
+            <div class="shelf rel" data-hscroll>
+              <GameCard v-for="r in row.items" :key="r.id" :rom="r" :show-platform="true" @open="(r) => go('game', { romId: r.id })" />
+            </div>
+          </template>
         </div>
         <aside class="facts glass">
           <div v-for="f in facts" :key="f.k" class="fact"><span>{{ f.k }}</span><b>{{ f.v }}</b></div>
@@ -124,7 +134,7 @@
 <script setup>
 import { addGame, removeGame, applyChanges } from '../steam.js';
 import { computed, onMounted, ref, nextTick, watch } from 'vue';
-import { store, call, img, go, cover, bytes, year, rating, toast, confirm, download, downloadFor, romById, platformById, isNew, setBg, logoOf, resetLogos, artFor, choose, openModal } from '../store.js';
+import { store, call, img, go, cover, bytes, year, rating, toast, confirm, download, downloadFor, romById, platformById, isNew, setBg, logoOf, resetLogos, artFor, choose, openModal, allRoms, visible, isFavourite, addToCollection } from '../store.js';
 import { useView } from '../useView.js';
 import { IS_ANDROID } from '../platform.js';
 import { ensureFocus, focusFirst } from '../nav.js';
@@ -133,6 +143,7 @@ import Btn from '../components/Btn.vue';
 import PIcon from '../components/PIcon.vue';
 import GameLogo from '../components/GameLogo.vue';
 import Grade from '../components/Grade.vue';
+import GameCard from '../components/GameCard.vue';
 
 const props = defineProps({ romId: Number });
 const el = ref(null);
@@ -256,12 +267,60 @@ const banner = computed(() => {
   if (shot) return { src: img(shot) };
   return { src: cover(base.value, true), blur: true };
 });
+// Your RomM status for this game: favourite, play status, hidden
+const fav = computed(() => isFavourite(Number(props.romId)));
+const STATUSES = [
+  { v: 'playing', l: 'Playing now', data: { now_playing: true, backlogged: false }, icon: 'mdiPlayCircleOutline' },
+  { v: 'backlog', l: 'Backlog', data: { backlogged: true, now_playing: false }, icon: 'mdiBookClockOutline' },
+  { v: 'finished', l: 'Finished', data: { status: 'finished', now_playing: false, backlogged: false }, icon: 'mdiFlagCheckered' },
+  { v: 'completed_100', l: 'Completed 100%', data: { status: 'completed_100', now_playing: false, backlogged: false }, icon: 'mdiTrophyOutline' },
+  { v: 'retired', l: 'Gave up', data: { status: 'retired', now_playing: false, backlogged: false }, icon: 'mdiFlagOutline' },
+  { v: 'never_playing', l: 'Not for me', data: { status: 'never_playing', now_playing: false, backlogged: false }, icon: 'mdiCancel' },
+];
+const statusOf = (u) => (!u ? '' : u.playing ? 'playing' : u.backlog ? 'backlog' : u.status === 'incomplete' ? 'playing' : u.status || '');
+const statusText = computed(() => STATUSES.find((x) => x.v === statusOf(cached.value?.user))?.l || '');
+async function setUser(data, msg) {
+  try { await call('rom:user', { romId: Number(props.romId), data }); toast(msg, 'ok', 2200, 'mdiCheck'); } catch (e) { toast(e.message, 'error', 6000); }
+}
+async function pickStatus() {
+  const cur = statusOf(cached.value?.user);
+  const v = await choose({ title: 'Play status', options: [...STATUSES.map((x) => ({ label: x.l, value: x.v, icon: x.icon, selected: x.v === cur })), ...(cur ? [{ label: 'Clear status', value: '__clear', icon: 'mdiClose' }] : [])] });
+  if (!v) return;
+  if (v === '__clear') return setUser({ status: null, now_playing: false, backlogged: false }, 'Status cleared');
+  const s = STATUSES.find((x) => x.v === v);
+  await setUser(s.data, `Marked as ${s.l.toLowerCase()}`);
+}
+// Rows under the summary: other games in the same series, and IGDB's similar games you have
+const related = computed(() => {
+  const me = cached.value;
+  if (!me) return [];
+  const roms = allRoms().filter((r) => visible(r) && r.id !== me.id);
+  const out = [];
+  const series = me.series?.[0];
+  if (series) {
+    const l = roms.filter((r) => r.series?.includes(series) && r.name !== me.name).sort((a, b) => (a.year || 9e15) - (b.year || 9e15));
+    if (l.length) out.push({ id: 'series', title: 'More in this series', icon: 'mdiBookshelf', items: l.slice(0, 30) });
+  }
+  const sim = new Set(me.similar || []);
+  if (sim.size) {
+    const seen = new Set(out[0]?.items.map((r) => r.id));
+    const l = roms.filter((r) => r.igdb_id && sim.has(r.igdb_id) && !seen.has(r.id));
+    if (l.length) out.push({ id: 'similar', title: 'Similar games', icon: 'mdiShapeOutline', items: l.slice(0, 30) });
+  }
+  return out;
+});
+
 // More options: custom artwork from SteamGridDB, plus handy extras
 let steamInfo = null;
 const PC_SLUGS = /^(win|windows|win3x|pc|dos)$/i; // PC games (Android: open in GameNative, GameHub or Winlator)
 async function more() {
   const has = artFor(props.romId);
+  const u = cached.value?.user;
   const opts = [
+    { label: fav.value ? 'Remove from favourites' : 'Add to favourites', sub: 'Saved in RomM', value: 'fav', icon: fav.value ? 'mdiHeartOff' : 'mdiHeartOutline' },
+    { label: 'Play status', sub: statusText.value || 'None', value: 'status', icon: 'mdiProgressCheck' },
+    { label: 'Add to a collection', sub: 'Yours in RomM, or a new one', value: 'col', icon: 'mdiBookmarkPlusOutline' },
+    { label: u?.hidden ? 'Unhide game' : 'Hide game', sub: u?.hidden ? 'Show it in lists again' : 'Keep it out of Home, Library and Search', value: 'hide', icon: u?.hidden ? 'mdiEyeOutline' : 'mdiEyeOffOutline' },
     { label: 'Change cover', sub: 'SteamGridDB', value: 'grid', icon: 'mdiImageEditOutline' },
     { label: 'Change logo', sub: 'SteamGridDB', value: 'logo', icon: 'mdiFormatTitle' },
     { label: 'Change background', sub: 'SteamGridDB', value: 'hero', icon: 'mdiPanoramaVariantOutline' },
@@ -289,6 +348,14 @@ async function more() {
   const v = await choose({ title: base.value.name, options: opts });
   if (!v) return;
   if (import.meta.env.MODE === 'android' && v === 'pcapp') { const { openInPcApp } = await import('../android/pcApps.js'); await openInPcApp({ ...base.value, id: Number(props.romId) }, installedPath.value); return; }
+  if (v === 'fav') {
+    const on = !fav.value;
+    try { await call('fav:set', { romId: Number(props.romId), on }); toast(on ? 'Added to favourites' : 'Removed from favourites', 'ok', 2200, 'mdiHeartOutline'); } catch (e) { toast(e.message, 'error', 6000); }
+    return;
+  }
+  if (v === 'status') { await pickStatus(); return; }
+  if (v === 'col') { await addToCollection([Number(props.romId)]); return; }
+  if (v === 'hide') { await setUser({ hidden: !u?.hidden }, u?.hidden ? 'Shown in lists again' : 'Hidden from lists. Find it again with Library → Filters → Show hidden games.'); return; }
   if (v === 'steamadd') { await addGame({ ...base.value, id: Number(props.romId) }); return; }
   if (v === 'steamrm') {
     if (!steamInfo.ours && !(await confirm('Remove from Steam?', 'Cartridge did not add this shortcut. Remove it anyway?', 'Remove', true))) return;
@@ -356,6 +423,7 @@ onMounted(async () => {
 .shot { flex: none; width: 340px; aspect-ratio: 16/9; border-radius: 8px; overflow: hidden; background: #161a25; transition: transform 0.2s var(--ease), box-shadow 0.2s; }
 .shot img { width: 100%; height: 100%; object-fit: cover; }
 .shot:focus { transform: scale(1.04); }
+.rel { padding: 18px 20px 18px 56px; margin: -8px 0 0 -56px; scroll-padding: 0 56px; }
 .facts { width: 250px; padding: 16px 18px; display: flex; flex-direction: column; gap: 12px; align-self: start; box-sizing: border-box; }
 .icon-btn span { font-size: 14px; }
 .fact { display: flex; flex-direction: column; gap: 3px; word-break: break-word; }

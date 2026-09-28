@@ -2,6 +2,28 @@
 
 Every Cartridge release, newest first. Each GitHub release only lists its own changes.
 
+## Cartridge 0.7.3 · The Library Update
+
+### New: abdu2304's 0.7.0
+Everything from the original Cartridge's Library Update is now part of this build:
+- **Collections.** Your own collections saved in RomM, plus Top rated, Hidden gems, Couch multiplayer, Short games and every series, on Home and a Collections page.
+- **Genres** on Home and a Genres page.
+- **Customise the top bar** in Look & Feel → Top bar: show, hide and reorder tabs. LT and RT follow your order.
+- **Play status and favourites, synced with RomM.** Playing now, Backlog, Finished, Completed 100%, Gave up, Not for me, or hide a game. Home gets Continue playing, Backlog, Favourites and Recently played rows.
+- **Game page:** "About N h to beat" from HowLongToBeat, plus More in this series and Similar games.
+- **PS4 and PS5 zips unpack themselves** after downloading, on Android too.
+- **Better Library filters** (genre, decade, couch multiplayer, rating, play status, hidden games), sort by Rating, and **Surprise me**.
+- **Select many games** in the Library to download them or add them to a collection in one go.
+- **Download queue controls:** move waiting games up or down, Pause all, Resume all, and a Speed limit in Settings → Downloads.
+
+### Phone remote
+- **Queue controls on your phone.** Each device's downloads get Pause all or Resume all, and waiting games can be moved up or down.
+- **Hidden games stay hidden** in the phone's Library too.
+
+### Changed
+- On Android, Library → Select → Add to Steam only shows when Settings → Android → Steam & PC game apps is on, like the other Steam options.
+- Pairing with RomM by code or QR now asks for permission to change collections. Paired before? Pair again to use collections and play status.
+
 ## Cartridge 0.7.2 · Touch Enhancement
 
 ### New
@@ -114,6 +136,31 @@ Everything from the original Cartridge's latest two releases is now part of this
 
 ### Also in this release
 - Everything from 0.5.5 (smoother held D-pad scrolling, Home fixes, LT / RT switch tabs).
+
+## Cartridge 0.7.0 · The Library Update (abdu2304)
+
+Included in this fork from 0.7.3.
+
+### New
+- **Collections.** A Collections row on Home and a Collections page.
+  - **Your own collections**, made in Cartridge and saved in RomM, so every device and RomM's web page have them. Make one with **New collection**, add games from a game page (More → Add to a collection) or many at once from the Library. Rename or delete them from the collection's page.
+  - **Made by Cartridge:** Top rated, Hidden gems (rated highly by few people), Couch multiplayer and Short games (under 5 hours), built from your library.
+  - **Series:** every series with two or more games, in release order.
+  - RomM's own collections and smart collections are still there.
+- **Genres.** A row of genre tiles on Home and a Genres page. LB and RB switch genre.
+- **Customise the top bar (Look & Feel → Top bar).** Show or hide any tab and change the order: Home, Library, Consoles, Genres, Collections, Achievements, Downloads. Settings always stays. LT and RT follow your order.
+- **Play status and favourites, synced with RomM.** From a game's More menu: add to favourites, set Playing now, Backlog, Finished, Completed 100%, Gave up or Not for me, or hide the game. Home gets **Continue playing**, **Backlog** and **Favourites** rows.
+- **Recently played.** A Home row from Steam's last played times for games added to Steam, and RomM's.
+- **Game page:** "About N h to beat" from HowLongToBeat, and **More in this series** and **Similar games** rows with games you have.
+- **PS4 and PS5 zips unpack themselves.** The zip is downloaded, unpacked into the game's folder, then deleted. The space check counts room for both.
+- **Better Library filters.** A **Filters** button: genre, decade, couch multiplayer, rated 80% and up, play status, and show hidden games. Sort by **Rating**, and **Surprise me** opens a random game.
+- **Select many games.** **Select** in the Library, pick games with A, then download them, add them to a collection or add them to Steam in one go.
+- **Download queue controls.** Move waiting games up or down, **Pause all** and **Resume all**, and a **Speed limit** in Settings → Downloads (5, 10, 25 or 50 MB/s).
+
+### Changed
+- Games you hide in RomM stay out of Home, the Library and Search. Library → Filters → Show hidden games brings them back.
+- Pairing with a code or QR now asks RomM for permission to change collections. Paired before 0.7.0? Pair again to use collections and play status.
+
 ## Cartridge 0.6.1 (abdu2304)
 
 Included in this fork from 0.7.1.

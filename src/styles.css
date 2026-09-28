@@ -148,6 +148,9 @@ img { -webkit-user-drag: none; }
 .card:hover .art { transform: translateY(-3px); }
 .shine { position: absolute; inset: 0; opacity: 0; pointer-events: none; background: linear-gradient(115deg, transparent 30%, rgba(255, 255, 255, 0.28) 48%, transparent 62%); background-size: 250% 100%; background-position: 120% 0; }
 @keyframes shine { from { background-position: 120% 0; } to { background-position: -60% 0; } }
+.card .pick { position: absolute; top: 8px; left: 8px; width: 30px; height: 30px; border-radius: 7px; background: rgba(6, 7, 11, 0.72); color: #fff; display: grid; place-items: center; }
+.card.picked .pick { color: var(--primary-l); }
+.card.picked .art { box-shadow: 0 0 0 3px var(--primary-l), 0 10px 28px rgba(0, 0, 0, 0.45); }
 .badge-dl { position: absolute; top: 8px; right: 8px; width: 26px; height: 26px; border-radius: 50%; background: var(--green); color: #fff; display: grid; place-items: center; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5), 0 0 0 2px rgba(6, 7, 11, 0.6); }
 .badge-new { position: absolute; top: 8px; left: 8px; }
 .card .prog { position: absolute; left: 8px; right: 8px; bottom: 8px; height: 6px; border-radius: 3px; background: rgba(0, 0, 0, 0.65); overflow: hidden; }

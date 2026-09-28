@@ -458,6 +458,17 @@ module.exports = function createSteamManager(ctx) {
     };
   }
 
+  // When each downloaded game was last played from Steam (any shortcut that starts it, whoever
+  // added it): Steam writes LastPlayTime into shortcuts.vdf. romId -> ms
+  function played() {
+    const env = environment();
+    if (!env.account) return {};
+    const find = inSteamIndex(readShortcuts(env.account));
+    const out = {};
+    for (const g of installedGames()) { const sc = find(g); if (sc?.last) out[g.rom.id] = sc.last * 1000; }
+    return out;
+  }
+
   // One game: is it in Steam, and would Cartridge know how to add it?
   function forRom(romId) {
     const env = environment();
@@ -746,7 +757,7 @@ module.exports = function createSteamManager(ctx) {
   return {
     overview, preview, apply, undo, restartSteam, removeAllOurs, queueAdd, queueRemove, queueClear, queueInfo, test, setTemplate, setMode, verifyCollections,
     collections: () => { const env = environment(); return env.account ? readCollections(env.account) : []; },
-    onDownloaded, onDeleted, lastStatus, writeScript, startupReport, forRom, fixCollections,
+    onDownloaded, onDeleted, lastStatus, writeScript, startupReport, forRom, fixCollections, played,
     // exposed for tests
     _learnOne: learnOne, _tokenize: tokenize, _buildLaunch: buildLaunch, _learnAll: learnAll,
   };

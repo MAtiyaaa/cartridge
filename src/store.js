@@ -181,10 +181,13 @@ async function roomFor(rom, p) {
   if (!sp) return true;
   const same = (d) => ['queued', 'downloading'].includes(d.status) && store.lib?.platforms.find((x) => x.slug === d.platformSlug)?.target?.path === p.target.path;
   const pending = store.downloads.filter(same).reduce((s, d) => s + Math.max(0, (d.total || 0) - (d.received || 0)), 0);
-  if (rom.fs_size_bytes + pending <= sp.free) return true;
+  // PS4/PS5 zips are unpacked next to the zip before it is deleted: room for both
+  const unpack = ['ps4', 'ps5'].some((x) => [rom.platform_slug, rom.platform_fs_slug].includes(x)) && /\.zip$/i.test(rom.fs_name || '');
+  const need = rom.fs_size_bytes * (unpack ? 2 : 1);
+  if (need + pending <= sp.free) return true;
   const v = await choose({
     title: `Not enough space for ${rom.name}`,
-    message: `It needs ${bytes(rom.fs_size_bytes)}${pending ? `, plus ${bytes(pending)} still downloading there` : ''}. That drive has ${bytes(sp.free)} free.`,
+    message: `It needs ${bytes(need)}${unpack ? ' (the zip, and room to unpack it)' : ''}${pending ? `, plus ${bytes(pending)} still downloading there` : ''}. That drive has ${bytes(sp.free)} free.`,
     options: [
       { label: 'Free up space', sub: 'Open the storage manager', value: 'storage', icon: 'mdiHarddisk' },
       { label: 'Download anyway', value: 'go', icon: 'mdiDownload' },
@@ -264,12 +267,102 @@ rd.on('installed-changed', ({ romId, path }) => {
 call('dl:list').then((l) => { store.downloads = l; }).catch(() => {});
 
 // ---------------- collections
+// RomM's collections (yours and smart ones), plus ones Cartridge makes from the library: series,
+// top rated, hidden gems, couch multiplayer and short games. All share one shape:
+// { id, name, rom_ids, auto?, mine?, rid? } so tiles, grids and LB/RB treat them the same.
+export const visible = (r) => !r.user?.hidden; // games you hid in RomM stay out of lists
+export const score = (r) => (r.rating ? (r.rating <= 10 ? r.rating * 10 : r.rating) : 0);
+const AUTO = [
+  { id: 'auto-top', name: 'Top rated', icon: 'mdiStarOutline', description: 'Your best-rated games', pick: (rs) => rs.filter((r) => score(r) >= 80).sort((a, b) => score(b) - score(a)).slice(0, 80) },
+  { id: 'auto-gems', name: 'Hidden gems', icon: 'mdiDiamondStone', description: 'Rated highly by few people', pick: (rs) => rs.filter((r) => score(r) >= 75 && r.votes > 0 && r.votes < 60).sort((a, b) => score(b) - score(a)).slice(0, 80) },
+  { id: 'auto-couch', name: 'Couch multiplayer', icon: 'mdiAccountGroupOutline', description: 'Local multiplayer and co-op', pick: (rs) => rs.filter((r) => (r.modes || []).some((m) => /split screen|co-operative|^multiplayer$/i.test(m))) },
+  { id: 'auto-short', name: 'Short games', icon: 'mdiTimerSandComplete', description: 'Beatable in under 5 hours', pick: (rs) => rs.filter((r) => r.hours && r.hours <= 5).sort((a, b) => a.hours - b.hours) },
+];
+let autoCache = { v: -1, list: [] };
+function autoCollections() {
+  if (autoCache.v === store.libVersion) return autoCache.list;
+  const rs = allRoms().filter(visible);
+  const list = AUTO.map((a) => ({ id: a.id, name: a.name, icon: a.icon, description: a.description, auto: true, rom_ids: a.pick(rs).map((r) => r.id) })).filter((c) => c.rom_ids.length);
+  // Series: RomM's franchise data, any series with at least two games
+  const by = new Map();
+  for (const r of rs) for (const f of r.series || []) (by.get(f) || by.set(f, []).get(f)).push(r);
+  const series = [...by].filter(([, l]) => l.length >= 2).sort((a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0]))
+    .map(([name, l]) => ({ id: 'series-' + name, name, icon: 'mdiBookshelf', auto: true, series: true, description: 'Series', rom_ids: l.sort((a, b) => (a.year || 9e15) - (b.year || 9e15)).map((r) => r.id) }));
+  autoCache = { v: store.libVersion, list: [...list, ...series] };
+  return autoCache.list;
+}
 export function collections() { return (store.libVersion, store.lib?.collections || []); }
-export function collectionById(id) { return collections().find((c) => c.id === id); }
+export function allCollections() { return [...collections(), ...autoCollections()]; }
+export const autoLists = () => autoCollections().filter((c) => !c.series);
+export const seriesLists = () => autoCollections().filter((c) => c.series);
+export function collectionById(id) { return allCollections().find((c) => c.id === id); }
 export function romsOfCollection(id) {
   const c = collectionById(id);
-  return c ? c.rom_ids.map((rid) => romIndex.get(rid)).filter(Boolean) : [];
+  return c ? c.rom_ids.map((rid) => romIndex.get(rid)).filter((r) => r && visible(r)) : [];
 }
+export const myCollections = () => collections().filter((c) => c.mine && !c.smart);
+export const favourites = () => collections().find((c) => c.favorite && c.mine && !c.smart) || null;
+export const isFavourite = (id) => !!favourites()?.rom_ids.includes(id);
+
+// Add games to one of your collections (or a new one), from a game page or a multi-selection
+export async function addToCollection(romIds) {
+  const mine = myCollections().filter((c) => !c.favorite);
+  const v = await choose({
+    title: romIds.length > 1 ? `Add ${romIds.length} games to a collection` : 'Add to a collection',
+    options: [...mine.map((c) => ({ label: c.name, sub: `${c.rom_ids.length}`, value: c.rid, icon: 'mdiBookmarkOutline', selected: romIds.length === 1 && c.rom_ids.includes(romIds[0]) })),
+      { label: 'New collection…', value: '__new', icon: 'mdiPlus' }],
+  });
+  if (v == null) return false;
+  try {
+    if (v === '__new') {
+      const name = await askText({ title: 'Name the new collection', placeholder: 'Weekend games' });
+      if (!name || !name.trim()) return false;
+      await call('col:create', { name: name.trim(), romIds });
+      toast(`Added to ${name.trim()}`, 'ok', 2400, 'mdiBookmarkOutline');
+    } else {
+      const c = mine.find((x) => x.rid === v);
+      // one game already in that collection: picking it again takes it out
+      if (romIds.length === 1 && c?.rom_ids.includes(romIds[0])) {
+        await call('col:remove', { rid: v, romIds });
+        toast(`Removed from ${c.name}`, 'ok', 2400, 'mdiBookmarkRemoveOutline');
+      } else {
+        await call('col:add', { rid: v, romIds });
+        toast(`Added to ${c?.name || 'the collection'}`, 'ok', 2400, 'mdiBookmarkOutline');
+      }
+    }
+    return true;
+  } catch (e) { toast(e.message, 'error', 6000); return false; }
+}
+
+// ---------------- top bar tabs (Look & Feel → Top bar)
+export const TAB_DEFS = {
+  home: { label: 'Home', icon: 'mdiHomeVariantOutline' },
+  library: { label: 'Library', icon: 'mdiViewGridOutline' },
+  consoles: { label: 'Consoles', icon: 'mdiGamepadSquareOutline' },
+  genres: { label: 'Genres', icon: 'mdiTagMultipleOutline' },
+  collections: { label: 'Collections', icon: 'mdiBookmarkMultipleOutline' },
+  achievements: { label: 'Achievements', icon: 'mdiTrophyOutline' },
+  downloads: { label: 'Downloads', icon: 'mdiTrayArrowDown' },
+  settings: { label: 'Settings', icon: 'mdiCogOutline' },
+};
+export const DEFAULT_TABS = ['home', 'library', 'consoles', 'achievements', 'downloads', 'settings'];
+// Settings can't be removed, so the top bar can always be changed back
+export function activeTabs() {
+  const t = store.config?.ui?.tabs;
+  const list = (Array.isArray(t) && t.length ? t : DEFAULT_TABS).filter((n) => TAB_DEFS[n]);
+  return list.includes('settings') ? list : [...list, 'settings'];
+}
+
+// ---------------- genres
+let genreCache = { v: -1, list: [] };
+export function genres() {
+  if (genreCache.v === store.libVersion) return genreCache.list;
+  const by = new Map();
+  for (const r of allRoms()) if (visible(r)) for (const g of r.genres || []) (by.get(g) || by.set(g, []).get(g)).push(r.id);
+  genreCache = { v: store.libVersion, list: [...by].sort((a, b) => b[1].length - a[1].length).map(([name, ids]) => ({ id: 'genre-' + name, name, genre: true, icon: 'mdiTagOutline', rom_ids: ids })) };
+  return genreCache.list;
+}
+export const romsOfGenre = (g) => (genres().find((x) => x.name === g)?.rom_ids || []).map((id) => romIndex.get(id)).filter(Boolean);
 
 // Game logo, prepared by the main process: { url, w, h, dark } or null.
 // Order: a logo picked in "Change artwork", RomM's own logo, then SteamGridDB (when a key is set).

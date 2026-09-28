@@ -80,6 +80,7 @@
           <template v-else-if="sec === 'dl'">
             <h1>Downloads</h1>
             <div class="row"><span class="lbl">At once</span><div class="seg"><button v-for="n in [1, 2, 3, 4]" :key="n" data-focus :class="{ on: dls.concurrency === n }" @click="saveConfig({ downloads: { concurrency: n } })">{{ n }}</button></div></div>
+            <div class="row"><span class="lbl">Speed limit</span><div class="seg"><button v-for="n in [0, 5, 10, 25, 50]" :key="n" data-focus :class="{ on: (dls.limitMBs || 0) === n }" @click="saveConfig({ downloads: { limitMBs: n } })">{{ n ? n + ' MB/s' : 'Off' }}</button></div></div>
             <Toggle :model-value="dls.esdeM3uFolders" label="ES-DE multi-disc folders" desc="Save multi-disc games as “Game.m3u/” so ES-DE shows one entry" @update:model-value="(v) => saveConfig({ downloads: { esdeM3uFolders: v } })" />
             <Toggle :model-value="dls.flattenSingleFile" label="Flatten single-file folders" desc="If a game is a folder with one file on the server, save just the file" @update:model-value="(v) => saveConfig({ downloads: { flattenSingleFile: v } })" />
           </template>
@@ -153,6 +154,18 @@
               <p class="muted small" style="margin-top: -6px">Logos come from your RomM server when it has them (ScreenScraper "logo" media). For everything else, add a free key from steamgriddb.com → Preferences → API. {{ store.config.sgdbKey ? 'Key saved.' : '' }}</p>
             </template>
             <Toggle :model-value="ui.hideEmpty" label="Hide empty systems" @update:model-value="(v) => saveConfig({ ui: { hideEmpty: v } })" />
+
+            <div class="subh"><Icon name="mdiDockTop" :size="20" />Top bar</div>
+            <p class="muted small" style="margin-top: -6px">Pick which tabs show at the top and their order. LT and RT move through them in this order. Settings always stays.</p>
+            <div class="tabs-edit">
+              <div v-for="(t, i) in tabRows" :key="t.name" class="tab-row" :class="{ off: !t.on }">
+                <Icon :name="t.icon" :size="20" /><span class="tab-lbl">{{ t.label }}</span>
+                <button class="btn small" data-focus :disabled="!t.on || i === 0" :aria-label="'Move ' + t.label + ' up'" @click="moveTab(t.name, -1)"><Icon name="mdiChevronUp" :size="18" /></button>
+                <button class="btn small" data-focus :disabled="!t.on || i >= tabsOn.length - 1" :aria-label="'Move ' + t.label + ' down'" @click="moveTab(t.name, 1)"><Icon name="mdiChevronDown" :size="18" /></button>
+                <button class="btn small tab-tg" data-focus :class="{ primary: t.on }" :disabled="t.name === 'settings'" @click="toggleTab(t.name)">{{ t.on ? 'Shown' : 'Hidden' }}</button>
+              </div>
+            </div>
+            <button class="btn small" data-focus style="align-self: flex-start" @click="saveConfig({ ui: { tabs: null } })"><Icon name="mdiRestore" :size="18" />Default tabs</button>
 
             <div class="subh"><Icon name="mdiAnimationPlayOutline" :size="20" />Motion &amp; Sound</div>
             <div class="row"><span class="lbl">Animations</span><div class="seg"><button v-for="m in motions" :key="m.v" data-focus :class="{ on: (ui.motion || 'normal') === m.v }" @click="saveConfig({ ui: { motion: m.v } })">{{ m.l }}</button></div></div>
@@ -304,7 +317,7 @@
 
 <script setup>
 import { computed, defineAsyncComponent, nextTick, onMounted, ref, watch } from 'vue';
-import { store, call, go, tab, saveConfig, pickFolder, choose, confirm, toast, openModal, bytes, ago, resync, scanServer, allRoms, resetLogos, askText } from '../store.js';
+import { store, call, go, tab, saveConfig, pickFolder, choose, confirm, toast, openModal, bytes, ago, resync, scanServer, allRoms, resetLogos, askText, activeTabs, TAB_DEFS } from '../store.js';
 import { useView } from '../useView.js';
 import { input, focusFirst, setPointerPref } from '../nav.js';
 import { THEMES, SURFACES, TEXTS, FONTS, CARD_SHAPES, CARD_SIZES, DENSITIES, themeFrom, themeOf } from '../themes.js';
@@ -433,6 +446,19 @@ async function setPack(v) { await saveConfig({ ui: { soundPack: v } }); setSound
 async function setVolume(v) { await saveConfig({ ui: { volume: v } }); setSoundStyle(ui.value.soundPack, v); previewSound(); }
 // Look presets: the look settings saved under a name (not interface size, pointer, keyboard or
 // button icons, which belong to the device and controller rather than to a look)
+// Top bar tabs: shown ones in their order, then the hidden ones
+const tabsOn = computed(() => activeTabs());
+const tabRows = computed(() => [...tabsOn.value, ...Object.keys(TAB_DEFS).filter((n) => !tabsOn.value.includes(n))].map((name) => ({ name, ...TAB_DEFS[name], on: tabsOn.value.includes(name) })));
+function toggleTab(n) {
+  const l = tabsOn.value.includes(n) ? tabsOn.value.filter((x) => x !== n) : [...tabsOn.value.filter((x) => x !== 'settings'), n, 'settings'];
+  saveConfig({ ui: { tabs: l } });
+}
+function moveTab(n, d) {
+  const l = [...tabsOn.value], i = l.indexOf(n), j = i + d;
+  if (i < 0 || j < 0 || j >= l.length) return;
+  [l[i], l[j]] = [l[j], l[i]];
+  saveConfig({ ui: { tabs: l } });
+}
 const LOOK_KEYS = ['theme', 'customColor', 'colors', 'surface', 'text', 'font', 'bgStyle', 'wallDim', 'cardShape', 'density', 'gridSize', 'cardTitles', 'mediaBar', 'logos', 'motion', 'effects', 'sounds', 'soundPack', 'volume'];
 const presets = computed(() => store.config.lookPresets || []);
 const presetStyle = (p) => { const g = themeOf(p.ui).grad; return { background: `linear-gradient(135deg, ${g[0]}, ${g[2]} 60%, ${g[4]})` }; };
@@ -686,6 +712,11 @@ onMounted(async () => { space.value = await call('fs:space', store.config.romsRo
 .fadeup-enter-active, .fadeup-leave-active { transition: opacity 0.15s, transform 0.2s var(--ease); }
 .fadeup-enter-from { opacity: 0; transform: translateX(10px); }
 .fadeup-leave-to { opacity: 0; }
+.tabs-edit { display: flex; flex-direction: column; gap: 6px; }
+.tab-row { display: flex; align-items: center; gap: 10px; padding: 6px 8px 6px 14px; border-radius: 9px; background: rgba(255, 255, 255, 0.045); }
+.tab-row.off { opacity: 0.6; }
+.tab-lbl { flex: 1; min-width: 0; }
+.tab-tg { min-width: 92px; justify-content: center; }
 .subh { display: flex; align-items: center; gap: 10px; font-family: var(--display); font-size: 19px; font-weight: 700; margin-top: 4px; }
 .ra-mk { height: 20px; }
 .srcs { display: flex; flex-direction: column; gap: 10px; }
