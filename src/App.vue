@@ -190,8 +190,9 @@ onMounted(async () => {
   if (store.config.configured) call('server:status').then((c) => (store.connection = c)).catch(() => {});
   pushLayer(document.body, {
     back: () => { if (viewHandler('back') !== false) return; back(); },
-    lb: () => (viewHandler('lb') !== false ? undefined : cycleTab(-1)),
-    rb: () => (viewHandler('rb') !== false ? undefined : cycleTab(1)),
+    // Bumpers only switch sections inside a page (Achievements, consoles, collections). Top tabs are LT / RT.
+    lb: () => { viewHandler('lb'); },
+    rb: () => { viewHandler('rb'); },
     y: () => (viewHandler('y') !== false ? undefined : focusSearch()),
     accept: (a) => (a === searchEl.value ? toResults() : false),
     x: () => viewHandler('x'),
