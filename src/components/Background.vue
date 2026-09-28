@@ -23,6 +23,7 @@ import { computed, reactive, ref, watch, onBeforeUnmount, nextTick } from 'vue';
 import { store } from '../store.js';
 import { RENDERERS, DARK_BASE } from '../bgRenderers.js';
 import { paletteOf, lightEffects } from '../themes.js';
+import { lastInput } from '../nav.js';
 
 const mode = computed(() => {
   const m = store.config?.ui?.bgStyle || 'waves';
@@ -62,6 +63,9 @@ function loop(t) {
   raf = requestAnimationFrame(loop);
   const gap = light.value ? 50 : 33; // ~30fps (20 in light mode) is plenty for a slow ambient drift
   if (t - last < gap) return;
+  // without the GPU, give every frame to the interface while you move around; the background
+  // picks up again a moment after you stop
+  if (light.value && t - lastInput < 900) return;
   last = t;
   if (!setup()) return;
   frame((t - t0) / 1000);
@@ -73,7 +77,7 @@ function start() {
   raf = requestAnimationFrame(loop);
 }
 const restart = async () => { cancelAnimationFrame(raf); await nextTick(); start(); };
-watch([mode, reduce, light, () => store.config?.ui?.theme, () => store.config?.ui?.customColor, () => store.config?.ui?.surface], restart, { immediate: true });
+watch([mode, reduce, light, () => store.config?.ui?.theme, () => store.config?.ui?.customColor, () => store.config?.ui?.surface, () => JSON.stringify(store.config?.ui?.colors || {})], restart, { immediate: true });
 const onResize = () => { if (reduce.value) restart(); };
 window.addEventListener('resize', onResize);
 const vis = () => (document.hidden ? cancelAnimationFrame(raf) : start());

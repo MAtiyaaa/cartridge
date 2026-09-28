@@ -42,7 +42,8 @@ const DEFAULT_CONFIG = {
   downloads: { concurrency: 2, esdeM3uFolders: true, flattenSingleFile: true },
   ui: { gridSize: 'md', hideEmpty: true, sounds: true, bgStyle: 'waves', theme: 'purple', mediaBar: true, logos: true, pointer: 'auto', scale: 'auto', keyboard: 'auto',
     customColor: '', surface: 'glass', text: 'normal', font: 'outfit', cardShape: 'rounded', density: 'normal', cardTitles: true,
-    motion: 'normal', effects: 'auto', soundPack: 'soft', volume: 'medium', wallpaper: '', wallDim: 'medium' },
+    motion: 'normal', effects: 'auto', soundPack: 'soft', volume: 'medium', wallpaper: '', wallDim: 'medium',
+    colors: { highlight: '', buttons: '', bars: '', background: '' } },
   sync: { onLaunch: true, everyMinutes: 60 },
   sgdbKey: '', // optional SteamGridDB API key for game logos
   ra: { user: '', key: '' }, // RetroAchievements username + web API key
@@ -905,6 +906,34 @@ async function fetchAllLogos() {
 }
 
 // Artwork picker: SteamGridDB images of one kind for a game (by name, or a chosen SGDB game id)
+// Square game icons from SteamGridDB (used for trophy games). Cached; null when there is none.
+const ICON_FILE = path.join(USER_DATA, 'gameicons.json');
+const iconCache = loadJson(ICON_FILE, {});
+const iconInflight = new Map();
+async function gameIcon({ key, name }) {
+  if (!config.sgdbKey || !name) return null;
+  const k = String(key || name);
+  const c = iconCache[k];
+  if (c && (c.url || Date.now() - c.t < 7 * 864e5)) return c.url || null;
+  if (iconInflight.has(k)) return iconInflight.get(k);
+  const job = (async () => {
+    let url = null;
+    try {
+      const games = await sgdbGames(String(name).replace(/[™®©]/g, '').replace(/\s+trophies$/i, ''));
+      if (games[0]) {
+        const icons = (await sgdb(`/icons/game/${games[0].id}?types=static&nsfw=false&humor=false`)) || [];
+        const good = icons.filter((i) => i.mime === 'image/png' || /\.png($|\?)/i.test(i.url || ''))
+          .sort((a, b) => (Math.abs(a.width - a.height) - Math.abs(b.width - b.height)) || (b.width - a.width) || ((b.score || 0) - (a.score || 0)));
+        url = good[0]?.url || null;
+      }
+    } catch (e) { return null; } // offline or rejected key: try again next time
+    iconCache[k] = { url, t: Date.now() };
+    try { fs.writeFileSync(ICON_FILE, JSON.stringify(iconCache)); } catch {}
+    return url;
+  })();
+  iconInflight.set(k, job);
+  try { return await job; } finally { iconInflight.delete(k); }
+}
 async function sgdbArt({ name, kind, gameId }) {
   if (!config.sgdbKey) throw new Error('Add a SteamGridDB API key in Settings → Look & feel first.');
   const games = await sgdbGames(name);
@@ -1221,6 +1250,7 @@ const handlers = {
   'ra:forRom': (o) => raForRom(o),
   'ra:supported': ({ slug, fs_slug }) => !!(RA_CONSOLES[slug] ?? RA_CONSOLES[fs_slug]),
   'syslogo:get': (p) => sysLogo(p),
+  'icon:get': (p) => gameIcon(p),
   'logo:fetchAll': () => fetchAllLogos(),
   'logo:stopAll': () => { if (fetchAll) fetchAll.stop = true; return true; },
   'art:all': () => artOverrides,

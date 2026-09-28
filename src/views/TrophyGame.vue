@@ -4,7 +4,7 @@
     <div v-else-if="error" class="empty">{{ error }}</div>
     <template v-else>
       <header class="tg-head">
-        <div class="tg-icon"><img v-if="g.icon" :src="g.icon" /><img v-else-if="rom" :src="cover(rom)" class="cov" /><Grade v-else :g="g.kind === 'trophy' ? 'P' : null" :size="56" /></div>
+        <GameIcon :title="g.title" :rom-id="g.romId" :fallback="g.icon || (rom ? cover(rom) : '')" :size="150" :grade="g.kind === 'trophy' ? 'P' : null" />
         <div class="tg-info">
           <div class="eyebrow">{{ g.platform }}<template v-if="g.remoteOnly"> · from another device</template></div>
           <h1 class="tg-title">{{ g.title }}</h1>
@@ -52,6 +52,7 @@ import { useView } from '../useView.js';
 import { focusFirst } from '../nav.js';
 import Icon from '../components/Icon.vue';
 import Grade from '../components/Grade.vue';
+import GameIcon from '../components/GameIcon.vue';
 
 // One game's trophies (or Xbox 360 achievements), from this device and any other synced device
 const props = defineProps({ tkey: String });
@@ -91,7 +92,7 @@ onMounted(async () => { await load(); focusFirst(el.value); });
 <style scoped>
 .tg { padding-top: 18px; }
 .tg-head { display: flex; gap: 24px; align-items: flex-start; margin: 6px 0 26px; }
-.tg-icon { width: 240px; aspect-ratio: 16 / 9; border-radius: 12px; flex: none; overflow: hidden; display: grid; place-items: center; background: rgba(0, 0, 0, 0.3); box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5); }
+.tg-icon-unused { width: 240px; aspect-ratio: 16 / 9; border-radius: 12px; flex: none; overflow: hidden; display: grid; place-items: center; background: rgba(0, 0, 0, 0.3); box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5); }
 .tg-icon img { width: 100%; height: 100%; object-fit: contain; }
 .tg-icon img.cov { object-fit: cover; }
 .tg-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
@@ -108,6 +109,7 @@ onMounted(async () => { await load(); focusFirst(el.value); });
 .tg-ticon { width: 64px; height: 64px; border-radius: 8px; flex: none; overflow: hidden; display: grid; place-items: center; background: rgba(0, 0, 0, 0.3); }
 .tg-ticon img { width: 100%; height: 100%; object-fit: cover; }
 .tg-body { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.tg-ticon { border-radius: 12px; }
 .tg-t-title { font-family: var(--display); font-weight: 600; font-size: 15px; display: flex; gap: 6px; align-items: center; }
 .tg-t-desc { font-size: 12.5px; color: #c3c9d4; }
 .tg-t-meta { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; font-size: 11.5px; color: var(--muted); }

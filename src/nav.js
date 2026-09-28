@@ -9,6 +9,7 @@ document.body.classList.add('pad-mode'); // the starting mode needs its class to
 // While a direction is held down, focus jumps several times a second. Smooth scrolling can't keep
 // up with that (each new animation restarts the last), so scroll instantly during a hold.
 let lastRepeat = 0;
+export let lastInput = 0; // for the background: it pauses while you navigate in light-effects mode
 export const scrollMode = () => (performance.now() - lastRepeat < 250 ? 'auto' : 'smooth');
 const layers = [];
 
@@ -29,12 +30,14 @@ export function pushLayer(el, handlers = {}) {
 
 const topLayer = () => layers[layers.length - 1];
 
-function focusables(scope) {
-  return [...scope.querySelectorAll('[data-focus]')].filter((el) => {
-    if (el.disabled) return false;
+function focusables(scope, withRects = false) {
+  const out = [];
+  for (const el of scope.querySelectorAll('[data-focus]')) {
+    if (el.disabled) continue;
     const r = el.getBoundingClientRect();
-    return r.width > 0 && r.height > 0;
-  });
+    if (r.width > 0 && r.height > 0) out.push(withRects ? [el, r] : el);
+  }
+  return out;
 }
 
 export function focusFirst(scope, selector) {
@@ -59,10 +62,9 @@ function move(dir) {
   const c = cur.getBoundingClientRect();
   const cx = c.left + c.width / 2, cy = c.top + c.height / 2;
   let best = null, bestScore = Infinity;
-  for (const el of focusables(scope)) {
+  for (const [el, r] of focusables(scope, true)) {
     if (el === cur) continue;
     if ((dir === 'left' || dir === 'right') && el.hasAttribute('data-nofirst') && !cur.hasAttribute('data-nofirst')) continue; // the end of a row never jumps up to the search box
-    const r = el.getBoundingClientRect();
     const x = r.left + r.width / 2, y = r.top + r.height / 2;
     let primary, secondary;
     if (dir === 'right') { if (r.left < c.right - 4 && x <= cx + 1) continue; primary = x - cx; secondary = overlapGap(c.top, c.bottom, r.top, r.bottom); }
@@ -109,6 +111,7 @@ function scrollIntoViewSmart(el) {
 }
 
 export function dispatch(action) {
+  lastInput = performance.now();
   const layer = topLayer();
   setMode('pad');
   const h = layer?.handlers?.[action];

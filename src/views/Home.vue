@@ -4,7 +4,7 @@
       <Logo :size="72" />
       <h2>{{ syncing ? 'Syncing your library' : 'No library yet' }}</h2>
       <div class="muted">{{ syncing ? store.sync.label : store.sync.error || 'Pull your games from RomM to get started.' }}</div>
-      <div v-if="syncing && store.sync.total" class="bar" style="width: 320px"><i :style="{ width: (store.sync.done / store.sync.total) * 100 + '%' }" /></div>
+      <div v-if="syncing && store.sync.total" class="bar live" style="width: 320px"><i :style="{ width: (store.sync.done / store.sync.total) * 100 + '%' }" /></div>
       <button v-if="!syncing" class="btn primary xl" data-focus @click="resync()"><Icon name="mdiSync" />Sync now</button>
     </div>
     <template v-else>
@@ -108,10 +108,6 @@ function fitHero() {
   else if (over < -12 && logoMaxH.value < 140) logoMaxH.value = Math.min(140, logoMaxH.value + Math.floor(-over - 8));
 }
 let ro;
-watch(() => [heroRom.value?.id, heroSys.value?.id, heroCol.value?.id, heroRom.value && store.logos[heroRom.value.id]], async () => {
-  await nextTick();
-  for (const t of [0, 180, 600]) setTimeout(() => requestAnimationFrame(fitHero), t);
-});
 onMounted(() => { if (window.ResizeObserver) { ro = new ResizeObserver(() => requestAnimationFrame(fitHero)); if (heroEl.value) ro.observe(heroEl.value); } });
 onBeforeUnmount(() => ro?.disconnect());
 const heroRom = ref(null);
@@ -201,6 +197,10 @@ useView(
   [{ b: 'A', label: 'Open' }, { b: 'X', label: 'Download' }, { b: 'Y', label: 'Search' }, { b: 'LT', label: '/ RT  Tabs' }],
 );
 
+watch(() => [heroRom.value?.id, heroSys.value?.id, heroCol.value?.id, heroRom.value && store.logos[heroRom.value.id]], async () => {
+  await nextTick();
+  for (const t of [0, 180, 600]) setTimeout(() => requestAnimationFrame(fitHero), t);
+});
 watch(() => store.libVersion, async () => { await nextTick(); ensureFocus(el.value); });
 onMounted(async () => { await nextTick(); ensureFocus(el.value); });
 </script>
