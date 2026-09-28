@@ -211,7 +211,7 @@ async function downloadAll() {
   const size = todo.reduce((s, r) => s + (r.fs_size_bytes || 0), 0);
   const space = mode.value === 'platform' ? await call('fs:space', platform.value.target?.path) : null;
   if (!(await confirm(`Download ${todo.length} games?`, `${bytes(size)} total${space ? `\n${bytes(space.free)} free on that drive` : ''}`, 'Download all'))) return;
-  for (const r of todo) await download(r);
+  for (const r of todo) await download(r, { checkSpace: false }); // the confirm above already showed the space
 }
 
 onMounted(async () => {

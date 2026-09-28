@@ -55,7 +55,7 @@
               <div style="min-width: 0"><div class="lbl2">BIOS folder</div><div class="mono">{{ store.config.biosPath || 'Not set' }}</div></div>
               <button class="btn small" data-focus @click="browseBios"><Icon name="mdiFolderOpen" :size="18" />Browse</button>
             </div>
-            <div class="space-bar" v-if="space"><div class="bar"><i :style="{ width: (1 - space.free / space.total) * 100 + '%' }" /></div></div>
+            <StorageManager :key="storageKey" />
           </template>
 
           <template v-else-if="sec === 'folders'">
@@ -86,6 +86,16 @@
 
           <template v-else-if="sec === 'ui'">
             <h1>Look &amp; Feel</h1>
+
+            <div class="subh"><Icon name="mdiBookmarkOutline" :size="20" />Presets</div>
+            <div class="presets">
+              <button v-for="(p, i) in presets" :key="i" class="preset" data-focus @click="presetMenu(p, i)">
+                <span class="preset-sw" :style="presetStyle(p)"><i :style="{ background: themeOf(p.ui).accent[0] }" /></span>
+                <b>{{ p.name }}</b>
+              </button>
+              <button v-if="presets.length < 5" class="preset add" data-focus @click="savePreset"><span class="preset-sw"><Icon name="mdiPlus" :size="22" /></span><b>Save this look</b></button>
+            </div>
+            <p class="muted small" style="margin-top: -6px">Saves colour, background, fonts, cards, motion and sounds together, up to 5 looks. Interface size and controller settings stay as they are.</p>
 
             <div class="subh"><Icon name="mdiPaletteOutline" :size="20" />Colour</div>
             <div class="swatches">
@@ -282,10 +292,10 @@
 
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue';
-import { store, call, go, tab, saveConfig, pickFolder, choose, confirm, toast, openModal, bytes, ago, resync, scanServer, allRoms, resetLogos } from '../store.js';
+import { store, call, go, tab, saveConfig, pickFolder, choose, confirm, toast, openModal, bytes, ago, resync, scanServer, allRoms, resetLogos, askText } from '../store.js';
 import { useView } from '../useView.js';
 import { input, focusFirst, setPointerPref } from '../nav.js';
-import { THEMES, SURFACES, TEXTS, FONTS, CARD_SHAPES, CARD_SIZES, DENSITIES, themeFrom } from '../themes.js';
+import { THEMES, SURFACES, TEXTS, FONTS, CARD_SHAPES, CARD_SIZES, DENSITIES, themeFrom, themeOf } from '../themes.js';
 import { BACKGROUNDS } from '../bgRenderers.js';
 import { setSoundEnabled, setSoundStyle, previewSound, SOUND_PACKS } from '../sfx.js';
 import Icon from '../components/Icon.vue';
@@ -296,6 +306,7 @@ import PIcon from '../components/PIcon.vue';
 import Grade from '../components/Grade.vue';
 import Btn from '../components/Btn.vue';
 import SteamSettings from '../components/SteamSettings.vue';
+import StorageManager from '../components/StorageManager.vue';
 import { padInfo } from '../pad.js';
 
 const el = ref(null);
@@ -399,6 +410,39 @@ async function chooseWallpaper() {
 async function clearWallpaper() { store.config = await call('wallpaper:clear'); await saveConfig({ ui: { bgStyle: 'waves' } }); }
 async function setPack(v) { await saveConfig({ ui: { soundPack: v } }); setSoundStyle(v, ui.value.volume); previewSound(); }
 async function setVolume(v) { await saveConfig({ ui: { volume: v } }); setSoundStyle(ui.value.soundPack, v); previewSound(); }
+// Look presets: the look settings saved under a name (not interface size, pointer, keyboard or
+// button icons, which belong to the device and controller rather than to a look)
+const LOOK_KEYS = ['theme', 'customColor', 'colors', 'surface', 'text', 'font', 'bgStyle', 'wallDim', 'cardShape', 'density', 'gridSize', 'cardTitles', 'mediaBar', 'logos', 'motion', 'effects', 'sounds', 'soundPack', 'volume'];
+const presets = computed(() => store.config.lookPresets || []);
+const presetStyle = (p) => { const g = themeOf(p.ui).grad; return { background: `linear-gradient(135deg, ${g[0]}, ${g[2]} 60%, ${g[4]})` }; };
+function lookNow() { const o = {}; for (const k of LOOK_KEYS) if (ui.value[k] !== undefined) o[k] = JSON.parse(JSON.stringify(ui.value[k])); return o; }
+async function savePreset() {
+  const name = await askText({ title: 'Name this look', placeholder: 'TV night' });
+  if (!name || !name.trim()) return;
+  await saveConfig({ lookPresets: [...presets.value, { name: name.trim().slice(0, 30), ui: lookNow() }] });
+  toast(`Saved "${name.trim().slice(0, 30)}"`, 'ok', 2200, 'mdiBookmarkOutline');
+}
+async function applyPreset(p) {
+  const u = { ...p.ui };
+  if (u.bgStyle === 'wallpaper' && !ui.value.wallpaper) u.bgStyle = 'waves'; // the wallpaper image isn't part of a preset
+  await saveConfig({ ui: u });
+  setSoundEnabled(ui.value.sounds !== false);
+  setSoundStyle(ui.value.soundPack, ui.value.volume);
+  toast(`"${p.name}" applied`, 'ok', 2000, 'mdiBookmarkOutline');
+}
+async function presetMenu(p, i) {
+  const v = await choose({ title: p.name, options: [
+    { label: 'Use this look', value: 'apply', icon: 'mdiCheck' },
+    { label: 'Save the current look here', sub: 'Replaces what this preset had', value: 'update', icon: 'mdiContentSave' },
+    { label: 'Rename', value: 'rename', icon: 'mdiPencil' },
+    { label: 'Delete', value: 'delete', icon: 'mdiDeleteOutline', danger: true },
+  ] });
+  const list = [...presets.value];
+  if (v === 'apply') return applyPreset(p);
+  if (v === 'update') { list[i] = { ...p, ui: lookNow() }; await saveConfig({ lookPresets: list }); toast(`"${p.name}" updated`, 'ok', 2000, 'mdiContentSave'); }
+  if (v === 'rename') { const n = await askText({ title: 'Rename look', value: p.name }); if (n && n.trim()) { list[i] = { ...p, name: n.trim().slice(0, 30) }; await saveConfig({ lookPresets: list }); } }
+  if (v === 'delete' && (await confirm(`Delete "${p.name}"?`, 'Only the preset goes. Your current look stays as it is.', 'Delete', true))) { list.splice(i, 1); await saveConfig({ lookPresets: list }); }
+}
 async function resetLook() {
   if (!(await confirm('Reset Look & Feel?', 'Colour, background, fonts, cards, motion and sounds go back to the defaults.', 'Reset'))) return;
   await saveConfig({ ui: { colors: { highlight: '', buttons: '', bars: '', background: '' }, theme: 'purple', customColor: '', surface: 'glass', text: 'normal', font: 'outfit', cardShape: 'rounded', density: 'normal', cardTitles: true, gridSize: 'md', bgStyle: 'waves', motion: 'normal', effects: 'auto', soundPack: 'soft', volume: 'medium' } });
@@ -452,7 +496,9 @@ async function signOut() {
   await saveConfig({ server: { password: '', token: '' }, configured: false });
 }
 async function rescan() { await call('installed:rescan'); toast('Device rescanned', 'ok', 2000, 'mdiHarddisk'); }
+const storageKey = ref(0); // remeasure after the ROMs folder changes
 async function afterPath() {
+  storageKey.value++;
   if (showAll.value) await loadAll();
   space.value = await call('fs:space', store.config.romsRoot);
   await call('installed:rescan');
@@ -563,6 +609,12 @@ onMounted(async () => { space.value = await call('fs:space', store.config.romsRo
 .swatch.custom { background: conic-gradient(from 90deg, #f55, #fd5, #5f8, #5df, #85f, #f5c, #f55); flex-direction: column; justify-content: space-between; align-items: flex-start; }
 .btn-demo { display: inline-flex; gap: 4px; vertical-align: middle; margin-left: 6px; }
 .finetune { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.presets { display: flex; flex-wrap: wrap; gap: 10px; }
+.preset { display: flex; flex-direction: column; gap: 6px; width: 120px; padding: 8px; border-radius: 10px; background: rgba(255, 255, 255, 0.045); border: 1px solid var(--line); text-align: left; }
+.preset b { font-size: 12.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.preset-sw { position: relative; height: 44px; border-radius: 7px; display: grid; place-items: center; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.15); }
+.preset-sw i { position: absolute; top: 6px; right: 6px; width: 12px; height: 12px; border-radius: 50%; box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.7); }
+.preset.add .preset-sw { background: rgba(255, 255, 255, 0.06); color: var(--muted); border: 1px dashed var(--line-2); box-shadow: none; }
 .ft { display: flex; align-items: center; gap: 10px; padding: 8px 14px 8px 8px; border-radius: 10px; background: rgba(255, 255, 255, 0.045); border: 1px solid var(--line); }
 .ft-sw { width: 34px; height: 34px; border-radius: 8px; display: grid; place-items: center; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.25); color: #fff; }
 .ft-t { display: flex; flex-direction: column; text-align: left; }

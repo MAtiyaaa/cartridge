@@ -145,7 +145,7 @@ This downloads the latest AppImage to `~/Applications`, makes it executable and 
 | | |
 |---|---|
 | **Addresses** | A LAN address, a Cloudflare Tunnel address, or both. In **Auto** mode Cartridge uses the LAN when you're home and falls back to the tunnel. |
-| **Sign-in** | Username & password, a RomM **pairing code**, or an `rmm_` API token. |
+| **Sign-in** | Username & password, a RomM **pairing code** or **QR code**, or an `rmm_` API token. |
 | **Cloudflare Access** | Optional service-token headers if your tunnel sits behind Zero Trust. |
 | **Server scans** | "Scan server for new ROMs" needs username & password sign-in. |
 

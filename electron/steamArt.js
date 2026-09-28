@@ -154,7 +154,8 @@ async function addToSteam({ exe, artDir, restartSteam }) {
         Object.assign(entry, fields, { tags: entry.tags || {} });
         if (oldId !== appid) installArt(path.join(cfg, 'grid'), appid, artDir);
       } else {
-        const idx = String(Object.keys(list).length);
+        // next free key: Steam's numbering can have gaps, and reusing a key would replace a shortcut
+        const idx = String(Object.keys(list).reduce((m, k) => Math.max(m, /^\d+$/.test(k) ? Number(k) + 1 : m), 0));
         list[idx] = fields;
       }
       fs.mkdirSync(cfg, { recursive: true });
