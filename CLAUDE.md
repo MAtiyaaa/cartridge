@@ -60,5 +60,13 @@ LT/RT switch top tabs. LB/RB only switch sections inside a page. A select, B bac
 - QR pairing: RomM's device flow `/api/auth/device/init` and `/token` (`server:qrStart`, `server:qrPoll`), `config.deviceId`, the `qrcode` package in `Setup.vue`.
 - A mock RomM and Playwright checks for these were used in the session; they are not in the repo.
 
+## 0.7.0 (The Library Update)
+- slimRom adds `igdb_id`, `series`, `modes`, `players`, `votes`, `hours` (HLTB), `similar`, `user` (RomM `rom_user`: status, backlog, playing, hidden, played).
+- Collections: `col:*`, `fav:set`, `rom:user` in `main.js` (`colHandlers`, `apiForm` multipart). Automatic lists, series and genres are built in `store.js` (`autoCollections`, `genres`). QR pairing asks for `collections.write`.
+- Top bar tabs: `config.ui.tabs`, `TAB_DEFS`/`activeTabs()` in `store.js`; Settings always shown.
+- PS4/PS5 zips: `unzipGame` (yauzl) after `checkFiles`; unpacks to `<name>.partial`, flattens one top folder, then deletes the zip.
+- Queue: `dl:move`, `dl:pauseAll`, `dl:resumeAll`, `config.downloads.limitMBs` (`rateWait`). `it.running` stops a resumed item starting a second run before the stopped one ends.
+- Recently played: `steam:played` (shortcuts LastPlayTime). Select many: Gallery `selecting`, `addGames` in `steam.js`.
+
 ## Releases (full steps: HANDOFF D8)
 Only when the owner asks. Bump `version` and `build.releaseInfo.releaseName` ("Cartridge X.Y.Z") in `package.json`, put only this version's notes in `RELEASE_NOTES.md` (heading `## Cartridge X.Y.Z · Title`), add them to the top of `CHANGELOG.md`, grouped as New / Changed / Fixed with bold lead-ins. CI builds, launch-checks and publishes.

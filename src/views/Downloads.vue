@@ -6,7 +6,11 @@
         <h1 class="big">{{ active.length ? `${active.length} in progress` : 'All caught up' }}</h1>
         <div class="muted" style="font-size: 13.5px" v-if="active.length">{{ bytes(remaining) }} left · {{ bytes(speed) }}/s</div>
       </div>
-      <button class="btn small" data-focus :disabled="!finished.length" @click="call('dl:clear')"><Icon name="mdiBroom" :size="18" />Clear history</button>
+      <div class="row" style="gap: 10px">
+        <button v-if="active.length" class="btn small" data-focus @click="call('dl:pauseAll')"><Icon name="mdiPause" :size="18" />Pause all</button>
+        <button v-else-if="paused.length" class="btn small" data-focus @click="call('dl:resumeAll')"><Icon name="mdiPlay" :size="18" />Resume all · {{ paused.length }}</button>
+        <button class="btn small" data-focus :disabled="!finished.length" @click="call('dl:clear')"><Icon name="mdiBroom" :size="18" />Clear history</button>
+      </div>
     </header>
 
     <div v-if="!store.downloads.length" class="empty-dl">
@@ -37,7 +41,13 @@
 
     <section v-if="queued.length">
       <div class="shelf-title"><Icon name="mdiClockOutline" :size="20" />Up next<span class="count">{{ queued.length }}</span></div>
-      <div class="list"><DlRow v-for="d in queued" :key="d.id" :d="d" action="Cancel" @act="act" /></div>
+      <div class="list">
+        <div v-for="(d, i) in queued" :key="d.id" class="q-row">
+          <DlRow :d="d" action="Cancel" @act="act" />
+          <button class="btn small q-mv" data-focus :disabled="i === 0" aria-label="Move up" @click="call('dl:move', { id: d.id, dir: -1 })"><Icon name="mdiArrowUp" :size="18" /></button>
+          <button class="btn small q-mv" data-focus :disabled="i === queued.length - 1" aria-label="Move down" @click="call('dl:move', { id: d.id, dir: 1 })"><Icon name="mdiArrowDown" :size="18" /></button>
+        </div>
+      </div>
     </section>
     <section v-if="finished.length">
       <div class="shelf-title"><Icon name="mdiHistory" :size="20" />History<span class="count">{{ finished.length }}</span></div>
@@ -55,6 +65,7 @@ import Btn from '../components/Btn.vue';
 
 const current = computed(() => store.downloads.filter((d) => d.status === 'downloading'));
 const queued = computed(() => store.downloads.filter((d) => d.status === 'queued'));
+const paused = computed(() => store.downloads.filter((d) => d.status === 'cancelled'));
 const active = computed(() => [...current.value, ...queued.value]);
 const finished = computed(() => store.downloads.filter((d) => !['downloading', 'queued'].includes(d.status)).sort((a, b) => b.addedAt - a.addedAt));
 const remaining = computed(() => active.value.reduce((s, d) => s + Math.max(0, (d.total || 0) - (d.received || 0)), 0));
@@ -109,6 +120,8 @@ DlRow.emits = ['act'];
 .stats { gap: 20px; color: var(--muted); font-size: 13.5px; }
 .pct { font-family: var(--display); font-weight: 700; font-size: 26px; }
 .now-act { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 13px; }
+.q-row { display: flex; align-items: center; gap: 8px; }
+.q-mv { flex: none; }
 .list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 26px; }
 :deep(.dl-row) { display: flex; align-items: center; gap: 16px; padding: 10px 16px; border-radius: 9px; background: rgba(16, 19, 28, 0.6); border: 1px solid var(--line); width: 100%; }
 :deep(.dl-row .thumb) { width: 44px; height: 58px; border-radius: 8px; overflow: hidden; background: #1a1e2a; flex: none; }

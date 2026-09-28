@@ -1,20 +1,21 @@
-## Cartridge 0.6.1
+## Cartridge 0.7.0 · The Library Update
 
 ### New
-- **Downloads are checked against RomM.** When a game finishes downloading, Cartridge compares every file with the size and checksum RomM keeps for it. A damaged file is deleted and the download shows "Damaged download", so **Retry** gets a fresh copy.
-  - Zip, 7z, rar and CHD files get the size check only, because RomM checksums what is inside them, not the file itself.
-  - Consoles RomM doesn't checksum (like PS4 and Switch) get the size check only.
-  - If a retry brings exactly the same file again, the file on your server is fine and RomM's checksum is out of date. Cartridge keeps the game and tells you a rescan in RomM would fix it.
-- **Storage manager (Settings → Storage), like Steam's.**
-  - Each drive with a bar showing what Cartridge's games use, what everything else uses, and what is free.
-  - Every downloaded game on that drive with its real size on disk, sorted by size, name or when you added it.
-  - Pick any number of games with A and delete them in one go. They stay on your RomM server.
-- **Warning before a download that won't fit.** If a game doesn't fit on its drive (counting what is still downloading there), Cartridge says so first and offers **Free up space**, **Download anyway** or **Cancel**.
-- **Look & Feel presets.** Save your current look under a name (up to 5) and switch between them in one press: colour, background, fonts, cards, motion and sounds. Interface size and controller settings stay as they are. Each preset can be updated, renamed or deleted.
-- **Pair with a QR code.** In Setup → Pairing code, **Pair with a QR code instead** shows a QR code. Scan it with your phone, approve Cartridge in RomM, and Cartridge signs in by itself. Needs a RomM version with device pairing; older versions keep the typed pairing code.
+- **Collections.** A Collections row on Home and a Collections page.
+  - **Your own collections**, made in Cartridge and saved in RomM, so every device and RomM's web page have them. Make one with **New collection**, add games from a game page (More → Add to a collection) or many at once from the Library. Rename or delete them from the collection's page.
+  - **Made by Cartridge:** Top rated, Hidden gems (rated highly by few people), Couch multiplayer and Short games (under 5 hours), built from your library.
+  - **Series:** every series with two or more games, in release order.
+  - RomM's own collections and smart collections are still there.
+- **Genres.** A row of genre tiles on Home and a Genres page. LB and RB switch genre.
+- **Customise the top bar (Look & Feel → Top bar).** Show or hide any tab and change the order: Home, Library, Consoles, Genres, Collections, Achievements, Downloads. Settings always stays. LT and RT follow your order.
+- **Play status and favourites, synced with RomM.** From a game's More menu: add to favourites, set Playing now, Backlog, Finished, Completed 100%, Gave up or Not for me, or hide the game. Home gets **Continue playing**, **Backlog** and **Favourites** rows.
+- **Recently played.** A Home row from Steam's last played times for games added to Steam, and RomM's.
+- **Game page:** "About N h to beat" from HowLongToBeat, and **More in this series** and **Similar games** rows with games you have.
+- **PS4 and PS5 zips unpack themselves.** The zip is downloaded, unpacked into the game's folder, then deleted. The space check counts room for both.
+- **Better Library filters.** A **Filters** button: genre, decade, couch multiplayer, rated 80% and up, play status, and show hidden games. Sort by **Rating**, and **Surprise me** opens a random game.
+- **Select many games.** **Select** in the Library, pick games with A, then download them, add them to a collection or add them to Steam in one go.
+- **Download queue controls.** Move waiting games up or down, **Pause all** and **Resume all**, and a **Speed limit** in Settings → Downloads (5, 10, 25 or 50 MB/s).
 
-### Fixed
-- **Y on the Search page now opens the on-screen keyboard** when the built-in keyboard is on (Game Mode).
-- **Adding Cartridge itself to Steam could replace another shortcut** when Steam's list had a gap in its numbering. It now always takes a free spot.
-- **Undo in Settings → Steam could restore the wrong file** in a rare case where the Steam step ran twice. Each change now runs exactly once, and a backup is never replaced.
-- **Adding games to Steam showed no progress** while artwork was being fetched, which could look stuck with many games. The top bar now shows "Steam artwork 3/12", then "Waiting for Steam…".
+### Changed
+- Games you hide in RomM stay out of Home, the Library and Search. Library → Filters → Show hidden games brings them back.
+- Pairing with a code or QR now asks RomM for permission to change collections. Paired before 0.7.0? Pair again to use collections and play status.
