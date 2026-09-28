@@ -1,11 +1,14 @@
-## Cartridge 0.6.0 · The Android Update
+## Cartridge 0.6.1 · Android Fixes
 
 ### New
-- **Cartridge for Android.** Every release now also comes as `Cartridge-android.apk`, built from the same code as the AppImage, so Android gets every update at the same time. Same look, same controls, same features.
-- **Your ROM folders are found for you.** Cartridge looks on internal storage and SD cards for `ROMs`, `Emulation/roms` and the ES-DE ROM folder, and saves each game into its console folder (`nds`, `n3ds`, `psp`, `ps2`, `switch` and the rest). A console folder somewhere else, like `NDS` at the top of the SD card, is picked up too.
-- **Controllers and touch.** Built-in and Bluetooth controllers work like on the Deck, including held directions and triggers. Everything can also be tapped and swiped, and the Android back gesture goes back.
-- **Dual screen on the AYN Thor.** On dual-screen devices the bottom screen becomes a touch companion: the highlighted game with its cover and a Download button, live download progress, a touch d-pad and quick tabs. Single-screen devices never see it.
-- **Settings → Android.** File access, found ROM folders, dual screen, downloads that keep going in the background, full screen and in-app updates. These settings only exist in the Android app.
+- **A second screen that matches the first.** On the AYN Thor and other dual-screen devices, the bottom screen now uses your theme, background, fonts and game logos. It has three tabs:
+  - **Game:** artwork, cover, logo, year, rating, size, genres, the description and live download progress, with Open, Download and Cancel.
+  - **Downloads:** your whole queue with live progress; cancel, retry or clear finished.
+  - **Controls:** a touch D-pad (hold to repeat), A / B / X / Y, shoulder buttons, Select / Start and shortcuts that jump the top screen to Home, Library, Consoles, Search, Downloads or Settings.
+- **Turn the second screen off** from Settings → Android → Use the second screen, or with the button on the second screen itself.
 
-### Also in this release
-- Everything from 0.5.5 (smoother held D-pad scrolling, Home fixes, LT / RT switch tabs).
+### Fixed
+- **Downloads on the second screen and in the notification stayed at 0%.** They now show live progress.
+- **Touch scrolling and tapping on Android.** Lists now scroll smoothly with momentum, and taps register properly.
+- **The search box no longer traps the D-pad on Android.** Android's keyboard used to open and grab the D-pad; the built-in on-screen keyboard is used instead (change it under Look & Feel → On-screen keyboard).
+- **Releases include the AppImage again,** next to the APK.
