@@ -14,10 +14,18 @@ function emit(ch, data) {
   for (const fn of listeners.get(ch) || []) { try { fn(data); } catch (e) { console.error(e); } }
 }
 
+// Images are spread over i0-i7.localhost (all loopback): the WebView opens only 6 connections per
+// host, and one host made every cover wait in line behind slow server fetches, on both screens.
+function imgUrl(query) {
+  let h = 0;
+  for (let i = 0; i < query.length; i++) h = (h * 31 + query.charCodeAt(i)) | 0;
+  const port = base.slice(base.lastIndexOf(':') + 1);
+  return `http://i${Math.abs(h) % 8}.localhost:${port}/romimg/?_k=${token}&${query}`;
+}
 // Backend payloads carry romimg:// URLs; point them at the local server instead.
-const ROMIMG = 'romimg://img/?';
+const ROMIMG = /romimg:\/\/img\/\?([^\s"')]*)/g;
 function rewrite(v) {
-  if (typeof v === 'string') return v.includes(ROMIMG) ? v.split(ROMIMG).join(`${base}/romimg/?_k=${token}&`) : v;
+  if (typeof v === 'string') return v.includes('romimg://') ? v.replace(ROMIMG, (_, q) => imgUrl(q)) : v;
   if (Array.isArray(v)) return v.map(rewrite);
   if (v && typeof v === 'object') { const o = {}; for (const k in v) o[k] = rewrite(v[k]); return o; }
   return v;
@@ -56,7 +64,7 @@ export const cart = {
   nativeTouch: true, // nav.js leaves touch scrolling to the WebView
   call,
   on,
-  img: (query) => `${base}/romimg/?_k=${token}&${query}`,
+  img: (query) => imgUrl(query),
   override: (ch, fn) => overrides.set(ch, fn),
   emit,
   get server() { return { base, token }; },

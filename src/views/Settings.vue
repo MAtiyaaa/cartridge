@@ -2,7 +2,7 @@
   <div class="set-view" ref="el">
     <nav class="rail">
       <div class="eyebrow" style="padding: 0 14px 10px">Settings</div>
-      <button v-for="s in sections" :key="s.id" class="rail-item" :class="{ on: sec === s.id }" data-focus :data-key="'sec-' + s.id" @focus="sec = s.id" @click="enter">
+      <button v-for="s in sections" :key="s.id" class="rail-item" :class="{ on: sec === s.id }" data-focus :data-key="'sec-' + s.id" @focus="sec = s.id" @click="pick(s.id)">
         <Icon :name="s.icon" :size="20" />{{ s.label }}
       </button>
     </nav>
@@ -92,6 +92,13 @@
               <button v-for="(t, k) in THEMES" :key="k" class="swatch" data-focus :class="{ on: (ui.theme || 'purple') === k }" :style="{ background: `linear-gradient(135deg, ${t.grad[0]}, ${t.grad[2]} 60%, ${t.grad[4]})` }" :title="t.label" @click="saveConfig({ ui: { theme: k } })"><i :style="{ background: t.accent[0] }" /><span>{{ t.label }}</span></button>
               <button class="swatch custom" data-focus :class="{ on: ui.theme === 'custom' }" :style="ui.customColor ? { background: `linear-gradient(135deg, ${customT.grad[0]}, ${customT.grad[2]} 60%, ${customT.grad[4]})` } : {}" @click="pickColor"><Icon name="mdiEyedropperVariant" :size="18" /><span>Custom</span></button>
             </div>
+            <div class="finetune">
+              <button v-for="f in fineTune" :key="f.k" class="ft" data-focus @click="pickPart(f)">
+                <span class="ft-sw" :style="{ background: (ui.colors || {})[f.k] || f.def() }"><Icon v-if="!(ui.colors || {})[f.k]" name="mdiPaletteOutline" :size="14" /></span>
+                <span class="ft-t"><b>{{ f.l }}</b><small>{{ (ui.colors || {})[f.k] ? 'Custom' : 'From theme' }}</small></span>
+              </button>
+              <button v-if="Object.values(ui.colors || {}).some(Boolean)" class="btn small" data-focus @click="saveConfig({ ui: { colors: { highlight: '', buttons: '', bars: '', background: '' } } })"><Icon name="mdiRestore" :size="16" />Use theme colours</button>
+            </div>
             <div class="row"><span class="lbl">Panels</span><div class="seg"><button v-for="(v, k) in SURFACES" :key="k" data-focus :class="{ on: (ui.surface || 'glass') === k }" @click="saveConfig({ ui: { surface: k } })">{{ v.label }}</button></div></div>
             <div class="row"><span class="lbl">Text</span><div class="seg"><button v-for="(v, k) in TEXTS" :key="k" data-focus :class="{ on: (ui.text || 'normal') === k }" @click="saveConfig({ ui: { text: k } })">{{ v.label }}</button></div></div>
 
@@ -130,7 +137,7 @@
               <div class="row" style="gap: 12px; align-items: center">
                 <button v-if="!logoJob" class="btn" data-focus @click="fetchAll"><Icon name="mdiDownloadMultiple" :size="18" />Fetch all logos</button>
                 <button v-else class="btn" data-focus @click="call('logo:stopAll')"><Icon name="mdiStop" :size="18" />Stop</button>
-                <div v-if="logoJob" class="logo-prog"><div class="bar"><i :style="{ width: (logoJob.total ? (logoJob.done / logoJob.total) * 100 : 0) + '%' }" /></div><span class="muted small">{{ logoJob.done }} / {{ logoJob.total }} games · {{ logoJob.found }} logos</span></div>
+                <div v-if="logoJob" class="logo-prog"><div class="bar live"><i :style="{ width: (logoJob.total ? (logoJob.done / logoJob.total) * 100 : 0) + '%' }" /></div><span class="muted small">{{ logoJob.done }} / {{ logoJob.total }} games · {{ logoJob.found }} logos</span></div>
                 <span v-else class="muted small">Gets the logo for every game now, instead of as you browse.</span>
               </div>
               <p class="muted small" style="margin-top: -6px">Logos come from your RomM server when it has them (ScreenScraper "logo" media). For everything else, add a free key from steamgriddb.com → Preferences → API. {{ store.config.sgdbKey ? 'Key saved.' : '' }}</p>
@@ -164,7 +171,7 @@
               <div style="display: flex; flex-direction: column; gap: 6px; flex: 1">
                 <div style="font-family: var(--display); font-size: 22px; font-weight: 700">Cartridge {{ store.info.version }}</div>
                 <div class="muted small">{{ updText }}</div>
-                <div v-if="store.update.state === 'downloading'" class="bar" style="max-width: 360px"><i :style="{ width: (store.update.percent || 0) + '%' }" /></div>
+                <div v-if="store.update.state === 'downloading'" class="bar live" style="max-width: 360px"><i :style="{ width: (store.update.percent || 0) + '%' }" /></div>
               </div>
             </div>
             <div class="row wrap">
@@ -363,6 +370,18 @@ const dims = [{ v: 'low', l: 'Bright' }, { v: 'medium', l: 'Dimmed' }, { v: 'hig
 const motions = [{ v: 'normal', l: 'Normal' }, { v: 'fast', l: 'Fast' }, { v: 'reduce', l: 'Reduced' }];
 const effectsOpts = [{ v: 'auto', l: 'Auto' }, { v: 'full', l: 'Full' }, { v: 'light', l: 'Light' }];
 const volumes = [{ v: 'low', l: 'Low' }, { v: 'medium', l: 'Medium' }, { v: 'high', l: 'High' }];
+const cssVar = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const fineTune = [
+  { k: 'highlight', l: 'Highlights', sub: 'Focus, tabs, switches', def: () => cssVar('--primary') },
+  { k: 'buttons', l: 'Buttons', sub: 'Main action buttons', def: () => cssVar('--primary-l') },
+  { k: 'bars', l: 'Progress bars', sub: 'Downloads, trophies', def: () => cssVar('--primary') },
+  { k: 'background', l: 'Background', sub: 'Waves and gradients', def: () => cssVar('--g2') },
+];
+async function pickPart(f) {
+  const c = await openModal('color', { value: (ui.value.colors || {})[f.k] || f.def(), title: f.l, note: f.sub, allowReset: !!(ui.value.colors || {})[f.k] });
+  if (c === '__theme') await saveConfig({ ui: { colors: { [f.k]: '' } } });
+  else if (c) await saveConfig({ ui: { colors: { [f.k]: c } } });
+}
 const customT = computed(() => themeFrom(ui.value.customColor || '#8b74e8'));
 async function pickColor() {
   const c = await openModal('color', { value: ui.value.customColor || THEMES[ui.value.theme]?.accent?.[0] || '#8b74e8' });
@@ -382,7 +401,7 @@ async function setPack(v) { await saveConfig({ ui: { soundPack: v } }); setSound
 async function setVolume(v) { await saveConfig({ ui: { volume: v } }); setSoundStyle(ui.value.soundPack, v); previewSound(); }
 async function resetLook() {
   if (!(await confirm('Reset Look & Feel?', 'Colour, background, fonts, cards, motion and sounds go back to the defaults.', 'Reset'))) return;
-  await saveConfig({ ui: { theme: 'purple', customColor: '', surface: 'glass', text: 'normal', font: 'outfit', cardShape: 'rounded', density: 'normal', cardTitles: true, gridSize: 'md', bgStyle: 'waves', motion: 'normal', effects: 'auto', soundPack: 'soft', volume: 'medium' } });
+  await saveConfig({ ui: { colors: { highlight: '', buttons: '', bars: '', background: '' }, theme: 'purple', customColor: '', surface: 'glass', text: 'normal', font: 'outfit', cardShape: 'rounded', density: 'normal', cardTitles: true, gridSize: 'md', bgStyle: 'waves', motion: 'normal', effects: 'auto', soundPack: 'soft', volume: 'medium' } });
 }
 const gfx = [{ v: 'auto', l: 'Auto (GPU)' }, { v: 'software', l: 'Compatible' }];
 const pointers = [{ v: 'auto', l: 'Auto' }, { v: 'touch', l: 'Touch' }, { v: 'mouse', l: 'Mouse' }];
@@ -420,6 +439,8 @@ useView({ back: () => { if (!document.activeElement?.closest('.rail')) { focusFi
 watch(sec, (v) => { store.settingsSection = v; });
 
 function enter() { focusFirst(paneEl.value); }
+// A tap switches the section right away (touch never focuses the rail); a controller also moves into it
+function pick(id) { sec.value = id; if (input.mode !== 'touch') enter(); }
 async function setMode(mode) { await saveConfig({ server: { mode } }); reconnect(); }
 async function reconnect() {
   try { const r = await call('server:reconnect'); toast(`Connected · ${r.base}`, 'ok', 2600, 'mdiLanConnect'); } catch (e) { toast(e.message, 'error'); }
@@ -539,6 +560,12 @@ onMounted(async () => { space.value = await call('fs:space', store.config.romsRo
 .swatch { position: relative; }
 .swatch i { position: absolute; top: 6px; right: 6px; width: 12px; height: 12px; border-radius: 50%; box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.7); }
 .swatch.custom { background: conic-gradient(from 90deg, #f55, #fd5, #5f8, #5df, #85f, #f5c, #f55); flex-direction: column; justify-content: space-between; align-items: flex-start; }
+.finetune { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.ft { display: flex; align-items: center; gap: 10px; padding: 8px 14px 8px 8px; border-radius: 10px; background: rgba(255, 255, 255, 0.045); border: 1px solid var(--line); }
+.ft-sw { width: 34px; height: 34px; border-radius: 8px; display: grid; place-items: center; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.25); color: #fff; }
+.ft-t { display: flex; flex-direction: column; text-align: left; }
+.ft-t b { font-size: 13px; font-weight: 600; }
+.ft-t small { font-size: 11px; color: var(--muted); }
 .bgs { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
 .bgtile { position: relative; display: flex; flex-direction: column; gap: 2px; padding: 10px; border-radius: 10px; background: rgba(255, 255, 255, 0.045); border: 1px solid var(--line); text-align: left; }
 .bgtile.on { border-color: var(--primary-l); background: rgba(var(--primary-rgb), 0.18); }

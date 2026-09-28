@@ -203,55 +203,93 @@ function parseVita3k(root) {
 }
 
 // ---------------------------------------------------------------- shadPS4 (PS4)
-// Current layout: <user>/trophy/<NP>/Xml/TROP.XML + <user>/home/<uid>/trophy/<NP>.xml (unlocks)
-// Older layout:   <user>/game_data/<CUSA…>/TrophyFiles/trophy00/Xml/TROP.XML (unlocks inline)
+// The emulator and its Qt launcher share one user folder (~/.local/share/shadPS4, or a portable
+// "user" folder next to the program). Layouts, per shadPS4's source:
+//   0.16+:   <user>/trophy/<NP>/Xml/TROP*.XML (names) + <home>/<uid>/trophy/<NP>.xml (unlocks)
+//   builds in between: <home>/<uid>/trophy/<ID>/ (a folder with the XML inside)
+//   <=0.15:  <user>/game_data/<CUSA…>/TrophyFiles/trophy00/Xml/TROP.XML (unlocks inline)
+// <home> is <user>/home unless the settings (config.json "home_dir") point somewhere else.
+const APP_DIRS = () => [path.join(HOME, 'Applications'), path.join(HOME, 'AppImages'), path.join(HOME, 'Downloads'), path.join(HOME, '.local', 'bin'), path.join(HOME, 'Games'), ...emulationRoots().map((r) => path.join(r, 'tools'))];
 function shadps4Roots() {
   const found = [];
-  const users = [path.join(XDG_DATA, 'shadPS4'), path.join(HOME, '.var/app/net.shadps4.shadPS4/data/shadPS4')];
+  const users = [
+    path.join(XDG_DATA, 'shadPS4'), path.join(XDG_DATA, 'shadPS4QtLauncher'),
+    path.join(HOME, '.local', 'share', 'shadPS4'), path.join(HOME, '.local', 'share', 'shadPS4QtLauncher'),
+    path.join(HOME, '.var/app/net.shadps4.shadPS4/data/shadPS4'), path.join(HOME, '.var/app/net.shadps4.shadPS4QtLauncher/data/shadPS4'),
+  ];
   for (const r of emulationRoots()) users.push(path.join(r, 'storage', 'shadps4'), path.join(r, 'storage', 'shadPS4'));
-  for (const u of users) if (isDir(path.join(u, 'trophy')) || isDir(path.join(u, 'home')) || isDir(path.join(u, 'game_data'))) found.push({ dir: u, how: 'config' });
+  // portable installs keep a "user" folder next to the AppImage or inside the launcher's versions
+  for (const d of APP_DIRS()) {
+    users.push(path.join(d, 'user'));
+    for (const n of ls(d)) if (/shadps4/i.test(n) && isDir(path.join(d, n))) users.push(path.join(d, n, 'user'), path.join(d, n));
+  }
+  for (const v of ls(path.join(XDG_DATA, 'shadPS4QtLauncher', 'versions'))) users.push(path.join(XDG_DATA, 'shadPS4QtLauncher', 'versions', v, 'user'));
+  for (const u of [...new Set(users)]) if (shadps4Games(u).length) found.push({ dir: u, how: /\/user$/.test(u) ? 'known' : 'config' });
   return found;
+}
+// home folders for a user folder: the default plus any custom "home_dir" in its settings
+function shadHomes(userDir) {
+  const homes = [path.join(userDir, 'home')];
+  for (const f of ['config.json', 'config.toml']) {
+    const t = readText(path.join(userDir, f));
+    if (!t) continue;
+    const re = /["']?home_?dir["']?\s*[:=]\s*["']([^"']+)["']/gi;
+    let m;
+    while ((m = re.exec(t))) if (m[1]) homes.push(m[1].replace(/^~(?=\/)/, HOME));
+  }
+  return [...new Set(homes)].filter(isDir);
+}
+// every trophy save under a user folder: [{ np, file }]
+function shadps4Games(userDir) {
+  const out = [];
+  for (const home of shadHomes(userDir)) {
+    for (const uid of ls(home)) {
+      const tdir = path.join(home, uid, 'trophy');
+      for (const n of ls(tdir)) {
+        const p = path.join(tdir, n);
+        if (/\.xml$/i.test(n)) out.push({ np: n.replace(/\.xml$/i, ''), file: p });
+        else if (isDir(p)) {
+          // a folder per game: take the XML that holds unlocks (or the only one)
+          const xmls = [p, path.join(p, 'Xml')].flatMap((d) => ls(d).filter((f) => /\.xml$/i.test(f)).map((f) => path.join(d, f)));
+          const pick = xmls.find((x) => /unlockstate/i.test(readText(x) || '')) || xmls.find((x) => /TROPUSR|TROP\.XML$/i.test(x)) || xmls[0];
+          if (pick) out.push({ np: n, file: pick, dir: p });
+        }
+      }
+    }
+  }
+  for (const tid of ls(path.join(userDir, 'game_data'))) {
+    const tf = path.join(userDir, 'game_data', tid, 'TrophyFiles');
+    for (const t0 of ls(tf)) { const xml = path.join(tf, t0, 'Xml', 'TROP.XML'); if (exists(xml)) out.push({ np: null, tid, file: xml, dir: path.join(tf, t0) }); }
+  }
+  return out;
 }
 const tsMs = (v) => { const n = Number(v); if (!n) return null; return n > 1e14 ? Math.round(n / 1000) : n > 1e11 ? n : n * 1000; };
 function parseShadps4(userDir) {
   const games = new Map();
   const add = (g) => { const k = g.set; const prev = games.get(k); if (!prev || g.trophies.filter((t) => t.unlocked).length >= prev.trophies.filter((t) => t.unlocked).length) games.set(k, g); };
   const iconsOf = (dir, id) => iconToken(path.join(dir, `TROP${String(id).padStart(3, '0')}.PNG`));
-  // current layout
-  for (const uid of ls(path.join(userDir, 'home'))) {
-    const tdir = path.join(userDir, 'home', uid, 'trophy');
-    for (const f of ls(tdir)) {
-      if (!/\.xml$/i.test(f)) continue;
-      const np = f.replace(/\.xml$/i, '');
-      const conf = parseTrophyXml(readText(path.join(tdir, f)));
-      if (!conf) continue;
-      const base = path.join(userDir, 'trophy', np);
-      // names may be empty in the save copy: fill from the English/master definitions
-      const defs = parseTrophyXml(readText(path.join(base, 'Xml', 'TROP_01.XML'))) || parseTrophyXml(readText(path.join(base, 'Xml', 'TROP.XML')));
-      const byId = new Map((defs?.trophies || []).map((t) => [t.id, t]));
-      add({
-        src: 'shadps4', set: np, title: defs?.title || conf.title || np, titleId: null,
-        icon: iconToken(path.join(base, 'Icons', 'ICON0.PNG')),
-        trophies: conf.trophies.map((t) => { const d = byId.get(t.id) || t; return { id: t.id, name: d.name || t.name, desc: d.desc || t.desc, grade: t.grade || d.grade, hidden: t.hidden, icon: iconsOf(path.join(base, 'Icons'), t.id), unlocked: t.unlockstate === 'true', time: t.unlockstate === 'true' ? tsMs(t.timestamp) : null }; }),
-        files: [path.join(tdir, f)],
-      });
+  const defsFor = (np, own) => {
+    for (const base of [own, path.join(userDir, 'trophy', np || '_')].filter(Boolean)) {
+      for (const xd of [path.join(base, 'Xml'), base]) {
+        const d = parseTrophyXml(readText(path.join(xd, 'TROP_01.XML'))) || parseTrophyXml(readText(path.join(xd, 'TROP.XML'))) || parseTrophyXml(readText(path.join(xd, 'TROPCONF.XML')));
+        if (d && d.trophies.some((t) => t.name)) return { d, icons: exists(path.join(base, 'Icons')) ? path.join(base, 'Icons') : base };
+      }
     }
-  }
-  // older layout
-  for (const tid of ls(path.join(userDir, 'game_data'))) {
-    const tf = path.join(userDir, 'game_data', tid, 'TrophyFiles');
-    for (const t0 of ls(tf)) {
-      const xml = path.join(tf, t0, 'Xml', 'TROP.XML');
-      const conf = parseTrophyXml(readText(xml));
-      if (!conf) continue;
-      const set = conf.npcommid || `${tid}-${t0}`;
-      add({
-        src: 'shadps4', set, title: conf.title || tid, titleId: /^[A-Z]{4}\d{5}$/.test(tid) ? tid : null,
-        icon: iconToken(path.join(tf, t0, 'Icons', 'ICON0.PNG')),
-        trophies: conf.trophies.map((t) => ({ id: t.id, name: t.name, desc: t.desc, grade: t.grade, hidden: t.hidden, icon: iconsOf(path.join(tf, t0, 'Icons'), t.id), unlocked: t.unlockstate === 'true', time: t.unlockstate === 'true' ? tsMs(t.timestamp) : null })),
-        files: [xml],
-      });
-    }
+    return { d: null, icons: path.join(userDir, 'trophy', np || '_', 'Icons') };
+  };
+  for (const e of shadps4Games(userDir)) {
+    const conf = parseTrophyXml(readText(e.file));
+    if (!conf) continue;
+    const np = e.np || conf.npcommid || `${e.tid}`;
+    const { d: defs, icons } = defsFor(conf.npcommid || np, e.dir);
+    const byId = new Map((defs?.trophies || []).map((t) => [t.id, t]));
+    const tid = e.tid && /^[A-Z]{4}\d{5}$/.test(e.tid) ? e.tid : /^[A-Z]{4}\d{5}$/.test(np) ? np : null;
+    add({
+      src: 'shadps4', set: conf.npcommid || np, title: defs?.title || conf.title || np, titleId: tid,
+      icon: iconToken(path.join(icons, 'ICON0.PNG')),
+      trophies: conf.trophies.map((t) => { const d = byId.get(t.id) || t; return { id: t.id, name: d.name || t.name, desc: d.desc || t.desc, grade: t.grade || d.grade, hidden: t.hidden, icon: iconsOf(icons, t.id), unlocked: t.unlockstate === 'true', time: t.unlockstate === 'true' ? tsMs(t.timestamp) : null }; }),
+      files: [e.file],
+    });
   }
   return [...games.values()];
 }
@@ -410,9 +448,7 @@ function validateAt(src, dir) {
     return null;
   }
   if (src === 'shadps4') {
-    const check = (d) => (isDir(path.join(d, 'home')) && ls(path.join(d, 'home')).some((u) => ls(path.join(d, 'home', u, 'trophy')).some((f) => /\.xml$/i.test(f))))
-      || ls(path.join(d, 'game_data')).some((t) => isDir(path.join(d, 'game_data', t, 'TrophyFiles')));
-    for (const d of [...tryDirs, path.join(dir, 'user')]) if (check(d)) return d;
+    for (const d of [...tryDirs, path.join(dir, 'user'), path.join(dir, 'shadPS4')]) if (shadps4Games(d).length) return d;
     return null;
   }
   if (src === 'xenia') {
@@ -460,7 +496,7 @@ async function scan({ want, extraRoots = [], budgetMs = 12000, maxDepth = 10, on
       if (xeniaProfiles(content).length) hit('xenia', content);
       continue;
     }
-    if (path.basename(dir) === 'trophy' && path.basename(path.dirname(path.dirname(dir))) === 'home' && [...names].some((n) => /^NPWR\d{5}_\d{2}\.xml$/i.test(n))) {
+    if (path.basename(dir) === 'trophy' && path.basename(path.dirname(path.dirname(dir))) === 'home' && [...names].some((n) => /^(NPWR\d{5}_\d{2}|[A-Z]{4}\d{5})(\.xml)?$/i.test(n))) {
       hit('shadps4', path.dirname(path.dirname(path.dirname(dir))));
       continue;
     }

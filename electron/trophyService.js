@@ -40,15 +40,29 @@ module.exports = function createTrophyService(ctx) {
     const out = new Map();
     for (const d of s.custom || []) out.set(d, 'chosen');
     for (const f of s.dirs || []) if (!out.has(f.dir)) out.set(f.dir, f.how);
-    return [...out].filter(([d]) => { try { return fs.statSync(d).isDirectory(); } catch { return false; } }).map(([dir, how]) => ({ dir, how }));
+    // the same folder often shows up under several mount paths (/run/media/…, /media/…, symlinks):
+    // keep one entry per real folder
+    const seen = new Set();
+    const res = [];
+    for (const [dir, how] of out) {
+      let real;
+      try { if (!fs.statSync(dir).isDirectory()) continue; real = fs.realpathSync(dir); } catch { continue; }
+      const st = fs.statSync(real);
+      const key = st.dev + ':' + st.ino;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      res.push({ dir, how });
+    }
+    return res;
   }
   // Layer 1: each emulator's own config and the usual install locations (fast, every start)
   function detect() {
     for (const id of ORDER) {
       const s = srcCfg(id);
       const found = T.DETECT[id]();
-      const merged = new Map((s.dirs || []).map((f) => [f.dir, f.how]));
-      for (const f of found) if (!merged.has(f.dir) || merged.get(f.dir) !== 'scan') merged.set(f.dir, f.how);
+      // keep earlier scan results only while they still hold trophy data; settings-based ones are re-read
+      const merged = new Map((s.dirs || []).filter((f) => f.how === 'scan' && T.validate(id, f.dir, false)).map((f) => [f.dir, f.how]));
+      for (const f of found) if (!merged.has(f.dir)) merged.set(f.dir, f.how);
       s.dirs = [...merged].map(([dir, how]) => ({ dir, how }));
     }
     ctx.saveConfig();

@@ -39,7 +39,7 @@
       <div v-if="!data.recent.length" class="muted" style="margin: 0 0 24px">Nothing unlocked yet.</div>
       <div v-else class="shelf" data-hscroll>
         <button v-for="t in data.recent" :key="t.key + t.id" class="tp-unlock glass" data-focus @click="open(t.key)">
-          <div class="tp-ticon"><img v-if="t.icon" :src="t.icon" loading="lazy" /><Grade v-else :g="t.grade" :size="36" /></div>
+          <div class="tp-ticon"><img v-if="t.icon" :src="t.icon" loading="lazy" /><Grade v-else :g="t.grade" :size="36" /><span class="tp-ticon-game"><GameIcon :title="t.game" :rom-id="romOf(t.key)" :fallback="t.gameIcon" :size="26" /></span></div>
           <div class="tp-u-body">
             <div class="tp-u-title"><Grade :g="t.grade" :size="16" />{{ t.name }}</div>
             <div class="tp-u-desc">{{ t.desc }}</div>
@@ -52,7 +52,7 @@
       <div class="shelf-title" style="margin-top: 18px"><Icon name="mdiGamepadVariantOutline" :size="20" />Games<span class="count">{{ data.games.length }}</span></div>
       <div class="tp-games">
         <button v-for="g in data.games" :key="g.key" class="tp-game glass" data-focus :data-key="'tg-' + g.key" @click="open(g.key)" @focus="focusGame(g)">
-          <div class="tp-gicon"><img v-if="g.icon" :src="g.icon" loading="lazy" /><img v-else-if="g.cover" :src="img(g.cover)" loading="lazy" class="cov" /><Grade v-else :g="g.kind === 'trophy' ? 'G' : null" :size="40" /></div>
+          <GameIcon :title="g.title" :rom-id="g.romId" :fallback="g.icon || (g.cover ? img(g.cover) : '')" :size="76" :grade="g.kind === 'trophy' ? 'G' : null" />
           <div class="tp-g-body">
             <div class="tp-g-title">{{ g.title }}</div>
             <div class="tp-g-sub"><span class="plat">{{ g.short }}</span><template v-if="g.last">{{ when(g.last) }}</template><template v-if="g.romId"> · <span class="inlib">In your library</span></template><template v-if="g.remoteOnly"> · <span class="dev">from {{ g.devices[0] || 'another device' }}</span></template></div>
@@ -76,10 +76,12 @@ import { useView } from '../useView.js';
 import { focusFirst } from '../nav.js';
 import Icon from '../components/Icon.vue';
 import Grade from '../components/Grade.vue';
+import GameIcon from '../components/GameIcon.vue';
 
 // Trophies and achievements that emulators keep on this device (plus other devices, via RomM)
 const el = ref(null);
 const data = ref(null);
+const romOf = (key) => data.value?.games.find((g) => g.key === key)?.romId || null;
 const fmt = (n) => (n || 0).toLocaleString();
 const pct = (g) => (g.total ? Math.round((g.earned / g.total) * 100) : 0);
 const stateLabel = (s) => ({ found: 'Found', missing: 'Not found', off: 'Off' }[s.state]);
@@ -131,8 +133,10 @@ onMounted(async () => { await load(); focusFirst(el.value); });
 .tp-meta { display: flex; flex-direction: column; gap: 4px; align-items: flex-end; font-size: 14px; }
 .tp-unlock { flex: none; width: 360px; display: flex; gap: 14px; padding: 14px; border-radius: 12px; text-align: left; transition: transform 0.14s ease-out; }
 .tp-unlock:focus { transform: scale(1.03); }
-.tp-ticon { width: 64px; height: 64px; border-radius: 8px; flex: none; display: grid; place-items: center; overflow: hidden; background: rgba(0, 0, 0, 0.25); box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4); }
-.tp-ticon img { width: 100%; height: 100%; object-fit: cover; }
+.tp-ticon { position: relative; width: 64px; height: 64px; border-radius: 12px; flex: none; display: grid; place-items: center; overflow: visible; background: rgba(0, 0, 0, 0.25); box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4); }
+.tp-ticon > img { width: 100%; height: 100%; object-fit: cover; border-radius: 12px; }
+.tp-ticon-game { position: absolute; right: -8px; bottom: -8px; }
+.tp-ticon-game .gicon { box-shadow: 0 0 0 2px rgba(10, 10, 20, 0.9); }
 .tp-u-body { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
 .tp-u-title { font-family: var(--display); font-weight: 600; font-size: 15.5px; display: flex; gap: 6px; align-items: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tp-u-desc { font-size: 12.5px; color: #c3c9d4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
@@ -143,9 +147,6 @@ onMounted(async () => { await load(); focusFirst(el.value); });
 .tp-games { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 14px; padding-bottom: 30px; }
 .tp-game { display: flex; gap: 14px; align-items: center; padding: 12px 14px; border-radius: 12px; text-align: left; transition: transform 0.14s ease-out; position: relative; }
 .tp-game:focus { transform: scale(1.02); }
-.tp-gicon { width: 128px; aspect-ratio: 16 / 9; border-radius: 8px; flex: none; overflow: hidden; display: grid; place-items: center; background: rgba(0, 0, 0, 0.3); }
-.tp-gicon img { width: 100%; height: 100%; object-fit: contain; }
-.tp-gicon img.cov { object-fit: cover; }
 .tp-g-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 5px; }
 .tp-g-title { font-family: var(--display); font-weight: 600; font-size: 15.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tp-g-sub { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
