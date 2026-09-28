@@ -109,12 +109,13 @@
               <div class="now-name">{{ current.name }}</div>
               <div class="now-stats">
                 <span class="now-pct num">{{ pctOf(current) }}<small>%</small></span>
-                <span class="now-sub num">{{ current.speed ? bytes(current.speed) + '/s · ' : '' }}{{ leftOf(current) }} left</span>
+                <span class="now-sub num">{{ current.speed ? bytes(current.speed) + '/s · ' : '' }}{{ leftOf(current) }} left<template v-if="itemLeft(current)"> · {{ itemLeft(current) }}</template></span>
               </div>
               <div class="bar"><i :style="{ width: pctOf(current) + '%' }" /></div>
             </div>
             <button class="round small" aria-label="Cancel" @click="call('dl:cancel', current.id)"><Icon name="mdiClose" :size="18" /></button>
           </div>
+          <div v-if="qAll.count > 1 && qAll.time" class="all-left num"><Icon name="mdiClockOutline" :size="15" />Everything: {{ bytes(qAll.left) }} · about {{ qAll.time }} left</div>
           <div class="list">
             <div v-for="d in sortedDl.filter((x) => x !== current)" :key="d.id" class="lrow" :class="d.status">
               <Art class="thumb" :src="d.cover ? img(d.cover) : ''"><div class="ph"><Icon name="mdiGamepadVariantOutline" :size="18" /></div></Art>
@@ -180,7 +181,7 @@
 
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue';
-import { store, call, loadConfig, loadLibrary, loadArt, romById, platformById, collectionById, romsOf, romsOfCollection, cover, backdropOf, logoOf, bytes, year, rating, img, downloadFor, download } from '../store.js';
+import { store, call, loadConfig, loadLibrary, loadArt, romById, platformById, collectionById, romsOf, romsOfCollection, cover, backdropOf, logoOf, bytes, year, rating, img, downloadFor, download, queueLeft, itemLeft } from '../store.js';
 import { applyTheme } from '../themes.js';
 import Btn from '../components/Btn.vue';
 import Background from '../components/Background.vue';
@@ -298,10 +299,12 @@ const ORDER = { downloading: 0, queued: 1, error: 2, cancelled: 3, done: 4 };
 const sortedDl = computed(() => [...store.downloads].sort((a, b) => (ORDER[a.status] ?? 5) - (ORDER[b.status] ?? 5) || b.addedAt - a.addedAt));
 const dl = computed(() => rom.value && downloadFor(rom.value.id));
 const dlActive = computed(() => dl.value && ['queued', 'downloading'].includes(dl.value.status));
+const qAll = computed(() => queueLeft(store.downloads));
 const leftOf = (d) => (d?.total ? bytes(Math.max(0, d.total - (d.received || 0))) : '');
 const pctOf = (d) => (d?.total ? Math.min(100, Math.round((d.received / d.total) * 100)) : 0);
 function statusText(d) {
   if (d.status === 'downloading') return pctOf(d) + '%' + (d.speed ? ' · ' + bytes(d.speed) + '/s' : '');
+  if (d.status === 'queued' && d.notice === 'waiting') return 'Waiting for the server';
   return { queued: 'Queued', done: 'Done', error: 'Failed', cancelled: 'Cancelled' }[d.status] || d.status;
 }
 const busyDl = ref(false);
@@ -379,6 +382,7 @@ html, body { touch-action: pan-x pan-y; }
 .head-t { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 7px; padding-bottom: 2px; }
 .head-t :deep(.t-title), .t-title { font-family: var(--display); font-size: 28px; font-weight: 800; line-height: 1.03; letter-spacing: -0.02em; text-shadow: 0 6px 30px rgba(0, 0, 0, 0.55); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .sys-logo { max-height: 40px; max-width: 220px; object-fit: contain; object-position: left bottom; margin-bottom: 4px; filter: drop-shadow(0 3px 10px rgba(0, 0, 0, 0.5)); }
+.all-left { display: flex; align-items: center; gap: 6px; margin: 10px 2px 0; color: #cfd4de; font-size: 13px; }
 .meta { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 12px; color: #cfd4de; font-size: 13.5px; }
 
 /* actions */

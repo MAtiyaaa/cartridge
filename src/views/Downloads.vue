@@ -4,7 +4,7 @@
       <div>
         <div class="eyebrow">Downloads</div>
         <h1 class="big">{{ active.length ? `${active.length} in progress` : 'All caught up' }}</h1>
-        <div class="muted" style="font-size: 13.5px" v-if="active.length">{{ bytes(remaining) }} left · {{ bytes(speed) }}/s</div>
+        <div class="muted" style="font-size: 13.5px" v-if="active.length">{{ bytes(remaining) }} left · {{ bytes(speed) }}/s<template v-if="all.time"> · about {{ all.time }} for everything</template></div>
       </div>
       <div class="row" style="gap: 10px">
         <button v-if="active.length" class="btn small" data-focus @click="call('dl:pauseAll')"><Icon name="mdiPause" :size="18" />Pause all</button>
@@ -58,7 +58,7 @@
 
 <script setup>
 import { computed, h } from 'vue';
-import { store, call, img, bytes, go, tab, setBg, romById, backdropOf } from '../store.js';
+import { store, call, img, bytes, go, tab, setBg, romById, backdropOf, queueLeft } from '../store.js';
 import { useView } from '../useView.js';
 import Icon from '../components/Icon.vue';
 import Btn from '../components/Btn.vue';
@@ -70,6 +70,7 @@ const active = computed(() => [...current.value, ...queued.value]);
 const finished = computed(() => store.downloads.filter((d) => !['downloading', 'queued'].includes(d.status)).sort((a, b) => b.addedAt - a.addedAt));
 const remaining = computed(() => active.value.reduce((s, d) => s + Math.max(0, (d.total || 0) - (d.received || 0)), 0));
 const speed = computed(() => current.value.reduce((s, d) => s + (d.speed || 0), 0));
+const all = computed(() => queueLeft(store.downloads));
 useView({ x: () => call('dl:clear') }, [{ b: 'A', label: 'Pause / Resume' }, { b: 'X', label: 'Clear history' }, { b: 'LT+RT', label: 'Tabs' }]);
 
 const pct = (d) => (d.total ? Math.min(100, Math.floor((d.received / d.total) * 100)) : 0);
@@ -96,7 +97,7 @@ const DlRow = (props, { emit }) => {
       h('b', d.name),
       h('span', { class: 'muted' }, d.status === 'error' ? d.error : d.status === 'done' ? d.path : `${d.platformName} · ${bytes(d.total)}${d.received && d.status !== 'done' ? ` · ${pct(d)}% saved` : ''}`),
     ]),
-    h('span', { class: ['st', d.status] }, LABEL[d.status]),
+    h('span', { class: ['st', d.status] }, d.status === 'queued' && d.notice === 'waiting' ? 'Waiting for the server' : LABEL[d.status]),
     h('span', { class: 'act' }, [h(Btn, { b: 'A' }), props.action]),
   ]);
 };
