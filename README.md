@@ -57,8 +57,8 @@ Your library is mirrored locally, so it opens instantly and works offline. Resyn
 <tr>
 <td valign="top">
 
-**🚂 One-click Add to Steam**<br>
-Settings → Steam adds Cartridge to your library as a non-Steam game, complete with cover, banner, logo and icon.
+**🚂 Your games in Steam**<br>
+Adds downloaded games to Steam with artwork and collections, launching exactly like the shortcuts you already have (Steam ROM Manager, EmuDeck or your own). Preview first, undo any time. Cartridge itself goes in with one click too.
 
 </td>
 <td valign="top">
@@ -181,7 +181,7 @@ From the phone you can see what's on screen, use touch controls, browse the libr
 | | |
 |---|---|
 | **Addresses** | A LAN address, a Cloudflare Tunnel address, or both. In **Auto** mode Cartridge uses the LAN when you're home and falls back to the tunnel. |
-| **Sign-in** | Username & password, a RomM **pairing code**, or an `rmm_` API token. |
+| **Sign-in** | Username & password, a RomM **pairing code** or **QR code**, or an `rmm_` API token. |
 | **Cloudflare Access** | Optional service-token headers if your tunnel sits behind Zero Trust. |
 | **Server scans** | "Scan server for new ROMs" needs username & password sign-in. |
 

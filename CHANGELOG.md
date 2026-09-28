@@ -95,6 +95,73 @@ Every Cartridge release, newest first. Each GitHub release only lists its own ch
 
 ### Also in this release
 - Everything from 0.5.5 (smoother held D-pad scrolling, Home fixes, LT / RT switch tabs).
+## Cartridge 0.6.1 (abdu2304)
+
+Included in this fork from 0.7.0.
+
+### New
+- **Downloads are checked against RomM.** When a game finishes downloading, Cartridge compares every file with the size and checksum RomM keeps for it. A damaged file is deleted and the download shows "Damaged download", so **Retry** gets a fresh copy.
+  - Zip, 7z, rar and CHD files get the size check only, because RomM checksums what is inside them, not the file itself.
+  - Consoles RomM doesn't checksum (like PS4 and Switch) get the size check only.
+  - If a retry brings exactly the same file again, the file on your server is fine and RomM's checksum is out of date. Cartridge keeps the game and tells you a rescan in RomM would fix it.
+- **Storage manager (Settings → Storage), like Steam's.**
+  - Each drive with a bar showing what Cartridge's games use, what everything else uses, and what is free.
+  - Every downloaded game on that drive with its real size on disk, sorted by size, name or when you added it.
+  - Pick any number of games with A and delete them in one go. They stay on your RomM server.
+- **Warning before a download that won't fit.** If a game doesn't fit on its drive (counting what is still downloading there), Cartridge says so first and offers **Free up space**, **Download anyway** or **Cancel**.
+- **Look & Feel presets.** Save your current look under a name (up to 5) and switch between them in one press: colour, background, fonts, cards, motion and sounds. Interface size and controller settings stay as they are. Each preset can be updated, renamed or deleted.
+- **Pair with a QR code.** In Setup → Pairing code, **Pair with a QR code instead** shows a QR code. Scan it with your phone, approve Cartridge in RomM, and Cartridge signs in by itself. Needs a RomM version with device pairing; older versions keep the typed pairing code.
+
+### Fixed
+- **Y on the Search page now opens the on-screen keyboard** when the built-in keyboard is on (Game Mode).
+- **Adding Cartridge itself to Steam could replace another shortcut** when Steam's list had a gap in its numbering. It now always takes a free spot.
+- **Undo in Settings → Steam could restore the wrong file** in a rare case where the Steam step ran twice. Each change now runs exactly once, and a backup is never replaced.
+- **Adding games to Steam showed no progress** while artwork was being fetched, which could look stuck with many games. The top bar now shows "Steam artwork 3/12", then "Waiting for Steam…".
+
+## Cartridge 0.6.0 · The Steam Update (abdu2304)
+
+Included in this fork from 0.7.0.
+
+### New: your games in Steam
+Settings → Steam now adds the games you downloaded to Steam as non-Steam shortcuts, so you can start them straight from Game Mode.
+
+- **Launches the way your setup already does.** Cartridge reads the shortcuts you already have (from Steam ROM Manager, EmuDeck or made by hand) and copies each console's **Target**, **Start in** and **Launch options**, only swapping in the new game. Mixed setups work, for example EmuDeck for PS2 and Dolphin next to AppImages for RPCS3, shadPS4 and Eden.
+  - Frame generation wrappers (like `mako-run` and lsfg-vk) are left out. Prefixes like `vblank_mode=0` are kept.
+  - Quoting is kept exactly as your shortcuts write it.
+  - PS3 games start by game ID (`%RPCS3_GAMEID%:BLUS…`) when RPCS3 already knows the game, and from the file when it doesn't.
+  - PS4 games through the shadPS4 launcher start by title ID (`-g CUSA…`) or from `eboot.bin`.
+  - Wii U game folders start from their `.rpx`.
+  - Paths are written the way your shortcuts write them, even when a drive shows up under two paths (`/run/media/…` and `/media/…`).
+- **Consoles with no shortcut yet** use the emulator Cartridge finds: the EmuDeck launcher, then an AppImage (including `~/Documents/Apps`), then a Flatpak, then RetroArch with a matching core.
+- **See it before it happens.** A preview lists every Target, Start in and Launch options before Steam is touched. You can turn it off.
+- **Collections.** Pick one or more of your Steam collections, none, or make a new one. Cartridge remembers the choice per console, tells you if Steam Cloud drops them, and can put them back.
+- **Artwork.** Cover, background, logo and wide banner from RomM and SteamGridDB, each checked for the right shape.
+- **Safe to use.** Steam closes for a moment while its files change, then opens again (Game Mode brings it back by itself). Your other shortcuts are not touched, the shortcuts file is backed up first, and **Undo last change** puts it back.
+- **Games already in Steam are skipped**, whoever added them. Games that share a name get the console added, like "God of War (PS3)", or always if you prefer.
+- **Per game:** More → **Add to Steam** or **Remove from Steam** on any downloaded game. PS4 games you marked as installed ask for their folder once.
+- **Edit any console** in Settings → Steam → Emulators: Target, Start in and Launch options, with a Test button.
+- **Optional:** add games to Steam after they download, and remove them when you delete them. Both are off by default.
+- **Remove everything Cartridge added** in one go, and **Restart Steam** from Cartridge.
+- **Start through Cartridge (optional, per console).** A shortcut can go through a small script instead of starting the emulator directly. If the game is gone, Cartridge opens on that game's page so you can download it again.
+- Clear messages when Steam isn't installed or no account has signed in yet. Flatpak Steam works too. With several accounts, the one that signed in last is used.
+
+### New: trophies
+- **Trophies & Gamerscore tab, redesigned** in the style of the RetroAchievements tab.
+- **Game logos and console wordmarks** on trophy cards and trophy pages instead of plain names, sized evenly.
+- **Latest achievements on Home include trophies**, mixed with RetroAchievements, newest first. Choose All, RetroAchievements, Trophies or Off in Settings → Achievements.
+- **Trophy pictures sync between devices.** Small copies are stored with your trophies in RomM, so a device that never played the game still shows them. You can turn this off.
+- **Change a game's icon** from its trophy page (More → Change icon), picked from SteamGridDB.
+- **Icons are always full rounded squares.** Round icons with see-through corners are skipped.
+- **Better SteamGridDB matches.** Exact names come first, so Skate 3 no longer picks up "skate: recompiled".
+
+### New: your controller's buttons
+- **Button hints match the controller you're holding**: Xbox, PlayStation, Nintendo (with A/B and X/Y in their real places) or Steam. Cartridge reads the real controller even when Steam presents it as an Xbox pad. Pick one yourself in Settings → Look & Feel → Button icons.
+
+### Fixed
+- **shadPS4 showed "Not found" without a trophy key.** It is now found as soon as its folder exists and says "no trophy key" until you add one in shadPS4. The shadPS4 Qt launcher's folder is no longer used, since it only holds emulator versions.
+- **Portable shadPS4 in `~/Documents/Apps`** is now found for trophies.
+- **Start and Select icons were too big** in the button bar, and **LT had a white box** that RT didn't.
+- **Cartridge sometimes wouldn't open again until Steam restarted.** Only one Cartridge runs at a time now: opening it again brings the running one forward, and one that stopped responding is closed so the new one can start.
 
 ## Cartridge 0.5.6
 

@@ -24,6 +24,8 @@ module.exports = function createTrophyService(ctx) {
   let syncState = { state: 'idle' };
   let syncT = null, pollT = null, lastPoll = '';
   const saveLinks = () => { try { fs.writeFileSync(LINKS_FILE, JSON.stringify(links)); } catch {} };
+  // pictures pulled from other devices: register them so the image protocol can serve them
+  for (const r of remote.values()) for (const f of Object.values(r.icons || {})) { try { if (fs.existsSync(f)) T.registerIcon(f); } catch {} }
   const saveRemote = () => { try { fs.writeFileSync(REMOTE_FILE, JSON.stringify(Object.fromEntries(remote))); } catch {} };
   const device = () => (cfg().device || os.hostname() || 'This device').slice(0, 40);
   const keyOf = (g) => `${g.src}:${g.set}`;
@@ -104,7 +106,12 @@ module.exports = function createTrophyService(ctx) {
       const s = srcCfg(id);
       const dirs = dirsOf(id);
       const n = [...games.values()].filter((g) => g.src === id).length;
-      return { ...T.SOURCES[id], enabled: s.enabled !== false, found: dirs, custom: s.custom || [], games: n, state: s.enabled === false ? 'off' : dirs.length ? 'found' : 'missing' };
+      // shadPS4 writes nothing until its trophy key is set: say which of the two it is
+      let note = '';
+      if (id === 'shadps4' && dirs.length && !n) note = dirs.some((d) => T.shadKeyState(d.dir) === 'set') ? 'empty' : 'nokey';
+      else if (dirs.length && !n) note = 'empty';
+      const found = dirs.map((d) => ({ ...d, watch: T.watchPaths(id, d.dir) }));
+      return { ...T.SOURCES[id], enabled: s.enabled !== false, found, custom: s.custom || [], games: n, note, state: s.enabled === false ? 'off' : dirs.length ? 'found' : 'missing' };
     });
   }
 
@@ -190,11 +197,13 @@ module.exports = function createTrophyService(ctx) {
     const loc = games.get(k);
     const rem = remote.get(k)?.data;
     if (!loc && !rem) return null;
+    const ric = remote.get(k)?.icons || {};
+    const ricon = (id) => { const f = ric[String(id)]; return f && fs.existsSync(f) ? T.registerIcon(f) : ''; };
     const me = device();
     const base = loc
       ? { ...loc, trophies: loc.trophies.map((t) => ({ ...t, device: t.unlocked ? me : null })) }
-      : { src: rem.src, set: rem.set, title: rem.title, titleId: rem.titleId || null, icon: '', remoteOnly: true,
-        trophies: (rem.list || []).map((t) => ({ id: t.id, name: t.name, desc: t.desc || '', grade: t.grade || null, points: t.points || 0, hidden: false, icon: '', unlocked: false, time: null, device: null })) };
+      : { src: rem.src, set: rem.set, title: rem.title, titleId: rem.titleId || null, icon: ricon('_game'), remoteOnly: true,
+        trophies: (rem.list || []).map((t) => ({ id: t.id, name: t.name, desc: t.desc || '', grade: t.grade || null, points: t.points || 0, hidden: false, icon: ricon(t.id), unlocked: false, time: null, device: null })) };
     if (rem?.unlocks) {
       const byId = new Map(base.trophies.map((t) => [String(t.id), t]));
       for (const [id, u] of Object.entries(rem.unlocks)) {
@@ -245,13 +254,67 @@ module.exports = function createTrophyService(ctx) {
   }
 
   // ------------------------------------------------------------ RomM notes sync
-  const parse = (s) => { try { const j = JSON.parse(s); return j && j.cartridge === 'trophies' ? j : null; } catch { return null; } };
+  const parseAny = (s) => { try { const j = JSON.parse(s); return j && typeof j.cartridge === 'string' ? j : null; } catch { return null; } };
+  const parse = (s) => { const j = parseAny(s); return j && j.cartridge === 'trophies' ? j : null; };
   const listOf = (r) => (Array.isArray(r) ? r : r?.items || []);
   let meId;
-  async function notesFor(romId) {
+  async function notesAll(romId) {
     if (meId === undefined) { try { meId = (await api('/api/users/me')).id ?? null; } catch { meId = null; } }
     const notes = listOf(await api(`/api/roms/${romId}/notes`, { query: { tags: NOTE_TAG } }));
-    return notes.filter((n) => n && n.title === NOTE_TITLE && (meId == null || n.user_id == null || n.user_id === meId)).map((n) => ({ id: n.id, data: parse(n.content) })).filter((n) => n.data);
+    return notes.filter((n) => n && String(n.title || '').startsWith('Cartridge troph') && (meId == null || n.user_id == null || n.user_id === meId)).map((n) => ({ id: n.id, title: n.title, data: parseAny(n.content) })).filter((n) => n.data);
+  }
+  async function notesFor(romId) { return (await notesAll(romId)).filter((n) => n.data.cartridge === 'trophies' && n.title === NOTE_TITLE); }
+
+  // ---- trophy pictures: small copies stored as extra private notes, so other devices can show them
+  const ICON_REMOTE = path.join(USER_DATA, 'trophyicons', 'remote');
+  const safe = (x) => String(x).replace(/[^A-Za-z0-9_-]+/g, '_');
+  function packIcons(g) {
+    const { nativeImage } = require('electron');
+    const pic = (token, w, h) => {
+      const f = token && T.iconPath(String(token).split('tr=')[1]);
+      if (!f) return null;
+      try {
+        let im = nativeImage.createFromPath(f);
+        if (im.isEmpty()) return null;
+        const sz = im.getSize();
+        im = h ? im.resize({ width: w, height: h, quality: 'best' }) : im.resize({ width: Math.min(w, sz.width), quality: 'best' });
+        return im.toJPEG(82).toString('base64');
+      } catch { return null; }
+    };
+    const all = [];
+    const gi = pic(g.icon, 200);
+    if (gi) all.push(['_game', gi]);
+    for (const t of g.trophies) { const d = pic(t.icon, 64, 64); if (d) all.push([String(t.id), d]); }
+    if (!all.length) return [];
+    // RomM on MariaDB keeps notes up to 64 KB: split into parts well under that
+    const parts = [];
+    let cur = {}, size = 0;
+    for (const [id, d] of all) {
+      if (size + d.length > 44000 && Object.keys(cur).length) { parts.push(cur); cur = {}; size = 0; }
+      cur[id] = d; size += d.length + 16;
+    }
+    parts.push(cur);
+    return parts;
+  }
+  async function pushIcons(g, romId, existing) {
+    if (cfg().syncIcons === false || existing.length) return;
+    const parts = packIcons(g);
+    for (const [i, icons] of parts.entries()) {
+      const body = { title: `Cartridge trophy icons ${safe(g.set)} ${i + 1}`, content: JSON.stringify({ cartridge: 'trophy-icons', v: 1, src: g.src, set: g.set, part: i + 1, parts: parts.length, icons }), is_public: false, tags: [NOTE_TAG] };
+      await api(`/api/roms/${romId}/notes`, { method: 'POST', body });
+    }
+    if (parts.length) log('trophy icons uploaded', g.set, parts.length, 'part(s)');
+  }
+  function unpackIcons(set, iconNotes) {
+    const dir = path.join(ICON_REMOTE, safe(set));
+    const out = {};
+    for (const n of iconNotes) {
+      for (const [id, d] of Object.entries(n.data.icons || {})) {
+        const f = path.join(dir, safe(id) + '.jpg');
+        try { if (!fs.existsSync(f)) { fs.mkdirSync(dir, { recursive: true }); fs.writeFileSync(f, Buffer.from(d, 'base64')); } out[id] = f; } catch {}
+      }
+    }
+    return out;
   }
   function noteData(g, prev) {
     const unlocks = { ...(prev?.unlocks || {}) };
@@ -270,8 +333,10 @@ module.exports = function createTrophyService(ctx) {
   }
   async function syncOne(g, romId) {
     const k = keyOf(g);
-    const notes = await notesFor(romId);
+    const all = await notesAll(romId);
+    const notes = all.filter((n) => n.data.cartridge === 'trophies' && n.title === NOTE_TITLE);
     const note = notes.find((n) => n.data.src === g.src && n.data.set === g.set);
+    try { await pushIcons(g, romId, all.filter((n) => n.data.cartridge === 'trophy-icons' && n.data.set === g.set)); } catch (e) { log('trophy icons upload failed', e.message); }
     const { changed, data } = noteData(g, note?.data);
     const body = { title: NOTE_TITLE, content: JSON.stringify(data), is_public: false, tags: [NOTE_TAG] };
     let noteId = note?.id;
@@ -298,10 +363,12 @@ module.exports = function createTrophyService(ctx) {
       const localRoms = new Set([...games.values()].map(autoLink).filter(Boolean));
       const withNotes = ORDER.flatMap((id) => romsFor(id)).filter((r) => r.has_notes && !localRoms.has(r.id)).slice(0, 80);
       for (const r of withNotes) {
-        for (const n of await notesFor(r.id)) {
+        const all = await notesAll(r.id);
+        for (const n of all.filter((x) => x.data.cartridge === 'trophies' && x.title === NOTE_TITLE)) {
           const k = `${n.data.src}:${n.data.set}`;
           if (!T.SOURCES[n.data.src] || games.has(k)) continue;
-          remote.set(k, { romId: r.id, noteId: n.id, data: n.data }); pulled++;
+          const icons = cfg().syncIcons === false ? {} : unpackIcons(n.data.set, all.filter((x) => x.data.cartridge === 'trophy-icons' && x.data.set === n.data.set));
+          remote.set(k, { romId: r.id, noteId: n.id, data: n.data, icons }); pulled++;
         }
       }
       saveRemote();

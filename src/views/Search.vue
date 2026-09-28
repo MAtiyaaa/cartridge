@@ -40,7 +40,7 @@ const results = computed(() => {
 
 useView(
   {
-    y: () => ask(),
+    // Y is left to App.vue's search handler, which opens the built-in keyboard in Game Mode
     x: () => {
       const key = document.activeElement?.dataset?.key || '';
       const r = key.startsWith('rom-') && romById(key.slice(4));
@@ -50,7 +50,6 @@ useView(
   [{ b: 'A', label: 'Open' }, { b: 'X', label: 'Download' }, { b: 'Y', label: 'Search' }, { b: 'B', label: 'Back' }],
 );
 
-function ask() { document.querySelector('.top-search input')?.focus(); }
 </script>
 
 <style scoped>

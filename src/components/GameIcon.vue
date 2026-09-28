@@ -10,7 +10,7 @@
 </template>
 <script setup>
 import { ref, watch } from 'vue';
-import { call, img, romById, store } from '../store.js';
+import { call, img, romById, store, iconKey } from '../store.js';
 import Grade from './Grade.vue';
 // A square game icon: SteamGridDB's icon when there is one (sharp, made for this), otherwise the
 // emulator's own picture fitted inside the square over a soft blurred copy of itself.
@@ -20,14 +20,14 @@ const icon = ref('');
 function load() {
   const rom = props.romId ? romById(props.romId) : null;
   const name = rom?.name || props.title;
-  const key = rom ? 'rom-' + rom.id : 'tro-' + props.title;
+  const key = iconKey(rom?.id, props.title);
   if (!name || !store.config?.sgdbKey) { icon.value = ''; return; }
   if (cache.has(key)) { const v = cache.get(key); if (typeof v === 'string') icon.value = v; else v.then((u) => (icon.value = u || '')); return; }
-  const p = call('icon:get', { key, name }).then((u) => { cache.set(key, u || ''); return u; }).catch(() => { cache.set(key, ''); return ''; });
+  const p = call('icon:get', { key, name, year: rom?.year ? new Date(rom.year > 1e11 ? rom.year : rom.year * 1000).getFullYear() : null }).then((u) => { cache.set(key, u || ''); return u; }).catch(() => { cache.set(key, ''); return ''; });
   cache.set(key, p);
   p.then((u) => (icon.value = u || ''));
 }
-watch(() => [props.romId, props.title, store.config?.sgdbKey], load, { immediate: true });
+watch(() => [props.romId, props.title, store.config?.sgdbKey, store.iconVer], load, { immediate: true });
 </script>
 <style>
 .gicon { position: relative; flex: none; overflow: hidden; background: rgba(255, 255, 255, 0.06); box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4), inset 0 0 0 1px rgba(255, 255, 255, 0.08); }

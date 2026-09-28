@@ -132,7 +132,7 @@ function openGame(gameId) { go('ra-game', { gameId }); }
 function focusGame(g) { if (g.boxart || g.icon) setBg({ src: img(g.boxart || g.icon), blur: true }); }
 function focusUnlock(a) { if (a.gameIcon) setBg({ src: img(a.gameIcon), blur: true }); }
 
-useView({ x: () => load(true), lb: () => (store.achTab = 'ra'), rb: () => (store.achTab = 'others') }, [{ b: 'A', label: 'Open' }, { b: 'X', label: 'Refresh' }, { b: 'RB', label: 'Others' }]);
+useView({ x: () => load(true), lb: () => (store.achTab = 'ra'), rb: () => (store.achTab = 'others') }, [{ b: 'A', label: 'Open' }, { b: 'X', label: 'Refresh' }, { b: 'RB', label: 'Trophies & Gamerscore' }]);
 onMounted(async () => { await load(); focusFirst(el.value); });
 </script>
 

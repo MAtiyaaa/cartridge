@@ -59,7 +59,7 @@ const active = computed(() => [...current.value, ...queued.value]);
 const finished = computed(() => store.downloads.filter((d) => !['downloading', 'queued'].includes(d.status)).sort((a, b) => b.addedAt - a.addedAt));
 const remaining = computed(() => active.value.reduce((s, d) => s + Math.max(0, (d.total || 0) - (d.received || 0)), 0));
 const speed = computed(() => current.value.reduce((s, d) => s + (d.speed || 0), 0));
-useView({ x: () => call('dl:clear') }, [{ b: 'A', label: 'Pause / Resume' }, { b: 'X', label: 'Clear history' }, { b: 'LT', label: '/ RT  Tabs' }]);
+useView({ x: () => call('dl:clear') }, [{ b: 'A', label: 'Pause / Resume' }, { b: 'X', label: 'Clear history' }, { b: 'LT+RT', label: 'Tabs' }]);
 
 const pct = (d) => (d.total ? Math.min(100, Math.floor((d.received / d.total) * 100)) : 0);
 function eta(d) {
