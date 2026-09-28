@@ -62,6 +62,14 @@ module.exports = function steamLive({ log = () => {} } = {}) {
       if (!f || !fs.existsSync(f)) continue;
       const b64 = fs.readFileSync(f).toString('base64');
       await run(`SteamClient.Apps.SetCustomArtworkForApp(${appid}, ${J(b64)}, 'png', ${type})`, 30000).catch((e) => log('steam live art', suffix, e.message));
+      // a shortcut's logo stays blank until it has a position: SteamGridDB's plugin saves one too
+      if (type === 2) await run(`(async () => {
+        let ov = window.appStore?.GetAppOverviewByAppID(${appid});
+        for (let i = 0; !ov && i < 20; i++) { await new Promise((r) => setTimeout(r, 250)); ov = window.appStore?.GetAppOverviewByAppID(${appid}); }
+        if (!ov || !window.appDetailsStore?.SaveCustomLogoPosition) return false;
+        await window.appDetailsStore.SaveCustomLogoPosition(ov, { pinnedPosition: 'BottomLeft', nWidthPct: 50, nHeightPct: 50 });
+        return true;
+      })()`).catch((e) => log('steam live logo position', e.message));
     }
     if (collections?.length) await addToCollections(appid, collections).catch((e) => log('steam live collections', e.message));
     return appid >>> 0;
