@@ -246,10 +246,13 @@ const server = http.createServer(async (req, res) => {
 });
 
 const PORT = Number(process.env.CARTRIDGE_PORT || 0);
-server.listen(PORT, '127.0.0.1', () => {
-  const info = { port: server.address().port, token: TOKEN, version: state.version };
-  // Image hosts (i0-i7.localhost) may resolve to IPv6 loopback: answer there too
-  http.createServer(server.listeners('request')[0]).on('error', () => {}).listen(info.port, '::1');
+// The WebView opens at most 6 connections per host:port, shared by both screens. Images are
+// spread over 8 ports on the same address so dozens load at once instead of queueing.
+const listenOn = (srv, port) => new Promise((resolve) => srv.once('error', () => resolve(null)).listen(port, '127.0.0.1', () => resolve(srv.address().port)));
+server.listen(PORT, '127.0.0.1', async () => {
+  const handler = server.listeners('request')[0];
+  const extra = await Promise.all(Array.from({ length: 7 }, () => listenOn(http.createServer(handler), 0)));
+  const info = { port: server.address().port, ports: [server.address().port, ...extra.filter(Boolean)], token: TOKEN, version: state.version };
   console.log('CARTRIDGE SERVER ' + JSON.stringify(info));
   if (bridge) {
     bridge.channel.send('server', info);

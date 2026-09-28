@@ -1,143 +1,148 @@
 <template>
   <div class="cmp" :class="{ ready: !!store.config }">
-    <Background v-if="store.config" />
+    <Background v-if="store.config" still />
 
     <header class="cbar">
-      <div class="where"><Logo :size="22" /><span>{{ routeLabel }}</span></div>
-      <nav class="seg tabs">
-        <button v-for="t in TABS" :key="t.id" :class="{ on: tab === t.id }" @click="tab = t.id">
-          <Icon :name="t.icon" :size="17" />{{ t.label }}<b v-if="t.id === 'dl' && active.length" class="count">{{ active.length }}</b>
+      <div class="where"><Logo :size="24" /><div><div class="eyebrow">Cartridge</div><div class="where-t">{{ routeLabel }}</div></div></div>
+      <nav class="tabs">
+        <button v-for="t in TABS" :key="t.id" class="tab" :class="{ active: tab === t.id }" @click="tab = t.id">
+          <Icon :name="t.icon" :size="18" /><span>{{ t.label }}</span>
+          <span v-if="t.id === 'dl' && active.length" class="badge">{{ active.length }}</span>
         </button>
       </nav>
-      <button class="icon-btn" :class="{ warn: offArmed }" :aria-label="offArmed ? 'Tap again to turn off' : 'Turn off second screen'" @click="turnOff">
-        <Icon name="mdiMonitorOff" :size="19" /><span v-if="offArmed">Tap again</span>
+      <button class="round" :class="{ warn: offArmed }" :aria-label="offArmed ? 'Tap again to turn off' : 'Turn off second screen'" @click="turnOff">
+        <Icon :name="offArmed ? 'mdiPower' : 'mdiMonitorOff'" :size="20" />
       </button>
     </header>
+    <div v-if="offArmed" class="off-hint">Tap again to turn the second screen off</div>
 
     <main class="body">
-      <Transition name="fadeup" mode="out-in">
+      <Transition name="cfade" mode="out-in">
         <!-- Game -->
-        <section v-if="tab === 'game' && rom" :key="'g' + rom.id" class="game">
-          <div class="hero">
-            <img v-if="heroSrc" :key="heroSrc" :src="heroSrc" class="hero-img" :class="{ blur: hero?.blur }" alt="" @error="(e) => retryImg(e)" />
-            <div class="hero-fade" />
-          </div>
-          <div class="g-main">
-            <div class="cover glass">
-              <img v-if="coverSrc && !coverFailed" :src="coverSrc + (coverRetry ? '&r=1' : '')" alt="" @error="coverError" />
-              <Icon v-else name="mdiGamepadVariantOutline" :size="40" />
-            </div>
-            <div class="meta">
-              <div class="plat"><PIcon v-if="platform" :p="platform" :size="20" />{{ rom.platform_display_name || platform?.display_name }}</div>
-              <GameLogo :logo="store.config.ui.logos !== false ? logoOf(rom) : null" :name="rom.name" cls="g-title" :area="16000" :max-w="330" :max-h="84" />
-              <div class="chips">
-                <span v-if="yr" class="chip">{{ yr }}</span>
-                <span v-if="info.rating" class="chip gold"><Icon name="mdiStar" :size="14" />{{ rating(info.rating) }}</span>
-                <span v-if="rom.fs_size_bytes" class="chip">{{ bytes(rom.fs_size_bytes) }}</span>
-                <span v-if="installed" class="chip green"><Icon name="mdiCheckCircle" :size="14" />Installed</span>
-              </div>
-              <div v-if="info.genres" class="genres muted">{{ info.genres }}</div>
-            </div>
+        <section v-if="tab === 'game' && rom" :key="'g' + rom.id" class="view" data-scroll>
+          <div class="banner">
+            <Art class="fill" :src="heroSrc" :blur="hero?.blur" />
+            <div class="shade" />
+            <div class="banner-logo"><GameLogo :logo="store.config.ui.logos !== false ? logoOf(rom) : null" :name="rom.name" cls="b-title" :area="15000" :max-w="340" :max-h="86" /></div>
+            <Art class="cover" :src="coverSrc"><div class="cover-ph"><PIcon v-if="platform" :p="platform" :size="44" /></div></Art>
           </div>
 
-          <div v-if="dl && ['queued', 'downloading'].includes(dl.status)" class="dlcard glass">
-            <div class="row between"><b>{{ dl.status === 'queued' ? 'Queued' : 'Downloading' }}</b><span class="muted num">{{ pctOf(dl) }}%<template v-if="dl.speed"> · {{ bytes(dl.speed) }}/s</template></span></div>
-            <div class="bar-p"><i :style="{ width: pctOf(dl) + '%' }" /></div>
-            <div class="muted small num">{{ bytes(dl.received) }} of {{ bytes(dl.total) }}</div>
+          <div class="meta">
+            <span class="row"><PIcon v-if="platform" :p="platform" :size="18" />{{ rom.platform_display_name || platform?.display_name }}</span>
+            <span v-if="yr">{{ yr }}</span>
+            <span v-if="info.genres">{{ info.genres }}</span>
+            <span v-if="rom.fs_size_bytes">{{ bytes(rom.fs_size_bytes) }}</span>
+            <span v-if="info.rating" class="row gold"><Icon name="mdiStar" :size="15" />{{ rating(info.rating) }}</span>
+          </div>
+
+          <div v-if="dlActive" class="dlbox glass">
+            <div class="dl-row"><b>{{ dl.status === 'queued' ? 'Queued' : 'Downloading' }}</b><span class="num">{{ pctOf(dl) }}%<template v-if="dl.speed"> · {{ bytes(dl.speed) }}/s</template></span></div>
+            <div class="bar"><i :style="{ width: pctOf(dl) + '%' }" /></div>
           </div>
 
           <div class="acts">
-            <button class="btn primary" @click="cmd({ open: true, romId: rom.id })"><Icon name="mdiOpenInNew" />Open on top screen</button>
-            <button v-if="!installed && !dlActive" class="btn" :disabled="busyDl" @click="startDl"><Icon name="mdiDownload" />Download</button>
+            <button class="btn primary" @click="cmd({ open: true, romId: rom.id })"><Icon name="mdiOpenInNew" />Open</button>
+            <span v-if="installed" class="chip green big"><Icon name="mdiCheckCircle" :size="16" />On this device</span>
             <button v-else-if="dlActive" class="btn" @click="call('dl:cancel', dl.id)"><Icon name="mdiClose" />Cancel</button>
+            <button v-else class="btn" :disabled="busyDl" @click="startDl"><Icon name="mdiDownload" />Download</button>
           </div>
 
-          <div v-if="summary" class="sum-wrap">
+          <div v-if="summary" class="sum">
             <p class="summary" :class="{ open: bioOpen }">{{ summary }}</p>
-            <button v-if="summary.length > 220" class="more" @click="bioOpen = !bioOpen">{{ bioOpen ? 'Less' : 'More' }}<Icon :name="bioOpen ? 'mdiChevronUp' : 'mdiChevronDown'" :size="16" /></button>
+            <button v-if="summary.length > 200" class="more" @click="bioOpen = !bioOpen">{{ bioOpen ? 'Show less' : 'Show more' }}<Icon :name="bioOpen ? 'mdiChevronUp' : 'mdiChevronDown'" :size="16" /></button>
           </div>
         </section>
 
         <!-- Console -->
-        <section v-else-if="tab === 'game' && selPlat" :key="'p' + selPlat.id" class="game">
-          <div class="p-main">
-            <div class="tile-wrap"><SysTile :p="selPlat" @open="cmd({ open: true, platformId: selPlat.id })" /></div>
-            <div class="meta">
-              <div class="plat"><PIcon :p="selPlat" :size="20" />Console</div>
-              <div class="g-title">{{ selPlat.display_name || selPlat.name }}</div>
-              <div class="chips">
-                <span class="chip">{{ selPlat.rom_count || 0 }} {{ selPlat.rom_count === 1 ? 'game' : 'games' }}</span>
-                <span class="chip" :class="{ green: platOnDevice }">{{ platOnDevice }} on this device</span>
-                <span class="chip" :class="selPlat.target?.source === 'custom' ? 'primary' : selPlat.target?.exists ? 'green' : ''">{{ selPlat.target?.source === 'custom' ? 'Custom folder' : selPlat.target?.exists ? 'Folder found' : selPlat.target?.path ? 'Folder will be created' : 'No folder' }}</span>
-              </div>
-              <div v-if="selPlat.target?.path" class="path muted">{{ selPlat.target.path }}</div>
+        <section v-else-if="tab === 'game' && selPlat" :key="'p' + selPlat.id" class="view" data-scroll>
+          <div class="banner sys" :style="sysStyle">
+            <div class="glyph"><PIcon :p="selPlat" :size="190" /></div>
+            <div class="banner-logo">
+              <img v-if="sysLogo" class="sys-logo" :src="sysLogo" :alt="selPlat.display_name" />
+              <div v-else class="b-title">{{ selPlat.display_name }}</div>
             </div>
           </div>
-          <div class="acts"><button class="btn primary" @click="cmd({ open: true, platformId: selPlat.id })"><Icon name="mdiOpenInNew" />Open on top screen</button></div>
+          <div class="eyebrow">System</div>
+          <div class="h-title">{{ selPlat.display_name || selPlat.name }}</div>
+          <div class="meta">
+            <span>{{ selPlat.rom_count || 0 }} {{ selPlat.rom_count === 1 ? 'game' : 'games' }} on your server</span>
+            <span v-if="platOnDevice" class="chip green">{{ platOnDevice }} on this device</span>
+          </div>
+          <div class="folder glass">
+            <Icon name="mdiFolderOutline" :size="20" />
+            <span class="path">{{ selPlat.target?.path || 'No folder set' }}</span>
+            <span class="chip" :class="selPlat.target?.source === 'custom' ? 'primary' : selPlat.target?.exists ? 'green' : ''">{{ selPlat.target?.source === 'custom' ? 'Custom' : selPlat.target?.exists ? 'Found' : selPlat.target?.path ? 'Will create' : 'Not set' }}</span>
+          </div>
+          <div class="acts"><button class="btn primary" @click="cmd({ open: true, platformId: selPlat.id })"><Icon name="mdiOpenInNew" />Open</button></div>
         </section>
 
         <!-- Collection -->
-        <section v-else-if="tab === 'game' && selColl" :key="'c' + selColl.id" class="game">
-          <div class="p-main">
-            <div class="tile-wrap"><CollTile :c="selColl" @open="cmd({ open: true, collectionId: selColl.id })" /></div>
-            <div class="meta">
-              <div class="plat"><Icon name="mdiBookmarkMultipleOutline" :size="18" />Collection</div>
-              <div class="g-title">{{ selColl.name }}</div>
-              <div class="chips">
-                <span class="chip">{{ collCount }} {{ collCount === 1 ? 'game' : 'games' }}</span>
-                <span class="chip" :class="{ green: collOnDevice }">{{ collOnDevice }} on this device</span>
-              </div>
-              <p v-if="selColl.description" class="summary">{{ selColl.description }}</p>
+        <section v-else-if="tab === 'game' && selColl" :key="'c' + selColl.id" class="view" data-scroll>
+          <div class="banner coll">
+            <Art v-if="collArts[0]" class="fill" :src="collArts[0]" blur />
+            <div class="shade" />
+            <div class="covers" :class="'n' + collArts.length">
+              <Art v-for="(a, i) in collArts" :key="a + i" class="c-art" :src="a" />
+              <div v-if="!collArts.length" class="c-ph"><Icon :name="selColl.favorite ? 'mdiStar' : 'mdiBookmarkMultipleOutline'" :size="48" /></div>
             </div>
           </div>
-          <div class="acts"><button class="btn primary" @click="cmd({ open: true, collectionId: selColl.id })"><Icon name="mdiOpenInNew" />Open on top screen</button></div>
+          <div class="eyebrow">{{ selColl.favorite ? 'Favourites' : selColl.smart ? 'Smart collection' : 'Collection' }}</div>
+          <div class="h-title">{{ selColl.name }}</div>
+          <div class="meta">
+            <span>{{ collCount }} {{ collCount === 1 ? 'game' : 'games' }}</span>
+            <span v-if="collOnDevice" class="chip green">{{ collOnDevice }} on this device</span>
+          </div>
+          <p v-if="selColl.description" class="summary">{{ selColl.description }}</p>
+          <div class="acts"><button class="btn primary" @click="cmd({ open: true, collectionId: selColl.id })"><Icon name="mdiOpenInNew" />Open</button></div>
         </section>
 
-        <section v-else-if="tab === 'game'" key="idle" class="idle">
-          <Logo :size="54" />
-          <div class="idle-t">{{ routeLabel }}</div>
+        <!-- Nothing highlighted -->
+        <section v-else-if="tab === 'game'" key="idle" class="view idle">
+          <Logo :size="64" />
+          <div class="h-title">{{ routeLabel }}</div>
           <div class="muted">{{ libLine }}</div>
-          <div class="muted small">Highlight a game on the top screen to see it here</div>
-          <div v-if="current" class="dlcard glass wide">
-            <div class="row between"><b class="ell">{{ current.name }}</b><span class="muted num">{{ pctOf(current) }}%</span></div>
-            <div class="bar-p"><i :style="{ width: pctOf(current) + '%' }" /></div>
+          <div class="hint">Highlight a game or console on the top screen</div>
+          <div v-if="current" class="dlbox glass wide">
+            <div class="dl-row"><b class="ell">{{ current.name }}</b><span class="num">{{ pctOf(current) }}%</span></div>
+            <div class="bar"><i :style="{ width: pctOf(current) + '%' }" /></div>
           </div>
         </section>
 
         <!-- Downloads -->
-        <section v-else-if="tab === 'dl'" key="dl" class="dls" data-scroll>
+        <section v-else-if="tab === 'dl'" key="dl" class="view" data-scroll>
           <div v-if="!store.downloads.length" class="idle">
-            <Icon name="mdiTrayArrowDown" :size="44" />
-            <div class="idle-t">No downloads</div>
-            <div class="muted small">Games you download show up here with live progress</div>
+            <Icon name="mdiTrayArrowDown" :size="48" />
+            <div class="h-title">No downloads</div>
+            <div class="hint">Games you download show up here with live progress</div>
           </div>
           <template v-else>
-            <div v-for="d in sortedDl" :key="d.id" class="dl glass">
-              <div class="thumb"><img v-if="d.cover" :src="img(d.cover)" alt="" /><Icon v-else name="mdiGamepadVariantOutline" :size="22" /></div>
-              <div class="dl-t">
-                <div class="row between"><b class="ell">{{ d.name }}</b><span class="st" :class="d.status">{{ statusText(d) }}</span></div>
-                <div class="muted small ell">{{ d.platformName }}</div>
-                <div v-if="['queued', 'downloading'].includes(d.status)" class="bar-p"><i :style="{ width: pctOf(d) + '%' }" /></div>
+            <div v-for="d in sortedDl" :key="d.id" class="dcard glass" :class="d.status">
+              <Art class="thumb" :src="d.cover ? img(d.cover) : ''"><div class="thumb-ph"><Icon name="mdiGamepadVariantOutline" :size="22" /></div></Art>
+              <div class="d-main">
+                <div class="d-name ell">{{ d.name }}</div>
+                <div class="d-sub"><span class="ell">{{ d.platformName }}</span><span class="st num">{{ statusText(d) }}</span></div>
+                <div v-if="['queued', 'downloading'].includes(d.status)" class="bar"><i :style="{ width: pctOf(d) + '%' }" /></div>
               </div>
-              <button v-if="['queued', 'downloading'].includes(d.status)" class="icon-btn" aria-label="Cancel" @click="call('dl:cancel', d.id)"><Icon name="mdiClose" :size="18" /></button>
-              <button v-else-if="['error', 'cancelled'].includes(d.status)" class="icon-btn" aria-label="Retry" @click="call('dl:retry', d.id)"><Icon name="mdiRefresh" :size="18" /></button>
+              <button v-if="['queued', 'downloading'].includes(d.status)" class="round" aria-label="Cancel" @click="call('dl:cancel', d.id)"><Icon name="mdiClose" :size="18" /></button>
+              <button v-else-if="['error', 'cancelled'].includes(d.status)" class="round" aria-label="Retry" @click="call('dl:retry', d.id)"><Icon name="mdiRefresh" :size="18" /></button>
+              <Icon v-else-if="d.status === 'done'" name="mdiCheckCircle" :size="22" class="ok-ic" />
             </div>
             <button v-if="finished" class="btn small clear" @click="call('dl:clear')"><Icon name="mdiNotificationClearAll" />Clear finished</button>
           </template>
         </section>
 
         <!-- Controls -->
-        <section v-else key="pad" class="pad">
+        <section v-else key="pad" class="view pad">
           <div class="shoulders">
-            <button class="k pill" @pointerdown.prevent="press('lt')">LT<small>Tab</small></button>
+            <button class="k pill" @pointerdown.prevent="press('lt')">LT</button>
             <button class="k pill" @pointerdown.prevent="press('lb')">LB</button>
-            <button class="k pill" @pointerdown.prevent="press('select')"><Icon name="mdiTrayArrowDown" :size="16" /></button>
-            <button class="k pill" @pointerdown.prevent="press('start')"><Icon name="mdiMenu" :size="16" /></button>
+            <button class="k pill" aria-label="Select" @pointerdown.prevent="press('select')"><Icon name="mdiTrayArrowDown" :size="18" /></button>
+            <button class="k pill" aria-label="Start" @pointerdown.prevent="press('start')"><Icon name="mdiMenu" :size="18" /></button>
             <button class="k pill" @pointerdown.prevent="press('rb')">RB</button>
-            <button class="k pill" @pointerdown.prevent="press('rt')">RT<small>Tab</small></button>
+            <button class="k pill" @pointerdown.prevent="press('rt')">RT</button>
           </div>
           <div class="sticks">
-            <div class="dpad">
+            <div class="dpad glass">
               <button v-for="d in DIRS" :key="d.a" class="k" :class="d.a" :aria-label="d.a" @pointerdown.prevent="hold(d.a)" @pointerup="release" @pointerleave="release" @pointercancel="release"><Icon :name="d.icon" :size="30" /></button>
             </div>
             <div class="face">
@@ -148,7 +153,7 @@
             </div>
           </div>
           <div class="jump">
-            <button v-for="t in JUMPS" :key="t.id" class="chip-btn" :class="{ on: store.companion?.route === t.id }" @click="cmd({ tab: t.id })"><Icon :name="t.icon" :size="18" />{{ t.label }}</button>
+            <button v-for="t in JUMPS" :key="t.id" class="jbtn" :class="{ on: store.companion?.route === t.id }" @click="cmd({ tab: t.id })"><Icon :name="t.icon" :size="18" />{{ t.label }}</button>
           </div>
         </section>
       </Transition>
@@ -164,8 +169,8 @@ import Background from '../components/Background.vue';
 import GameLogo from '../components/GameLogo.vue';
 import PIcon from '../components/PIcon.vue';
 import Logo from '../components/Logo.vue';
-import SysTile from '../components/SysTile.vue';
-import CollTile from '../components/CollTile.vue';
+import Art from './Art.vue';
+import { consoleColors } from '../consoleColors.js';
 import Icon from '../components/Icon.vue';
 
 const cart = window.cart;
@@ -199,8 +204,6 @@ const details = new Map(); // romId -> RomM detail, fetched once
 const detail = ref(null);
 let detailT = null;
 watch(() => rom.value?.id, (id) => {
-  coverFailed.value = false;
-  coverRetry.value = false;
   bioOpen.value = false;
   detail.value = details.get(id) || null;
   clearTimeout(detailT);
@@ -215,26 +218,37 @@ const info = computed(() => {
 });
 const yr = computed(() => year(info.value.year));
 const summary = computed(() => detail.value?.summary || rom.value?.summary || '');
-const coverFailed = ref(false);
-const coverRetry = ref(false);
 const bioOpen = ref(false);
-// A cover that fails (server busy, connection dropped) gets one more try before the placeholder shows
-function coverError() {
-  if (coverRetry.value) { coverFailed.value = true; return; }
-  setTimeout(() => (coverRetry.value = true), 1500);
-}
-function retryImg(e) {
-  const el = e.target;
-  if (el.dataset.retried) return;
-  el.dataset.retried = '1';
-  setTimeout(() => { el.src = el.src + '&r=1'; }, 1500);
-}
 
 // ---------------- highlighted console / collection
 const selPlat = computed(() => (!rom.value && store.companion.platformId ? platformById(store.companion.platformId) : null));
 const platOnDevice = computed(() => (selPlat.value ? romsOf(selPlat.value.id).filter((r) => store.installed[r.id]).length : 0));
 const selColl = computed(() => (!rom.value && !selPlat.value && store.companion.collectionId != null ? collectionById(store.companion.collectionId) : null));
 const collCount = computed(() => selColl.value?.rom_ids?.length || selColl.value?.rom_count || 0);
+// Console banner: the console's own colours, like its tile on the top screen
+const sysLogos = new Map();
+const sysLogo = ref('');
+watch(selPlat, (p) => {
+  sysLogo.value = '';
+  if (!p) return;
+  if (sysLogos.has(p.slug)) { sysLogo.value = sysLogos.get(p.slug); return; }
+  call('syslogo:get', { slug: p.slug, fs_slug: p.fs_slug }).then((u) => { sysLogos.set(p.slug, u || ''); if (selPlat.value?.slug === p.slug) sysLogo.value = u || ''; }).catch(() => {});
+}, { immediate: true });
+const sysStyle = computed(() => {
+  const p = selPlat.value;
+  const c = p && consoleColors(p);
+  if (!c) return { background: 'linear-gradient(145deg, rgba(var(--primary-rgb), .55), rgba(14,16,24,.94) 70%)' };
+  const [a, b] = c;
+  return { background: `radial-gradient(120% 90% at 0% 0%, ${a}e6 0%, ${a}8c 38%, transparent 70%), linear-gradient(150deg, ${a}66 0%, ${b}59 60%, rgba(12,13,20,.92) 100%), rgba(14,16,24,.9)` };
+});
+// Collection banner: up to four covers, like its tile on the top screen
+const collArts = computed(() => {
+  const c = selColl.value;
+  if (!c) return [];
+  if (c.covers?.length) return c.covers.slice(0, 4).map(img);
+  const fromRoms = romsOfCollection(c.id).slice(0, 4).map((r) => cover(r, true)).filter(Boolean);
+  return fromRoms.length ? fromRoms : c.cover ? [img(c.cover)] : [];
+});
 const collOnDevice = computed(() => (selColl.value ? romsOfCollection(selColl.value.id).filter((r) => store.installed[r.id]).length : 0));
 const coverSrc = computed(() => rom.value && cover(rom.value, true));
 const hero = computed(() => rom.value && backdropOf(detail.value ? { ...rom.value, shot: detail.value.merged_screenshots?.[0] || rom.value.shot } : rom.value));
@@ -301,91 +315,106 @@ onMounted(async () => {
   try { store.downloads = await call('dl:list'); } catch {}
 });
 </script>
-
 <style>
 html, body { touch-action: pan-x pan-y; }
-.fadeup-enter-active, .fadeup-leave-active { transition: opacity 0.15s, transform 0.2s var(--ease); }
-.fadeup-enter-from { opacity: 0; transform: translateY(6px); }
-.fadeup-leave-to { opacity: 0; }
 * { -webkit-tap-highlight-color: transparent; }
+.cfade-enter-active { transition: opacity 0.18s ease-out, transform 0.22s var(--ease); }
+.cfade-leave-active { transition: opacity 0.1s ease-in; }
+.cfade-enter-from { opacity: 0; transform: translateY(6px); }
+.cfade-leave-to { opacity: 0; }
 </style>
 <style scoped>
 .cmp { position: fixed; inset: 0; display: flex; flex-direction: column; overflow: hidden; opacity: 0; transition: opacity 0.3s var(--ease); }
 .cmp.ready { opacity: 1; }
-.cbar { position: relative; z-index: 2; display: flex; align-items: center; gap: 10px; padding: 12px 14px 8px; }
-.where { display: flex; align-items: center; gap: 8px; font-family: var(--display); font-weight: 700; font-size: 16px; min-width: 0; flex: 1; }
-.where span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.tabs { flex: none; }
-.tabs button { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; }
-.count { min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: var(--primary); color: var(--on-primary); font-size: 11px; display: inline-grid; place-items: center; }
-.icon-btn { flex: none; display: inline-flex; align-items: center; gap: 6px; height: 44px; min-width: 44px; padding: 0 10px; justify-content: center; border-radius: 10px; border: 1px solid var(--line-2); background: var(--glass-2); color: var(--muted); font: 500 13px var(--body); transition: background 0.15s, color 0.15s; }
-.icon-btn:active { transform: scale(0.95); }
-.icon-btn.warn { color: #ffa39c; border-color: rgba(255, 107, 97, 0.5); background: rgba(255, 107, 97, 0.14); }
-.body { position: relative; z-index: 1; flex: 1; min-height: 0; padding: 4px 14px 14px; }
-.body > section { height: 100%; }
 
-.game { display: flex; flex-direction: column; gap: 12px; overflow-y: auto; overscroll-behavior: contain; }
-.hero { position: absolute; inset: -60px -14px auto; height: 300px; z-index: -1; pointer-events: none; }
-.hero-img { width: 100%; height: 100%; object-fit: cover; opacity: 0.55; }
-.hero-img.blur { filter: blur(24px) saturate(1.2); transform: scale(1.15); }
-.hero-fade { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(var(--tint-rgb), 0.2) 0%, var(--bg) 96%); }
-.g-main { display: flex; gap: 16px; align-items: flex-end; }
-.cover { flex: none; width: 150px; aspect-ratio: 3 / 4; border-radius: var(--card-r, 8px); overflow: hidden; display: grid; place-items: center; color: var(--dim); box-shadow: 0 16px 40px rgba(0, 0, 0, 0.55); }
-.cover img { width: 100%; height: 100%; object-fit: cover; }
-.meta { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
-.plat { display: flex; align-items: center; gap: 8px; font-size: 12.5px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--primary-t); }
-.meta :deep(.g-title) { font-family: var(--display); font-size: 26px; line-height: 1.1; font-weight: 700; margin: 0; }
-.chips { display: flex; flex-wrap: wrap; gap: 6px; }
-.chip.gold { color: var(--gold); }
-.genres { font-size: 13px; }
-.dlcard { padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; }
-.dlcard.wide { width: 100%; max-width: 420px; margin-top: 10px; }
-.bar-p { height: 6px; border-radius: 3px; background: rgba(255, 255, 255, 0.08); overflow: hidden; }
-.bar-p i { display: block; height: 100%; background: var(--grad); border-radius: 3px; transition: width 0.5s var(--ease); }
-.acts { display: flex; gap: 10px; flex-wrap: wrap; }
-.acts .btn { height: 46px; padding: 0 18px; }
-.sum-wrap { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
-.summary { margin: 0; font-size: 14px; line-height: 1.55; color: var(--muted); display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
-.summary.open { -webkit-line-clamp: unset; display: block; }
-.more { display: inline-flex; align-items: center; gap: 4px; min-height: 44px; padding: 0 12px 0 0; color: var(--primary-t); font: 600 13.5px var(--body); }
-.p-main { display: flex; gap: 18px; align-items: center; }
-.tile-wrap { flex: none; width: 230px; }
-.tile-wrap :deep(.systile), .tile-wrap :deep(.coll) { width: 100%; }
-.g-title { font-family: var(--display); font-size: 26px; line-height: 1.1; font-weight: 700; }
-.path { font-size: 12.5px; overflow-wrap: anywhere; }
-.row.between { justify-content: space-between; gap: 10px; }
-.ell { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.small { font-size: 12.5px; }
+/* top bar: the top screen's pill tabs */
+.cbar { position: relative; z-index: 2; display: flex; align-items: center; gap: 12px; padding: 14px 16px 10px; }
+.where { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; }
+.where-t { font-family: var(--display); font-weight: 700; font-size: 17px; line-height: 1.1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.eyebrow { font-size: 10.5px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: var(--primary-t); }
+.tabs { margin-left: 0; flex: none; }
+.tab { min-height: 40px; padding: 8px 14px; }
+.badge { position: absolute; top: 2px; right: 4px; min-width: 16px; height: 16px; border-radius: 8px; background: var(--peach); color: var(--on-primary); font-size: 10px; font-weight: 700; display: grid; place-items: center; padding: 0 4px; }
+.round { flex: none; width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; background: rgba(255, 255, 255, 0.06); border: 1px solid var(--line-2); color: var(--muted); transition: background 0.15s, color 0.15s, transform 0.1s var(--ease); }
+.round:active { transform: scale(0.94); }
+.round.warn { color: #ffa39c; border-color: rgba(255, 107, 97, 0.55); background: rgba(255, 107, 97, 0.16); }
+.off-hint { position: relative; z-index: 2; margin: -4px 16px 6px; font-size: 12.5px; color: #ffa39c; text-align: right; }
+
+.body { position: relative; z-index: 1; flex: 1; min-height: 0; }
+.view { height: 100%; overflow-y: auto; overscroll-behavior: contain; padding: 4px 16px 18px; display: flex; flex-direction: column; gap: 12px; }
+
+/* banner: the Game page's */
+.banner { position: relative; flex: none; height: 214px; border-radius: 16px; overflow: hidden; background: #141824; box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.07); }
+.fill { position: absolute; inset: 0; }
+.shade { position: absolute; inset: 0; background: linear-gradient(90deg, rgba(8, 8, 16, 0.78) 0%, rgba(8, 8, 16, 0.35) 45%, transparent 75%), linear-gradient(0deg, rgba(8, 8, 16, 0.72), transparent 55%); }
+.banner-logo { position: absolute; left: 22px; bottom: 20px; right: 150px; display: flex; align-items: flex-end; }
+.banner :deep(.b-title), .b-title { font-family: var(--display); font-size: 30px; font-weight: 800; line-height: 1.02; letter-spacing: -0.02em; text-shadow: 0 6px 30px rgba(0, 0, 0, 0.55); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.cover { position: absolute; right: 18px; bottom: 18px; width: 112px; height: 150px; border-radius: var(--card-r, 8px); background: #1b2030; box-shadow: 0 14px 34px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.12); }
+.cover-ph, .thumb-ph { position: absolute; inset: 0; display: grid; place-items: center; color: var(--dim); }
+
+.sys .glyph { position: absolute; right: -24px; bottom: -34px; opacity: 0.16; color: #fff; }
+.sys .banner-logo { right: 22px; top: 0; bottom: 0; align-items: center; }
+.sys-logo { max-width: 62%; max-height: 70px; object-fit: contain; filter: drop-shadow(0 6px 20px rgba(0, 0, 0, 0.4)); }
+.coll .covers { position: absolute; inset: 22px; display: grid; gap: 10px; }
+.covers.n1 { grid-template-columns: 124px; justify-content: center; }
+.covers.n2 { grid-template-columns: repeat(2, 124px); justify-content: center; }
+.covers.n3 { grid-template-columns: repeat(3, 124px); justify-content: center; }
+.covers.n4 { grid-template-columns: repeat(4, 1fr); }
+.c-art { border-radius: var(--card-r, 8px); background: #1b2030; box-shadow: 0 12px 30px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.1); }
+.c-ph { grid-column: 1 / -1; display: grid; place-items: center; color: var(--gold); }
+.h-title { font-family: var(--display); font-size: 28px; font-weight: 800; line-height: 1.05; letter-spacing: -0.02em; margin-top: -6px; }
+
+/* the Home hero's meta line */
+.meta { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 14px; color: #cfd4de; font-size: 14px; }
+.meta .row { gap: 6px; }
+.gold { color: var(--gold); }
+.acts { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.acts .btn { height: 48px; padding: 0 22px; }
+.chip.big { height: 40px; padding: 0 14px; font-size: 13.5px; }
+.dlbox { padding: 12px 14px; display: flex; flex-direction: column; gap: 9px; }
+.dlbox.wide { width: 100%; max-width: 440px; }
+.dl-row { display: flex; justify-content: space-between; gap: 10px; font-size: 13.5px; color: var(--muted); }
+.dl-row b { color: var(--text); font-weight: 600; }
 .num { font-variant-numeric: tabular-nums; }
+.ell { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sum { display: flex; flex-direction: column; align-items: flex-start; }
+.summary { margin: 0; color: #c3c9d4; font-size: 14px; line-height: 1.55; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.summary.open { display: block; }
+.more { display: inline-flex; align-items: center; gap: 4px; min-height: 44px; color: var(--primary-t); font: 600 13.5px var(--body); }
+.folder { display: flex; align-items: center; gap: 12px; padding: 12px 14px; color: var(--muted); }
+.folder .path { flex: 1; min-width: 0; font-family: ui-monospace, 'JetBrains Mono', monospace; font-size: 12.5px; color: var(--text); overflow-wrap: anywhere; }
 
-.idle { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; text-align: center; color: var(--muted); }
-.idle-t { font-family: var(--display); font-size: 24px; font-weight: 700; color: var(--text); }
+.idle { height: 100%; align-items: center; justify-content: center; text-align: center; gap: 8px; }
+.hint { font-size: 13px; color: var(--dim); }
 
-.dls { overflow-y: auto; overscroll-behavior: contain; display: flex; flex-direction: column; gap: 8px; }
-.dl { display: flex; align-items: center; gap: 12px; padding: 10px 12px; }
-.thumb { flex: none; width: 44px; height: 58px; border-radius: 6px; overflow: hidden; background: var(--glass-hi); display: grid; place-items: center; color: var(--dim); }
-.thumb img { width: 100%; height: 100%; object-fit: cover; }
-.dl-t { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 5px; }
-.st { flex: none; font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
-.st.done { color: var(--green-l); }
-.st.error { color: var(--red); }
-.clear { align-self: center; margin-top: 4px; }
+/* downloads: the top screen's cards */
+.dcard { display: flex; align-items: center; gap: 14px; padding: 10px 12px; }
+.thumb { flex: none; width: 48px; height: 64px; border-radius: 6px; background: #1b2030; box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4); }
+.d-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.d-name { font-family: var(--display); font-weight: 600; font-size: 15px; }
+.d-sub { display: flex; justify-content: space-between; gap: 10px; font-size: 12.5px; color: var(--muted); }
+.st { flex: none; }
+.dcard.done .st { color: var(--green-l); }
+.dcard.error .st { color: var(--red); }
+.ok-ic { color: var(--green-l); flex: none; margin-right: 10px; }
+.clear { align-self: center; }
 
-.pad { display: flex; flex-direction: column; justify-content: space-between; gap: 12px; }
-.k { display: grid; place-items: center; border: 1px solid var(--line-2); background: var(--glass-2); color: var(--text); font: 700 18px var(--display); transition: transform 0.08s var(--ease), background 0.1s; touch-action: none; }
+/* controls */
+.pad { justify-content: space-between; }
+.k { display: grid; place-items: center; border: 1px solid var(--line-2); background: rgba(255, 255, 255, 0.07); color: var(--text); font: 700 18px var(--display); transition: transform 0.08s var(--ease), background 0.1s; touch-action: none; }
 .k:active { transform: scale(0.92); background: rgba(var(--primary-rgb), 0.5); }
 .shoulders { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; }
-.pill { height: 44px; border-radius: 12px; font-size: 14px; display: flex; flex-direction: column; gap: 0; line-height: 1.05; }
-.pill small { font: 500 10px var(--body); color: var(--muted); }
-.sticks { flex: 1; display: flex; align-items: center; justify-content: space-between; padding: 0 12px; }
-.dpad { display: grid; grid-template: repeat(3, 62px) / repeat(3, 62px); }
+.pill { height: 44px; border-radius: 12px; font-size: 14px; }
+.sticks { flex: 1; display: flex; align-items: center; justify-content: space-between; padding: 0 10px; }
+.dpad { display: grid; grid-template: repeat(3, 60px) / repeat(3, 60px); border-radius: 20px; padding: 4px; }
 .dpad .k { border-radius: 14px; }
 .dpad .up { grid-area: 1 / 2; } .dpad .left { grid-area: 2 / 1; } .dpad .right { grid-area: 2 / 3; } .dpad .down { grid-area: 3 / 2; }
-.face { display: grid; grid-template: repeat(3, 62px) / repeat(3, 62px); }
-.face .k { border-radius: 50%; }
-.face .y { grid-area: 1 / 2; } .face .x { grid-area: 2 / 1; } .face .b { grid-area: 2 / 3; } .face .a { grid-area: 3 / 2; background: var(--primary); border-color: transparent; color: var(--on-primary); }
+.face { display: grid; grid-template: repeat(3, 60px) / repeat(3, 60px); }
+.face .k { border-radius: 50%; box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3); }
+.face .y { grid-area: 1 / 2; } .face .x { grid-area: 2 / 1; } .face .b { grid-area: 2 / 3; }
+.face .a { grid-area: 3 / 2; background: var(--grad); border-color: transparent; color: var(--on-primary); }
 .jump { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
-.chip-btn { display: flex; align-items: center; justify-content: center; gap: 7px; height: 42px; border-radius: 10px; border: 1px solid var(--line); background: var(--glass-bg); color: var(--muted); font: 500 13.5px var(--body); }
-.chip-btn.on { color: var(--text); border-color: rgba(var(--primary-l-rgb), 0.5); background: rgba(var(--primary-rgb), 0.2); }
-.chip-btn:active { transform: scale(0.96); }
+.jbtn { display: flex; align-items: center; justify-content: center; gap: 7px; height: 44px; border-radius: 999px; border: 1px solid var(--line); background: rgba(255, 255, 255, 0.04); color: var(--muted); font: 500 13.5px var(--body); transition: background 0.15s, color 0.15s; }
+.jbtn.on { color: #fff; background: rgba(var(--primary-rgb), 0.28); box-shadow: inset 0 0 0 1px rgba(var(--primary-l-rgb), 0.45); }
+.jbtn:active { transform: scale(0.96); }
 </style>
