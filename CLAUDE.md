@@ -68,5 +68,11 @@ LT/RT switch top tabs. LB/RB only switch sections inside a page. A select, B bac
 - Queue: `dl:move`, `dl:pauseAll`, `dl:resumeAll`, `config.downloads.limitMBs` (`rateWait`). `it.running` stops a resumed item starting a second run before the stopped one ends.
 - Recently played: `steam:played` (shortcuts LastPlayTime). Select many: Gallery `selecting`, `addGames` in `steam.js`.
 
+## 0.7.5
+- Settings → Steam: console cards open `src/views/SteamConsole.vue` (route `steam-console`, param `ckey`); the old emulator menu lives in its More.
+- HLTB: `electron/hltb.js` (RomM's wire contract, search URL read from RomM's repo, cache `hltb.json`, `CARTRIDGE_HLTB_BASE` for tests); the game page prefers RomM's `hltb_metadata`.
+- `nav.js`: focusing the first item in a `[data-scroll]` scrolls it to the top. Scrolling lists need `data-scroll` and `flex: none` rows (Menu, SteamCollections).
+- `CollTile` `wide` for collections and series; SysTile clips its strip and glyph in `.sys-clip`.
+
 ## Releases (full steps: HANDOFF D8)
 Only when the owner asks. Bump `version` and `build.releaseInfo.releaseName` ("Cartridge X.Y.Z") in `package.json`, put only this version's notes in `RELEASE_NOTES.md` (heading `## Cartridge X.Y.Z · Title`), add them to the top of `CHANGELOG.md`, grouped as New / Changed / Fixed with bold lead-ins. CI builds, launch-checks and publishes.

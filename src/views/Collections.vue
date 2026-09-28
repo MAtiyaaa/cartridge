@@ -12,7 +12,7 @@
     <section v-for="s in sections" :key="s.id" class="sec">
       <div class="shelf-title"><Icon :name="s.icon" :size="20" />{{ s.title }}<span class="count">{{ s.items.length }}</span></div>
       <div class="tile-grid">
-        <CollTile v-for="c in s.items" :key="c.id" :c="c" @open="open" @focused="focus" />
+        <CollTile v-for="c in s.items" :key="c.id" :c="c" wide @open="open" @focused="focus" />
       </div>
     </section>
     <div v-if="!total" class="empty">No collections yet. Press New collection, or add games from their More menu.</div>
@@ -56,6 +56,6 @@ watch(() => store.libVersion, async () => { await nextTick(); ensureFocus(el.val
 .lib-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; margin: 18px 0 20px; }
 .big { font-size: 36px; font-weight: 700; margin: 6px 0 8px; }
 .sec { margin-bottom: 26px; }
-.tile-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 22px 18px; }
+.tile-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 22px 18px; }
 .tile-grid :deep(.coll) { width: auto; }
 </style>
