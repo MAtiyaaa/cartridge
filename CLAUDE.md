@@ -30,6 +30,8 @@ This file is the short version every session needs. The full handoff (history, e
 - Test that it launches before anything is released. Release notes say exactly what changed.
 - Nothing private in the repo or releases.
 - Cartridge never touches saves, never downloads or launches emulators itself, and never modifies emulator files.
+- **Cartridge is for everyone, not the owner's setup.** Users run SteamOS, Bazzite, other image-based systems and ordinary desktop distros, with emulators from EmuDeck, Flatpak, AppImages, distro packages or Steam (RetroArch), in any mix and any version. Never hard-code the owner's paths, emulators or choices. Detect what is installed, prefer what the user already uses (their Steam shortcuts), let them pick, and fail with a clear message rather than a wrong guess. Test Steam and emulator changes against several setups (EmuDeck, Flatpak only, distro packages, AppImages, nothing installed), not one.
+- Paths: home can be a symlink (/home to /var/home on Bazzite and Fedora Atomic), and sandboxed (Flatpak) apps may not follow it. Hand emulators real paths, or names they resolve themselves (RetroArch cores).
 
 ## Controls (don't change without asking)
 LT/RT switch top tabs. LB/RB only switch sections inside a page. A select, B back, X download or page action, Y search or More, Start Quick Menu, Select Downloads. Every screen must work with a controller, touch and mouse, at 1280x800, 1920x1080 and 3840x2160, with nothing clipped.
@@ -86,6 +88,11 @@ LT/RT switch top tabs. LB/RB only switch sections inside a page. A select, B bac
 - `readShortcuts` splits args out of Exe (SRM `appendArgsToExecutable`) into `%command% <args>`; `Z:` paths understood.
 - Icons: `<appid>_icon.png` in grid (SGDB icon via `gameIconPng`, else cover cropped); live `SetShortcutIcon`, helper sets `icon`.
 - Library: series merged by word subset (`STOP` words), games de-duplicated; Gallery `groups` splits collection/genre by console; `GenreTile.vue`.
+
+## 0.7.9
+- Emulator detection covers every install kind: `EMU` (per emulator: EmuDeck `scripts`, AppImage `app` pattern, Flatpak ids `fp`, program names `bin`, `args`) and `EMUS` (console -> emulator ids). `candidates()` lists each copy found (first keeps the plain id, others `id@src`). RetroArch from EmuDeck, Flatpak, AppImage, distro package or Steam, each with its own cores; only the sandboxed ones get cores by name.
+- `styled()` returns the real path when no learned path style applies.
+- The session tested detection with fake homes for EmuDeck, Flatpak-only, distro packages, AppImages + Steam RetroArch, and nothing installed (not in the repo).
 
 ## Releases (full steps: HANDOFF D8)
 Only when the owner asks. Bump `version` and `build.releaseInfo.releaseName` ("Cartridge X.Y.Z") in `package.json`, put only this version's notes in `RELEASE_NOTES.md` (heading `## Cartridge X.Y.Z · Title`), add them to the top of `CHANGELOG.md`, grouped as New / Changed / Fixed with bold lead-ins. CI builds, launch-checks and publishes.

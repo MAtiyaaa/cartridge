@@ -243,35 +243,40 @@ module.exports = function createSteamManager(ctx) {
     try { flatpaks = execFileSync('flatpak', ['list', '--app', '--columns=application'], { encoding: 'utf8', timeout: 8000 }).split('\n').map((s) => s.trim()).filter(Boolean); } catch { flatpaks = []; }
     return flatpaks;
   }
-  // Each console's emulators, best first. Arguments follow EmuDeck's Steam ROM Manager parsers
-  // (EmuDeck/configs/steam-rom-manager), which are what EmuDeck users' working shortcuts use.
-  // [id, name, launcher scripts, AppImage name pattern, flatpak id, args]
-  const EMUS = {
-    ps2: [['pcsx2', 'PCSX2', ['pcsx2-qt.sh', 'pcsx2.sh'], /pcsx2/i, 'net.pcsx2.PCSX2', '-batch -fullscreen -nogui "{ROM}"']],
-    psx: [['duckstation', 'DuckStation', ['duckstation.sh'], /duckstation/i, 'org.duckstation.DuckStation', '-batch -fullscreen -nogui "{ROM}"']],
-    gc: [['dolphin', 'Dolphin', ['dolphin-emu.sh'], /dolphin/i, 'org.DolphinEmu.dolphin-emu', '-b -e "{ROM}"']],
-    wii: [['dolphin', 'Dolphin', ['dolphin-emu.sh'], /dolphin/i, 'org.DolphinEmu.dolphin-emu', '-b -e "{ROM}"']],
-    wiiu: [['cemu', 'Cemu', ['cemu.sh'], /cemu/i, 'info.cemu.Cemu', '-f -g "{ROM}"']],
-    switch: [
-      ['eden', 'Eden', ['eden.sh'], /eden/i, null, '-f -g "{ROM}"'], ['citron', 'Citron', ['citron.sh'], /citron/i, null, '-f -g "{ROM}"'],
-      ['yuzu', 'Yuzu', ['yuzu.sh', 'suyu.sh'], /(yuzu|sudachi|suyu)/i, 'org.yuzu_emu.yuzu', '-f -g "{ROM}"'], ['ryujinx', 'Ryujinx', ['ryujinx.sh'], /ryujinx/i, 'org.ryujinx.Ryujinx', '--fullscreen "{ROM}"'],
-    ],
-    ps3: [['rpcs3', 'RPCS3', ['rpcs3.sh'], /rpcs3/i, 'net.rpcs3.RPCS3', '--no-gui "{ROM}"']],
-    ps4: [['shadps4', 'shadPS4', ['shadps4.sh'], /shadps4/i, 'net.shadps4.shadPS4', '-g "{ROM}"']],
-    psp: [['ppsspp', 'PPSSPP', ['ppsspp.sh'], /ppsspp/i, 'org.ppsspp.PPSSPP', '-f -g "{ROM}"']],
-    n3ds: [['azahar', 'Azahar', ['azahar.sh', 'lime3ds.sh', 'citra.sh'], /(azahar|lime3ds|citra)/i, 'org.azahar_emu.Azahar', '"{ROM}"']],
-    nds: [['melonds', 'melonDS', ['melonds.sh'], /melonds/i, 'net.kuribo64.melonDS', '"{ROM}" -f']],
+  // Standalone emulators and every way people install them: EmuDeck launcher scripts, AppImages,
+  // Flatpaks (all known ids) and distro packages (program names on PATH). Arguments follow EmuDeck's
+  // Steam ROM Manager parsers (EmuDeck/configs/steam-rom-manager), known to work in Game Mode.
+  const EMU = {
+    pcsx2: { label: 'PCSX2', scripts: ['pcsx2-qt.sh', 'pcsx2.sh'], app: /pcsx2/i, fp: ['net.pcsx2.PCSX2'], bin: ['pcsx2-qt', 'pcsx2'], args: '-batch -fullscreen -nogui "{ROM}"' },
+    duckstation: { label: 'DuckStation', scripts: ['duckstation.sh'], app: /duckstation/i, fp: ['org.duckstation.DuckStation'], bin: ['duckstation-qt', 'duckstation'], args: '-batch -fullscreen -nogui "{ROM}"' },
+    dolphin: { label: 'Dolphin', scripts: ['dolphin-emu.sh'], app: /dolphin/i, fp: ['org.DolphinEmu.dolphin-emu'], bin: ['dolphin-emu'], args: '-b -e "{ROM}"' },
+    cemu: { label: 'Cemu', scripts: ['cemu.sh'], app: /cemu/i, fp: ['info.cemu.Cemu'], bin: ['cemu', 'Cemu'], args: '-f -g "{ROM}"' },
+    eden: { label: 'Eden', scripts: ['eden.sh'], app: /eden/i, fp: ['dev.eden_emu.eden'], bin: ['eden'], args: '-f -g "{ROM}"' },
+    citron: { label: 'Citron', scripts: ['citron.sh'], app: /citron/i, fp: ['org.citron_emu.citron'], bin: ['citron'], args: '-f -g "{ROM}"' },
+    yuzu: { label: 'Yuzu', scripts: ['yuzu.sh', 'suyu.sh'], app: /(yuzu|sudachi|suyu)/i, fp: ['org.yuzu_emu.yuzu', 'org.sudachi_emu.sudachi'], bin: ['yuzu', 'sudachi', 'suyu'], args: '-f -g "{ROM}"' },
+    ryujinx: { label: 'Ryujinx', scripts: ['ryujinx.sh'], app: /ryujinx/i, fp: ['io.github.ryubing.Ryujinx', 'org.ryujinx.Ryujinx'], bin: ['Ryujinx', 'ryujinx'], args: '--fullscreen "{ROM}"' },
+    rpcs3: { label: 'RPCS3', scripts: ['rpcs3.sh'], app: /rpcs3/i, fp: ['net.rpcs3.RPCS3'], bin: ['rpcs3'], args: '--no-gui "{ROM}"' },
+    shadps4: { label: 'shadPS4', scripts: ['shadps4.sh'], app: /shadps4/i, fp: ['net.shadps4.shadPS4'], bin: ['shadps4'], args: '-g "{ROM}"', qtArgs: '-d -g "{ROM}"' },
+    ppsspp: { label: 'PPSSPP', scripts: ['ppsspp.sh'], app: /ppsspp/i, fp: ['org.ppsspp.PPSSPP'], bin: ['PPSSPPSDL', 'ppsspp', 'PPSSPPQt'], args: '-f -g "{ROM}"' },
+    azahar: { label: 'Azahar', scripts: ['azahar.sh', 'lime3ds.sh', 'citra.sh'], app: /(azahar|lime3ds|citra)/i, fp: ['org.azahar_emu.Azahar', 'io.github.lime3ds.Lime3DS', 'org.citra_emu.citra'], bin: ['azahar', 'azahar-qt', 'lime3ds', 'lime3ds-gui', 'citra-qt'], args: '"{ROM}"' },
+    melonds: { label: 'melonDS', scripts: ['melonds.sh'], app: /melonds/i, fp: ['net.kuribo64.melonDS'], bin: ['melonDS', 'melonds'], args: '"{ROM}" -f' },
     // xemu only loads a game given as -dvd_path; EmuDeck's launcher is xemu-emu.sh
-    xbox: [['xemu', 'xemu', ['xemu-emu.sh', 'xemu.sh'], /xemu/i, 'app.xemu.xemu', '-full-screen -dvd_path "{ROM}"']],
+    xemu: { label: 'xemu', scripts: ['xemu-emu.sh', 'xemu.sh'], app: /xemu/i, fp: ['app.xemu.xemu'], bin: ['xemu'], args: '-full-screen -dvd_path "{ROM}"' },
     // Xenia runs under Proton inside EmuDeck's launcher, so the game needs a Windows path (Z: is /)
-    xbox360: [['xenia', 'Xenia', ['xenia.sh'], null, null, '"Z:{ROM}"']],
-    psvita: [['vita3k', 'Vita3K', ['vita3k.sh'], /vita3k/i, null, '"{ROM}"']],
-    gb: [['mgba', 'mGBA', ['mgba.sh'], /mgba/i, 'io.mgba.mGBA', '-f "{ROM}"']],
-    gbc: [['mgba', 'mGBA', ['mgba.sh'], /mgba/i, 'io.mgba.mGBA', '-f "{ROM}"']],
-    gba: [['mgba', 'mGBA', ['mgba.sh'], /mgba/i, 'io.mgba.mGBA', '-f "{ROM}"']],
-    n64: [['rmg', "Rosalie's Mupen GUI", ['rosaliesmupengui.sh'], /(rmg|mupen)/i, 'com.github.Rosalie241.RMG', '--fullscreen --nogui --quit-after-emulation "{ROM}"']],
-    dreamcast: [['flycast', 'Flycast', ['flycast.sh'], /flycast/i, 'org.flycast.Flycast', '"{ROM}"']],
+    xenia: { label: 'Xenia', scripts: ['xenia.sh'], args: '"Z:{ROM}"' },
+    vita3k: { label: 'Vita3K', scripts: ['vita3k.sh'], app: /vita3k/i, fp: [], bin: ['Vita3K', 'vita3k'], args: '"{ROM}"' },
+    mgba: { label: 'mGBA', scripts: ['mgba.sh'], app: /mgba/i, fp: ['io.mgba.mGBA'], bin: ['mgba-qt', 'mgba'], args: '-f "{ROM}"' },
+    rmg: { label: "Rosalie's Mupen GUI", scripts: ['rosaliesmupengui.sh'], app: /(^rmg|rosalie)/i, fp: ['com.github.Rosalie241.RMG'], bin: ['RMG'], args: '--fullscreen --nogui --quit-after-emulation "{ROM}"' },
+    flycast: { label: 'Flycast', scripts: ['flycast.sh'], app: /flycast/i, fp: ['org.flycast.Flycast'], bin: ['flycast'], args: '"{ROM}"' },
   };
+  // console -> standalone emulators, best first
+  const EMUS = {
+    ps2: ['pcsx2'], psx: ['duckstation'], gc: ['dolphin'], wii: ['dolphin'], wiiu: ['cemu'], switch: ['eden', 'citron', 'yuzu', 'ryujinx'],
+    ps3: ['rpcs3'], ps4: ['shadps4'], psp: ['ppsspp'], n3ds: ['azahar'], nds: ['melonds'], xbox: ['xemu'], xbox360: ['xenia'], psvita: ['vita3k'],
+    gb: ['mgba'], gbc: ['mgba'], gba: ['mgba'], n64: ['rmg'], dreamcast: ['flycast'],
+  };
+  const BIN_DIRS = () => [...new Set([...(process.env.PATH || '').split(':'), '/usr/bin', '/usr/local/bin', '/usr/games', '/app/bin', path.join(HOME, '.local/bin'), '/var/lib/flatpak/exports/bin'].filter((d) => d && d.startsWith('/') && !d.includes('/tmp/.mount_')))];
+  const findBin = (names) => { for (const d of BIN_DIRS()) for (const n of names || []) { const f = path.join(d, n); if (exists(f) && !isDir(f)) return f; } return null; };
   // consoles where EmuDeck uses RetroArch unless you pick a standalone emulator
   const RA_FIRST = new Set(['nes', 'snes', 'gb', 'gbc', 'gba', 'genesis', 'megadrive', 'mastersystem', 'gamegear', 'segacd', 'n64', 'pcengine', 'dreamcast', 'saturn', 'arcade', 'atari2600', 'atarilynx', 'ngp', 'ngpc', 'wonderswan', 'wonderswancolor']);
   // RetroArch cores per console, best first
@@ -283,39 +288,53 @@ module.exports = function createSteamManager(ctx) {
     psx: ['swanstation', 'mednafen_psx_hw', 'mednafen_psx', 'pcsx_rearmed'], psp: ['ppsspp'], nds: ['melondsds', 'melonds', 'desmume'], gc: ['dolphin'], wii: ['dolphin'],
   };
   const CORE_NAMES = { mesen: 'Mesen', fceumm: 'FCEUmm', nestopia: 'Nestopia', snes9x: 'Snes9x', bsnes: 'bsnes', bsnes_hd_beta: 'bsnes-hd', gambatte: 'Gambatte', sameboy: 'SameBoy', mgba: 'mGBA', vba_next: 'VBA Next', genesis_plus_gx: 'Genesis Plus GX', picodrive: 'PicoDrive', mupen64plus_next: 'Mupen64Plus-Next', parallel_n64: 'ParaLLEl N64', mednafen_pce_fast: 'Beetle PCE Fast', mednafen_pce: 'Beetle PCE', flycast: 'Flycast', mednafen_saturn: 'Beetle Saturn', kronos: 'Kronos', yabasanshiro: 'YabaSanshiro', yabause: 'Yabause', fbneo: 'FBNeo', mame: 'MAME', mame2003_plus: 'MAME 2003-Plus', stella: 'Stella', handy: 'Handy', mednafen_lynx: 'Beetle Lynx', mednafen_ngp: 'Beetle NeoPop', mednafen_wswan: 'Beetle Cygne', swanstation: 'SwanStation', mednafen_psx_hw: 'Beetle PSX HW', mednafen_psx: 'Beetle PSX', pcsx_rearmed: 'PCSX ReARMed', ppsspp: 'PPSSPP', melondsds: 'melonDS DS', melonds: 'melonDS', desmume: 'DeSmuME', dolphin: 'Dolphin' };
-  function coreDirs() {
-    const homes = [...new Set([HOME, real(HOME)])];
-    return [...homes.flatMap((h) => [path.join(h, '.var/app/org.libretro.RetroArch/config/retroarch/cores'), path.join(h, '.config/retroarch/cores')]), '/usr/lib/libretro', '/usr/lib64/libretro'];
-  }
   const kindOf = (key) => (key === 'ps4' ? 'eboot' : key === 'wiiu' ? 'rpx' : 'path');
-  // Every emulator for this console that is installed here: [{ id, label, t }]
+  // Every emulator for this console that is installed here: [{ id, label, t }]. Each copy is listed
+  // (someone can have both the Flatpak and an AppImage); the first copy keeps the plain id.
   function candidates(key) {
     const L = launchersDirs(), out = [];
-    for (const [id, label, scripts, re, fp, args] of EMUS[key] || []) {
-      let t = null;
-      for (const d of L) for (const s of scripts) if (!t && exists(path.join(d, s))) t = { exe: path.join(d, s), start: d, pre: [], command: true, args, kind: kindOf(key), how: 'emudeck', from: `EmuDeck ${label}` };
-      if (!t && re) {
+    for (const id of EMUS[key] || []) {
+      const e = EMU[id], found = [];
+      const mk = (exe, start, args, how, from, src) => found.push({ t: { exe, start, pre: [], command: true, args, kind: kindOf(key), how, from }, src });
+      for (const d of L) for (const sc of e.scripts || []) if (exists(path.join(d, sc)) && !found.some((f) => f.src === 'emudeck')) mk(path.join(d, sc), d, e.args, 'emudeck', `EmuDeck ${e.label}`, 'emudeck');
+      if (e.app) {
         for (const d of APP_DIRS()) {
-          const hit = ls(d).filter((n) => re.test(n) && /\.appimage$/i.test(n) && !/qtlauncher/i.test(n)).sort().pop()
-            || ls(d).filter((n) => re.test(n) && /\.appimage$/i.test(n)).sort().pop();
-          if (hit) { const qt = /qtlauncher/i.test(hit); t = { exe: path.join(d, hit), start: d, pre: [], command: true, args: qt ? '-d -g "{ROM}"' : args, kind: kindOf(key), how: 'appimage', from: hit }; break; }
+          const apps = ls(d).filter((n) => e.app.test(n) && /\.appimage$/i.test(n));
+          const hit = apps.filter((n) => !/qtlauncher/i.test(n)).sort().pop() || apps.sort().pop();
+          if (hit && !found.some((f) => f.src === 'appimage')) mk(path.join(d, hit), d, /qtlauncher/i.test(hit) && e.qtArgs ? e.qtArgs : e.args, 'appimage', hit, 'appimage');
         }
       }
-      if (!t && fp && flatpakApps().includes(fp)) t = { exe: '/usr/bin/flatpak', start: '/usr/bin', pre: [], command: true, args: `run ${fp} ${args}`, kind: kindOf(key), how: 'flatpak', from: fp };
-      if (t) out.push({ id, label, t });
+      const fp = (e.fp || []).find((x) => flatpakApps().includes(x));
+      if (fp) mk('/usr/bin/flatpak', '/usr/bin', `run ${fp} ${e.args}`, 'flatpak', fp, 'flatpak');
+      const bin = findBin(e.bin);
+      if (bin && !/flatpak\/exports/.test(bin)) mk(bin, path.dirname(bin), e.args, 'native', bin, 'native');
+      const SRC = { emudeck: 'EmuDeck', appimage: 'AppImage', flatpak: 'Flatpak', native: 'Installed' };
+      found.forEach((f, i) => out.push({ id: i ? `${id}@${f.src}` : id, label: found.length > 1 ? `${e.label} · ${SRC[f.src]}` : e.label, t: f.t }));
     }
-    // RetroArch: the core goes by name, and RetroArch looks it up in its own cores folder. A full
-    // path breaks when the sandboxed (Flatpak) RetroArch sees home under another path (Bazzite: /var/home)
-    const ra = L.map((d) => path.join(d, 'retroarch.sh')).find(exists);
-    const raFlat = !ra && flatpakApps().includes('org.libretro.RetroArch');
+    // RetroArch, from every place it can be installed, with each core that copy has. The sandboxed
+    // (Flatpak, EmuDeck) RetroArch gets the core by name and finds it in its own cores folder: a full
+    // path breaks when it sees home under another path (Bazzite: /var/home). Others get the full path.
+    const homes = [...new Set([HOME, real(HOME)])];
+    const flatCores = homes.map((h) => path.join(h, '.var/app/org.libretro.RetroArch/config/retroarch/cores'));
+    const nativeCores = [...homes.map((h) => path.join(h, '.config/retroarch/cores')), '/usr/lib/libretro', '/usr/lib64/libretro', '/usr/lib/x86_64-linux-gnu/libretro', '/usr/local/lib/libretro'];
+    const sources = [];
+    const raSh = L.map((d) => path.join(d, 'retroarch.sh')).find(exists);
+    if (raSh) sources.push({ src: 'EmuDeck', exe: raSh, start: path.dirname(raSh), pre: '', dirs: flatCores, byName: true, from: 'EmuDeck RetroArch' });
+    if (flatpakApps().includes('org.libretro.RetroArch')) sources.push({ src: 'Flatpak', exe: '/usr/bin/flatpak', start: '/usr/bin', pre: 'run org.libretro.RetroArch ', dirs: flatCores, byName: true, from: 'RetroArch (Flatpak)' });
+    for (const d of APP_DIRS()) { const hit = ls(d).filter((n) => /^retroarch.*\.appimage$/i.test(n)).sort().pop(); if (hit) { sources.push({ src: 'AppImage', exe: path.join(d, hit), start: d, pre: '', dirs: [path.join(d, hit + '.home/.config/retroarch/cores'), ...nativeCores], from: hit }); break; } }
+    const raBin = findBin(['retroarch']);
+    if (raBin && !/flatpak\/exports/.test(raBin)) sources.push({ src: 'Installed', exe: raBin, start: path.dirname(raBin), pre: '', dirs: nativeCores, from: raBin });
+    for (const root of steamRoots()) { const d = path.join(root, 'steamapps/common/RetroArch'); if (exists(path.join(d, 'retroarch'))) { sources.push({ src: 'Steam', exe: path.join(d, 'retroarch'), start: d, pre: '', dirs: [path.join(d, 'cores')], from: 'RetroArch on Steam' }); break; } }
     const ras = [];
-    if (ra || raFlat) {
+    sources.forEach((so, si) => {
       for (const c of CORES[key] || []) {
-        if (!coreDirs().some((d) => exists(path.join(d, `${c}_libretro.so`)))) continue;
-        const args = `-L ${c}_libretro.so "{ROM}"`;
-        ras.push({ id: 'ra:' + c, label: `RetroArch · ${CORE_NAMES[c] || c}`, t: ra ? { exe: ra, start: path.dirname(ra), pre: [], command: true, args, kind: 'path', how: 'emudeck', from: 'EmuDeck RetroArch' } : { exe: '/usr/bin/flatpak', start: '/usr/bin', pre: [], command: true, args: `run org.libretro.RetroArch ${args}`, kind: 'path', how: 'flatpak', from: 'RetroArch (Flatpak)' } });
+        const file = so.dirs.map((d) => path.join(d, `${c}_libretro.so`)).find(exists);
+        if (!file) continue;
+        const core = so.byName ? `${c}_libretro.so` : `"${real(file)}"`;
+        ras.push({ id: 'ra:' + c + (si ? '@' + so.src.toLowerCase() : ''), label: `RetroArch · ${CORE_NAMES[c] || c}${sources.length > 1 ? ' · ' + so.src : ''}`,
+          t: { exe: so.exe, start: so.start, pre: [], command: true, args: `${so.pre}-L ${core} "{ROM}"`, kind: 'path', how: so.src === 'EmuDeck' ? 'emudeck' : so.src === 'Flatpak' ? 'flatpak' : so.src === 'AppImage' ? 'appimage' : 'native', from: so.from } });
       }
-    }
+    });
     return RA_FIRST.has(key) ? [...ras, ...out] : [...out, ...ras];
   }
   function findTemplate(key) { return candidates(key)[0]?.t || null; }
@@ -370,7 +389,9 @@ module.exports = function createSteamManager(ctx) {
       rr = rr.endsWith('/') ? rr : rr + '/';
       if (rf.startsWith(rr)) return (root.endsWith('/') ? root : root + '/') + rf.slice(rr.length);
     }
-    return file;
+    // no shortcut style to follow: the real path, which sandboxed (Flatpak) emulators can always
+    // open, unlike a symlinked home such as /home on Bazzite and other image-based systems
+    return rf;
   }
   // What goes in place of the game in the launch options
   function gameRef(rom, file, t) {
@@ -861,6 +882,6 @@ module.exports = function createSteamManager(ctx) {
     liveEnable: () => { const env = environment(); if (!env.account) throw new Error('Steam was not found.'); fs.writeFileSync(path.join(env.account.root, live.FLAG), ''); return true; },
     onDownloaded, onDeleted, lastStatus, writeScript, startupReport, forRom, fixCollections, played,
     // exposed for tests
-    _learnOne: learnOne, _tokenize: tokenize, _buildLaunch: buildLaunch, _learnAll: learnAll,
+    _learnOne: learnOne, _tokenize: tokenize, _buildLaunch: buildLaunch, _learnAll: learnAll, _candidates: candidates,
   };
 };
