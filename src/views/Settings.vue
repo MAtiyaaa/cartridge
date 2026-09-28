@@ -7,7 +7,7 @@
       </button>
     </nav>
     <section class="pane" data-scroll ref="paneEl">
-      <Transition name="fadeup" mode="out-in">
+      <Transition name="fadeup" mode="out-in" @after-enter="afterSection">
         <div :key="sec" class="pane-in">
           <template v-if="sec === 'conn'">
             <h1>Connection</h1>
@@ -281,7 +281,7 @@
 </template>
 
 <script setup>
-import { computed, defineAsyncComponent, onMounted, ref, watch } from 'vue';
+import { computed, defineAsyncComponent, nextTick, onMounted, ref, watch } from 'vue';
 import { store, call, go, tab, saveConfig, pickFolder, choose, confirm, toast, openModal, bytes, ago, resync, scanServer, allRoms, resetLogos } from '../store.js';
 import { useView } from '../useView.js';
 import { input, focusFirst, setPointerPref } from '../nav.js';
@@ -441,7 +441,21 @@ useView({ back: () => { if (!document.activeElement?.closest('.rail')) { focusFi
   [{ b: 'A', label: 'Select' }, { b: 'B', label: 'Back' }, { b: 'LT', label: '/ RT  Tabs' }]);
 watch(sec, (v) => { store.settingsSection = v; });
 
-function enter() { focusFirst(paneEl.value); }
+// Switching sections swaps the pane with a short transition. Moving into the pane during it used to
+// focus the old pane, which then vanished: focus dropped and the next press jumped to the first
+// section. Now the move waits for the new pane, and lost focus returns to where you were.
+let wantPane = false;
+function enter() {
+  if (paneEl.value?.querySelector('.fadeup-leave-active, .fadeup-enter-active')) { wantPane = true; return; }
+  focusFirst(paneEl.value);
+}
+async function afterSection() {
+  await nextTick();
+  const a = document.activeElement;
+  const lost = !a || a === document.body || !a.isConnected;
+  if (wantPane) { wantPane = false; focusFirst(paneEl.value); return; }
+  if (lost && input.mode !== 'touch') focusFirst(el.value, `[data-key="sec-${sec.value}"]`);
+}
 // A tap switches the section right away (touch never focuses the rail); a controller also moves into it
 function pick(id) { sec.value = id; if (input.mode !== 'touch') enter(); }
 async function setMode(mode) { await saveConfig({ server: { mode } }); reconnect(); }
