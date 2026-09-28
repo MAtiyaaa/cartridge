@@ -39,7 +39,7 @@ function focusSys(p) {
   const r = romsOf(p.id).find((x) => x.shot) || romsOf(p.id).find((x) => x.path_cover_large);
   setBg(backdropOf(r));
 }
-useView({ x: () => resync() }, [{ b: 'A', label: 'Open console' }, { b: 'X', label: 'Resync' }, { b: 'Y', label: 'Search' }, { b: 'LT', label: '/ RT  Tabs' }]);
+useView({ x: () => resync() }, [{ b: 'A', label: 'Open console' }, { b: 'X', label: 'Resync' }, { b: 'Y', label: 'Search' }, { b: 'LT+RT', label: 'Tabs' }]);
 onMounted(async () => { await nextTick(); ensureFocus(el.value.querySelector('.sys-grid') || el.value); });
 watch(() => store.libVersion, async () => { await nextTick(); ensureFocus(el.value); });
 </script>

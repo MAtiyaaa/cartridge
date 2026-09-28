@@ -28,6 +28,7 @@ export const store = reactive({
   update: { state: 'idle' },
   achTab: 'ra', // Achievements tab: 'ra' | 'others'
   trophyVer: 0, // bumps whenever emulator trophies change
+  iconVer: 0, // bumps when a game icon is changed or reset
   trophySync: { state: 'idle' },
   trophyScan: null,
   pops: [], // "Trophy unlocked" pop-ups
@@ -207,6 +208,8 @@ rd.on('trophy-unlocked', (t) => {
   if (store.pops.length > 3) store.pops.shift();
   setTimeout(() => { const i = store.pops.indexOf(p); if (i >= 0) store.pops.splice(i, 1); }, 6500);
 });
+export const iconKey = (romId, title) => (romId ? 'rom-' + romId : 'tro-' + title);
+export function iconChanged(key) { globalThis.__gameIcons?.delete(key); store.iconVer++; }
 export const GRADE = { P: 'Platinum', G: 'Gold', S: 'Silver', B: 'Bronze' };
 export function when(ms) {
   if (!ms) return '';

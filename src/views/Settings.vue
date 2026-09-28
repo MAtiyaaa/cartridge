@@ -157,6 +157,8 @@
             <div class="subh"><Icon name="mdiGamepadVariantOutline" :size="20" />Controls &amp; Display</div>
             <div class="row"><span class="lbl">Touch &amp; mouse</span><div class="seg"><button v-for="p in pointers" :key="p.v" data-focus :class="{ on: (ui.pointer || 'auto') === p.v }" @click="setPointer(p.v)">{{ p.l }}</button></div></div>
             <p class="muted small" style="margin-top: -6px">Auto hides the cursor when you tap the screen and shows it when a mouse moves. Touch never shows a cursor.</p>
+            <div class="row"><span class="lbl">Button icons</span><div class="seg"><button v-for="k in buttonOpts" :key="k.v" data-focus :class="{ on: (ui.buttons || 'auto') === k.v }" @click="saveConfig({ ui: { buttons: k.v } })">{{ k.l }}</button></div></div>
+            <p class="muted small" style="margin-top: -6px">Auto draws the buttons of the controller you're holding{{ padInfo?.name ? ` (right now: ${padInfo.name})` : '' }}, even when Steam presents it as an Xbox pad. <span class="btn-demo"><Btn b="A" /><Btn b="B" /><Btn b="X" /><Btn b="Y" /><Btn b="LB" /><Btn b="RT" /><Btn b="START" /><Btn b="SELECT" /></span></p>
             <div class="row"><span class="lbl">On-screen keyboard</span><div class="seg"><button v-for="k in keyboards" :key="k.v" data-focus :class="{ on: (ui.keyboard || 'auto') === k.v }" @click="saveConfig({ ui: { keyboard: k.v } })">{{ k.l }}</button></div></div>
             <p class="muted small" style="margin-top: -6px">Auto uses the built-in keyboard in Game Mode and your real keyboard on the desktop. Steam leaves typing to the Steam keyboard (Steam + X).</p>
             <div class="row"><span class="lbl">Rendering</span><div class="seg"><button v-for="g in gfx" :key="g.v" data-focus :class="{ on: (store.config.graphics || 'auto') === g.v }" @click="setGraphics(g.v)">{{ g.l }}</button></div></div>
@@ -183,6 +185,8 @@
 
           <template v-else-if="sec === 'ra'">
             <h1>Achievements</h1>
+            <div class="row"><span class="lbl">On Home</span><div class="seg"><button v-for="m in homeAchOpts" :key="m.v" data-focus :class="{ on: homeAch === m.v }" @click="saveConfig({ ui: { homeAch: m.v } })">{{ m.l }}</button></div></div>
+            <p class="muted small" style="margin-top: -6px">A row of your newest achievements and trophies on Home, newest first.</p>
             <div class="subh"><img src="../assets/ra-logo.png" class="ra-mk" />RetroAchievements</div>
             <template v-if="!store.config.ra?.user">
               <p class="muted">Sign in to RetroAchievements to see your unlocks in the Achievements tab and on every game that supports them.</p>
@@ -203,30 +207,30 @@
                 <button class="btn" data-focus @click="raSignOut"><Icon name="mdiLogout" />Sign out</button>
               </div>
               <Toggle :model-value="ui.raOnGames !== false" label="Achievements on game pages" desc="Show progress and badges on games that have RetroAchievements (PS3, PS4, Switch and other unsupported consoles never show them)" @update:model-value="(v) => saveConfig({ ui: { raOnGames: v } })" />
-              <Toggle :model-value="ui.raOnHome !== false" label="Latest unlocks on Home" desc="Adds a row of your newest achievements to the Home screen" @update:model-value="(v) => saveConfig({ ui: { raOnHome: v } })" />
             </template>
 
-            <div class="subh" style="margin-top: 14px"><Grade g="G" :size="22" />Other sources</div>
+            <div class="subh" style="margin-top: 14px"><Grade g="P" :size="22" />Trophies &amp; Gamerscore</div>
             <p class="muted small" style="margin-top: -8px">Trophies and achievements that emulators keep on this device. Cartridge reads each emulator's own settings first, then looks through your home, emulation and SD card folders. Nothing is ever written to the emulators' files.</p>
             <div class="srcs">
               <div v-for="s in trophySrc" :key="s.id" class="src glass">
                 <div class="src-top">
                   <div><b>{{ s.name }}</b> <span class="muted small">{{ s.platform }}</span></div>
-                  <span class="chip" :class="s.state">{{ { found: 'Found', missing: 'Not found', off: 'Off' }[s.state] }}<template v-if="s.state === 'found'"> · {{ s.games }} {{ s.games === 1 ? 'game' : 'games' }}</template></span>
+                  <span class="chip" :class="[s.state, s.note]">{{ { found: 'Found', missing: 'Not found', off: 'Off' }[s.state] }}<template v-if="s.state === 'found'"> · {{ s.note === 'nokey' ? 'no trophy key' : s.note === 'empty' ? 'no trophies yet' : s.games + (s.games === 1 ? ' game' : ' games') }}</template></span>
                   <div class="spacer" />
                   <button class="btn small" data-focus @click="chooseSrc(s)"><Icon name="mdiFolderOpen" :size="18" />Choose folder</button>
                   <Toggle :model-value="s.enabled" compact @update:model-value="(v) => toggleSrc(s, v)" />
                 </div>
+                <p v-if="s.note === 'nokey'" class="muted small src-note">shadPS4 has no trophy key set, so it can't record trophies yet. Add the key in shadPS4's settings, then play a game: trophies show up here by themselves.</p>
                 <div v-for="f in s.found" :key="f.dir" class="src-path">
                   <span class="how">{{ { config: 'From settings', known: 'Known place', scan: 'Found by scan', chosen: 'Chosen by you' }[f.how] || f.how }}</span>
-                  <span class="mono">{{ f.dir }}</span>
+                  <span class="mono">{{ (f.watch && f.watch.length && s.id === 'shadps4') ? f.watch.join('  ·  ') : f.dir }}</span>
                   <button v-if="f.how === 'chosen' || f.how === 'scan'" class="btn small ghost" data-focus @click="removeDir(s, f.dir)"><Icon name="mdiClose" :size="16" /></button>
                 </div>
               </div>
             </div>
             <div class="row wrap">
               <button class="btn" data-focus :disabled="!!store.trophyScan" @click="scanTrophies"><Icon name="mdiRadar" />{{ store.trophyScan ? `Scanning… ${store.trophyScan.visited || ''}` : 'Scan again' }}</button>
-              <button class="btn" data-focus @click="openOthers"><Icon name="mdiTrophyOutline" />Open trophies</button>
+              <button class="btn" data-focus @click="openOthers"><Icon name="mdiTrophyOutline" />Open Trophies &amp; Gamerscore</button>
             </div>
             <Toggle :model-value="tcfg.sync !== false" label="Sync across devices" desc="Keeps trophies from every device together, stored as private notes on your RomM games. Uses your RomM login, no extra account. Only adds unlocks, never removes them." @update:model-value="(v) => setT({ sync: v })" />
             <p v-if="tcfg.sync !== false" class="muted small" style="margin-top: -6px">{{ syncLine }}</p>
@@ -234,12 +238,15 @@
               <TextField v-model="deviceName" label="This device's name" :placeholder="store.info.hostname || 'Steam Deck'" icon="mdiDevices" style="flex: 1" />
               <button class="btn" data-focus @click="setT({ device: deviceName.trim() })"><Icon name="mdiCheck" :size="18" />Save name</button>
             </div>
+            <Toggle v-if="tcfg.sync !== false" :model-value="tcfg.syncIcons !== false" label="Sync trophy pictures" desc="Stores small copies of trophy pictures in RomM too (about 150 to 300 KB per game), so every device shows them, not just the one that played" @update:model-value="(v) => setT({ syncIcons: v })" />
             <Toggle :model-value="tcfg.popups !== false" label="Trophy pop-ups" desc="Shows a pop-up when a trophy unlocks while Cartridge is open" @update:model-value="(v) => setT({ popups: v })" />
             <Toggle :model-value="ui.trophyOnGames !== false" label="Trophies on game pages" desc="PS3, PS4, Xbox 360 and PS Vita games show their trophies" @update:model-value="(v) => saveConfig({ ui: { trophyOnGames: v } })" />
           </template>
 
           <template v-else-if="sec === 'steam'">
             <h1>Steam</h1>
+            <SteamSettings />
+            <div class="subh" style="margin-top: 10px"><Icon name="mdiApplicationOutline" :size="20" />Cartridge itself</div>
             <div class="about glass">
               <img src="../../steam-art/grid.png" class="steam-grid" />
               <div style="display: flex; flex-direction: column; gap: 10px">
@@ -262,7 +269,7 @@
             </div>
             <div class="card-s glass">
               <div class="kv"><span>Game Mode</span><span>{{ store.info.gamescope ? 'Yes (gamescope)' : 'No (desktop)' }}</span></div>
-              <div class="kv"><span>Controller</span><span>{{ input.padName || 'Press any button' }}</span></div>
+              <div class="kv"><span>Controller</span><span>{{ padInfo?.name || input.padName || 'Press any button' }}</span></div>
               <div class="kv"><span>Data</span><span class="mono">{{ store.info.userData }}</span></div>
             </div>
             <div class="row"><button class="btn danger" data-focus @click="call('app:quit')"><Icon name="mdiPower" />Quit Cartridge</button></div>
@@ -287,6 +294,9 @@ import Toggle from '../components/Toggle.vue';
 import TextField from '../components/TextField.vue';
 import PIcon from '../components/PIcon.vue';
 import Grade from '../components/Grade.vue';
+import Btn from '../components/Btn.vue';
+import SteamSettings from '../components/SteamSettings.vue';
+import { padInfo } from '../pad.js';
 
 const el = ref(null);
 const paneEl = ref(null);
@@ -395,6 +405,9 @@ async function resetLook() {
 }
 const gfx = [{ v: 'auto', l: 'Auto (GPU)' }, { v: 'software', l: 'Compatible' }];
 const pointers = [{ v: 'auto', l: 'Auto' }, { v: 'touch', l: 'Touch' }, { v: 'mouse', l: 'Mouse' }];
+const homeAchOpts = [{ v: 'all', l: 'All' }, { v: 'ra', l: 'RetroAchievements' }, { v: 'trophies', l: 'Trophies' }, { v: 'off', l: 'Off' }];
+const homeAch = computed(() => ui.value.homeAch || (ui.value.raOnHome === false ? 'trophies' : 'all'));
+const buttonOpts = [{ v: 'auto', l: 'Auto' }, { v: 'xbox', l: 'Xbox' }, { v: 'playstation', l: 'PlayStation' }, { v: 'nintendo', l: 'Nintendo' }, { v: 'steam', l: 'Steam' }];
 const keyboards = [{ v: 'auto', l: 'Auto' }, { v: 'builtin', l: 'Built-in' }, { v: 'steam', l: 'Steam' }];
 // Emulator trophies (Settings → Achievements → Other sources)
 const trophySrc = ref([]);
@@ -425,7 +438,7 @@ const every = [{ v: 0, l: 'Off' }, { v: 30, l: '30 min' }, { v: 60, l: '1 h' }, 
 const folderList = computed(() => (store.libVersion, showAll.value ? supported.value : store.lib?.platforms || []));
 
 useView({ back: () => { if (!document.activeElement?.closest('.rail')) { focusFirst(el.value, `[data-key="sec-${sec.value}"]`); return; } return false; } },
-  [{ b: 'A', label: 'Select' }, { b: 'B', label: 'Back' }, { b: 'LT', label: '/ RT  Tabs' }]);
+  [{ b: 'A', label: 'Select' }, { b: 'B', label: 'Back' }, { b: 'LT+RT', label: 'Tabs' }]);
 watch(sec, (v) => { store.settingsSection = v; });
 
 function enter() { focusFirst(paneEl.value); }
@@ -548,6 +561,7 @@ onMounted(async () => { space.value = await call('fs:space', store.config.romsRo
 .swatch { position: relative; }
 .swatch i { position: absolute; top: 6px; right: 6px; width: 12px; height: 12px; border-radius: 50%; box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.7); }
 .swatch.custom { background: conic-gradient(from 90deg, #f55, #fd5, #5f8, #5df, #85f, #f5c, #f55); flex-direction: column; justify-content: space-between; align-items: flex-start; }
+.btn-demo { display: inline-flex; gap: 4px; vertical-align: middle; margin-left: 6px; }
 .finetune { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
 .ft { display: flex; align-items: center; gap: 10px; padding: 8px 14px 8px 8px; border-radius: 10px; background: rgba(255, 255, 255, 0.045); border: 1px solid var(--line); }
 .ft-sw { width: 34px; height: 34px; border-radius: 8px; display: grid; place-items: center; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.25); color: #fff; }
@@ -592,6 +606,8 @@ onMounted(async () => { space.value = await call('fs:space', store.config.romsRo
 .src-path .how { color: var(--muted); width: 110px; flex: none; }
 .src-path .mono { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
 .chip.found { background: rgba(80, 200, 120, 0.18); color: #9be8b4; }
+.chip.found.nokey { background: rgba(245, 197, 66, 0.18); color: #ffd978; }
+.src-note { margin: 0; }
 .chip.missing { background: rgba(255, 255, 255, 0.08); color: var(--muted); }
 .chip.off { background: rgba(255, 90, 90, 0.14); color: #ffaaaa; }
 .logo-prog { flex: 1; display: flex; flex-direction: column; gap: 6px; max-width: 360px; }

@@ -90,6 +90,37 @@ function log(...a) {
   try { fs.mkdirSync(USER_DATA, { recursive: true }); fs.appendFileSync(LOG_FILE, `[${new Date().toISOString()}] ${a.join(' ')}\n`); } catch {}
 }
 try { if (fs.statSync(LOG_FILE).size > 512 * 1024) fs.renameSync(LOG_FILE, LOG_FILE + '.old'); } catch {}
+// ---------------------------------------------------------------- one Cartridge at a time
+// A second launch (Steam, the desktop icon, a game shortcut with --game) hands over to the
+// running one. If that one stopped answering (a hung start used to need a Steam restart), it is
+// ended and this launch carries on.
+const argGame = (argv = process.argv) => { const i = argv.indexOf('--game'); const v = i >= 0 ? Number(argv[i + 1]) : NaN; return Number.isFinite(v) ? v : null; };
+const BEAT_FILE = path.join(USER_DATA, 'running.json');
+let startGame = argGame();
+if (!process.env.CARTRIDGE_SMOKE && !process.env.CARTRIDGE_MULTI) {
+  if (!app.requestSingleInstanceLock({ game: startGame })) {
+    let beat = null;
+    try { beat = JSON.parse(fs.readFileSync(BEAT_FILE, 'utf8')); } catch {}
+    const alive = beat && Date.now() - beat.t < 20000;
+    if (alive) { log('already running (pid ' + beat.pid + '), handing over'); app.exit(0); }
+    else {
+      if (beat?.pid) { try { process.kill(beat.pid, 'SIGKILL'); log('ended a Cartridge that stopped answering, pid', beat.pid); } catch {} }
+      try { fs.rmSync(path.join(USER_DATA, 'SingletonLock'), { force: true }); } catch {}
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 700);
+      app.relaunch({ execPath: process.env.APPIMAGE || process.execPath, args: process.argv.slice(1) });
+      app.exit(0);
+    }
+  } else {
+    const beatNow = () => { try { fs.writeFileSync(BEAT_FILE, JSON.stringify({ pid: process.pid, t: Date.now() })); } catch {} };
+    beatNow(); setInterval(beatNow, 5000).unref?.();
+    app.on('second-instance', (_e, argv, _cwd, data) => {
+      if (win && !win.isDestroyed()) { if (win.isMinimized()) win.restore(); win.show(); win.focus(); }
+      const g = data?.game ?? argGame(argv);
+      if (g) broadcast('open-game', g);
+    });
+    app.on('will-quit', () => { try { fs.rmSync(BEAT_FILE, { force: true }); } catch {} });
+  }
+}
 function isGamescope() {
   const e = process.env;
   const de = ((e.XDG_CURRENT_DESKTOP || '') + ' ' + (e.XDG_SESSION_DESKTOP || '') + ' ' + (e.DESKTOP_SESSION || '')).toLowerCase();
@@ -630,11 +661,32 @@ async function sgdb(pathname) {
   return j && j.success ? j.data : null;
 }
 function cleanName(n) { return String(n || '').replace(/\s*[\(\[][^\)\]]*[\)\]]/g, '').replace(/\s+/g, ' ').trim(); }
-async function sgdbGames(name) {
+// SteamGridDB's search returns loose matches first sometimes ("skate: recompiled" for Skate 3), so
+// rank the results: exact name first, extra words (remaster, demo, mod…) down, verified and a
+// matching release year up.
+const sgNorm = (t) => String(t || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[™®©]/g, '')
+  .replace(/\s*[\(\[][^\)\]]*[\)\]]/g, '').replace(/^the\s+|,\s*the\b/g, '').replace(/&/g, 'and').replace(/[^a-z0-9]+/g, ' ').trim();
+const SG_EXTRA = /\b(recompiled|remaster(ed)?|remake|demo|beta|prototype|mod|hack|fan|port|reloaded|redux|online|collection|definitive|hd|trilogy|bundle|dlc|soundtrack|pack|edition)\b/;
+function sgScore(q, g, year, i) {
+  const a = sgNorm(q), b = sgNorm(g.name);
+  let s = 0;
+  if (a === b) s = 100;
+  else if (b.startsWith(a + ' ') || a.startsWith(b + ' ')) s = 60 - 6 * Math.abs(b.split(' ').length - a.split(' ').length);
+  else { const A = new Set(a.split(' ')), B = new Set(b.split(' ')); const inter = [...A].filter((x) => B.has(x)).length; s = (50 * inter) / new Set([...A, ...B]).size; }
+  const extra = b.replace(a, '');
+  if (SG_EXTRA.test(extra) && !SG_EXTRA.test(a)) s -= 40;
+  if (g.verified) s += 8;
+  if (year && g.release_date) s -= Math.min(15, Math.abs(new Date(g.release_date * 1000).getFullYear() - year) * 3);
+  return s - i * 0.5; // SteamGridDB's own order breaks ties
+}
+async function sgdbGames(name, year) {
   const tries = [...new Set([cleanName(name), cleanName(name).split(/:| - /)[0].trim()])].filter((x) => x.length > 1);
   for (const term of tries) {
     const games = await sgdb('/search/autocomplete/' + encodeURIComponent(term));
-    if (games && games.length) return games.slice(0, 6).map((g) => ({ id: g.id, name: g.name, year: g.release_date ? new Date(g.release_date * 1000).getFullYear() : null }));
+    if (games && games.length) {
+      const ranked = games.map((g, i) => ({ g, s: sgScore(name, g, year, i) })).sort((x, y) => y.s - x.s).map((x) => x.g);
+      return ranked.slice(0, 6).map((g) => ({ id: g.id, name: g.name, year: g.release_date ? new Date(g.release_date * 1000).getFullYear() : null }));
+    }
   }
   return [];
 }
@@ -907,24 +959,46 @@ async function fetchAllLogos() {
 
 // Artwork picker: SteamGridDB images of one kind for a game (by name, or a chosen SGDB game id)
 // Square game icons from SteamGridDB (used for trophy games). Cached; null when there is none.
-const ICON_FILE = path.join(USER_DATA, 'gameicons.json');
+const ICON_FILE = path.join(USER_DATA, 'gameicons2.json'); // v2: square icons only
 const iconCache = loadJson(ICON_FILE, {});
 const iconInflight = new Map();
-async function gameIcon({ key, name }) {
+// A full rounded-square icon: square, big enough, and no see-through corners (older round
+// icons have transparent corners, which look wrong in a square tile)
+function iconOpaque(buf) {
+  const { nativeImage } = require('electron');
+  const im = nativeImage.createFromBuffer(buf);
+  const { width: w, height: h } = im.getSize();
+  if (!w || !h || w < 96 || Math.abs(w - h) > Math.max(w, h) * 0.08) return false;
+  const bmp = im.toBitmap(); // BGRA
+  const a = (x, y) => bmp[(y * w + x) * 4 + 3];
+  const m = Math.max(1, Math.round(w * 0.04)), n = Math.round(h * 0.04);
+  return [[m, n], [w - 1 - m, n], [m, h - 1 - n], [w - 1 - m, h - 1 - n]].every(([x, y]) => a(x, y) > 200);
+}
+async function pickIcon(gid) {
+  const icons = (await sgdb(`/icons/game/${gid}?types=static&nsfw=false&humor=false`)) || [];
+  const cands = icons.filter((i) => i.mime === 'image/png' || /\.png($|\?)/i.test(i.url || ''))
+    .sort((a, b) => (Math.abs(a.width - a.height) - Math.abs(b.width - b.height)) || (b.width - a.width) || ((b.score || 0) - (a.score || 0)))
+    .slice(0, 8);
+  for (const c of cands) {
+    try { if (iconOpaque(await fetchImage(c.url))) return c.url; } catch {}
+  }
+  return null;
+}
+async function gameIcon({ key, name, year }) {
   if (!config.sgdbKey || !name) return null;
   const k = String(key || name);
   const c = iconCache[k];
-  if (c && (c.url || Date.now() - c.t < 7 * 864e5)) return c.url || null;
+  if (c && (c.custom || c.url || Date.now() - c.t < 7 * 864e5)) return c.url || null;
   if (iconInflight.has(k)) return iconInflight.get(k);
   const job = (async () => {
     let url = null;
     try {
-      const games = await sgdbGames(String(name).replace(/[™®©]/g, '').replace(/\s+trophies$/i, ''));
+      const games = await sgdbGames(String(name).replace(/[™®©]/g, '').replace(/\s+trophies$/i, ''), year);
       if (games[0]) {
-        const icons = (await sgdb(`/icons/game/${games[0].id}?types=static&nsfw=false&humor=false`)) || [];
-        const good = icons.filter((i) => i.mime === 'image/png' || /\.png($|\?)/i.test(i.url || ''))
-          .sort((a, b) => (Math.abs(a.width - a.height) - Math.abs(b.width - b.height)) || (b.width - a.width) || ((b.score || 0) - (a.score || 0)));
-        url = good[0]?.url || null;
+        for (const g of games.slice(0, 2)) {
+          url = await pickIcon(g.id);
+          if (url) break;
+        }
       }
     } catch (e) { return null; } // offline or rejected key: try again next time
     iconCache[k] = { url, t: Date.now() };
@@ -941,6 +1015,7 @@ async function sgdbArt({ name, kind, gameId }) {
   if (!gid) return { games, gameId: null, images: [] };
   const ep = kind === 'grid' ? `/grids/game/${gid}?dimensions=600x900,342x482,660x930&types=static&nsfw=false&humor=false`
     : kind === 'hero' ? `/heroes/game/${gid}?types=static&nsfw=false&humor=false`
+    : kind === 'icon' ? `/icons/game/${gid}?types=static&nsfw=false&humor=false&mimes=image/png`
     : `/logos/game/${gid}?types=static&nsfw=false&humor=false`;
   const imgs = (await sgdb(ep)) || [];
   const sorted = kind === 'logo' ? [...imgs].sort((a, b) => logoRank(a) - logoRank(b) || (b.score || 0) - (a.score || 0)) : [...imgs].sort((a, b) => (b.score || 0) - (a.score || 0));
@@ -1104,6 +1179,7 @@ async function runJob(it) {
     saveManifest();
     installedMap[rom.id] = finalPath;
     broadcast('installed-changed', { romId: rom.id, path: finalPath });
+    try { if (steamMgr.onDownloaded(rom.id)) broadcast('steam-auto', { romId: rom.id, name: rom.name, action: 'add' }); } catch (e) { log('steam auto add', e.message); }
   } catch (e) {
     if (it.abort.signal.aborted) { it.status = it.status === 'paused' ? 'paused' : 'cancelled'; }
     else { it.status = 'error'; it.error = e.message; }
@@ -1148,6 +1224,42 @@ function setupUpdater() {
   const check = () => autoUpdater.checkForUpdates().catch(() => {});
   setTimeout(check, 8000);
   setInterval(check, 6 * 3600e3);
+}
+
+// ---------------------------------------------------------------- controller detection
+// Steam Input shows apps a virtual Xbox 360 pad (Valve 28de:11ff). The real controllers are still
+// listed by Linux, so read those to draw the right button icons.
+const PADS = [
+  [/^054c:/, 'playstation', 'PlayStation controller'],
+  [/^057e:/, 'nintendo', 'Nintendo controller'],
+  [/^28de:1205$/, 'steam', 'Steam Deck'],
+  [/^28de:(1102|1142|1101)$/, 'steam', 'Steam Controller'],
+  [/^28de:/, 'steam', 'Steam controller'],
+  [/^045e:/, 'xbox', 'Xbox controller'],
+  [/^0b05:/, 'xbox', 'ROG Ally'],
+  [/^17ef:/, 'xbox', 'Legion Go'],
+  [/^2dc8:/, 'xbox', '8BitDo controller'],
+];
+function detectPad() {
+  let txt = '';
+  try { txt = fs.readFileSync('/proc/bus/input/devices', 'utf8'); } catch { return null; }
+  const found = [];
+  for (const block of txt.split(/\n\s*\n/)) {
+    const I = block.match(/^I: Bus=(\w+) Vendor=(\w+) Product=(\w+)/m);
+    const N = block.match(/^N: Name="([^"]*)"/m);
+    const H = block.match(/^H: Handlers=(.*)$/m);
+    if (!I || !H || !/\bjs\d+/.test(H[1])) continue; // controllers only
+    const id = `${I[2]}:${I[3]}`.toLowerCase();
+    if (id === '28de:11ff' || /virtual|x-box 360 pad \d/i.test(N?.[1] || '') && id.startsWith('28de')) continue; // Steam Input's virtual pad
+    const ev = Number((H[1].match(/event(\d+)/) || [])[1] || 0);
+    const hit = PADS.find(([re]) => re.test(id));
+    const builtin = /^(28de:1205|0b05:|17ef:)/.test(id) || I[1] === '0019';
+    found.push({ id, name: N?.[1] || '', kind: hit ? hit[1] : 'xbox', label: hit ? hit[2] : N?.[1] || 'Controller', bus: I[1], ev, builtin });
+  }
+  if (!found.length) return { kind: null, devices: [] };
+  // a controller you plugged in or paired wins over the handheld's own; newest first
+  found.sort((a, b) => (a.builtin - b.builtin) || (b.ev - a.ev));
+  return { kind: found[0].kind, name: found[0].name || found[0].label, devices: found };
 }
 
 // ---------------------------------------------------------------- window + ipc
@@ -1222,6 +1334,55 @@ const trophySvc = require('./trophyService')({
   USER_DATA, api, broadcast: (c, d) => broadcast(c, d), log, loadJson,
   getConfig: () => config, saveConfig: () => saveConfig(), getLibrary: () => library,
 });
+// ---------------------------------------------------------------- Steam ROM manager
+function coverCrop(buf, W, H) {
+  const { nativeImage } = require('electron');
+  const im = nativeImage.createFromBuffer(buf);
+  if (im.isEmpty()) return null;
+  const { width: w, height: h } = im.getSize();
+  const s = Math.max(W / w, H / h);
+  const rw = Math.round(w * s), rh = Math.round(h * s);
+  const r = im.resize({ width: rw, height: rh, quality: 'best' });
+  return r.crop({ x: Math.max(0, Math.floor((rw - W) / 2)), y: Math.max(0, Math.floor((rh - H) / 3)), width: W, height: H }).toPNG();
+}
+function asPng(buf) {
+  if (!buf) return null;
+  const { nativeImage } = require('electron');
+  const im = nativeImage.createFromBuffer(buf);
+  return im.isEmpty() ? null : im.toPNG();
+}
+async function sgdbImage(name, kind) {
+  if (!config.sgdbKey || !name) return null;
+  const g = (await sgdbGames(name))[0];
+  if (!g) return null;
+  const ep = kind === 'grid' ? `/grids/game/${g.id}?dimensions=600x900&types=static&nsfw=false&humor=false`
+    : kind === 'wide' ? `/grids/game/${g.id}?dimensions=920x430,460x215&types=static&nsfw=false&humor=false`
+    : `/heroes/game/${g.id}?types=static&nsfw=false&humor=false`;
+  const list = ((await sgdb(ep)) || []).sort((a, b) => (b.score || 0) - (a.score || 0));
+  // only take images of the right shape (a portrait cover is no use as a wide banner)
+  const fits = (w, h) => (kind === 'grid' ? h > w : kind === 'wide' ? w > h * 1.6 : w > h * 1.4);
+  for (const i of list.filter((x) => !x.width || fits(x.width, x.height)).slice(0, 3)) {
+    try {
+      const { nativeImage } = require('electron');
+      const im = nativeImage.createFromBuffer(await fetchImage(i.url));
+      const { width: w, height: h } = im.getSize();
+      if (!im.isEmpty() && fits(w, h)) return im.toPNG();
+    } catch {}
+  }
+  return null;
+}
+const romIndexMain = () => { const m = new Map(); for (const list of Object.values(library?.roms || {})) for (const r of list) m.set(r.id, r); return m; };
+const steamMgr = require('./steamManager')({
+  USER_DATA, log, PLATFORM_MAP, getConfig: () => config, saveConfig: () => saveConfig(), broadcast: (c, d) => broadcast(c, d), getLibrary: () => library,
+  installed: () => installedMap, MARKED, markedPath: (r) => marks[r.id]?.path || null,
+  romById: (id) => romIndexMain().get(id) || null,
+  artFor: (id) => artOverrides[id] || null,
+  fetchImage: async (src) => asPng(await fetchImage(src)),
+  sgdbImage, cropTo: coverCrop,
+  logoFile: async (rom) => { if (!rom) return null; await logoFor({ id: rom.id, name: rom.name, romm: rom.logo }).catch(() => null); const c = logoCache[rom.id]; return c?.file ? path.join(LOGO_DIR, c.file) : null; },
+  emulationRoots: () => { const emu = readEmuDeckSettings(); return require('./trophies').emulationRoots([emu.emulationPath, config.romsRoot && path.dirname(config.romsRoot)].filter(Boolean)); },
+  isGamescope,
+});
 const handlers = {
   ...trophySvc.handlers,
   'config:get': () => config,
@@ -1251,6 +1412,9 @@ const handlers = {
   'ra:supported': ({ slug, fs_slug }) => !!(RA_CONSOLES[slug] ?? RA_CONSOLES[fs_slug]),
   'syslogo:get': (p) => sysLogo(p),
   'icon:get': (p) => gameIcon(p),
+  'pad:detect': () => detectPad(),
+  'icon:set': ({ key, url }) => { iconCache[String(key)] = { url, t: Date.now(), custom: true }; try { fs.writeFileSync(ICON_FILE, JSON.stringify(iconCache)); } catch {} return url; },
+  'icon:reset': ({ key }) => { delete iconCache[String(key)]; try { fs.writeFileSync(ICON_FILE, JSON.stringify(iconCache)); } catch {} return true; },
   'logo:fetchAll': () => fetchAllLogos(),
   'logo:stopAll': () => { if (fetchAll) fetchAll.stop = true; return true; },
   'art:all': () => artOverrides,
@@ -1331,7 +1495,7 @@ const handlers = {
     let target = p || manifest[romId]?.path;
     // a hand-made mark has no files of its own: only remove the mark, never touch folders
     if (target === MARKED || (marks[romId] && !manifest[romId] && (!target || target === MARKED))) {
-      delete marks[romId]; saveMarks(); computeInstalled(); return true;
+      delete marks[romId]; saveMarks(); computeInstalled(); try { steamMgr.onDeleted(romId); } catch {} return true;
     }
     if (!target) throw new Error('Nothing to delete');
     // never delete a whole console folder or the ROMs root
@@ -1342,6 +1506,7 @@ const handlers = {
     saveManifest();
     delete installedMap[romId];
     broadcast('installed-changed', { romId, path: null });
+    try { if (steamMgr.onDeleted(romId)) broadcast('steam-auto', { romId, action: 'remove' }); } catch (e) { log('steam auto remove', e.message); }
     return true;
   },
   'dl:add': (job) => enqueue(job),
@@ -1399,6 +1564,28 @@ const handlers = {
     if (!res.length) throw new Error('Add Cartridge to Steam first (Add a Non-Steam Game), then try again.');
     return res;
   },
+  'steam:overview': () => steamMgr.overview(),
+  'steam:preview': () => steamMgr.preview(),
+  'steam:apply': (o) => steamMgr.apply(o || {}),
+  'steam:undo': () => steamMgr.undo(),
+  'steam:restart': () => steamMgr.restartSteam(),
+  'steam:queueAdd': (items) => steamMgr.queueAdd(items),
+  'steam:queueRemove': (ids) => steamMgr.queueRemove(ids),
+  'steam:queueClear': () => steamMgr.queueClear(),
+  'steam:removeAll': () => steamMgr.removeAllOurs(),
+  'steam:collections': () => steamMgr.collections(),
+  'steam:test': ({ key }) => steamMgr.test(key),
+  'steam:testTemplate': ({ key, template }) => steamMgr.test(key, template),
+  'steam:setTemplate': ({ key, template }) => steamMgr.setTemplate(key, template),
+  'steam:setMode': ({ key, mode }) => steamMgr.setMode(key, mode),
+  'steam:verify': () => steamMgr.verifyCollections(),
+  'steam:fixCollections': () => steamMgr.fixCollections(),
+  'steam:report': () => steamMgr.startupReport(),
+  'steam:last': () => steamMgr.lastStatus(),
+  'steam:forRom': ({ romId }) => steamMgr.forRom(Number(romId)),
+  'steam:setConfig': (patch) => { config.steam = { ...(config.steam || {}), ...patch }; saveConfig(); return config.steam; },
+  'steam:setPath': ({ romId, path: p }) => { if (!isDir(p) && !fs.existsSync(p)) throw new Error('That folder does not exist'); marks[romId] = { ...(marks[romId] || { at: Date.now() }), path: p }; saveMarks(); return true; },
+  'app:startGame': () => { const g = startGame; startGame = null; return g; },
   'update:get': () => ({ ...updateState, current: app.getVersion(), supported: !!autoUpdater }),
   'update:check': async () => { if (!autoUpdater) throw new Error('Updates work in the AppImage build only'); await autoUpdater.checkForUpdates(); return updateState; },
   'update:install': () => { if (updateState.state === 'ready') autoUpdater.quitAndInstall(true, true); },

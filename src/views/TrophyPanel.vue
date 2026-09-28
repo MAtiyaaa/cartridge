@@ -44,7 +44,7 @@
             <div class="tp-u-title"><Grade :g="t.grade" :size="16" />{{ t.name }}</div>
             <div class="tp-u-desc">{{ t.desc }}</div>
             <div class="tp-u-meta"><span v-if="t.points" class="pts">{{ t.points }} G</span><span>{{ when(t.time) }}</span><span v-if="t.device && t.device !== data.device" class="dev"><Icon name="mdiDevices" :size="13" />{{ t.device }}</span></div>
-            <div class="tp-u-game">{{ t.game }} · {{ t.short }}</div>
+            <div class="tp-u-game">{{ t.game }} · <ConsoleMark :slug="SLUG[t.src]" :label="t.short" /></div>
           </div>
         </button>
       </div>
@@ -54,8 +54,8 @@
         <button v-for="g in data.games" :key="g.key" class="tp-game glass" data-focus :data-key="'tg-' + g.key" @click="open(g.key)" @focus="focusGame(g)">
           <GameIcon :title="g.title" :rom-id="g.romId" :fallback="g.icon || (g.cover ? img(g.cover) : '')" :size="76" :grade="g.kind === 'trophy' ? 'G' : null" />
           <div class="tp-g-body">
-            <div class="tp-g-title">{{ g.title }}</div>
-            <div class="tp-g-sub"><span class="plat">{{ g.short }}</span><template v-if="g.last">{{ when(g.last) }}</template><template v-if="g.romId"> · <span class="inlib">In your library</span></template><template v-if="g.remoteOnly"> · <span class="dev">from {{ g.devices[0] || 'another device' }}</span></template></div>
+            <GameLogo class="tp-g-logo" :logo="store.config.ui.logos !== false ? logoFor(g) : null" :name="g.title" cls="tp-g-title" :area="4200" :max-w="200" :max-h="38" />
+            <div class="tp-g-sub"><span class="plat"><ConsoleMark :slug="SLUG[g.src]" :label="g.short" /></span><template v-if="g.last">{{ when(g.last) }}</template><template v-if="g.romId"> · <span class="inlib">In your library</span></template><template v-if="g.remoteOnly"> · <span class="dev">from {{ g.devices[0] || 'another device' }}</span></template></div>
             <div class="bar tp-bar"><i :style="{ width: pct(g) + '%' }" /></div>
             <div class="tp-g-prog">
               <template v-if="g.kind === 'gamerscore'"><b>{{ g.score }}</b> / {{ g.possible }} G · {{ g.earned }} of {{ g.total }}</template>
@@ -71,16 +71,25 @@
 
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue';
-import { store, call, img, go, toast, setBg, when, GRADE } from '../store.js';
+import { store, call, img, go, toast, setBg, when, GRADE, logoOf, romById } from '../store.js';
 import { useView } from '../useView.js';
 import { focusFirst } from '../nav.js';
 import Icon from '../components/Icon.vue';
 import Grade from '../components/Grade.vue';
 import GameIcon from '../components/GameIcon.vue';
+import GameLogo from '../components/GameLogo.vue';
+import ConsoleMark from '../components/ConsoleMark.vue';
 
 // Trophies and achievements that emulators keep on this device (plus other devices, via RomM)
 const el = ref(null);
 const data = ref(null);
+const SLUG = { rpcs3: 'ps3', shadps4: 'ps4', xenia: 'xbox360', vita3k: 'psvita' };
+// the game's logo: the library game's own, or one looked up by name for games only in trophies
+const hash = (t) => { let h = 5381; for (const c of String(t)) h = ((h * 33) ^ c.charCodeAt(0)) >>> 0; return h.toString(36); };
+function logoFor(g) {
+  const rom = g.romId ? romById(g.romId) : null;
+  return rom ? logoOf(rom) : logoOf({ id: 'tro' + hash(g.title), name: g.title.replace(/[™®©]/g, '') });
+}
 const romOf = (key) => data.value?.games.find((g) => g.key === key)?.romId || null;
 const fmt = (n) => (n || 0).toLocaleString();
 const pct = (g) => (g.total ? Math.round((g.earned / g.total) * 100) : 0);
@@ -150,7 +159,8 @@ onMounted(async () => { await load(); focusFirst(el.value); });
 .tp-g-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 5px; }
 .tp-g-title { font-family: var(--display); font-weight: 600; font-size: 15.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tp-g-sub { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.plat { font-weight: 700; color: #cfd6e4; margin-right: 8px; }
+.plat { font-weight: 700; color: #cfd6e4; margin-right: 8px; font-size: 13px; }
+.tp-g-logo.game-logo { margin: 0 0 2px; }
 .inlib { color: var(--green-l); }
 .tp-bar { height: 6px; }
 .tp-bar i { background: linear-gradient(90deg, #7fa8ff, #cfe0ff); }

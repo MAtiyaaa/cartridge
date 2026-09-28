@@ -165,7 +165,7 @@ useView(
   },
   () => [{ b: 'A', label: 'Details' }, { b: 'X', label: 'Download' }, { b: 'Y', label: 'Filter' },
     ...(mode.value === 'all' ? [] : [{ b: 'LB', label: mode.value === 'platform' ? '/ RB  Console' : '/ RB  Collection' }]),
-    { b: 'LT', label: '/ RT  Tabs' }, ...(mode.value === 'all' ? [] : [{ b: 'B', label: 'Back' }])],
+    { b: 'LT+RT', label: 'Tabs' }, ...(mode.value === 'all' ? [] : [{ b: 'B', label: 'Back' }])],
 );
 
 function open(r) { go('game', { romId: r.id }); }
