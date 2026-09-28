@@ -143,6 +143,33 @@ export function dispatch(action) {
   }
 }
 
+// ---------------- tapping a button hint presses that button
+// Every hint ("Y Filter", "≡ Menu", "B Back") is drawn by Btn with data-b. A tap or click on one runs
+// the same action as the controller button, without switching to pad mode (no focus ring).
+const HINT_ACTIONS = { A: 'accept', B: 'back', X: 'x', Y: 'y', LB: 'lb', RB: 'rb', LT: 'lt', RT: 'rt', START: 'start', SELECT: 'select' };
+export function tap(action) {
+  lastInput = performance.now();
+  const layer = topLayer();
+  if (action === 'accept') sfx.accept();
+  else if (action === 'back') sfx.back();
+  else if (['lb', 'rb'].includes(action)) sfx.tab();
+  const h = layer?.handlers?.[action];
+  if (h && h(document.activeElement) !== false) return;
+  if (action === 'accept') { const el = document.activeElement; if (layer && el?.hasAttribute?.('data-focus') && inScope(el, layer.el)) el.click(); }
+}
+document.addEventListener('click', (e) => {
+  const t = e.target instanceof Element ? e.target : null;
+  if (!t) return;
+  const glyph = t.closest('.pb[data-b]');
+  const hint = glyph ? null : t.closest('.hint');
+  const pb = glyph || hint?.querySelector('.pb[data-b]');
+  if (!pb || pb.closest('button, a, input, label, .btn-demo')) return; // real buttons already act on click; the Settings demo is only a preview
+  const action = HINT_ACTIONS[pb.dataset.b];
+  if (!action) return;
+  e.preventDefault(); e.stopPropagation();
+  tap(action);
+}, { capture: true });
+
 // ---------------- keyboard
 const KEYMAP = {
   ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right',

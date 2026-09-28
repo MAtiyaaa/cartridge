@@ -1,7 +1,7 @@
 {
   "name": "cartridge",
   "productName": "Cartridge",
-  "version": "0.7.1",
+  "version": "0.7.2",
   "description": "Controller-first RomM client for SteamOS, Bazzite and Android",
   "main": "electron/main.js",
   "author": "abdu2304",
@@ -51,7 +51,7 @@
       }
     ],
     "releaseInfo": {
-      "releaseName": "Cartridge 0.7.1 · The Steam Update",
+      "releaseName": "Cartridge 0.7.2 · Touch Enhancement",
       "releaseNotesFile": "RELEASE_NOTES.md"
     }
   },

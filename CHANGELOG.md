@@ -2,6 +2,11 @@
 
 Every Cartridge release, newest first. Each GitHub release only lists its own changes.
 
+## Cartridge 0.7.2 · Touch Enhancement
+
+### New
+- **Tap a button hint to press it.** Every controller hint now works with touch and the mouse too: tap **≡ Menu** for the Quick Menu, **Downloads** for your queue, **Y Filter**, **X Download**, **B Back**, or the **LT** / **RT** next to the tabs to switch tabs. The same goes for the hints in the on-screen keyboard, the folder picker and the screenshot viewer. Tapping never brings up the controller highlight, and swiping across the hint bar doesn't trigger anything.
+
 ## Cartridge 0.7.1 · The Steam Update
 
 ### New: abdu2304's 0.6.0 and 0.6.1
