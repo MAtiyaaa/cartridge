@@ -16,10 +16,16 @@
             <span v-if="dev">{{ dev }}</span>
             <span v-if="genres">{{ genres }}</span>
             <span v-if="base.rating" class="row" style="gap: 4px; color: var(--gold)"><Icon name="mdiStar" :size="16" />{{ rating(base.rating) }}</span>
-            <span v-if="cached?.hours" class="row" style="gap: 4px"><Icon name="mdiTimerOutline" :size="16" />About {{ cached.hours }} h to beat</span>
             <span v-if="fav" class="chip primary"><Icon name="mdiHeart" :size="14" />Favourite</span>
             <span v-if="statusText" class="chip"><Icon name="mdiProgressCheck" :size="14" />{{ statusText }}</span>
             <span v-if="cached?.user?.hidden" class="chip"><Icon name="mdiEyeOffOutline" :size="14" />Hidden</span>
+          </div>
+
+          <div v-if="beat" class="beat">
+            <Icon name="mdiTimerOutline" :size="17" /><span class="beat-l">How long to beat</span>
+            <span v-if="beat.main"><b>{{ beat.main }} h</b>Main story</span>
+            <span v-if="beat.extra"><b>{{ beat.extra }} h</b>Main + extras</span>
+            <span v-if="beat.full"><b>{{ beat.full }} h</b>Completionist</span>
           </div>
 
           <div class="g-actions">
@@ -266,6 +272,20 @@ const banner = computed(() => {
   if (shot) return { src: img(shot) };
   return { src: cover(base.value, true), blur: true };
 });
+// HowLongToBeat: RomM's own times when it has them, else Cartridge asks HLTB (cached)
+const hltbLive = ref(null);
+const halfHours = (sec) => (sec > 0 ? Math.round((sec / 3600) * 2) / 2 : null);
+const beat = computed(() => {
+  const h = detail.value?.hltb_metadata;
+  const fromRomm = h && (h.main_story || h.main_plus_extra || h.completionist) ? { main: halfHours(h.main_story), extra: halfHours(h.main_plus_extra), full: halfHours(h.completionist) } : null;
+  return fromRomm || hltbLive.value;
+});
+async function loadHltb() {
+  if (beat.value || !base.value) return;
+  const y = base.value.year ? new Date(base.value.year).getUTCFullYear() : null;
+  hltbLive.value = await call('hltb:lookup', { name: base.value.name, year: y }).catch(() => null);
+}
+
 // Your RomM status for this game: favourite, play status, hidden
 const fav = computed(() => isFavourite(Number(props.romId)));
 const STATUSES = [
@@ -385,6 +405,7 @@ onMounted(async () => {
   } catch (e) { if (!cached.value) toast(e.message, 'error'); }
   loadRa();
   loadTrophies();
+  loadHltb();
   const p = platformById(base.value?.platform_id);
   if (p) call('fs:space', p.target?.path).then((s) => (space.value = s));
   await nextTick();
@@ -417,6 +438,10 @@ onMounted(async () => {
 .shot { flex: none; width: 340px; aspect-ratio: 16/9; border-radius: 8px; overflow: hidden; background: #161a25; transition: transform 0.2s var(--ease), box-shadow 0.2s; }
 .shot img { width: 100%; height: 100%; object-fit: cover; }
 .shot:focus { transform: scale(1.04); }
+.beat { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; font-size: 13.5px; color: var(--muted); }
+.beat-l { margin-left: -10px; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; font-weight: 600; }
+.beat span:not(.beat-l) { display: inline-flex; align-items: baseline; gap: 6px; }
+.beat b { color: var(--text); font-family: var(--display); font-size: 16px; font-weight: 600; }
 .rel { padding: 18px 20px 18px 56px; margin: -8px 0 0 -56px; scroll-padding: 0 56px; }
 .facts { width: 250px; padding: 16px 18px; display: flex; flex-direction: column; gap: 12px; align-self: start; box-sizing: border-box; }
 .icon-btn span { font-size: 14px; }

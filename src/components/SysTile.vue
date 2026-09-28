@@ -1,6 +1,8 @@
 <template>
   <button class="systile" data-focus :data-key="'sys-' + p.id" @click="$emit('open', p)" @focus="$emit('focused', p)" :style="tileStyle">
-    <div class="glyph"><PIcon :p="p" :size="150" /></div>
+    <!-- the faded logo and the colour strip sit in their own clipped layer: while the tile is zoomed on
+         focus they otherwise slip past the rounded corners (software rendering) -->
+    <div class="sys-clip"><div class="glyph"><PIcon :p="p" :size="150" /></div></div>
     <div class="sys-top">
       <img v-if="logo && !logoFail" class="sys-logo" :src="logo" :alt="p.display_name" @error="logoFail = true" />
       <template v-else>
@@ -56,5 +58,6 @@ const tileStyle = computed(() => {
 .systile:focus .sys-logo { transform: scale(1.06); }
 .systile .ondev { color: var(--green-l); }
 .systile { box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), inset 0 0 0 1px rgba(255, 255, 255, 0.05); }
-.systile::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: linear-gradient(90deg, var(--sys-a, transparent), var(--sys-b, transparent)); opacity: 0.85; }
+.systile .sys-clip { position: absolute; inset: 0; border-radius: inherit; overflow: hidden; clip-path: inset(0 round 10px); pointer-events: none; }
+.systile .sys-clip::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: linear-gradient(90deg, var(--sys-a, transparent), var(--sys-b, transparent)); opacity: 0.85; }
 </style>
