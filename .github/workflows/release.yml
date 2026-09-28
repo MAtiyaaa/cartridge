@@ -23,7 +23,7 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Publish to this repository
-        # package.json names abdu2304/cartridge; a fork publishes to (and updates from) its own releases instead
+        # package.json names abdu2304/cartridge; a fork updates from its own releases instead (baked into the AppImage)
         run: |
           node -e "
             const fs = require('fs'), p = require('./package.json');
@@ -42,9 +42,16 @@ jobs:
           CARTRIDGE_SMOKE=1 APPIMAGE_EXTRACT_AND_RUN=1 timeout 90 xvfb-run -a ./Cartridge-x86_64.AppImage 2>&1 | tee smoke.log
           grep -q "SMOKE OK" smoke.log
       - name: Publish AppImage
-        run: npm run release
+        # Uploaded with gh (like the APK) so a re-run always lands, even on a release older than two hours
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          V=$(node -p "require('./package.json').version")
+          NAME=$(node -p "require('./package.json').build.releaseInfo.releaseName")
+          gh release view "v$V" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 \
+            || gh release create "v$V" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "$NAME" --notes-file RELEASE_NOTES.md
+          FILES="release/Cartridge-x86_64.AppImage"; [ -f release/latest-linux.yml ] && FILES="$FILES release/latest-linux.yml"
+          gh release upload "v$V" $FILES --repo "$GITHUB_REPOSITORY" --clobber
 
   apk:
     # Built from the same commit as the AppImage. Runs even if the AppImage job fails,
