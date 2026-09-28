@@ -33,8 +33,8 @@ import Btn from './Btn.vue';
 
 // Pick a cover, logo or background for one game from SteamGridDB. Resolves with the image URL.
 const props = defineProps({ kind: { type: String, default: 'grid' }, romName: String, query: String });
-const titles = { grid: 'Change cover', logo: 'Change logo', hero: 'Change background' };
-const nouns = { grid: 'covers', logo: 'logos', hero: 'backgrounds' };
+const titles = { grid: 'Change cover', logo: 'Change logo', hero: 'Change background', icon: 'Change icon' };
+const nouns = { grid: 'covers', logo: 'logos', hero: 'backgrounds', icon: 'icons' };
 const el = ref(null);
 const games = ref([]);
 const gameId = ref(null);
@@ -79,6 +79,8 @@ onBeforeUnmount(() => layer.pop());
 .ap-grid.grid .ap-item img { aspect-ratio: 2 / 3; }
 .ap-grid.hero { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
 .ap-grid.hero .ap-item img { aspect-ratio: 96 / 31; }
+.ap-grid.icon { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
+.ap-grid.icon .ap-item img { aspect-ratio: 1; border-radius: 22%; object-fit: cover; }
 .ap-grid.logo { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
 .ap-grid.logo .ap-item { background: repeating-conic-gradient(#2a2e3a 0% 25%, #20232d 0% 50%) 50% / 20px 20px; padding: 14px; }
 .ap-grid.logo .ap-item img { aspect-ratio: 16 / 7; }

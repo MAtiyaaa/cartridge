@@ -56,11 +56,11 @@
               <SysTile v-for="p in s.items" :key="p.id" :p="p" @open="openSys" @focused="focusSys" />
             </template>
             <template v-else-if="s.type === 'ra'">
-              <button v-for="a in s.items" :key="a.id + a.date" class="ra-home glass" data-focus @click="go('ra-game', { gameId: a.gameId })" @focus="focusRa(a)">
-                <img :src="img(a.badge)" loading="lazy" />
+              <button v-for="a in s.items" :key="a.key" class="ra-home glass" data-focus @click="a.open()" @focus="focusRa(a)">
+                <span class="ach-img"><img v-if="a.badge" :src="a.badge" loading="lazy" /><Grade v-else :g="a.grade" :size="40" /><span class="ach-src"><img v-if="a.kind === 'ra'" :src="raLogo" class="ach-ra" /><Grade v-else :g="a.grade || null" :size="16" /></span></span>
                 <div class="ra-home-t">{{ a.title }}</div>
                 <div class="ra-home-g">{{ a.game }}</div>
-                <div class="ra-home-p">{{ a.points }} pts<template v-if="a.hardcore"> · HC</template></div>
+                <div class="ra-home-p" :class="'k-' + a.kind"><template v-if="a.kind === 'ra'">{{ a.pts }}</template><template v-else-if="a.grade">{{ GRADE[a.grade] }}</template><template v-else>{{ a.pts }}</template></div>
               </button>
             </template>
             <template v-else-if="s.type === 'col'">
@@ -78,7 +78,7 @@
 
 <script setup>
 import { computed, ref, nextTick, onMounted, onBeforeUnmount, watch } from 'vue';
-import { img, cover, collections, store, go, allRoms, visiblePlatforms, romsOf, isNew, setBg, backdropOf, bytes, year, ago, rating, resync, downloadFor, download, romById, toast, logoOf, call } from '../store.js';
+import { img, cover, collections, store, go, allRoms, visiblePlatforms, romsOf, isNew, setBg, backdropOf, bytes, year, ago, rating, resync, downloadFor, download, romById, toast, logoOf, call, GRADE } from '../store.js';
 import { useView } from '../useView.js';
 import { ensureFocus, scrollMode } from '../nav.js';
 import Icon from '../components/Icon.vue';
@@ -88,6 +88,8 @@ import GameCard from '../components/GameCard.vue';
 import SysTile from '../components/SysTile.vue';
 import CollTile from '../components/CollTile.vue';
 import GameLogo from '../components/GameLogo.vue';
+import Grade from '../components/Grade.vue';
+import raLogo from '../assets/ra-logo.png';
 import MediaBar from '../components/MediaBar.vue';
 
 const el = ref(null);
@@ -133,11 +135,27 @@ const heroDl = computed(() => {
 const sysOnDevice = (p) => romsOf(p.id).filter((r) => store.installed[r.id]).length;
 
 let discoverSeed = null;
-// RetroAchievements: newest unlocks as a Home row (when signed in and enabled)
+// Newest achievements as a Home row: RetroAchievements and emulator trophies, one timeline
 const raRecent = ref([]);
-if (store.config.ra?.user && store.config.ui.raOnHome !== false) {
-  call('ra:overview').then((o) => { raRecent.value = (o.recent || []).slice(0, 20); }).catch(() => {});
+const raDate = (d) => { const t = new Date(String(d).replace(' ', 'T') + (/[zZ]|[+-]\d\d:?\d\d$/.test(d) ? '' : 'Z')).getTime(); return isNaN(t) ? 0 : t; };
+async function loadAch() {
+  const ui = store.config.ui;
+  const mode = ui.homeAch || (ui.raOnHome === false ? 'trophies' : 'all');
+  if (mode === 'off') { raRecent.value = []; return; }
+  const out = [];
+  const jobs = [];
+  if (mode !== 'trophies' && store.config.ra?.user) jobs.push(call('ra:overview').then((o) => {
+    for (const a of o.recent || []) out.push({ kind: 'ra', key: 'ra' + a.id + a.date, t: raDate(a.date), badge: img(a.badge), title: a.title, game: a.game, pts: `${a.points} pts${a.hardcore ? ' · HC' : ''}`, romId: a.romId, open: () => go('ra-game', { gameId: a.gameId }) });
+  }).catch(() => {}));
+  if (mode !== 'ra') jobs.push(call('trophies:overview').then((o) => {
+    const romOf = new Map((o.games || []).map((g) => [g.key, g.romId]));
+    for (const t of o.recent || []) out.push({ kind: 'tro', key: 'tr' + t.key + t.id, t: t.time || 0, badge: t.icon, grade: t.grade, title: t.name, game: t.game, pts: t.points ? `${t.points} G` : '', romId: romOf.get(t.key), open: () => go('trophy-game', { tkey: t.key }) });
+  }).catch(() => {}));
+  await Promise.all(jobs);
+  raRecent.value = out.sort((a, b) => b.t - a.t).slice(0, 24);
 }
+loadAch();
+watch(() => store.trophyVer, loadAch);
 function focusRa(a) {
   heroRom.value = a.romId ? romById(a.romId) : null; heroSys.value = null; heroCol.value = null;
   if (heroRom.value) setBg(backdropOf(heroRom.value));
@@ -194,7 +212,7 @@ useView(
       if (r && !store.installed[r.id]) download(r); else if (r) toast('Already on this device', 'info', 1800);
     },
   },
-  [{ b: 'A', label: 'Open' }, { b: 'X', label: 'Download' }, { b: 'Y', label: 'Search' }, { b: 'LT', label: '/ RT  Tabs' }],
+  [{ b: 'A', label: 'Open' }, { b: 'X', label: 'Download' }, { b: 'Y', label: 'Search' }, { b: 'LT+RT', label: 'Tabs' }],
 );
 
 watch(() => [heroRom.value?.id, heroSys.value?.id, heroCol.value?.id, heroRom.value && store.logos[heroRom.value.id]], async () => {
@@ -224,7 +242,11 @@ onMounted(async () => { await nextTick(); ensureFocus(el.value); });
 .hero-enter-from, .hero-leave-to { opacity: 0; }
 .ra-home { flex: none; width: 150px; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 14px 10px 12px; border-radius: 12px; text-align: center; transition: transform 0.14s ease-out; }
 .ra-home:focus { transform: scale(1.05); }
-.ra-home img { width: 72px; height: 72px; border-radius: 10px; box-shadow: 0 6px 16px rgba(0, 0, 0, 0.45); }
+.ach-img { position: relative; width: 72px; height: 72px; display: grid; place-items: center; }
+.ach-img > img { width: 72px; height: 72px; border-radius: 12px; object-fit: cover; box-shadow: 0 6px 16px rgba(0, 0, 0, 0.45); }
+.ach-src { position: absolute; right: -6px; bottom: -6px; height: 22px; min-width: 22px; padding: 0 3px; border-radius: 7px; background: rgba(12, 12, 22, 0.92); display: grid; place-items: center; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5); }
+.ach-ra { height: 12px; width: auto; }
+.ra-home-p.k-tro { color: #cfe0ff; }
 .ra-home-t { font-family: var(--display); font-weight: 600; font-size: 13.5px; line-height: 1.2; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .ra-home-g { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
 .ra-home-p { font-size: 11px; color: var(--gold); font-weight: 600; }

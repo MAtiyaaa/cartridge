@@ -3,8 +3,8 @@
 // Android and desktop builds; also reports the battery for the phone app's device list.
 import { watch } from 'vue';
 import { store, call, go, tab } from '../store.js';
-import { dispatch, input } from '../nav.js';
-import { promptFamily, familyOf } from '../prompts.js';
+import { dispatch } from '../nav.js';
+import { padKind } from '../pad.js';
 
 let extras = () => ({});
 let focused = {}, t = null, started = false;
@@ -20,9 +20,7 @@ export function publish() {
     else if (focused.collectionId) st.collectionId = focused.collectionId;
     else if (r.name === 'platform') st.platformId = Number(p.platformId);
     else if (r.name === 'collection') st.collectionId = p.collectionId;
-    // icons for touch buttons: the controller's, never keyboard keys
-    const fam = promptFamily.value;
-    st.family = fam === 'keyboard' ? familyOf(input.padName) : fam;
+    st.family = padKind.value; // touch buttons are drawn for the controller used here
     Object.assign(st, extras());
     call('remote:state', st).catch(() => {});
   }, 100);
@@ -39,7 +37,7 @@ export function startPublisher({ extra, onCmd } = {}) {
     publish();
   });
   watch(() => [store.route.name, JSON.stringify(store.route.params)], () => { focused = {}; publish(); });
-  watch(() => promptFamily.value, publish);
+  watch(() => padKind.value, publish);
 
   window.cart.on('remote:cmd', (c) => {
     if (!c) return;

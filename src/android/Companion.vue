@@ -142,16 +142,16 @@
         <section v-else key="pad" class="view pad">
           <div class="shoulders">
             <button v-for="k in SHOULDERS" :key="k.b" class="k pill-k" :aria-label="k.b" @pointerdown.prevent="press(k.a)">
-              <img v-if="glyph(k.b)" :src="glyph(k.b)" class="gl" alt="" /><template v-else>{{ k.b }}</template>
+              <Btn :b="k.b" :kind="padKindHere" class="gl" />
             </button>
           </div>
           <div class="sticks">
             <div class="dpad">
               <button v-for="d in DIRS" :key="d.a" class="k" :class="d.a" :aria-label="d.a" @pointerdown.prevent="hold(d.a)" @pointerup="release" @pointerleave="release" @pointercancel="release"><Icon :name="d.icon" :size="30" /></button>
             </div>
-            <div class="face" :class="nintendoFace ? 'nin' : 'xbox'">
-              <button v-for="k in FACE" :key="k.b" class="k" :class="[k.b.toLowerCase(), { glyphed: !!glyph(k.b) }]" :aria-label="k.b" @pointerdown.prevent="press(k.a)">
-                <img v-if="glyph(k.b)" :src="glyph(k.b)" class="gl face-gl" alt="" /><template v-else>{{ k.b }}</template>
+            <div class="facepad" :class="nintendoFace ? 'nin' : 'xbox'">
+              <button v-for="k in FACE" :key="k.b" class="k glyphed" :class="k.b.toLowerCase()" :aria-label="k.b" @pointerdown.prevent="press(k.a)">
+                <Btn :b="nintendoFace ? NIN_POS[k.b] : k.b" :kind="padKindHere" class="gl face-gl" />
               </button>
             </div>
           </div>
@@ -182,7 +182,7 @@
 import { computed, onMounted, ref, watch } from 'vue';
 import { store, call, loadConfig, loadLibrary, loadArt, romById, platformById, collectionById, romsOf, romsOfCollection, cover, backdropOf, logoOf, bytes, year, rating, img, downloadFor, download } from '../store.js';
 import { applyTheme } from '../themes.js';
-import { promptIcon } from '../prompts.js';
+import Btn from '../components/Btn.vue';
 import Background from '../components/Background.vue';
 import GameLogo from '../components/GameLogo.vue';
 import PIcon from '../components/PIcon.vue';
@@ -208,7 +208,11 @@ const JUMPS = [
 const SHOULDERS = [{ b: 'LT', a: 'lt' }, { b: 'LB', a: 'lb' }, { b: 'SELECT', a: 'select' }, { b: 'START', a: 'start' }, { b: 'RB', a: 'rb' }, { b: 'RT', a: 'rt' }];
 const FACE = [{ b: 'Y', a: 'y' }, { b: 'X', a: 'x' }, { b: 'B', a: 'back' }, { b: 'A', a: 'accept' }];
 // The same button icons as the top screen, for the controller in use
-const glyph = (b) => promptIcon(b, store.companion.family || 'xbox');
+// Button glyphs as the main screen draws them (abdu2304's Btn), for the controller in use there.
+// In the Nintendo face layout the buttons sit where Nintendo puts them, so each one is drawn by the
+// Xbox position it occupies (Btn relabels positions for Nintendo: right shows A, bottom shows B).
+const padKindHere = computed(() => store.companion.family || 'xbox');
+const NIN_POS = { X: 'Y', Y: 'X', A: 'B', B: 'A' };
 const nintendoFace = computed(() => store.companion.layout === 'nintendo' || store.companion.family === 'nintendo');
 const DIRS = [
   { a: 'up', icon: 'mdiChevronUp' }, { a: 'left', icon: 'mdiChevronLeft' },
@@ -440,7 +444,7 @@ html, body { touch-action: pan-x pan-y; }
 .k:active { transform: scale(0.92); background: rgba(var(--primary-rgb), 0.5); }
 .shoulders { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; }
 .pill-k { height: 42px; border-radius: 999px; font-size: 14px; }
-.gl { width: 30px; height: 30px; object-fit: contain; pointer-events: none; }
+.gl { pointer-events: none; transform: scale(1.35); }
 .sticks { flex: 1; display: flex; align-items: center; justify-content: space-between; padding: 0 12px; }
 .dpad { display: grid; grid-template: repeat(3, 60px) / repeat(3, 60px); filter: drop-shadow(0 6px 14px rgba(0, 0, 0, 0.3)); }
 .dpad::before { content: ''; grid-area: 2 / 2; background: rgba(255, 255, 255, 0.07); }
@@ -449,13 +453,13 @@ html, body { touch-action: pan-x pan-y; }
 .dpad .down { grid-area: 3 / 2; border-radius: 0 0 14px 14px; border-top: 0; }
 .dpad .left { grid-area: 2 / 1; border-radius: 14px 0 0 14px; border-right: 0; }
 .dpad .right { grid-area: 2 / 3; border-radius: 0 14px 14px 0; border-left: 0; }
-.face { display: grid; grid-template: repeat(3, 60px) / repeat(3, 60px); }
-.face .k { border-radius: 50%; box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3); }
-.face .y { grid-area: 1 / 2; } .face .x { grid-area: 2 / 1; } .face .b { grid-area: 2 / 3; } .face .a { grid-area: 3 / 2; }
-.face.nin .x { grid-area: 1 / 2; } .face.nin .y { grid-area: 2 / 1; } .face.nin .a { grid-area: 2 / 3; } .face.nin .b { grid-area: 3 / 2; }
-.face .k:not(.glyphed).a { background: var(--grad); border-color: transparent; color: var(--on-primary); }
-.face .k.glyphed { background: rgba(255, 255, 255, 0.05); }
-.face-gl { width: 46px; height: 46px; }
+.facepad { display: grid; grid-template: repeat(3, 60px) / repeat(3, 60px); }
+.facepad .k { border-radius: 50%; box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3); }
+.facepad .y { grid-area: 1 / 2; } .facepad .x { grid-area: 2 / 1; } .facepad .b { grid-area: 2 / 3; } .facepad .a { grid-area: 3 / 2; }
+.facepad.nin .x { grid-area: 1 / 2; } .facepad.nin .y { grid-area: 2 / 1; } .facepad.nin .a { grid-area: 2 / 3; } .facepad.nin .b { grid-area: 3 / 2; }
+.facepad .k:not(.glyphed).a { background: var(--grad); border-color: transparent; color: var(--on-primary); }
+.facepad .k.glyphed { background: rgba(255, 255, 255, 0.05); }
+.face-gl { transform: scale(2); }
 .jump { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .jbtn { display: flex; align-items: center; justify-content: center; gap: 7px; height: 44px; border-radius: 14px; border: 1px solid var(--line); background: rgba(255, 255, 255, 0.04); color: var(--muted); font: 500 13.5px var(--body); transition: background 0.15s, color 0.15s; }
 .jbtn.on { color: #fff; background: rgba(var(--primary-rgb), 0.24); border-color: rgba(var(--primary-l-rgb), 0.45); }
@@ -471,8 +475,8 @@ html, body { touch-action: pan-x pan-y; }
 .d-gear:active { color: var(--text); transform: scale(0.94); }
 /* narrow phones */
 @media (max-width: 440px) {
-  .dpad, .face { grid-template: repeat(3, 52px) / repeat(3, 52px); }
-  .face-gl { width: 40px; height: 40px; }
+  .dpad, .facepad { grid-template: repeat(3, 52px) / repeat(3, 52px); }
+  .face-gl { transform: scale(1.75); }
   .strip { grid-template-columns: repeat(4, 1fr); }
   .strip .s-cover:nth-child(n + 5) { display: none; }
   .head-t :deep(.t-title), .t-title { font-size: 24px; }

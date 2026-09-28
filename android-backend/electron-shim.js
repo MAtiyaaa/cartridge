@@ -26,6 +26,7 @@ Object.assign(app, {
   getVersion: () => state.version,
   whenReady: () => ready,
   isReady: () => true,
+  requestSingleInstanceLock: () => true, // Android runs one app instance by itself
   disableHardwareAcceleration() {},
   getGPUFeatureStatus: () => ({ android: 'webview' }),
   getPath(name) {
@@ -62,6 +63,8 @@ class BrowserWindow extends EventEmitter {
   loadURL() { return Promise.resolve(); }
   setMenuBarVisibility() {}
   isDestroyed() { return false; }
+  isMinimized() { return false; }
+  restore() {}
   getContentSize() { return state.size; }
   isFullScreen() { return this.full; }
   setFullScreen(v) { this.full = !!v; bus.emit('send', 'android:fullscreen', this.full); }

@@ -67,7 +67,8 @@
                 <small v-if="targets[d.id] && !targets[d.id].path" class="lv-warn">No {{ rom.platform_display_name }} folder yet. Choose one on {{ d.name }} in Settings.</small>
                 <template v-else-if="targets[d.id]">
                   <small class="lv-path"><Icon name="mdiFolderOutline" :size="13" />{{ short(targets[d.id].path) }}</small>
-                  <small class="lv-dim">
+                  <small v-if="!fits(d)" class="lv-warn">Won't fit: needs {{ bytes(rom.fs_size_bytes) }}, {{ bytes(freeOn(d, targets[d.id].path)) }} free</small>
+                  <small v-else class="lv-dim">
                     {{ targets[d.id].exists ? 'Folder found' : 'Folder will be created' }}<template v-if="freeOn(d, targets[d.id].path) != null"> · {{ bytes(freeOn(d, targets[d.id].path)) }} free</template>
                   </small>
                 </template>
@@ -75,8 +76,8 @@
               </div>
               <span v-if="has(d, rom.id)" class="lv-state ok"><Icon name="mdiCheck" :size="15" />Installed</span>
               <span v-else-if="jobOn(d, rom.id)" class="lv-state">{{ jobOn(d, rom.id).status === 'queued' ? 'Queued' : pct(jobOn(d, rom.id)) + '%' }}</span>
-              <button v-else-if="!targets[d.id] || targets[d.id].path" class="lv-dl" :disabled="!d.online || !targets[d.id]?.path || sending === d.id" @click="send(d)">
-                <Icon name="mdiDownload" :size="18" />{{ sending === d.id ? 'Sending' : 'Get' }}
+              <button v-else-if="!targets[d.id] || targets[d.id].path" class="lv-dl" :class="{ warn: targets[d.id] && !fits(d) }" :disabled="!d.online || !targets[d.id]?.path || sending === d.id" @click="send(d)">
+                <Icon name="mdiDownload" :size="18" />{{ sending === d.id ? 'Sending' : targets[d.id] && !fits(d) ? 'Anyway' : 'Get' }}
               </button>
             </div>
             <p v-if="!paired.length" class="lv-dim">Connect a device first.</p>
@@ -132,6 +133,11 @@ const has = (d, id) => !!mapOf(d)[id];
 const homes = (id) => paired.value.filter((d) => has(d, id));
 const jobOn = (d, id) => (d.dls || []).find((x) => x.romId === id && ['queued', 'downloading'].includes(x.status));
 function activeFor(id) { for (const d of paired.value) { const j = jobOn(d, id); if (j) return j; } return null; }
+// the same rule as the main screen's space check: the game has to fit in what's free on that drive
+function fits(d) {
+  const free = freeOn(d, targets[d.id]?.path || '');
+  return free == null || !rom.value?.fs_size_bytes || rom.value.fs_size_bytes <= free;
+}
 const short = (p) => { const parts = p.split('/').filter(Boolean); return parts.length > 3 ? '…/' + parts.slice(-3).join('/') : p; };
 function freeOn(d, target) {
   const st = d.info?.storage || [];
@@ -220,6 +226,7 @@ async function send(d) {
 .lv-warn { color: #ffc48f; font-size: 12px !important; line-height: 1.4; }
 .lv-dl { flex: none; display: inline-flex; align-items: center; gap: 6px; height: 38px; padding: 0 16px; border-radius: 999px; background: var(--grad); color: var(--on-primary); font: 700 13.5px var(--body); box-shadow: 0 6px 18px rgba(var(--primary-rgb), 0.35); transition: opacity 0.2s, transform 0.15s; }
 .lv-dl:active { transform: scale(0.96); }
+.lv-dl.warn { background: rgba(255, 196, 143, 0.16); color: #ffc48f; box-shadow: inset 0 0 0 1px rgba(255, 196, 143, 0.5); }
 .lv-dl:disabled { opacity: 0.4; box-shadow: none; }
 .lv-state { flex: none; display: inline-flex; align-items: center; gap: 4px; font: 600 12.5px var(--body); color: var(--primary-t); font-variant-numeric: tabular-nums; }
 .lv-state.ok { color: var(--green-l); }

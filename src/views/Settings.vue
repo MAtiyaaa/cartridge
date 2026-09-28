@@ -55,7 +55,7 @@
               <div style="min-width: 0"><div class="lbl2">BIOS folder</div><div class="mono">{{ store.config.biosPath || 'Not set' }}</div></div>
               <button class="btn small" data-focus @click="browseBios"><Icon name="mdiFolderOpen" :size="18" />Browse</button>
             </div>
-            <div class="space-bar" v-if="space"><div class="bar"><i :style="{ width: (1 - space.free / space.total) * 100 + '%' }" /></div></div>
+            <StorageManager :key="storageKey" />
           </template>
 
           <template v-else-if="sec === 'folders'">
@@ -86,6 +86,16 @@
 
           <template v-else-if="sec === 'ui'">
             <h1>Look &amp; Feel</h1>
+
+            <div class="subh"><Icon name="mdiBookmarkOutline" :size="20" />Presets</div>
+            <div class="presets">
+              <button v-for="(p, i) in presets" :key="i" class="preset" data-focus @click="presetMenu(p, i)">
+                <span class="preset-sw" :style="presetStyle(p)"><i :style="{ background: themeOf(p.ui).accent[0] }" /></span>
+                <b>{{ p.name }}</b>
+              </button>
+              <button v-if="presets.length < 5" class="preset add" data-focus @click="savePreset"><span class="preset-sw"><Icon name="mdiPlus" :size="22" /></span><b>Save this look</b></button>
+            </div>
+            <p class="muted small" style="margin-top: -6px">Saves colour, background, fonts, cards, motion and sounds together, up to 5 looks. Interface size and controller settings stay as they are.</p>
 
             <div class="subh"><Icon name="mdiPaletteOutline" :size="20" />Colour</div>
             <div class="swatches">
@@ -157,9 +167,9 @@
             <div class="subh"><Icon name="mdiGamepadVariantOutline" :size="20" />Controls &amp; Display</div>
             <div class="row"><span class="lbl">Touch &amp; mouse</span><div class="seg"><button v-for="p in pointers" :key="p.v" data-focus :class="{ on: (ui.pointer || 'auto') === p.v }" @click="setPointer(p.v)">{{ p.l }}</button></div></div>
             <p class="muted small" style="margin-top: -6px">Auto hides the cursor when you tap the screen and shows it when a mouse moves. Touch never shows a cursor.</p>
+            <div class="row"><span class="lbl">Button icons</span><div class="seg"><button v-for="k in buttonOpts" :key="k.v" data-focus :class="{ on: (ui.buttons || 'auto') === k.v }" @click="saveConfig({ ui: { buttons: k.v } })">{{ k.l }}</button></div></div>
+            <p class="muted small" style="margin-top: -6px">Auto draws the buttons of the controller you're holding{{ padInfo?.name ? ` (right now: ${padInfo.name})` : '' }}, even when Steam presents it as an Xbox pad. <span class="btn-demo"><Btn b="A" /><Btn b="B" /><Btn b="X" /><Btn b="Y" /><Btn b="LB" /><Btn b="RT" /><Btn b="START" /><Btn b="SELECT" /></span></p>
             <div class="row"><span class="lbl">On-screen keyboard</span><div class="seg"><button v-for="k in keyboards" :key="k.v" data-focus :class="{ on: (ui.keyboard || 'auto') === k.v }" @click="saveConfig({ ui: { keyboard: k.v } })">{{ k.l }}</button></div></div>
-            <div class="row"><span class="lbl">Button icons</span><div class="seg"><button v-for="f in FAMILIES" :key="f.v" data-focus :class="{ on: (ui.prompts || 'auto') === f.v }" @click="saveConfig({ ui: { prompts: f.v } })">{{ f.l }}</button></div></div>
-            <p class="muted small" style="margin-top: -6px">Auto shows the buttons of the controller you're using{{ input.padName ? ' (' + input.padName.replace(/\s*\(.*$/, '') + ')' : '' }}, or keyboard keys when you use a keyboard.</p>
             <p class="muted small" style="margin-top: -6px">Auto uses the built-in keyboard in Game Mode and your real keyboard on the desktop. Steam leaves typing to the Steam keyboard (Steam + X).</p>
             <div class="row"><span class="lbl">Rendering</span><div class="seg"><button v-for="g in gfx" :key="g.v" data-focus :class="{ on: (store.config.graphics || 'auto') === g.v }" @click="setGraphics(g.v)">{{ g.l }}</button></div></div>
             <p class="muted small" style="margin-top: -6px">Auto uses the GPU from the app menu and on big screens like TVs. On handheld-size screens launched from Steam or Game Mode it uses software rendering, which is proven there. If the GPU ever fails, Cartridge switches to Compatible by itself. Compatible never uses the GPU.</p>
@@ -186,6 +196,8 @@
 
           <template v-else-if="sec === 'ra'">
             <h1>Achievements</h1>
+            <div class="row"><span class="lbl">On Home</span><div class="seg"><button v-for="m in homeAchOpts" :key="m.v" data-focus :class="{ on: homeAch === m.v }" @click="saveConfig({ ui: { homeAch: m.v } })">{{ m.l }}</button></div></div>
+            <p class="muted small" style="margin-top: -6px">A row of your newest achievements and trophies on Home, newest first.</p>
             <div class="subh"><img src="../assets/ra-logo.png" class="ra-mk" />RetroAchievements</div>
             <template v-if="!store.config.ra?.user">
               <p class="muted">Sign in to RetroAchievements to see your unlocks in the Achievements tab and on every game that supports them.</p>
@@ -206,30 +218,30 @@
                 <button class="btn" data-focus @click="raSignOut"><Icon name="mdiLogout" />Sign out</button>
               </div>
               <Toggle :model-value="ui.raOnGames !== false" label="Achievements on game pages" desc="Show progress and badges on games that have RetroAchievements (PS3, PS4, Switch and other unsupported consoles never show them)" @update:model-value="(v) => saveConfig({ ui: { raOnGames: v } })" />
-              <Toggle :model-value="ui.raOnHome !== false" label="Latest unlocks on Home" desc="Adds a row of your newest achievements to the Home screen" @update:model-value="(v) => saveConfig({ ui: { raOnHome: v } })" />
             </template>
 
-            <div class="subh" style="margin-top: 14px"><Grade g="G" :size="22" />Other sources</div>
+            <div class="subh" style="margin-top: 14px"><Grade g="P" :size="22" />Trophies &amp; Gamerscore</div>
             <p class="muted small" style="margin-top: -8px">Trophies and achievements that emulators keep on this device. Cartridge reads each emulator's own settings first, then looks through your home, emulation and SD card folders. Nothing is ever written to the emulators' files.</p>
             <div class="srcs">
               <div v-for="s in trophySrc" :key="s.id" class="src glass">
                 <div class="src-top">
                   <div><b>{{ s.name }}</b> <span class="muted small">{{ s.platform }}</span></div>
-                  <span class="chip" :class="s.state">{{ { found: 'Found', missing: 'Not found', off: 'Off' }[s.state] }}<template v-if="s.state === 'found'"> · {{ s.games }} {{ s.games === 1 ? 'game' : 'games' }}</template></span>
+                  <span class="chip" :class="[s.state, s.note]">{{ { found: 'Found', missing: 'Not found', off: 'Off' }[s.state] }}<template v-if="s.state === 'found'"> · {{ s.note === 'nokey' ? 'no trophy key' : s.note === 'empty' ? 'no trophies yet' : s.games + (s.games === 1 ? ' game' : ' games') }}</template></span>
                   <div class="spacer" />
                   <button class="btn small" data-focus @click="chooseSrc(s)"><Icon name="mdiFolderOpen" :size="18" />Choose folder</button>
                   <Toggle :model-value="s.enabled" compact @update:model-value="(v) => toggleSrc(s, v)" />
                 </div>
+                <p v-if="s.note === 'nokey'" class="muted small src-note">shadPS4 has no trophy key set, so it can't record trophies yet. Add the key in shadPS4's settings, then play a game: trophies show up here by themselves.</p>
                 <div v-for="f in s.found" :key="f.dir" class="src-path">
                   <span class="how">{{ { config: 'From settings', known: 'Known place', scan: 'Found by scan', chosen: 'Chosen by you' }[f.how] || f.how }}</span>
-                  <span class="mono">{{ f.dir }}</span>
+                  <span class="mono">{{ (f.watch && f.watch.length && s.id === 'shadps4') ? f.watch.join('  ·  ') : f.dir }}</span>
                   <button v-if="f.how === 'chosen' || f.how === 'scan'" class="btn small ghost" data-focus @click="removeDir(s, f.dir)"><Icon name="mdiClose" :size="16" /></button>
                 </div>
               </div>
             </div>
             <div class="row wrap">
               <button class="btn" data-focus :disabled="!!store.trophyScan" @click="scanTrophies"><Icon name="mdiRadar" />{{ store.trophyScan ? `Scanning… ${store.trophyScan.visited || ''}` : 'Scan again' }}</button>
-              <button class="btn" data-focus @click="openOthers"><Icon name="mdiTrophyOutline" />Open trophies</button>
+              <button class="btn" data-focus @click="openOthers"><Icon name="mdiTrophyOutline" />Open Trophies &amp; Gamerscore</button>
             </div>
             <Toggle :model-value="tcfg.sync !== false" label="Sync across devices" desc="Keeps trophies from every device together, stored as private notes on your RomM games. Uses your RomM login, no extra account. Only adds unlocks, never removes them." @update:model-value="(v) => setT({ sync: v })" />
             <p v-if="tcfg.sync !== false" class="muted small" style="margin-top: -6px">{{ syncLine }}</p>
@@ -237,12 +249,17 @@
               <TextField v-model="deviceName" label="This device's name" :placeholder="store.info.hostname || 'Steam Deck'" icon="mdiDevices" style="flex: 1" />
               <button class="btn" data-focus @click="setT({ device: deviceName.trim() })"><Icon name="mdiCheck" :size="18" />Save name</button>
             </div>
+            <Toggle v-if="tcfg.sync !== false" :model-value="tcfg.syncIcons !== false" label="Sync trophy pictures" desc="Stores small copies of trophy pictures in RomM too (about 150 to 300 KB per game), so every device shows them, not just the one that played" @update:model-value="(v) => setT({ syncIcons: v })" />
             <Toggle :model-value="tcfg.popups !== false" label="Trophy pop-ups" desc="Shows a pop-up when a trophy unlocks while Cartridge is open" @update:model-value="(v) => setT({ popups: v })" />
             <Toggle :model-value="ui.trophyOnGames !== false" label="Trophies on game pages" desc="PS3, PS4, Xbox 360 and PS Vita games show their trophies" @update:model-value="(v) => saveConfig({ ui: { trophyOnGames: v } })" />
           </template>
 
           <template v-else-if="sec === 'steam'">
             <h1>Steam</h1>
+            <p v-if="IS_ANDROID" class="muted small">Steam doesn't run on Android, so these tools work on a Deck or PC. For Windows games on this device, open a game and pick More → Open in a PC game app (GameNative, GameHub or Winlator).</p>
+            <SteamSettings />
+            <template v-if="!IS_ANDROID">
+            <div class="subh" style="margin-top: 10px"><Icon name="mdiApplicationOutline" :size="20" />Cartridge itself</div>
             <div class="about glass">
               <img src="../../steam-art/grid.png" class="steam-grid" />
               <div style="display: flex; flex-direction: column; gap: 10px">
@@ -255,6 +272,7 @@
               </div>
             </div>
             <p class="muted small">Added before 0.2.1? Press Add to Steam once more: Steam now starts Cartridge through a launch script that makes it open reliably, and logs each launch to ~/.config/Cartridge/steam-launch.log. Keep the AppImage where it is; if you move it, add it again.</p>
+            </template>
           </template>
 
           <template v-else-if="sec === 'remote'">
@@ -273,7 +291,7 @@
             </div>
             <div class="card-s glass">
               <div v-if="!IS_ANDROID" class="kv"><span>Game Mode</span><span>{{ store.info.gamescope ? 'Yes (gamescope)' : 'No (desktop)' }}</span></div>
-              <div class="kv"><span>Controller</span><span>{{ input.padName || 'Press any button' }}</span></div>
+              <div class="kv"><span>Controller</span><span>{{ padInfo?.name || input.padName || 'Press any button' }}</span></div>
               <div class="kv"><span>Data</span><span class="mono">{{ store.info.userData }}</span></div>
             </div>
             <div class="row"><button class="btn danger" data-focus @click="call('app:quit')"><Icon name="mdiPower" />Quit Cartridge</button></div>
@@ -286,11 +304,10 @@
 
 <script setup>
 import { computed, defineAsyncComponent, nextTick, onMounted, ref, watch } from 'vue';
-import { store, call, go, tab, saveConfig, pickFolder, choose, confirm, toast, openModal, bytes, ago, resync, scanServer, allRoms, resetLogos } from '../store.js';
+import { store, call, go, tab, saveConfig, pickFolder, choose, confirm, toast, openModal, bytes, ago, resync, scanServer, allRoms, resetLogos, askText } from '../store.js';
 import { useView } from '../useView.js';
 import { input, focusFirst, setPointerPref } from '../nav.js';
-import { FAMILIES } from '../prompts.js';
-import { THEMES, SURFACES, TEXTS, FONTS, CARD_SHAPES, CARD_SIZES, DENSITIES, themeFrom } from '../themes.js';
+import { THEMES, SURFACES, TEXTS, FONTS, CARD_SHAPES, CARD_SIZES, DENSITIES, themeFrom, themeOf } from '../themes.js';
 import { BACKGROUNDS } from '../bgRenderers.js';
 import { setSoundEnabled, setSoundStyle, previewSound, SOUND_PACKS } from '../sfx.js';
 import PhoneRemote from './PhoneRemote.vue';
@@ -300,6 +317,10 @@ import Toggle from '../components/Toggle.vue';
 import TextField from '../components/TextField.vue';
 import PIcon from '../components/PIcon.vue';
 import Grade from '../components/Grade.vue';
+import Btn from '../components/Btn.vue';
+import SteamSettings from '../components/SteamSettings.vue';
+import StorageManager from '../components/StorageManager.vue';
+import { padInfo } from '../pad.js';
 
 // Android build only: the Android section replaces Steam. In the desktop build this is dropped.
 const IS_ANDROID = import.meta.env.MODE === 'android';
@@ -308,7 +329,7 @@ const AndroidSettings = import.meta.env.MODE === 'android' ? defineAsyncComponen
 const el = ref(null);
 const paneEl = ref(null);
 const sec = ref(store.settingsSection || 'conn');
-const sections = [
+const ALL_SECTIONS = [
   { id: 'conn', label: 'Connection', icon: 'mdiServerNetwork' },
   { id: 'sync', label: 'Library & Sync', icon: 'mdiSync' },
   { id: 'storage', label: 'Storage', icon: 'mdiHarddisk' },
@@ -321,7 +342,9 @@ const sections = [
   { id: 'android', label: 'Android', icon: 'mdiAndroid' },
   { id: 'updates', label: 'Updates', icon: 'mdiUpdate' },
   { id: 'about', label: 'About', icon: 'mdiInformationOutline' },
-].filter((s) => (IS_ANDROID ? s.id !== 'steam' : s.id !== 'android'));
+];
+// Android: Steam shows only when Settings → Android → Steam & PC game apps is on
+const sections = computed(() => ALL_SECTIONS.filter((s) => (IS_ANDROID ? s.id !== 'steam' || store.config.android?.steamApps === true : s.id !== 'android')));
 const showAll = ref(false);
 const supported = ref([]);
 const space = ref(null);
@@ -408,12 +431,48 @@ async function chooseWallpaper() {
 async function clearWallpaper() { store.config = await call('wallpaper:clear'); await saveConfig({ ui: { bgStyle: 'waves' } }); }
 async function setPack(v) { await saveConfig({ ui: { soundPack: v } }); setSoundStyle(v, ui.value.volume); previewSound(); }
 async function setVolume(v) { await saveConfig({ ui: { volume: v } }); setSoundStyle(ui.value.soundPack, v); previewSound(); }
+// Look presets: the look settings saved under a name (not interface size, pointer, keyboard or
+// button icons, which belong to the device and controller rather than to a look)
+const LOOK_KEYS = ['theme', 'customColor', 'colors', 'surface', 'text', 'font', 'bgStyle', 'wallDim', 'cardShape', 'density', 'gridSize', 'cardTitles', 'mediaBar', 'logos', 'motion', 'effects', 'sounds', 'soundPack', 'volume'];
+const presets = computed(() => store.config.lookPresets || []);
+const presetStyle = (p) => { const g = themeOf(p.ui).grad; return { background: `linear-gradient(135deg, ${g[0]}, ${g[2]} 60%, ${g[4]})` }; };
+function lookNow() { const o = {}; for (const k of LOOK_KEYS) if (ui.value[k] !== undefined) o[k] = JSON.parse(JSON.stringify(ui.value[k])); return o; }
+async function savePreset() {
+  const name = await askText({ title: 'Name this look', placeholder: 'TV night' });
+  if (!name || !name.trim()) return;
+  await saveConfig({ lookPresets: [...presets.value, { name: name.trim().slice(0, 30), ui: lookNow() }] });
+  toast(`Saved "${name.trim().slice(0, 30)}"`, 'ok', 2200, 'mdiBookmarkOutline');
+}
+async function applyPreset(p) {
+  const u = { ...p.ui };
+  if (u.bgStyle === 'wallpaper' && !ui.value.wallpaper) u.bgStyle = 'waves'; // the wallpaper image isn't part of a preset
+  await saveConfig({ ui: u });
+  setSoundEnabled(ui.value.sounds !== false);
+  setSoundStyle(ui.value.soundPack, ui.value.volume);
+  toast(`"${p.name}" applied`, 'ok', 2000, 'mdiBookmarkOutline');
+}
+async function presetMenu(p, i) {
+  const v = await choose({ title: p.name, options: [
+    { label: 'Use this look', value: 'apply', icon: 'mdiCheck' },
+    { label: 'Save the current look here', sub: 'Replaces what this preset had', value: 'update', icon: 'mdiContentSave' },
+    { label: 'Rename', value: 'rename', icon: 'mdiPencil' },
+    { label: 'Delete', value: 'delete', icon: 'mdiDeleteOutline', danger: true },
+  ] });
+  const list = [...presets.value];
+  if (v === 'apply') return applyPreset(p);
+  if (v === 'update') { list[i] = { ...p, ui: lookNow() }; await saveConfig({ lookPresets: list }); toast(`"${p.name}" updated`, 'ok', 2000, 'mdiContentSave'); }
+  if (v === 'rename') { const n = await askText({ title: 'Rename look', value: p.name }); if (n && n.trim()) { list[i] = { ...p, name: n.trim().slice(0, 30) }; await saveConfig({ lookPresets: list }); } }
+  if (v === 'delete' && (await confirm(`Delete "${p.name}"?`, 'Only the preset goes. Your current look stays as it is.', 'Delete', true))) { list.splice(i, 1); await saveConfig({ lookPresets: list }); }
+}
 async function resetLook() {
   if (!(await confirm('Reset Look & Feel?', 'Colour, background, fonts, cards, motion and sounds go back to the defaults.', 'Reset'))) return;
   await saveConfig({ ui: { colors: { highlight: '', buttons: '', bars: '', background: '' }, theme: 'purple', customColor: '', surface: 'glass', text: 'normal', font: 'outfit', cardShape: 'rounded', density: 'normal', cardTitles: true, gridSize: 'md', bgStyle: 'waves', motion: 'normal', effects: 'auto', soundPack: 'soft', volume: 'medium' } });
 }
 const gfx = [{ v: 'auto', l: 'Auto (GPU)' }, { v: 'software', l: 'Compatible' }];
 const pointers = [{ v: 'auto', l: 'Auto' }, { v: 'touch', l: 'Touch' }, { v: 'mouse', l: 'Mouse' }];
+const homeAchOpts = [{ v: 'all', l: 'All' }, { v: 'ra', l: 'RetroAchievements' }, { v: 'trophies', l: 'Trophies' }, { v: 'off', l: 'Off' }];
+const homeAch = computed(() => ui.value.homeAch || (ui.value.raOnHome === false ? 'trophies' : 'all'));
+const buttonOpts = [{ v: 'auto', l: 'Auto' }, { v: 'xbox', l: 'Xbox' }, { v: 'playstation', l: 'PlayStation' }, { v: 'nintendo', l: 'Nintendo' }, { v: 'steam', l: 'Steam' }];
 const keyboards = [{ v: 'auto', l: 'Auto' }, { v: 'builtin', l: 'Built-in' }, { v: 'steam', l: 'Steam' }];
 // Emulator trophies (Settings → Achievements → Other sources)
 const trophySrc = ref([]);
@@ -444,7 +503,7 @@ const every = [{ v: 0, l: 'Off' }, { v: 30, l: '30 min' }, { v: 60, l: '1 h' }, 
 const folderList = computed(() => (store.libVersion, showAll.value ? supported.value : store.lib?.platforms || []));
 
 useView({ back: () => { if (!document.activeElement?.closest('.rail')) { focusFirst(el.value, `[data-key="sec-${sec.value}"]`); return; } return false; } },
-  [{ b: 'A', label: 'Select' }, { b: 'B', label: 'Back' }, { b: 'LT', label: '/ RT  Tabs' }]);
+  [{ b: 'A', label: 'Select' }, { b: 'B', label: 'Back' }, { b: 'LT+RT', label: 'Tabs' }]);
 watch(sec, (v) => { store.settingsSection = v; });
 
 // Switching sections swaps the pane with a short transition. Moving into the pane during it used to
@@ -474,7 +533,9 @@ async function signOut() {
   await saveConfig({ server: { password: '', token: '' }, configured: false });
 }
 async function rescan() { await call('installed:rescan'); toast('Device rescanned', 'ok', 2000, 'mdiHarddisk'); }
+const storageKey = ref(0); // remeasure after the ROMs folder changes
 async function afterPath() {
+  storageKey.value++;
   if (showAll.value) await loadAll();
   space.value = await call('fs:space', store.config.romsRoot);
   await call('installed:rescan');
@@ -583,7 +644,14 @@ onMounted(async () => { space.value = await call('fs:space', store.config.romsRo
 .swatch { position: relative; }
 .swatch i { position: absolute; top: 6px; right: 6px; width: 12px; height: 12px; border-radius: 50%; box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.7); }
 .swatch.custom { background: conic-gradient(from 90deg, #f55, #fd5, #5f8, #5df, #85f, #f5c, #f55); flex-direction: column; justify-content: space-between; align-items: flex-start; }
+.btn-demo { display: inline-flex; gap: 4px; vertical-align: middle; margin-left: 6px; }
 .finetune { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.presets { display: flex; flex-wrap: wrap; gap: 10px; }
+.preset { display: flex; flex-direction: column; gap: 6px; width: 120px; padding: 8px; border-radius: 10px; background: rgba(255, 255, 255, 0.045); border: 1px solid var(--line); text-align: left; }
+.preset b { font-size: 12.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.preset-sw { position: relative; height: 44px; border-radius: 7px; display: grid; place-items: center; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.15); }
+.preset-sw i { position: absolute; top: 6px; right: 6px; width: 12px; height: 12px; border-radius: 50%; box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.7); }
+.preset.add .preset-sw { background: rgba(255, 255, 255, 0.06); color: var(--muted); border: 1px dashed var(--line-2); box-shadow: none; }
 .ft { display: flex; align-items: center; gap: 10px; padding: 8px 14px 8px 8px; border-radius: 10px; background: rgba(255, 255, 255, 0.045); border: 1px solid var(--line); }
 .ft-sw { width: 34px; height: 34px; border-radius: 8px; display: grid; place-items: center; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.25); color: #fff; }
 .ft-t { display: flex; flex-direction: column; text-align: left; }
@@ -627,6 +695,8 @@ onMounted(async () => { space.value = await call('fs:space', store.config.romsRo
 .src-path .how { color: var(--muted); width: 110px; flex: none; }
 .src-path .mono { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
 .chip.found { background: rgba(80, 200, 120, 0.18); color: #9be8b4; }
+.chip.found.nokey { background: rgba(245, 197, 66, 0.18); color: #ffd978; }
+.src-note { margin: 0; }
 .chip.missing { background: rgba(255, 255, 255, 0.08); color: var(--muted); }
 .chip.off { background: rgba(255, 90, 90, 0.14); color: #ffaaaa; }
 .logo-prog { flex: 1; display: flex; flex-direction: column; gap: 6px; max-width: 360px; }

@@ -93,8 +93,8 @@ img { -webkit-user-drag: none; }
 .view { position: absolute; inset: 0; overflow-y: auto; overflow-x: hidden; padding: 12px 36px 40px; animation: viewIn 0.16s ease-out; }
 @keyframes viewIn { from { opacity: 0; } }
 
-.hintbar { display: flex; align-items: center; gap: 24px; padding: 0 28px; color: #d6cdee; font-size: 13px; background: linear-gradient(0deg, rgba(14, 5, 32, 0.7), transparent); }
-.hintbar .left { flex: 1; display: flex; gap: 10px; align-items: center; color: var(--dim); }
+.hintbar { display: flex; align-items: center; gap: 24px; padding: 0 28px; color: var(--text); font-size: 13px; background: linear-gradient(0deg, rgba(var(--tint-rgb), 0.7), transparent); }
+.hintbar .left { flex: 1; display: flex; gap: 18px; align-items: center; color: var(--muted); }
 .hint { display: flex; align-items: center; gap: 8px; white-space: nowrap; flex-shrink: 0; }
 .hintbar { gap: 18px; }
 .hintbar .left { min-width: 0; overflow: hidden; white-space: nowrap; }

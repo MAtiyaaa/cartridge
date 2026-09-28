@@ -90,6 +90,37 @@ function log(...a) {
   try { fs.mkdirSync(USER_DATA, { recursive: true }); fs.appendFileSync(LOG_FILE, `[${new Date().toISOString()}] ${a.join(' ')}\n`); } catch {}
 }
 try { if (fs.statSync(LOG_FILE).size > 512 * 1024) fs.renameSync(LOG_FILE, LOG_FILE + '.old'); } catch {}
+// ---------------------------------------------------------------- one Cartridge at a time
+// A second launch (Steam, the desktop icon, a game shortcut with --game) hands over to the
+// running one. If that one stopped answering (a hung start used to need a Steam restart), it is
+// ended and this launch carries on.
+const argGame = (argv = process.argv) => { const i = argv.indexOf('--game'); const v = i >= 0 ? Number(argv[i + 1]) : NaN; return Number.isFinite(v) ? v : null; };
+const BEAT_FILE = path.join(USER_DATA, 'running.json');
+let startGame = argGame();
+if (!process.env.CARTRIDGE_SMOKE && !process.env.CARTRIDGE_MULTI) {
+  if (!app.requestSingleInstanceLock({ game: startGame })) {
+    let beat = null;
+    try { beat = JSON.parse(fs.readFileSync(BEAT_FILE, 'utf8')); } catch {}
+    const alive = beat && Date.now() - beat.t < 20000;
+    if (alive) { log('already running (pid ' + beat.pid + '), handing over'); app.exit(0); }
+    else {
+      if (beat?.pid) { try { process.kill(beat.pid, 'SIGKILL'); log('ended a Cartridge that stopped answering, pid', beat.pid); } catch {} }
+      try { fs.rmSync(path.join(USER_DATA, 'SingletonLock'), { force: true }); } catch {}
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 700);
+      app.relaunch({ execPath: process.env.APPIMAGE || process.execPath, args: process.argv.slice(1) });
+      app.exit(0);
+    }
+  } else {
+    const beatNow = () => { try { fs.writeFileSync(BEAT_FILE, JSON.stringify({ pid: process.pid, t: Date.now() })); } catch {} };
+    beatNow(); setInterval(beatNow, 5000).unref?.();
+    app.on('second-instance', (_e, argv, _cwd, data) => {
+      if (win && !win.isDestroyed()) { if (win.isMinimized()) win.restore(); win.show(); win.focus(); }
+      const g = data?.game ?? argGame(argv);
+      if (g) broadcast('open-game', g);
+    });
+    app.on('will-quit', () => { try { fs.rmSync(BEAT_FILE, { force: true }); } catch {} });
+  }
+}
 function isGamescope() {
   const e = process.env;
   const de = ((e.XDG_CURRENT_DESKTOP || '') + ' ' + (e.XDG_SESSION_DESKTOP || '') + ' ' + (e.DESKTOP_SESSION || '')).toLowerCase();
@@ -633,11 +664,32 @@ async function sgdb(pathname) {
   return j && j.success ? j.data : null;
 }
 function cleanName(n) { return String(n || '').replace(/\s*[\(\[][^\)\]]*[\)\]]/g, '').replace(/\s+/g, ' ').trim(); }
-async function sgdbGames(name) {
+// SteamGridDB's search returns loose matches first sometimes ("skate: recompiled" for Skate 3), so
+// rank the results: exact name first, extra words (remaster, demo, mod…) down, verified and a
+// matching release year up.
+const sgNorm = (t) => String(t || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[™®©]/g, '')
+  .replace(/\s*[\(\[][^\)\]]*[\)\]]/g, '').replace(/^the\s+|,\s*the\b/g, '').replace(/&/g, 'and').replace(/[^a-z0-9]+/g, ' ').trim();
+const SG_EXTRA = /\b(recompiled|remaster(ed)?|remake|demo|beta|prototype|mod|hack|fan|port|reloaded|redux|online|collection|definitive|hd|trilogy|bundle|dlc|soundtrack|pack|edition)\b/;
+function sgScore(q, g, year, i) {
+  const a = sgNorm(q), b = sgNorm(g.name);
+  let s = 0;
+  if (a === b) s = 100;
+  else if (b.startsWith(a + ' ') || a.startsWith(b + ' ')) s = 60 - 6 * Math.abs(b.split(' ').length - a.split(' ').length);
+  else { const A = new Set(a.split(' ')), B = new Set(b.split(' ')); const inter = [...A].filter((x) => B.has(x)).length; s = (50 * inter) / new Set([...A, ...B]).size; }
+  const extra = b.replace(a, '');
+  if (SG_EXTRA.test(extra) && !SG_EXTRA.test(a)) s -= 40;
+  if (g.verified) s += 8;
+  if (year && g.release_date) s -= Math.min(15, Math.abs(new Date(g.release_date * 1000).getFullYear() - year) * 3);
+  return s - i * 0.5; // SteamGridDB's own order breaks ties
+}
+async function sgdbGames(name, year) {
   const tries = [...new Set([cleanName(name), cleanName(name).split(/:| - /)[0].trim()])].filter((x) => x.length > 1);
   for (const term of tries) {
     const games = await sgdb('/search/autocomplete/' + encodeURIComponent(term));
-    if (games && games.length) return games.slice(0, 6).map((g) => ({ id: g.id, name: g.name, year: g.release_date ? new Date(g.release_date * 1000).getFullYear() : null }));
+    if (games && games.length) {
+      const ranked = games.map((g, i) => ({ g, s: sgScore(name, g, year, i) })).sort((x, y) => y.s - x.s).map((x) => x.g);
+      return ranked.slice(0, 6).map((g) => ({ id: g.id, name: g.name, year: g.release_date ? new Date(g.release_date * 1000).getFullYear() : null }));
+    }
   }
   return [];
 }
@@ -910,24 +962,46 @@ async function fetchAllLogos() {
 
 // Artwork picker: SteamGridDB images of one kind for a game (by name, or a chosen SGDB game id)
 // Square game icons from SteamGridDB (used for trophy games). Cached; null when there is none.
-const ICON_FILE = path.join(USER_DATA, 'gameicons.json');
+const ICON_FILE = path.join(USER_DATA, 'gameicons2.json'); // v2: square icons only
 const iconCache = loadJson(ICON_FILE, {});
 const iconInflight = new Map();
-async function gameIcon({ key, name }) {
+// A full rounded-square icon: square, big enough, and no see-through corners (older round
+// icons have transparent corners, which look wrong in a square tile)
+function iconOpaque(buf) {
+  const { nativeImage } = require('electron');
+  const im = nativeImage.createFromBuffer(buf);
+  const { width: w, height: h } = im.getSize();
+  if (!w || !h || w < 96 || Math.abs(w - h) > Math.max(w, h) * 0.08) return false;
+  const bmp = im.toBitmap(); // BGRA
+  const a = (x, y) => bmp[(y * w + x) * 4 + 3];
+  const m = Math.max(1, Math.round(w * 0.04)), n = Math.round(h * 0.04);
+  return [[m, n], [w - 1 - m, n], [m, h - 1 - n], [w - 1 - m, h - 1 - n]].every(([x, y]) => a(x, y) > 200);
+}
+async function pickIcon(gid) {
+  const icons = (await sgdb(`/icons/game/${gid}?types=static&nsfw=false&humor=false`)) || [];
+  const cands = icons.filter((i) => i.mime === 'image/png' || /\.png($|\?)/i.test(i.url || ''))
+    .sort((a, b) => (Math.abs(a.width - a.height) - Math.abs(b.width - b.height)) || (b.width - a.width) || ((b.score || 0) - (a.score || 0)))
+    .slice(0, 8);
+  for (const c of cands) {
+    try { if (iconOpaque(await fetchImage(c.url))) return c.url; } catch {}
+  }
+  return null;
+}
+async function gameIcon({ key, name, year }) {
   if (!config.sgdbKey || !name) return null;
   const k = String(key || name);
   const c = iconCache[k];
-  if (c && (c.url || Date.now() - c.t < 7 * 864e5)) return c.url || null;
+  if (c && (c.custom || c.url || Date.now() - c.t < 7 * 864e5)) return c.url || null;
   if (iconInflight.has(k)) return iconInflight.get(k);
   const job = (async () => {
     let url = null;
     try {
-      const games = await sgdbGames(String(name).replace(/[™®©]/g, '').replace(/\s+trophies$/i, ''));
+      const games = await sgdbGames(String(name).replace(/[™®©]/g, '').replace(/\s+trophies$/i, ''), year);
       if (games[0]) {
-        const icons = (await sgdb(`/icons/game/${games[0].id}?types=static&nsfw=false&humor=false`)) || [];
-        const good = icons.filter((i) => i.mime === 'image/png' || /\.png($|\?)/i.test(i.url || ''))
-          .sort((a, b) => (Math.abs(a.width - a.height) - Math.abs(b.width - b.height)) || (b.width - a.width) || ((b.score || 0) - (a.score || 0)));
-        url = good[0]?.url || null;
+        for (const g of games.slice(0, 2)) {
+          url = await pickIcon(g.id);
+          if (url) break;
+        }
       }
     } catch (e) { return null; } // offline or rejected key: try again next time
     iconCache[k] = { url, t: Date.now() };
@@ -944,6 +1018,7 @@ async function sgdbArt({ name, kind, gameId }) {
   if (!gid) return { games, gameId: null, images: [] };
   const ep = kind === 'grid' ? `/grids/game/${gid}?dimensions=600x900,342x482,660x930&types=static&nsfw=false&humor=false`
     : kind === 'hero' ? `/heroes/game/${gid}?types=static&nsfw=false&humor=false`
+    : kind === 'icon' ? `/icons/game/${gid}?types=static&nsfw=false&humor=false&mimes=image/png`
     : `/logos/game/${gid}?types=static&nsfw=false&humor=false`;
   const imgs = (await sgdb(ep)) || [];
   const sorted = kind === 'logo' ? [...imgs].sort((a, b) => logoRank(a) - logoRank(b) || (b.score || 0) - (a.score || 0)) : [...imgs].sort((a, b) => (b.score || 0) - (a.score || 0));
@@ -1021,10 +1096,52 @@ async function downloadTo(url, dest, it, onBytes) {
   await fsp.rename(part, dest);
 }
 
+// Checksums: RomM keeps a size, md5 and sha1 for every file. Archives (zip, 7z, rar) are hashed by
+// their unpacked contents and CHDs by their own embedded hash, so those only get the size check.
+// Consoles RomM doesn't hash (PS4, Switch...) have no hashes and also only get the size check.
+const HASH_BY_CONTENTS = new Set(['zip', '7z', 'rar', 'chd']);
+async function checkFile(file, f, it) {
+  if (!f) return null;
+  const st = await fsp.stat(file).catch(() => null);
+  if (!st) return { why: 'missing', got: 'missing' };
+  if (f.file_size_bytes && st.size !== f.file_size_bytes) return { why: 'size', got: 'size:' + st.size };
+  const want = f.md5_hash ? ['md5', f.md5_hash] : f.sha1_hash ? ['sha1', f.sha1_hash] : null;
+  if (!want || HASH_BY_CONTENTS.has(path.extname(file).slice(1).toLowerCase())) return null;
+  it.currentFile = 'Checking ' + path.basename(file);
+  emitQueueThrottled();
+  const h = crypto.createHash(want[0]);
+  for await (const chunk of fs.createReadStream(file, { highWaterMark: 1 << 20 })) {
+    if (it.abort.signal.aborted) throw new Error('aborted');
+    h.update(chunk);
+  }
+  const got = h.digest('hex');
+  return got === String(want[1]).toLowerCase() ? null : { why: 'hash', got };
+}
+// Damaged files are deleted, so Retry downloads them again instead of skipping them as complete.
+// If the retry brings exactly the same file, the server has it that way and RomM's checksum is out
+// of date (the file changed after RomM scanned it): keep it and say so instead of failing forever.
+const lastBad = new Map(); // file -> what the previous attempt got
+async function checkFiles(pairs, it) {
+  const bad = [];
+  for (const [file, f] of pairs) {
+    const r = await checkFile(file, f, it);
+    if (!r) { lastBad.delete(file); continue; }
+    if (r.why !== 'missing' && lastBad.get(file) === r.got) { lastBad.delete(file); it.notice = 'stale'; log('download kept, RomM checksum out of date', path.basename(file)); continue; }
+    lastBad.set(file, r.got);
+    bad.push([file, r.why]);
+  }
+  it.currentFile = null;
+  if (!bad.length) return;
+  for (const [file] of bad) await fsp.rm(file, { force: true }).catch(() => {});
+  log('download damaged', bad.map(([f, w]) => path.basename(f) + ':' + w).join(', '));
+  throw new Error(`Damaged download: ${path.basename(bad[0][0])}${bad.length > 1 ? ` and ${bad.length - 1} more` : ''} didn't match RomM's checksum. Retry to download again.`);
+}
+
 async function runJob(it) {
   it.status = 'downloading';
   it.abort = new AbortController();
   it.error = null;
+  it.notice = null;
   emitQueue();
   const base = await resolveBase();
   let lastT = Date.now(), lastB = 0;
@@ -1059,6 +1176,7 @@ async function runJob(it) {
         if (!files[0] || !/not found|404/.test(e.message)) throw e;
         await downloadTo(`${base}/api/roms/${rom.id}/content/${encodeURIComponent(fname)}`, finalPath, it, onBytes);
       }
+      await checkFiles([[finalPath, files[0]]], it);
     } else {
       // Multi-file: mirror the server folder, one file at a time (resumable)
       const folder = path.join(target, rom.fs_name);
@@ -1073,6 +1191,7 @@ async function runJob(it) {
         await downloadTo(`${base}/api/roms/${f.id}/files/content/${encodeURIComponent(f.file_name)}`, dest, it, onBytes);
       }
       it.currentFile = null;
+      await checkFiles(files.map((f) => [path.join(folder, f.full_path.startsWith(romPrefix) ? f.full_path.slice(romPrefix.length) : f.file_name), f]), it);
       finalPath = folder;
       // Multi-disc: generate an .m3u if the server has none
       const exts = files.map((f) => (f.file_name.split('.').pop() || '').toLowerCase());
@@ -1107,6 +1226,7 @@ async function runJob(it) {
     saveManifest();
     installedMap[rom.id] = finalPath;
     broadcast('installed-changed', { romId: rom.id, path: finalPath });
+    try { if (steamMgr.onDownloaded(rom.id)) broadcast('steam-auto', { romId: rom.id, name: rom.name, action: 'add' }); } catch (e) { log('steam auto add', e.message); }
   } catch (e) {
     if (it.abort.signal.aborted) { it.status = it.status === 'paused' ? 'paused' : 'cancelled'; }
     else { it.status = 'error'; it.error = e.message; }
@@ -1133,6 +1253,69 @@ async function downloadBios(platformId, slug) {
   return { count: list.length, files: done, dir };
 }
 
+// ---------------------------------------------------------------- storage manager
+// Like Steam's: each drive with what Cartridge's games use, what else uses it and what is free, and
+// every game on this device by size. Sizes are measured on disk (folders walked) and cached by mtime.
+const sizeCache = new Map(); // path -> { m, size }
+async function sizeOnDisk(p) {
+  const st = await fsp.stat(p).catch(() => null);
+  if (!st) return 0;
+  if (!st.isDirectory()) return st.size;
+  const c = sizeCache.get(p);
+  if (c && c.m === st.mtimeMs) return c.size;
+  let size = 0;
+  const walk = async (d, depth) => {
+    for (const e of await fsp.readdir(d, { withFileTypes: true }).catch(() => [])) {
+      const q = path.join(d, e.name);
+      if (e.isDirectory() && depth < 12) await walk(q, depth + 1);
+      else if (e.isFile()) size += (await fsp.stat(q).catch(() => ({ size: 0 }))).size;
+    }
+  };
+  await walk(p, 0);
+  sizeCache.set(p, { m: st.mtimeMs, size });
+  return size;
+}
+function mounts() {
+  try {
+    return fs.readFileSync('/proc/mounts', 'utf8').split('\n').map((l) => l.split(' ')[1]).filter(Boolean)
+      .map((m) => m.replace(/\\040/g, ' ')).sort((a, b) => b.length - a.length);
+  } catch { return ['/']; }
+}
+function driveOf(p, list) {
+  let real; try { real = fs.realpathSync(p); } catch { real = p; }
+  const mount = list.find((m) => real === m || real.startsWith(m.endsWith('/') ? m : m + '/')) || '/';
+  const name = path.basename(mount);
+  const internal = mount === '/' || /^\/(home|var|var\/home|sysroot)$/.test(mount);
+  return { mount, label: internal ? 'This device' : name || mount };
+}
+async function storageOverview() {
+  const list = mounts();
+  const drives = new Map();
+  const addDrive = async (p) => {
+    if (!p) return null;
+    let d = p; while (d && !isDir(d)) { const up = path.dirname(d); if (up === d) break; d = up; }
+    const dv = driveOf(d || '/', list);
+    if (!drives.has(dv.mount)) {
+      let free = 0, total = 0;
+      try { const st = await fsp.statfs(dv.mount); free = st.bavail * st.bsize; total = st.blocks * st.bsize; } catch {}
+      drives.set(dv.mount, { ...dv, free, total, games: 0, count: 0 });
+    }
+    return drives.get(dv.mount);
+  };
+  await addDrive(config.romsRoot);
+  const roms = new Map(library ? Object.values(library.roms).flat().map((r) => [r.id, r]) : []);
+  const games = [];
+  for (const [id, p] of Object.entries(installedMap)) {
+    if (!p || p === MARKED) continue;
+    const r = roms.get(Number(id));
+    const dv = await addDrive(p);
+    const size = await sizeOnDisk(p);
+    dv.games += size; dv.count++;
+    games.push({ romId: Number(id), name: r?.name || path.basename(p), platform: r?.platform_display_name || '', cover: r ? r.path_cover_small || r.url_cover || null : null, path: p, size, at: manifest[id]?.at || 0, drive: dv.mount });
+  }
+  return { drives: [...drives.values()].sort((a, b) => ((b.label === 'This device') - (a.label === 'This device')) || b.total - a.total), games };
+}
+
 // ---------------------------------------------------------------- self-update (GitHub Releases)
 let updateState = { state: 'idle' };
 let autoUpdater = null;
@@ -1151,6 +1334,42 @@ function setupUpdater() {
   const check = () => autoUpdater.checkForUpdates().catch(() => {});
   setTimeout(check, 8000);
   setInterval(check, 6 * 3600e3);
+}
+
+// ---------------------------------------------------------------- controller detection
+// Steam Input shows apps a virtual Xbox 360 pad (Valve 28de:11ff). The real controllers are still
+// listed by Linux, so read those to draw the right button icons.
+const PADS = [
+  [/^054c:/, 'playstation', 'PlayStation controller'],
+  [/^057e:/, 'nintendo', 'Nintendo controller'],
+  [/^28de:1205$/, 'steam', 'Steam Deck'],
+  [/^28de:(1102|1142|1101)$/, 'steam', 'Steam Controller'],
+  [/^28de:/, 'steam', 'Steam controller'],
+  [/^045e:/, 'xbox', 'Xbox controller'],
+  [/^0b05:/, 'xbox', 'ROG Ally'],
+  [/^17ef:/, 'xbox', 'Legion Go'],
+  [/^2dc8:/, 'xbox', '8BitDo controller'],
+];
+function detectPad() {
+  let txt = '';
+  try { txt = fs.readFileSync('/proc/bus/input/devices', 'utf8'); } catch { return null; }
+  const found = [];
+  for (const block of txt.split(/\n\s*\n/)) {
+    const I = block.match(/^I: Bus=(\w+) Vendor=(\w+) Product=(\w+)/m);
+    const N = block.match(/^N: Name="([^"]*)"/m);
+    const H = block.match(/^H: Handlers=(.*)$/m);
+    if (!I || !H || !/\bjs\d+/.test(H[1])) continue; // controllers only
+    const id = `${I[2]}:${I[3]}`.toLowerCase();
+    if (id === '28de:11ff' || /virtual|x-box 360 pad \d/i.test(N?.[1] || '') && id.startsWith('28de')) continue; // Steam Input's virtual pad
+    const ev = Number((H[1].match(/event(\d+)/) || [])[1] || 0);
+    const hit = PADS.find(([re]) => re.test(id));
+    const builtin = /^(28de:1205|0b05:|17ef:)/.test(id) || I[1] === '0019';
+    found.push({ id, name: N?.[1] || '', kind: hit ? hit[1] : 'xbox', label: hit ? hit[2] : N?.[1] || 'Controller', bus: I[1], ev, builtin });
+  }
+  if (!found.length) return { kind: null, devices: [] };
+  // a controller you plugged in or paired wins over the handheld's own; newest first
+  found.sort((a, b) => (a.builtin - b.builtin) || (b.ev - a.ev));
+  return { kind: found[0].kind, name: found[0].name || found[0].label, devices: found };
 }
 
 // ---------------------------------------------------------------- window + ipc
@@ -1228,6 +1447,55 @@ const trophySvc = require('./trophyService')({
   USER_DATA, api, broadcast: (c, d) => broadcast(c, d), log, loadJson,
   getConfig: () => config, saveConfig: () => saveConfig(), getLibrary: () => library,
 });
+// ---------------------------------------------------------------- Steam ROM manager
+function coverCrop(buf, W, H) {
+  const { nativeImage } = require('electron');
+  const im = nativeImage.createFromBuffer(buf);
+  if (im.isEmpty()) return null;
+  const { width: w, height: h } = im.getSize();
+  const s = Math.max(W / w, H / h);
+  const rw = Math.round(w * s), rh = Math.round(h * s);
+  const r = im.resize({ width: rw, height: rh, quality: 'best' });
+  return r.crop({ x: Math.max(0, Math.floor((rw - W) / 2)), y: Math.max(0, Math.floor((rh - H) / 3)), width: W, height: H }).toPNG();
+}
+function asPng(buf) {
+  if (!buf) return null;
+  const { nativeImage } = require('electron');
+  const im = nativeImage.createFromBuffer(buf);
+  return im.isEmpty() ? null : im.toPNG();
+}
+async function sgdbImage(name, kind) {
+  if (!config.sgdbKey || !name) return null;
+  const g = (await sgdbGames(name))[0];
+  if (!g) return null;
+  const ep = kind === 'grid' ? `/grids/game/${g.id}?dimensions=600x900&types=static&nsfw=false&humor=false`
+    : kind === 'wide' ? `/grids/game/${g.id}?dimensions=920x430,460x215&types=static&nsfw=false&humor=false`
+    : `/heroes/game/${g.id}?types=static&nsfw=false&humor=false`;
+  const list = ((await sgdb(ep)) || []).sort((a, b) => (b.score || 0) - (a.score || 0));
+  // only take images of the right shape (a portrait cover is no use as a wide banner)
+  const fits = (w, h) => (kind === 'grid' ? h > w : kind === 'wide' ? w > h * 1.6 : w > h * 1.4);
+  for (const i of list.filter((x) => !x.width || fits(x.width, x.height)).slice(0, 3)) {
+    try {
+      const { nativeImage } = require('electron');
+      const im = nativeImage.createFromBuffer(await fetchImage(i.url));
+      const { width: w, height: h } = im.getSize();
+      if (!im.isEmpty() && fits(w, h)) return im.toPNG();
+    } catch {}
+  }
+  return null;
+}
+const romIndexMain = () => { const m = new Map(); for (const list of Object.values(library?.roms || {})) for (const r of list) m.set(r.id, r); return m; };
+const steamMgr = require('./steamManager')({
+  USER_DATA, log, PLATFORM_MAP, getConfig: () => config, saveConfig: () => saveConfig(), broadcast: (c, d) => broadcast(c, d), getLibrary: () => library,
+  installed: () => installedMap, MARKED, markedPath: (r) => marks[r.id]?.path || null,
+  romById: (id) => romIndexMain().get(id) || null,
+  artFor: (id) => artOverrides[id] || null,
+  fetchImage: async (src) => asPng(await fetchImage(src)),
+  sgdbImage, cropTo: coverCrop,
+  logoFile: async (rom) => { if (!rom) return null; await logoFor({ id: rom.id, name: rom.name, romm: rom.logo }).catch(() => null); const c = logoCache[rom.id]; return c?.file ? path.join(LOGO_DIR, c.file) : null; },
+  emulationRoots: () => { const emu = readEmuDeckSettings(); return require('./trophies').emulationRoots([emu.emulationPath, config.romsRoot && path.dirname(config.romsRoot)].filter(Boolean)); },
+  isGamescope,
+});
 const handlers = {
   ...trophySvc.handlers,
   'config:get': () => config,
@@ -1257,6 +1525,9 @@ const handlers = {
   'ra:supported': ({ slug, fs_slug }) => !!(RA_CONSOLES[slug] ?? RA_CONSOLES[fs_slug]),
   'syslogo:get': (p) => sysLogo(p),
   'icon:get': (p) => gameIcon(p),
+  'pad:detect': () => detectPad(),
+  'icon:set': ({ key, url }) => { iconCache[String(key)] = { url, t: Date.now(), custom: true }; try { fs.writeFileSync(ICON_FILE, JSON.stringify(iconCache)); } catch {} return url; },
+  'icon:reset': ({ key }) => { delete iconCache[String(key)]; try { fs.writeFileSync(ICON_FILE, JSON.stringify(iconCache)); } catch {} return true; },
   'logo:fetchAll': () => fetchAllLogos(),
   'logo:stopAll': () => { if (fetchAll) fetchAll.stop = true; return true; },
   'art:all': () => artOverrides,
@@ -1312,6 +1583,35 @@ const handlers = {
     const j = await r.json();
     return j.raw_token;
   },
+  // QR pairing: RomM's device sign-in (/api/auth/device, newer RomM). Cartridge asks for a short
+  // code, shows it as a QR code linking to RomM's /pair/device page, and polls until it's approved
+  // on the phone. Older RomM has no such endpoint: the UI falls back to a typed pairing code.
+  'server:qrStart': async ({ base, link }) => {
+    const b = trimUrl(base);
+    if (!config.deviceId) { config.deviceId = crypto.randomUUID(); saveConfig(); }
+    const r = await fetch(`${b}/api/auth/device/init`, {
+      method: 'POST', headers: { ...authHeaders({ ...config.server, auth: 'none', username: '' }), 'Content-Type': 'application/json' }, signal: AbortSignal.timeout(15000),
+      body: JSON.stringify({ client_device_identifier: config.deviceId, name: `Cartridge on ${os.hostname()}`.slice(0, 255), client: 'Cartridge', platform: 'linux', client_version: app.getVersion(),
+        requested_scopes: ['me.read', 'roms.read', 'roms.user.read', 'roms.user.write', 'platforms.read', 'assets.read', 'firmware.read', 'collections.read'] }),
+    });
+    if (r.status === 404 || r.status === 405) throw new Error('This RomM version has no QR pairing. Use a pairing code instead.');
+    if (r.status === 429) throw new Error('RomM is limiting pairing requests. Try again in a minute.');
+    if (!r.ok) throw new Error(`QR pairing failed (HTTP ${r.status})`);
+    const j = await r.json();
+    return { userCode: j.user_code, deviceCode: j.device_code, interval: j.interval || 5, expiresIn: j.expires_in || 600, url: trimUrl(link || base) + j.verification_path_complete };
+  },
+  'server:qrPoll': async ({ base, deviceCode }) => {
+    const r = await fetch(`${trimUrl(base)}/api/auth/device/token`, {
+      method: 'POST', headers: { ...authHeaders({ ...config.server, auth: 'none', username: '' }), 'Content-Type': 'application/json' }, signal: AbortSignal.timeout(15000),
+      body: JSON.stringify({ device_code: deviceCode }),
+    });
+    if (r.ok) return { token: (await r.json()).access_token };
+    const detail = (await r.json().catch(() => ({}))).detail || '';
+    if (detail === 'authorization_pending' || detail === 'slow_down' || r.status === 429) return { pending: true, slow: detail === 'slow_down' };
+    if (detail === 'access_denied') throw new Error('Pairing was declined in RomM');
+    if (detail === 'expired_token') throw new Error('The QR code expired. Start again.');
+    throw new Error(`Pairing failed (HTTP ${r.status})`);
+  },
   'server:reconnect': async () => ({ base: await resolveBase(true) }),
   'server:status': async () => ({ base: await resolveBase(), route: activeBase === trimUrl(config.server.localUrl) ? 'local' : 'remote' }),
   'api:get': ({ path: p, query }) => api(p, { query }),
@@ -1337,7 +1637,7 @@ const handlers = {
     let target = p || manifest[romId]?.path;
     // a hand-made mark has no files of its own: only remove the mark, never touch folders
     if (target === MARKED || (marks[romId] && !manifest[romId] && (!target || target === MARKED))) {
-      delete marks[romId]; saveMarks(); computeInstalled(); return true;
+      delete marks[romId]; saveMarks(); computeInstalled(); try { steamMgr.onDeleted(romId); } catch {} return true;
     }
     if (!target) throw new Error('Nothing to delete');
     // never delete a whole console folder or the ROMs root
@@ -1348,6 +1648,7 @@ const handlers = {
     saveManifest();
     delete installedMap[romId];
     broadcast('installed-changed', { romId, path: null });
+    try { if (steamMgr.onDeleted(romId)) broadcast('steam-auto', { romId, action: 'remove' }); } catch (e) { log('steam auto remove', e.message); }
     return true;
   },
   'dl:add': (job) => enqueue(job),
@@ -1375,6 +1676,7 @@ const handlers = {
     return { path: path.resolve(d), parent: path.dirname(path.resolve(d)), dirs, files };
   },
   'fs:mkdir': async (dir) => { await fsp.mkdir(dir, { recursive: true }); return true; },
+  'storage:overview': () => storageOverview(),
   'fs:space': async (dir) => {
     let d = dir;
     while (d && !isDir(d)) { const up = path.dirname(d); if (up === d) break; d = up; }
@@ -1405,6 +1707,28 @@ const handlers = {
     if (!res.length) throw new Error('Add Cartridge to Steam first (Add a Non-Steam Game), then try again.');
     return res;
   },
+  'steam:overview': () => steamMgr.overview(),
+  'steam:preview': () => steamMgr.preview(),
+  'steam:apply': (o) => steamMgr.apply(o || {}),
+  'steam:undo': () => steamMgr.undo(),
+  'steam:restart': () => steamMgr.restartSteam(),
+  'steam:queueAdd': (items) => steamMgr.queueAdd(items),
+  'steam:queueRemove': (ids) => steamMgr.queueRemove(ids),
+  'steam:queueClear': () => steamMgr.queueClear(),
+  'steam:removeAll': () => steamMgr.removeAllOurs(),
+  'steam:collections': () => steamMgr.collections(),
+  'steam:test': ({ key }) => steamMgr.test(key),
+  'steam:testTemplate': ({ key, template }) => steamMgr.test(key, template),
+  'steam:setTemplate': ({ key, template }) => steamMgr.setTemplate(key, template),
+  'steam:setMode': ({ key, mode }) => steamMgr.setMode(key, mode),
+  'steam:verify': () => steamMgr.verifyCollections(),
+  'steam:fixCollections': () => steamMgr.fixCollections(),
+  'steam:report': () => steamMgr.startupReport(),
+  'steam:last': () => steamMgr.lastStatus(),
+  'steam:forRom': ({ romId }) => steamMgr.forRom(Number(romId)),
+  'steam:setConfig': (patch) => { config.steam = { ...(config.steam || {}), ...patch }; saveConfig(); return config.steam; },
+  'steam:setPath': ({ romId, path: p }) => { if (!isDir(p) && !fs.existsSync(p)) throw new Error('That folder does not exist'); marks[romId] = { ...(marks[romId] || { at: Date.now() }), path: p }; saveMarks(); return true; },
+  'app:startGame': () => { const g = startGame; startGame = null; return g; },
   'update:get': () => ({ ...updateState, current: app.getVersion(), supported: !!autoUpdater }),
   'update:check': async () => { if (!autoUpdater) throw new Error('Updates work in the AppImage build only'); await autoUpdater.checkForUpdates(); return updateState; },
   'update:install': () => { if (updateState.state === 'ready') autoUpdater.quitAndInstall(true, true); },

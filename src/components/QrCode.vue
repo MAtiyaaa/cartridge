@@ -6,15 +6,15 @@
 </template>
 <script setup>
 import { computed } from 'vue';
-import qrcode from 'qrcode-generator';
+import QRCode from 'qrcode'; // the same library Setup uses for RomM's QR sign-in
 const props = defineProps({ text: { type: String, default: '' } });
 const QUIET = 2;
-const qr = computed(() => { const q = qrcode(0, 'M'); q.addData(props.text || ' '); q.make(); return q; });
-const size = computed(() => qr.value.getModuleCount() + QUIET * 2);
+const qr = computed(() => QRCode.create(props.text || ' ', { errorCorrectionLevel: 'M' }).modules);
+const size = computed(() => qr.value.size + QUIET * 2);
 const d = computed(() => {
-  const q = qr.value, n = q.getModuleCount();
+  const q = qr.value, n = q.size;
   let s = '';
-  for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) if (q.isDark(y, x)) s += `M${x + QUIET} ${y + QUIET}h1v1h-1z`;
+  for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) if (q.get(y, x)) s += `M${x + QUIET} ${y + QUIET}h1v1h-1z`;
   return s;
 });
 </script>

@@ -5,6 +5,7 @@ import android.app.Presentation;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.content.pm.ResolveInfo;
 import android.graphics.Color;
 import android.hardware.display.DisplayManager;
 import android.hardware.input.InputManager;
@@ -279,6 +280,46 @@ public class CartridgeNativePlugin extends Plugin {
     public void openUrl(PluginCall call) {
         try {
             Intent i = new Intent(Intent.ACTION_VIEW, Uri.parse(call.getString("url")));
+            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            getActivity().startActivity(i);
+            call.resolve();
+        } catch (Exception e) {
+            call.reject(e.getMessage());
+        }
+    }
+
+    // Apps that run PC (Windows) games on Android. Their game lists are private to each app, so
+    // Cartridge can only open them for you (Settings → Android → Steam & PC game apps).
+    private static final java.util.regex.Pattern PC_APPS = java.util.regex.Pattern.compile("gamenative|gamehub|winlator", java.util.regex.Pattern.CASE_INSENSITIVE);
+
+    @PluginMethod
+    public void launchers(PluginCall call) {
+        JSArray out = new JSArray();
+        try {
+            PackageManager pm = getContext().getPackageManager();
+            Intent i = new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER);
+            java.util.HashSet<String> seen = new java.util.HashSet<>();
+            for (ResolveInfo r : pm.queryIntentActivities(i, 0)) {
+                String pkg = r.activityInfo.packageName;
+                String label = String.valueOf(r.loadLabel(pm));
+                if (seen.contains(pkg) || !(PC_APPS.matcher(pkg).find() || PC_APPS.matcher(label).find())) continue;
+                seen.add(pkg);
+                JSObject o = new JSObject();
+                o.put("pkg", pkg);
+                o.put("label", label);
+                out.put(o);
+            }
+        } catch (Exception ignored) {}
+        JSObject res = new JSObject();
+        res.put("apps", out);
+        call.resolve(res);
+    }
+
+    @PluginMethod
+    public void openApp(PluginCall call) {
+        try {
+            Intent i = getContext().getPackageManager().getLaunchIntentForPackage(call.getString("pkg", ""));
+            if (i == null) { call.reject("That app isn't installed"); return; }
             i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             getActivity().startActivity(i);
             call.resolve();

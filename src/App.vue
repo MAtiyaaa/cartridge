@@ -7,12 +7,12 @@
       <button v-if="store.history.length" class="backbtn" aria-label="Back" @click="back()"><Icon name="mdiArrowLeft" :size="22" /></button>
       <div class="brand"><Logo :size="30" /><span class="brand-word">Cartridge</span></div>
       <nav class="tabs">
-        <Btn b="LT" style="margin: 0 4px" />
+        <Btn b="LT" class="tab-trig" />
         <button v-for="t in tabs" :key="t.name" class="tab" :class="{ active: activeTab === t.name }" @click="tab(t.name)">
           <Icon :name="t.icon" :size="18" /><span class="tab-label">{{ t.label }}</span>
           <span v-if="t.name === 'downloads' && activeDl.length" class="tab-badge">{{ activeDl.length }}</span>
         </button>
-        <Btn b="RT" style="margin: 0 4px" />
+        <Btn b="RT" class="tab-trig" />
       </nav>
       <div class="spacer" />
       <label class="top-search" :class="{ on: store.route.name === 'search' }">
@@ -23,6 +23,7 @@
       </label>
       <div class="sys">
         <div v-if="syncBusy" class="item sync-pill"><Icon name="mdiSync" :size="16" class="spin" />{{ syncLabel }}</div>
+        <div v-if="steam.progress" class="item sync-pill"><Icon name="mdiSteam" :size="16" />{{ steamProgressLabel(steam.progress) }}</div>
         <div v-if="activeDl.length" class="item">
           <svg width="22" height="22" viewBox="0 0 36 36" class="ring"><circle cx="18" cy="18" r="15" fill="none" stroke="rgba(255,255,255,.12)" stroke-width="4" /><circle cx="18" cy="18" r="15" fill="none" stroke="url(#rg)" stroke-width="4" stroke-linecap="round" :stroke-dasharray="`${dlPct * 0.943} 100`" transform="rotate(-90 18 18)" /><defs><linearGradient id="rg"><stop offset="0" style="stop-color: var(--primary-l)" /><stop offset="1" style="stop-color: var(--peach)" /></linearGradient></defs></svg>
           {{ dlPct }}%
@@ -36,7 +37,7 @@
       <component :is="views[store.route.name]" :key="viewKey" v-bind="store.route.params" />
     </main>
     <footer class="hintbar">
-      <div class="left"><Btn b="START" />Menu<Btn b="SELECT" style="margin-left: 10px" />Downloads</div>
+      <div class="left"><span class="hint"><Btn b="START" />Menu</span><span class="hint"><Btn b="SELECT" />Downloads</span></div>
       <span v-for="h in store.hints" :key="h.b + h.label" class="hint"><Btn :b="h.b" />{{ h.label }}</span>
     </footer>
   </div>
@@ -48,6 +49,9 @@
   <FolderPicker v-if="store.modal?.type === 'folder'" v-bind="store.modal.props" />
   <Menu v-if="store.modal?.type === 'menu'" v-bind="store.modal.props" />
   <ColorPicker v-if="store.modal?.type === 'color'" v-bind="store.modal.props" />
+  <SteamCollections v-if="store.modal?.type === 'steam-collections'" :key="JSON.stringify(store.modal.props.selected) + (store.modal.props.extra || []).join()" v-bind="store.modal.props" />
+  <SteamPreview v-if="store.modal?.type === 'steam-preview'" v-bind="store.modal.props" />
+  <SteamEmu v-if="store.modal?.type === 'steam-emu'" :key="JSON.stringify(store.modal.props)" v-bind="store.modal.props" />
   <ArtPicker v-if="store.modal?.type === 'art'" :key="store.modal.props.query || ''" v-bind="store.modal.props" />
 
   <div class="pops">
@@ -74,6 +78,7 @@ import { pushLayer, focusFirst } from './nav.js';
 import { setSoundEnabled, setSoundStyle, sfx } from './sfx.js';
 import { applyTheme, CARD_SIZES } from './themes.js';
 import { setPointerPref } from './nav.js';
+import { detectPad } from './pad.js';
 import Icon from './components/Icon.vue';
 import Btn from './components/Btn.vue';
 import Logo from './components/Logo.vue';
@@ -85,6 +90,10 @@ import Grade from './components/Grade.vue';
 import FolderPicker from './components/FolderPicker.vue';
 import Menu from './components/Menu.vue';
 import ArtPicker from './components/ArtPicker.vue';
+import SteamCollections from './components/SteamCollections.vue';
+import SteamPreview from './components/SteamPreview.vue';
+import SteamEmu from './components/SteamEmu.vue';
+import { steamReport, steam, steamProgressLabel } from './steam.js';
 import ColorPicker from './components/ColorPicker.vue';
 import PairOverlay from './components/PairOverlay.vue';
 import { IS_ANDROID } from './platform.js';
@@ -187,6 +196,7 @@ onMounted(async () => {
   setSoundEnabled(store.config.ui.sounds !== false);
   setSoundStyle(store.config.ui.soundPack, store.config.ui.volume);
   applyTheme(store.config.ui);
+  detectPad();
   setPointerPref(store.config.ui.pointer);
   await loadLibrary();
   // Phone remote on desktop: tell phones what's on screen while it's turned on (Android always does)
@@ -196,6 +206,11 @@ onMounted(async () => {
     window.cart.on('remote:settings', (r) => r?.enabled && pub());
   }
   loadArt();
+  // opened from a Steam shortcut whose game is gone (--game <id>), or a second launch handing over
+  const openGame = (id) => { if (id && store.lib) { store.quickMenu = false; go('game', { romId: Number(id) }); } };
+  call('app:startGame').then(openGame).catch(() => {});
+  window.cart.on('open-game', openGame);
+  if (!IS_ANDROID || store.config?.android?.steamApps) setTimeout(steamReport, 2500); // Android: only when Steam options are on
   if (store.config.configured) call('server:status').then((c) => (store.connection = c)).catch(() => {});
   pushLayer(document.body, {
     back: () => { if (viewHandler('back') !== false) return; back(); },
@@ -232,7 +247,11 @@ watch(() => store.downloads.map((d) => d.id + d.status).join(), () => {
   for (const d of store.downloads) {
     if (d.status !== 'done' || announced.has(d.id)) continue;
     announced.add(d.id);
-    if (dlPrimed) { toast(`${d.name} is ready to play`, 'ok', 3800, 'mdiCheckCircle'); sfx.done(); }
+    if (dlPrimed) {
+      if (d.notice === 'stale') toast(`${d.name} is ready. RomM's checksum for it looks out of date, so a rescan in RomM would fix that.`, 'info', 6000, 'mdiCheckCircle');
+      else toast(`${d.name} is ready to play`, 'ok', 3800, 'mdiCheckCircle');
+      sfx.done();
+    }
   }
   dlPrimed = true;
 });
@@ -257,6 +276,7 @@ watch(viewKey, async () => {
 </script>
 
 <style scoped>
+.tab-trig { margin: 0 4px; }
 .top-search { display: flex; align-items: center; gap: 8px; flex: 0 1 260px; min-width: 130px; height: 40px; padding: 0 10px 0 14px; border-radius: 999px; background: rgba(255, 255, 255, 0.06); border: 1px solid var(--line); color: var(--muted); cursor: text; transition: border-color 0.14s, background 0.14s; }
 .top-search.on, .top-search:focus-within { background: rgba(255, 255, 255, 0.1); border-color: var(--primary-l); color: var(--text); }
 .top-search:focus-within { box-shadow: var(--ring); }

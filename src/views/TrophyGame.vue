@@ -6,8 +6,8 @@
       <header class="tg-head">
         <GameIcon :title="g.title" :rom-id="g.romId" :fallback="g.icon || (rom ? cover(rom) : '')" :size="150" :grade="g.kind === 'trophy' ? 'P' : null" />
         <div class="tg-info">
-          <div class="eyebrow">{{ g.platform }}<template v-if="g.remoteOnly"> · from another device</template></div>
-          <h1 class="tg-title">{{ g.title }}</h1>
+          <div class="eyebrow tg-eyebrow"><ConsoleMark :slug="SLUG[g.src]" :label="g.platform" /><template v-if="g.remoteOnly"> · from another device</template></div>
+          <GameLogo :logo="store.config.ui.logos !== false ? gameLogo : null" :name="g.title" cls="tg-title" :area="15000" :max-w="440" :max-h="100" />
           <div class="bar tg-bar"><i :style="{ width: pct + '%' }" /></div>
           <div class="tg-prog">
             <template v-if="g.kind === 'gamerscore'"><span><b>{{ l.score }}</b> / {{ l.possible }} Gamerscore · {{ l.earned }} of {{ l.total }} achievements</span></template>
@@ -18,6 +18,7 @@
           </div>
           <div class="row" style="gap: 10px; margin-top: 6px">
             <button v-if="g.romId" class="btn primary" data-focus @click="go('game', { romId: g.romId })"><Icon name="mdiGamepadVariantOutline" />Open in library</button>
+            <button class="btn icon-btn" data-focus @click="more"><Icon name="mdiDotsHorizontal" :size="22" /><span>More</span></button>
             <div class="seg">
               <button v-for="f in filters" :key="f.v" data-focus :class="{ on: filter === f.v }" @click="filter = f.v">{{ f.l }}</button>
             </div>
@@ -47,12 +48,14 @@
 
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue';
-import { store, call, go, cover, img, setBg, romById, GRADE } from '../store.js';
+import { store, call, go, cover, img, setBg, romById, GRADE, iconKey, iconChanged, choose, openModal, toast, logoOf } from '../store.js';
 import { useView } from '../useView.js';
 import { focusFirst } from '../nav.js';
 import Icon from '../components/Icon.vue';
 import Grade from '../components/Grade.vue';
 import GameIcon from '../components/GameIcon.vue';
+import GameLogo from '../components/GameLogo.vue';
+import ConsoleMark from '../components/ConsoleMark.vue';
 
 // One game's trophies (or Xbox 360 achievements), from this device and any other synced device
 const props = defineProps({ tkey: String });
@@ -65,6 +68,9 @@ const filters = [{ v: 'all', l: 'All' }, { v: 'unlocked', l: 'Unlocked' }, { v: 
 const l = computed(() => g.value?.light || {});
 const pct = computed(() => (l.value.total ? Math.round((l.value.earned / l.value.total) * 100) : 0));
 const rom = computed(() => romById(g.value?.romId));
+const SLUG = { rpcs3: 'ps3', shadps4: 'ps4', xenia: 'xbox360', vita3k: 'psvita' };
+const hash = (t) => { let h = 5381; for (const c of String(t)) h = ((h * 33) ^ c.charCodeAt(0)) >>> 0; return h.toString(36); };
+const gameLogo = computed(() => (!g.value ? null : rom.value ? logoOf(rom.value) : logoOf({ id: 'tro' + hash(g.value.title), name: g.value.title.replace(/[™®©]/g, '') })));
 const totals = computed(() => { const o = { P: 0, G: 0, S: 0, B: 0 }; for (const t of g.value?.trophies || []) if (o[t.grade] !== undefined) o[t.grade]++; return o; });
 const order = { P: 0, G: 1, S: 2, B: 3 };
 const shown = computed(() => {
@@ -84,8 +90,24 @@ async function load() {
   } catch (e) { error.value = e.message; }
 }
 watch(() => store.trophyVer, load);
-useView({ y: () => { const i = filters.findIndex((f) => f.v === filter.value); filter.value = filters[(i + 1) % filters.length].v; } },
-  [{ b: 'Y', label: 'Filter' }, { b: 'B', label: 'Back' }]);
+// More: change or reset the game's icon (SteamGridDB)
+async function more() {
+  const key = iconKey(g.value?.romId, g.value?.title);
+  const opts = [{ label: 'Change icon', sub: 'SteamGridDB', value: 'icon', icon: 'mdiImageEditOutline' }, { label: 'Reset icon', sub: 'Back to the automatic pick', value: 'reset', icon: 'mdiRestore' }];
+  if (g.value?.romId) opts.push({ label: 'Open in library', value: 'lib', icon: 'mdiGamepadVariantOutline' });
+  const v = await choose({ title: g.value.title, options: opts });
+  if (v === 'lib') { go('game', { romId: g.value.romId }); return; }
+  if (v === 'reset') { await call('icon:reset', { key }); iconChanged(key); toast('Icon reset', 'ok', 2000, 'mdiRestore'); return; }
+  if (v !== 'icon') return;
+  if (!store.config.sgdbKey) { toast('Add a SteamGridDB API key in Settings → Look & Feel first', 'error', 4500); return; }
+  const url = await openModal('art', { kind: 'icon', romName: rom.value?.name || g.value.title.replace(/[™®©]/g, '') });
+  if (!url) return;
+  await call('icon:set', { key, url });
+  iconChanged(key);
+  toast('Icon updated', 'ok', 2000, 'mdiCheck');
+}
+useView({ x: () => { const i = filters.findIndex((f) => f.v === filter.value); filter.value = filters[(i + 1) % filters.length].v; }, y: more },
+  [{ b: 'X', label: 'Filter' }, { b: 'Y', label: 'More' }, { b: 'B', label: 'Back' }]);
 onMounted(async () => { await load(); focusFirst(el.value); });
 </script>
 
@@ -97,6 +119,7 @@ onMounted(async () => { await load(); focusFirst(el.value); });
 .tg-icon img.cov { object-fit: cover; }
 .tg-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
 .tg-title { font-size: 34px; }
+.tg-eyebrow { font-size: 16px; letter-spacing: 0; }
 .tg-bar { height: 8px; max-width: 560px; }
 .tg-bar i { background: linear-gradient(90deg, #7fa8ff, #cfe0ff); }
 .tg-prog { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; font-size: 14px; color: #d4d8e2; }

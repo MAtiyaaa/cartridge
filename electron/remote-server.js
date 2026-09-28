@@ -24,7 +24,7 @@ const LAN_CHANNELS = new Set([
   'remote:info', 'remote:get', 'remote:cmd', 'remote:unpair',
 ]);
 // Events a phone receives (the rest stay on the device)
-const LAN_EVENTS = new Set(['library', 'installed', 'installed-changed', 'downloads', 'sync', 'remote:state', 'remote:config', 'remote:info', 'logos-progress']);
+const LAN_EVENTS = new Set(['library', 'installed', 'installed-changed', 'downloads', 'sync', 'remote:state', 'remote:config', 'remote:info', 'logos-progress', 'remote:link']);
 const API_OK = /^\/api\/roms\/\d+$/; // RomM reads a phone may make through the device (game details)
 
 const sha = (s) => crypto.createHash('sha256').update(String(s)).digest('hex');
@@ -206,6 +206,8 @@ module.exports = function createRemoteServer(opts) {
     'remote:get': () => companion,
     'remote:cmd': (c) => { send('remote:cmd', c); return true; },
     'remote:info': () => info(),
+    // a link for connected phones to open (RomM's QR sign-in approval page, from Setup)
+    'remote:link': (l) => { if (!/^https?:\/\//.test(String(l?.url || ''))) throw new Error('Not a web link'); send('remote:link', { title: String(l.title || '').slice(0, 80), url: l.url, code: String(l.code || '').slice(0, 20) }); return phonesOnline(); },
     'remote:peers': () => peers(),
   };
 
