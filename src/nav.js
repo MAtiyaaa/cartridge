@@ -226,6 +226,7 @@ function stopGlide() { cancelAnimationFrame(glide); glide = 0; }
 window.addEventListener('pointerdown', (e) => {
   stopGlide();
   if (e.button !== 0 || e.target.closest('input, textarea, [data-nodrag]')) { drag = null; return; }
+  if (e.pointerType === 'touch' && window.cart?.nativeTouch) { drag = null; return; } // Android: the WebView scrolls natively
   drag = { id: e.pointerId, x: e.clientX, y: e.clientY, lx: e.clientX, ly: e.clientY, axis: null, sc: null, target: e.target, hist: [] };
 }, { capture: true, passive: true });
 window.addEventListener('pointermove', (e) => {

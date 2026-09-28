@@ -1,5 +1,5 @@
 import { reactive, markRaw } from 'vue';
-import { romimg } from './platform.js';
+import { romimg, IS_ANDROID } from './platform.js';
 
 const rd = window.cart;
 export const call = (ch, arg) => rd.call(ch, arg ? JSON.parse(JSON.stringify(arg)) : arg);
@@ -71,7 +71,8 @@ export const askText = (props) => openModal('keyboard', props);
 // Built-in on-screen keyboard: always, never (Steam keyboard), or Auto = in Game Mode only
 export function builtinKb() {
   const k = store.config?.ui?.keyboard || 'auto';
-  return k === 'builtin' || (k === 'auto' && !!store.info?.gamescope);
+  // Android: the system keyboard would grab the D-pad, so Auto uses the built-in one there too
+  return k === 'builtin' || (k === 'auto' && (!!store.info?.gamescope || IS_ANDROID));
 }
 export const pickFolder = (props) => openModal('folder', props);
 export const choose = (props) => openModal('menu', props);

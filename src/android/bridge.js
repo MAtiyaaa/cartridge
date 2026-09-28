@@ -53,6 +53,7 @@ function listen() {
 }
 
 export const cart = {
+  nativeTouch: true, // nav.js leaves touch scrolling to the WebView
   call,
   on,
   img: (query) => `${base}/romimg/?_k=${token}&${query}`,
