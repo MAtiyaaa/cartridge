@@ -7,6 +7,7 @@ export const isCompanion = params.has('companion');
 
 let base = '';
 let token = '';
+let ports = []; // image ports (see imgUrl)
 const listeners = new Map(); // channel -> Set(fn)
 const overrides = new Map(); // channel -> fn(arg), answered in the WebView instead of Node
 
@@ -14,13 +15,14 @@ function emit(ch, data) {
   for (const fn of listeners.get(ch) || []) { try { fn(data); } catch (e) { console.error(e); } }
 }
 
-// Images are spread over i0-i7.localhost (all loopback): the WebView opens only 6 connections per
-// host, and one host made every cover wait in line behind slow server fetches, on both screens.
+// Images are spread over several ports: the WebView opens only 6 connections per host:port, and a
+// single port made every cover wait in line behind slow server fetches, on both screens. The same
+// image always maps to the same port, so the browser cache still hits.
 function imgUrl(query) {
   let h = 0;
   for (let i = 0; i < query.length; i++) h = (h * 31 + query.charCodeAt(i)) | 0;
-  const port = base.slice(base.lastIndexOf(':') + 1);
-  return `http://i${Math.abs(h) % 8}.localhost:${port}/romimg/?_k=${token}&${query}`;
+  const port = ports.length ? ports[Math.abs(h) % ports.length] : base.slice(base.lastIndexOf(':') + 1);
+  return `http://127.0.0.1:${port}/romimg/?_k=${token}&${query}`;
 }
 // Backend payloads carry romimg:// URLs; point them at the local server instead.
 const ROMIMG = /romimg:\/\/img\/\?([^\s"')]*)/g;
@@ -67,7 +69,7 @@ export const cart = {
   img: (query) => imgUrl(query),
   override: (ch, fn) => overrides.set(ch, fn),
   emit,
-  get server() { return { base, token }; },
+  get server() { return { base, token, ports }; },
 };
 
 // Resolves once the Node backend is reachable
@@ -75,6 +77,7 @@ export const ready = (async () => {
   if (isCompanion || params.has('port')) { // companion screen, or the UI opened in a browser for testing
     base = `http://127.0.0.1:${params.get('port')}`;
     token = params.get('k') || '';
+    ports = (params.get('ports') || '').split(',').map(Number).filter(Boolean);
   } else {
     const { NodeJS } = await import('capacitor-nodejs');
     const info = await new Promise((resolve) => {
@@ -83,6 +86,7 @@ export const ready = (async () => {
     });
     base = `http://127.0.0.1:${info.port}`;
     token = info.token;
+    ports = info.ports || [];
   }
   window.cart = cart;
   listen();

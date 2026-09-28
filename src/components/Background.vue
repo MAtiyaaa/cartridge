@@ -25,6 +25,7 @@ import { romimg } from '../platform.js';
 import { RENDERERS, DARK_BASE } from '../bgRenderers.js';
 import { paletteOf, lightEffects } from '../themes.js';
 import { lastInput } from '../nav.js';
+const props = defineProps({ still: Boolean });
 
 const mode = computed(() => {
   const m = store.config?.ui?.bgStyle || 'waves';
@@ -32,7 +33,8 @@ const mode = computed(() => {
 });
 const painted = computed(() => !!RENDERERS[mode.value] || mode.value === 'solid');
 const light = computed(() => lightEffects(store.config?.ui, store.info));
-const reduce = computed(() => store.config?.ui?.motion === 'reduce');
+// `still`: one frame, no animation (the Android second screen)
+const reduce = computed(() => props.still || store.config?.ui?.motion === 'reduce');
 watch(light, (v) => document.body.classList.toggle('light-fx', v), { immediate: true });
 
 // ---------- animated canvas backgrounds

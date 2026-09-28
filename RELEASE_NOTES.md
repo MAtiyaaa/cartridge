@@ -1,15 +1,13 @@
-## Cartridge 0.6.2 · The Android Hotfix
+## Cartridge 0.6.3 · Second Screen Polish
+
+### Changed
+- **The second screen looks like the first.** It is rebuilt from the same pieces as the top screen:
+  - **Games:** a banner with the game's artwork and logo, the cover art on top, then the same details line as the Home header, Open and Download, and the description with Show more.
+  - **Consoles:** a banner in the console's own colours with its logo, how many games are on your server and on this device, and its ROM folder.
+  - **Collections and Favourites:** a banner of their covers, the name and how many games they hold.
+  - **Downloads:** cover, name, live progress and speed, with cancel and retry.
+  - The top screen's tabs, buttons and panels.
+- **The second screen's background stays still.** It uses the same theme, colours, background style and wallpaper as the top screen, without the animation.
 
 ### Fixed
-- **Tapping a section in Settings now opens it.** On a touchscreen the list on the left ignored taps.
-- **Game art loads much faster,** on both screens. Images now load many at a time instead of six at once, which also fixes covers that showed on the top screen but not the bottom one. An image that fails to load gets one more try.
-- **Look & Feel changes show on the second screen right away:** theme, colours, fonts, panels, background and wallpaper.
-- **Moving up from the second row goes to the row above,** not the top bar, even when that row is scrolled sideways. The same fix applies to moving down.
-- **Long game descriptions on the second screen** show four lines, with More to read the rest.
-
-### New
-- **Consoles and collections on the second screen.** Highlight a console and the bottom screen shows its tile, how many games it has, how many are on this device and its ROM folder. Collections show their covers and counts. Both have Open on top screen.
-- **Bigger touch targets** on the second screen.
-
-### Also in this release
-- **Everything from Cartridge 0.5.6:** square game icons on the trophy pages, fine-tuned colours for highlights, buttons, progress bars and the background, shadPS4 trophy fixes, and smoother performance.
+- **Game art loads reliably and fast on both screens.** Images now load over several connections at once without depending on special addresses, and each one fades in once it is ready instead of popping in or showing as broken.

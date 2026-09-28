@@ -131,8 +131,8 @@ export async function afterMount() {
   }
 
   // ---------------- second screen (AYN Thor and other dual-screen devices)
-  const { base, token } = cart.server;
-  const companionUrl = `${base}/ui/index.html?companion=1&port=${new URL(base).port}&k=${token}`;
+  const { base, token, ports } = cart.server;
+  const companionUrl = `${base}/ui/index.html?companion=1&port=${new URL(base).port}&k=${token}&ports=${ports.join(',')}`;
   const refreshCompanion = async () => {
     const d = await Native.displays().catch(() => ({ secondary: null }));
     store.androidDisplays = d;

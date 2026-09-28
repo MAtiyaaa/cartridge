@@ -1,7 +1,7 @@
 {
   "name": "cartridge",
   "productName": "Cartridge",
-  "version": "0.6.2",
+  "version": "0.6.3",
   "description": "Controller-first RomM client for SteamOS, Bazzite and Android",
   "main": "electron/main.js",
   "author": "abdu2304",
@@ -50,7 +50,7 @@
       }
     ],
     "releaseInfo": {
-      "releaseName": "Cartridge 0.6.2 · The Android Hotfix",
+      "releaseName": "Cartridge 0.6.3 · Second Screen Polish",
       "releaseNotesFile": "RELEASE_NOTES.md"
     }
   },
