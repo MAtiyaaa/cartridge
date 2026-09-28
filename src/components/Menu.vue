@@ -3,7 +3,7 @@
     <div class="dialog" style="min-width: 460px">
       <h2 v-if="title">{{ title }}</h2>
       <p v-if="message" class="muted" style="margin: 0; line-height: 1.5; white-space: pre-line">{{ message }}</p>
-      <div class="menu-list">
+      <div class="menu-list" data-scroll>
         <button
           v-for="(o, i) in options" :key="i" class="menu-item" :class="{ danger: o.danger, selected: o.selected }"
           data-focus :data-autofocus="(o.selected || (i === 0 && !anySelected)) ? '' : undefined" @click="closeModal(o.value)"

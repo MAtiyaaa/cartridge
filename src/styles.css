@@ -188,6 +188,7 @@ img { -webkit-user-drag: none; }
 @keyframes pop { from { transform: scale(0.96) translateY(8px); opacity: 0; } }
 .dialog h2 { font-size: 22px; }
 .menu-list { display: flex; flex-direction: column; gap: 6px; overflow-y: auto; padding: 4px; }
+.menu-list > * { flex: none; }
 .menu-item { display: flex; align-items: center; gap: 14px; padding: 14px 16px; border-radius: 8px; background: rgba(255, 255, 255, 0.05); border: 1px solid transparent; transition: background 0.15s; }
 .menu-item.danger { color: #ffa39c; }
 .menu-item.selected { border-color: rgba(var(--primary-l-rgb), 0.5); }

@@ -2,6 +2,20 @@
 
 Every Cartridge release, newest first. Each GitHub release only lists its own changes.
 
+## Cartridge 0.7.5 · Steam & Polish
+
+### New: abdu2304's 0.7.5, 0.7.6 and 0.7.7
+Everything from the original Cartridge's latest three releases is now part of this build:
+- **Steam consoles have their own page** (Settings → Steam): each console as a card with its logo and how many games are in Steam, every downloaded game with In Steam or Not in Steam, and **Add all**.
+- **Adding games to Steam in Game Mode works live** when Decky Loader is installed: shortcut, launch options, artwork and collections go straight into the running Steam, with no restart. Without Decky, Cartridge watches Steam much more closely so changes aren't lost. **Live changes** in Settings → Steam shows the state and can turn it on.
+- **Logos on games added to Steam no longer show blank.**
+- **How long to beat on every game page:** Main story, Main + extras and Completionist, from RomM or HowLongToBeat, looked up once and saved.
+- **New collection and series tiles** with the game's artwork and fanned covers.
+- **One "Change metadata" entry** in a game's More menu for cover, logo, background and reset.
+- **Fixes:** the Steam collection list and long pop-up menus scroll with a controller, a game page scrolls back up to its banner, and console tiles keep their rounded corners when highlighted.
+
+On Android, the Steam options still only appear when Settings → Android → Steam & PC game apps is on.
+
 ## Cartridge 0.7.4 · Security & Resume
 
 ### New
@@ -148,6 +162,44 @@ Everything from the original Cartridge's latest two releases is now part of this
 
 ### Also in this release
 - Everything from 0.5.5 (smoother held D-pad scrolling, Home fixes, LT / RT switch tabs).
+
+## Cartridge 0.7.7 · Steam Logo Fix (abdu2304)
+
+Included in this fork from 0.7.5.
+
+### Fixed
+- **Logos on games added to Steam could show blank.** Steam only shows a shortcut's logo once it has a position, so Cartridge now saves one (bottom left) right after the logo, the same way the SteamGridDB Decky plugin does. Applies when games are added live through Decky Loader.
+
+## Cartridge 0.7.6 · Steam Fixes (abdu2304)
+
+Included in this fork from 0.7.5.
+
+### Fixed
+- **Adding games to Steam in Game Mode.** Game Mode starts Steam again the moment it closes, so Cartridge's changes could be lost or never written, and the top bar stayed on "Waiting for Steam…". When Decky Loader is installed, Cartridge now adds games straight into the running Steam, the same way the SteamGridDB plugin changes artwork: shortcut, launch options, artwork and collections, with no restart. Removing works the same way.
+- **Restart Steam from Game Mode.** When Decky Loader is installed, Restart Steam asks Steam to restart itself, like the SteamGridDB plugin does.
+- **Without Decky Loader**, Cartridge now watches much more closely for Steam closing in Game Mode, so the change is written before Game Mode brings Steam back.
+
+### New
+- **Live changes (Settings → Steam).** Shows whether Steam takes changes live. Without Decky Loader, **Turn on** adds the same small file Decky uses to open Steam's interface to apps on this device. Restart Steam once afterwards.
+
+### Changed
+- **One "Change metadata" entry in a game's More menu** instead of three. It opens Change cover, Change logo, Change background and Reset artwork.
+
+## Cartridge 0.7.5 · Fixes and Polish (abdu2304)
+
+Included in this fork from 0.7.5.
+
+### New
+- **Steam consoles have their own page (Settings → Steam).** Each console is now a card with its logo, how many games you have and how many are in Steam. Open one to see every downloaded game for that console with **In Steam** or **Not in Steam**, and add or remove each one with A. **Add all** adds the rest in one go. The emulator setup (Target, Start in, Launch options) is shown at the top, and **More** holds Edit, Test and how games start.
+- **How long to beat on every game page.** Main story, Main + extras and Completionist times. Cartridge uses RomM's times when it has them, and otherwise asks HowLongToBeat itself. Results are saved, so each game is looked up once.
+
+### Changed
+- **New collection and series tiles.** Collections and series show a game's artwork with its covers fanned on top, and a series shows its game logo. Genres keep their tiles.
+
+### Fixed
+- **The Steam collection list couldn't scroll** past the first few collections with a controller, and the rows squashed together. Long pop-up menus had the same problem.
+- **A game page wouldn't scroll back up to its banner** after you scrolled down. Moving back to the buttons now shows the top of the page again.
+- **Console tiles showed square edges** when highlighted: the colour strip and faded logo slipped past the rounded corners.
 
 ## Cartridge 0.7.0 · The Library Update (abdu2304)
 

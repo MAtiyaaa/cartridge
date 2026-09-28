@@ -121,6 +121,9 @@ function scrollIntoViewSmart(el) {
   const sc = el.closest('[data-scroll]');
   if (!sc) return;
   const s = sc.getBoundingClientRect();
+  // nothing focusable above this one: show the top of the page too (a game's banner, a page header)
+  const first = [...sc.querySelectorAll('[data-focus]')].find((x) => !x.disabled && x.offsetParent !== null);
+  if (first === el) { sc.scrollTo({ top: 0, behavior: scrollMode() }); return; }
   const vpad = Math.min(120, s.height * 0.2);
   if (r.top < s.top + vpad) sc.scrollBy({ top: r.top - s.top - vpad, behavior: scrollMode() });
   else if (r.bottom > s.bottom - vpad) sc.scrollBy({ top: r.bottom - s.bottom + vpad, behavior: scrollMode() });

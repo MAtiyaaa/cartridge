@@ -135,6 +135,7 @@ module.exports = function createSteamManager(ctx) {
   let queue = (() => { try { return JSON.parse(fs.readFileSync(QUEUE_FILE, 'utf8')); } catch { return { add: [], remove: [], collections: {} }; } })();
   const GONE_FILE = path.join(USER_DATA, 'steam-games-removed.json'); // so Undo can bring them back as ours
   const gone = (() => { try { return JSON.parse(fs.readFileSync(GONE_FILE, 'utf8')); } catch { return {}; } })();
+  const live = require('./steamLive')({ log });
   const saveReg = () => { try { fs.writeFileSync(REG_FILE, JSON.stringify(reg, null, 1)); fs.writeFileSync(GONE_FILE, JSON.stringify(gone)); } catch {} };
   const saveQueue = () => { try { fs.writeFileSync(QUEUE_FILE, JSON.stringify(queue)); } catch {} ctx.broadcast('steam-queue', queueInfo()); };
 
@@ -407,6 +408,11 @@ module.exports = function createSteamManager(ctx) {
   }
   // Which downloaded games are already in Steam (ours, or added some other way)
   const nameKey = (n) => String(n || '').toLowerCase().replace(/[™®©]/g, '').replace(/\s+/g, ' ').trim();
+  // a game added live whose shortcut Steam hasn't saved to disk yet
+  function liveHit(g) {
+    const hit = Object.entries(reg).find(([, r]) => r.live && r.romId === g.rom.id);
+    return hit ? { appid: Number(hit[0]) >>> 0, name: hit[1].name, exe: hit[1].exe } : null;
+  }
   function inSteamIndex(scs) {
     const byPath = new Map(), byName = new Map();
     for (const sc of scs) {
@@ -439,7 +445,7 @@ module.exports = function createSteamManager(ctx) {
     const scs = env.account ? readShortcuts(env.account) : [];
     const find = inSteamIndex(scs);
     const games = installedGames().map((g) => {
-      const sc = find(g);
+      const sc = find(g) || liveHit(g);
       const ours = sc && reg[sc.appid];
       const queued = queue.add.some((a) => a.romId === g.rom.id) ? 'add' : sc && queue.remove.includes(sc.appid) ? 'remove' : null;
       return { romId: g.rom.id, name: g.rom.name, console: g.key, platform: g.platform.display_name, inSteam: !!sc, ours: !!ours, appid: sc?.appid || null, queued, file: g.file };
@@ -475,7 +481,7 @@ module.exports = function createSteamManager(ctx) {
     const g = installedGames().find((x) => x.rom.id === romId);
     const out = { steam: !!env.account, installed: !!g, console: g?.key || consoleOfRom(romId), needsFolder: !!g && !g.file, inSteam: false, ours: false, appid: null, queued: null };
     if (!env.account || !g) return out;
-    const sc = inSteamIndex(readShortcuts(env.account))(g);
+    const sc = inSteamIndex(readShortcuts(env.account))(g) || liveHit(g);
     out.inSteam = !!sc; out.ours = !!(sc && reg[sc.appid]); out.appid = sc?.appid || null;
     out.queued = queue.add.some((a) => a.romId === romId) ? 'add' : sc && queue.remove.includes(sc.appid) ? 'remove' : null;
     out.lastCollections = (cfg().lastCollections || {})[out.console] || null;
@@ -611,18 +617,50 @@ module.exports = function createSteamManager(ctx) {
     for (const id of removeIds) { if (reg[id]) gone[id] = reg[id]; delete reg[id]; }
     saveReg();
     writeScript();
+    // Steam's interface reachable (Decky Loader, or live changes turned on): change it while it runs
+    if (await live.available(p.account.root)) {
+      const res = await applyLive(p, f, removeIds).catch((e) => { log('steam live apply failed, using the helper', e.message); return null; });
+      if (res) return finishApply(p, { started: true, live: true, added: res.added, removed: res.removed, steamWillRestart: false });
+    }
     runHelper('last', {
       id: stamp, stamp, add, remove: removeIds, collections, restart, gamescope: !!ctx.isGamescope(), flatpakSteam: !!p.account.flatpak,
       shortcutsFile: f.shortcuts, cloudFile: Object.keys(collections).length ? f.cloud : null, configFile: add.some((a) => a.proton) ? f.config : null,
       backupDir: BACKUP_DIR, logFile: path.join(USER_DATA, 'steam-apply.log'),
     });
+    log('steam apply started', p.entries.length, 'add,', removeIds.length, 'remove');
+    return finishApply(p, { started: true, added: p.entries.length, removed: removeIds.length, steamWillRestart: steamRunning() });
+  }
+  function finishApply(p, out) {
     const lc = cfg().lastCollections ||= {};
     for (const e of p.entries) lc[e.console] = e.collections || [];
     ctx.saveConfig();
     queue = { add: [], remove: [], collections: queue.collections || {} };
     saveQueue();
-    log('steam apply started', p.entries.length, 'add,', removeIds.length, 'remove');
-    return { started: true, added: p.entries.length, removed: removeIds.length, steamWillRestart: steamRunning() };
+    return out;
+  }
+  // Live: each shortcut is added through Steam itself, which picks the appid, so the registry and
+  // artwork move to Steam's id. Removing is one call. Writes the same status file the helper does.
+  async function applyLive(p, f, removeIds) {
+    const statusFile = path.join(JOB_DIR, 'last.status.json');
+    fs.mkdirSync(JOB_DIR, { recursive: true });
+    const put = (o) => { try { fs.writeFileSync(statusFile, JSON.stringify({ ...o, at: Date.now(), live: true })); } catch {} };
+    put({ state: 'writing' });
+    let added = 0;
+    for (const e of p.entries) {
+      const id = await live.addShortcut({ name: e.name, exe: q(e.exe), start: q(e.start), lo: e.lo, art: { dir: f.grid, id: e.appid }, proton: e.proton, collections: e.collections });
+      if (id !== (e.appid >>> 0)) {
+        reg[id] = reg[e.appid]; delete reg[e.appid];
+        // Steam stored its own copy of the artwork: drop ours, named after the old id
+        for (const n of [`${e.appid}p.png`, `${e.appid}.png`, `${e.appid}_hero.png`, `${e.appid}_logo.png`]) { try { fs.rmSync(path.join(f.grid, n), { force: true }); } catch {} }
+      }
+      reg[id].live = true; // Steam may save its shortcuts file a while later: count it as in Steam now
+      added++;
+      saveReg();
+    }
+    for (const id of removeIds) await live.removeShortcut(id);
+    log('steam live apply', added, 'added,', removeIds.length, 'removed');
+    put({ state: 'done', added, removed: removeIds.length });
+    return { added, removed: removeIds.length };
   }
   // Put back the shortcuts file from before the last change (Steam has to be closed for it)
   async function undo() {
@@ -684,8 +722,10 @@ module.exports = function createSteamManager(ctx) {
     return { fixed: miss.length, steamWillRestart: steamRunning() };
   }
   function removeAllOurs() { return queueRemove(Object.keys(reg).map(Number)); }
-  function restartSteam() {
+  async function restartSteam() {
     const env = environment();
+    // in Game Mode Steam must restart itself (closing it from outside races Game Mode bringing it back)
+    if (env.account && (await live.available(env.account.root))) { try { await live.restart(); log('steam restarted from its interface'); return true; } catch (e) { log('steam live restart failed', e.message); } }
     runHelper('restart', { id: 'restart', stamp: 'restart-' + Date.now(), onlyRestart: true, restart: true, gamescope: !!ctx.isGamescope(), flatpakSteam: !!env.account?.flatpak, backupDir: BACKUP_DIR, logFile: path.join(USER_DATA, 'steam-apply.log') });
     return true;
   }
@@ -757,6 +797,9 @@ module.exports = function createSteamManager(ctx) {
   return {
     overview, preview, apply, undo, restartSteam, removeAllOurs, queueAdd, queueRemove, queueClear, queueInfo, test, setTemplate, setMode, verifyCollections,
     collections: () => { const env = environment(); return env.account ? readCollections(env.account) : []; },
+    // live changes: is Steam's interface reachable, and turning on its local debugging port
+    liveInfo: async () => { const env = environment(); if (!env.account) return { on: false, flag: false }; return { on: await live.available(env.account.root), flag: live.flagOn(env.account.root) }; },
+    liveEnable: () => { const env = environment(); if (!env.account) throw new Error('Steam was not found.'); fs.writeFileSync(path.join(env.account.root, live.FLAG), ''); return true; },
     onDownloaded, onDeleted, lastStatus, writeScript, startupReport, forRom, fixCollections, played,
     // exposed for tests
     _learnOne: learnOne, _tokenize: tokenize, _buildLaunch: buildLaunch, _learnAll: learnAll,

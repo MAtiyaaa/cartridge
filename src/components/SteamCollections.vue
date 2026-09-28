@@ -3,7 +3,7 @@
     <div class="dialog sc">
       <h2>Add to a Steam collection?</h2>
       <p class="muted" style="margin: 0; font-size: 13px">Pick any number, or none. {{ many ? 'Used for every game in this batch.' : 'Cartridge remembers your choice for this console.' }}</p>
-      <div class="sc-list">
+      <div class="sc-list" data-scroll>
         <button class="menu-item" data-focus :class="{ selected: !picked.length }" @click="picked = []">
           <Icon name="mdiCancel" /><span>None</span><Icon v-if="!picked.length" name="mdiCheck" class="tick" />
         </button>
@@ -49,6 +49,7 @@ onBeforeUnmount(() => layer?.pop());
 </script>
 <style scoped>
 .sc { width: min(560px, 94vw); }
-.sc-list { display: flex; flex-direction: column; gap: 4px; max-height: 50vh; overflow-y: auto; }
+.sc-list { display: flex; flex-direction: column; gap: 4px; max-height: 50vh; overflow-y: auto; padding: 4px; }
+.sc-list > * { flex: none; } /* rows keep their height and the list scrolls, instead of squashing together */
 .tick { margin-left: auto; color: var(--primary-l); }
 </style>
