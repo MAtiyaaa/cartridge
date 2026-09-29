@@ -41,6 +41,6 @@ async function paste() {
 .tf-input:focus { box-shadow: none !important; }
 .tf-input::placeholder { color: var(--dim); }
 .tf-reveal { background: none; border: 0; color: var(--muted); padding: 4px; margin-left: auto; }
-.tf-paste { display: inline-flex; align-items: center; gap: 5px; flex: none; height: 32px; padding: 0 10px; border-radius: 8px; background: rgba(255, 255, 255, 0.07); color: var(--muted); font-size: 12.5px; }
+.tf-paste { display: inline-flex; align-items: center; gap: 5px; flex: none; height: 32px; padding: 0 10px; border-radius: var(--r-md); background: var(--s2); color: var(--muted); font-size: var(--t-xs); }
 .tf-paste:focus { box-shadow: var(--ring); color: var(--text); }
 </style>

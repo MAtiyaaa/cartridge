@@ -12,8 +12,8 @@
       <div class="list" data-scroll>
         <button class="menu-item" data-focus data-autofocus @click="open(cur.parent)" v-if="cur.path !== '/'"><Icon name="mdiArrowUp" />..</button>
         <button v-for="d in cur.dirs" :key="d" class="menu-item" data-focus @click="open(join(cur.path, d))"><Icon name="mdiFolder" style="color: var(--primary-l)" />{{ d }}</button>
-        <button v-for="f in cur.files || []" :key="'f' + f" class="menu-item" data-focus @click="closeModal(join(cur.path, f))"><Icon name="mdiImageOutline" style="color: var(--peach)" />{{ f }}</button>
-        <div v-if="!cur.dirs.length && !(cur.files || []).length" class="muted" style="padding: 12px">{{ files ? 'No images or subfolders here' : 'No subfolders' }}</div>
+        <button v-for="f in cur.files || []" :key="'f' + f" class="menu-item" data-focus @click="closeModal(join(cur.path, f))"><Icon :name="files === '*' ? 'mdiFileOutline' : 'mdiImageOutline'" style="color: var(--muted)" />{{ f }}</button>
+        <div v-if="!cur.dirs.length && !(cur.files || []).length" class="muted" style="padding: 12px">{{ files === '*' ? 'Nothing here' : files ? 'No images or subfolders here' : 'No subfolders' }}</div>
       </div>
       <div class="row" style="justify-content: flex-end">
         <button v-if="!files" class="btn" data-focus @click="newFolder"><Icon name="mdiFolderPlus" />New folder</button>
@@ -32,7 +32,7 @@ import { closeModal, call, askText, store, toast } from '../store.js';
 import Icon from './Icon.vue';
 import Btn from './Btn.vue';
 
-const props = defineProps({ title: { type: String, default: 'Choose a folder' }, subtitle: String, start: String, hidden: Boolean, files: Array });
+const props = defineProps({ title: { type: String, default: 'Choose a folder' }, subtitle: String, start: String, hidden: Boolean, files: [Array, String] });
 const el = ref(null);
 const cur = reactive({ path: '', parent: '', dirs: [], files: [] });
 const places = ref([]);
@@ -73,8 +73,8 @@ onBeforeUnmount(() => layer.pop());
 <style scoped>
 .picker { width: min(820px, 94vw); height: 82vh; }
 .places { display: flex; gap: 8px; flex-wrap: wrap; }
-.crumb { display: flex; gap: 8px; align-items: center; padding: 10px 14px; background: var(--bg); border-radius: 7px; font-family: ui-monospace, monospace; font-size: 13px; color: var(--muted); overflow: hidden; white-space: nowrap; }
+.crumb { display: flex; gap: 8px; align-items: center; padding: 10px 14px; background: var(--bg); border-radius: var(--r-sm); font-family: ui-monospace, monospace; font-size: var(--t-sm); color: var(--muted); overflow: hidden; white-space: nowrap; }
 .list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; padding: 4px; }
-.kb-hints { display: flex; gap: 18px; justify-content: center; font-size: 12px; }
+.kb-hints { display: flex; gap: 18px; justify-content: center; font-size: var(--t-xs); }
 .hint { display: flex; align-items: center; gap: 6px; }
 </style>

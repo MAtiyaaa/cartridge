@@ -44,7 +44,7 @@ LT/RT switch top tabs. LB/RB only switch sections inside a page. A select, B bac
 - Steam must be closed before `shortcuts.vdf` is written. The helper is copied out of the AppImage and run through `systemd-run --user ... KillMode=process`. Steam's appid formula with quotes around the exe. Existing shortcuts are kept exactly.
 - Shortcut learning: keep Target, Start in and Launch options, strip frame generation wrappers (mako-run, lsfg), keep `vblank_mode`, keep quoting, first `/roms/` in a path, replace `/tmp/.mount_` Start In, `styled()` path aliases.
 - Trophies: read only; unlocks only added, earliest wins; notes title prefix `'Cartridge troph'`; picture notes under 44,000 characters; folders de-duplicated by device:inode; icons served by token only.
-- Touch: `touch-action: none` plus the pointer-based drag in `nav.js`. The app starts in pad mode; instant scroll while a direction is held.
+- Touch (rebuilt in 0.8.2 at the owner's request): real touches scroll natively (`touch-action: pan-x pan-y`); mouse-typed pointers (Game Mode can send touches as mouse) use the drag in `nav.js` (applied once per frame, momentum). The app starts in pad mode; instant scroll while a direction is held.
 - Delete refuses the ROMs root and console folders; a mark never touches files.
 - Single modal slot: nested dialogs save `store.modal.resolve` and reopen themselves (see FolderPicker, SteamCollections, SteamEmu).
 - Square-only game icons (`iconOpaque`), `sgScore` match ranking.
@@ -125,6 +125,22 @@ LT/RT switch top tabs. LB/RB only switch sections inside a page. A select, B bac
 
 ## 0.8.1
 - `.net` pill colour coded: nearly solid dark green (LAN), purple (Tunnel), red (Offline) backgrounds with a matching edge.
+
+## 0.8.2
+- Launch options: `launchFor()` in steamManager: Target = `"exe"`, Launch options = arguments (no leading `%command%`); with `pre` (vblank_mode, env) `<pre> %command% <args>`. `sigOf` v3. `steam:refresh` converts in place with `steamLive.updateShortcut` (same appid; `reg.inPlace`), else re-adds. `badLo` = ours with arguments in Exe.
+- nav.js: gamepad polled on `setInterval(8)`; LT/RT by value only (> 0.6, armed after seen < 0.6), axes 2/5 for non-standard pads; repeat 220 ms then 70/40 ms; `glideBy`/`glideTo` 120 ms scroll; up/down keep a column (`colX`). `padLive`, `lastPointer` feed `ControllerTest.vue` (About).
+- Light effects keep a card focus ring (`body.light-fx .card:focus .art`). Card ring shows instantly (transition on transform only).
+- Play sessions: `syncPlay()` in main.js posts Steam play-time deltas to RomM `/api/play-sessions` (device from `/api/devices`, `config.rommDevice`), reads other devices' sessions back (`remotePlay`); `play:stats` entries carry `device`/`remote`. Older RomM: `props?update_last_played`. `play-sync.json` keeps what was sent. QR pairing asks `devices.read/write`. Device name (`config.trophies.device`) lives in About; `play:device` renames it in RomM.
+- Trophies: `config.trophies.hidden` keys (`trophies:hide`) are left out of summary and recent; TrophyPanel Show/Sort menus and Hidden toggle; TrophyGame More hide/show.
+- SteamGridDB heroes ask `dimensions=3840x1240,1920x620` first and sort by width; ArtPicker shows sizes.
+
+## 0.9.0 (Setup)
+- Design system (direction B, owner's pick): `docs/design.md`. Tokens in `styles.css` `:root` (`--t-*` type scale, `--s-*` space, `--r-sm/md/lg`, `--s0..s3` surfaces, `--d-*` motion, `--display-stretch`). Focus is white everywhere (`--focus`/`--on-focus`, `--ring` white). Section titles have no icons (`.subh > svg`, `.shelf-title > .icon` hidden). Shared `.lrow`, `.status`, `.page-head`, `.sec-title`. Use tokens, not new px values.
+- Brand: `Logo.vue` flat mark in `#EF4B23`; theme `cartridge` (neutral, `neutral: true` gives a flat `--xmb`), font `cartridge` (Archivo + Inter), surface `solid` are the defaults. `configVersion: 3` moves old default look values (purple/glass/outfit/waves) to the new ones and sets `setupDone` for existing users. `steam-art/*` and `build/icon.png` regenerated.
+- `electron/detect.js`: AppImages by content (ELF + `AI` type byte), reads `.desktop`/AppStream from the squashfs (gzip, zstd via Node, xz/lzma via system `xz`; DwarFS falls back to name), `.upd_info`, `identify()` (conf 3/2/1, `FAMILY` for yuzu forks), `identifyProgram` (strings, needs 12+ mentions), `walk()` (budgeted home walk), `menuEntries`, `srmConfigs`, `extraBinDirs`, `missingFuse2`, `flatpakCanSee`.
+- steamManager: `scanEmulators` → `emulators-found.json`; `foundFor(id)` (conf ≥ 2 or `steam.confirmed[path]`) feeds `candidates()`; SRM configs as `srm:` candidates; learned templates with a missing exe are skipped. `setupOverview`, `preflight` (flatpak access, exec bit, FUSE 2, core, `bios.js` status), `useFile` (Browse), `health`/`healthFix` (relink live via `updateShortcut`), `movedEmulators` (start-up check), `setupReport` (scrubbed), `templateForGame` (`steam.gameEmus[romId]`), `syncConsoleCollections` (`steam.consoleCollections`). Reg entries carry `emu`/`emuExe`.
+- Views: `EmuSetup.vue` (route `emu-setup`, `first` on first launch until `config.setupDone`), `ShortcutHealth.vue` (`steam-health`), `FirstTour.vue` (modal `tour`, `ui.toured`), `ManualViewer.vue` (modal `manual`, pdf.js, loaded on demand), `LibraryCheck.vue` (Settings → Storage, `library:verify`). `fs:list` takes `files: '*'`; `clip:write`.
+- `npm test`: `test/detect.test.js` (fake homes, squashfs fixtures in `test/fixtures`). Not shipped in the AppImage.
 
 ## Releases (full steps: HANDOFF D8)
 Only when the owner asks. Bump `version` and `build.releaseInfo.releaseName` ("Cartridge X.Y.Z") in `package.json`, put only this version's notes in `RELEASE_NOTES.md` (heading `## Cartridge X.Y.Z · Title`), add them to the top of `CHANGELOG.md`, grouped as New / Changed / Fixed with bold lead-ins. CI builds, launch-checks and publishes.

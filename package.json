@@ -1,13 +1,14 @@
 {
   "name": "cartridge",
   "productName": "Cartridge",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "description": "Controller-first RomM client for SteamOS, Bazzite and Android",
   "main": "electron/main.js",
   "author": "abdu2304",
   "license": "MIT",
   "scripts": {
     "dev": "vite",
+    "test": "node --test test/*.test.js",
     "build:ui": "vite build && vite build --mode remote",
     "start": "vite build && vite build --mode remote && electron .",
     "dist": "vite build && vite build --mode remote && electron-builder --linux AppImage --x64 --publish never",
@@ -51,11 +52,12 @@
       }
     ],
     "releaseInfo": {
-      "releaseName": "Cartridge 0.8.0 · Your Library, Alive",
+      "releaseName": "Cartridge 0.9.0 · Setup",
       "releaseNotesFile": "RELEASE_NOTES.md"
     }
   },
   "dependencies": {
+    "@fontsource-variable/archivo": "^5.3.0",
     "@fontsource-variable/inter": "^5.3.0",
     "@fontsource-variable/lexend": "^5.3.0",
     "@fontsource-variable/nunito": "^5.3.0",
@@ -83,6 +85,7 @@
     "electron-builder": "26.15.3",
     "jpeg-js": "^0.4.4",
     "pngjs": "^7.0.0",
+    "pdfjs-dist": "^4.10.38",
     "vite": "8.3.1"
   },
   "desktopName": "cartridge.desktop",

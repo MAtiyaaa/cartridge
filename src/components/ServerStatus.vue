@@ -47,8 +47,8 @@ onMounted(load);
 <style scoped>
 .ss { padding: 18px 20px; display: flex; flex-direction: column; gap: 14px; }
 .ss-top { display: flex; align-items: center; gap: 14px; }
-.ss-top b { font-family: var(--display); font-size: 17px; }
-.small { font-size: 12.5px; }
+.ss-top b { font-family: var(--display); font-size: var(--t-md); }
+.small { font-size: var(--t-xs); }
 .spacer { flex: 1; }
 .ss-dot { width: 12px; height: 12px; border-radius: 50%; background: var(--dim); flex: none; }
 .ss-dot.ok { background: #7fe3a6; box-shadow: 0 0 0 4px rgba(127, 227, 166, 0.18); }
@@ -56,10 +56,10 @@ onMounted(load);
 .ss-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px 20px; }
 .ss-grid > div { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .ss-grid .wide { grid-column: 1 / -1; }
-.ss-grid span { font-size: 10.5px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
-.ss-grid b { font-size: 15px; font-weight: 600; }
-.ss-grid b small { font-weight: 500; color: var(--muted); font-size: 12.5px; }
+.ss-grid span { font-size: var(--t-xs); color: var(--muted); font-weight: 600; }
+.ss-grid b { font-size: var(--t-md); font-weight: 600; }
+.ss-grid b small { font-weight: 500; color: var(--muted); font-size: var(--t-xs); }
 .ss-grid .good { color: #b9f6ca; }
 .ss-grid .badt { color: #ffc0c0; }
-.srcs { font-weight: 500 !important; font-size: 13.5px !important; line-height: 1.5; }
+.srcs { font-weight: 500 !important; font-size: var(--t-sm) !important; line-height: 1.5; }
 </style>

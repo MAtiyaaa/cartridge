@@ -31,7 +31,7 @@ watch(() => store.libVersion, async () => { await nextTick(); ensureFocus(el.val
 
 <style scoped>
 .lib-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; margin: 18px 0 26px; }
-.big { font-size: 36px; font-weight: 700; margin: 6px 0 8px; }
+.big { font-size: var(--t-2xl); font-weight: 700; margin: 6px 0 8px; }
 .tile-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 22px 18px; padding-bottom: 40px; }
 .tile-grid :deep(.genre) { width: auto; }
 </style>
