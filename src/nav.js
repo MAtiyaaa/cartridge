@@ -87,8 +87,12 @@ function move(dir) {
   if (!vertical || colFrom !== cur) colX = cx;
   const wantX = colX;
   let best = null, bestScore = Infinity;
+  // Zones (0.9.2): the D-pad never leaves the part of the screen you're in. The page is a zone, so
+  // up never lands on the top bar (LT/RT and Y reach that); Settings' right side is one too, left
+  // with B, like other console menus.
+  const zone = cur.closest('[data-zone]');
   for (const [el, r] of focusables(scope, true)) {
-    if (el === cur) continue;
+    if (el === cur || (zone && !zone.contains(el))) continue;
     if ((dir === 'left' || dir === 'right') && el.hasAttribute('data-nofirst') && !cur.hasAttribute('data-nofirst')) continue; // the end of a row never jumps up to the search box
     const x = r.left + r.width / 2, y = r.top + r.height / 2;
     let primary, secondary;

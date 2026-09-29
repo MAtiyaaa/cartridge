@@ -93,7 +93,7 @@ onMounted(async () => {
 .up-con { display: flex; align-items: center; gap: 10px; margin: 6px 0 2px; font-family: var(--display); }
 .up-row { display: flex; align-items: center; gap: 14px; padding: 9px 14px; border-radius: var(--r-md); background: var(--s2); text-align: left; min-width: 0; }
 .up-row:focus { background: var(--focus); color: var(--on-focus); box-shadow: none; }
-.up-row:focus .muted, .up-row:focus .up-ic, .up-row:focus .up-act { color: rgba(12, 13, 16, 0.75); }
+.up-row:focus .muted, .up-row:focus .up-ic, .up-row:focus .up-act { color: var(--on-focus-dim); }
 .up-ic { color: var(--muted); flex: none; }
 .up-ic.done { color: var(--green-l); }
 .up-ic.error { color: var(--red); }
