@@ -3,7 +3,7 @@
 Agreed list, not built yet.
 
 ## Launch arguments
-1. Check every emulator's command-line options against its own source code (fullscreen, start a game directly and skip its menu, quit when the game closes). Fix any that changed. Name any whose source couldn't be reached instead of guessing.
+1. Refresh the emulator database (`electron/emulators.js`) from the latest EmuDeck SRM parsers and Steam ROM Manager presets: those are tested on real Steam. Check an emulator's own source only where neither covers it (new forks) or the two disagree. Keep the special cases (shadPS4 Qt launcher `-d -g` and `eboot.bin`, xemu, Xenia, RPCS3, Vita3K, MAME, ares).
 2. Arguments by version where an emulator changed its flags (PCSX2 old against new is the likely one), picked from the version Setup already reads (AppStream or `X-AppImage-Version`, `flatpak info`, file name). Unknown version: current flags.
 3. Clearer "Test with one game": pick a game that isn't in Steam yet, say which one to start, and what to do if it doesn't start.
 4. Type your own launch options (with `{ROM}`) straight from Emulator setup, for emulators Cartridge doesn't know.
