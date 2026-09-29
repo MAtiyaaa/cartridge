@@ -6,7 +6,8 @@ name: Release
 on:
   push:
     branches: [main]
-    paths: ['package.json']
+    # also when this file changes: a fix to the release itself republishes the current version (uploads replace)
+    paths: ['package.json', '.github/workflows/release.yml']
   workflow_dispatch:
 
 permissions:
@@ -72,6 +73,30 @@ jobs:
           distribution: temurin
           java-version: 21
       - uses: gradle/actions/setup-gradle@v4
+      - name: Android NDK version
+        run: |
+          V=$(sed -n "s/.*ndkVersion = '\\(.*\\)'.*/\\1/p" android/variables.gradle)
+          echo "NDK_VERSION=$V" >> "$GITHUB_ENV"
+          echo "NDK_DIR=$ANDROID_HOME/ndk/$V" >> "$GITHUB_ENV"
+      # The NDK is cached and installed before the build. Gradle used to download it (about 700 MB) in the
+      # middle of every build, and a broken download ("Archive is not a ZIP archive") failed the APK.
+      - name: Android NDK (cache)
+        id: ndk
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.NDK_DIR }}
+          key: android-ndk-${{ env.NDK_VERSION }}
+      - name: Android NDK (install, checked, with retries)
+        if: steps.ndk.outputs.cache-hit != 'true'
+        run: |
+          SDKM="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          for i in 1 2 3 4 5; do
+            rm -rf "$NDK_DIR"
+            yes | "$SDKM" --install "ndk;$NDK_VERSION" > "$RUNNER_TEMP/ndk.log" 2>&1 || true
+            if [ -f "$NDK_DIR/source.properties" ] && [ -x "$NDK_DIR/ndk-build" ]; then echo "NDK $NDK_VERSION installed"; exit 0; fi
+            echo "NDK install attempt $i failed, retrying"; tail -5 "$RUNNER_TEMP/ndk.log"; sleep $((i * 15))
+          done
+          echo "::error::Could not install NDK $NDK_VERSION"; exit 1
       - run: npm ci
       - name: Build UI + backend for Android
         run: npm run build:android
@@ -93,7 +118,7 @@ jobs:
           CARTRIDGE_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           CARTRIDGE_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           CARTRIDGE_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-        run: ./gradlew assembleRelease --no-daemon
+        run: ./gradlew assembleRelease --no-daemon || { echo 'Build failed, trying once more (network hiccups)'; sleep 20; ./gradlew assembleRelease --no-daemon; }
       - name: Publish APK
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

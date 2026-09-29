@@ -10,6 +10,7 @@ def ks = System.getenv('CARTRIDGE_KEYSTORE')
 android {
     namespace "io.github.abdu2304.cartridge"
     compileSdk rootProject.ext.compileSdkVersion
+    ndkVersion rootProject.ext.ndkVersion
     defaultConfig {
         applicationId "io.github.abdu2304.cartridge"
         minSdkVersion rootProject.ext.minSdkVersion

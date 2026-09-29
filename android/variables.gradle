@@ -1,6 +1,9 @@
 ext {
     minSdkVersion = 26
     compileSdkVersion = 35
+    // Pinned so the version CI installs and caches (.github/workflows) is the one the build asks for.
+    // Left to the plugin's default, Gradle downloaded it mid-build and a broken download failed the APK.
+    ndkVersion = '27.0.12077973'
     targetSdkVersion = 35
     androidxActivityVersion = '1.9.2'
     androidxAppCompatVersion = '1.7.0'
