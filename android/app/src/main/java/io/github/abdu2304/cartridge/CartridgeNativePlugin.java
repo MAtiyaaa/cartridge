@@ -295,6 +295,7 @@ public class CartridgeNativePlugin extends Plugin {
 
     @PluginMethod
     public void launchers(PluginCall call) {
+        boolean all = call.getBoolean("all", false);
         JSArray out = new JSArray();
         try {
             PackageManager pm = getContext().getPackageManager();
@@ -303,11 +304,13 @@ public class CartridgeNativePlugin extends Plugin {
             for (ResolveInfo r : pm.queryIntentActivities(i, 0)) {
                 String pkg = r.activityInfo.packageName;
                 String label = String.valueOf(r.loadLabel(pm));
-                if (seen.contains(pkg) || !(PC_APPS.matcher(pkg).find() || PC_APPS.matcher(label).find())) continue;
+                // all: every launchable app (emulator forks are matched by name in src/android/play.js)
+                if (seen.contains(pkg) || !(all || PC_APPS.matcher(pkg).find() || PC_APPS.matcher(label).find())) continue;
                 seen.add(pkg);
                 JSObject o = new JSObject();
                 o.put("pkg", pkg);
                 o.put("label", label);
+                if (all) { try { String v = pm.getPackageInfo(pkg, 0).versionName; o.put("version", v == null ? "" : v); } catch (Exception ignored) {} }
                 out.put(o);
             }
         } catch (Exception ignored) {}
@@ -385,6 +388,12 @@ public class CartridgeNativePlugin extends Plugin {
         if (s == null) return "";
         if (s.contains("{ROM}")) s = s.replace("{ROM}", f.getAbsolutePath());
         if (s.contains("{EXT}")) s = s.replace("{EXT}", Environment.getExternalStorageDirectory().getAbsolutePath());
+        if (s.contains("{URI}")) {
+            // A disc sheet points at track files next to it, which a single shared file can't reach:
+            // those go as a documents URI (the emulator needs that folder added in its own settings)
+            if (f.getName().toLowerCase().matches(".*\\.(cue|gdi|m3u|ccd|toc|mds)$")) s = s.replace("{URI}", safUri(f));
+            else s = s.replace("{URI}", "{PROVIDER}");
+        }
         if (s.contains("{SAF}")) s = s.replace("{SAF}", safUri(f));
         if (s.contains("{PROVIDER}")) {
             String uri;
@@ -414,7 +423,17 @@ public class CartridgeNativePlugin extends Plugin {
                 Intent l = getContext().getPackageManager().getLaunchIntentForPackage(pkg);
                 if (l == null) { call.reject("That emulator isn't installed"); return; }
                 i.setComponent(l.getComponent());
-            } else i.setClassName(pkg, act.startsWith(".") ? pkg + act : act);
+            } else {
+                String cls = act.startsWith(".") ? pkg + act : act;
+                boolean has;
+                try { getContext().getPackageManager().getActivityInfo(new android.content.ComponentName(pkg, cls), 0); has = true; } catch (PackageManager.NameNotFoundException e) { has = false; }
+                if (has) i.setClassName(pkg, cls);
+                else {
+                    // A fork or beta that renamed its activity: let Android pick the one in that app that takes this intent
+                    i.setPackage(pkg);
+                    if (action.isEmpty()) i.setAction(Intent.ACTION_VIEW);
+                }
+            }
             String cat = call.getString("category", "");
             if (!cat.isEmpty()) i.addCategory(cat);
             String data = call.getString("data", "");
@@ -441,7 +460,16 @@ public class CartridgeNativePlugin extends Plugin {
                 try { getContext().grantUriPermission(pkg, shared[0], Intent.FLAG_GRANT_READ_URI_PERMISSION); } catch (Exception ignored) {}
             }
             i.addFlags(flags);
-            getActivity().startActivity(i);
+            try { getActivity().startActivity(i); }
+            catch (android.content.ActivityNotFoundException e) {
+                // Nothing in that app took the intent as sent: open its main screen with the same game attached
+                Intent l = getContext().getPackageManager().getLaunchIntentForPackage(pkg);
+                if (l == null || i.getComponent() != null) throw e;
+                l.setData(i.getData());
+                if (i.getExtras() != null) l.putExtras(i.getExtras());
+                l.addFlags(flags);
+                getActivity().startActivity(l);
+            }
             call.resolve();
         } catch (android.content.ActivityNotFoundException e) {
             call.reject("Android could not find that emulator. Is it installed?");

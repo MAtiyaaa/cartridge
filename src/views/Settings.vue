@@ -1,6 +1,6 @@
 <template>
   <div class="set-view" ref="el">
-    <nav class="rail">
+    <nav class="rail" data-scroll>
       <div class="eyebrow" style="padding: 0 14px 10px">Settings</div>
       <button v-for="s in sections" :key="s.id" class="rail-item" :class="{ on: sec === s.id }" data-focus :data-key="'sec-' + s.id" @focus="sec = s.id" @click="pick(s.id)">
         <Icon :name="s.icon" :size="20" />{{ s.label }}

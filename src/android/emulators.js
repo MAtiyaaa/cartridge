@@ -3,9 +3,11 @@
 // (es_find_rules.xml and es_systems.xml). Cartridge never installs or changes an emulator: it only asks
 // one that is already installed to open a game, the same way a frontend does.
 //
-// Tokens inside an intent: {ROM} the file's path, {SAF} the same file as a documents URI (what most
-// emulators want), {PROVIDER} a URI Cartridge shares just for this launch, {PKG} the emulator's package,
-// {CORE} a RetroArch core, {EXT} the shared storage folder.
+// Tokens inside an intent: {ROM} the file's path, {URI} the file as a content URI the emulator is allowed
+// to read (Cartridge shares it for this launch; a disc sheet like .cue, whose tracks sit next to it, goes
+// as a storage documents URI instead, which needs the folder added in the emulator), {SAF} always that
+// documents URI, {PROVIDER} always Cartridge's shared URI, {PKG} the emulator's package, {CORE} a
+// RetroArch core, {EXT} the shared storage folder.
 
 const VIEW = 'android.intent.action.VIEW';
 const MAIN = 'android.intent.action.MAIN';
@@ -14,39 +16,39 @@ const TASK = ['clearTask', 'clearTop'];
 const a = (pkg, activity) => ({ pkg, activity });
 
 export const EMUS = {
-  ppsspp: { name: 'PPSSPP', get: 'https://www.ppsspp.org/download', apps: [a('org.ppsspp.ppssppgold', 'org.ppsspp.ppsspp.PpssppActivity'), a('org.ppsspp.ppsspp', 'org.ppsspp.ppsspp.PpssppActivity')], intent: { action: VIEW, category: DEFAULT, data: '{SAF}' } },
-  dolphin: { name: 'Dolphin', get: 'https://dolphin-emu.org/download/', apps: [a('org.dolphinemu.dolphinemu', 'org.dolphinemu.dolphinemu.ui.main.TvMainActivity')], intent: { action: MAIN, category: 'android.intent.category.LEANBACK_LAUNCHER', extras: { AutoStartFile: '{SAF}' } } },
-  mmjr: { name: 'Dolphin MMJR', get: 'https://github.com/MoonPower/Dolphin-MMJR/releases', apps: [a('org.mm.jr', 'org.dolphinemu.dolphinemu.ui.main.MainActivity'), a('org.dolphinemu.mmjr', 'org.dolphinemu.dolphinemu.ui.main.MainActivity')], intent: { action: VIEW, extras: { AutoStartFile: '{SAF}' } } },
-  cemu: { name: 'Cemu', get: 'https://cemu.info/', apps: [a('info.cemu.cemu', 'info.cemu.cemu.emulation.EmulationActivity'), a('info.cemu.Cemu', 'info.cemu.Cemu.emulation.EmulationActivity')], intent: { data: '{SAF}' } },
-  azahar: { name: 'Azahar', get: 'https://azahar-emu.org/', apps: [a('org.azahar_emu.azahar', 'org.citra.citra_emu.activities.EmulationActivity')], intent: { data: '{SAF}', flags: TASK } },
-  azaharplus: { name: 'AzaharPlus', get: 'https://github.com/AzaharPlus/AzaharPlus/releases', apps: [a('io.github.azaharplus.android', 'org.citra.citra_emu.activities.EmulationActivity')], intent: { data: '{SAF}', flags: TASK } },
-  lime3ds: { name: 'Lime3DS', get: 'https://github.com/Lime3DS/lime3ds-archive/releases', apps: [a('io.github.lime3ds.android', 'io.github.lime3ds.android.activities.EmulationActivity')], intent: { data: '{SAF}', flags: TASK } },
-  citra: { name: 'Citra', get: 'https://github.com/PabloMK7/citra/releases', apps: [a('org.citra.citra_emu', 'org.citra.citra_emu.activities.EmulationActivity')], intent: { data: '{SAF}', flags: TASK } },
-  mandarine: { name: 'Mandarine', get: 'https://github.com/mandarine3ds/mandarine/releases', apps: [a('io.github.mandarine3ds.mandarine', 'io.github.mandarine3ds.mandarine.activities.EmulationActivity')], intent: { data: '{SAF}', flags: TASK } },
+  ppsspp: { name: 'PPSSPP', get: 'https://www.ppsspp.org/download', apps: [a('org.ppsspp.ppssppgold', 'org.ppsspp.ppsspp.PpssppActivity'), a('org.ppsspp.ppsspp', 'org.ppsspp.ppsspp.PpssppActivity')], intent: { action: VIEW, category: DEFAULT, data: '{URI}' } },
+  dolphin: { name: 'Dolphin', get: 'https://dolphin-emu.org/download/', apps: [a('org.dolphinemu.dolphinemu', 'org.dolphinemu.dolphinemu.ui.main.TvMainActivity')], intent: { action: MAIN, category: 'android.intent.category.LEANBACK_LAUNCHER', extras: { AutoStartFile: '{URI}' } } },
+  mmjr: { name: 'Dolphin MMJR', get: 'https://github.com/MoonPower/Dolphin-MMJR/releases', apps: [a('org.mm.jr', 'org.dolphinemu.dolphinemu.ui.main.MainActivity'), a('org.dolphinemu.mmjr', 'org.dolphinemu.dolphinemu.ui.main.MainActivity')], intent: { action: VIEW, extras: { AutoStartFile: '{URI}' } } },
+  cemu: { name: 'Cemu', get: 'https://cemu.info/', apps: [a('info.cemu.cemu', 'info.cemu.cemu.emulation.EmulationActivity'), a('info.cemu.Cemu', 'info.cemu.Cemu.emulation.EmulationActivity')], intent: { data: '{URI}' } },
+  azahar: { name: 'Azahar', get: 'https://azahar-emu.org/', apps: [a('org.azahar_emu.azahar', 'org.citra.citra_emu.activities.EmulationActivity')], intent: { data: '{URI}', flags: TASK } },
+  azaharplus: { name: 'AzaharPlus', get: 'https://github.com/AzaharPlus/AzaharPlus/releases', apps: [a('io.github.azaharplus.android', 'org.citra.citra_emu.activities.EmulationActivity')], intent: { data: '{URI}', flags: TASK } },
+  lime3ds: { name: 'Lime3DS', get: 'https://github.com/Lime3DS/lime3ds-archive/releases', apps: [a('io.github.lime3ds.android', 'io.github.lime3ds.android.activities.EmulationActivity')], intent: { data: '{URI}', flags: TASK } },
+  citra: { name: 'Citra', get: 'https://github.com/PabloMK7/citra/releases', apps: [a('org.citra.citra_emu', 'org.citra.citra_emu.activities.EmulationActivity')], intent: { data: '{URI}', flags: TASK } },
+  mandarine: { name: 'Mandarine', get: 'https://github.com/mandarine3ds/mandarine/releases', apps: [a('io.github.mandarine3ds.mandarine', 'io.github.mandarine3ds.mandarine.activities.EmulationActivity')], intent: { data: '{URI}', flags: TASK } },
   panda3ds: { name: 'Panda3DS', get: 'https://panda3ds.com/', apps: [a('com.panda3ds.pandroid', 'com.panda3ds.pandroid.app.MainActivity')], intent: { data: '{PROVIDER}' } },
-  melonds: { name: 'melonDS', get: 'https://play.google.com/store/apps/details?id=me.magnum.melonds', apps: [a('me.magnum.melonds', 'me.magnum.melonds.ui.emulator.EmulatorActivity'), a('me.magnum.melondualds', 'me.magnum.melonds.ui.emulator.EmulatorActivity')], intent: { action: 'me.magnum.melonds.LAUNCH_ROM', extras: { uri: '{SAF}' } } },
-  melondsnightly: { name: 'melonDS Nightly', get: 'https://github.com/rafaelvcaetano/melonDS-android/releases', apps: [a('me.magnum.melonds.nightly', 'me.magnum.melonds.ui.emulator.EmulatorActivity')], intent: { action: 'me.magnum.melonds.nightly.LAUNCH_ROM', extras: { uri: '{SAF}' } } },
-  drastic: { name: 'DraStic', get: 'https://play.google.com/store/apps/details?id=com.dsemu.drastic', apps: [a('com.dsemu.drastic', 'com.dsemu.drastic.DraSticActivity')], intent: { data: '{SAF}', flags: TASK } },
+  melonds: { name: 'melonDS', get: 'https://play.google.com/store/apps/details?id=me.magnum.melonds', apps: [a('me.magnum.melonds', 'me.magnum.melonds.ui.emulator.EmulatorActivity'), a('me.magnum.melondualds', 'me.magnum.melonds.ui.emulator.EmulatorActivity')], intent: { action: 'me.magnum.melonds.LAUNCH_ROM', extras: { uri: '{URI}' } } },
+  melondsnightly: { name: 'melonDS Nightly', get: 'https://github.com/rafaelvcaetano/melonDS-android/releases', apps: [a('me.magnum.melonds.nightly', 'me.magnum.melonds.ui.emulator.EmulatorActivity')], intent: { action: 'me.magnum.melonds.nightly.LAUNCH_ROM', extras: { uri: '{URI}' } } },
+  drastic: { name: 'DraStic', get: 'https://play.google.com/store/apps/details?id=com.dsemu.drastic', apps: [a('com.dsemu.drastic', 'com.dsemu.drastic.DraSticActivity')], intent: { data: '{URI}', flags: TASK } },
   noods: { name: 'NooDS', get: 'https://play.google.com/store/apps/details?id=com.hydra.noods', apps: [a('com.hydra.noods', 'com.hydra.noods.FileBrowser')], intent: { extras: { LaunchPath: '{ROM}' }, flags: TASK } },
-  duckstation: { name: 'DuckStation', get: 'https://www.duckstation.org/', apps: [a('com.github.stenzek.duckstation', 'com.github.stenzek.duckstation.EmulationActivity')], intent: { extras: { bootPath: '{SAF}' }, bools: { resumeState: false }, flags: TASK } },
+  duckstation: { name: 'DuckStation', get: 'https://www.duckstation.org/', apps: [a('com.github.stenzek.duckstation', 'com.github.stenzek.duckstation.EmulationActivity')], intent: { extras: { bootPath: '{URI}' }, bools: { resumeState: false }, flags: TASK } },
   epsxe: { name: 'ePSXe', get: 'https://play.google.com/store/apps/details?id=com.epsxe.ePSXe', apps: [a('com.epsxe.ePSXe', 'com.epsxe.ePSXe.ePSXe')], intent: { action: MAIN, extras: { 'com.epsxe.ePSXe.isoName': '{ROM}' } } },
   fpse: { name: 'FPseNG', get: 'https://play.google.com/store/apps/details?id=com.emulator.fpse64', apps: [a('com.emulator.fpse64', 'com.emulator.fpse64.Main')], intent: { action: VIEW, data: '{PROVIDER}' } },
-  armsx2: { name: 'ARMSX2', get: 'https://github.com/ARMSX2/ARMSX2/releases', apps: [a('come.nanodata.armsx2', 'com.armsx2.MainActivity'), a('com.armsx2', 'com.armsx2.MainActivity'), a('com.armsx2.nightly', 'com.armsx2.MainActivity')], intent: { action: VIEW, data: '{SAF}' } },
-  nethersx2: { name: 'NetherSX2', get: 'https://www.google.com/search?q=NetherSX2+patch+APK', apps: [a('xyz.aethersx2.android', 'xyz.aethersx2.android.EmulationActivity'), a('xyz.aethersx2.tturnip', 'xyz.aethersx2.android.EmulationActivity'), a('xyz.aethersx2.cturnip', 'xyz.aethersx2.android.EmulationActivity')], intent: { action: MAIN, extras: { bootPath: '{SAF}' }, flags: TASK } },
-  play: { name: 'Play!', get: 'https://purei.org/', apps: [a('com.virtualapplications.play', 'com.virtualapplications.play.MainActivity')], intent: { action: VIEW, data: '{SAF}' } },
-  aps3e: { name: 'aPS3e', get: 'https://github.com/aenu1/aps3e/releases', apps: [a('aenu.aps3e.premium', 'aenu.aps3e.EmulatorActivity'), a('aenu.aps3e', 'aenu.aps3e.EmulatorActivity')], intent: { action: 'aenu.intent.action.APS3E', extras: { iso_uri: '{SAF}' } }, dirIntent: { action: 'aenu.intent.action.APS3E', extras: { game_dir: '{ROM}' } } },
+  armsx2: { name: 'ARMSX2', get: 'https://github.com/ARMSX2/ARMSX2/releases', apps: [a('come.nanodata.armsx2', 'com.armsx2.MainActivity'), a('com.armsx2', 'com.armsx2.MainActivity'), a('com.armsx2.nightly', 'com.armsx2.MainActivity')], intent: { action: VIEW, data: '{URI}' } },
+  nethersx2: { name: 'NetherSX2', get: 'https://www.google.com/search?q=NetherSX2+patch+APK', apps: [a('xyz.aethersx2.android', 'xyz.aethersx2.android.EmulationActivity'), a('xyz.aethersx2.tturnip', 'xyz.aethersx2.android.EmulationActivity'), a('xyz.aethersx2.cturnip', 'xyz.aethersx2.android.EmulationActivity')], intent: { action: MAIN, extras: { bootPath: '{URI}' }, flags: TASK } },
+  play: { name: 'Play!', get: 'https://purei.org/', apps: [a('com.virtualapplications.play', 'com.virtualapplications.play.MainActivity')], intent: { action: VIEW, data: '{URI}' } },
+  aps3e: { name: 'aPS3e', get: 'https://github.com/aenu1/aps3e/releases', apps: [a('aenu.aps3e.premium', 'aenu.aps3e.EmulatorActivity'), a('aenu.aps3e', 'aenu.aps3e.EmulatorActivity')], intent: { action: 'aenu.intent.action.APS3E', extras: { iso_uri: '{URI}' } }, dirIntent: { action: 'aenu.intent.action.APS3E', extras: { game_dir: '{ROM}' } } },
   eden: { name: 'Eden', get: 'https://eden-emu.dev/', apps: [a('dev.eden.eden_emulator', 'org.yuzu.yuzu_emu.activities.EmulationActivity'), a('dev.legacy.eden_emulator', 'org.yuzu.yuzu_emu.activities.EmulationActivity')], intent: { action: 'android.nfc.action.TECH_DISCOVERED', data: '{PROVIDER}' } },
   skyline: { name: 'Skyline', get: 'https://github.com/skyline-emu/skyline', apps: [a('skyline.emu', 'emu.skyline.EmulationActivity')], intent: { action: VIEW, data: '{PROVIDER}' } },
-  kenjinx: { name: 'Kenji-NX', get: 'https://github.com/KenjiNX/Kenji-NX/releases', apps: [a('org.kenjinx.android', 'org.kenjinx.android.MainActivity')], intent: { action: 'org.kenjinx.android.LAUNCH_GAME', extras: { bootPath: '{SAF}' } } },
-  flycast: { name: 'Flycast', get: 'https://flycast.org/', apps: [a('com.flycast.emulator', 'com.flycast.emulator.MainActivity')], intent: { action: VIEW, data: '{SAF}' } },
-  redream: { name: 'Redream', get: 'https://redream.io/download', apps: [a('io.recompiled.redream', 'io.recompiled.redream.MainActivity')], intent: { action: VIEW, data: '{SAF}' } },
-  yaba: { name: 'Yaba Sanshiro 2', get: 'https://play.google.com/store/apps/details?id=org.devmiyax.yabasanshioro2', apps: [a('org.devmiyax.yabasanshioro2.pro', 'org.uoyabause.android.Yabause'), a('org.devmiyax.yabasanshioro2', 'org.uoyabause.android.Yabause')], intent: { action: VIEW, extras: { 'org.uoyabause.android.FileNameUri': '{SAF}' }, flags: TASK } },
-  myboy: { name: 'My Boy!', get: 'https://play.google.com/store/apps/details?id=com.fastemulator.gba', apps: [a('com.fastemulator.gba', 'com.fastemulator.gba.EmulatorActivity')], intent: { action: VIEW, data: '{SAF}' } },
-  myoldboy: { name: 'My OldBoy!', get: 'https://play.google.com/store/apps/details?id=com.fastemulator.gbc', apps: [a('com.fastemulator.gbc', 'com.fastemulator.gbc.EmulatorActivity')], intent: { action: VIEW, data: '{SAF}' } },
-  pizzagba: { name: 'Pizza Boy GBA', get: 'https://play.google.com/store/apps/details?id=it.dbtecno.pizzaboygbapro', apps: [a('it.dbtecno.pizzaboygbapro', 'it.dbtecno.pizzaboygbapro.MainActivity'), a('it.dbtecno.pizzaboygba', 'it.dbtecno.pizzaboygba.MainActivity')], intent: { extras: { rom_uri: '{SAF}' }, flags: TASK } },
-  snes9x: { name: 'Snes9x EX+', get: 'https://play.google.com/store/apps/details?id=com.explusalpha.Snes9xPlus', apps: [a('com.explusalpha.Snes9xPlus', 'com.imagine.BaseActivity')], intent: { data: '{SAF}' } },
-  mupen: { name: 'M64Plus FZ', get: 'https://play.google.com/store/apps/details?id=org.mupen64plusae.v3.fzurita', apps: [a('org.mupen64plusae.v3.fzurita', 'paulscode.android.mupen64plusae.SplashActivity'), a('org.mupen64plusae.v3.fzurita.pro', 'paulscode.android.mupen64plusae.SplashActivity')], intent: { action: VIEW, data: '{SAF}' } },
-  saturnemu: { name: 'Saturn.emu', get: 'https://play.google.com/store/apps/details?id=com.explusalpha.SaturnEmu', apps: [a('com.explusalpha.SaturnEmu', 'com.imagine.BaseActivity')], intent: { data: '{SAF}' } },
+  kenjinx: { name: 'Kenji-NX', get: 'https://github.com/KenjiNX/Kenji-NX/releases', apps: [a('org.kenjinx.android', 'org.kenjinx.android.MainActivity')], intent: { action: 'org.kenjinx.android.LAUNCH_GAME', extras: { bootPath: '{URI}' } } },
+  flycast: { name: 'Flycast', get: 'https://flycast.org/', apps: [a('com.flycast.emulator', 'com.flycast.emulator.MainActivity')], intent: { action: VIEW, data: '{URI}' } },
+  redream: { name: 'Redream', get: 'https://redream.io/download', apps: [a('io.recompiled.redream', 'io.recompiled.redream.MainActivity')], intent: { action: VIEW, data: '{URI}' } },
+  yaba: { name: 'Yaba Sanshiro 2', get: 'https://play.google.com/store/apps/details?id=org.devmiyax.yabasanshioro2', apps: [a('org.devmiyax.yabasanshioro2.pro', 'org.uoyabause.android.Yabause'), a('org.devmiyax.yabasanshioro2', 'org.uoyabause.android.Yabause')], intent: { action: VIEW, extras: { 'org.uoyabause.android.FileNameUri': '{URI}' }, flags: TASK } },
+  myboy: { name: 'My Boy!', get: 'https://play.google.com/store/apps/details?id=com.fastemulator.gba', apps: [a('com.fastemulator.gba', 'com.fastemulator.gba.EmulatorActivity')], intent: { action: VIEW, data: '{URI}' } },
+  myoldboy: { name: 'My OldBoy!', get: 'https://play.google.com/store/apps/details?id=com.fastemulator.gbc', apps: [a('com.fastemulator.gbc', 'com.fastemulator.gbc.EmulatorActivity')], intent: { action: VIEW, data: '{URI}' } },
+  pizzagba: { name: 'Pizza Boy GBA', get: 'https://play.google.com/store/apps/details?id=it.dbtecno.pizzaboygbapro', apps: [a('it.dbtecno.pizzaboygbapro', 'it.dbtecno.pizzaboygbapro.MainActivity'), a('it.dbtecno.pizzaboygba', 'it.dbtecno.pizzaboygba.MainActivity')], intent: { extras: { rom_uri: '{URI}' }, flags: TASK } },
+  snes9x: { name: 'Snes9x EX+', get: 'https://play.google.com/store/apps/details?id=com.explusalpha.Snes9xPlus', apps: [a('com.explusalpha.Snes9xPlus', 'com.imagine.BaseActivity')], intent: { data: '{URI}' } },
+  mupen: { name: 'M64Plus FZ', get: 'https://play.google.com/store/apps/details?id=org.mupen64plusae.v3.fzurita', apps: [a('org.mupen64plusae.v3.fzurita', 'paulscode.android.mupen64plusae.SplashActivity'), a('org.mupen64plusae.v3.fzurita.pro', 'paulscode.android.mupen64plusae.SplashActivity')], intent: { action: VIEW, data: '{URI}' } },
+  saturnemu: { name: 'Saturn.emu', get: 'https://play.google.com/store/apps/details?id=com.explusalpha.SaturnEmu', apps: [a('com.explusalpha.SaturnEmu', 'com.imagine.BaseActivity')], intent: { data: '{URI}' } },
   // RetroArch runs any console through a core; it is picked per game by the console's core list below
   retroarch: {
     name: 'RetroArch', get: 'https://play.google.com/store/apps/details?id=com.retroarch.aarch64',
@@ -124,10 +126,30 @@ export const BIOS = {
 
 // The emulators of this console that are installed (found: id -> { pkg, activity, version }), in the order
 // they will be offered: the game's own pick, then the console's pick, then the list's order.
+// Builds that aren't in the list above (forks, betas, renamed packages): matched by the words in their
+// package name or app name, and started with their family's intent. A found fork is keyed "<id>~<package>".
+export const FAMILIES = {
+  ppsspp: ['ppsspp'], dolphin: ['dolphin', 'dolphinemu'], azahar: ['azahar', 'citra', 'lime3ds', 'mandarine', 'borked3ds'],
+  melonds: ['melonds', 'melondualds'], duckstation: ['duckstation'], nethersx2: ['aethersx2', 'nethersx2'], armsx2: ['armsx2', 'pcsx2'],
+  eden: ['eden', 'yuzu', 'sudachi', 'citron', 'suyu', 'torzu', 'strato'], kenjinx: ['kenjinx', 'ryujinx'], flycast: ['flycast', 'reicast'],
+  cemu: ['cemu'], retroarch: ['retroarch'], aps3e: ['aps3e'], drastic: ['drastic'], redream: ['redream'],
+};
+const NOT_EMU = /browser|launcher|cartridge|daijisho|emulationstation|es-de|esde|pegasus|beacon|frontend|keyboard|wallpaper/i;
+export function familyOf(pkg, label = '') {
+  const text = `${pkg} ${label}`;
+  if (NOT_EMU.test(text)) return null;
+  const words = new Set(text.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean));
+  for (const [id, list] of Object.entries(FAMILIES)) if (list.some((w) => words.has(w) || [...words].some((x) => x.startsWith(w) && x.length <= w.length + 6))) return id;
+  return null;
+}
+export const baseId = (id) => String(id || '').split('~')[0];
+export const emuName = (id, found = {}) => (id?.includes('~') ? found[id]?.label : null) || EMUS[baseId(id)]?.name || id;
+
 export function candidatesFor(key, found, cfg = {}, romId) {
   const c = CONSOLES[key];
   if (!c) return [];
-  const ids = [...c.emus.filter((id) => found[id]), ...(c.cores.length && found.retroarch ? ['retroarch'] : [])];
+  const have = (b) => Object.keys(found).filter((id) => baseId(id) === b).sort((x, y) => x.includes('~') - y.includes('~'));
+  const ids = [...c.emus.flatMap(have), ...(c.cores.length ? have('retroarch') : [])];
   const first = [cfg.gameEmus?.[romId], cfg.emus?.[key]].filter((x) => x && ids.includes(x));
   return [...new Set([...first, ...ids])];
 }
@@ -142,7 +164,7 @@ const fill = (v, t) => (typeof v === 'string' ? v.replace(/\{PKG\}/g, t.pkg || '
 
 // The intent to fire for one game. Native fills {ROM}, {SAF}, {PROVIDER} and {EXT} from the path.
 export function planLaunch(emuId, app, { core, folder } = {}) {
-  const e = EMUS[emuId];
+  const e = EMUS[baseId(emuId)];
   if (!e || !app) return null;
   const base = folder && e.dirIntent ? e.dirIntent : e.intent;
   const t = { pkg: app.pkg, core };

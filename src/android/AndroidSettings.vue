@@ -64,9 +64,9 @@ import { Native } from './native.js';
 import Icon from '../components/Icon.vue';
 import Toggle from '../components/Toggle.vue';
 import { emus, scanEmulators } from './play.js';
-import { EMUS } from './emulators.js';
+import { emuName } from './emulators.js';
 
-const foundNames = computed(() => Object.keys(emus.found || {}).map((id) => EMUS[id].name));
+const foundNames = computed(() => Object.keys(emus.found || {}).map((id) => emuName(id, emus.found)));
 const findEmus = () => scanEmulators(true);
 scanEmulators();
 const storage = ref({ granted: true });
