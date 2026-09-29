@@ -854,12 +854,12 @@ async function logoFromSgdb(id, name) {
   return null;
 }
 function logoPublic(c) { return c && c.file ? { url: 'romimg://img/?f=' + encodeURIComponent(c.file) + '&t=' + c.t, w: c.w, h: c.h, dark: c.dark } : null; }
-async function logoFor({ id, name, romm }) {
+async function logoFor({ id, name, romm, retry }) {
   if (!id) return null;
   const pick = artOverrides[id]?.logo || '';
   const c = logoCache[id];
   const want = pick ? 'pick:' + pick : romm ? 'romm:' + romm : 'sgdb';
-  if (c && c.v === LOGO_VERSION && c.want === want && (c.file || Date.now() - c.t < 3 * 864e5)) return logoPublic(c);
+  if (c && c.v === LOGO_VERSION && c.want === want && (c.file || (!retry && Date.now() - c.t < 3 * 864e5))) return logoPublic(c);
   if (want === 'sgdb' && !config.sgdbKey) return null;
   if (logoInflight.has(id)) return logoInflight.get(id);
   const job = (logoChain = logoChain.then(async () => {
@@ -1018,23 +1018,24 @@ async function sysLogo({ slug, fs_slug }) {
   if (!key) return null;
   // bundled logos (PS5: the wordmark without the PlayStation symbol)
   for (const n of [slug, fs_slug]) if (n && fs.existsSync(path.join(__dirname, '../build/syslogos', n + '.png'))) return 'romimg://img/?sys=' + encodeURIComponent(n) + '&png=1';
-  const file = path.join(SYSLOGO_DIR, key + '.svg'), miss = file + '.none';
+  const file = path.join(SYSLOGO_DIR, key + '.svg'), miss = file + '.missing'; // .none (before 0.9.1) was also written after timeouts: ignored
   if (fs.existsSync(file)) return 'romimg://img/?sys=' + encodeURIComponent(key);
   try { if (Date.now() - fs.statSync(miss).mtimeMs < 7 * 864e5) return null; } catch {}
   if (sysLogoInflight.has(key)) return sysLogoInflight.get(key);
   const job = (async () => {
+    let failed = false; // a timeout or network error: try again next time
     for (const n of names) {
       try {
-        const r = await fetch(SYSLOGO_BASE + n + '.svg', { signal: AbortSignal.timeout(10000) });
-        if (!r.ok) continue;
+        const r = await fetch(SYSLOGO_BASE + n + '.svg', { signal: AbortSignal.timeout(20000) });
+        if (!r.ok) { if (r.status !== 404) failed = true; continue; }
         const svg = await r.text();
         if (!/<svg[\s>]/i.test(svg)) continue;
         fs.mkdirSync(SYSLOGO_DIR, { recursive: true });
         fs.writeFileSync(file, svg);
         return 'romimg://img/?sys=' + encodeURIComponent(key);
-      } catch {}
+      } catch { failed = true; }
     }
-    try { fs.mkdirSync(SYSLOGO_DIR, { recursive: true }); fs.writeFileSync(miss, ''); } catch {}
+    if (!failed) try { fs.mkdirSync(SYSLOGO_DIR, { recursive: true }); fs.writeFileSync(miss, ''); } catch {}
     return null;
   })();
   sysLogoInflight.set(key, job);
@@ -1054,7 +1055,7 @@ async function fetchAllLogos() {
     for (const r of roms) {
       if (fetchAll.stop) break;
       const romm = r.logo || '';
-      try { if (await logoFor({ id: r.id, name: r.name, romm })) fetchAll.found++; } catch (e) { if (e.auth) { report('error'); throw e; } }
+      try { if (await logoFor({ id: r.id, name: r.name, romm, retry: true })) fetchAll.found++; } catch (e) { if (e.auth) { report('error'); throw e; } }
       fetchAll.done++;
       if (Date.now() - last > 250) { last = Date.now(); report('running'); }
     }

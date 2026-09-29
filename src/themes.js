@@ -163,5 +163,5 @@ export function paletteOf(ui) {
 // "Light effects" when the GPU is off (software rendering), unless the user picked otherwise
 export function lightEffects(ui, info) {
   const e = ui?.effects || 'auto';
-  return e === 'light' || (e === 'auto' && info?.gpu === false);
+  return e === 'light' || (e === 'auto' && (info?.gpu === false || import.meta.env.MODE === 'android'));
 }

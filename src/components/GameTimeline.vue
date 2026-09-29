@@ -64,7 +64,7 @@ onBeforeUnmount(() => layer?.pop());
 .tl-list::before { content: ''; position: absolute; left: 17px; top: 18px; bottom: 18px; width: 2px; background: linear-gradient(180deg, rgba(var(--primary-rgb), 0.6), rgba(var(--primary-rgb), 0.12)); }
 .tl-e { flex: none; position: relative; display: flex; gap: 14px; padding: 8px 10px 8px 0; border-radius: var(--r-md); outline: none; }
 .tl-e:focus { background: rgba(255, 255, 255, 0.05); box-shadow: var(--ring); }
-.tl-dot { flex: none; width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: color-mix(in srgb, var(--primary) 30%, #12141d); border: 2px solid rgba(var(--primary-rgb), 0.7); color: #fff; z-index: 1; }
+.tl-dot { flex: none; width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: var(--s2); background: color-mix(in srgb, var(--primary) 30%, #12141d); border: 2px solid rgba(var(--primary-rgb), 0.7); color: #fff; z-index: 1; }
 .tl-body { display: flex; flex-direction: column; gap: 2px; padding-top: 1px; min-width: 0; }
 .tl-when { font-size: var(--t-xs); color: var(--primary-t); font-weight: 700; }
 .tl-what { font-family: var(--display); font-size: var(--t-md); font-weight: 600; }
