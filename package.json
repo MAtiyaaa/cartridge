@@ -8,6 +8,7 @@
   "license": "MIT",
   "scripts": {
     "dev": "vite",
+    "test": "node --test test/*.test.js",
     "build:ui": "vite build",
     "start": "vite build && electron .",
     "dist": "vite build && electron-builder --linux AppImage --x64 --publish never",

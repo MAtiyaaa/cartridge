@@ -1665,7 +1665,7 @@ const steamMgr = require('./steamManager')({
   gameIconPng: async (rom) => { if (!rom) return null; const u = await gameIcon({ key: 'rom-' + rom.id, name: rom.name, year: rom.year ? new Date(rom.year > 1e11 ? rom.year : rom.year * 1000).getFullYear() : null }).catch(() => null); return u ? asPng(await fetchImage(u)) : null; },
   logoFile: async (rom) => { if (!rom) return null; await logoFor({ id: rom.id, name: rom.name, romm: rom.logo }).catch(() => null); const c = logoCache[rom.id]; return c?.file ? path.join(LOGO_DIR, c.file) : null; },
   emulationRoots: () => { const emu = readEmuDeckSettings(); return require('./trophies').emulationRoots([emu.emulationPath, config.romsRoot && path.dirname(config.romsRoot)].filter(Boolean)); },
-  isGamescope,
+  isGamescope, version: app.getVersion(), osInfo: (() => { try { return (fs.readFileSync('/etc/os-release', 'utf8').match(/^PRETTY_NAME="?([^"\n]+)/m) || [])[1] || os.release(); } catch { return os.release(); } })(),
 });
 // ---------------------------------------------------------------- 0.8: play time, server status, edits, uploads
 // RetroArch's runtime logs (playlists/logs/<core>/<game>.lrtl, when "Save runtime log" is on):
@@ -1929,8 +1929,24 @@ const handlers08 = {
   'upload:start': (o) => uploadFile(o),
   'upload:cancel': ({ path: f }) => { uploads.get(f)?.abort.abort(); return true; },
 };
+// ---------------------------------------------------------------- 0.9: Setup, shortcut health, per-game emulator
+const handlers09 = {
+  'setup:overview': () => steamMgr.setupOverview(),
+  'setup:scan': async ({ drives } = {}) => { await steamMgr.scanEmulators({ drives: !!drives }); return steamMgr.setupOverview(); },
+  'setup:confirm': ({ path: f, id }) => steamMgr.confirm(f, id),
+  'setup:use': ({ key, file, as, args }) => steamMgr.useFile(key, file, { as, args }),
+  'setup:report': () => steamMgr.setupReport(),
+  'setup:done': () => { config.setupDone = Date.now(); saveConfig(); return true; },
+  'steam:health': () => steamMgr.health(),
+  'steam:healthFix': ({ appids }) => steamMgr.healthFix(appids || []),
+  'steam:moved': () => steamMgr.movedEmulators(),
+  'steam:gameEmu': ({ romId }) => ({ current: steamMgr.gameEmu(romId), key: steamMgr.forRom(romId).console }),
+  'steam:gameEmuOptions': ({ key }) => steamMgr.candidatesFor(key),
+  'steam:setGameEmu': ({ romId, id }) => steamMgr.setGameEmu(romId, id),
+};
 const handlers = {
   ...trophySvc.handlers,
+  ...handlers09,
   ...colHandlers,
   ...handlers08,
   'config:get': () => config,
