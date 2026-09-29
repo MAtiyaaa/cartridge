@@ -10,7 +10,8 @@
           <div v-else-if="mode !== 'all'" class="hicon"><Icon :name="headIcon" :size="30" /></div>
           <div style="min-width: 0">
             <div v-if="mode !== 'platform'" class="eyebrow">{{ eyebrow }}</div>
-            <h1>{{ title }}</h1>
+            <div v-if="mode === 'platform'" class="eyebrow">{{ title }}</div>
+            <h1 :class="{ 'sys-mark': mode === 'platform' }"><ConsoleMark v-if="mode === 'platform'" :slug="platform.slug" :fs="platform.fs_slug" :label="title" /><template v-else>{{ title }}</template></h1>
             <div class="muted row" style="gap: 8px; font-size: 13px">
               <span>{{ source.length }} games</span><span>·</span><span style="color: var(--green-l)">{{ installedCount }} on device</span>
               <template v-if="mode === 'platform'"><span>·</span>
@@ -108,6 +109,7 @@ import { ensureFocus } from '../nav.js';
 import Icon from '../components/Icon.vue';
 import Btn from '../components/Btn.vue';
 import PIcon from '../components/PIcon.vue';
+import ConsoleMark from '../components/ConsoleMark.vue';
 import GameCard from '../components/GameCard.vue';
 
 const props = defineProps({ platformId: Number, collectionId: String, genre: String });
@@ -383,6 +385,9 @@ onMounted(async () => {
 .ph-head { display: flex; align-items: center; justify-content: space-between; gap: 20px; margin: 6px 0 14px; }
 .sys-switch { display: flex; align-items: center; gap: 16px; min-width: 0; }
 .sys-switch h1 { font-size: var(--t-xl); font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sys-switch h1.sys-mark { font-size: 40px; line-height: 1; margin: 4px 0 6px; }
+.sys-switch h1.sys-mark :deep(.cmark) { height: 1em; max-width: min(360px, 100%); object-fit: contain; object-position: left center; opacity: 1; vertical-align: bottom; }
+.sys-switch h1.sys-mark :deep(.cmark-t) { font-size: var(--t-xl); }
 .hicon { width: 52px; height: 52px; border-radius: var(--r-md); display: grid; place-items: center; background: rgba(var(--primary-rgb), 0.2); color: var(--primary-t); flex: none; }
 .toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
 .small { font-size: var(--t-xs); }
