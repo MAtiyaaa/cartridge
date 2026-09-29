@@ -219,7 +219,7 @@ onMounted(async () => { await nextTick(); focusFirst(el.value); });
 </script>
 
 <style scoped>
-.setup { position: relative; z-index: 1; height: 100%; overflow-y: auto; padding: 40px 20px 60px; display: flex; flex-direction: column; align-items: center; gap: 18px; background: radial-gradient(1200px 600px at 50% -10%, rgba(var(--primary-rgb), 0.22), transparent 60%); }
+.setup { position: relative; z-index: 1; height: 100%; overflow-y: auto; padding: 40px 20px 60px; display: flex; flex-direction: column; align-items: center; gap: 18px; background: var(--s0); }
 .hero { text-align: center; display: flex; flex-direction: column; align-items: center; gap: 8px; }
 .hero .logo { width: 64px; height: 64px; border-radius: var(--r-md); background: linear-gradient(135deg, var(--primary-l), var(--primary-d)); display: grid; place-items: center; box-shadow: 0 10px 40px rgba(var(--primary-rgb), 0.4); }
 .hero h1 { font-size: var(--t-2xl); font-weight: 800; letter-spacing: -0.02em; }
@@ -227,7 +227,7 @@ onMounted(async () => { await nextTick(); focusFirst(el.value); });
 .steps { display: flex; gap: 20px; color: var(--dim); font-size: var(--t-sm); }
 .steps .on { color: var(--primary-l); font-weight: 500; }
 .card-s { width: min(820px, 100%); padding: 26px; display: flex; flex-direction: column; gap: 18px; }
-.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.grid2 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; }
 .stack { display: flex; flex-direction: column; gap: 10px; }
 .small { font-size: var(--t-sm); margin: 0; line-height: 1.5; }
 .lbl { width: 110px; color: var(--muted); font-size: var(--t-sm); }
