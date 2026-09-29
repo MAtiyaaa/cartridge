@@ -32,6 +32,8 @@ export function themeFrom(accent, label = 'Custom') {
   };
 }
 export const THEMES = {
+  // Cartridge's own: signal red-orange on neutral greys (the default since 0.9)
+  cartridge: { label: 'Cartridge', grad: ['#3a3d44', '#1c1e23', '#15171b', '#101114', '#0b0c0e', '#1a1c20'], accent: ['#ef4b23', '#ff7a55', '#c7350f'], warm: '#ffb35c', neutral: true },
   purple: { label: 'Purple', grad: ['#b16cf0', '#6a2fc2', '#4a1b92', '#2b0f5e', '#170838', '#3a1170'], accent: ['#8b74e8', '#a18fff', '#6043c8'], warm: '#e1a38d' },
   blue: { label: 'Blue', grad: ['#6fb2ff', '#2f5fd0', '#1f3f9e', '#122768', '#0a1538', '#16307a'], accent: ['#5b8cff', '#8fb1ff', '#3561d6'], warm: '#8fe3ff' },
   red: { label: 'Red', grad: ['#ff7a6b', '#c2302f', '#921c28', '#5e0f1a', '#33070d', '#701223'], accent: ['#f0616a', '#ff8f95', '#c23a44'], warm: '#ffc48f' },
@@ -55,17 +57,18 @@ export const CUSTOM_SWATCHES = [
 
 // Surfaces: how see-through panels are, and how dark the page behind them is
 export const SURFACES = {
+  solid: { label: 'Solid', glassA: 1, bg: '#0c0d10' },
   glass: { label: 'Glass', glassA: 0.62, bg: '#06070b' },
-  solid: { label: 'Solid', glassA: 0.9, bg: '#06070b' },
-  oled: { label: 'OLED black', glassA: 0.94, bg: '#000000', black: true },
+  oled: { label: 'OLED black', glassA: 1, bg: '#000000', black: true },
 };
 export const TEXTS = {
-  normal: { label: 'Standard', text: '#f4f3f8', muted: '#a3abbb', dim: '#636b7b' },
-  bright: { label: 'High contrast', text: '#ffffff', muted: '#cfd5e0', dim: '#8e97a8' },
-  soft: { label: 'Soft', text: '#e3e2ea', muted: '#959cab', dim: '#5a6170' },
+  normal: { label: 'Standard', text: '#f4f4f5', muted: '#a4a6ad', dim: '#6c6f77' },
+  bright: { label: 'High contrast', text: '#ffffff', muted: '#d0d2d8', dim: '#8e919a' },
+  soft: { label: 'Soft', text: '#e4e4e7', muted: '#96989f', dim: '#5c5f66' },
 };
 // Bundled open-source fonts (SIL Open Font License), display + body
 export const FONTS = {
+  cartridge: { label: 'Archivo + Inter', display: "'Archivo Variable', 'Inter Variable', Roboto, sans-serif", body: "'Inter Variable', Roboto, 'Noto Sans', system-ui, sans-serif" },
   outfit: { label: 'Outfit', display: "'Outfit Variable', 'Outfit', Roboto, sans-serif", body: "Roboto, 'Noto Sans', system-ui, sans-serif" },
   inter: { label: 'Inter', display: "'Inter Variable', Roboto, sans-serif", body: "'Inter Variable', Roboto, sans-serif" },
   nunito: { label: 'Nunito', display: "'Nunito Variable', Roboto, sans-serif", body: "'Nunito Variable', Roboto, sans-serif" },
@@ -79,7 +82,7 @@ export const DENSITIES = { compact: { label: 'Compact', x: '12px', y: '14px' }, 
 
 export function themeOf(ui) {
   if (ui?.theme === 'custom' && /^#[0-9a-f]{6}$/i.test(ui.customColor || '')) return themeFrom(ui.customColor);
-  return THEMES[ui?.theme] || THEMES.purple;
+  return THEMES[ui?.theme] || THEMES.cartridge;
 }
 
 export function applyTheme(uiOrName) {
@@ -100,7 +103,7 @@ export function applyTheme(uiOrName) {
   if (ok(col.bars)) { const [b, bl] = themeFrom(col.bars).accent; r.setProperty('--bar', `linear-gradient(90deg, ${b}, ${bl})`); }
   else r.removeProperty('--bar');
   document.body.classList.toggle('custom-bars', ok(col.bars));
-  const surf = SURFACES[ui.surface] || SURFACES.glass;
+  const surf = SURFACES[ui.surface] || SURFACES.solid;
   const tx = TEXTS[ui.text] || TEXTS.normal;
   const g = t.grad;
   const rgb = (h) => hex2rgb(h).join(', ');
@@ -115,19 +118,28 @@ export function applyTheme(uiOrName) {
   r.setProperty('--primary-t', hsl(ah, 0.9, 0.86));
   r.setProperty('--on-primary', hsl(ah, 0.5, 0.1));
   r.setProperty('--peach', t.warm);
-  r.setProperty('--grad', `linear-gradient(120deg, ${al} 0%, ${a} 45%, ${t.warm} 100%)`);
-  r.setProperty('--ring', `0 0 0 2px #fff, 0 0 0 5px ${a}e6, 0 12px 40px ${a}73`);
-  r.setProperty('--ring-soft', `0 0 0 2px rgba(255, 255, 255, 0.9), 0 0 24px ${a}8c`);
+  // 0.9: one flat accent, no gradients; focus is white everywhere (see docs/design.md)
+  r.setProperty('--grad', `linear-gradient(${a}, ${a})`);
+  r.setProperty('--ring', '0 0 0 3px var(--s0), 0 0 0 6px #fff');
+  r.setProperty('--ring-soft', '0 0 0 2px #fff');
+  // surfaces: neutral greys, tinted a little towards the theme for the coloured themes
+  const sh = rgb2hsl(...hex2rgb(g[2])), ss = t.neutral ? 0 : Math.min(0.16, sh[1] * 0.25);
+  const surfL = surf.black ? [0, 0.055, 0.09, 0.14] : [0.05, 0.085, 0.12, 0.165];
+  const S = surfL.map((l) => hsl(sh[0], ss, l));
+  if (surf.bg && !surf.black && surf.glassA < 1) S[0] = surf.bg;
+  S.forEach((c, i) => r.setProperty('--s' + i, surf.glassA < 1 && i ? `rgba(${rgb(c)}, ${surf.glassA})` : c));
   r.setProperty('--xmb', `radial-gradient(120% 90% at 85% 0%, ${g[0]} 0%, transparent 55%), radial-gradient(90% 80% at 0% 100%, ${g[5]} 0%, transparent 60%), linear-gradient(160deg, ${g[1]} 0%, ${g[2]} 38%, ${g[3]} 70%, ${g[4]} 100%)`);
   r.setProperty('--xmb-base', surf.black ? '#000' : g[4]);
+  // Cartridge's own theme: a flat page, so art and panels meet it without a seam
+  if (t.neutral) { r.setProperty('--xmb', surf.black ? '#000' : S[0]); r.setProperty('--xmb-base', surf.black ? '#000' : S[0]); }
   for (let i = 0; i < 6; i++) r.setProperty('--g' + i, g[i]);
   r.setProperty('--tint-rgb', surf.black ? '0, 0, 0' : tint);
-  r.setProperty('--glass-bg', `rgba(${surf.black ? '0, 0, 0' : tint}, ${surf.glassA})`);
-  r.setProperty('--bg', surf.bg);
+  r.setProperty('--glass-bg', surf.glassA < 1 ? `rgba(${surf.black ? '0, 0, 0' : tint}, ${surf.glassA})` : S[1]);
+  r.setProperty('--bg', surf.black ? '#000' : S[0]);
   r.setProperty('--text', tx.text);
   r.setProperty('--muted', tx.muted);
   r.setProperty('--dim', tx.dim);
-  const f = FONTS[ui.font] || FONTS.outfit;
+  const f = FONTS[ui.font] || FONTS.cartridge;
   r.setProperty('--display', f.display);
   r.setProperty('--body', f.body);
   r.setProperty('--card-r', (CARD_SHAPES[ui.cardShape] || CARD_SHAPES.rounded).r);
@@ -138,6 +150,7 @@ export function applyTheme(uiOrName) {
   b.toggle('motion-fast', ui.motion === 'fast');
   b.toggle('motion-reduce', ui.motion === 'reduce');
   b.toggle('surface-oled', !!surf.black);
+  b.toggle('surface-glass', surf.glassA < 1 && !surf.black);
   b.toggle('no-titles', ui.cardTitles === false);
 }
 // Colours the animated backgrounds draw with

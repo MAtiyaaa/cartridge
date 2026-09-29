@@ -55,16 +55,16 @@ onBeforeUnmount(() => layer?.pop());
 .sp-head { display: flex; align-items: center; gap: 12px; }
 .sp-head h2 { margin: 0; }
 .sp-list { display: flex; flex-direction: column; gap: 8px; overflow-y: auto; min-height: 0; flex: 1; padding: 2px; }
-.sp-e { display: flex; flex-direction: column; gap: 5px; padding: 12px 14px; border-radius: 10px; background: rgba(255, 255, 255, 0.045); border: 1px solid var(--line); outline: none; }
+.sp-e { display: flex; flex-direction: column; gap: 5px; padding: 12px 14px; border-radius: var(--r-md); background: var(--s2); outline: none; }
 .sp-e:focus { border-color: var(--primary-l); box-shadow: var(--ring); }
 .sp-e.rm, .sp-e.skip { flex-direction: row; align-items: center; gap: 10px; }
 .sp-e.rm { color: #ffb4b4; }
 .sp-e.skip { color: #ffd978; }
 .sp-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.sp-top b { font-size: 15px; margin-right: 4px; }
+.sp-top b { font-size: var(--t-md); margin-right: 4px; }
 .chip.how { background: rgba(var(--primary-rgb), 0.22); }
-.sp-kv { display: grid; grid-template-columns: 120px 1fr; gap: 10px; font-size: 12.5px; min-width: 0; }
+.sp-kv { display: grid; grid-template-columns: 120px 1fr; gap: 10px; font-size: var(--t-xs); min-width: 0; }
 .sp-kv span { color: var(--muted); }
-.sp-kv code { font-family: var(--mono, monospace); font-size: 12px; word-break: break-all; color: var(--text); }
-.sp-note { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+.sp-kv code { font-family: var(--mono, monospace); font-size: var(--t-xs); word-break: break-all; color: var(--text); }
+.sp-note { display: flex; align-items: center; gap: 6px; font-size: var(--t-xs); color: var(--muted); }
 </style>

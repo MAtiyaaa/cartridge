@@ -8,6 +8,7 @@ import '@fontsource-variable/nunito';
 import '@fontsource-variable/rubik';
 import '@fontsource-variable/space-grotesk';
 import '@fontsource-variable/lexend';
+import '@fontsource-variable/archivo/wdth.css';
 import './styles.css';
 import App from './App.vue';
 createApp(App).mount('#app');

@@ -71,12 +71,12 @@ onBeforeUnmount(() => layer.pop());
 
 <style>
 .ap-item { position: relative; }
-.ap-size { position: absolute; left: 6px; bottom: 6px; padding: 2px 7px; border-radius: 6px; background: rgba(0, 0, 0, 0.65); font-size: 11px; font-weight: 600; color: #fff; }
+.ap-size { position: absolute; left: 6px; bottom: 6px; padding: 2px 7px; border-radius: var(--r-sm); background: rgba(0, 0, 0, 0.65); font-size: var(--t-xs); font-weight: 600; color: #fff; }
 .ap-size.low { color: #ffc0c0; }
 .dialog.art-picker { width: min(980px, 94vw); max-width: none; height: min(720px, 90vh); }
 .ap-head { display: flex; align-items: baseline; gap: 14px; }
 .ap-games { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.chipbtn { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border-radius: 999px; background: rgba(255, 255, 255, 0.07); border: 1px solid var(--line-2); font-size: 13px; color: var(--text); }
+.chipbtn { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border-radius: 999px; background: var(--s2); font-size: var(--t-sm); color: var(--text); }
 .chipbtn.on { background: var(--primary); border-color: var(--primary-l); color: #fff; }
 .ap-grid { flex: 1 1 auto; min-height: 0; overflow-y: auto; display: grid; gap: 16px; padding: 8px; align-content: start; grid-auto-rows: max-content; }
 .ap-grid.grid { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); }
@@ -89,9 +89,9 @@ onBeforeUnmount(() => layer.pop());
 .ap-grid.logo .ap-item { background: repeating-conic-gradient(#2a2e3a 0% 25%, #20232d 0% 50%) 50% / 20px 20px; padding: 14px; }
 .ap-grid.logo .ap-item img { aspect-ratio: 16 / 7; }
 .ap-grid.logo .ap-item img { object-fit: contain; }
-.ap-item { position: relative; display: block; width: 100%; min-height: 0; border-radius: 6px; overflow: hidden; background: #161a25; transition: transform 0.14s ease-out; }
+.ap-item { position: relative; display: block; width: 100%; min-height: 0; border-radius: var(--r-sm); overflow: hidden; background: #161a25; transition: transform 0.14s ease-out; }
 .ap-item img { width: 100%; height: auto; object-fit: cover; display: block; }
 .ap-item:focus { transform: scale(1.04); }
-.ap-style { position: absolute; left: 6px; bottom: 6px; font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; padding: 2px 6px; border-radius: 4px; background: rgba(0, 0, 0, 0.6); color: #cfd3dc; }
+.ap-style { position: absolute; left: 6px; bottom: 6px; font-size: var(--t-xs); padding: 2px 6px; border-radius: 4px; background: rgba(0, 0, 0, 0.6); color: #cfd3dc; }
 .ap-foot { display: flex; align-items: center; gap: 6px; justify-content: flex-end; }
 </style>

@@ -84,18 +84,18 @@ onMounted(async () => { await load(); await nextTick(); ensureFocus(el.value); }
 
 <style scoped>
 .sm-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; margin: 18px 0 22px; }
-.big { font-size: 34px; font-weight: 700; margin: 6px 0 8px; }
+.big { font-size: var(--t-2xl); font-weight: 700; margin: 6px 0 8px; }
 .sm-sec { margin-bottom: 26px; }
-.sm-con { display: flex; align-items: center; gap: 12px; margin: 0 0 14px; font-family: var(--display); font-size: 18px; }
-.sm-con .count { color: var(--muted); font-size: 13px; }
+.sm-con { display: flex; align-items: center; gap: 12px; margin: 0 0 14px; font-family: var(--display); font-size: var(--t-lg); }
+.sm-con .count { color: var(--muted); font-size: var(--t-sm); }
 .sg-list { display: flex; flex-direction: column; gap: 8px; }
-.sc-row { display: flex; align-items: center; gap: 16px; padding: 8px 16px; border-radius: 10px; background: rgba(16, 19, 28, 0.6); border: 1px solid var(--line); text-align: left; min-width: 0; }
+.sc-row { display: flex; align-items: center; gap: 16px; padding: 8px 16px; border-radius: var(--r-md); background: rgba(16, 19, 28, 0.6); border: 1px solid var(--line); text-align: left; min-width: 0; }
 .sc-row:focus { border-color: var(--primary-l); }
-.sc-thumb { width: 40px; height: 54px; border-radius: 6px; overflow: hidden; background: #1a1e2a; flex: none; }
+.sc-thumb { width: 40px; height: 54px; border-radius: var(--r-sm); overflow: hidden; background: #1a1e2a; flex: none; }
 .sc-thumb img { width: 100%; height: 100%; object-fit: cover; }
 .sc-mid { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .sc-mid b { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.sc-mid span { font-size: 12px; }
-.sc-act { display: flex; align-items: center; gap: 8px; width: 120px; justify-content: flex-end; color: var(--muted); font-size: 12.5px; flex: none; }
-.chip.none { background: rgba(245, 197, 66, 0.18); color: #ffd978; font-size: 11.5px; }
+.sc-mid span { font-size: var(--t-xs); }
+.sc-act { display: flex; align-items: center; gap: 8px; width: 120px; justify-content: flex-end; color: var(--muted); font-size: var(--t-xs); flex: none; }
+.chip.none { background: rgba(245, 197, 66, 0.18); color: #ffd978; font-size: var(--t-xs); }
 </style>

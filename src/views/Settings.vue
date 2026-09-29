@@ -104,7 +104,7 @@
 
             <div class="subh"><Icon name="mdiPaletteOutline" :size="20" />Colour</div>
             <div class="swatches">
-              <button v-for="(t, k) in THEMES" :key="k" class="swatch" data-focus :class="{ on: (ui.theme || 'purple') === k }" :style="{ background: `linear-gradient(135deg, ${t.grad[0]}, ${t.grad[2]} 60%, ${t.grad[4]})` }" :title="t.label" @click="saveConfig({ ui: { theme: k, gameTheme: null } })"><i :style="{ background: t.accent[0] }" /><span>{{ t.label }}</span></button>
+              <button v-for="(t, k) in THEMES" :key="k" class="swatch" data-focus :class="{ on: (ui.theme || 'cartridge') === k }" :style="{ background: `linear-gradient(135deg, ${t.grad[0]}, ${t.grad[2]} 60%, ${t.grad[4]})` }" :title="t.label" @click="saveConfig({ ui: { theme: k, gameTheme: null } })"><i :style="{ background: t.accent[0] }" /><span>{{ t.label }}</span></button>
               <button class="swatch custom" data-focus :class="{ on: ui.theme === 'custom' }" :style="ui.customColor ? { background: `linear-gradient(135deg, ${customT.grad[0]}, ${customT.grad[2]} 60%, ${customT.grad[4]})` } : {}" @click="pickColor"><Icon name="mdiEyedropperVariant" :size="18" /><span>Custom</span></button>
             </div>
             <div class="finetune">
@@ -114,7 +114,7 @@
               </button>
               <button v-if="Object.values(ui.colors || {}).some(Boolean)" class="btn small" data-focus @click="saveConfig({ ui: { colors: { highlight: '', buttons: '', bars: '', background: '' } } })"><Icon name="mdiRestore" :size="16" />Use theme colours</button>
             </div>
-            <div class="row"><span class="lbl">Panels</span><div class="seg"><button v-for="(v, k) in SURFACES" :key="k" data-focus :class="{ on: (ui.surface || 'glass') === k }" @click="saveConfig({ ui: { surface: k } })">{{ v.label }}</button></div></div>
+            <div class="row"><span class="lbl">Panels</span><div class="seg"><button v-for="(v, k) in SURFACES" :key="k" data-focus :class="{ on: (ui.surface || 'solid') === k }" @click="saveConfig({ ui: { surface: k } })">{{ v.label }}</button></div></div>
             <div class="row"><span class="lbl">Text</span><div class="seg"><button v-for="(v, k) in TEXTS" :key="k" data-focus :class="{ on: (ui.text || 'normal') === k }" @click="saveConfig({ ui: { text: k } })">{{ v.label }}</button></div></div>
 
             <div class="subh"><Icon name="mdiWallpaper" :size="20" />Background</div>
@@ -132,7 +132,7 @@
 
             <div class="subh"><Icon name="mdiFormatFont" :size="20" />Text &amp; Size</div>
             <div class="fonts">
-              <button v-for="(f, k) in FONTS" :key="k" class="fonttile" data-focus :class="{ on: (ui.font || 'outfit') === k }" :style="{ fontFamily: f.display }" @click="saveConfig({ ui: { font: k } })"><b>Aa</b><span>{{ f.label }}</span></button>
+              <button v-for="(f, k) in FONTS" :key="k" class="fonttile" data-focus :class="{ on: (ui.font || 'cartridge') === k }" :style="{ fontFamily: f.display }" @click="saveConfig({ ui: { font: k } })"><b>Aa</b><span>{{ f.label }}</span></button>
             </div>
             <div class="row"><span class="lbl">Interface size</span><div class="seg"><button v-for="z in scales" :key="z.v" data-focus :class="{ on: String(ui.scale || 'auto') === z.v }" @click="setScale(z.v)">{{ z.l }}</button></div></div>
             <p class="muted small" style="margin-top: -6px">{{ scaleNote }}</p>
@@ -438,7 +438,7 @@ async function chooseWallpaper() {
   if (!file) return;
   try { store.config = await call('wallpaper:set', { file }); toast('Wallpaper set', 'ok', 2000, 'mdiWallpaper'); } catch (e) { toast(e.message, 'error', 4000); }
 }
-const bgNow = computed(() => BACKGROUNDS.find((b) => b.v === (ui.value.bgStyle || 'waves')) || BACKGROUNDS[0]);
+const bgNow = computed(() => BACKGROUNDS.find((b) => b.v === (ui.value.bgStyle || 'solid')) || BACKGROUNDS[0]);
 const BG_ICON = { Theme: 'mdiWaves', Consoles: 'mdiGamepadVariantOutline', Other: 'mdiImageOutline' };
 async function pickBg() {
   let last = '';
@@ -446,7 +446,7 @@ async function pickBg() {
   const v = await choose({ title: 'Background', options });
   if (v) await setBg(v);
 }
-async function clearWallpaper() { store.config = await call('wallpaper:clear'); await saveConfig({ ui: { bgStyle: 'waves' } }); }
+async function clearWallpaper() { store.config = await call('wallpaper:clear'); await saveConfig({ ui: { bgStyle: 'solid' } }); }
 async function setPack(v) { await saveConfig({ ui: { soundPack: v } }); setSoundStyle(v, ui.value.volume); previewSound(); }
 async function setVolume(v) { await saveConfig({ ui: { volume: v } }); setSoundStyle(ui.value.soundPack, v); previewSound(); }
 // Look presets: the look settings saved under a name (not interface size, pointer, keyboard or
@@ -476,7 +476,7 @@ async function savePreset() {
 }
 async function applyPreset(p) {
   const u = { ...p.ui };
-  if (u.bgStyle === 'wallpaper' && !ui.value.wallpaper) u.bgStyle = 'waves'; // the wallpaper image isn't part of a preset
+  if (u.bgStyle === 'wallpaper' && !ui.value.wallpaper) u.bgStyle = 'solid'; // the wallpaper image isn't part of a preset
   await saveConfig({ ui: u });
   setSoundEnabled(ui.value.sounds !== false);
   setSoundStyle(ui.value.soundPack, ui.value.volume);
@@ -497,7 +497,7 @@ async function presetMenu(p, i) {
 }
 async function resetLook() {
   if (!(await confirm('Reset Look & Feel?', 'Colour, background, fonts, cards, motion and sounds go back to the defaults.', 'Reset'))) return;
-  await saveConfig({ ui: { colors: { highlight: '', buttons: '', bars: '', background: '' }, theme: 'purple', customColor: '', surface: 'glass', text: 'normal', font: 'outfit', cardShape: 'rounded', density: 'normal', cardTitles: true, gridSize: 'md', bgStyle: 'waves', motion: 'normal', effects: 'auto', soundPack: 'soft', volume: 'medium' } });
+  await saveConfig({ ui: { colors: { highlight: '', buttons: '', bars: '', background: '' }, theme: 'cartridge', customColor: '', surface: 'solid', text: 'normal', font: 'cartridge', cardShape: 'rounded', density: 'normal', cardTitles: true, gridSize: 'md', bgStyle: 'solid', motion: 'normal', effects: 'auto', soundPack: 'soft', volume: 'medium' } });
 }
 const gfx = [{ v: 'auto', l: 'Auto (GPU)' }, { v: 'software', l: 'Compatible' }];
 const pointers = [{ v: 'auto', l: 'Auto' }, { v: 'touch', l: 'Touch' }, { v: 'mouse', l: 'Mouse' }];
@@ -640,28 +640,29 @@ onMounted(async () => { space.value = await call('fs:space', store.config.romsRo
 <style scoped>
 .set-view { position: absolute; inset: 0; display: grid; grid-template-columns: 270px 1fr; gap: 10px; padding: 16px 36px 0; animation: viewIn 0.16s ease-out; }
 .rail { display: flex; flex-direction: column; gap: 4px; padding-top: 10px; }
-.rail-item { display: flex; align-items: center; gap: 14px; padding: 13px 16px; border-radius: 8px; color: var(--muted); font-weight: 500; transition: background 0.15s, color 0.15s; }
-.rail-item.on { color: #fff; background: rgba(255, 255, 255, 0.06); }
-.rail-item:focus { background: rgba(var(--primary-rgb), 0.25); color: #fff; }
+.rail-item { display: flex; align-items: center; gap: 14px; padding: 13px 16px; border-radius: var(--r-md); color: var(--muted); font-weight: 500; transition: background 0.15s, color 0.15s; }
+.rail-item.on { color: var(--text); background: var(--s2); box-shadow: inset 3px 0 0 var(--primary); }
+.rail-item:focus { background: var(--focus); color: var(--on-focus); box-shadow: none; }
 .pane { overflow-y: auto; padding: 6px 12px 60px 24px; }
 .pane-in { display: flex; flex-direction: column; gap: 16px; max-width: 860px; }
-.pane h1 { font-size: 34px; font-weight: 700; margin: 4px 0 6px; }
+.pane h1 { font-size: var(--t-2xl); font-weight: 700; margin: 4px 0 6px; }
 .card-s { padding: 18px 20px; display: flex; flex-direction: column; gap: 10px; }
-.kv { display: flex; gap: 16px; font-size: 14px; min-width: 0; }
+.kv { display: flex; gap: 16px; font-size: var(--t-sm); min-width: 0; }
 .kv > span:first-child { width: 110px; color: var(--muted); flex: none; }
-.lbl { width: 130px; color: var(--muted); font-size: 13.5px; flex: none; }
-.lbl2 { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.12em; margin-bottom: 4px; font-weight: 600; }
-.small { font-size: 12.5px; }
+.lbl { width: 130px; color: var(--muted); font-size: var(--t-sm); flex: none; }
+.lbl2 { font-size: var(--t-xs); color: var(--muted); margin-bottom: 4px; font-weight: 600; }
+.small { font-size: var(--t-xs); }
 .wrap { flex-wrap: wrap; }
 .pathrow { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 18px; }
 .plist { display: flex; flex-direction: column; gap: 6px; }
-.prow { display: grid; grid-template-columns: 30px 210px 1fr auto; align-items: center; gap: 14px; padding: 10px 14px; border-radius: 8px; background: rgba(255, 255, 255, 0.045); }
-.prow:focus { background: rgba(var(--primary-rgb), 0.2); }
+.prow { display: grid; grid-template-columns: 30px 210px 1fr auto; align-items: center; gap: 14px; padding: 10px 14px; border-radius: var(--r-md); background: var(--s2); }
+.prow:focus { background: var(--focus); color: var(--on-focus); box-shadow: none; }
+.prow:focus .pp, .prow:focus .muted { color: rgba(12, 13, 16, 0.75); }
 .pn { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pp { color: var(--muted); }
 .about { display: flex; align-items: center; gap: 22px; padding: 22px; }
 .swatches { display: flex; flex-wrap: wrap; gap: 10px; }
-.swatch { width: 74px; height: 50px; border-radius: 8px; display: flex; align-items: flex-end; padding: 6px 8px; font-size: 11px; font-weight: 600; color: #fff; text-shadow: 0 1px 4px rgba(0,0,0,.6); box-shadow: inset 0 0 0 1px rgba(255,255,255,.15); }
+.swatch { width: 74px; height: 50px; border-radius: var(--r-md); display: flex; align-items: flex-end; padding: 6px 8px; font-size: var(--t-xs); font-weight: 600; color: #fff; text-shadow: 0 1px 4px rgba(0,0,0,.6); box-shadow: inset 0 0 0 1px rgba(255,255,255,.15); }
 .swatch.on { box-shadow: 0 0 0 2px #fff, 0 0 0 5px var(--primary); }
 .swatch { position: relative; }
 .swatch i { position: absolute; top: 6px; right: 6px; width: 12px; height: 12px; border-radius: 50%; box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.7); }
@@ -669,29 +670,29 @@ onMounted(async () => { space.value = await call('fs:space', store.config.romsRo
 .btn-demo { display: inline-flex; gap: 4px; vertical-align: middle; margin-left: 6px; }
 .finetune { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
 .presets { display: flex; flex-wrap: wrap; gap: 10px; }
-.preset { display: flex; flex-direction: column; gap: 6px; width: 120px; padding: 8px; border-radius: 10px; background: rgba(255, 255, 255, 0.045); border: 1px solid var(--line); text-align: left; }
-.preset b { font-size: 12.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.preset-sw { position: relative; height: 44px; border-radius: 7px; display: grid; place-items: center; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.15); }
+.preset { display: flex; flex-direction: column; gap: 6px; width: 120px; padding: 8px; border-radius: var(--r-md); background: var(--s2); text-align: left; }
+.preset b { font-size: var(--t-xs); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.preset-sw { position: relative; height: 44px; border-radius: var(--r-sm); display: grid; place-items: center; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.15); }
 .preset-sw i { position: absolute; top: 6px; right: 6px; width: 12px; height: 12px; border-radius: 50%; box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.7); }
 .preset.add .preset-sw { background: rgba(255, 255, 255, 0.06); color: var(--muted); border: 1px dashed var(--line-2); box-shadow: none; }
-.ft { display: flex; align-items: center; gap: 10px; padding: 8px 14px 8px 8px; border-radius: 10px; background: rgba(255, 255, 255, 0.045); border: 1px solid var(--line); }
-.ft-sw { width: 34px; height: 34px; border-radius: 8px; display: grid; place-items: center; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.25); color: #fff; }
+.ft { display: flex; align-items: center; gap: 10px; padding: 8px 14px 8px 8px; border-radius: var(--r-md); background: var(--s2); }
+.ft-sw { width: 34px; height: 34px; border-radius: var(--r-md); display: grid; place-items: center; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.25); color: #fff; }
 .ft-t { display: flex; flex-direction: column; text-align: left; }
-.ft-t b { font-size: 13px; font-weight: 600; }
-.ft-t small { font-size: 11px; color: var(--muted); }
+.ft-t b { font-size: var(--t-sm); font-weight: 600; }
+.ft-t small { font-size: var(--t-xs); color: var(--muted); }
 .bgs { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
-.bgnow { display: flex; align-items: center; gap: 14px; padding: 12px 16px; border-radius: 12px; text-align: left; width: 100%; max-width: 560px; }
+.bgnow { display: flex; align-items: center; gap: 14px; padding: 12px 16px; border-radius: var(--r-md); text-align: left; width: 100%; max-width: 560px; }
 .bgnow:focus { box-shadow: var(--ring); }
-.bgnow-ic { width: 40px; height: 40px; border-radius: 10px; display: grid; place-items: center; background: rgba(var(--primary-rgb), 0.22); color: var(--primary-t); flex: none; }
+.bgnow-ic { width: 40px; height: 40px; border-radius: var(--r-md); display: grid; place-items: center; background: rgba(var(--primary-rgb), 0.22); color: var(--primary-t); flex: none; }
 .bgnow-t { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.bgnow-t b { font-size: 15px; }
-.bgnow-t small { font-size: 12px; color: var(--muted); }
-.bgnow-c { display: inline-flex; align-items: center; gap: 2px; font-size: 13px; font-weight: 600; color: var(--primary-t); }
-.bgtile { position: relative; display: flex; flex-direction: column; gap: 2px; padding: 10px; border-radius: 10px; background: rgba(255, 255, 255, 0.045); border: 1px solid var(--line); text-align: left; }
+.bgnow-t b { font-size: var(--t-md); }
+.bgnow-t small { font-size: var(--t-xs); color: var(--muted); }
+.bgnow-c { display: inline-flex; align-items: center; gap: 2px; font-size: var(--t-sm); font-weight: 600; color: var(--primary-t); }
+.bgtile { position: relative; display: flex; flex-direction: column; gap: 2px; padding: 10px; border-radius: var(--r-md); background: var(--s2); text-align: left; }
 .bgtile.on { border-color: var(--primary-l); background: rgba(var(--primary-rgb), 0.18); }
-.bgtile b { font-size: 13.5px; font-weight: 600; margin-top: 6px; }
-.bgtile small { font-size: 11px; color: var(--muted); }
-.bgp { position: relative; height: 54px; border-radius: 7px; overflow: hidden; background: var(--xmb); }
+.bgtile b { font-size: var(--t-sm); font-weight: 600; margin-top: 6px; }
+.bgtile small { font-size: var(--t-xs); color: var(--muted); }
+.bgp { position: relative; height: 54px; border-radius: var(--r-sm); overflow: hidden; background: var(--xmb); }
 .bgp i { position: absolute; display: block; }
 .bgp-waves .bgp i { left: -10%; right: -10%; height: 14px; border-radius: 50%; border-top: 1.5px solid rgba(255, 255, 255, 0.5); background: rgba(255, 255, 255, 0.08); }
 .bgp-waves .bgp i:nth-child(1) { top: 26px; transform: rotate(-6deg); } .bgp-waves .bgp i:nth-child(2) { top: 30px; transform: rotate(4deg); } .bgp-waves .bgp i:nth-child(3) { top: 34px; transform: rotate(-2deg); }
@@ -707,25 +708,25 @@ onMounted(async () => { space.value = await call('fs:space', store.config.romsRo
 .bgp-art .bgp { background: linear-gradient(90deg, rgba(0, 0, 0, 0.7), transparent), repeating-linear-gradient(45deg, #3a3f50 0 8px, #2a2e3b 8px 16px); }
 .bgp-wallpaper .bgp { background: linear-gradient(135deg, #3a4b6b, #6b4b3a); }
 .fonts { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 10px; }
-.fonttile { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 12px 8px; border-radius: 10px; background: rgba(255, 255, 255, 0.045); border: 1px solid var(--line); }
-.fonttile b { font-size: 28px; font-weight: 600; line-height: 1.1; }
-.fonttile span { font-size: 12px; color: var(--muted); }
+.fonttile { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 12px 8px; border-radius: var(--r-md); background: var(--s2); }
+.fonttile b { font-size: var(--t-xl); font-weight: 600; line-height: 1.1; }
+.fonttile span { font-size: var(--t-xs); color: var(--muted); }
 .fonttile.on { border-color: var(--primary-l); background: rgba(var(--primary-rgb), 0.18); }
-.steam-grid { width: 130px; border-radius: 7px; box-shadow: 0 14px 34px rgba(0, 0, 0, 0.5); flex: none; }
+.steam-grid { width: 130px; border-radius: var(--r-sm); box-shadow: 0 14px 34px rgba(0, 0, 0, 0.5); flex: none; }
 .fadeup-enter-active, .fadeup-leave-active { transition: opacity 0.15s, transform 0.2s var(--ease); }
 .fadeup-enter-from { opacity: 0; transform: translateX(10px); }
 .fadeup-leave-to { opacity: 0; }
 .tabs-edit { display: flex; flex-direction: column; gap: 6px; }
-.tab-row { display: flex; align-items: center; gap: 10px; padding: 6px 8px 6px 14px; border-radius: 9px; background: rgba(255, 255, 255, 0.045); }
+.tab-row { display: flex; align-items: center; gap: 10px; padding: 6px 8px 6px 14px; border-radius: var(--r-md); background: var(--s2); }
 .tab-row.off { opacity: 0.6; }
 .tab-lbl { flex: 1; min-width: 0; }
 .tab-tg { min-width: 92px; justify-content: center; }
-.subh { display: flex; align-items: center; gap: 10px; font-family: var(--display); font-size: 19px; font-weight: 700; margin-top: 4px; }
+.subh { display: flex; align-items: center; gap: 10px; font-family: var(--display); font-size: var(--t-lg); font-weight: 700; margin-top: 4px; }
 .ra-mk { height: 20px; }
 .srcs { display: flex; flex-direction: column; gap: 10px; }
 .src { padding: 12px 16px; display: flex; flex-direction: column; gap: 8px; }
 .src-top { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-.src-path { display: flex; align-items: center; gap: 12px; font-size: 12.5px; min-width: 0; }
+.src-path { display: flex; align-items: center; gap: 12px; font-size: var(--t-xs); min-width: 0; }
 .src-path .how { color: var(--muted); width: 110px; flex: none; }
 .src-path .mono { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
 .chip.found { background: rgba(80, 200, 120, 0.18); color: #9be8b4; }

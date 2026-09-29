@@ -40,8 +40,8 @@ const DEFAULT_CONFIG = {
   biosPath: '',
   paths: {},
   downloads: { concurrency: 2, esdeM3uFolders: true, flattenSingleFile: true },
-  ui: { gridSize: 'md', hideEmpty: true, sounds: true, bgStyle: 'waves', theme: 'purple', mediaBar: true, logos: true, pointer: 'auto', scale: 'auto', keyboard: 'auto',
-    customColor: '', surface: 'glass', text: 'normal', font: 'outfit', cardShape: 'rounded', density: 'normal', cardTitles: true,
+  ui: { gridSize: 'md', hideEmpty: true, sounds: true, bgStyle: 'solid', theme: 'cartridge', mediaBar: true, logos: true, pointer: 'auto', scale: 'auto', keyboard: 'auto',
+    customColor: '', surface: 'solid', text: 'normal', font: 'cartridge', cardShape: 'rounded', density: 'normal', cardTitles: true,
     motion: 'normal', effects: 'auto', soundPack: 'soft', volume: 'medium', wallpaper: '', wallDim: 'medium',
     colors: { highlight: '', buttons: '', bars: '', background: '' } },
   sync: { onLaunch: true, everyMinutes: 60 },
@@ -49,7 +49,7 @@ const DEFAULT_CONFIG = {
   ra: { user: '', key: '' }, // RetroAchievements username + web API key
   trophies: { sources: {}, sync: true, popups: true, device: '' }, // PS3/PS4/Xbox 360/Vita trophies from emulators
   graphics: 'auto', // auto (GPU, falls back on failure) | software
-  configVersion: 2,
+  configVersion: 3,
   configured: false,
 };
 
@@ -70,8 +70,9 @@ if (!fs.existsSync(CONFIG_FILE)) {
     try { fs.mkdirSync(USER_DATA, { recursive: true }); fs.copyFileSync(path.join(old, f), path.join(USER_DATA, f)); } catch {}
   }
 }
+const freshConfig = !fs.existsSync(CONFIG_FILE);
 let config = loadJson(CONFIG_FILE, {});
-const rawVersion = config.configVersion || 1;
+const rawVersion = freshConfig ? DEFAULT_CONFIG.configVersion : config.configVersion || 1; // a new install starts on today's defaults
 config = deepMerge(DEFAULT_CONFIG, config);
 if (rawVersion < 2) {
   // 0.1.1/0.1.2 saved 'software' as a default, not a user choice: move everyone to Auto (GPU)
@@ -79,6 +80,15 @@ if (rawVersion < 2) {
   if (config.graphics === 'hardware') config.graphics = 'auto';
   config.configVersion = 2;
   try { fs.mkdirSync(USER_DATA, { recursive: true }); fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2), { mode: 0o600 }); } catch {}
+}
+if (rawVersion < 3 && config.configured) {
+  // 0.9's new look: settings still at the old defaults (saved as values, not choices) move to it;
+  // anything someone picked stays. Existing users have set up already, so Setup isn't forced on them.
+  const u = config.ui, was = { theme: 'purple', surface: 'glass', font: 'outfit', bgStyle: 'waves' }, now = { theme: 'cartridge', surface: 'solid', font: 'cartridge', bgStyle: 'solid' };
+  for (const k of Object.keys(was)) if (u[k] === was[k]) u[k] = now[k];
+  if (!config.setupDone) config.setupDone = 'before 0.9'; // Setup is in Settings → Steam for them
+  config.configVersion = 3;
+  try { fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2), { mode: 0o600 }); } catch {}
 }
 
 // ---------------------------------------------------------------- graphics
@@ -1961,6 +1971,7 @@ const handlers = {
     return config;
   },
   'wallpaper:clear': () => { for (const f of fs.readdirSync(USER_DATA)) if (/^wallpaper\./.test(f)) try { fs.rmSync(path.join(USER_DATA, f)); } catch {} config.ui.wallpaper = ''; saveConfig(); return config; },
+  'clip:write': ({ text }) => { require('electron').clipboard.writeText(String(text || '')); return true; },
   'clip:read': async () => String((await require('electron').clipboard.readText()) || '').trim().slice(0, 4000),
   'logo:get': (r) => logoFor(r),
   'ra:signin': async ({ user, key }) => {
@@ -2137,7 +2148,8 @@ const handlers = {
     const isD = (e) => e.isDirectory() || (e.isSymbolicLink() && isDir(path.join(d, e.name)));
     const dirs = entries.filter((e) => isD(e) && (o.hidden ? !['.', '..', '.cache', '.Trash-1000'].includes(e.name) : !e.name.startsWith('.'))).map((e) => e.name).sort((a, b) => a.localeCompare(b));
     const exts = Array.isArray(o.files) ? o.files.map((x) => '.' + String(x).toLowerCase()) : null;
-    const files = exts ? entries.filter((e) => !isD(e) && !e.name.startsWith('.') && exts.includes(path.extname(e.name).toLowerCase())).map((e) => e.name).sort((a, b) => a.localeCompare(b)) : undefined;
+    // files: a list of extensions, or '*' for any file (picking an emulator, whatever it's called)
+    const files = exts || o.files === '*' ? entries.filter((e) => !isD(e) && !e.name.startsWith('.') && (!exts || exts.includes(path.extname(e.name).toLowerCase()))).map((e) => e.name).sort((a, b) => a.localeCompare(b)) : undefined;
     return { path: path.resolve(d), parent: path.dirname(path.resolve(d)), dirs, files };
   },
   'fs:mkdir': async (dir) => { await fsp.mkdir(dir, { recursive: true }); return true; },

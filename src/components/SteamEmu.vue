@@ -68,12 +68,12 @@ onBeforeUnmount(() => layer?.pop());
 </script>
 <style scoped>
 .se { width: min(860px, 95vw); }
-.se-f { display: grid; grid-template-columns: 130px 1fr auto; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 10px; background: rgba(255, 255, 255, 0.045); border: 1px solid var(--line); text-align: left; }
+.se-f { display: grid; grid-template-columns: 130px 1fr auto; align-items: center; gap: 12px; padding: 12px 14px; border-radius: var(--r-md); background: var(--s2); text-align: left; }
 .se-f:focus { border-color: var(--primary-l); box-shadow: var(--ring); }
-.se-l { color: var(--muted); font-size: 13px; }
-.se-f code { font-size: 12.5px; word-break: break-all; }
+.se-l { color: var(--muted); font-size: var(--t-sm); }
+.se-f code { font-size: var(--t-xs); word-break: break-all; }
 .se-i { color: var(--muted); }
-.se-test { display: flex; align-items: center; gap: 8px; font-size: 13px; padding: 8px 12px; border-radius: 8px; }
+.se-test { display: flex; align-items: center; gap: 8px; font-size: var(--t-sm); padding: 8px 12px; border-radius: var(--r-md); }
 .se-test.ok { background: rgba(80, 200, 120, 0.14); color: #9be8b4; }
 .se-test.bad { background: rgba(255, 90, 90, 0.14); color: #ffaaaa; }
 </style>

@@ -286,7 +286,9 @@ function identifyProgram(file, { strings = true } = {}) {
       for (const [id, m] of marks) { let i = -1; while ((i = b.indexOf(m, i + 1)) >= 0) { hits[id] = (hits[id] || 0) + 1; if (hits[id] > 50) break; } }
     }
     const top = Object.entries(hits).sort((a, b) => b[1] - a[1]);
-    if (top.length && top[0][1] >= 3 && (!top[1] || top[0][1] >= top[1][1] * 3)) return { id: top[0][0], conf: 1, why: ['a name inside the program'] };
+    // an emulator names itself many times (window titles, logs, config paths); a passing mention in
+    // another program (a browser's list of GPUs) doesn't count
+    if (top.length && top[0][1] >= 12 && (!top[1] || top[0][1] >= top[1][1] * 3)) return { id: top[0][0], conf: 1, why: ['a name inside the program'] };
   } catch {} finally { if (fd !== undefined) try { fs.closeSync(fd); } catch {} }
   return { id: null, conf: 0 };
 }

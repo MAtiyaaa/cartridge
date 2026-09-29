@@ -99,26 +99,27 @@ onMounted(load);
 
 <style scoped>
 .sm { display: flex; flex-direction: column; gap: 14px; }
-.subh { display: flex; align-items: center; gap: 10px; font-family: var(--display); font-size: 19px; font-weight: 700; margin-top: 4px; }
-.small { font-size: 12.5px; }
+.subh { display: flex; align-items: center; gap: 10px; font-family: var(--display); font-size: var(--t-lg); font-weight: 700; margin-top: 4px; }
+.small { font-size: var(--t-xs); }
 .wrap { flex-wrap: wrap; }
 .spacer { flex: 1; }
 .sm-drives { align-self: flex-start; }
 .sm-card { padding: 16px 18px; display: flex; flex-direction: column; gap: 10px; }
-.sm-top { display: flex; align-items: baseline; gap: 12px; font-size: 14px; min-width: 0; }
-.sm-top b { font-size: 16px; }
-.sm-bar { display: flex; height: 14px; border-radius: 7px; overflow: hidden; background: rgba(255, 255, 255, 0.08); }
+.sm-top { display: flex; align-items: baseline; gap: 12px; font-size: var(--t-sm); min-width: 0; }
+.sm-top b { font-size: var(--t-md); }
+.sm-bar { display: flex; height: 14px; border-radius: var(--r-sm); overflow: hidden; background: rgba(255, 255, 255, 0.08); }
 .sm-bar i { display: block; height: 100%; }
 .sm-bar .g, .dot-g { background: var(--bar, var(--grad)); }
 .sm-bar .o, .dot-o { background: rgba(255, 255, 255, 0.28); }
 .dot-f { background: rgba(255, 255, 255, 0.08); box-shadow: inset 0 0 0 1px var(--line-2); }
-.sm-cons { display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--muted); }
-.sm-legend { display: flex; gap: 18px; flex-wrap: wrap; font-size: 12.5px; color: var(--muted); }
+.sm-cons { display: flex; align-items: center; gap: 7px; font-size: var(--t-xs); color: var(--muted); }
+.sm-legend { display: flex; gap: 18px; flex-wrap: wrap; font-size: var(--t-xs); color: var(--muted); }
 .sm-legend span { display: inline-flex; align-items: center; gap: 7px; }
 .sm-legend i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
 .sm-list { display: flex; flex-direction: column; gap: 6px; }
-.sm-row { display: flex; align-items: center; gap: 14px; padding: 8px 14px; border-radius: 9px; background: rgba(255, 255, 255, 0.045); border: 1px solid transparent; text-align: left; min-width: 0; }
-.sm-row:focus { background: rgba(var(--primary-rgb), 0.2); }
+.sm-row { display: flex; align-items: center; gap: 14px; padding: 8px 14px; border-radius: var(--r-md); background: var(--s2); border: 1px solid transparent; text-align: left; min-width: 0; }
+.sm-row:focus { background: var(--focus); color: var(--on-focus); box-shadow: none; }
+.sm-row:focus .muted { color: rgba(12, 13, 16, 0.75); }
 .sm-row.on { border-color: rgba(var(--primary-l-rgb), 0.5); }
 .sm-ck { color: var(--muted); }
 .sm-row.on .sm-ck { color: var(--primary-l); }
@@ -126,6 +127,6 @@ onMounted(load);
 .sm-thumb img { width: 100%; height: 100%; object-fit: cover; }
 .sm-mid { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .sm-mid b { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.sm-mid span { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.sm-size { font-family: var(--display); font-weight: 600; font-size: 14px; flex: none; }
+.sm-mid span { font-size: var(--t-xs); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sm-size { font-family: var(--display); font-weight: 600; font-size: var(--t-sm); flex: none; }
 </style>

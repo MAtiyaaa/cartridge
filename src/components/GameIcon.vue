@@ -30,7 +30,7 @@ function load() {
 watch(() => [props.romId, props.title, store.config?.sgdbKey, store.iconVer], load, { immediate: true });
 </script>
 <style>
-.gicon { position: relative; flex: none; overflow: hidden; background: rgba(255, 255, 255, 0.06); box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4), inset 0 0 0 1px rgba(255, 255, 255, 0.08); }
+.gicon { position: relative; flex: none; overflow: hidden; background: var(--s2); box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4), inset 0 0 0 1px rgba(255, 255, 255, 0.08); }
 .gicon img { position: absolute; }
 .gi-full { inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .gi-blur { inset: -20%; width: 140%; height: 140%; object-fit: cover; filter: blur(14px) saturate(1.2) brightness(0.75); }

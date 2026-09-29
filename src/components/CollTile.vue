@@ -50,10 +50,10 @@ const bg = computed(() => {
 const logo = computed(() => (props.c.series && store.config.ui.logos !== false && roms.value[0] ? logoOf(roms.value[0]) : null));
 </script>
 <style scoped>
-.coll { flex: none; width: 250px; display: flex; flex-direction: column; gap: 10px; border-radius: 10px; }
+.coll { flex: none; width: 250px; display: flex; flex-direction: column; gap: 10px; border-radius: var(--r-md); }
 .coll.wide { width: 330px; }
 .coll:focus { box-shadow: none !important; }
-.mosaic, .art { height: 150px; border-radius: 10px; overflow: hidden; background: #151924; box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45); transition: transform 0.22s var(--ease), box-shadow 0.22s; }
+.mosaic, .art { height: 150px; border-radius: var(--r-md); overflow: hidden; background: #151924; box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45); transition: transform 0.22s var(--ease), box-shadow 0.22s; }
 .art { position: relative; height: 180px; }
 .mosaic { display: grid; gap: 2px; }
 .mosaic.n1 { grid-template-columns: 1fr; } .mosaic.n2 { grid-template-columns: 1fr 1fr; } .mosaic.n3 { grid-template-columns: 1fr 1fr 1fr; } .mosaic.n4 { grid-template-columns: repeat(4, 1fr); }
@@ -63,12 +63,12 @@ const logo = computed(() => (props.c.series && store.config.ui.logos !== false &
 .art .bg.blur { filter: blur(18px) saturate(1.3) brightness(0.8); transform: scale(1.2); }
 .art .shade { position: absolute; inset: 0; background: linear-gradient(90deg, rgba(8, 8, 16, 0.82) 0%, rgba(8, 8, 16, 0.35) 55%, rgba(8, 8, 16, 0.55) 100%); }
 .lead { position: absolute; left: 18px; top: 0; bottom: 0; display: flex; align-items: center; max-width: 52%; }
-.badge { width: 58px; height: 58px; border-radius: 16px; display: grid; place-items: center; color: #fff; background: rgba(255, 255, 255, 0.14); backdrop-filter: blur(6px); box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35); }
-.lead :deep(.lead-t) { font-family: var(--display); font-weight: 700; font-size: 20px; line-height: 1.1; text-shadow: 0 3px 14px rgba(0, 0, 0, 0.6); }
+.badge { width: 58px; height: 58px; border-radius: var(--r-lg); display: grid; place-items: center; color: #fff; background: rgba(255, 255, 255, 0.14); backdrop-filter: blur(6px); box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35); }
+.lead :deep(.lead-t) { font-family: var(--display); font-weight: 700; font-size: var(--t-lg); line-height: 1.1; text-shadow: 0 3px 14px rgba(0, 0, 0, 0.6); }
 .fan { position: absolute; right: 16px; bottom: 16px; top: 16px; width: 150px; }
-.fan img { position: absolute; right: calc(var(--i) * 34px); bottom: 0; height: 100%; aspect-ratio: 2 / 3; object-fit: cover; border-radius: 6px; box-shadow: 0 8px 22px rgba(0, 0, 0, 0.6); transform: rotate(calc((var(--i) - (var(--n) - 1) / 2) * -5deg)); z-index: calc(10 - var(--i)); }
+.fan img { position: absolute; right: calc(var(--i) * 34px); bottom: 0; height: 100%; aspect-ratio: 2 / 3; object-fit: cover; border-radius: var(--r-sm); box-shadow: 0 8px 22px rgba(0, 0, 0, 0.6); transform: rotate(calc((var(--i) - (var(--n) - 1) / 2) * -5deg)); z-index: calc(10 - var(--i)); }
 body.light-fx .badge { backdrop-filter: none; }
 .coll:focus .mosaic, .coll:focus .art { transform: translateY(-5px) scale(1.04); box-shadow: var(--ring); }
-.cap { display: flex; align-items: center; gap: 8px; font-size: 14px; padding: 0 4px; }
+.cap { display: flex; align-items: center; gap: 8px; font-size: var(--t-sm); padding: 0 4px; }
 .cap .nm { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 </style>

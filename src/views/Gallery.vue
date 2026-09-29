@@ -7,7 +7,7 @@
           <Btn v-if="mode !== 'all'" b="LB" />
           <PIcon v-if="mode === 'platform'" :p="platform" :size="52" />
           <div v-else-if="headArt" class="hicon art"><img :src="headArt" /></div>
-          <div v-else class="hicon"><Icon :name="headIcon" :size="30" /></div>
+          <div v-else-if="mode !== 'all'" class="hicon"><Icon :name="headIcon" :size="30" /></div>
           <div style="min-width: 0">
             <div v-if="mode !== 'platform'" class="eyebrow">{{ eyebrow }}</div>
             <h1>{{ title }}</h1>
@@ -379,29 +379,29 @@ onMounted(async () => {
 .plat-view { position: absolute; inset: 0; display: grid; grid-template-rows: auto auto 1fr; padding: 8px 36px 0; animation: viewIn 0.16s ease-out; }
 .ph-head { display: flex; align-items: center; justify-content: space-between; gap: 20px; margin: 6px 0 14px; }
 .sys-switch { display: flex; align-items: center; gap: 16px; min-width: 0; }
-.sys-switch h1 { font-size: 30px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.hicon { width: 52px; height: 52px; border-radius: 9px; display: grid; place-items: center; background: rgba(var(--primary-rgb), 0.2); color: var(--primary-t); flex: none; }
+.sys-switch h1 { font-size: var(--t-xl); font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hicon { width: 52px; height: 52px; border-radius: var(--r-md); display: grid; place-items: center; background: rgba(var(--primary-rgb), 0.2); color: var(--primary-t); flex: none; }
 .toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; flex-wrap: wrap; }
-.small { font-size: 12.5px; }
+.small { font-size: var(--t-xs); }
 .body { display: grid; grid-template-columns: 1fr 340px; gap: 24px; min-height: 0; }
 .grid-pane { overflow-y: auto; padding: 22px 12px 60px; margin: 0 -12px; }
 .more { display: grid; place-items: center; padding: 30px; }
 .detail { align-self: start; margin-top: 12px; padding: 18px; max-height: calc(100% - 30px); overflow: hidden; }
 .detail-in { display: flex; flex-direction: column; gap: 12px; }
-.d-cover { width: 150px; aspect-ratio: 2/3; border-radius: 8px; overflow: hidden; box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6); background: #1a1e2a; }
+.d-cover { width: 150px; aspect-ratio: 2/3; border-radius: var(--r-md); overflow: hidden; box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6); background: #1a1e2a; }
 .d-cover img { width: 100%; height: 100%; object-fit: cover; }
-.noart { height: 100%; display: grid; place-items: center; padding: 10px; text-align: center; color: var(--muted); font-size: 13px; }
-.detail h2 { font-size: 22px; line-height: 1.15; }
-.d-sum { margin: 0; color: #c3c9d4; font-size: 13.5px; line-height: 1.55; display: -webkit-box; -webkit-line-clamp: 6; -webkit-box-orient: vertical; overflow: hidden; }
-.d-hints { display: flex; gap: 16px; color: var(--muted); font-size: 12.5px; }
+.noart { height: 100%; display: grid; place-items: center; padding: 10px; text-align: center; color: var(--muted); font-size: var(--t-sm); }
+.detail h2 { font-size: var(--t-lg); line-height: 1.15; }
+.d-sum { margin: 0; color: #c3c9d4; font-size: var(--t-sm); line-height: 1.55; display: -webkit-box; -webkit-line-clamp: 6; -webkit-box-orient: vertical; overflow: hidden; }
+.d-hints { display: flex; gap: 16px; color: var(--muted); font-size: var(--t-xs); }
 .fadeup-enter-active, .fadeup-leave-active { transition: opacity 0.16s, transform 0.22s var(--ease); }
 .fadeup-enter-from { opacity: 0; transform: translateY(8px); }
 .fadeup-leave-to { opacity: 0; }
 @media (max-width: 1100px) { .body { grid-template-columns: 1fr; } .detail { display: none; } }
 .con-sec { margin-bottom: 26px; }
-.con-head { display: flex; align-items: center; gap: 12px; margin: 4px 0 4px; font-family: var(--display); font-size: 18px; }
+.con-head { display: flex; align-items: center; gap: 12px; margin: 4px 0 4px; font-family: var(--display); font-size: var(--t-lg); }
 .con-head b { font-weight: 700; }
-.con-head .count { color: var(--muted); font-size: 13px; font-family: var(--font); }
+.con-head .count { color: var(--muted); font-size: var(--t-sm); font-family: var(--font); }
 .hicon.art { overflow: hidden; padding: 0; }
 .hicon.art img { width: 100%; height: 100%; object-fit: cover; }
 /* room above each console's games so a highlighted (raised, zoomed) card never covers its header */

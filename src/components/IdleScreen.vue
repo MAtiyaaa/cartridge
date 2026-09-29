@@ -111,11 +111,11 @@ defineExpose({ sleep, wake });
 .idle-shade { position: absolute; inset: 0; background: linear-gradient(0deg, rgba(0, 0, 0, 0.78) 0%, rgba(0, 0, 0, 0.1) 45%, rgba(0, 0, 0, 0.35) 100%); }
 .idle-clock { position: absolute; left: 56px; bottom: 52px; color: #fff; text-shadow: 0 4px 24px rgba(0, 0, 0, 0.6); }
 .idle-clock .t { font-family: var(--display); font-size: 96px; font-weight: 700; line-height: 1; letter-spacing: -0.03em; }
-.idle-clock .d { font-size: 22px; font-weight: 500; opacity: 0.85; margin-top: 8px; }
+.idle-clock .d { font-size: var(--t-lg); font-weight: 500; opacity: 0.85; margin-top: 8px; }
 .idle-cap { position: absolute; right: 56px; bottom: 56px; text-align: right; color: #fff; max-width: 40vw; text-shadow: 0 3px 18px rgba(0, 0, 0, 0.7); }
-.idle-cap .n { font-family: var(--display); font-size: 26px; font-weight: 700; }
-.idle-cap .p { font-size: 14px; opacity: 0.75; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 600; margin-top: 4px; }
-.idle-hint { position: absolute; top: 34px; right: 44px; display: flex; align-items: center; gap: 10px; color: rgba(255, 255, 255, 0.55); font-size: 14px; font-weight: 500; }
+.idle-cap .n { font-family: var(--display); font-size: var(--t-xl); font-weight: 700; }
+.idle-cap .p { font-size: var(--t-sm); opacity: 0.75; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 600; margin-top: 4px; }
+.idle-hint { position: absolute; top: 34px; right: 44px; display: flex; align-items: center; gap: 10px; color: rgba(255, 255, 255, 0.55); font-size: var(--t-sm); font-weight: 500; }
 .idle-enter-active, .idle-leave-active { transition: opacity 0.8s ease; }
 .idle-enter-from, .idle-leave-to { opacity: 0; }
 .slide-enter-active { transition: opacity 1.6s ease; }

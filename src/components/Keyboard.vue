@@ -138,26 +138,26 @@ onBeforeUnmount(() => { window.removeEventListener('keydown', onKey, true); laye
 
 <style scoped>
 .kb { width: min(860px, 94vw); }
-.kb-display { position: relative; display: flex; align-items: center; min-height: 56px; padding: 0 16px; border-radius: 12px; background: var(--bg); border: 1px solid var(--primary); font-size: 20px; overflow: hidden; white-space: nowrap; }
+.kb-display { position: relative; display: flex; align-items: center; min-height: 56px; padding: 0 16px; border-radius: var(--r-md); background: var(--bg); border: 1px solid var(--primary); font-size: var(--t-lg); overflow: hidden; white-space: nowrap; }
 .kb-display .ph { color: var(--dim); }
 .caret { display: inline-block; width: 2px; height: 26px; background: var(--primary-l); margin-left: 2px; animation: blink 1s steps(1) infinite; }
 @keyframes blink { 50% { opacity: 0; } }
-.reveal { margin-left: auto; padding: 6px; border-radius: 8px; color: var(--muted); }
+.reveal { margin-left: auto; padding: 6px; border-radius: var(--r-md); color: var(--muted); }
 .reveal:focus { box-shadow: var(--ring); }
 .kb-rows { display: flex; flex-direction: column; gap: 8px; }
 .kb-row { display: flex; gap: 8px; justify-content: center; }
-.key { flex: 1; height: 52px; border-radius: 10px; background: rgba(255,255,255,.07); border: 1px solid var(--line); display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 18px; transition: transform 0.08s; }
-.key.small { height: 38px; font-size: 13px; flex: none; padding: 0 12px; }
-.key.wide { flex: 1.6; font-size: 14px; }
-.key.space { flex: 4; font-size: 14px; }
+.key { flex: 1; height: 52px; border-radius: var(--r-md); background: rgba(255,255,255,.07); border: 1px solid var(--line); display: flex; align-items: center; justify-content: center; gap: 6px; font-size: var(--t-lg); transition: transform 0.08s; }
+.key.small { height: 38px; font-size: var(--t-sm); flex: none; padding: 0 12px; }
+.key.wide { flex: 1.6; font-size: var(--t-sm); }
+.key.space { flex: 4; font-size: var(--t-sm); }
 .key.on { background: rgba(var(--primary-rgb), 0.25); border-color: var(--primary); }
 .key.done { background: var(--btn, var(--grad)); border: 0; color: var(--on-btn, var(--on-primary)); font-weight: 700; }
 .key:focus { box-shadow: var(--ring); transform: scale(1.06); z-index: 1; }
 .key:hover { background: rgba(255,255,255,.12); }
 .sugg { justify-content: flex-start; flex-wrap: nowrap; overflow: hidden; min-height: 38px; }
 .key.sg { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-flex; gap: 6px; }
-.sg-empty { color: var(--dim); font-size: 13px; align-self: center; padding-left: 4px; }
+.sg-empty { color: var(--dim); font-size: var(--t-sm); align-self: center; padding-left: 4px; }
 .key.sg.title { background: rgba(var(--primary-rgb), 0.18); border-color: rgba(var(--primary-rgb), 0.45); }
-.kb-hints { display: flex; gap: 18px; justify-content: center; color: var(--muted); font-size: 12px; }
+.kb-hints { display: flex; gap: 18px; justify-content: center; color: var(--muted); font-size: var(--t-xs); }
 .hint { display: flex; align-items: center; gap: 6px; }
 </style>
