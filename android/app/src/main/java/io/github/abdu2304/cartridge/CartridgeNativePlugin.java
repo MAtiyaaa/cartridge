@@ -447,6 +447,17 @@ public class CartridgeNativePlugin extends Plugin {
                 java.util.Iterator<String> keys = extras.keys();
                 while (keys.hasNext()) { String k = keys.next(); i.putExtra(k, expand(extras.optString(k, ""), file, shared)); }
             }
+            JSObject arrays = call.getObject("arrays");
+            if (arrays != null) {
+                java.util.Iterator<String> keys = arrays.keys();
+                while (keys.hasNext()) {
+                    String k = keys.next();
+                    org.json.JSONArray src = arrays.getJSONArray(k);
+                    String[] out = new String[src.length()];
+                    for (int n = 0; n < out.length; n++) out[n] = expand(src.getString(n), file, shared);
+                    i.putExtra(k, out);
+                }
+            }
             JSObject bools = call.getObject("bools");
             if (bools != null) {
                 java.util.Iterator<String> keys = bools.keys();

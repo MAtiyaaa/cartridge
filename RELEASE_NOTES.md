@@ -1,16 +1,12 @@
-## Cartridge 0.9.5 · Smooth Moves
-
-### Fixed
-- **Games you have are found, even under another name.** Cartridge now also matches a file to a game by its name without the region and dump tags, or by the game's title, when exactly one file fits. "Assassin's Creed - Bloodlines (USA).cso" now counts as installed.
-- **The Home banner is no longer cut in half after leaving a game.** Coming back to a game card could scroll the whole page up under the top bar. That part of the screen can't scroll any more.
-- **The animated background moves on Android without touching the screen.** It only showed new frames while something else changed on screen.
-- **Covers load on the first start.** Home loads its covers straight away, and a cover that fails because the image server wasn't ready yet is tried again.
-- **Scrolling no longer jumps back to the top.** When a list refreshed under the highlighted game, the next press started from the first item; it now carries on from the same game, or the nearest one.
-- **The second screen follows the right game.** It could show a game you'd already moved past (updates arrived out of order), and now shows the newest one sooner.
-- **The second screen comes back.** A back gesture on it no longer closes it, it reopens when you return to Cartridge, and the Quick Menu has a Second screen switch.
-- **Your emulator's real name.** Play and Ready to play show the installed app's own name (like Azahar Plus), and each installed app is listed once.
-- **Long console names** stay under their own game card.
-- **Home ends at the last row** instead of scrolling on into empty space.
+## Cartridge 0.9.6 · Emulator Expansion
 
 ### New
-- **Top bar and art as one piece (preview, Android).** The top bar takes a deep shade of the art on screen, the art fades up into it, and it fades into the page with a long, soft edge. Turn it off in Settings → Android → Blend the top bar with the art.
+- **The ARM emulators.** Play now starts games in ARMSX1 (PS1), ARMSX2 (PS2, including the debug build), ARMSX3 (PS3), EmuCoreX (PS2), EmuCoreC (PS3), aX360e, XenDroid and Xenra (Xbox 360), hakuX (Xbox), BachataS4 (PS4), Citra MMJ (3DS), SkyEmu (Game Boy, GBC, GBA, DS), NooDS (also GBA) and MAME4droid (arcade). Their launch methods are the ones the big frontends use.
+- **PS Vita, PS4 and Xbox consoles.** Vita3K and EmuCoreV start a Vita game from its title ID when the game's name carries it (like `[PCSB00245]`), BachataS4 a PS4 game from its CUSA ID. ARMSX3 can start from either the file or the title ID.
+- **Emulators that can't be told which game:** RPCSX, shadPS4 and Xenia are found by name and Play opens them, with a note to pick the game inside. The same happens for Vita3K, EmuCoreV or BachataS4 when a game has no title ID in its name. Ready to play says "opens the app" for these.
+- **Firmware and BIOS checks** for PS3, Vita and Xbox, with the same "I have it" confirmation.
+- **A new app icon.** The launcher icon, round icon and splash use the current Cartridge mark on a dark tile, replacing the old purple one.
+
+### Fixed
+- **Genres on the second screen.** Highlighting a genre now shows it (its name, game count, covers and Open), and Open takes you to that genre. Series and Cartridge's own lists are labelled as what they are instead of "Collection".
+- **Pictures on Collections, Series and Genres.** The tiles used lazily loaded images at fractional sizes, which some Android WebViews never started loading. They now load straight away with fixed sizes, and try again if the image server wasn't ready. The covers on the second screen no longer rely on a newer layout feature either.

@@ -13,7 +13,7 @@ test('every console uses emulators that exist, and cores for RetroArch only when
     for (const id of c.emus) assert.ok(EMUS[id], `${key} lists an unknown emulator ${id}`);
     assert.ok(c.emus.length || c.cores.length, `${key} can not be played at all`);
   }
-  for (const [id, e] of Object.entries(EMUS)) assert.ok(e.apps.length && e.apps.every((x) => x.pkg && x.activity), `${id} needs a package and an activity`);
+  for (const [id, e] of Object.entries(EMUS)) assert.ok((e.apps.length || e.family) && e.apps.every((x) => x.pkg && x.activity), `${id} needs a package and an activity (or is found by name)`);
 });
 
 test('the manifest lists every emulator package', async () => {
@@ -89,4 +89,23 @@ test('forks and betas are found by name and offered after the known builds', asy
   assert.deepStrictEqual(candidatesFor('3ds', found, {}, 1), ['azahar', 'azahar~io.github.azahar.next']);
   assert.deepStrictEqual(candidatesFor('3ds', found, { emus: { '3ds': 'azahar~io.github.azahar.next' } }, 1)[0], 'azahar~io.github.azahar.next');
   assert.strictEqual(emuName('azahar~io.github.azahar.next', found), 'Azahar Next');
+});
+
+test('the ARM emulators start the way their frontends document', async () => {
+  const { EMUS, planLaunch, serialOf, candidatesFor, familyOf } = await load();
+  const at = (id) => EMUS[id].apps[0];
+  assert.strictEqual(planLaunch('armsx2', at('armsx2')).data, '{URI}');
+  assert.strictEqual(planLaunch('armsx1', at('armsx1')).activity, 'com.armsx2.Main');
+  assert.strictEqual(planLaunch('armsx3', at('armsx3')).extras.path, '{ROM}');
+  assert.strictEqual(planLaunch('armsx3', at('armsx3'), { serial: 'BLUS30001' }).extras.title_id, 'BLUS30001');
+  assert.deepStrictEqual(planLaunch('vita3k', at('vita3k'), { serial: 'PCSB00245' }).arrays.AppStartParameters, ['-r', 'PCSB00245']);
+  assert.strictEqual(planLaunch('vita3k', at('vita3k')).openOnly, true); // no title ID: just open it
+  assert.strictEqual(planLaunch('ax360e', at('ax360e')).action, 'aenu.intent.action.AX360E');
+  assert.strictEqual(serialOf('Game Name [CUSA12345]'), 'CUSA12345');
+  assert.strictEqual(serialOf('Assassins Creed Bloodlines'), '');
+  // emulators found by name are only opened
+  assert.strictEqual(familyOf('net.rpcsx', 'RPCSX'), 'rpcsx');
+  const found = { 'rpcsx~net.rpcsx': { pkg: 'net.rpcsx' }, aps3e: { pkg: 'aenu.aps3e' } };
+  assert.deepStrictEqual(candidatesFor('ps3', found, {}, 1), ['aps3e', 'rpcsx~net.rpcsx']);
+  assert.strictEqual(planLaunch('rpcsx~net.rpcsx', { pkg: 'net.rpcsx', activity: '' }).openOnly, true);
 });

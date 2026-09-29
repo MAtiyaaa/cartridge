@@ -72,7 +72,7 @@
           <div class="hero short"><Art v-if="collArt" class="fill" :src="collArt.src" :blur="collArt.blur" /><div class="hero-shade" /></div>
           <div class="head plain">
             <div class="head-t">
-              <div class="eyebrow row"><Icon :name="selColl.favorite ? 'mdiStar' : 'mdiBookmarkMultipleOutline'" :size="14" />{{ selColl.favorite ? 'Favourites' : selColl.smart ? 'Smart collection' : 'Collection' }}</div>
+              <div class="eyebrow row"><Icon :name="selColl.favorite ? 'mdiStar' : selColl.icon || 'mdiBookmarkMultipleOutline'" :size="14" />{{ selColl.favorite ? 'Favourites' : selColl.genre ? 'Genre' : selColl.series ? 'Series' : selColl.auto ? 'Made by Cartridge' : selColl.smart ? 'Smart collection' : 'Collection' }}</div>
               <div class="t-title">{{ selColl.name }}</div>
               <div class="meta">
                 <span>{{ collCount }} {{ collCount === 1 ? 'game' : 'games' }}</span>
@@ -84,7 +84,7 @@
           <div v-if="collStrip.length" class="strip">
             <button v-for="r in collStrip" :key="r.id" class="s-cover" :aria-label="r.name" @click="cmd({ open: true, romId: r.id })"><Art class="fill" :src="r.src" /></button>
           </div>
-          <p v-if="selColl.description" class="summary">{{ selColl.description }}</p>
+          <p v-if="selColl.description && !selColl.series && !selColl.auto" class="summary">{{ selColl.description }}</p>
         </section>
 
         <!-- Nothing highlighted -->
@@ -414,7 +414,8 @@ html, body { touch-action: pan-x pan-y; }
 .summary.open { display: block; }
 .more { display: inline-flex; align-items: center; gap: 4px; min-height: 40px; color: var(--primary-t); font: 600 13.5px var(--body); }
 .strip { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; }
-.s-cover { position: relative; aspect-ratio: 3 / 4; border-radius: 8px; overflow: hidden; background: var(--s2); box-shadow: 0 10px 24px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.08); transition: transform 0.12s var(--ease); }
+.s-cover { position: relative; display: block; border-radius: 8px; overflow: hidden; background: var(--s2); box-shadow: 0 10px 24px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.08); transition: transform 0.12s var(--ease); }
+.s-cover::before { content: ''; display: block; padding-top: 133.34%; } /* 3:4 without aspect-ratio (older WebViews left these buttons flat) */
 .s-cover:active { transform: scale(0.95); }
 .folder { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 14px; background: var(--s1); border: 1px solid var(--line); color: var(--muted); }
 .folder .path { flex: 1; min-width: 0; font-family: ui-monospace, 'JetBrains Mono', monospace; font-size: 12px; color: var(--text); overflow-wrap: anywhere; }

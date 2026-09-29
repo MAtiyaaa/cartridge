@@ -33,7 +33,7 @@ export const EMUS = {
   duckstation: { name: 'DuckStation', get: 'https://www.duckstation.org/', apps: [a('com.github.stenzek.duckstation', 'com.github.stenzek.duckstation.EmulationActivity')], intent: { extras: { bootPath: '{URI}' }, bools: { resumeState: false }, flags: TASK } },
   epsxe: { name: 'ePSXe', get: 'https://play.google.com/store/apps/details?id=com.epsxe.ePSXe', apps: [a('com.epsxe.ePSXe', 'com.epsxe.ePSXe.ePSXe')], intent: { action: MAIN, extras: { 'com.epsxe.ePSXe.isoName': '{ROM}' } } },
   fpse: { name: 'FPseNG', get: 'https://play.google.com/store/apps/details?id=com.emulator.fpse64', apps: [a('com.emulator.fpse64', 'com.emulator.fpse64.Main')], intent: { action: VIEW, data: '{PROVIDER}' } },
-  armsx2: { name: 'ARMSX2', get: 'https://github.com/ARMSX2/ARMSX2/releases', apps: [a('come.nanodata.armsx2', 'com.armsx2.MainActivity'), a('com.armsx2', 'com.armsx2.MainActivity'), a('com.armsx2.nightly', 'com.armsx2.MainActivity')], intent: { action: VIEW, data: '{URI}' } },
+  armsx2: { name: 'ARMSX2', get: 'https://github.com/ARMSX2/ARMSX2/releases', apps: [a('come.nanodata.armsx2', 'com.armsx2.MainActivity'), a('com.armsx2', 'com.armsx2.MainActivity'), a('com.armsx2.nightly', 'com.armsx2.MainActivity'), a('come.nanodata.armsx2.debug', 'com.armsx2.MainActivity')], intent: { action: VIEW, data: '{URI}' } },
   nethersx2: { name: 'NetherSX2', get: 'https://www.google.com/search?q=NetherSX2+patch+APK', apps: [a('xyz.aethersx2.android', 'xyz.aethersx2.android.EmulationActivity'), a('xyz.aethersx2.tturnip', 'xyz.aethersx2.android.EmulationActivity'), a('xyz.aethersx2.cturnip', 'xyz.aethersx2.android.EmulationActivity')], intent: { action: MAIN, extras: { bootPath: '{URI}' }, flags: TASK } },
   play: { name: 'Play!', get: 'https://purei.org/', apps: [a('com.virtualapplications.play', 'com.virtualapplications.play.MainActivity')], intent: { action: VIEW, data: '{URI}' } },
   aps3e: { name: 'aPS3e', get: 'https://github.com/aenu1/aps3e/releases', apps: [a('aenu.aps3e.premium', 'aenu.aps3e.EmulatorActivity'), a('aenu.aps3e', 'aenu.aps3e.EmulatorActivity')], intent: { action: 'aenu.intent.action.APS3E', extras: { iso_uri: '{URI}' } }, dirIntent: { action: 'aenu.intent.action.APS3E', extras: { game_dir: '{ROM}' } } },
@@ -49,6 +49,26 @@ export const EMUS = {
   snes9x: { name: 'Snes9x EX+', get: 'https://play.google.com/store/apps/details?id=com.explusalpha.Snes9xPlus', apps: [a('com.explusalpha.Snes9xPlus', 'com.imagine.BaseActivity')], intent: { data: '{URI}' } },
   mupen: { name: 'M64Plus FZ', get: 'https://play.google.com/store/apps/details?id=org.mupen64plusae.v3.fzurita', apps: [a('org.mupen64plusae.v3.fzurita', 'paulscode.android.mupen64plusae.SplashActivity'), a('org.mupen64plusae.v3.fzurita.pro', 'paulscode.android.mupen64plusae.SplashActivity')], intent: { action: VIEW, data: '{URI}' } },
   saturnemu: { name: 'Saturn.emu', get: 'https://play.google.com/store/apps/details?id=com.explusalpha.SaturnEmu', apps: [a('com.explusalpha.SaturnEmu', 'com.imagine.BaseActivity')], intent: { data: '{URI}' } },
+  // ---- Emulator Expansion (0.9.6): the ARM builds. Launch methods are ES-DE's; where an emulator documents
+  // none, it is only opened (openOnly) and you pick the game inside it.
+  armsx1: { name: 'ARMSX1', get: 'https://github.com/ARMSX2/ARMSX1/releases', apps: [a('com.nanodata.armsx', 'com.armsx2.Main')], intent: { data: '{URI}' } },
+  armsx3: { name: 'ARMSX3', get: 'https://armsx2.net/', apps: [a('com.armsx3', 'com.armsx2.Main')], intent: { action: VIEW, extras: { path: '{ROM}' } }, serialIntent: { action: VIEW, extras: { title_id: '{SERIAL}' } } },
+  emucorex: { name: 'EmuCoreX', get: 'https://github.com/sbro-dev/EmuCoreX/releases', apps: [a('com.sbro.emucorex', 'com.sbro.emucorex.MainActivity')], intent: { action: VIEW, data: '{URI}', flags: ['clearTask'] } },
+  emucorec: { name: 'EmuCoreC', get: 'https://github.com/sbro-dev/EmuCoreC/releases', apps: [a('com.sbro.emucorec', 'com.sbro.emucorec.core.ps3.Emulator')], intent: { extras: { gamePath: '{ROM}' } } },
+  emucorev: { name: 'EmuCoreV', get: 'https://github.com/sbro-dev/EmuCoreV/releases', apps: [a('com.sbro.emucorev', 'com.sbro.emucorev.core.vita.Emulator')], intent: { arrays: { AppStartParameters: ['-r', '{SERIAL}'] } } },
+  vita3k: { name: 'Vita3K', get: 'https://vita3k.org/', apps: [a('org.vita3k.emulator', 'org.vita3k.emulator.Emulator')], intent: { arrays: { AppStartParameters: ['-r', '{SERIAL}'] } } },
+  bachatas4: { name: 'BachataS4', get: 'https://github.com/search?q=BachataS4', apps: [a('com.bachatas4.android', 'com.bachatas4.android.DirectLaunchActivity'), a('com.bachatas4.android.github', 'com.bachatas4.android.DirectLaunchActivity')], intent: { extras: { game_id: '{SERIAL}' } } },
+  ax360e: { name: 'aX360e', get: 'https://github.com/aenu1/ax360e/releases', apps: [a('aenu.ax360e', 'aenu.ax360e.EmulatorActivity'), a('aenu.ax360e.free', 'aenu.ax360e.EmulatorActivity')], intent: { action: 'aenu.intent.action.AX360E', extras: { game_uri: '{URI}' } } },
+  xendroid: { name: 'XenDroid', get: 'https://github.com/search?q=XenDroid+xbox360', apps: [a('xendroid.compose', 'xendroid.compose.EmulatorHostActivity')], intent: { data: '{URI}' } },
+  xenra: { name: 'Xenra', get: 'https://github.com/search?q=Xenra+xbox', apps: [a('Ali.Xanite', 'Ali.Xanite.LauncherActivity'), a('Ali.Xanite.green', 'Ali.Xanite.LauncherActivity')], intent: { data: '{URI}' } },
+  hakux: { name: 'hakuX', get: 'https://github.com/search?q=hakuX+xbox', apps: [a('com.rfandango.haku_x', 'com.rfandango.haku_x.LauncherActivity')], intent: { action: VIEW, data: '{URI}' } },
+  citramm: { name: 'Citra MMJ', get: 'https://github.com/weihuoya/citra/releases', apps: [a('org.citra.emu', 'org.citra.emu.ui.EmulationActivity')], intent: { extras: { GamePath: '{ROM}' } } },
+  skyemu: { name: 'SkyEmu', get: 'https://github.com/skylersaleh/SkyEmu/releases', apps: [a('com.sky.SkyEmu', 'com.sky.SkyEmu.EnhancedNativeActivity')], intent: { action: VIEW, data: '{URI}', flags: TASK } },
+  mame4droid: { name: 'MAME4droid', get: 'https://play.google.com/store/apps/details?id=com.seleuco.mame4droid', apps: [a('com.seleuco.mame4droid', 'com.seleuco.mame4droid.MAME4droid')], intent: { action: VIEW, data: '{URI}' } },
+  // No documented way to start a game from outside: found by name (see FAMILIES), and only opened
+  rpcsx: { name: 'RPCSX', get: 'https://github.com/RPCSX/rpcsx', apps: [], family: true, intent: { openOnly: true } },
+  shadps4: { name: 'shadPS4', get: 'https://shadps4.net/', apps: [], family: true, intent: { openOnly: true } },
+  xenia: { name: 'Xenia', get: 'https://xenia.jp/', apps: [], family: true, intent: { openOnly: true } },
   // RetroArch runs any console through a core; it is picked per game by the console's core list below
   retroarch: {
     name: 'RetroArch', get: 'https://play.google.com/store/apps/details?id=com.retroarch.aarch64',
@@ -64,17 +84,21 @@ export const CONSOLES = {
   gc: { name: 'GameCube', emus: ['dolphin', 'mmjr'], cores: ['dolphin'] },
   wii: { name: 'Wii', emus: ['dolphin', 'mmjr'], cores: ['dolphin'] },
   wiiu: { name: 'Wii U', emus: ['cemu'], cores: [] },
-  '3ds': { name: 'Nintendo 3DS', emus: ['azahar', 'azaharplus', 'lime3ds', 'citra', 'mandarine', 'panda3ds'], cores: [] },
-  nds: { name: 'Nintendo DS', emus: ['melonds', 'melondsnightly', 'drastic', 'noods'], cores: ['melonds', 'desmume'] },
-  psx: { name: 'PlayStation', emus: ['duckstation', 'epsxe', 'fpse'], cores: ['pcsx_rearmed', 'mednafen_psx_hw'], bios: 'psx' },
-  ps2: { name: 'PlayStation 2', emus: ['armsx2', 'nethersx2', 'play'], cores: [], bios: 'ps2' },
-  ps3: { name: 'PlayStation 3', emus: ['aps3e'], cores: [] },
+  '3ds': { name: 'Nintendo 3DS', emus: ['azahar', 'azaharplus', 'lime3ds', 'citra', 'mandarine', 'panda3ds', 'citramm'], cores: [] },
+  nds: { name: 'Nintendo DS', emus: ['melonds', 'melondsnightly', 'drastic', 'noods', 'skyemu'], cores: ['melonds', 'desmume'] },
+  psx: { name: 'PlayStation', emus: ['duckstation', 'armsx1', 'epsxe', 'fpse'], cores: ['pcsx_rearmed', 'mednafen_psx_hw'], bios: 'psx' },
+  ps2: { name: 'PlayStation 2', emus: ['armsx2', 'emucorex', 'nethersx2', 'play'], cores: [], bios: 'ps2' },
+  ps3: { name: 'PlayStation 3', emus: ['aps3e', 'armsx3', 'emucorec', 'rpcsx'], cores: [], bios: 'ps3' },
+  ps4: { name: 'PlayStation 4', emus: ['bachatas4', 'shadps4'], cores: [] },
+  psvita: { name: 'PS Vita', emus: ['vita3k', 'emucorev'], cores: [], bios: 'psvita' },
+  xbox: { name: 'Xbox', emus: ['hakux', 'xenra'], cores: [], bios: 'xbox' },
+  x360: { name: 'Xbox 360', emus: ['ax360e', 'xendroid', 'xenra', 'xenia'], cores: [] },
   switch: { name: 'Nintendo Switch', emus: ['eden', 'kenjinx', 'skyline'], cores: [], bios: 'switch' },
   dc: { name: 'Dreamcast', emus: ['flycast', 'redream'], cores: ['flycast'] },
   saturn: { name: 'Saturn', emus: ['yaba', 'saturnemu'], cores: ['yabasanshiro', 'mednafen_saturn'], bios: 'saturn' },
-  gba: { name: 'Game Boy Advance', emus: ['myboy', 'pizzagba'], cores: ['mgba', 'gpsp'] },
-  gbc: { name: 'Game Boy Color', emus: ['myoldboy'], cores: ['gambatte', 'mgba'] },
-  gb: { name: 'Game Boy', emus: ['myoldboy'], cores: ['gambatte', 'mgba'] },
+  gba: { name: 'Game Boy Advance', emus: ['myboy', 'pizzagba', 'skyemu', 'noods'], cores: ['mgba', 'gpsp'] },
+  gbc: { name: 'Game Boy Color', emus: ['myoldboy', 'skyemu'], cores: ['gambatte', 'mgba'] },
+  gb: { name: 'Game Boy', emus: ['myoldboy', 'skyemu'], cores: ['gambatte', 'mgba'] },
   nes: { name: 'NES', emus: [], cores: ['fceumm', 'nestopia'] },
   snes: { name: 'SNES', emus: ['snes9x'], cores: ['snes9x', 'bsnes'] },
   n64: { name: 'Nintendo 64', emus: ['mupen'], cores: ['mupen64plus_next', 'parallel_n64'] },
@@ -83,7 +107,7 @@ export const CONSOLES = {
   gg: { name: 'Game Gear', emus: [], cores: ['genesis_plus_gx'] },
   segacd: { name: 'Sega CD', emus: [], cores: ['genesis_plus_gx', 'picodrive'], bios: 'segacd' },
   pce: { name: 'PC Engine', emus: [], cores: ['mednafen_pce_fast', 'mednafen_pce'] },
-  arcade: { name: 'Arcade', emus: [], cores: ['fbneo', 'mame2003_plus'] },
+  arcade: { name: 'Arcade', emus: ['mame4droid'], cores: ['fbneo', 'mame2003_plus'] },
   a2600: { name: 'Atari 2600', emus: [], cores: ['stella'] },
   lynx: { name: 'Atari Lynx', emus: [], cores: ['handy', 'mednafen_lynx'] },
   ws: { name: 'WonderSwan', emus: [], cores: ['mednafen_wswan'] },
@@ -94,6 +118,7 @@ export const CONSOLES = {
 const SLUGS = {
   psp: 'psp', ngc: 'gc', gc: 'gc', gamecube: 'gc', wii: 'wii', wiiu: 'wiiu', '3ds': '3ds', n3ds: '3ds', new3ds: '3ds', nds: 'nds', ds: 'nds', nintendods: 'nds', ndsi: 'nds', nintendodsi: 'nds',
   ps: 'psx', psx: 'psx', playstation: 'psx', ps2: 'ps2', playstation2: 'ps2', ps3: 'ps3', playstation3: 'ps3',
+  ps4: 'ps4', playstation4: 'ps4', psvita: 'psvita', vita: 'psvita', playstationvita: 'psvita', xbox: 'xbox', xbox360: 'x360', x360: 'x360',
   switch: 'switch', nintendoswitch: 'switch', dc: 'dc', dreamcast: 'dc', saturn: 'saturn', segasaturn: 'saturn',
   gba: 'gba', gameboyadvance: 'gba', gbc: 'gbc', gameboycolor: 'gbc', gb: 'gb', gameboy: 'gb',
   nes: 'nes', famicom: 'nes', fds: 'nes', snes: 'snes', sfam: 'snes', superfamicom: 'snes', n64: 'n64', nintendo64: 'n64',
@@ -121,6 +146,9 @@ export const BIOS = {
   ps2: { label: 'PS2 BIOS', names: /\.(bin|rom0)$/i, minSize: 3.5e6, dirs: ['BIOS', 'bios', 'Android/data/xyz.aethersx2.android/files/bios', 'Android/data/come.nanodata.armsx2/files/bios', 'Android/data/com.armsx2/files/bios', 'ARMSX2/bios'], hint: 'Put your PS2 BIOS in the emulator\'s bios folder.' },
   switch: { label: 'Switch keys and firmware', names: /^prod\.keys$/i, dirs: ['Android/data/dev.eden.eden_emulator/files/keys', 'Android/data/dev.legacy.eden_emulator/files/keys', 'Android/data/org.kenjinx.android/files/system', 'eden/keys'], hint: 'Add prod.keys and install firmware from the emulator\'s settings.' },
   saturn: { label: 'Saturn BIOS', names: /^(sega_101|mpr-17933|saturn_bios|sega_bios)/i, dirs: ['BIOS', 'bios', 'RetroArch/system', 'Android/data/com.retroarch/files/system', 'Android/data/com.retroarch.aarch64/files/system'], hint: 'Put your Saturn BIOS in the emulator\'s bios folder.', optional: true },
+  ps3: { label: 'PS3 firmware', names: /\.pup$/i, dirs: ['BIOS', 'bios', 'PS3', 'Firmware', 'Download'], hint: 'Install PS3UPDAT.PUP from the emulator\'s own menu (firmware is not a BIOS file you copy).' },
+  psvita: { label: 'Vita firmware', names: /\.pup$/i, dirs: ['BIOS', 'bios', 'Vita3K', 'Firmware', 'Download'], hint: 'Install PSVUPDAT.PUP and PSP2UPDAT.PUP from Vita3K\'s menu.' },
+  xbox: { label: 'Xbox BIOS', names: /(mcpx|complex|xbox.*bios|^bios)/i, dirs: ['BIOS', 'bios', 'Xbox', 'hakuX'], hint: 'The emulator needs the MCPX boot ROM and an Xbox BIOS.' },
   segacd: { label: 'Sega CD BIOS', names: /^(bios_cd_|segacd)/i, dirs: ['BIOS', 'bios', 'RetroArch/system', 'Android/data/com.retroarch/files/system', 'Android/data/com.retroarch.aarch64/files/system'], hint: 'Put bios_CD_U/E/J.bin in RetroArch\'s system folder.' },
 };
 
@@ -130,9 +158,10 @@ export const BIOS = {
 // package name or app name, and started with their family's intent. A found fork is keyed "<id>~<package>".
 export const FAMILIES = {
   ppsspp: ['ppsspp'], dolphin: ['dolphin', 'dolphinemu'], azahar: ['azahar', 'azaharplus', 'citra', 'lime3ds', 'mandarine', 'borked3ds'],
-  melonds: ['melonds', 'melondualds'], duckstation: ['duckstation'], nethersx2: ['aethersx2', 'nethersx2'], armsx2: ['armsx2', 'pcsx2'],
+  melonds: ['melonds', 'melondualds'], duckstation: ['duckstation'], nethersx2: ['aethersx2', 'nethersx2'],
   eden: ['eden', 'yuzu', 'sudachi', 'citron', 'suyu', 'torzu', 'strato'], kenjinx: ['kenjinx', 'ryujinx'], flycast: ['flycast', 'reicast'],
   cemu: ['cemu'], retroarch: ['retroarch'], aps3e: ['aps3e'], drastic: ['drastic'], redream: ['redream'],
+  armsx2: ['armsx2', 'pcsx2'], armsx1: ['armsx1'], armsx3: ['armsx3'], vita3k: ['vita3k'], rpcsx: ['rpcsx'], shadps4: ['shadps4', 'shandroidps4'], xenia: ['xenia'], ax360e: ['ax360e'], skyemu: ['skyemu'],
 };
 const NOT_EMU = /browser|launcher|cartridge|daijisho|emulationstation|es-de|esde|pegasus|beacon|frontend|keyboard|wallpaper/i;
 export function familyOf(pkg, label = '') {
@@ -162,18 +191,30 @@ export const coreFor = (key, cfg = {}) => {
   return list.includes(cfg.cores?.[key]) ? cfg.cores[key] : list[0];
 };
 
-const fill = (v, t) => (typeof v === 'string' ? v.replace(/\{PKG\}/g, t.pkg || '').replace(/\{CORE\}/g, t.core || '') : v);
+const fill = (v, t) => (typeof v === 'string' ? v.replace(/\{PKG\}/g, t.pkg || '').replace(/\{CORE\}/g, t.core || '').replace(/\{SERIAL\}/g, t.serial || '') : v);
 
-// The intent to fire for one game. Native fills {ROM}, {SAF}, {PROVIDER} and {EXT} from the path.
-export function planLaunch(emuId, app, { core, folder } = {}) {
+// A PlayStation title ID in a game's name or file name (PCSB00245, CUSA12345, BLUS30001): Vita3K, BachataS4
+// and ARMSX3 can start a game from it
+export const serialOf = (...names) => {
+  for (const n of names) { const m = String(n || '').match(/\b(PC[A-Z]{2}\d{5}|CUSA\d{5}|PPSA\d{5}|[BN][LC][A-Z]{2}\d{5}|NP[A-Z]{2}\d{5})\b/); if (m) return m[1]; }
+  return '';
+};
+const usesSerial = (i) => JSON.stringify(i || {}).includes('{SERIAL}');
+
+// The intent to fire for one game. Native fills {ROM}, {URI}, {SAF}, {PROVIDER} and {EXT} from the path.
+// { openOnly: true } when the emulator can only be opened (or needs a title ID the game doesn't carry).
+export function planLaunch(emuId, app, { core, folder, serial } = {}) {
   const e = EMUS[baseId(emuId)];
   if (!e || !app) return null;
-  const base = folder && e.dirIntent ? e.dirIntent : e.intent;
-  const t = { pkg: app.pkg, core };
-  const extras = {};
+  let base = folder && e.dirIntent ? e.dirIntent : e.intent;
+  if (e.serialIntent && serial && !folder) base = e.serialIntent; // a title ID beats a path where the emulator prefers it
+  if (base.openOnly || (usesSerial(base) && !serial)) return { openOnly: true, pkg: app.pkg };
+  const t = { pkg: app.pkg, core, serial };
+  const extras = {}, arrays = {};
   for (const [k, v] of Object.entries(base.extras || {})) extras[k] = fill(v, t);
+  for (const [k, v] of Object.entries(base.arrays || {})) arrays[k] = v.map((x) => fill(x, t));
   return {
     pkg: app.pkg, activity: app.activity, action: base.action || '', category: base.category || '', data: base.data || '',
-    extras, bools: base.bools || {}, flags: base.flags || [],
+    extras, arrays, bools: base.bools || {}, flags: base.flags || [],
   };
 }

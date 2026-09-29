@@ -2,7 +2,7 @@
   <!-- A genre: its own colour, a big icon, the name on the tile and a tilted column of covers -->
   <button class="genre" data-focus :data-key="'col-' + g.id" :style="{ '--h': hue }" @click="$emit('open', g)" @focus="$emit('focused', g)">
     <Icon class="mark" :name="icon" :size="150" />
-    <div class="strip"><img v-for="(a, i) in covers" :key="i" :src="a" loading="lazy" /></div>
+    <div class="strip"><CoverImg v-for="(a, i) in covers" :key="a + i" :src="a" /></div>
     <div class="txt">
       <span class="ic"><Icon :name="icon" :size="22" /></span>
       <b>{{ g.name }}</b>
@@ -14,6 +14,7 @@
 import { computed } from 'vue';
 import { cover, romById } from '../store.js';
 import Icon from './Icon.vue';
+import CoverImg from './CoverImg.vue';
 const props = defineProps({ g: Object });
 defineEmits(['open', 'focused']);
 // IGDB genre names -> an icon that reads at a glance
@@ -35,7 +36,7 @@ const covers = computed(() => props.g.rom_ids.slice(0, 16).map((id) => romById(i
 .genre:focus { box-shadow: var(--ring) !important; transform: translateY(-5px) scale(1.04); }
 .mark { position: absolute; left: -26px; bottom: -34px; opacity: 0.12; color: #fff; transform: rotate(-12deg); }
 .strip { position: absolute; right: 18px; top: -30px; bottom: -30px; width: 92px; display: flex; flex-direction: column; gap: 8px; transform: rotate(12deg); }
-.strip img { width: 92px; aspect-ratio: 2 / 3; object-fit: cover; border-radius: var(--r-sm); box-shadow: 0 8px 18px rgba(0, 0, 0, 0.55); }
+.strip img { width: 92px; height: 138px; flex: none; object-fit: cover; border-radius: var(--r-sm); box-shadow: 0 8px 18px rgba(0, 0, 0, 0.55); }
 .txt { position: relative; display: flex; flex-direction: column; gap: 4px; max-width: 58%; }
 .ic { width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; background: rgba(255, 255, 255, 0.16); color: #fff; margin-bottom: 6px; }
 .txt b { font-family: var(--display); font-size: var(--t-lg); font-weight: 700; line-height: 1.1; text-shadow: 0 2px 12px rgba(0, 0, 0, 0.5); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
