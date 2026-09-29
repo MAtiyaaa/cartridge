@@ -31,7 +31,7 @@ watch(() => props.src, async (src) => {
 /* 0.9: the hero art runs the full width of the screen; a scrim on the left and at the bottom keeps the
    title readable and fades it into the page (no mask: cheaper without the GPU, same look) */
 .media { position: absolute; inset: 0; pointer-events: none; overflow: hidden; background: var(--s0); }
-.media::after { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg, var(--s0) 0%, color-mix(in srgb, var(--s0) 82%, transparent) 28%, color-mix(in srgb, var(--s0) 25%, transparent) 62%, transparent 100%), linear-gradient(0deg, var(--s0) 0%, color-mix(in srgb, var(--s0) 55%, transparent) 30%, transparent 62%); }
+.media::after { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg, #0c0d10 0%, rgba(12, 13, 16, 0.82) 28%, rgba(12, 13, 16, 0.25) 62%, transparent 100%), linear-gradient(0deg, #0c0d10 0%, rgba(12, 13, 16, 0.55) 30%, transparent 62%); /* before color-mix (older Android WebViews) */ background: linear-gradient(90deg, var(--s0) 0%, color-mix(in srgb, var(--s0) 82%, transparent) 28%, color-mix(in srgb, var(--s0) 25%, transparent) 62%, transparent 100%), linear-gradient(0deg, var(--s0) 0%, color-mix(in srgb, var(--s0) 55%, transparent) 30%, transparent 62%); }
 .media.empty { background: transparent; }
 .media.empty::after { display: none; }
 .media img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center 30%; opacity: 0; transition: opacity var(--d-med) ease-out; }

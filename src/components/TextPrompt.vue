@@ -56,7 +56,7 @@ onBeforeUnmount(() => layer?.pop?.());
 .dialog.prompt { width: min(620px, 92vw); display: flex; flex-direction: column; gap: 14px; }
 .prompt-field { position: relative; display: flex; align-items: center; }
 .prompt-input { width: 100%; font: inherit; font-size: var(--t-lg); color: var(--text); background: var(--s2); border: 1px solid rgba(255, 255, 255, 0.14); border-radius: var(--r-md); padding: 14px 16px; outline: none; }
-.prompt-input:focus { border-color: var(--primary-l); box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 45%, transparent); }
+.prompt-input:focus { border-color: var(--primary-l); box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.25); box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 45%, transparent); }
 .prompt-field .reveal { position: absolute; right: 96px; background: none; border: 0; color: var(--muted); padding: 8px; border-radius: var(--r-sm); }
 .prompt-tip { margin: 0; color: var(--muted); font-size: var(--t-sm); display: flex; align-items: center; gap: 8px; }
 .prompt-actions { display: flex; justify-content: flex-end; gap: 10px; }

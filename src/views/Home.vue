@@ -312,5 +312,5 @@ onMounted(async () => { await nextTick(); ensureFocus(el.value); });
 .ra-home { position: relative; padding-top: 28px; }
 .ach-when { position: absolute; top: 8px; left: 50%; transform: translateX(-50%); padding: 2px 8px; border-radius: 999px; background: rgba(0, 0, 0, 0.35); font-size: var(--t-xs); font-weight: 600; color: rgba(255, 255, 255, 0.78); white-space: nowrap; }
 .ach-day { flex: none; align-self: stretch; display: flex; align-items: center; padding: 0 2px 0 6px; }
-.ach-day span { writing-mode: vertical-rl; transform: rotate(180deg); font-size: var(--t-xs); letter-spacing: 0.16em; text-transform: uppercase; font-weight: 700; color: var(--primary-t); padding: 8px 0; border-right: 2px solid color-mix(in srgb, var(--primary-t) 50%, transparent); padding-right: 8px; }
+.ach-day span { writing-mode: vertical-rl; transform: rotate(180deg); font-size: var(--t-xs); letter-spacing: 0.16em; text-transform: uppercase; font-weight: 700; color: var(--primary-t); padding: 8px 0; border-right: 2px solid var(--line-2); border-right: 2px solid color-mix(in srgb, var(--primary-t) 50%, transparent); padding-right: 8px; }
 </style>

@@ -1,14 +1,11 @@
-## Cartridge 0.9.0 · Setup
+## Cartridge 0.9.1 · Handheld Fixes
 
-### New: abdu2304's 0.8.2 and 0.9.0
-Everything from the original Cartridge's latest releases is now part of this build:
-- **A new look.** Solid, dark and quiet around your game art, with bigger art, one type scale, one accent colour and a white highlight, plus a new logo. Themes, fonts and backgrounds you picked yourself stay. The phone remote and the second screen follow it too.
-- **Emulator setup** finds your emulators wherever they are (even renamed AppImages, by what's inside them), shows which emulator each console uses, and flags missing cores, BIOS files and Flatpak folder access. **BIOS from RomM** when it has them.
-- **Emulator for one game**, **Shortcut health** that fixes shortcuts whose emulator moved, and **console collections in Steam**.
-- **Check downloaded games** (Settings → Storage) against RomM and re-download damaged ones.
-- **Manuals** readable with the controller, a short **tour** of the controls, and **Copy setup report** for bug reports.
-- **Recently played across devices** through RomM, **trophy filters** and Hide from totals, and a **controller test** in Settings → About.
-- **Fixes:** Steam launch options back where they were, LT and RT work on the first press, snappier controls, touch scrolls like a phone, and sharper SteamGridDB backgrounds.
-- QR pairing with RomM asks for device access (for Recently played across devices). Paired before? Pair again to use it.
+### Fixed
+- **Settings fit on handheld screens.** On shorter screens like the AYN Thor, the bottom of every Settings page was cut off, so About never showed fully. The side menu and the page now each scroll within the screen.
+- **Console cards and the game preview on Android.** Some Android versions ignore a colour effect the new look relies on, so console cards came out flat grey and the game preview on Home had no dark shade behind the text, making it hard to read. Both now have a fallback and look right everywhere.
+- **Console logos missing on the Consoles screen.** If a logo download failed once (a slow or dropped connection), Cartridge treated that console as having no logo for a week. It now only gives up when the logo really doesn't exist, and tries again otherwise. Consoles affected before are checked again.
+- **Fetch all logos did nothing** for games whose logo lookup had failed recently. It now tries them again, and says when a SteamGridDB key is needed.
+- **Smoother on Android.** The animated background now uses the lighter mode on Android (the one the Deck uses in Game Mode): it draws at a lower resolution and frame rate and pauses while you move around. You can still pick Full in Look & Feel.
 
-On Android, Emulator setup and the Steam options only appear when Settings → Android → Steam & PC game apps is on.
+### Changed
+- **The second screen matches the new look:** solid dark panels, a flat accent button, white highlights and the new type, without the old glows and gradients. The phone remote's Controls tab follows it too.

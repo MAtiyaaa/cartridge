@@ -399,6 +399,7 @@ const sgdbBusy = ref(false);
 // Fetch all logos: progress lives in the store (one listener for the whole app)
 const logoJob = computed(() => store.logoJob);
 async function fetchAll() {
+  if (!store.config.sgdbKey) toast('Without a SteamGridDB key only logos RomM has can be found. Add a key above for the rest.', 'info', 6000, 'mdiKeyVariant');
   store.logoJob = { done: 0, total: 0, found: 0 };
   call('logo:fetchAll').catch((e) => { store.logoJob = null; toast(e.message, 'error', 4000); });
 }
@@ -677,12 +678,13 @@ onMounted(async () => { space.value = await call('fs:space', store.config.romsRo
 </script>
 
 <style scoped>
-.set-view { position: absolute; inset: 0; display: grid; grid-template-columns: 270px 1fr; gap: 10px; padding: 16px 36px 0; animation: viewIn 0.16s ease-out; }
-.rail { display: flex; flex-direction: column; gap: 4px; padding-top: 10px; }
+.set-view { position: absolute; inset: 0; display: grid; grid-template-columns: 270px 1fr; grid-template-rows: minmax(0, 1fr); /* one row the height of the screen: the rail and pane scroll inside it (short screens like the AYN Thor cut the bottom off before) */ gap: 10px; padding: 16px 36px 0; animation: viewIn 0.16s ease-out; }
+.rail { display: flex; flex-direction: column; gap: 4px; padding-top: 10px; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding-bottom: 24px; }
+.rail > * { flex: none; }
 .rail-item { display: flex; align-items: center; gap: 14px; padding: 13px 16px; border-radius: var(--r-md); color: var(--muted); font-weight: 500; transition: background 0.15s, color 0.15s; }
 .rail-item.on { color: var(--text); background: var(--s2); box-shadow: inset 3px 0 0 var(--primary); }
 .rail-item:focus { background: var(--focus); color: var(--on-focus); box-shadow: none; }
-.pane { overflow-y: auto; padding: 6px 12px 60px 24px; }
+.pane { min-height: 0; min-width: 0; overflow-x: hidden; overflow-y: auto; padding: 6px 12px 60px 24px; }
 .pane-in { display: flex; flex-direction: column; gap: 16px; max-width: 860px; }
 .pane h1 { font-size: var(--t-2xl); font-weight: 700; margin: 4px 0 6px; }
 .card-s { padding: 18px 20px; display: flex; flex-direction: column; gap: 10px; }
