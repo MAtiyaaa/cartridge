@@ -83,22 +83,23 @@ onMounted(async () => {
 
 <style scoped>
 .up { display: flex; flex-direction: column; gap: 14px; }
-.subh { display: flex; align-items: center; gap: 10px; font-family: var(--display); font-size: 19px; font-weight: 700; margin-top: 4px; }
-.small { font-size: 12.5px; }
+.subh { display: flex; align-items: center; gap: 10px; font-family: var(--display); font-size: var(--t-lg); font-weight: 700; margin-top: 4px; }
+.small { font-size: var(--t-xs); }
 .wrap { flex-wrap: wrap; }
 .spacer { flex: 1; }
 .up-empty { display: flex; align-items: center; gap: 14px; padding: 16px 18px; color: var(--green-l); }
 .up-empty b { color: var(--text); }
 .up-sec { display: flex; flex-direction: column; gap: 6px; }
 .up-con { display: flex; align-items: center; gap: 10px; margin: 6px 0 2px; font-family: var(--display); }
-.up-row { display: flex; align-items: center; gap: 14px; padding: 9px 14px; border-radius: 9px; background: rgba(255, 255, 255, 0.045); text-align: left; min-width: 0; }
-.up-row:focus { background: rgba(var(--primary-rgb), 0.2); }
+.up-row { display: flex; align-items: center; gap: 14px; padding: 9px 14px; border-radius: var(--r-md); background: var(--s2); text-align: left; min-width: 0; }
+.up-row:focus { background: var(--focus); color: var(--on-focus); box-shadow: none; }
+.up-row:focus .muted, .up-row:focus .up-ic, .up-row:focus .up-act { color: rgba(12, 13, 16, 0.75); }
 .up-ic { color: var(--muted); flex: none; }
 .up-ic.done { color: var(--green-l); }
 .up-ic.error { color: var(--red); }
 .up-ic.uploading { color: var(--primary-l); }
 .up-mid { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
 .up-mid b { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.up-mid span { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.up-act { flex: none; font-size: 13px; font-weight: 600; color: var(--primary-t); }
+.up-mid span { font-size: var(--t-xs); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.up-act { flex: none; font-size: var(--t-sm); font-weight: 600; color: var(--primary-t); }
 </style>

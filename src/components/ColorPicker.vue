@@ -38,11 +38,11 @@ onBeforeUnmount(() => layer?.pop());
 <style scoped>
 .cp { width: min(700px, 94vw); }
 .cp-grid { display: grid; grid-template-columns: repeat(12, 1fr); gap: 8px; }
-.cp-sw { aspect-ratio: 1; border-radius: 8px; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.15); transition: transform 0.12s; }
+.cp-sw { aspect-ratio: 1; border-radius: var(--r-md); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.15); transition: transform 0.12s; }
 .cp-sw:focus { transform: scale(1.15); box-shadow: var(--ring); z-index: 1; }
 .cp-sw.on { box-shadow: 0 0 0 2px #fff, 0 0 0 4px rgba(0, 0, 0, 0.6); }
 .cp-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
-.cp-native { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); cursor: pointer; }
+.cp-native { display: inline-flex; align-items: center; gap: 8px; font-size: var(--t-sm); color: var(--muted); cursor: pointer; }
 .cp-native input { width: 44px; height: 36px; border: 0; padding: 0; background: none; cursor: pointer; }
-.cp-prev { width: 150px; height: 44px; border-radius: 8px; display: grid; place-items: center; }
+.cp-prev { width: 150px; height: 44px; border-radius: var(--r-md); display: grid; place-items: center; }
 </style>

@@ -40,8 +40,8 @@ const DEFAULT_CONFIG = {
   biosPath: '',
   paths: {},
   downloads: { concurrency: 2, esdeM3uFolders: true, flattenSingleFile: true },
-  ui: { gridSize: 'md', hideEmpty: true, sounds: true, bgStyle: 'waves', theme: 'purple', mediaBar: true, logos: true, pointer: 'auto', scale: 'auto', keyboard: 'auto',
-    customColor: '', surface: 'glass', text: 'normal', font: 'outfit', cardShape: 'rounded', density: 'normal', cardTitles: true,
+  ui: { gridSize: 'md', hideEmpty: true, sounds: true, bgStyle: 'solid', theme: 'cartridge', mediaBar: true, logos: true, pointer: 'auto', scale: 'auto', keyboard: 'auto',
+    customColor: '', surface: 'solid', text: 'normal', font: 'cartridge', cardShape: 'rounded', density: 'normal', cardTitles: true,
     motion: 'normal', effects: 'auto', soundPack: 'soft', volume: 'medium', wallpaper: '', wallDim: 'medium',
     colors: { highlight: '', buttons: '', bars: '', background: '' } },
   sync: { onLaunch: true, everyMinutes: 60 },
@@ -49,7 +49,7 @@ const DEFAULT_CONFIG = {
   ra: { user: '', key: '' }, // RetroAchievements username + web API key
   trophies: { sources: {}, sync: true, popups: true, device: '' }, // PS3/PS4/Xbox 360/Vita trophies from emulators
   graphics: 'auto', // auto (GPU, falls back on failure) | software
-  configVersion: 2,
+  configVersion: 3,
   configured: false,
 };
 
@@ -70,8 +70,9 @@ if (!fs.existsSync(CONFIG_FILE)) {
     try { fs.mkdirSync(USER_DATA, { recursive: true }); fs.copyFileSync(path.join(old, f), path.join(USER_DATA, f)); } catch {}
   }
 }
+const freshConfig = !fs.existsSync(CONFIG_FILE);
 let config = loadJson(CONFIG_FILE, {});
-const rawVersion = config.configVersion || 1;
+const rawVersion = freshConfig ? DEFAULT_CONFIG.configVersion : config.configVersion || 1; // a new install starts on today's defaults
 config = deepMerge(DEFAULT_CONFIG, config);
 if (rawVersion < 2) {
   // 0.1.1/0.1.2 saved 'software' as a default, not a user choice: move everyone to Auto (GPU)
@@ -79,6 +80,15 @@ if (rawVersion < 2) {
   if (config.graphics === 'hardware') config.graphics = 'auto';
   config.configVersion = 2;
   try { fs.mkdirSync(USER_DATA, { recursive: true }); fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2), { mode: 0o600 }); } catch {}
+}
+if (rawVersion < 3 && config.configured) {
+  // 0.9's new look: settings still at the old defaults (saved as values, not choices) move to it;
+  // anything someone picked stays. Existing users have set up already, so Setup isn't forced on them.
+  const u = config.ui, was = { theme: 'purple', surface: 'glass', font: 'outfit', bgStyle: 'waves' }, now = { theme: 'cartridge', surface: 'solid', font: 'cartridge', bgStyle: 'solid' };
+  for (const k of Object.keys(was)) if (u[k] === was[k]) u[k] = now[k];
+  if (!config.setupDone) config.setupDone = 'before 0.9'; // Setup is in Settings → Steam for them
+  config.configVersion = 3;
+  try { fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2), { mode: 0o600 }); } catch {}
 }
 
 // ---------------------------------------------------------------- graphics
@@ -444,6 +454,7 @@ const MARKED = '(marked as installed)';
 let library = loadJson(LIBRARY_FILE, null); // { platforms, roms: {pid: [...]}, firstSeen: {id: ts}, syncedAt, base }
 let syncing = null;
 let installedMap = {};
+let playSyncAt = 0; // last play-session sync with RomM (0: do it on the next request)
 
 // Transparent game logo from RomM (ScreenScraper "logo" media, or an ES-DE gamelist marquee)
 function logoPath(r) {
@@ -500,6 +511,7 @@ function computeInstalled() {
   if (!library) return out;
   for (const p of library.platforms) Object.assign(out, installedState(library.roms[p.id] || [], p));
   installedMap = out;
+  playSyncAt = 0; // play time can be matched to games now: sync again
   broadcast('installed', out);
   return out;
 }
@@ -1112,7 +1124,10 @@ async function sgdbArt({ name, kind, gameId }) {
     : kind === 'icon' ? `/icons/game/${gid}?types=static&nsfw=false&humor=false&mimes=image/png`
     : `/logos/game/${gid}?types=static&nsfw=false&humor=false`;
   const imgs = (await sgdb(ep)) || [];
-  const sorted = kind === 'logo' ? [...imgs].sort((a, b) => logoRank(a) - logoRank(b) || (b.score || 0) - (a.score || 0)) : [...imgs].sort((a, b) => (b.score || 0) - (a.score || 0));
+  // backgrounds: sharpest first, so the top picks look right on a TV
+  const sorted = kind === 'logo' ? [...imgs].sort((a, b) => logoRank(a) - logoRank(b) || (b.score || 0) - (a.score || 0))
+    : kind === 'hero' ? [...imgs].sort((a, b) => ((b.width || 0) >= 1920) - ((a.width || 0) >= 1920) || (b.width || 0) - (a.width || 0) || (b.score || 0) - (a.score || 0))
+    : [...imgs].sort((a, b) => (b.score || 0) - (a.score || 0));
   return { games, gameId: gid, images: sorted.slice(0, 40).map((i) => ({ url: i.url, thumb: i.thumb || i.url, w: i.width, h: i.height, style: i.style })) };
 }
 async function setArt({ id, kind, url }) {
@@ -1716,8 +1731,12 @@ async function sgdbImage(name, kind, style) {
   const st = style && (kind !== 'hero' || ['alternate', 'blurred', 'material'].includes(style)) ? `&styles=${style}` : '';
   const ep = kind === 'grid' ? `/grids/game/${g.id}?dimensions=600x900&types=static&nsfw=false&humor=false${st}`
     : kind === 'wide' ? `/grids/game/${g.id}?dimensions=920x430,460x215&types=static&nsfw=false&humor=false${st}`
-    : `/heroes/game/${g.id}?types=static&nsfw=false&humor=false${st}`;
-  const list = ((await sgdb(ep)) || []).sort((a, b) => (b.score || 0) - (a.score || 0));
+    : `/heroes/game/${g.id}?dimensions=3840x1240,1920x620&types=static&nsfw=false&humor=false${st}`;
+  let list = (await sgdb(ep)) || [];
+  // backgrounds: the full-size ones first (small ones look soft on a TV), then by votes; only when
+  // none come in those sizes, any big enough one
+  if (kind === 'hero' && !list.length) list = ((await sgdb(`/heroes/game/${g.id}?types=static&nsfw=false&humor=false${st}`)) || []).filter((x) => !x.width || x.width >= 1600);
+  list.sort((a, b) => (kind === 'hero' ? (b.width || 0) - (a.width || 0) : 0) || (b.score || 0) - (a.score || 0));
   // only take images of the right shape (a portrait cover is no use as a wide banner)
   const fits = (w, h) => (kind === 'grid' ? h > w : kind === 'wide' ? w > h * 1.6 : w > h * 1.4);
   for (const i of list.filter((x) => !x.width || fits(x.width, x.height)).slice(0, 3)) {
@@ -1743,7 +1762,7 @@ const steamMgr = require('./steamManager')({
   gameIconPng: async (rom) => { if (!rom) return null; const u = await gameIcon({ key: 'rom-' + rom.id, name: rom.name, year: rom.year ? new Date(rom.year > 1e11 ? rom.year : rom.year * 1000).getFullYear() : null }).catch(() => null); return u ? asPng(await fetchImage(u)) : null; },
   logoFile: async (rom) => { if (!rom) return null; await logoFor({ id: rom.id, name: rom.name, romm: rom.logo }).catch(() => null); const c = logoCache[rom.id]; return c?.file ? path.join(LOGO_DIR, c.file) : null; },
   emulationRoots: () => { const emu = readEmuDeckSettings(); return require('./trophies').emulationRoots([emu.emulationPath, config.romsRoot && path.dirname(config.romsRoot)].filter(Boolean)); },
-  isGamescope,
+  isGamescope, version: app.getVersion(), osInfo: (() => { try { return (fs.readFileSync('/etc/os-release', 'utf8').match(/^PRETTY_NAME="?([^"\n]+)/m) || [])[1] || os.release(); } catch { return os.release(); } })(),
 });
 // ---------------------------------------------------------------- 0.8: play time, server status, edits, uploads
 // RetroArch's runtime logs (playlists/logs/<core>/<game>.lrtl, when "Save runtime log" is on):
@@ -1796,6 +1815,88 @@ function playStats() {
     }
   }
   return out;
+}
+// ---------------- recently played across devices (RomM play sessions)
+// When Steam's play time for a game goes up, that time goes to RomM as a play session from this
+// device. Sessions from your other devices come back, with the device's name, so Recently played
+// shows games wherever they were played. Older RomM (no play sessions) only gets "last played".
+const PLAY_SYNC_FILE = path.join(USER_DATA, 'play-sync.json');
+const playSync = loadJson(PLAY_SYNC_FILE, { sent: {}, last: {} }); // romId -> minutes / last played already sent
+let remotePlay = {}, playSyncing = null;
+const deviceName = () => (config.trophies?.device || '').trim() || os.hostname();
+async function rommFetch(pathname, opts = {}) {
+  const b = await resolveBase();
+  return fetch(b + pathname, { ...opts, headers: { ...authHeaders(), ...(opts.body && typeof opts.body === 'string' ? { 'Content-Type': 'application/json' } : {}), ...(opts.headers || {}) }, signal: AbortSignal.timeout(20000) });
+}
+// This device in RomM: registered once (a QR pairing token already belongs to a device)
+async function rommDevice() {
+  const d = config.rommDevice || {};
+  if (d.id) return d.id;
+  if (d.none && Date.now() - d.none < 864e5) return null;
+  try {
+    const r = await rommFetch('/api/devices', { method: 'POST', body: JSON.stringify({ name: deviceName(), platform: 'linux', client: 'Cartridge', client_version: app.getVersion(), hostname: os.hostname(), allow_existing: true }) });
+    if (!r.ok) { config.rommDevice = { none: Date.now() }; saveConfig(); return null; }
+    const j = await r.json();
+    config.rommDevice = { id: j.device_id }; saveConfig();
+    return j.device_id;
+  } catch { return null; }
+}
+async function renameDevice(name) {
+  const id = await rommDevice();
+  if (id) await rommFetch(`/api/devices/${id}`, { method: 'PUT', body: JSON.stringify({ name: name || deviceName() }) }).catch(() => {});
+  playSyncAt = 0;
+  return true;
+}
+async function syncPlay() {
+  if (playSyncing) return playSyncing;
+  playSyncing = (async () => {
+    const local = (() => { try { return steamMgr.playtime(); } catch { return {}; } })();
+    const devId = await rommDevice();
+    // send what's new since last time
+    const sessions = [];
+    for (const [id, p] of Object.entries(local)) {
+      const before = playSync.sent[id] || 0, add = (p.min || 0) - before;
+      if (add > 0 && p.last) sessions.push({ id, rom_id: Number(id), start_time: new Date(p.last - add * 60000).toISOString(), end_time: new Date(p.last).toISOString(), duration_ms: add * 60000, min: p.min });
+    }
+    let supported = true;
+    if (sessions.length) {
+      for (let i = 0; i < sessions.length; i += 100) {
+        const batch = sessions.slice(i, i + 100);
+        const r = await rommFetch('/api/play-sessions', { method: 'POST', body: JSON.stringify({ ...(devId ? { device_id: devId } : {}), sessions: batch.map(({ rom_id, start_time, end_time, duration_ms }) => ({ rom_id, start_time, end_time, duration_ms })) }) }).catch(() => null);
+        if (r && (r.status === 404 || r.status === 405)) { supported = false; break; }
+        if (r?.ok) for (const x of batch) playSync.sent[x.id] = x.min;
+      }
+    }
+    // older RomM: at least "last played" for games played in the last day
+    if (!supported) {
+      for (const [id, p] of Object.entries(local)) {
+        if (!p.last || p.last <= (playSync.last[id] || 0) || Date.now() - p.last > 864e5) continue;
+        const r = await rommFetch(`/api/roms/${id}/props?update_last_played=true`, { method: 'PUT', body: JSON.stringify({ data: {} }) }).catch(() => null);
+        if (r?.ok) { playSync.last[id] = p.last; playSync.sent[id] = p.min || 0; }
+      }
+    }
+    saveJson(PLAY_SYNC_FILE, playSync, false);
+    // read everyone's sessions back: device names, then sessions (a device token only sees its own
+    // unless asked per device)
+    const out = {};
+    if (supported) {
+      const devs = await rommFetch('/api/devices').then((r) => (r.ok ? r.json() : [])).catch(() => []);
+      const names = new Map((Array.isArray(devs) ? devs : []).map((d) => [d.id, d.name || d.hostname || 'Another device']));
+      const lists = [await rommFetch('/api/play-sessions?limit=200').then((r) => (r.ok ? r.json() : [])).catch(() => [])];
+      for (const id of names.keys()) if (id !== devId) lists.push(await rommFetch(`/api/play-sessions?limit=100&device_id=${encodeURIComponent(id)}`).then((r) => (r.ok ? r.json() : [])).catch(() => []));
+      const seen = new Set();
+      for (const s of lists.flat()) {
+        if (!s?.rom_id || seen.has(s.id)) continue; seen.add(s.id);
+        const end = Date.parse(s.end_time) || 0, mine = devId ? s.device_id === devId : false;
+        const o = out[s.rom_id] || (out[s.rom_id] = { last: 0, device: null, mine: false, min: 0 });
+        o.min += Math.round((s.duration_ms || 0) / 60000);
+        if (end > o.last) { o.last = end; o.mine = mine; o.device = mine ? deviceName() : names.get(s.device_id) || 'Another device'; }
+      }
+    }
+    remotePlay = out; playSyncAt = Date.now();
+    return out;
+  })().catch((e) => { log('play sync failed', e.message); return remotePlay; }).finally(() => { playSyncing = null; });
+  return playSyncing;
 }
 // The server at a glance (Settings → About): reachable, how fast, its version and what it holds
 async function serverHealth() {
@@ -1900,7 +2001,19 @@ async function uploadFile({ path: f, platformId }) {
   return { path: f, state: 'uploading' };
 }
 const handlers08 = {
-  'play:stats': () => playStats(),
+  // local play time plus where each game was last played (this device or another one in RomM)
+  'play:stats': async () => {
+    if (Date.now() - playSyncAt > 10 * 60e3 && config.configured) { const p = syncPlay(); if (!playSyncAt) await Promise.race([p, new Promise((r) => setTimeout(r, 4000))]); }
+    const out = playStats(), me = deviceName();
+    for (const [id, p] of Object.entries(out)) p.device = me;
+    for (const [id, r] of Object.entries(remotePlay)) {
+      const cur = out[id];
+      if (!cur) out[id] = { min: 0, last: r.last, device: r.device, remote: !r.mine };
+      else if (r.last > (cur.last || 0) + 60e3 && !r.mine) Object.assign(cur, { last: r.last, device: r.device, remote: true });
+    }
+    return out;
+  },
+  'play:device': ({ name }) => renameDevice(name),
   // dates for a game's timeline (the game page adds trophies and achievements it already has)
   'rom:timeline': ({ romId }) => {
     const r = romIndexMain().get(romId);
@@ -1913,8 +2026,82 @@ const handlers08 = {
   'upload:start': (o) => uploadFile(o),
   'upload:cancel': ({ path: f }) => { uploads.get(f)?.abort.abort(); return true; },
 };
+// ---------------------------------------------------------------- 0.9: library check and repair
+// Every downloaded game checked against RomM's own record, the way a finished download is: sizes,
+// and md5/sha1 where RomM hashes the file itself (not zip/7z/rar/chd). Only reads: nothing is deleted
+// here; a damaged game is re-downloaded when you choose to.
+let verifyRun = null;
+async function verifyLibrary() {
+  if (verifyRun) return verifyRun.promise;
+  const ac = new AbortController();
+  const it = { abort: ac, currentFile: null };
+  verifyRun = { ac, promise: (async () => {
+    const ids = Object.keys(installedMap).map(Number).filter((id) => installedMap[id] && installedMap[id] !== MARKED);
+    const byId = romIndexMain();
+    const out = { checked: 0, damaged: [], skipped: 0 };
+    for (const [i, id] of ids.entries()) {
+      if (ac.signal.aborted) break;
+      const lr = byId.get(id);
+      broadcast('verify-progress', { done: i, total: ids.length, name: lr?.name || '' });
+      let rom;
+      try { rom = await api(`/api/roms/${id}`); } catch { out.skipped++; continue; }
+      const where = installedMap[id];
+      const files = (rom.files || []).slice();
+      const st = await fsp.stat(where).catch(() => null);
+      if (!st) { out.damaged.push({ romId: id, name: rom.name, why: 'Its files are gone' }); continue; }
+      // PS4/PS5 games unpacked from a zip can't be compared with the zip RomM has
+      if (isFolderSystem(rom) && files.length === 1 && /\.zip$/i.test(files[0].file_name) && st.isDirectory()) { out.skipped++; continue; }
+      const prefix = rom.full_path + '/';
+      const pairs = st.isDirectory() ? files.map((f) => [path.join(where, f.full_path.startsWith(prefix) ? f.full_path.slice(prefix.length) : f.file_name), f]) : [[where, files[0]]];
+      const bad = [];
+      for (const [file, f] of pairs) {
+        try { const r = await checkFile(file, f, it); if (r) bad.push([path.basename(file), r.why]); } catch (e) { if (ac.signal.aborted) break; }
+      }
+      out.checked++;
+      if (bad.length) out.damaged.push({ romId: id, name: rom.name, why: bad[0][1] === 'missing' ? `${bad[0][0]} is missing` : `${bad[0][0]} doesn't match RomM's record`, files: bad.length });
+    }
+    broadcast('verify-progress', null);
+    out.cancelled = ac.signal.aborted;
+    return out;
+  })().finally(() => { verifyRun = null; }) };
+  return verifyRun.promise;
+}
+
+// ---------------------------------------------------------------- 0.9: Setup, shortcut health, per-game emulator
+const handlers09 = {
+  'setup:overview': () => steamMgr.setupOverview(),
+  'setup:scan': async ({ drives } = {}) => { await steamMgr.scanEmulators({ drives: !!drives }); return steamMgr.setupOverview(); },
+  'setup:confirm': ({ path: f, id }) => steamMgr.confirm(f, id),
+  'setup:use': ({ key, file, as, args }) => steamMgr.useFile(key, file, { as, args }),
+  'setup:report': () => steamMgr.setupReport(),
+  'setup:done': () => { config.setupDone = Date.now(); saveConfig(); return true; },
+  // a game's manual (PDF) from RomM, kept in manuals/ so it opens offline next time
+  'rom:manual': async ({ romId }) => {
+    const dir = path.join(USER_DATA, 'manuals'), f = path.join(dir, `${Number(romId)}.pdf`);
+    if (fs.existsSync(f)) return fs.readFileSync(f);
+    const rom = await api(`/api/roms/${Number(romId)}`);
+    if (!rom.path_manual) throw new Error('RomM has no manual for this game.');
+    const base = await resolveBase();
+    const r = await fetch(`${base}/assets/romm/resources/${String(rom.path_manual).split('/').map(encodeURIComponent).join('/')}`, { headers: authHeaders() });
+    if (!r.ok) throw new Error(`RomM could not send the manual (error ${r.status})`);
+    const buf = Buffer.from(await r.arrayBuffer());
+    await fsp.mkdir(dir, { recursive: true });
+    fs.writeFileSync(f, buf);
+    return buf;
+  },
+  'library:verify': () => verifyLibrary(),
+  'library:verifyCancel': () => { verifyRun?.ac.abort(); return true; },
+  'steam:health': () => steamMgr.health(),
+  'steam:consoleCollections': () => steamMgr.syncConsoleCollections(),
+  'steam:healthFix': ({ appids }) => steamMgr.healthFix(appids || []),
+  'steam:moved': () => steamMgr.movedEmulators(),
+  'steam:gameEmu': ({ romId }) => ({ current: steamMgr.gameEmu(romId), key: steamMgr.forRom(romId).console }),
+  'steam:gameEmuOptions': ({ key }) => steamMgr.candidatesFor(key),
+  'steam:setGameEmu': ({ romId, id }) => steamMgr.setGameEmu(romId, id),
+};
 const handlers = {
   ...trophySvc.handlers,
+  ...handlers09,
   ...colHandlers,
   ...handlers08,
   'config:get': () => config,
@@ -1929,6 +2116,7 @@ const handlers = {
     return config;
   },
   'wallpaper:clear': () => { for (const f of fs.readdirSync(USER_DATA)) if (/^wallpaper\./.test(f)) try { fs.rmSync(path.join(USER_DATA, f)); } catch {} config.ui.wallpaper = ''; saveConfig(); return config; },
+  'clip:write': ({ text }) => { require('electron').clipboard.writeText(String(text || '')); return true; },
   'clip:read': async () => String((await require('electron').clipboard.readText()) || '').trim().slice(0, 4000),
   'logo:get': (r) => logoFor(r),
   'ra:signin': async ({ user, key }) => {
@@ -2011,7 +2199,7 @@ const handlers = {
     const r = await fetch(`${b}/api/auth/device/init`, {
       method: 'POST', headers: { ...authHeaders({ ...config.server, auth: 'none', username: '' }), 'Content-Type': 'application/json' }, signal: AbortSignal.timeout(15000),
       body: JSON.stringify({ client_device_identifier: config.deviceId, name: `Cartridge on ${os.hostname()}`.slice(0, 255), client: 'Cartridge', platform: 'linux', client_version: app.getVersion(),
-        requested_scopes: ['me.read', 'roms.read', 'roms.user.read', 'roms.user.write', 'platforms.read', 'assets.read', 'firmware.read', 'collections.read', 'collections.write', 'roms.write'] }),
+        requested_scopes: ['me.read', 'roms.read', 'roms.user.read', 'roms.user.write', 'platforms.read', 'assets.read', 'firmware.read', 'collections.read', 'collections.write', 'roms.write', 'devices.read', 'devices.write'] }),
     });
     if (r.status === 404 || r.status === 405) throw new Error('This RomM version has no QR pairing. Use a pairing code instead.');
     if (r.status === 429) throw new Error('RomM is limiting pairing requests. Try again in a minute.');
@@ -2105,7 +2293,8 @@ const handlers = {
     const isD = (e) => e.isDirectory() || (e.isSymbolicLink() && isDir(path.join(d, e.name)));
     const dirs = entries.filter((e) => isD(e) && (o.hidden ? !['.', '..', '.cache', '.Trash-1000'].includes(e.name) : !e.name.startsWith('.'))).map((e) => e.name).sort((a, b) => a.localeCompare(b));
     const exts = Array.isArray(o.files) ? o.files.map((x) => '.' + String(x).toLowerCase()) : null;
-    const files = exts ? entries.filter((e) => !isD(e) && !e.name.startsWith('.') && exts.includes(path.extname(e.name).toLowerCase())).map((e) => e.name).sort((a, b) => a.localeCompare(b)) : undefined;
+    // files: a list of extensions, or '*' for any file (picking an emulator, whatever it's called)
+    const files = exts || o.files === '*' ? entries.filter((e) => !isD(e) && !e.name.startsWith('.') && (!exts || exts.includes(path.extname(e.name).toLowerCase()))).map((e) => e.name).sort((a, b) => a.localeCompare(b)) : undefined;
     return { path: path.resolve(d), parent: path.dirname(path.resolve(d)), dirs, files };
   },
   'fs:mkdir': async (dir) => { await fsp.mkdir(dir, { recursive: true }); return true; },

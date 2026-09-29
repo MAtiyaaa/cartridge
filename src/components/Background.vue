@@ -29,8 +29,8 @@ import { lastInput } from '../nav.js';
 const props = defineProps({ still: Boolean });
 
 const mode = computed(() => {
-  const m = store.config?.ui?.bgStyle || 'waves';
-  return RENDERERS[m] || ['solid', 'art', 'wallpaper'].includes(m) ? m : 'waves';
+  const m = store.config?.ui?.bgStyle || 'solid';
+  return RENDERERS[m] || ['solid', 'art', 'wallpaper'].includes(m) ? m : 'solid';
 });
 const painted = computed(() => !!RENDERERS[mode.value] || mode.value === 'solid');
 const light = computed(() => lightEffects(store.config?.ui, store.info));

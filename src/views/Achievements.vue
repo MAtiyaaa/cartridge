@@ -29,7 +29,7 @@ function set(t) { store.achTab = t; }
 <style scoped>
 .ach { padding-top: 16px; }
 .ach-switch { display: flex; align-items: center; gap: 10px; margin: 0 0 18px; }
-.ach-tab { display: inline-flex; align-items: center; gap: 10px; height: 44px; padding: 0 18px; border-radius: 999px; background: rgba(255, 255, 255, 0.06); border: 1px solid var(--line); color: var(--muted); font-family: var(--display); font-weight: 600; font-size: 15px; }
+.ach-tab { display: inline-flex; align-items: center; gap: 10px; height: 44px; padding: 0 18px; border-radius: 999px; background: var(--s2); color: var(--muted); font-family: var(--display); font-weight: 600; font-size: var(--t-md); }
 .ach-tab.on { background: rgba(255, 255, 255, 0.14); color: var(--text); border-color: rgba(255, 255, 255, 0.28); }
 .ra-mark { height: 20px; width: auto; }
 .tg-mark { position: relative; width: 30px; height: 22px; display: inline-block; }
@@ -40,7 +40,7 @@ function set(t) { store.achTab = t; }
 .tg-word .t2 { background: linear-gradient(90deg, #ffe28a, #e0a32a); -webkit-background-clip: text; background-clip: text; color: transparent; }
 .tg-word .amp { color: var(--muted); font-weight: 500; }
 .ach-tab:not(.on) .tg-word { opacity: 0.75; }
-.ach-sub { font-family: var(--body); font-weight: 400; font-size: 12px; color: var(--muted); }
+.ach-sub { font-family: var(--body); font-weight: 400; font-size: var(--t-xs); color: var(--muted); }
 @media (max-width: 1100px) { .tg-mark { position: relative; width: 30px; height: 22px; display: inline-block; }
 .tg-mark .grade { position: absolute; left: 0; top: 0; }
 .tg-g { position: absolute; right: -2px; bottom: -3px; width: 14px; height: 14px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #9be38a, #2f8f2a); font: 800 9px var(--display); color: #0b2a08; display: grid; place-items: center; box-shadow: 0 0 0 2px rgba(20, 22, 40, 0.9); }

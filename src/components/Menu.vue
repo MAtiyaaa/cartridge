@@ -39,5 +39,5 @@ onBeforeUnmount(() => layer.pop());
 </script>
 
 <style scoped>
-.menu-h { flex: none; font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; font-weight: 700; color: var(--muted); padding: 10px 12px 2px; }
+.menu-h { flex: none; font-size: var(--t-xs); font-weight: 700; color: var(--muted); padding: 10px 12px 2px; }
 </style>
