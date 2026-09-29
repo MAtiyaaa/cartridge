@@ -54,7 +54,7 @@ const sticks = computed(() => (pad.value?.axes || []).slice(0, 4).map((v, i) => 
 .small { font-size: var(--t-xs); }
 .ct-btns { display: flex; flex-wrap: wrap; gap: 6px; }
 .ct-b { padding: 4px 9px; border-radius: var(--r-sm); background: var(--s2); font-size: var(--t-xs); font-weight: 600; color: var(--muted); min-width: 30px; text-align: center; }
-.ct-b.on { background: var(--primary); color: #fff; }
+.ct-b.on { background: var(--primary); color: var(--on-primary); }
 .ct-bars { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px 18px; }
 .ct-bars > div { display: grid; grid-template-columns: 58px 1fr 40px; align-items: center; gap: 8px; font-size: var(--t-xs); color: var(--muted); }
 .ct-bars i { position: relative; height: 8px; border-radius: 4px; background: rgba(255, 255, 255, 0.08); overflow: hidden; }

@@ -4,7 +4,7 @@ import { reactive, computed, watch, onScopeDispose } from 'vue';
 import { App } from '@capacitor/app';
 import { store, call, download, saveConfig, toast, choose, bytes, tab } from '../store.js';
 import { Native } from './native.js';
-import { EMUS, CONSOLES, BIOS, consoleKey, allPackages, candidatesFor, coreFor, planLaunch } from './emulators.js';
+import { EMUS, CONSOLES, BIOS, consoleKey, allPackages, candidatesFor, coreFor, planLaunch, familyOf, baseId, emuName } from './emulators.js';
 import { makeBundle, playablePath } from './bundle.js';
 
 const MARKED = '(marked as installed)';
@@ -22,6 +22,15 @@ export function scanEmulators(force = false) {
       for (const [id, e] of Object.entries(EMUS)) {
         const app = e.apps.find((x) => by.has(x.pkg));
         if (app) found[id] = { ...app, version: by.get(app.pkg).version, label: by.get(app.pkg).label };
+      }
+      // Forks and betas under other package names (an Azahar beta, a yuzu fork): found by name among
+      // the launchable apps, started with their family's intent
+      const known = new Set(allPackages());
+      const apps = (await Native.launchers({ all: true }).catch(() => ({ apps: [] }))).apps || [];
+      for (const a of apps) {
+        if (known.has(a.pkg)) continue;
+        const fam = familyOf(a.pkg, a.label);
+        if (fam && EMUS[fam]) found[`${fam}~${a.pkg}`] = { pkg: a.pkg, activity: EMUS[fam].apps[0].activity, version: a.version || '', label: a.label, fork: true };
       }
       emus.found = found;
       emus.at = Date.now();
@@ -48,7 +57,7 @@ export function usePlay(g) {
   const cands = computed(() => (emus.found && supported.value ? candidatesFor(key.value, emus.found, cfg(), g.romId()) : []));
   const emuId = computed(() => cands.value[0] || null);
   const app = computed(() => (emuId.value ? emus.found[emuId.value] : null));
-  const core = computed(() => (emuId.value === 'retroarch' ? coreFor(key.value, cfg()) : null));
+  const core = computed(() => (baseId(emuId.value) === 'retroarch' ? coreFor(key.value, cfg()) : null));
   const bundle = computed(() => makeBundle({ files: g.detail()?.files || [], prefix: g.detail()?.full_path ? g.detail().full_path + '/' : '', scan: st.scan }));
   const installed = computed(() => { const p = g.installedPath(); return p && p !== MARKED ? p : ''; });
   const confirmed = (k) => cfg().confirmed?.[k] === true;
@@ -79,7 +88,7 @@ export function usePlay(g) {
     else if (busy) out.push({ key: 'rom', label: 'ROM', status: 'wait', text: d.status === 'queued' ? 'Queued to download' : `Downloading ${pct}%` });
     else out.push({ key: 'rom', label: 'ROM', status: 'bad', text: `Not on this device (${bytes(base?.fs_size_bytes || 0)})`, fix: { label: 'Download', auto: true, run: fixRom } });
     // Emulator
-    if (app.value) out.push({ key: 'emu', label: 'Emulator', status: 'ok', text: `${EMUS[emuId.value].name}${core.value ? ' · ' + core.value : ''}${app.value.version ? ' ' + app.value.version : ''}`, change: cands.value.length > 1 || (CONSOLES[key.value].cores.length > 1 && emuId.value === 'retroarch') });
+    if (app.value) out.push({ key: 'emu', label: 'Emulator', status: 'ok', text: `${emuName(emuId.value, emus.found)}${core.value ? ' · ' + core.value : ''}${app.value.version ? ' ' + app.value.version : ''}`, change: cands.value.length > 1 || (CONSOLES[key.value].cores.length > 1 && !!core.value) });
     else out.push({ key: 'emu', label: 'Emulator', status: 'bad', text: `${EMUS[wanted.value].name} isn't installed`, fix: { label: `Get ${EMUS[wanted.value].name}`, auto: true, last: true, run: fixEmu } });
     // BIOS
     const b = con.value.bios && BIOS[con.value.bios];
@@ -154,6 +163,13 @@ export function usePlay(g) {
     await scanEmulators(true);
     if (!installed.value) { toast(g.installedPath() === MARKED ? 'Marked games have no file to open' : 'Download it first', 'info', 3000); return; }
     if (!emuId.value) { toast(`${EMUS[wanted.value].name} isn't installed`, 'error', 4500); return; }
+    // More than one emulator for this console and none picked yet: ask once, never guess
+    const c = cfg();
+    if (cands.value.length > 1 && !c.emus?.[key.value] && !c.gameEmus?.[g.romId()]) {
+      const id = await choose({ title: `Which emulator do you use for ${con.value.name}?`, message: 'Cartridge remembers it for every game of this console. Change it any time from a game\'s More menu.', options: cands.value.map((x) => ({ label: emuName(x, emus.found), sub: [emus.found[x].version, emus.found[x].pkg].filter(Boolean).join(' · '), value: x, icon: 'mdiGamepadVariantOutline' })) });
+      if (!id) return;
+      await saveConfig({ android: { emus: { [key.value]: id } } });
+    }
     st.launching = true;
     try {
       const scan = st.scan || await call('android:scan', installed.value);
@@ -171,19 +187,19 @@ export function usePlay(g) {
   async function pickEmulator() {
     if (cands.value.length < 1) return;
     const cur = emuId.value;
-    const id = cands.value.length === 1 ? cur : await choose({ title: 'Emulator', options: cands.value.map((x) => ({ label: EMUS[x].name, sub: emus.found[x].version || undefined, value: x, icon: 'mdiGamepadVariantOutline', selected: x === cur })) });
+    const id = cands.value.length === 1 ? cur : await choose({ title: 'Emulator', options: cands.value.map((x) => ({ label: emuName(x, emus.found), sub: [emus.found[x].version, emus.found[x].fork ? emus.found[x].pkg : ''].filter(Boolean).join(' · ') || undefined, value: x, icon: 'mdiGamepadVariantOutline', selected: x === cur })) });
     if (!id) return;
     let c = core.value;
-    if (id === 'retroarch' && con.value.cores.length > 1) {
+    if (baseId(id) === 'retroarch' && con.value.cores.length > 1) {
       c = await choose({ title: 'RetroArch core', options: con.value.cores.map((x) => ({ label: x, value: x, icon: 'mdiPuzzleOutline', selected: x === c })) }) || c;
     }
-    const scope = await choose({ title: `Use ${EMUS[id].name}${id === 'retroarch' ? ' · ' + c : ''} for`, options: [
+    const scope = await choose({ title: `Use ${emuName(id, emus.found)}${baseId(id) === 'retroarch' ? ' · ' + c : ''} for`, options: [
       { label: 'This game only', value: 'game', icon: 'mdiGamepadVariantOutline' },
       { label: `Every ${con.value.name} game`, value: 'console', icon: 'mdiControllerClassic' },
     ] });
     if (!scope) return;
     const patch = scope === 'game' ? { gameEmus: { [g.romId()]: id } } : { emus: { [key.value]: id } };
-    if (id === 'retroarch' && c) patch.cores = { [key.value]: c };
+    if (baseId(id) === 'retroarch' && c) patch.cores = { [key.value]: c };
     await saveConfig({ android: patch });
   }
 

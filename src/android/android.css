@@ -18,3 +18,12 @@ header .sys {
   font-variant-numeric: tabular-nums;
   color: var(--text);
 }
+
+/* Console cards: the WebView didn't repaint the masked, clipped controller picture after it loaded, so it
+   only appeared once the card was focused. No mask or clip-path here (overflow and the radius clip it). */
+.systile { will-change: auto; }
+.systile .sys-clip { clip-path: none; }
+.systile .glyph { -webkit-mask-image: none; mask-image: none; filter: saturate(0.6) brightness(1.1); opacity: 0.4; }
+
+/* Game page banner from a small screenshot: soften it instead of showing it blocky across the page */
+.g-banner-img.lowres:not(.blur) { filter: blur(10px) saturate(1.2) brightness(0.8); transform: scale(1.08); }

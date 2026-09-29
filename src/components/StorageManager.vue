@@ -119,10 +119,11 @@ onMounted(load);
 .sm-list { display: flex; flex-direction: column; gap: 6px; }
 .sm-row { display: flex; align-items: center; gap: 14px; padding: 8px 14px; border-radius: var(--r-md); background: var(--s2); border: 1px solid transparent; text-align: left; min-width: 0; }
 .sm-row:focus { background: var(--focus); color: var(--on-focus); box-shadow: none; }
-.sm-row:focus .muted { color: rgba(12, 13, 16, 0.75); }
-.sm-row.on { border-color: rgba(var(--primary-l-rgb), 0.5); }
+.sm-row:focus .muted { color: var(--on-focus-dim); }
+.sm-row.on:not(:focus) { background: var(--sel); }
 .sm-ck { color: var(--muted); }
-.sm-row.on .sm-ck { color: var(--primary-l); }
+.sm-row.on .sm-ck { color: var(--text); }
+.sm-row.on:focus .sm-ck { color: var(--on-focus); }
 .sm-thumb { width: 34px; height: 46px; border-radius: 5px; overflow: hidden; background: #1a1e2a; flex: none; }
 .sm-thumb img { width: 100%; height: 100%; object-fit: cover; }
 .sm-mid { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }

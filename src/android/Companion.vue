@@ -5,36 +5,36 @@
     <main class="body">
       <Transition name="cfade" mode="out-in">
         <!-- Game -->
-        <section v-if="tab === 'game' && rom" :key="'g' + rom.id" class="view" data-scroll>
+        <section v-if="tab === 'game' && rom" :key="'g' + rom.id" class="view gv" data-scroll>
           <div class="hero"><Art class="fill" :src="heroSrc" :blur="hero?.blur" /><div class="hero-shade" /></div>
-          <div class="head">
-            <Art class="cover" :src="coverSrc"><div class="ph"><PIcon v-if="platform" :p="platform" :size="44" /></div></Art>
-            <div class="head-t">
-              <div class="eyebrow row"><PIcon v-if="platform" :p="platform" :size="16" />{{ rom.platform_display_name || platform?.display_name }}</div>
-              <GameLogo :logo="store.config.ui.logos !== false ? logoOf(rom) : null" :name="rom.name" cls="t-title" :area="14000" :max-w="360" :max-h="78" />
-              <div class="meta">
-                <span v-if="yr">{{ yr }}</span>
-                <span v-if="info.genres">{{ info.genres }}</span>
-                <span v-if="rom.fs_size_bytes">{{ bytes(rom.fs_size_bytes) }}</span>
-                <span v-if="info.rating" class="row gold"><Icon name="mdiStar" :size="14" />{{ rating(info.rating) }}</span>
-              </div>
+          <!-- the box art peeks in from the right; the logo leads -->
+          <Art class="peek" :src="coverSrc"><div class="ph"><PIcon v-if="platform" :p="platform" :size="44" /></div></Art>
+          <div class="gv-main">
+            <div class="eyebrow row"><PIcon v-if="platform" :p="platform" :size="16" />{{ rom.platform_display_name || platform?.display_name }}</div>
+            <GameLogo :logo="gameLogo" :name="rom.name" cls="t-title" :area="30000" :max-w="340" :max-h="130" fixed />
+            <div v-if="gameLogo" class="gv-name">{{ rom.name }}</div>
+            <div class="meta">
+              <span v-if="yr">{{ yr }}</span>
+              <span v-if="info.genres">{{ info.genres }}</span>
+              <span v-if="rom.fs_size_bytes">{{ bytes(rom.fs_size_bytes) }}</span>
+              <span v-if="info.rating" class="row gold"><Icon name="mdiStar" :size="14" />{{ rating(info.rating) }}</span>
             </div>
-          </div>
-
-          <div class="acts">
-            <button class="pill primary" @click="cmd({ open: true, romId: rom.id })"><Icon name="mdiOpenInNew" :size="19" />Open</button>
-            <span v-if="installed" class="pill ok"><Icon name="mdiCheckCircle" :size="18" />On this device</span>
-            <button v-else-if="dlActive" class="pill" @click="call('dl:cancel', dl.id)"><Icon name="mdiClose" :size="19" />Cancel</button>
-            <button v-else class="pill" :disabled="busyDl" @click="startDl"><Icon name="mdiDownload" :size="19" />Download</button>
-          </div>
-          <div v-if="dlActive" class="inline-dl">
-            <div class="row between"><span>{{ dl.status === 'queued' ? 'Queued' : 'Downloading' }}</span><span class="num">{{ pctOf(dl) }}%<template v-if="dl.speed"> · {{ bytes(dl.speed) }}/s</template></span></div>
-            <div class="bar"><i :style="{ width: pctOf(dl) + '%' }" /></div>
           </div>
 
           <div v-if="summary" class="sum">
             <p class="summary" :class="{ open: bioOpen }">{{ summary }}</p>
-            <button v-if="summary.length > 200" class="more" @click="bioOpen = !bioOpen">{{ bioOpen ? 'Show less' : 'Show more' }}<Icon :name="bioOpen ? 'mdiChevronUp' : 'mdiChevronDown'" :size="16" /></button>
+            <button v-if="summary.length > 160" class="more" @click="bioOpen = !bioOpen">{{ bioOpen ? 'Show less' : 'Show more' }}<Icon :name="bioOpen ? 'mdiChevronUp' : 'mdiChevronDown'" :size="16" /></button>
+          </div>
+
+          <div v-if="dlActive" class="inline-dl">
+            <div class="row between"><span>{{ dl.status === 'queued' ? 'Queued' : 'Downloading' }}</span><span class="num">{{ pctOf(dl) }}%<template v-if="dl.speed"> · {{ bytes(dl.speed) }}/s</template></span></div>
+            <div class="bar"><i :style="{ width: pctOf(dl) + '%' }" /></div>
+          </div>
+          <div class="acts gv-acts">
+            <button class="pill primary" @click="cmd({ open: true, romId: rom.id })"><Icon name="mdiOpenInNew" :size="19" />Open</button>
+            <span v-if="installed" class="pill ok"><Icon name="mdiCheckCircle" :size="18" />On this device</span>
+            <button v-else-if="dlActive" class="pill" @click="call('dl:cancel', dl.id)"><Icon name="mdiClose" :size="19" />Cancel</button>
+            <button v-else class="pill" :disabled="busyDl" @click="startDl"><Icon name="mdiDownload" :size="19" />Download</button>
           </div>
         </section>
 
@@ -287,6 +287,7 @@ const collArt = computed(() => groupArt(collRoms.value));
 const collStrip = computed(() => strip(collRoms.value));
 const collOnDevice = computed(() => (selColl.value ? romsOfCollection(selColl.value.id).filter((r) => store.installed[r.id]).length : 0));
 const coverSrc = computed(() => rom.value && cover(rom.value, true));
+const gameLogo = computed(() => (rom.value && store.config.ui.logos !== false ? logoOf(rom.value) : null));
 const hero = computed(() => rom.value && backdropOf(detail.value ? { ...rom.value, shot: detail.value.merged_screenshots?.[0] || rom.value.shot } : rom.value));
 const heroSrc = computed(() => hero.value?.src || '');
 const installed = computed(() => rom.value && !!store.installed[rom.value.id]);
@@ -486,4 +487,15 @@ html, body { touch-action: pan-x pan-y; }
   .head-t :deep(.t-title), .t-title { font-size: 24px; }
   .cover { width: 104px; height: 140px; }
 }
+
+/* Game (0.9.3): the logo leads, the box art peeks in from the right edge, then the story and the buttons */
+.gv { overflow-x: hidden; }
+.gv .peek { position: absolute; right: -46px; top: 104px; width: 158px; height: 212px; border-radius: 10px; background: var(--s2); transform: rotate(7deg); box-shadow: 0 24px 50px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.12); z-index: 0; animation: gv-peek 0.4s var(--ease) both; }
+@keyframes gv-peek { from { opacity: 0; transform: translateX(40px) rotate(12deg); } }
+.gv-main { position: relative; z-index: 1; display: flex; flex-direction: column; gap: 6px; margin-top: 118px; padding-right: 128px; min-height: 176px; justify-content: flex-end; }
+.gv-main :deep(.game-logo) { margin: 4px 0 2px; filter: drop-shadow(0 6px 22px rgba(0, 0, 0, 0.6)); }
+.gv-name { font-size: 12.5px; font-weight: 600; color: rgba(255, 255, 255, 0.62); letter-spacing: 0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gv .sum { position: relative; z-index: 1; }
+.gv-acts { position: relative; z-index: 1; padding-top: 2px; }
+.gv-acts .pill { flex: 1; justify-content: center; }
 </style>

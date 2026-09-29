@@ -7,10 +7,12 @@ this file first.
 ## Principles
 - **Art first.** Game art is the colour on screen. Chrome is neutral and stays out of its way.
 - **Solid, not glass.** Surfaces are opaque neutral greys, separated by value, not by borders or blur.
-- **White means "you are here".** Focus is always white: a white ring on art, a white fill on buttons,
-  rows and tabs. Readable from a sofa, the same on every screen.
-- **One accent.** The theme colour (Cartridge's own is signal red-orange) marks the main action, the
-  active tab, progress and switches. Never gradients.
+- **White means "you are here".** Focus is white (or the Highlights colour when one is picked): a ring
+  on art, a full fill on buttons, rows and tabs. Readable from a sofa, the same on every screen.
+- **Chosen is a lighter grey fill** (`--sel`), never a stripe or an outline. The current top tab has a
+  faint outline (0.9.2).
+- **One accent.** The theme colour (white in Cartridge's own theme since 0.9.2) marks the main action,
+  progress and switches. Never gradients.
 - **Fewer words.** Short labels. No sentence explaining a screen when the layout can.
 
 ## Type
@@ -50,6 +52,7 @@ One curve `--ease` (0.2, 0, 0, 1). 120ms for focus and press, 200ms for moves, 3
 Focus appears at once; only the lift animates.
 
 ## Focus
-- Buttons, rows, tabs, menu items: white fill, near-black text.
+- Buttons, rows, tabs, menu items: white fill, near-black text. A main button is already white, so it
+  also gets the ring when focused.
 - Game cards and tiles: 3px white ring outside a 3px gap, lifted 6%.
 - Fields: white 2px ring.

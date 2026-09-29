@@ -21,12 +21,18 @@ import { pushLayer, glideBy } from '../nav.js';
 import { call, closeModal } from '../store.js';
 import Icon from './Icon.vue';
 import Btn from './Btn.vue';
-import * as pdfjs from 'pdfjs-dist';
-import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 
 // A game's manual from RomM, read with the controller: up/down scroll, LB/RB turn pages, X zooms,
 // B closes. Pages are drawn as they come into view.
-pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
+// Android WebViews older than Chrome 119 lack Promise.withResolvers and other things pdf.js 4 uses
+// ("Promise.withResolvers is not a function"): the legacy build carries them, in the worker too.
+async function loadPdf() {
+  const [lib, worker] = import.meta.env.MODE === 'android'
+    ? await Promise.all([import('pdfjs-dist/legacy/build/pdf.mjs'), import('pdfjs-dist/legacy/build/pdf.worker.min.mjs?url')])
+    : await Promise.all([import('pdfjs-dist'), import('pdfjs-dist/build/pdf.worker.min.mjs?url')]);
+  lib.GlobalWorkerOptions.workerSrc = worker.default;
+  return lib;
+}
 const props = defineProps({ romId: Number, name: String });
 const el = ref(null), scroller = ref(null);
 const pages = ref(0), page = ref(1), error = ref(''), fit = ref(true);
@@ -61,6 +67,7 @@ onMounted(async () => {
   });
   try {
     const data = await call('rom:manual', { romId: props.romId });
+    const pdfjs = await loadPdf();
     doc = await pdfjs.getDocument({ data: new Uint8Array(data) }).promise;
     pages.value = doc.numPages;
     await nextTick();

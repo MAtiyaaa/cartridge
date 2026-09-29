@@ -47,7 +47,8 @@ watch(mode, (m) => document.body.classList.toggle('bg-console', !!BG_BASE[m]), {
 // than drawing it full size (measured: about 30% of each frame while moving around).
 const cv = ref(null);
 let raf = 0, last = 0, ctx = null, frame = null, key = '';
-const t0 = performance.now();
+let clock = 0; // ms of animation drawn so far
+const ANDROID = import.meta.env.MODE === 'android';
 function scale() {
   const dpr = window.devicePixelRatio || 1;
   if (light.value) return innerWidth * dpr > 2600 ? 0.5 : 1;
@@ -73,10 +74,14 @@ function loop(t) {
   if (t - last < gap) return;
   // without the GPU, give every frame to the interface while you move around; the background
   // picks up again a moment after you stop
-  if (light.value && t - lastInput < 900) return;
+  // (not on Android: it composites on the GPU, and pausing there read as the picture stalling on every tap)
+  if (light.value && !ANDROID && t - lastInput < 900) return;
+  // The animation's own clock only moves while it draws: after a pause it carries on from where it
+  // stopped instead of jumping ahead (that jump looked like the background restarting on every press)
+  clock += last ? Math.min(t - last, gap * 2) : 0;
   last = t;
   if (!setup()) return;
-  frame((t - t0) / 1000);
+  frame(clock / 1000);
 }
 function start() {
   cancelAnimationFrame(raf); last = 0; key = ''; frame = null;

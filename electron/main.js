@@ -701,7 +701,7 @@ async function handleImage(request) {
     try { return new Response(await fsp.readFile(path.join(__dirname, '../build/syslogos', path.basename(sl) + '.png')), { headers: { 'Content-Type': 'image/png' } }); } catch { return new Response('nf', { status: 404 }); }
   }
   if (sl) {
-    try { return new Response(await fsp.readFile(path.join(SYSLOGO_DIR, path.basename(sl) + '.svg')), { headers: { 'Content-Type': 'image/svg+xml' } }); } catch { return new Response('nf', { status: 404 }); }
+    try { return new Response(sizedSvg(await fsp.readFile(path.join(SYSLOGO_DIR, path.basename(sl) + '.svg'), 'utf8')), { headers: { 'Content-Type': 'image/svg+xml' } }); } catch { return new Response('nf', { status: 404 }); }
   }
   if (u.searchParams.get('wp')) {
     const f = fs.readdirSync(USER_DATA).find((n) => /^wallpaper\.(png|jpe?g|webp)$/i.test(n));
@@ -1012,6 +1012,16 @@ async function raGame({ gameId, force }) {
 const SYSLOGO_DIR = path.join(USER_DATA, 'syslogos');
 const SYSLOGO_BASE = 'https://raw.githubusercontent.com/anthonycaccese/art-book-next-es-de/main/_inc/systems/logos/';
 const sysLogoInflight = new Map();
+// Most console logos give only a viewBox. Older Android WebViews draw an <img> of such an SVG at zero
+// size (only PSP and Wii, which state width and height, showed on the AYN Thor), so add them from the viewBox.
+function sizedSvg(svg) {
+  return svg.replace(/<svg\b[^>]*>/i, (tag) => {
+    if (/\swidth\s*=/.test(tag) && /\sheight\s*=/.test(tag)) return tag;
+    const vb = tag.match(/viewBox\s*=\s*["']\s*[-\d.]+[\s,]+[-\d.]+[\s,]+([\d.]+)[\s,]+([\d.]+)/i);
+    if (!vb) return tag;
+    return tag.replace(/\s(width|height)\s*=\s*["'][^"']*["']/gi, '').replace(/^<svg/i, `<svg width="${vb[1]}" height="${vb[2]}"`);
+  });
+}
 async function sysLogo({ slug, fs_slug }) {
   const names = [...new Set([...(PLATFORM_MAP[slug] || []), ...(PLATFORM_MAP[fs_slug] || []), fs_slug, slug].filter(Boolean))].filter((n) => /^[a-z0-9_-]+$/i.test(n));
   const key = names[0];

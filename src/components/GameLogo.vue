@@ -18,6 +18,7 @@ const props = defineProps({
   area: { type: Number, default: 30000 }, // px² of screen space at 1280 wide
   maxW: { type: Number, default: 440 },
   maxH: { type: Number, default: 120 },
+  fixed: Boolean, // sizes are real pixels (the narrow second screen), not scaled with the window
 });
 const known = (globalThis.__cartLogoState ||= new Map());
 const state = ref(known.get(props.logo?.url) || 'loading');
@@ -30,6 +31,7 @@ const box = computed(() => {
   const k = Math.min(1, props.maxW / w, props.maxH / h);
   w *= k; h *= k;
   // scale with the window a little, like the rest of the UI
+  if (props.fixed) return { width: `min(${Math.round(w)}px, 100%)`, height: 'auto', aspectRatio: `${l.w} / ${l.h}` };
   return { width: `min(${Math.round(w)}px, ${(w / 12.8).toFixed(2)}vw * 1.1)`, height: 'auto', aspectRatio: `${l.w} / ${l.h}` };
 });
 function ok() { known.set(props.logo.url, 'ok'); state.value = 'ok'; }

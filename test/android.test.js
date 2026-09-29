@@ -35,7 +35,7 @@ test('launch plans follow the emulators\' own intents', async () => {
   const { EMUS, planLaunch, candidatesFor, coreFor } = await load();
   const ppsspp = planLaunch('ppsspp', EMUS.ppsspp.apps[1]);
   assert.strictEqual(ppsspp.action, 'android.intent.action.VIEW');
-  assert.strictEqual(ppsspp.data, '{SAF}');
+  assert.strictEqual(ppsspp.data, '{URI}');
   const ra = planLaunch('retroarch', EMUS.retroarch.apps[0], { core: 'snes9x' });
   assert.strictEqual(ra.extras.LIBRETRO, '/data/data/com.retroarch.aarch64/cores/snes9x_libretro_android.so');
   assert.strictEqual(ra.extras.ROM, '{ROM}');
@@ -77,4 +77,16 @@ test('a game with an update and DLC becomes one bundle, and launches the base ga
   assert.deepStrictEqual(old.groups.map((g) => g.cat), ['game', 'dlc']);
   // a plain single game is not shown as a bundle
   assert.strictEqual(makeBundle({ files: [files[0]], prefix: 'x/' }).extras, false);
+});
+
+test('forks and betas are found by name and offered after the known builds', async () => {
+  const { familyOf, candidatesFor, emuName } = await import('../src/android/emulators.js');
+  assert.strictEqual(familyOf('io.github.azahar.next', 'Azahar Next'), 'azahar');
+  assert.strictEqual(familyOf('dev.citron.citron_emu', 'Citron'), 'eden');
+  assert.strictEqual(familyOf('mobi.mgeek.TunnyBrowser', 'Dolphin Browser'), null);
+  assert.strictEqual(familyOf('com.example.notes', 'Notes'), null);
+  const found = { azahar: { pkg: 'org.azahar_emu.azahar' }, 'azahar~io.github.azahar.next': { pkg: 'io.github.azahar.next', label: 'Azahar Next' } };
+  assert.deepStrictEqual(candidatesFor('3ds', found, {}, 1), ['azahar', 'azahar~io.github.azahar.next']);
+  assert.deepStrictEqual(candidatesFor('3ds', found, { emus: { '3ds': 'azahar~io.github.azahar.next' } }, 1)[0], 'azahar~io.github.azahar.next');
+  assert.strictEqual(emuName('azahar~io.github.azahar.next', found), 'Azahar Next');
 });

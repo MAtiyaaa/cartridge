@@ -156,7 +156,7 @@ onMounted(() => { load(); loadLive(); });
 .ss-emus { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; padding: 4px; margin: -4px; }
 .ss-emu { display: flex; align-items: center; gap: 14px; padding: 14px 16px; border-radius: var(--r-md); background: var(--s2); text-align: left; min-width: 0; }
 .ss-emu:focus { background: var(--focus); color: var(--on-focus); box-shadow: none; border-color: transparent; }
-.ss-emu:focus .muted { color: rgba(12, 13, 16, 0.75); }
+.ss-emu:focus .muted { color: var(--on-focus-dim); }
 .ss-e-logo { width: 60px; height: 60px; border-radius: var(--r-md); display: grid; place-items: center; background: rgba(255, 255, 255, 0.06); flex: none; }
 .ss-e-mid { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .ss-e-mid b { font-size: var(--t-md); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

@@ -149,6 +149,12 @@ LT/RT switch top tabs. LB/RB only switch sections inside a page. A select, B bac
 - `steamManager.refreshGame(romId)` (`steam:refreshGame`) updates one shortcut; `setup:flatpakAllow` runs `flatpak override --user --filesystem`; `setupNotice` in App.vue (once, `ui.setupNotice`, for `setupDone === 'before 0.9'`); start-up dialogs wait for each other.
 - CI runs `npm test` before building.
 
+## 0.9.2 (Controls and colour)
+- Cartridge theme accent is white (`bgAccent` keeps the brand colour for animated backgrounds). `applyTheme` sets `--focus` (white, or `colors.highlight`), `--on-focus`/`--on-focus-dim` by luminance, `--sel` (chosen, not focused), `--knob`. Near-white picks stay white (`accentOf`).
+- Selected states use a `--sel` fill, never stripes or outlines; the active top tab has a faint outline. A focused `.btn.primary` also gets the ring.
+- `nav.js` zones: `move()` never leaves the nearest `[data-zone]` (App `<main>`, Settings `.pane`). Settings' B returns to the rail.
+- Old 0.9.2 notes are in `docs/plan-0.9.3.md`.
+
 ## Releases (full steps: HANDOFF D8)
 Only when the owner asks. Bump `version` and `build.releaseInfo.releaseName` ("Cartridge X.Y.Z") in `package.json`, put only this version's notes in `RELEASE_NOTES.md` (heading `## Cartridge X.Y.Z · Title`), add them to the top of `CHANGELOG.md`, grouped as New / Changed / Fixed with bold lead-ins. CI builds, launch-checks and publishes.
 
@@ -161,3 +167,4 @@ Only when the owner asks. Bump `version` and `build.releaseInfo.releaseName` ("C
 - Phone upload: `/phone-upload/start|<id>?offset=|<id>/finish` in `remote-server.js` (8 MB pieces into `phone-uploads/`, then the device's `upload:start`; the copy is deleted when RomM is done). Phones may `upload:start` only paths from `upload:list` or their own upload. Phone UI: `src/remote/UploadView.vue`.
 - Upstream releases are merged as their own fork version (abdu2304 0.7.0 became 0.7.3). `yauzl` and the other backend packages Android needs are listed in `NODE_DEPS` in `scripts/build-android.mjs`.
 - Android Expansion (0.9.2): `src/android/emulators.js` (emulator profiles from ES-DE's Android rules, `CONSOLES`, `BIOS`, `planLaunch`), `play.js` (`usePlay`, Ready to play checks, fixes, launch), `bundle.js` (RomM file categories -> base/update/DLC), `ReadyToPlay.vue`, `GameBundle.vue`. Native `packages`/`launchGame`/`device` in `CartridgeNativePlugin.java`; every emulator package must be in the manifest `<queries>` (`npm test` checks). `electron/androidPlay.js`: `android:scan`, `android:bios`. Game.vue loads all of it behind `import.meta.env.MODE === 'android'`. Add emulators in `emulators.js` only. MainActivity asks for the highest refresh mode.
+- 0.9.3: console logo SVGs get width/height from the viewBox when served (`sizedSvg`, older WebViews draw size-less SVG images at zero). Android: `android.css` drops the mask/clip on console card pictures (they didn't repaint), softens low-res game banners (`bannerLow`); ManualViewer loads pdf.js's legacy build in android mode (Promise.withResolvers). Play: `{URI}` = FileProvider URI with a read grant (`root-path` covers SD cards), documents URI only for disc sheets; forks found by name (`FAMILIES`, `familyOf`, ids `<id>~<pkg>`, `Native.launchers({ all })`), the first Play asks which emulator when several fit; `launchGame` falls back to the package when a fork renamed its activity. Background clock only advances while drawing; Android never pauses it. Settings rail is `data-scroll`. Companion game view: logo first, `.peek` box art, `GameLogo fixed`.

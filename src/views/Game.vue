@@ -3,7 +3,7 @@
     <div v-if="!base" class="center"><div class="spinner" /></div>
     <template v-else>
       <section class="g-banner">
-        <img v-if="banner.src" class="g-banner-img" :class="{ blur: banner.blur }" :src="banner.src" @error="bannerFail = true" />
+        <img v-if="banner.src" class="g-banner-img" :class="{ blur: banner.blur, lowres: bannerLow }" :src="banner.src" @error="bannerFail = true" @load="bannerLoaded" />
         <div class="g-banner-shade" />
         <div class="g-banner-logo"><GameLogo :logo="store.config.ui.logos !== false ? logoOf(base) : null" :name="base.name" cls="g-title" :area="40000" :max-w="560" :max-h="150" /></div>
       </section>
@@ -276,6 +276,9 @@ async function linkTrophies() {
 }
 // Header banner: your chosen background, else the first screenshot, else the cover (blurred)
 const bannerFail = ref(false);
+// A small screenshot (a PSP one is 480 wide) stretched across the page looks blocky: android.css softens it
+const bannerLow = ref(false);
+function bannerLoaded(e) { const i = e.target; bannerLow.value = i.naturalWidth > 0 && i.naturalWidth < i.clientWidth * 0.6; }
 const banner = computed(() => {
   if (!base.value) return {};
   const h = artFor(props.romId).hero;
