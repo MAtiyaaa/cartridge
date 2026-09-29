@@ -9,3 +9,5 @@ Moved from 0.9.1, then past 0.9.2 (the controls and colour update); do next.
 
 ## From testing at home
 (add here)
+
+Already done on the branch: the Settings list has no grey box for the current section (the page follows the list as you move), only brighter text.

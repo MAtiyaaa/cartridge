@@ -643,7 +643,8 @@ onMounted(async () => { space.value = await call('fs:space', store.config.romsRo
 .set-view { position: absolute; inset: 0; display: grid; grid-template-columns: 270px 1fr; gap: 10px; padding: 16px 36px 0; animation: viewIn 0.16s ease-out; }
 .rail { display: flex; flex-direction: column; gap: 4px; padding-top: 10px; }
 .rail-item { display: flex; align-items: center; gap: 14px; padding: 13px 16px; border-radius: var(--r-md); color: var(--muted); font-weight: 500; transition: background 0.15s, color 0.15s; }
-.rail-item.on { color: var(--text); background: var(--sel); }
+/* the page follows the list as you move, so the current section only needs brighter text, no box */
+.rail-item.on { color: var(--text); }
 .rail-item:focus { background: var(--focus); color: var(--on-focus); box-shadow: none; }
 .pane { overflow-y: auto; padding: 6px 12px 60px 24px; }
 .pane-in { display: flex; flex-direction: column; gap: 16px; max-width: 860px; }
