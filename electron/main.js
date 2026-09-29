@@ -2202,6 +2202,13 @@ const handlers = {
   'library:reset': () => { library = null; installedMap = {}; try { fs.rmSync(LIBRARY_FILE); } catch {} broadcast('library', null); return true; },
   'library:sync': () => syncLibrary(),
   'library:scan': async () => { const stats = await scanServer(); const res = await syncLibrary(); return { stats, ...res }; },
+  // Android: the files inside an installed game (bundles, which file to launch) and emulator BIOS checks
+  'android:scan': (p) => {
+    const known = Object.values(installedMap).filter((x) => x && x !== MARKED);
+    if (typeof p !== 'string' || !known.includes(p)) throw new Error('Not an installed game');
+    return require('./androidPlay').scan(p);
+  },
+  'android:bios': (spec) => require('./androidPlay').bios(spec || {}),
   'installed:get': () => installedMap,
   'installed:rescan': () => computeInstalled(),
   'server:test': async (srv) => {

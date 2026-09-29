@@ -38,6 +38,10 @@
     </div>
     <p class="muted small">Sets where A, B, X and Y sit on the second screen's touch controls. Auto follows your controller{{ store.androidPads?.length ? ' (' + store.androidPads.join(', ') + ')' : '' }}: {{ store.androidLayoutDetected === 'nintendo' ? 'Nintendo, A on the right' : 'Xbox, A at the bottom' }}.</p>
 
+    <div class="subh"><Icon name="mdiGamepadVariantOutline" :size="22" />Emulators</div>
+    <p class="muted small">{{ foundNames.length ? 'Found on this device: ' + foundNames.join(', ') + '.' : 'No emulators found yet.' }} Play opens a game in the emulator for its console. Pick another for one game from its More menu.</p>
+    <div class="row wrap"><button class="btn" data-focus @click="findEmus"><Icon name="mdiRefresh" />Look again</button></div>
+
     <div class="subh"><Icon name="mdiMicrosoftWindows" :size="22" />Steam &amp; PC game apps</div>
     <Toggle :model-value="store.config.android?.steamApps === true" label="Show Steam and PC game app options" desc="Off by default. Adds Settings → Steam, and Open in a PC game app to Windows games, for GameNative, GameHub or Winlator" @update:model-value="setSteamApps" />
     <p v-if="store.config.android?.steamApps" class="muted small">
@@ -59,7 +63,12 @@ import { store, call, saveConfig, toast } from '../store.js';
 import { Native } from './native.js';
 import Icon from '../components/Icon.vue';
 import Toggle from '../components/Toggle.vue';
+import { emus, scanEmulators } from './play.js';
+import { EMUS } from './emulators.js';
 
+const foundNames = computed(() => Object.keys(emus.found || {}).map((id) => EMUS[id].name));
+const findEmus = () => scanEmulators(true);
+scanEmulators();
 const storage = ref({ granted: true });
 const roots = ref([]);
 const scanning = ref(false);
