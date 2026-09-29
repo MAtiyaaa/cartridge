@@ -101,8 +101,6 @@ export async function afterMount() {
   const nav = await import('../nav.js');
   const { dispatch } = nav;
   const { watch } = await import('vue');
-  // Prototype: the top bar blends with the art on screen (heroTint.js, Settings → Android)
-  import('./heroTint.js').then((m) => m.startHeroTint(() => store.config?.android?.heroBlend !== false)).catch(() => {});
   // Settings changed on the second screen show up here right away
   cart.on('remote:config', (c) => { if (c && JSON.stringify(c) !== JSON.stringify(store.config)) store.config = c; });
   const readSettings = () => { settings = store.config?.android || {}; };

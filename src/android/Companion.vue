@@ -43,48 +43,65 @@
         </section>
 
         <!-- Console -->
-        <section v-else-if="tab === 'game' && selPlat" :key="'p' + selPlat.id" class="view" data-scroll>
-          <div class="hero short"><Art v-if="platArt" class="fill" :src="platArt.src" :blur="platArt.blur" /><div class="hero-shade" /></div>
-          <div class="head plain">
-            <div class="head-t">
-              <img v-if="sysLogo" class="sys-logo" :src="sysLogo" :alt="selPlat.display_name" />
-              <div class="eyebrow">System</div>
-              <div class="t-title">{{ selPlat.display_name || selPlat.name }}</div>
+        <!-- Console (0.9.7): laid out like a game, the console's wordmark leads and its name sits small below -->
+        <section v-else-if="tab === 'game' && selPlat" :key="'p' + selPlat.id" class="view gv" data-scroll :style="{ '--p': gvP, '--sy': gvY }" @scroll.passive="gvScroll">
+          <div class="hero gv-hero"><Art v-if="platArt" class="fill" :src="platArt.src" :blur="platArt.blur" /><div class="hero-shade" /></div>
+          <div class="gv-head">
+            <div class="gv-main">
+              <div class="gv-logo">
+                <img v-if="sysLogo && !sysBad" class="sys-mark" :src="sysLogo" :alt="selPlat.display_name" @error="sysBad = true" />
+                <div v-else class="t-title">{{ selPlat.display_name || selPlat.name }}</div>
+              </div>
+              <div v-if="sysLogo && !sysBad" class="gv-name">{{ selPlat.display_name || selPlat.name }}</div>
               <div class="meta">
-                <span>{{ selPlat.rom_count || 0 }} {{ selPlat.rom_count === 1 ? 'game' : 'games' }} on your server</span>
+                <span>{{ selPlat.rom_count || 0 }} {{ selPlat.rom_count === 1 ? 'game' : 'games' }}</span>
                 <span v-if="platOnDevice" class="chip green">{{ platOnDevice }} on this device</span>
               </div>
             </div>
+            <div v-if="platStrip.length" class="fan"><Art v-for="(r, i) in platStrip.slice(0, 3)" :key="r.id" class="fan-c" :src="r.src" :style="{ '--i': i, '--n': Math.min(3, platStrip.length) }" /></div>
           </div>
-          <div class="acts"><button class="pill primary" @click="cmd({ open: true, platformId: selPlat.id })"><Icon name="mdiOpenInNew" :size="19" />Open</button></div>
-          <div v-if="platStrip.length" class="strip">
-            <button v-for="r in platStrip" :key="r.id" class="s-cover" :aria-label="r.name" @click="cmd({ open: true, romId: r.id })"><Art class="fill" :src="r.src" /></button>
-          </div>
+          <template v-if="platStrip.length">
+            <div class="c-sec">Games<span>{{ platOnDevice ? 'on this device first' : '' }}</span></div>
+            <div class="c-row">
+              <button v-for="r in platStrip" :key="r.id" class="c-game" @click="cmd({ open: true, romId: r.id })">
+                <span class="s-cover"><Art class="fill" :src="r.src" /><Icon v-if="r.on" class="c-on" name="mdiCheckCircle" :size="16" /></span>
+                <span class="c-name">{{ r.name }}</span>
+              </button>
+            </div>
+          </template>
           <div class="folder">
             <Icon name="mdiFolderOutline" :size="19" />
             <span class="path">{{ selPlat.target?.path || 'No folder set' }}</span>
             <span class="chip" :class="selPlat.target?.source === 'custom' ? 'primary' : selPlat.target?.exists ? 'green' : ''">{{ selPlat.target?.source === 'custom' ? 'Custom' : selPlat.target?.exists ? 'Found' : selPlat.target?.path ? 'Will create' : 'Not set' }}</span>
           </div>
+          <div class="gv-acts"><div class="acts"><button class="pill primary" @click="cmd({ open: true, platformId: selPlat.id })"><Icon name="mdiOpenInNew" :size="19" />Open {{ selPlat.display_name || selPlat.name }}</button></div></div>
         </section>
 
-        <!-- Collection / Favourites -->
-        <section v-else-if="tab === 'game' && selColl" :key="'c' + selColl.id" class="view" data-scroll>
-          <div class="hero short"><Art v-if="collArt" class="fill" :src="collArt.src" :blur="collArt.blur" /><div class="hero-shade" /></div>
-          <div class="head plain">
-            <div class="head-t">
-              <div class="eyebrow row"><Icon :name="selColl.favorite ? 'mdiStar' : selColl.icon || 'mdiBookmarkMultipleOutline'" :size="14" />{{ selColl.favorite ? 'Favourites' : selColl.genre ? 'Genre' : selColl.series ? 'Series' : selColl.auto ? 'Made by Cartridge' : selColl.smart ? 'Smart collection' : 'Collection' }}</div>
+        <!-- Collection, series, genre, favourites (0.9.7): the same layout as a game, covers fanned beside the title -->
+        <section v-else-if="tab === 'game' && selColl" :key="'c' + selColl.id" class="view gv" data-scroll :style="{ '--p': gvP, '--sy': gvY }" @scroll.passive="gvScroll">
+          <div class="hero gv-hero"><Art v-if="collArt" class="fill" :src="collArt.src" :blur="collArt.blur" /><div class="hero-shade" /></div>
+          <div class="gv-head">
+            <div class="gv-main">
+              <div class="eyebrow row"><Icon :name="collIcon" :size="14" />{{ collKind }}</div>
               <div class="t-title">{{ selColl.name }}</div>
               <div class="meta">
                 <span>{{ collCount }} {{ collCount === 1 ? 'game' : 'games' }}</span>
                 <span v-if="collOnDevice" class="chip green">{{ collOnDevice }} on this device</span>
               </div>
             </div>
+            <div v-if="collStrip.length" class="fan"><Art v-for="(r, i) in collStrip.slice(0, 3)" :key="r.id" class="fan-c" :src="r.src" :style="{ '--i': i, '--n': Math.min(3, collStrip.length) }" /></div>
           </div>
-          <div class="acts"><button class="pill primary" @click="cmd({ open: true, collectionId: selColl.id })"><Icon name="mdiOpenInNew" :size="19" />Open</button></div>
-          <div v-if="collStrip.length" class="strip">
-            <button v-for="r in collStrip" :key="r.id" class="s-cover" :aria-label="r.name" @click="cmd({ open: true, romId: r.id })"><Art class="fill" :src="r.src" /></button>
-          </div>
-          <p v-if="selColl.description && !selColl.series && !selColl.auto" class="summary">{{ selColl.description }}</p>
+          <p v-if="collDesc" class="summary">{{ collDesc }}</p>
+          <template v-if="collStrip.length">
+            <div class="c-sec">Games<span>{{ collOnDevice ? 'on this device first' : '' }}</span></div>
+            <div class="c-row">
+              <button v-for="r in collStrip" :key="r.id" class="c-game" @click="cmd({ open: true, romId: r.id })">
+                <span class="s-cover"><Art class="fill" :src="r.src" /><Icon v-if="r.on" class="c-on" name="mdiCheckCircle" :size="16" /></span>
+                <span class="c-name">{{ r.name }}</span>
+              </button>
+            </div>
+          </template>
+          <div class="gv-acts"><div class="acts"><button class="pill primary" @click="cmd({ open: true, collectionId: selColl.id })"><Icon name="mdiOpenInNew" :size="19" />Open</button></div></div>
         </section>
 
         <!-- Nothing highlighted -->
@@ -264,8 +281,9 @@ const collCount = computed(() => selColl.value?.rom_ids?.length || selColl.value
 // Console banner: the console's own colours, like its tile on the top screen
 const sysLogos = new Map();
 const sysLogo = ref('');
+const sysBad = ref(false);
 watch(selPlat, (p) => {
-  sysLogo.value = '';
+  sysLogo.value = ''; sysBad.value = false;
   if (!p) return;
   if (sysLogos.has(p.slug)) { sysLogo.value = sysLogos.get(p.slug); return; }
   call('syslogo:get', { slug: p.slug, fs_slug: p.fs_slug }).then((u) => { sysLogos.set(p.slug, u || ''); if (selPlat.value?.slug === p.slug) sysLogo.value = u || ''; }).catch(() => {});
@@ -280,8 +298,8 @@ function groupArt(roms) {
 }
 // A few covers to tap, games on this device first
 function strip(roms) {
-  return [...roms].sort((a, b) => (store.installed[b.id] ? 1 : 0) - (store.installed[a.id] ? 1 : 0)).slice(0, 6)
-    .map((r) => ({ id: r.id, name: r.name, src: cover(r) })).filter((r) => r.src);
+  return [...roms].sort((a, b) => (store.installed[b.id] ? 1 : 0) - (store.installed[a.id] ? 1 : 0)).filter((r) => cover(r)).slice(0, 14)
+    .map((r) => ({ id: r.id, name: r.name, src: cover(r), on: !!store.installed[r.id] }));
 }
 const platRoms = computed(() => (selPlat.value ? romsOf(selPlat.value.id) : []));
 const platArt = computed(() => groupArt(platRoms.value));
@@ -290,6 +308,9 @@ const collRoms = computed(() => (selColl.value ? romsOfCollection(selColl.value.
 const collArt = computed(() => groupArt(collRoms.value));
 const collStrip = computed(() => strip(collRoms.value));
 const collOnDevice = computed(() => (selColl.value ? romsOfCollection(selColl.value.id).filter((r) => store.installed[r.id]).length : 0));
+const collKind = computed(() => { const c = selColl.value; return !c ? '' : c.favorite ? 'Favourites' : c.genre ? 'Genre' : c.series ? 'Series' : c.auto ? 'Made by Cartridge' : c.smart ? 'Smart collection' : 'Collection'; });
+const collIcon = computed(() => { const c = selColl.value; return !c ? '' : c.favorite ? 'mdiStar' : c.genre ? 'mdiShape' : c.series ? 'mdiLayersTriple' : c.smart ? 'mdiAutoFix' : c.icon || 'mdiBookmarkMultipleOutline'; });
+const collDesc = computed(() => (selColl.value && !selColl.value.series ? selColl.value.description || '' : ''));
 const coverSrc = computed(() => rom.value && cover(rom.value, true));
 // Scrolling the game view: the art drifts slower than the page and fades, the logo and box art ease back
 const gvEl = ref(null), gvY = ref(0), gvP = ref(0);
@@ -299,7 +320,7 @@ function gvScroll(e) {
   if (gvRaf) return;
   gvRaf = requestAnimationFrame(() => { gvRaf = 0; gvY.value = Math.round(t.scrollTop); gvP.value = Math.min(1, t.scrollTop / 220).toFixed(3); });
 }
-watch(() => rom.value?.id, () => { gvY.value = 0; gvP.value = 0; });
+watch(() => [rom.value?.id, selPlat.value?.id, selColl.value?.id].join(), () => { gvY.value = 0; gvP.value = 0; });
 const gameLogo = computed(() => (rom.value && store.config.ui.logos !== false ? logoOf(rom.value) : null));
 const hero = computed(() => rom.value && backdropOf(detail.value ? { ...rom.value, shot: detail.value.merged_screenshots?.[0] || rom.value.shot } : rom.value));
 const heroSrc = computed(() => hero.value?.src || '');
@@ -388,14 +409,8 @@ html, body { touch-action: pan-x pan-y; }
 
 /* artwork that melts into the background, like the Home header */
 .hero { position: absolute; top: 0; left: 0; right: 0; height: 300px; z-index: -1; -webkit-mask-image: linear-gradient(180deg, #000 40%, transparent 100%); mask-image: linear-gradient(180deg, #000 40%, transparent 100%); }
-.hero.short { height: 220px; }
 .hero-shade { position: absolute; inset: 0; background: linear-gradient(90deg, rgba(12, 13, 16, 0.72) 0%, rgba(12, 13, 16, 0.25) 60%, transparent 100%), linear-gradient(180deg, transparent 40%, rgba(12, 13, 16, 0.5) 100%); }
-.head { display: flex; align-items: flex-end; gap: 16px; margin-top: 120px; }
-.head.plain { margin-top: 84px; }
-.cover { position: relative; flex: none; width: 118px; height: 158px; border-radius: 10px; background: var(--s2); box-shadow: 0 18px 40px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.14); }
-.head-t { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 7px; padding-bottom: 2px; }
-.head-t :deep(.t-title), .t-title { font-family: var(--display); font-stretch: var(--display-stretch); font-size: 28px; font-weight: 800; line-height: 1.03; letter-spacing: -0.02em; text-shadow: 0 6px 30px rgba(0, 0, 0, 0.55); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-.sys-logo { max-height: 40px; max-width: 220px; object-fit: contain; object-position: left bottom; margin-bottom: 4px; filter: drop-shadow(0 3px 10px rgba(0, 0, 0, 0.5)); }
+.t-title { font-family: var(--display); font-stretch: var(--display-stretch); font-size: 28px; font-weight: 800; line-height: 1.03; letter-spacing: -0.02em; text-shadow: 0 6px 30px rgba(0, 0, 0, 0.55); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .all-left { display: flex; align-items: center; gap: 6px; margin: 10px 2px 0; color: #cfd4de; font-size: 13px; }
 .meta { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 12px; color: #cfd4de; font-size: 13.5px; }
 
@@ -413,10 +428,6 @@ html, body { touch-action: pan-x pan-y; }
 .summary { margin: 0; color: #c3c9d4; font-size: 14px; line-height: 1.6; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .summary.open { display: block; }
 .more { display: inline-flex; align-items: center; gap: 4px; min-height: 40px; color: var(--primary-t); font: 600 13.5px var(--body); }
-.strip { display: grid; grid-template-columns: repeat(6, 1fr); gap: 10px; }
-.s-cover { position: relative; display: block; border-radius: 8px; overflow: hidden; background: var(--s2); box-shadow: 0 10px 24px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.08); transition: transform 0.12s var(--ease); }
-.s-cover::before { content: ''; display: block; padding-top: 133.34%; } /* 3:4 without aspect-ratio (older WebViews left these buttons flat) */
-.s-cover:active { transform: scale(0.95); }
 .folder { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 14px; background: var(--s1); border: 1px solid var(--line); color: var(--muted); }
 .folder .path { flex: 1; min-width: 0; font-family: ui-monospace, 'JetBrains Mono', monospace; font-size: 12px; color: var(--text); overflow-wrap: anywhere; }
 
@@ -496,10 +507,9 @@ html, body { touch-action: pan-x pan-y; }
 @media (max-width: 440px) {
   .dpad, .facepad { grid-template: repeat(3, 52px) / repeat(3, 52px); }
   .face-gl { transform: scale(1.75); }
-  .strip { grid-template-columns: repeat(4, 1fr); }
-  .strip .s-cover:nth-child(n + 5) { display: none; }
-  .head-t :deep(.t-title), .t-title { font-size: 24px; }
-  .cover { width: 104px; height: 140px; }
+  .t-title { font-size: 24px; }
+  .fan { width: 118px; }
+  .sys-mark { height: 54px; }
 }
 
 /* Game (0.9.4): the logo leads with the box art standing beside it; Open and Download stay pinned above the
@@ -517,4 +527,23 @@ html, body { touch-action: pan-x pan-y; }
 .gv-acts { position: sticky; bottom: 0; z-index: 3; margin-top: auto; display: flex; flex-direction: column; gap: 10px; padding: 16px 0 6px; background: linear-gradient(180deg, rgba(12, 13, 16, 0) 0%, var(--s0) 34%); }
 .gv-acts .acts { flex-wrap: nowrap; }
 .gv-acts .pill { flex: 1; justify-content: center; min-width: 0; }
+
+/* Console and collection (0.9.7): the game view's layout. A console's wordmark leads like a game logo (white,
+   as on its tile) with the name small below; collections get their covers fanned where a game has its box art,
+   and a row of games to tap. Sizes are fixed (no aspect-ratio, older WebViews). */
+.sys-mark { display: block; height: 64px; width: auto; max-width: 100%; object-fit: contain; object-position: left bottom; filter: brightness(0) invert(1) drop-shadow(0 6px 22px rgba(0, 0, 0, 0.6)); }
+.gv-main .t-title { margin-top: 2px; }
+.fan { position: relative; flex: none; width: 136px; height: 152px; transform: translate3d(0, calc(var(--sy, 0) * -0.12px), 0); animation: gv-in 0.42s var(--ease) both; }
+.fan-c { position: absolute; right: calc(var(--i) * 22px); bottom: 0; width: 100px; height: 136px; border-radius: 9px; background: var(--s2); box-shadow: 0 16px 34px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.14); transform: rotate(calc((var(--i) - (var(--n) - 1) / 2) * -6deg)); transform-origin: 50% 100%; z-index: calc(10 - var(--i)); }
+.gv .summary { position: relative; z-index: 1; }
+.c-sec { position: relative; z-index: 1; display: flex; align-items: baseline; gap: 10px; margin-top: 4px; font-family: var(--display); font-size: 16px; font-weight: 700; }
+.c-sec span { font-family: var(--body); font-size: 12.5px; font-weight: 500; color: var(--muted); }
+.c-row { position: relative; z-index: 1; display: flex; gap: 12px; overflow-x: auto; overscroll-behavior-x: contain; margin: -4px -18px 0; padding: 4px 18px 6px; scrollbar-width: none; touch-action: pan-x pan-y; }
+.c-row::-webkit-scrollbar { display: none; }
+.c-game { flex: none; width: 96px; display: flex; flex-direction: column; align-items: stretch; gap: 7px; text-align: left; }
+.c-game .s-cover { position: relative; display: block; width: 96px; height: 128px; border-radius: 8px; overflow: hidden; background: var(--s2); box-shadow: 0 10px 24px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.08); transition: transform 0.12s var(--ease); }
+.c-game:active .s-cover { transform: scale(0.95); }
+.c-on { position: absolute; right: 5px; bottom: 5px; color: var(--green-l); filter: drop-shadow(0 1px 4px rgba(0, 0, 0, 0.8)); }
+.c-name { font-size: 12px; font-weight: 500; color: #cfd4de; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gv .folder { position: relative; z-index: 1; }
 </style>
