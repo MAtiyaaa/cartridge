@@ -32,8 +32,8 @@ export function themeFrom(accent, label = 'Custom') {
   };
 }
 export const THEMES = {
-  // Cartridge's own: signal red-orange on neutral greys (the default since 0.9)
-  cartridge: { label: 'Cartridge', grad: ['#3a3d44', '#1c1e23', '#15171b', '#101114', '#0b0c0e', '#1a1c20'], accent: ['#ef4b23', '#ff7a55', '#c7350f'], warm: '#ffb35c', neutral: true },
+  // Cartridge's own: white on neutral greys (the default since 0.9; white highlights, buttons and bars since 0.9.2)
+  cartridge: { label: 'Cartridge', grad: ['#3a3d44', '#1c1e23', '#15171b', '#101114', '#0b0c0e', '#1a1c20'], accent: ['#ffffff', '#ffffff', '#d4d4d8'], bgAccent: ['#ef4b23', '#ff7a55'], warm: '#ffb35c', neutral: true },
   purple: { label: 'Purple', grad: ['#b16cf0', '#6a2fc2', '#4a1b92', '#2b0f5e', '#170838', '#3a1170'], accent: ['#8b74e8', '#a18fff', '#6043c8'], warm: '#e1a38d' },
   blue: { label: 'Blue', grad: ['#6fb2ff', '#2f5fd0', '#1f3f9e', '#122768', '#0a1538', '#16307a'], accent: ['#5b8cff', '#8fb1ff', '#3561d6'], warm: '#8fe3ff' },
   red: { label: 'Red', grad: ['#ff7a6b', '#c2302f', '#921c28', '#5e0f1a', '#33070d', '#701223'], accent: ['#f0616a', '#ff8f95', '#c23a44'], warm: '#ffc48f' },
@@ -93,14 +93,16 @@ export function applyTheme(uiOrName) {
   // fine-tuned colours on top of the theme: background, highlights, buttons and bars
   if (ok(col.background)) t = { ...t, grad: themeFrom(col.background).grad };
   const r = document.documentElement.style;
-  const [a, al, ad] = ok(col.highlight) ? themeFrom(col.highlight).accent : t.accent;
   const lum = (h) => { const [x, y, z] = hex2rgb(h); return (0.299 * x + 0.587 * y + 0.114 * z) / 255; };
+  // themeFrom turns white into grey (it clamps lightness), so near-white picks stay white
+  const accentOf = (c) => lum(c) > 0.85 ? [c, c, '#d4d4d8'] : themeFrom(c).accent;
+  const [a, al, ad] = ok(col.highlight) ? accentOf(col.highlight) : t.accent;
   if (ok(col.buttons)) {
-    const [b, bl, bd] = themeFrom(col.buttons).accent;
+    const [b, bl, bd] = accentOf(col.buttons);
     r.setProperty('--btn', `linear-gradient(120deg, ${bl} 0%, ${b} 55%, ${bd} 100%)`);
     r.setProperty('--on-btn', lum(b) > 0.6 ? '#141018' : '#ffffff');
   } else { r.removeProperty('--btn'); r.removeProperty('--on-btn'); }
-  if (ok(col.bars)) { const [b, bl] = themeFrom(col.bars).accent; r.setProperty('--bar', `linear-gradient(90deg, ${b}, ${bl})`); }
+  if (ok(col.bars)) { const [b, bl] = accentOf(col.bars); r.setProperty('--bar', `linear-gradient(90deg, ${b}, ${bl})`); }
   else r.removeProperty('--bar');
   document.body.classList.toggle('custom-bars', ok(col.bars));
   const surf = SURFACES[ui.surface] || SURFACES.solid;
@@ -115,18 +117,27 @@ export function applyTheme(uiOrName) {
   r.setProperty('--primary-d', ad);
   r.setProperty('--primary-rgb', rgb(a));
   r.setProperty('--primary-l-rgb', rgb(al));
-  r.setProperty('--primary-t', hsl(ah, 0.9, 0.86));
-  r.setProperty('--on-primary', hsl(ah, 0.5, 0.1));
+  const light = lum(a) > 0.75;
+  r.setProperty('--primary-t', light ? '#ffffff' : hsl(ah, 0.9, 0.86));
+  r.setProperty('--on-primary', light ? '#0c0d10' : hsl(ah, 0.5, 0.1));
+  r.setProperty('--knob', light ? '#0c0d10' : '#ffffff');
   r.setProperty('--peach', t.warm);
-  // 0.9: one flat accent, no gradients; focus is white everywhere (see docs/design.md)
+  // 0.9: one flat accent, no gradients. Focus (where you are) is white, or the Highlights colour
+  // when one is picked, with text that reads on it (0.9.2)
+  const fo = ok(col.highlight) ? a : '#ffffff', foLight = lum(fo) > 0.6;
   r.setProperty('--grad', `linear-gradient(${a}, ${a})`);
-  r.setProperty('--ring', '0 0 0 3px var(--s0), 0 0 0 6px #fff');
-  r.setProperty('--ring-soft', '0 0 0 2px #fff');
+  r.setProperty('--focus', fo);
+  r.setProperty('--on-focus', foLight ? '#0c0d10' : '#ffffff');
+  r.setProperty('--on-focus-dim', foLight ? 'rgba(12, 13, 16, 0.7)' : 'rgba(255, 255, 255, 0.75)');
+  r.setProperty('--ring', `0 0 0 3px var(--s0), 0 0 0 6px ${fo}`);
+  r.setProperty('--ring-soft', `0 0 0 2px ${fo}`);
   // surfaces: neutral greys, tinted a little towards the theme for the coloured themes
   const sh = rgb2hsl(...hex2rgb(g[2])), ss = t.neutral ? 0 : Math.min(0.16, sh[1] * 0.25);
   const surfL = surf.black ? [0, 0.055, 0.09, 0.14] : [0.05, 0.085, 0.12, 0.165];
   const S = surfL.map((l) => hsl(sh[0], ss, l));
   if (surf.bg && !surf.black && surf.glassA < 1) S[0] = surf.bg;
+  // chosen but not where you are: a lighter grey fill (0.9.2, replaces accent stripes)
+  r.setProperty('--sel', hsl(sh[0], ss, surf.black ? 0.22 : 0.26));
   S.forEach((c, i) => r.setProperty('--s' + i, surf.glassA < 1 && i ? `rgba(${rgb(c)}, ${surf.glassA})` : c));
   r.setProperty('--xmb', `radial-gradient(120% 90% at 85% 0%, ${g[0]} 0%, transparent 55%), radial-gradient(90% 80% at 0% 100%, ${g[5]} 0%, transparent 60%), linear-gradient(160deg, ${g[1]} 0%, ${g[2]} 38%, ${g[3]} 70%, ${g[4]} 100%)`);
   r.setProperty('--xmb-base', surf.black ? '#000' : g[4]);
@@ -158,7 +169,9 @@ export function paletteOf(ui) {
   let t = themeOf(ui);
   if (/^#[0-9a-f]{6}$/i.test(ui?.colors?.background || '')) t = { ...t, grad: themeFrom(ui.colors.background).grad };
   if (/^#[0-9a-f]{6}$/i.test(ui?.colors?.highlight || '')) t = { ...t, accent: themeFrom(ui.colors.highlight).accent };
-  return { accent: t.accent[0], light: t.accent[1], warm: t.warm, grad: t.grad, black: !!(SURFACES[ui?.surface] || {}).black };
+  // animated backgrounds keep the brand colour when the highlights are plain white
+  const [pa, pl] = !ui?.colors?.highlight && t.bgAccent ? t.bgAccent : t.accent;
+  return { accent: pa, light: pl, warm: t.warm, grad: t.grad, black: !!(SURFACES[ui?.surface] || {}).black };
 }
 // "Light effects" when the GPU is off (software rendering), unless the user picked otherwise
 export function lightEffects(ui, info) {

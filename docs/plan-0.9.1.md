@@ -1,6 +1,6 @@
 # Cartridge 0.9.1 notes
 
-Agreed list, built in 0.9.1. Items 6, 11, 13 and 14 moved to 0.9.2 (docs/plan-0.9.2.md).
+Agreed list, built in 0.9.1. Items 6, 11, 13 and 14 moved to 0.9.3 (docs/plan-0.9.3.md).
 
 ## Launch arguments
 1. Refresh the emulator database (`electron/emulators.js`) from the latest EmuDeck SRM parsers and Steam ROM Manager presets: those are tested on real Steam. Check an emulator's own source only where neither covers it (new forks) or the two disagree. Keep the special cases (shadPS4 Qt launcher `-d -g` and `eboot.bin`, xemu, Xenia, RPCS3, Vita3K, MAME, ares).
