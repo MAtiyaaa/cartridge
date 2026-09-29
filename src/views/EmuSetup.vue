@@ -61,6 +61,7 @@
           <div v-for="k in (c.using ? c.checks : []).filter((x) => x.level === 'bad' || x.level === 'warn')" :key="k.text" class="check" :class="k.level">
             <Icon :name="k.level === 'bad' ? 'mdiAlertCircle' : 'mdiAlert'" :size="18" /><span>{{ k.text }}</span>
             <button v-if="k.copy" class="btn small" data-focus @click="copy(k.copy)"><Icon name="mdiContentCopy" :size="16" />Copy the command</button>
+            <button v-if="k.bios && bios[c.key]" class="btn small" data-focus @click="getBios(c)"><Icon name="mdiChip" :size="16" />Get {{ bios[c.key] }} from RomM</button>
           </div>
         </template>
       </div>
@@ -71,7 +72,7 @@
 
 <script setup>
 import { computed, onMounted, onBeforeUnmount, ref, nextTick } from 'vue';
-import { call, toast, go, back, choose, pickFolder, store, romsOf, visiblePlatforms } from '../store.js';
+import { call, toast, go, choose, pickFolder, store, romsOf, visiblePlatforms, openModal, saveConfig } from '../store.js';
 import { addGame } from '../steam.js';
 import { useView } from '../useView.js';
 import { ensureFocus } from '../nav.js';
@@ -114,7 +115,22 @@ function state(c) {
   if (c.checks.some((x) => x.level === 'warn')) return { k: 'warn', t: 'Check' };
   return { k: 'ok', t: 'Ready' };
 }
-async function load() { try { ov.value = await call('setup:overview'); } catch (e) { toast(e.message, 'error'); } }
+async function load() {
+  try { ov.value = await call('setup:overview'); } catch (e) { toast(e.message, 'error'); return; }
+  // BIOS files your RomM server holds, for consoles missing theirs
+  for (const c of ov.value.consoles) {
+    if (!c.pid || !c.checks.some((k) => k.bios && k.level !== 'ok')) continue;
+    call('bios:list', { platformId: c.pid }).then((l) => { if (l?.length) bios.value = { ...bios.value, [c.key]: `${l.length} file${l.length === 1 ? '' : 's'}` }; }).catch(() => {});
+  }
+}
+const bios = ref({});
+// into your BIOS folder (Settings → Library), where EmuDeck and RetroArch setups look. Nothing is
+// copied into an emulator's own folders.
+async function getBios(c) {
+  if (!store.config.biosPath) return toast('Set your BIOS folder in Settings → Storage first.', 'info', 5000);
+  try { const r = await call('bios:download', { platformId: c.pid, slug: c.slug }); toast(`${r.files.filter((f) => !f.skipped).length} BIOS file${r.count === 1 ? '' : 's'} saved in ${r.dir}`, 'ok', 5000, 'mdiChip'); await load(); }
+  catch (e) { toast(e.message, 'error', 6000); }
+}
 async function scan(drives) {
   if (scanning.value) return;
   scanning.value = true; prog.value = null;
@@ -176,7 +192,11 @@ async function testOne(c) {
   if (!rom) return toast(`Download a ${c.platform} game first, then test with it.`, 'info', 4000);
   await addGame(rom);
 }
-async function finish() { await call('setup:done'); store.config.setupDone = Date.now(); go('home'); }
+async function finish() {
+  await call('setup:done'); store.config.setupDone = Date.now(); go('home');
+  // then the few controls worth knowing, once
+  if (!store.config.ui.toured) { await openModal('tour'); saveConfig({ ui: { toured: true } }); }
+}
 
 useView({ x: () => scan(), y: () => more(), ...(props.first ? { start: () => finish() } : {}) }, () => [{ b: 'A', label: 'Open' }, { b: 'X', label: 'Scan again' }, { b: 'Y', label: 'More' }, ...(props.first ? [{ b: 'START', label: 'Done' }] : [{ b: 'B', label: 'Back' }])]);
 onMounted(async () => {

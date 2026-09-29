@@ -1939,6 +1939,47 @@ const handlers08 = {
   'upload:start': (o) => uploadFile(o),
   'upload:cancel': ({ path: f }) => { uploads.get(f)?.abort.abort(); return true; },
 };
+// ---------------------------------------------------------------- 0.9: library check and repair
+// Every downloaded game checked against RomM's own record, the way a finished download is: sizes,
+// and md5/sha1 where RomM hashes the file itself (not zip/7z/rar/chd). Only reads: nothing is deleted
+// here; a damaged game is re-downloaded when you choose to.
+let verifyRun = null;
+async function verifyLibrary() {
+  if (verifyRun) return verifyRun.promise;
+  const ac = new AbortController();
+  const it = { abort: ac, currentFile: null };
+  verifyRun = { ac, promise: (async () => {
+    const ids = Object.keys(installedMap).map(Number).filter((id) => installedMap[id] && installedMap[id] !== MARKED);
+    const byId = romIndexMain();
+    const out = { checked: 0, damaged: [], skipped: 0 };
+    for (const [i, id] of ids.entries()) {
+      if (ac.signal.aborted) break;
+      const lr = byId.get(id);
+      broadcast('verify-progress', { done: i, total: ids.length, name: lr?.name || '' });
+      let rom;
+      try { rom = await api(`/api/roms/${id}`); } catch { out.skipped++; continue; }
+      const where = installedMap[id];
+      const files = (rom.files || []).slice();
+      const st = await fsp.stat(where).catch(() => null);
+      if (!st) { out.damaged.push({ romId: id, name: rom.name, why: 'Its files are gone' }); continue; }
+      // PS4/PS5 games unpacked from a zip can't be compared with the zip RomM has
+      if (isFolderSystem(rom) && files.length === 1 && /\.zip$/i.test(files[0].file_name) && st.isDirectory()) { out.skipped++; continue; }
+      const prefix = rom.full_path + '/';
+      const pairs = st.isDirectory() ? files.map((f) => [path.join(where, f.full_path.startsWith(prefix) ? f.full_path.slice(prefix.length) : f.file_name), f]) : [[where, files[0]]];
+      const bad = [];
+      for (const [file, f] of pairs) {
+        try { const r = await checkFile(file, f, it); if (r) bad.push([path.basename(file), r.why]); } catch (e) { if (ac.signal.aborted) break; }
+      }
+      out.checked++;
+      if (bad.length) out.damaged.push({ romId: id, name: rom.name, why: bad[0][1] === 'missing' ? `${bad[0][0]} is missing` : `${bad[0][0]} doesn't match RomM's record`, files: bad.length });
+    }
+    broadcast('verify-progress', null);
+    out.cancelled = ac.signal.aborted;
+    return out;
+  })().finally(() => { verifyRun = null; }) };
+  return verifyRun.promise;
+}
+
 // ---------------------------------------------------------------- 0.9: Setup, shortcut health, per-game emulator
 const handlers09 = {
   'setup:overview': () => steamMgr.setupOverview(),
@@ -1947,7 +1988,24 @@ const handlers09 = {
   'setup:use': ({ key, file, as, args }) => steamMgr.useFile(key, file, { as, args }),
   'setup:report': () => steamMgr.setupReport(),
   'setup:done': () => { config.setupDone = Date.now(); saveConfig(); return true; },
+  // a game's manual (PDF) from RomM, kept in manuals/ so it opens offline next time
+  'rom:manual': async ({ romId }) => {
+    const dir = path.join(USER_DATA, 'manuals'), f = path.join(dir, `${Number(romId)}.pdf`);
+    if (fs.existsSync(f)) return fs.readFileSync(f);
+    const rom = await api(`/api/roms/${Number(romId)}`);
+    if (!rom.path_manual) throw new Error('RomM has no manual for this game.');
+    const base = await resolveBase();
+    const r = await fetch(`${base}/assets/romm/resources/${String(rom.path_manual).split('/').map(encodeURIComponent).join('/')}`, { headers: authHeaders() });
+    if (!r.ok) throw new Error(`RomM could not send the manual (error ${r.status})`);
+    const buf = Buffer.from(await r.arrayBuffer());
+    await fsp.mkdir(dir, { recursive: true });
+    fs.writeFileSync(f, buf);
+    return buf;
+  },
+  'library:verify': () => verifyLibrary(),
+  'library:verifyCancel': () => { verifyRun?.ac.abort(); return true; },
   'steam:health': () => steamMgr.health(),
+  'steam:consoleCollections': () => steamMgr.syncConsoleCollections(),
   'steam:healthFix': ({ appids }) => steamMgr.healthFix(appids || []),
   'steam:moved': () => steamMgr.movedEmulators(),
   'steam:gameEmu': ({ romId }) => ({ current: steamMgr.gameEmu(romId), key: steamMgr.forRom(romId).console }),

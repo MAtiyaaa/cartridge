@@ -50,6 +50,7 @@
         <Toggle :model-value="sc.preview !== false" label="Show what changes first" desc="See every Target, Start in and Launch options before Steam is touched" @update:model-value="(v) => setC({ preview: v })" />
         <Toggle :model-value="!!sc.autoAdd" label="Add games after they download" desc="Queues each finished download for Steam, using that console's last collections" @update:model-value="(v) => setC({ autoAdd: v })" />
         <Toggle :model-value="!!sc.autoRemove" label="Remove games from Steam when you delete them" desc="Only shortcuts Cartridge added" @update:model-value="(v) => setC({ autoRemove: v })" />
+        <Toggle :model-value="!!sc.consoleCollections" label="Console collections in Steam" desc="Games Cartridge adds also go into a Steam collection named after their console. Your Cartridge collections are never copied into Steam." @update:model-value="setConsoleCols" />
         <div class="row"><span class="lbl">Console in names</span><div class="seg"><button v-for="m in nameOpts" :key="m.v" data-focus :class="{ on: (sc.consoleInName || 'clash') === m.v }" @click="setC({ consoleInName: m.v })">{{ m.l }}</button></div></div>
         <p class="muted small" style="margin-top: -6px">"Only on clashes" adds the console, like "God of War (PS2)", when two games share a name.</p>
 
@@ -118,6 +119,16 @@ async function refreshArt() {
   steam.busy = false; steam.progress = null;
 }
 async function setC(patch) { store.config.steam = await call('steam:setConfig', patch); }
+// turning console collections on: offer to sort the games already in Steam too
+async function setConsoleCols(v) {
+  await setC({ consoleCollections: v });
+  if (!v || !ov.value?.ours) return;
+  if (!(await confirm('Sort the games already in Steam?', `Puts the ${ov.value.ours} game${ov.value.ours === 1 ? '' : 's'} Cartridge added into their console's collection now.`, 'Sort them'))) return;
+  try {
+    const r = await call('steam:consoleCollections');
+    toast(r.count ? (r.live ? `${r.count} games sorted into console collections` : `${r.count} games will be sorted when Steam restarts`) : 'They were already in their console collections', 'ok', 4000, 'mdiSteam');
+  } catch (e) { toast(e.message, 'error'); }
+}
 async function apply() { if (await applyChanges()) load(); }
 async function clearQueue() { steam.queue = await call('steam:queueClear'); load(); }
 // console logo: RomM's icon for the platform of any of its games

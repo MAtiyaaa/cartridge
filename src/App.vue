@@ -53,6 +53,8 @@
   <SteamEmu v-if="store.modal?.type === 'steam-emu'" :key="JSON.stringify(store.modal.props)" v-bind="store.modal.props" />
   <ArtPicker v-if="store.modal?.type === 'art'" :key="store.modal.props.query || ''" v-bind="store.modal.props" />
   <GameTimeline v-if="store.modal?.type === 'timeline'" v-bind="store.modal.props" />
+  <FirstTour v-if="store.modal?.type === 'tour'" />
+  <ManualViewer v-if="store.modal?.type === 'manual'" v-bind="store.modal.props" />
   <IdleScreen v-if="store.config?.configured" />
 
   <div class="pops">
@@ -73,7 +75,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, onBeforeUnmount, ref, watch, nextTick } from 'vue';
+import { computed, onMounted, onBeforeUnmount, ref, watch, nextTick, defineAsyncComponent } from 'vue';
 import { store, loadConfig, loadLibrary, loadArt, back, tab, go, call, toast, choose, builtinKb, askText, GRADE, activeTabs, TAB_DEFS } from './store.js';
 import { pushLayer, focusFirst } from './nav.js';
 import { setSoundEnabled, setSoundStyle, sfx } from './sfx.js';
@@ -92,6 +94,9 @@ import FolderPicker from './components/FolderPicker.vue';
 import Menu from './components/Menu.vue';
 import ArtPicker from './components/ArtPicker.vue';
 import GameTimeline from './components/GameTimeline.vue';
+import FirstTour from './components/FirstTour.vue';
+// the manual reader brings pdf.js: loaded the first time a manual opens, not at start
+const ManualViewer = defineAsyncComponent(() => import('./components/ManualViewer.vue'));
 import IdleScreen from './components/IdleScreen.vue';
 import SteamCollections from './components/SteamCollections.vue';
 import SteamPreview from './components/SteamPreview.vue';

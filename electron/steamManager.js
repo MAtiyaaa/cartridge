@@ -789,7 +789,9 @@ module.exports = function createSteamManager(ctx) {
       entries.push({
         romId: g.rom.id, console: g.key, sig: sigOf(t, mode), name, exe, target, start, lo: launch, directLo: lo, directExe: t.exe, directStart: t.start, appid, how: t.how, from: t.from, fallback, emu: t.emu || null,
         proton: /\.exe$/i.test(t.exe) ? (cfg().proton || 'proton_experimental') : null,
-        collections: a.collections || [],
+        // 0.9: console collections on: also the Steam collection named after its console. Only
+        // Steam's own collections: Cartridge (RomM) collections are never copied into Steam.
+        collections: [...new Set([...(a.collections || []), ...(cfg().consoleCollections ? [g.platform.display_name] : [])])],
       });
     }
     const removing = queue.remove.map((id) => ({ appid: id, name: reg[id]?.name || scs.find((s) => s.appid === id)?.name || String(id) }));
@@ -1120,7 +1122,7 @@ module.exports = function createSteamManager(ctx) {
     refreshLearned();
     const lib = ctx.getLibrary();
     const keys = new Map();
-    for (const p of lib?.platforms || []) { const k = keyOf(p.slug, p.fs_slug); if (!keys.has(k)) keys.set(k, { key: k, label: SHORT[k] || p.display_name, platform: p.display_name, slug: p.slug, fs_slug: p.fs_slug, games: 0 }); keys.get(k).games += (lib.roms[p.id] || []).length; }
+    for (const p of lib?.platforms || []) { const k = keyOf(p.slug, p.fs_slug); if (!keys.has(k)) keys.set(k, { key: k, label: SHORT[k] || p.display_name, platform: p.display_name, slug: p.slug, fs_slug: p.fs_slug, pid: p.id, games: 0 }); keys.get(k).games += (lib.roms[p.id] || []).length; }
     const consoles = [...keys.values()].map((c) => {
       const cands = candidates(c.key);
       const t = templateFor(c.key);
@@ -1264,6 +1266,33 @@ module.exports = function createSteamManager(ctx) {
     for (const [k, t] of Object.entries(cfg().templates || {})) if (t?.exe && !exists(t.exe)) gone.set(t.exe, gone.get(t.exe) || 0);
     return [...gone.entries()].map(([exe, n]) => ({ exe: shortPath(exe), shortcuts: n }));
   }
+  // Console collections turned on: put the games Cartridge already added into the Steam collection
+  // named after their console (live when Steam can be reached, else the helper next time Steam closes)
+  async function syncConsoleCollections() {
+    const env = environment();
+    if (!env.account) throw new Error('Steam was not found.');
+    const byRom = new Map(installedGames().map((g) => [g.rom.id, g]));
+    const have = new Set(readShortcuts(env.account).map((s) => s.appid >>> 0));
+    const collections = {};
+    for (const [id, r] of Object.entries(reg)) {
+      const g = byRom.get(r.romId);
+      if (!g || !(have.has(Number(id) >>> 0) || r.live)) continue;
+      const name = g.platform.display_name;
+      if ((r.collections || []).includes(name)) continue;
+      (collections[name] ||= []).push(Number(id) >>> 0);
+      r.collections = [...(r.collections || []), name];
+    }
+    const n = Object.values(collections).flat().length;
+    if (!n) return { count: 0 };
+    saveReg();
+    if (await live.available(env.account.root).catch(() => false)) {
+      for (const [name, ids] of Object.entries(collections)) for (const id of ids) await live.addToCollections(id, [name]).catch((e) => log('steam live console collection', e.message));
+      return { count: n, live: true };
+    }
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    runHelper('last', { id: stamp, stamp, add: [], remove: [], collections, restart: true, gamescope: !!ctx.isGamescope(), flatpakSteam: !!env.account.flatpak, shortcutsFile: files(env.account).shortcuts, cloudFile: files(env.account).cloud, backupDir: BACKUP_DIR, logFile: path.join(USER_DATA, 'steam-apply.log') });
+    return { count: n, steamWillRestart: steamRunning() };
+  }
   // A plain-text summary for bug reports: what was found and chosen, with personal details taken out
   function setupReport() {
     const o = setupOverview();
@@ -1327,7 +1356,7 @@ module.exports = function createSteamManager(ctx) {
     liveInfo: async () => { const env = environment(); if (!env.account) return { on: false, flag: false }; return { on: await live.available(env.account.root), flag: live.flagOn(env.account.root) }; },
     liveEnable: () => { const env = environment(); if (!env.account) throw new Error('Steam was not found.'); fs.writeFileSync(path.join(env.account.root, live.FLAG), ''); return true; },
     onDownloaded, onDeleted, lastStatus, writeScript, startupReport, forRom, fixCollections, played, playtime, steamRoots, refreshArt,
-    scanEmulators, setupOverview, confirm, useFile, health, healthFix, movedEmulators, setupReport, preflight: (key) => preflight(key, templateFor(key)),
+    scanEmulators, setupOverview, confirm, useFile, health, healthFix, movedEmulators, setupReport, syncConsoleCollections, preflight: (key) => preflight(key, templateFor(key)),
     candidatesFor: (key) => candidates(key).map((c) => ({ id: c.id, label: c.label, sub: shortPath(c.t.how === 'flatpak' ? c.t.from : c.t.exe) })),
     setGameEmu: (romId, id) => { const c = cfg(); c.gameEmus ||= {}; if (id) c.gameEmus[romId] = id; else delete c.gameEmus[romId]; ctx.saveConfig(); return true; },
     gameEmu: (romId) => (cfg().gameEmus || {})[romId] || null,

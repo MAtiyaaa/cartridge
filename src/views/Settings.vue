@@ -60,6 +60,7 @@
               <button class="btn small" data-focus @click="browseBios"><Icon name="mdiFolderOpen" :size="18" />Browse</button>
             </div>
             <StorageManager :key="storageKey" />
+            <LibraryCheck />
           </template>
 
           <template v-else-if="sec === 'folders'">
@@ -333,6 +334,7 @@ import Grade from '../components/Grade.vue';
 import Btn from '../components/Btn.vue';
 import SteamSettings from '../components/SteamSettings.vue';
 import StorageManager from '../components/StorageManager.vue';
+import LibraryCheck from '../components/LibraryCheck.vue';
 import RommUpload from '../components/RommUpload.vue';
 import ServerStatus from '../components/ServerStatus.vue';
 import ControllerTest from '../components/ControllerTest.vue';
