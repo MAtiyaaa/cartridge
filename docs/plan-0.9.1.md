@@ -1,24 +1,29 @@
 # Cartridge 0.9.1 notes
 
-Fixes for after 0.9.0, not built yet. The owner tests 0.9.0 at home first; anything found there is added here, then 0.9.1 is built from this list.
+Agreed list, not built yet.
 
-## Launch arguments (the main one)
-Detection only helps if Steam starts each emulator with the right arguments. 0.9.0 uses the arguments from EmuDeck's Steam ROM Manager parsers and SRM's presets (`electron/emulators.js`). Gaps:
+## Launch arguments
+1. Check every emulator's command-line options against its own source code (fullscreen, start a game directly and skip its menu, quit when the game closes). Fix any that changed. Name any whose source couldn't be reached instead of guessing.
+2. Arguments by version where an emulator changed its flags (PCSX2 old against new is the likely one), picked from the version Setup already reads (AppStream or `X-AppImage-Version`, `flatpak info`, file name). Unknown version: current flags.
+3. Clearer "Test with one game": pick a game that isn't in Steam yet, say which one to start, and what to do if it doesn't start.
+4. Type your own launch options (with `{ROM}`) straight from Emulator setup, for emulators Cartridge doesn't know.
 
-1. **Check every emulator's current command-line options against its source code.** For each emulator in `EMU`, confirm from its own source (not memory):
-   - fullscreen;
-   - start a game directly and skip its own menu or game list;
-   - quit when the game closes, where it offers that.
+## Fixes to 0.9.0
+5. Setup doesn't freeze the screen: reading inside AppImages and programs (xz unpacking, the strings search) moves to a background worker.
+6. Measure Home's full-width art without the GPU; a cheaper version under reduced effects if it costs too much.
+7. Re-downloading a damaged game downloads the new copy first, then replaces the old one.
+8. "Emulator for this game" updates only that game's shortcut, not the whole console.
+9. Existing users get a one-time "New: Emulator setup" prompt.
+10. A button (after you confirm) to give a Flatpak emulator access to your games folder. The copyable command stays.
+11. Review the screens the redesign didn't cover: Trophies and Achievements, Search, Quick Menu, keyboard, a console's page in Settings → Steam, the Steam changes preview, the idle screen, the second first-run step, and Emulator setup, Shortcut health and the manual reader at 1080p and 4K, with touch and mouse. Fix anything clipped or off the design system; layouts stay.
 
-   Fix any that changed. Where a source repository can't be reached from the session, say so rather than guess.
-2. **Arguments by version.** Where an emulator changed its flags between versions (PCSX2's old versions against today's is the likely one), add "from version X, use these arguments" to `EMU`. Pick with the version Setup already reads: AppStream or `X-AppImage-Version` inside the AppImage, `flatpak info`, or the file name. If the version is unknown, use the current flags.
-3. **Nothing tests a launch automatically.** Cartridge never launches emulators, so "Test with one game" (Emulator setup) stays the check. Make it clearer: after adding the test game, say which game to start in Steam and what to do if it doesn't start (Shortcut health, pick another emulator, or set your own arguments).
-4. **Emulators not in the database.** Today they get arguments from "which one does it behave like". Also offer typing your own arguments with `{ROM}` straight from Emulator setup, not only from the console page.
+## Housekeeping
+12. CLAUDE.md: the tests line; CI runs `npm test` before the build.
+13. Tests for Shortcut health, relinking, the per-game emulator and the library check move into `test/` where they don't need the app running.
+14. HANDOFF.md updated for 0.9.
 
-## Still open from 0.9
-- RetroDECK launching (detected and warned about today, not used).
-- Flatpak Steam starting emulators on the host (detected and warned about today).
-- AppImages packed with zstd or DwarFS: check on real files. DwarFS falls back to the file name.
+## Left out (owner's call)
+RetroDECK launching and Flatpak Steam launching stay as they are in 0.9.0 (detected, with a warning).
 
 ## From testing at home
 (add here)
