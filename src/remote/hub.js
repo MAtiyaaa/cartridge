@@ -205,3 +205,32 @@ export function batteryIcon(b) {
 export const pct = (d) => (d?.total ? Math.min(100, Math.round((d.received / d.total) * 100)) : 0);
 // an image from a specific device (cover of a download queued there)
 export const imgOn = (d, p) => (p && d?.token ? imgUrl(d, 'u=' + encodeURIComponent(p)) : '');
+
+// ------------------------------------------------------------- upload a file from this phone
+// Sent to the selected device in 8 MB pieces (fine through tunnels, resumes after a hiccup), then the
+// device passes it on to RomM. onSend gets the fraction sent to the device.
+export async function uploadFromPhone(id, file, platformId, onSend) {
+  const d = hub.devices[id];
+  if (!d?.token) throw new Error('Not connected to this device');
+  const h = { 'x-cart-token': d.token };
+  const req = async (p, opts) => {
+    const r = await fetch(`${baseOf(d)}/phone-upload/${p}`, { ...opts, headers: { ...h, ...(opts?.headers || {}) } });
+    const j = await r.json().catch(() => ({ ok: false, error: `Error ${r.status}` }));
+    if (!j.ok) throw new Error(j.error);
+    return j.data;
+  };
+  const up = await req('start', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: file.name, size: file.size, platformId }) });
+  const CH = 8 * 1024 * 1024;
+  let at = 0, tries = 0;
+  while (at < file.size) {
+    try {
+      const r = await req(`${up.id}?offset=${at}`, { method: 'PUT', body: file.slice(at, at + CH) });
+      at = r.received; tries = 0;
+      onSend?.(at / file.size);
+    } catch (e) {
+      if (++tries > 4) throw e;
+      await new Promise((r) => setTimeout(r, 1500 * tries)); // a dropped piece: try it again
+    }
+  }
+  return req(`${up.id}/finish`, { method: 'POST' });
+}

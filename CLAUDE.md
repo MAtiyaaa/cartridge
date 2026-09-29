@@ -135,4 +135,5 @@ Only when the owner asks. Bump `version` and `build.releaseInfo.releaseName` ("C
 - Upstream (abdu2304/cartridge) is merged with merge commits; where both sides built the same feature, upstream's version is kept.
 - Releases here publish from this repository (AppImage and a signed APK); versions follow this fork's own numbering.
 - Here the session opens the PR and MAtiyaaa merges it (the upstream owner's standing merge instruction applies to upstream).
+- Phone upload: `/phone-upload/start|<id>?offset=|<id>/finish` in `remote-server.js` (8 MB pieces into `phone-uploads/`, then the device's `upload:start`; the copy is deleted when RomM is done). Phones may `upload:start` only paths from `upload:list` or their own upload. Phone UI: `src/remote/UploadView.vue`.
 - Upstream releases are merged as their own fork version (abdu2304 0.7.0 became 0.7.3). `yauzl` and the other backend packages Android needs are listed in `NODE_DEPS` in `scripts/build-android.mjs`.
