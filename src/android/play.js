@@ -4,7 +4,7 @@ import { reactive, computed, watch, onScopeDispose } from 'vue';
 import { App } from '@capacitor/app';
 import { store, call, download, saveConfig, toast, choose, bytes, tab } from '../store.js';
 import { Native } from './native.js';
-import { EMUS, CONSOLES, BIOS, consoleKey, allPackages, candidatesFor, coreFor, planLaunch, familyOf, baseId, emuName } from './emulators.js';
+import { EMUS, CONSOLES, BIOS, consoleKey, allPackages, candidatesFor, coreFor, planLaunch, familyOf, baseId, emuName, serialOf } from './emulators.js';
 import { makeBundle, playablePath } from './bundle.js';
 
 const MARKED = '(marked as installed)';
@@ -30,7 +30,7 @@ export function scanEmulators(force = false) {
       for (const a of apps) {
         if (known.has(a.pkg)) continue;
         const fam = familyOf(a.pkg, a.label);
-        if (fam && EMUS[fam]) found[`${fam}~${a.pkg}`] = { pkg: a.pkg, activity: EMUS[fam].apps[0].activity, version: a.version || '', label: a.label, fork: true };
+        if (fam && EMUS[fam]) found[`${fam}~${a.pkg}`] = { pkg: a.pkg, activity: EMUS[fam].apps[0]?.activity || "", version: a.version || '', label: a.label, fork: true };
       }
       emus.found = found;
       emus.at = Date.now();
@@ -88,7 +88,7 @@ export function usePlay(g) {
     else if (busy) out.push({ key: 'rom', label: 'ROM', status: 'wait', text: d.status === 'queued' ? 'Queued to download' : `Downloading ${pct}%` });
     else out.push({ key: 'rom', label: 'ROM', status: 'bad', text: `Not on this device (${bytes(base?.fs_size_bytes || 0)})`, fix: { label: 'Download', auto: true, run: fixRom } });
     // Emulator
-    if (app.value) out.push({ key: 'emu', label: 'Emulator', status: 'ok', text: `${emuName(emuId.value, emus.found)}${core.value ? ' · ' + core.value : ''}${app.value.version ? ' ' + app.value.version : ''}`, change: cands.value.length > 1 || (CONSOLES[key.value].cores.length > 1 && !!core.value) });
+    if (app.value) out.push({ key: 'emu', label: 'Emulator', status: 'ok', text: `${emuName(emuId.value, emus.found)}${core.value ? ' · ' + core.value : ''}${app.value.version ? ' ' + app.value.version : ''}${planLaunch(emuId.value, app.value, { core: core.value, serial: serialOf(base?.fs_name, base?.name, installed.value) })?.openOnly ? ' · opens the app' : ''}`, change: cands.value.length > 1 || (CONSOLES[key.value].cores.length > 1 && !!core.value) });
     else out.push({ key: 'emu', label: 'Emulator', status: 'bad', text: `${EMUS[wanted.value].name} isn't installed`, fix: { label: `Get ${EMUS[wanted.value].name}`, auto: true, last: true, run: fixEmu } });
     // BIOS
     const b = con.value.bios && BIOS[con.value.bios];
@@ -177,8 +177,12 @@ export function usePlay(g) {
       if (!path) throw new Error('Cartridge couldn\'t find the game file inside its folder');
       const folder = key.value === 'ps3' && scan.folder && !/\.(iso|bin)$/i.test(path);
       if (folder) path = installed.value;
-      const plan = planLaunch(emuId.value, app.value, { core: core.value, folder });
-      await Native.launchGame({ ...plan, path });
+      const plan = planLaunch(emuId.value, app.value, { core: core.value, folder, serial: serialOf(g.base()?.fs_name, g.base()?.name, installed.value) });
+      if (plan.openOnly) {
+        // this emulator can't be told which game (or needs a title ID this game doesn't carry): open it
+        await Native.openApp({ pkg: plan.pkg });
+        toast(`Opened ${emuName(emuId.value, emus.found)}. Pick the game inside it.`, 'info', 5000, 'mdiOpenInNew');
+      } else await Native.launchGame({ ...plan, path });
     } catch (e) { toast(e.message, 'error', 6500); }
     st.launching = false;
   }

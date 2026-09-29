@@ -335,7 +335,7 @@ export function collections() { return (store.libVersion, store.lib?.collections
 export function allCollections() { return [...collections(), ...autoCollections()]; }
 export const autoLists = () => autoCollections().filter((c) => !c.series);
 export const seriesLists = () => autoCollections().filter((c) => c.series);
-export function collectionById(id) { return allCollections().find((c) => c.id === id); }
+export function collectionById(id) { return allCollections().find((c) => c.id === id) || genres().find((g) => g.id === id); } // a genre is a list of games too (the second screen shows it like one)
 export function romsOfCollection(id) {
   const c = collectionById(id);
   // each game once, even if the collection lists it twice

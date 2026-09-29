@@ -20,6 +20,7 @@ export function publish() {
     else if (focused.collectionId) st.collectionId = focused.collectionId;
     else if (r.name === 'platform') st.platformId = Number(p.platformId);
     else if (r.name === 'collection') st.collectionId = p.collectionId;
+    else if (r.name === 'genre') st.collectionId = 'genre-' + p.genre;
     st.seq = Date.now() * 1000 + (++seq % 1000); // requests can arrive out of order: the newest wins (second screen showed an older game)
     st.family = padKind.value; // touch buttons are drawn for the controller used here
     Object.assign(st, extras());
@@ -46,7 +47,8 @@ export function startPublisher({ extra, onCmd } = {}) {
     if (c.tab) return c.tab === 'search' ? go('search') : tab(c.tab);
     if (c.open && c.romId) go('game', { romId: c.romId });
     if (c.open && c.platformId) go('platform', { platformId: c.platformId });
-    if (c.open && c.collectionId) go('collection', { collectionId: c.collectionId });
+    if (c.open && typeof c.collectionId === 'string' && c.collectionId.startsWith('genre-')) go('genre', { genre: c.collectionId.slice(6) });
+    else if (c.open && c.collectionId) go('collection', { collectionId: c.collectionId });
     onCmd?.(c);
   });
 

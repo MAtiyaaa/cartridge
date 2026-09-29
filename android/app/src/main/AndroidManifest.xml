@@ -53,10 +53,17 @@
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.LAUNCHER" />
         </intent>
+        <package android:name="Ali.Xanite" />
+        <package android:name="Ali.Xanite.green" />
         <package android:name="aenu.aps3e" />
         <package android:name="aenu.aps3e.premium" />
+        <package android:name="aenu.ax360e" />
+        <package android:name="aenu.ax360e.free" />
         <package android:name="com.armsx2" />
         <package android:name="com.armsx2.nightly" />
+        <package android:name="com.armsx3" />
+        <package android:name="com.bachatas4.android" />
+        <package android:name="com.bachatas4.android.github" />
         <package android:name="com.dsemu.drastic" />
         <package android:name="com.emulator.fpse64" />
         <package android:name="com.epsxe.ePSXe" />
@@ -67,12 +74,20 @@
         <package android:name="com.flycast.emulator" />
         <package android:name="com.github.stenzek.duckstation" />
         <package android:name="com.hydra.noods" />
+        <package android:name="com.nanodata.armsx" />
         <package android:name="com.panda3ds.pandroid" />
         <package android:name="com.retroarch" />
         <package android:name="com.retroarch.aarch64" />
         <package android:name="com.retroarch.ra32" />
+        <package android:name="com.rfandango.haku_x" />
+        <package android:name="com.sbro.emucorec" />
+        <package android:name="com.sbro.emucorev" />
+        <package android:name="com.sbro.emucorex" />
+        <package android:name="com.seleuco.mame4droid" />
+        <package android:name="com.sky.SkyEmu" />
         <package android:name="com.virtualapplications.play" />
         <package android:name="come.nanodata.armsx2" />
+        <package android:name="come.nanodata.armsx2.debug" />
         <package android:name="dev.eden.eden_emulator" />
         <package android:name="dev.legacy.eden_emulator" />
         <package android:name="info.cemu.Cemu" />
@@ -88,6 +103,7 @@
         <package android:name="me.magnum.melondualds" />
         <package android:name="org.azahar_emu.azahar" />
         <package android:name="org.citra.citra_emu" />
+        <package android:name="org.citra.emu" />
         <package android:name="org.devmiyax.yabasanshioro2" />
         <package android:name="org.devmiyax.yabasanshioro2.pro" />
         <package android:name="org.dolphinemu.dolphinemu" />
@@ -98,7 +114,9 @@
         <package android:name="org.mupen64plusae.v3.fzurita.pro" />
         <package android:name="org.ppsspp.ppsspp" />
         <package android:name="org.ppsspp.ppssppgold" />
+        <package android:name="org.vita3k.emulator" />
         <package android:name="skyline.emu" />
+        <package android:name="xendroid.compose" />
         <package android:name="xyz.aethersx2.android" />
         <package android:name="xyz.aethersx2.cturnip" />
         <package android:name="xyz.aethersx2.tturnip" />
