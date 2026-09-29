@@ -24,7 +24,7 @@
 
           <div v-if="summary" class="sum">
             <p class="summary" :class="{ open: bioOpen }">{{ summary }}</p>
-            <button v-if="summary.length > 160" class="more" @click="bioOpen = !bioOpen">{{ bioOpen ? 'Show less' : 'Show more' }}<Icon :name="bioOpen ? 'mdiChevronUp' : 'mdiChevronDown'" :size="16" /></button>
+            <button class="more" :class="{ hide: summary.length <= 160 }" @click="bioOpen = !bioOpen">{{ bioOpen ? 'Show less' : 'Show more' }}<Icon :name="bioOpen ? 'mdiChevronUp' : 'mdiChevronDown'" :size="16" /></button>
           </div>
 
           <!-- pinned above the dock: Open and Download are always on screen -->
@@ -43,60 +43,30 @@
         </section>
 
         <!-- Console -->
-        <!-- Console (0.9.7): laid out like a game, the console's wordmark leads and its name sits small below -->
-        <section v-else-if="tab === 'game' && selPlat" :key="'p' + selPlat.id" class="view gv" data-scroll :style="{ '--p': gvP, '--sy': gvY }" @scroll.passive="gvScroll">
-          <div class="hero gv-hero"><Art v-if="platArt" class="fill" :src="platArt.src" :blur="platArt.blur" /><div class="hero-shade" /></div>
-          <div class="gv-head">
-            <div class="gv-main">
-              <div class="gv-logo">
-                <img v-if="sysLogo && !sysBad" class="sys-mark" :src="sysLogo" :alt="selPlat.display_name" @error="sysBad = true" />
-                <div v-else class="t-title">{{ selPlat.display_name || selPlat.name }}</div>
-              </div>
-              <div v-if="sysLogo && !sysBad" class="gv-name">{{ selPlat.display_name || selPlat.name }}</div>
-              <div class="meta">
-                <span>{{ selPlat.rom_count || 0 }} {{ selPlat.rom_count === 1 ? 'game' : 'games' }}</span>
-                <span v-if="platOnDevice" class="chip green">{{ platOnDevice }} on this device</span>
-              </div>
-            </div>
-            <div v-if="platStrip.length" class="fan"><Art v-for="(r, i) in platStrip.slice(0, 3)" :key="r.id" class="fan-c" :src="r.src" :style="{ '--i': i, '--n': Math.min(3, platStrip.length) }" /></div>
+        <!-- Console, collection, series, genre (0.9.9): one full screen, no scrolling. The art fills it, three
+             covers stand in the middle, the logo (console wordmark or series logo) or name sits below them, and
+             Open is pinned where a game's Open is. -->
+        <section v-else-if="tab === 'game' && group" :key="group.key" class="view gx">
+          <div class="gx-bg"><Art v-if="group.art" class="fill" :src="group.art.src" :blur="group.art.blur" /></div>
+          <div class="gx-shade" />
+          <div class="gx-fan">
+            <Art v-for="(r, i) in group.covers" :key="r.id" class="gx-c" :src="r.src" :style="{ '--i': i - (group.covers.length - 1) / 2 }" @click="cmd({ open: true, romId: r.id })" />
           </div>
-          <template v-if="platStrip.length">
-            <div class="c-sec">Games<span>{{ platOnDevice ? 'on this device first' : '' }}</span></div>
-            <div class="c-row">
-              <button v-for="r in platStrip" :key="r.id" class="c-game" @click="cmd({ open: true, romId: r.id })">
-                <span class="s-cover"><Art class="fill" :src="r.src" /><Icon v-if="r.on" class="c-on" name="mdiCheckCircle" :size="16" /></span>
-                <span class="c-name">{{ r.name }}</span>
-              </button>
+          <div class="gx-info">
+            <div class="eyebrow row"><Icon :name="group.icon" :size="14" />{{ group.kind }}</div>
+            <div class="gx-logo">
+              <GameLogo v-if="group.series" :logo="group.seriesLogo" :name="group.name" cls="t-title" :area="22000" :max-w="340" :max-h="104" fixed />
+              <img v-else-if="group.logo && !logoBad" class="gx-mark" :src="group.logo" :alt="group.name" @error="logoBad = true" />
+              <div v-else class="t-title">{{ group.name }}</div>
             </div>
-          </template>
-          <div class="gv-acts"><div class="acts"><button class="pill primary" @click="cmd({ open: true, platformId: selPlat.id })"><Icon name="mdiOpenInNew" :size="19" />Open {{ selPlat.display_name || selPlat.name }}</button></div></div>
-        </section>
-
-        <!-- Collection, series, genre, favourites (0.9.7): the same layout as a game, covers fanned beside the title -->
-        <section v-else-if="tab === 'game' && selColl" :key="'c' + selColl.id" class="view gv" data-scroll :style="{ '--p': gvP, '--sy': gvY }" @scroll.passive="gvScroll">
-          <div class="hero gv-hero"><Art v-if="collArt" class="fill" :src="collArt.src" :blur="collArt.blur" /><div class="hero-shade" /></div>
-          <div class="gv-head">
-            <div class="gv-main">
-              <div class="eyebrow row"><Icon :name="collIcon" :size="14" />{{ collKind }}</div>
-              <div class="t-title">{{ selColl.name }}</div>
-              <div class="meta">
-                <span>{{ collCount }} {{ collCount === 1 ? 'game' : 'games' }}</span>
-                <span v-if="collOnDevice" class="chip green">{{ collOnDevice }} on this device</span>
-              </div>
+            <div v-if="(group.series && group.seriesLogo) || (group.logo && !logoBad)" class="gv-name">{{ group.name }}</div>
+            <div class="meta">
+              <span>{{ group.count }} {{ group.count === 1 ? 'game' : 'games' }}</span>
+              <span v-if="group.onDevice" class="chip green">{{ group.onDevice }} on this device</span>
+              <span v-if="group.desc" class="gx-desc">{{ group.desc }}</span>
             </div>
-            <div v-if="collStrip.length" class="fan"><Art v-for="(r, i) in collStrip.slice(0, 3)" :key="r.id" class="fan-c" :src="r.src" :style="{ '--i': i, '--n': Math.min(3, collStrip.length) }" /></div>
           </div>
-          <p v-if="collDesc" class="summary">{{ collDesc }}</p>
-          <template v-if="collStrip.length">
-            <div class="c-sec">Games<span>{{ collOnDevice ? 'on this device first' : '' }}</span></div>
-            <div class="c-row">
-              <button v-for="r in collStrip" :key="r.id" class="c-game" @click="cmd({ open: true, romId: r.id })">
-                <span class="s-cover"><Art class="fill" :src="r.src" /><Icon v-if="r.on" class="c-on" name="mdiCheckCircle" :size="16" /></span>
-                <span class="c-name">{{ r.name }}</span>
-              </button>
-            </div>
-          </template>
-          <div class="gv-acts"><div class="acts"><button class="pill primary" @click="cmd({ open: true, collectionId: selColl.id })"><Icon name="mdiOpenInNew" :size="19" />Open</button></div></div>
+          <div class="gv-acts"><div class="acts"><button class="pill primary" @click="cmd(group.open)"><Icon name="mdiOpenInNew" :size="19" />Open</button></div></div>
         </section>
 
         <!-- Nothing highlighted -->
@@ -270,15 +240,13 @@ const bioOpen = ref(false);
 
 // ---------------- highlighted console / collection
 const selPlat = computed(() => (!rom.value && store.companion.platformId ? platformById(store.companion.platformId) : null));
-const platOnDevice = computed(() => (selPlat.value ? romsOf(selPlat.value.id).filter((r) => store.installed[r.id]).length : 0));
 const selColl = computed(() => (!rom.value && !selPlat.value && store.companion.collectionId != null ? collectionById(store.companion.collectionId) : null));
-const collCount = computed(() => selColl.value?.rom_ids?.length || selColl.value?.rom_count || 0);
-// Console banner: the console's own colours, like its tile on the top screen
+// A console's white wordmark, fetched once per console
 const sysLogos = new Map();
 const sysLogo = ref('');
-const sysBad = ref(false);
+const logoBad = ref(false);
 watch(selPlat, (p) => {
-  sysLogo.value = ''; sysBad.value = false;
+  sysLogo.value = '';
   if (!p) return;
   if (sysLogos.has(p.slug)) { sysLogo.value = sysLogos.get(p.slug); return; }
   call('syslogo:get', { slug: p.slug, fs_slug: p.fs_slug }).then((u) => { sysLogos.set(p.slug, u || ''); if (selPlat.value?.slug === p.slug) sysLogo.value = u || ''; }).catch(() => {});
@@ -291,21 +259,22 @@ function groupArt(roms) {
   const first = roms.find((r) => cover(r, true));
   return first ? { src: cover(first, true), blur: true } : null;
 }
-// A few covers to tap, games on this device first
-function strip(roms) {
-  return [...roms].sort((a, b) => (store.installed[b.id] ? 1 : 0) - (store.installed[a.id] ? 1 : 0)).filter((r) => cover(r)).slice(0, 14)
-    .map((r) => ({ id: r.id, name: r.name, src: cover(r), on: !!store.installed[r.id] }));
-}
-const platRoms = computed(() => (selPlat.value ? romsOf(selPlat.value.id) : []));
-const platArt = computed(() => groupArt(platRoms.value));
-const platStrip = computed(() => strip(platRoms.value));
-const collRoms = computed(() => (selColl.value ? romsOfCollection(selColl.value.id) : []));
-const collArt = computed(() => groupArt(collRoms.value));
-const collStrip = computed(() => strip(collRoms.value));
-const collOnDevice = computed(() => (selColl.value ? romsOfCollection(selColl.value.id).filter((r) => store.installed[r.id]).length : 0));
-const collKind = computed(() => { const c = selColl.value; return !c ? '' : c.favorite ? 'Favourites' : c.genre ? 'Genre' : c.series ? 'Series' : c.auto ? 'Made by Cartridge' : c.smart ? 'Smart collection' : 'Collection'; });
-const collIcon = computed(() => { const c = selColl.value; return !c ? '' : c.favorite ? 'mdiStar' : c.genre ? 'mdiShape' : c.series ? 'mdiLayersTriple' : c.smart ? 'mdiAutoFix' : c.icon || 'mdiBookmarkMultipleOutline'; });
-const collDesc = computed(() => (selColl.value && !selColl.value.series ? selColl.value.description || '' : ''));
+// The highlighted console or collection as one thing to draw: its three covers (games on this device
+// first), its logo (a console's wordmark; a series uses its first game's logo, like its tile on Home)
+const group = computed(() => {
+  const p = selPlat.value, c = selColl.value;
+  if (!p && !c) return null;
+  const roms = p ? romsOf(p.id) : romsOfCollection(c.id);
+  const covers = [...roms].sort((a, b) => (store.installed[b.id] ? 1 : 0) - (store.installed[a.id] ? 1 : 0)).filter((r) => cover(r)).slice(0, 3).map((r) => ({ id: r.id, src: cover(r) }));
+  const common = { art: groupArt(roms), covers, onDevice: roms.filter((r) => store.installed[r.id]).length };
+  if (p) return { ...common, key: 'p' + p.id, sys: true, name: p.display_name || p.name, kind: 'Console', icon: 'mdiGamepadSquareOutline', logo: sysLogo.value, count: p.rom_count || roms.length, open: { open: true, platformId: p.id } };
+  const first = c.series ? romById(c.rom_ids?.[0]) : null;
+  return { ...common, key: 'c' + c.id, series: !!c.series, name: c.name, count: c.rom_ids?.length || c.rom_count || 0, open: { open: true, collectionId: c.id },
+    kind: c.favorite ? 'Favourites' : c.genre ? 'Genre' : c.series ? 'Series' : c.auto ? 'Made by Cartridge' : c.smart ? 'Smart collection' : 'Collection',
+    icon: c.favorite ? 'mdiStar' : c.genre ? 'mdiShape' : c.series ? 'mdiLayersTriple' : c.smart ? 'mdiAutoFix' : c.icon || 'mdiBookmarkMultipleOutline',
+    seriesLogo: first && store.config.ui.logos !== false ? logoOf(first) : null, desc: c.series ? '' : c.description || '' };
+});
+watch(() => group.value?.key, () => (logoBad.value = false));
 const coverSrc = computed(() => rom.value && cover(rom.value, true));
 // Scrolling the game view: the art drifts slower than the page and fades, the logo and box art ease back
 const gvEl = ref(null), gvY = ref(0), gvP = ref(0);
@@ -315,7 +284,7 @@ function gvScroll(e) {
   if (gvRaf) return;
   gvRaf = requestAnimationFrame(() => { gvRaf = 0; gvY.value = Math.round(t.scrollTop); gvP.value = Math.min(1, t.scrollTop / 220).toFixed(3); });
 }
-watch(() => [rom.value?.id, selPlat.value?.id, selColl.value?.id].join(), () => { gvY.value = 0; gvP.value = 0; });
+watch(() => rom.value?.id, () => { gvY.value = 0; gvP.value = 0; });
 const gameLogo = computed(() => (rom.value && store.config.ui.logos !== false ? logoOf(rom.value) : null));
 const hero = computed(() => rom.value && backdropOf(detail.value ? { ...rom.value, shot: detail.value.merged_screenshots?.[0] || rom.value.shot } : rom.value));
 const heroSrc = computed(() => hero.value?.src || '');
@@ -517,26 +486,30 @@ html, body { touch-action: pan-x pan-y; }
 .gv-name { font-size: 12.5px; font-weight: 600; color: rgba(255, 255, 255, 0.62); letter-spacing: 0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .gv .gv-cover { position: relative; flex: none; width: 112px; height: 152px; border-radius: 10px; background: var(--s2); box-shadow: 0 18px 40px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.14); transform: translate3d(0, calc(var(--sy, 0) * -0.12px), 0) scale(calc(1 - var(--p, 0) * 0.08)); transform-origin: 100% 100%; animation: gv-in 0.42s var(--ease) both; }
 @keyframes gv-in { from { opacity: 0; transform: translate3d(18px, 0, 0) scale(0.94); } }
-.gv .sum { position: relative; z-index: 1; }
-.gv-acts { position: sticky; bottom: 0; z-index: 3; margin-top: auto; display: flex; flex-direction: column; gap: 10px; padding: 16px 0 6px; background: linear-gradient(180deg, rgba(12, 13, 16, 0) 0%, var(--s0) 34%); }
+.gv .sum { position: relative; z-index: 1; margin-top: auto; }
+.gv .summary { min-height: calc(14px * 1.6 * 3); }
+.gv-acts { position: sticky; bottom: 0; z-index: 3; display: flex; flex-direction: column; gap: 10px; padding: 16px 0 6px; background: linear-gradient(180deg, rgba(12, 13, 16, 0) 0%, var(--s0) 34%); }
 .gv-acts .acts { flex-wrap: nowrap; }
 .gv-acts .pill { flex: 1; justify-content: center; min-width: 0; }
 
-/* Console and collection (0.9.7): the game view's layout. A console's wordmark leads like a game logo (white,
-   as on its tile) with the name small below; collections get their covers fanned where a game has its box art,
-   and a row of games to tap. Sizes are fixed (no aspect-ratio, older WebViews). */
-.sys-mark { display: block; height: 64px; width: auto; max-width: 100%; object-fit: contain; object-position: left bottom; filter: brightness(0) invert(1) drop-shadow(0 6px 22px rgba(0, 0, 0, 0.6)); }
-.gv-main .t-title { margin-top: 2px; }
-.fan { position: relative; z-index: 1; flex: none; width: 150px; margin-left: -8px; height: 152px; transform: translate3d(0, calc(var(--sy, 0) * -0.12px), 0); animation: gv-in 0.42s var(--ease) both; }
-.fan-c { position: absolute; right: calc(var(--i) * 22px); bottom: 0; width: 100px; height: 136px; border-radius: 9px; background: var(--s2); box-shadow: 0 16px 34px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.14); transform: rotate(calc((var(--i) - (var(--n) - 1) / 2) * -6deg)); transform-origin: 50% 100%; z-index: calc(10 - var(--i)); }
-.gv .summary { position: relative; z-index: 1; }
-.c-sec { position: relative; z-index: 1; display: flex; align-items: baseline; gap: 10px; margin-top: 4px; font-family: var(--display); font-size: 16px; font-weight: 700; }
-.c-sec span { font-family: var(--body); font-size: 12.5px; font-weight: 500; color: var(--muted); }
-.c-row { position: relative; z-index: 1; display: flex; gap: 12px; overflow-x: auto; overscroll-behavior-x: contain; margin: -4px -18px 0; padding: 4px 18px 6px; scrollbar-width: none; touch-action: pan-x pan-y; }
-.c-row::-webkit-scrollbar { display: none; }
-.c-game { flex: none; width: 96px; display: flex; flex-direction: column; align-items: stretch; gap: 7px; text-align: left; }
-.c-game .s-cover { position: relative; display: block; width: 96px; height: 128px; border-radius: 8px; overflow: hidden; background: var(--s2); box-shadow: 0 10px 24px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.08); transition: transform 0.12s var(--ease); }
-.c-game:active .s-cover { transform: scale(0.95); }
-.c-on { position: absolute; right: 5px; bottom: 5px; color: var(--green-l); filter: drop-shadow(0 1px 4px rgba(0, 0, 0, 0.8)); }
-.c-name { font-size: 12px; font-weight: 500; color: #cfd4de; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Console, collection, series, genre (0.9.9): one screen, nothing to scroll. The art fills it (shaded most at
+   the bottom where the words are), three covers stand in the middle, the logo or name sits below them, and
+   Open is where a game's Open is (the same .gv-acts). Covers have fixed sizes (older WebViews). */
+.gx { overflow: hidden; padding-bottom: 80px; gap: 0; }
+.gx-bg { position: absolute; inset: 0; z-index: -2; }
+.gx-bg .fill { transform: scale(1.04); }
+.gx-shade { position: absolute; inset: 0; z-index: -1; background: linear-gradient(180deg, rgba(12, 13, 16, 0.35) 0%, rgba(12, 13, 16, 0.2) 30%, rgba(12, 13, 16, 0.78) 62%, var(--s0) 92%); }
+.gx-fan { flex: 1 1 auto; min-height: 150px; position: relative; display: flex; align-items: center; justify-content: center; }
+.gx-c { position: absolute; top: 50%; left: 50%; width: 132px; height: 178px; margin: -89px 0 0 -66px; border-radius: 10px; background: var(--s2); box-shadow: 0 22px 44px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.14);
+  transform: translateX(calc(var(--i) * 92px)) translateY(calc(var(--i) * var(--i) * 10px)) rotate(calc(var(--i) * 7deg)) scale(calc(1 - var(--i) * var(--i) * 0.08)); z-index: calc(10 - var(--i) * var(--i));
+  animation: gx-in 0.44s var(--ease) both; }
+@keyframes gx-in { from { opacity: 0; transform: translateY(16px) scale(0.92); } }
+.gx-info { flex: none; position: relative; z-index: 2; display: flex; flex-direction: column; gap: 6px; padding-bottom: 6px; }
+.gx-logo { min-height: 34px; display: flex; align-items: flex-end; }
+.gx-logo :deep(.game-logo) { margin: 0; filter: drop-shadow(0 6px 22px rgba(0, 0, 0, 0.6)); }
+.gx-mark { display: block; height: 58px; width: auto; max-width: 100%; object-fit: contain; object-position: left bottom; filter: brightness(0) invert(1) drop-shadow(0 6px 22px rgba(0, 0, 0, 0.6)); }
+.gx-desc { color: var(--muted); }
+.gx .gv-acts { margin-top: 0; }
+.more.hide { visibility: hidden; } /* keeps its space, so Show more and Open never move */
+.inline-dl { position: absolute; left: 0; right: 0; bottom: calc(100% - 8px); padding: 10px 2px 0; background: linear-gradient(180deg, rgba(12, 13, 16, 0) 0%, var(--s0) 40%); } /* over the page, so the buttons stay put */
 </style>

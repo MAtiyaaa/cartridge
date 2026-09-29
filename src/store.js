@@ -21,6 +21,7 @@ export const store = reactive({
   toasts: [],
   modal: null,
   quickMenu: false,
+  battery: null, // { level, charging, toFull, toEmpty } from the WebView (App.vue), null on desktops
   lastSearch: '',
   logos: {},
   art: {},

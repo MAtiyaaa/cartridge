@@ -140,6 +140,10 @@ wrap('platforms:paths', async (list, orig) => {
 
 // ---------------------------------------------------------------- Android-only channels
 let loaded = false;
+// A manual is a Buffer, which the JSON bridge turns into { type, data: [...] }: the viewer read that as an
+// empty PDF and showed nothing. Send it as base64 instead.
+wrap('rom:manual', async (arg, orig) => { const b = await orig(); return { b64: Buffer.from(b).toString('base64') }; });
+
 handle('android:hello', (o = {}) => {
   if (o.w && o.h) state.size = [Math.round(o.w), Math.round(o.h)];
   const w = electron.__android.window();

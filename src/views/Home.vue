@@ -38,7 +38,9 @@
           </div>
           <div v-else-if="heroCol" :key="'c' + heroCol.id" class="hero-in">
             <div class="eyebrow">{{ heroCol.genre ? 'Genre' : heroCol.series ? 'Series' : heroCol.auto ? 'Made by Cartridge' : heroCol.smart ? 'Smart collection' : 'Collection' }}</div>
-            <h1 class="hero-title">{{ heroCol.name }}</h1>
+            <!-- a series leads with its first game's logo, like its tile -->
+            <GameLogo v-if="heroCol.series" :logo="store.config.ui.logos !== false ? logoOf(romById(heroCol.rom_ids[0])) : null" :name="heroCol.name" cls="hero-title" :area="32000" :max-w="420" :max-h="logoMaxH" />
+            <h1 v-else class="hero-title">{{ heroCol.name }}</h1>
             <div class="meta"><span>{{ heroCol.rom_ids.length }} games</span><span v-if="heroCol.description">{{ heroCol.description }}</span></div>
           </div>
           <div v-else key="welcome" class="hero-in">

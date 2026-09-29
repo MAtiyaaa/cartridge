@@ -11,7 +11,8 @@
           <div style="min-width: 0">
             <div v-if="mode !== 'platform'" class="eyebrow">{{ eyebrow }}</div>
             <div v-if="mode === 'platform'" class="eyebrow">{{ title }}</div>
-            <h1 :class="{ 'sys-mark': mode === 'platform' }"><ConsoleMark v-if="mode === 'platform'" :slug="platform.slug" :fs="platform.fs_slug" :label="title" /><template v-else>{{ title }}</template></h1>
+            <GameLogo v-if="mode === 'collection' && collection?.series && store.config.ui.logos !== false" class="head-logo" :logo="logoOf(romById(collection.rom_ids[0]))" :name="title" :area="9000" :max-w="360" :max-h="56" />
+            <h1 v-else :class="{ 'sys-mark': mode === 'platform' }"><ConsoleMark v-if="mode === 'platform'" :slug="platform.slug" :fs="platform.fs_slug" :label="title" /><template v-else>{{ title }}</template></h1>
             <div class="muted row" style="gap: 8px; font-size: 13px">
               <span>{{ source.length }} games</span><span>·</span><span style="color: var(--green-l)">{{ installedCount }} on device</span>
               <template v-if="mode === 'platform'"><span>·</span>
@@ -99,7 +100,7 @@
 
 <script setup>
 import { computed, onMounted, onBeforeUnmount, ref, nextTick, watch } from 'vue';
-import { store, go, back, platformById, romsOf, allRoms, collections, allCollections, collectionById, romsOfCollection, romsOfGenre, genres, visible, score, addToCollection, askText, pickFolder, call, download, toast, choose, confirm, bytes, year, isNew, cover, setBg, backdropOf, downloadFor, visiblePlatforms, romById } from '../store.js';
+import { logoOf, store, go, back, platformById, romsOf, allRoms, collections, allCollections, collectionById, romsOfCollection, romsOfGenre, genres, visible, score, addToCollection, askText, pickFolder, call, download, toast, choose, confirm, bytes, year, isNew, cover, setBg, backdropOf, downloadFor, visiblePlatforms, romById } from '../store.js';
 import { addGames } from '../steam.js';
 import { IS_ANDROID } from '../platform.js';
 // Android: Steam only when Settings → Android → Steam & PC game apps is on
@@ -110,6 +111,7 @@ import Icon from '../components/Icon.vue';
 import Btn from '../components/Btn.vue';
 import PIcon from '../components/PIcon.vue';
 import ConsoleMark from '../components/ConsoleMark.vue';
+import GameLogo from '../components/GameLogo.vue';
 import GameCard from '../components/GameCard.vue';
 
 const props = defineProps({ platformId: Number, collectionId: String, genre: String });
@@ -385,6 +387,7 @@ onMounted(async () => {
 .ph-head { display: flex; align-items: center; justify-content: space-between; gap: 20px; margin: 6px 0 14px; }
 .sys-switch { display: flex; align-items: center; gap: 16px; min-width: 0; }
 .sys-switch h1 { font-size: var(--t-xl); font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sys-switch .head-logo { margin: 4px 0 6px; }
 .sys-switch h1.sys-mark { font-size: 40px; line-height: 1; margin: 4px 0 6px; }
 .sys-switch h1.sys-mark :deep(.cmark) { height: 1em; max-width: min(360px, 100%); object-fit: contain; object-position: left center; opacity: 1; vertical-align: bottom; }
 .sys-switch h1.sys-mark :deep(.cmark-t) { font-size: var(--t-xl); }

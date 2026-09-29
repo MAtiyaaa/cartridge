@@ -4,6 +4,7 @@ import android.Manifest;
 import android.app.Presentation;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.graphics.Color;
@@ -15,6 +16,7 @@ import android.net.LinkProperties;
 import android.net.Network;
 import android.net.Uri;
 import android.net.wifi.WifiManager;
+import android.os.BatteryManager;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
@@ -83,6 +85,34 @@ public class CartridgeNativePlugin extends Plugin {
     private WifiManager.MulticastLock multicast;
 
     /** This device's IPv4 address on the current network (Node can't always read it on Android). */
+    // Battery details for the Quick Menu: level, charging and how, temperature, voltage, health, the current
+    // draw, and (Android 9+) the time to full. The WebView's battery API only has level and charging.
+    @PluginMethod
+    public void battery(PluginCall call) {
+        JSObject o = new JSObject();
+        try {
+            Intent b = getContext().registerReceiver(null, new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
+            if (b != null) {
+                int level = b.getIntExtra(BatteryManager.EXTRA_LEVEL, -1), scale = b.getIntExtra(BatteryManager.EXTRA_SCALE, 100);
+                o.put("level", level >= 0 && scale > 0 ? Math.round(level * 100f / scale) : -1);
+                int st = b.getIntExtra(BatteryManager.EXTRA_STATUS, -1);
+                o.put("status", st == BatteryManager.BATTERY_STATUS_CHARGING ? "charging" : st == BatteryManager.BATTERY_STATUS_FULL ? "full" : st == BatteryManager.BATTERY_STATUS_NOT_CHARGING ? "idle" : "discharging");
+                int pl = b.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0);
+                o.put("plugged", pl == BatteryManager.BATTERY_PLUGGED_AC ? "ac" : pl == BatteryManager.BATTERY_PLUGGED_USB ? "usb" : pl == BatteryManager.BATTERY_PLUGGED_WIRELESS ? "wireless" : "");
+                o.put("tempTenths", b.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, 0));
+                o.put("voltageMv", b.getIntExtra(BatteryManager.EXTRA_VOLTAGE, 0));
+                int h = b.getIntExtra(BatteryManager.EXTRA_HEALTH, 0);
+                o.put("health", h == BatteryManager.BATTERY_HEALTH_GOOD ? "good" : h == BatteryManager.BATTERY_HEALTH_OVERHEAT ? "overheating" : h == BatteryManager.BATTERY_HEALTH_DEAD ? "worn out" : h == BatteryManager.BATTERY_HEALTH_COLD ? "cold" : h == BatteryManager.BATTERY_HEALTH_OVER_VOLTAGE ? "over voltage" : "");
+            }
+            BatteryManager bm = (BatteryManager) getContext().getSystemService(Context.BATTERY_SERVICE);
+            if (bm != null) {
+                o.put("currentUa", bm.getIntProperty(BatteryManager.BATTERY_PROPERTY_CURRENT_NOW)); // microamps, sign varies by device
+                if (Build.VERSION.SDK_INT >= 28) o.put("toFullMs", bm.computeChargeTimeRemaining());
+            }
+        } catch (Exception ignored) {}
+        call.resolve(o);
+    }
+
     @PluginMethod
     public void wifiAddress(PluginCall call) {
         String ip = "";
