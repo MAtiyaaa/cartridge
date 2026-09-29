@@ -75,7 +75,7 @@
               <CollTile v-for="c in s.items" :key="c.id" :c="c" wide @open="openCol" @focused="focusCol" />
             </template>
             <template v-else>
-              <GameCard v-for="r in s.items" :key="r.id" :rom="r" :show-platform="true" :extra="s.sub ? s.sub(r) : ''" @open="openGame" @focused="focusRom" />
+              <GameCard v-for="r in s.items" :key="r.id" :rom="r" eager :show-platform="true" :extra="s.sub ? s.sub(r) : ''" @open="openGame" @focused="focusRom" />
             </template>
           </div>
         </div>
@@ -299,7 +299,7 @@ onMounted(async () => { await nextTick(); ensureFocus(el.value); });
 .hero-title { font-family: var(--display); font-stretch: var(--display-stretch); font-size: clamp(var(--t-2xl), 4.6vw, var(--t-3xl)); font-weight: 800; line-height: 1; letter-spacing: -0.02em; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .meta { display: flex; align-items: center; gap: var(--s-4); flex-wrap: nowrap; white-space: nowrap; overflow: hidden; min-width: 0; color: var(--text); font-size: var(--t-md); font-weight: 500; }
 .summary { margin: 0; max-width: 680px; color: var(--muted); line-height: 1.5; font-size: var(--t-md); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-.shelves { position: relative; overflow-y: auto; padding: var(--s-3) var(--s-7) 60vh; }
+.shelves { position: relative; overflow-y: auto; padding: var(--s-3) var(--s-7) var(--s-6); /* was 60vh: you could scroll into empty space past the last row */ }
 .shelf-wrap { margin-bottom: var(--s-4); }
 .shelf { padding: 22px var(--s-7) 18px; margin: -12px calc(-1 * var(--s-7)) 0; scroll-padding: 0 var(--s-7); }
 @media (max-width: 1400px) { .hero { padding-left: 36px; padding-right: 36px; } .hero-leave-active { left: 36px; } .shelves { padding-left: 36px; padding-right: 36px; } .shelf { padding-left: 36px; padding-right: 36px; margin-left: -36px; margin-right: -36px; scroll-padding: 0 36px; } }

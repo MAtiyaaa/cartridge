@@ -1,7 +1,7 @@
 <template>
   <button class="card" :class="{ picked: selected }" data-focus :data-key="'rom-' + rom.id" @click="$emit('open', rom)" @focus="onFocus">
     <div class="art">
-      <img v-if="src && !failed" :src="src" loading="lazy" decoding="async" @error="failed = true" />
+      <img v-if="src && !failed" :src="tries ? src + (src.includes('?') ? '&' : '?') + 'r=' + tries : src" :loading="eager ? 'eager' : 'lazy'" decoding="async" @error="onErr" />
       <div v-else class="ph">{{ rom.name }}<small>{{ rom.platform_display_name }}</small></div>
       <div class="shine" />
       <span v-if="fresh && !installed" class="chip new badge-new">NEW</span>
@@ -18,9 +18,12 @@
 import { computed, ref } from 'vue';
 import { store, cover, downloadFor, isNew } from '../store.js';
 import Icon from './Icon.vue';
-const props = defineProps({ rom: Object, showPlatform: Boolean, extra: String, hideTitle: Boolean, selected: { type: Boolean, default: null } });
+const props = defineProps({ rom: Object, showPlatform: Boolean, extra: String, hideTitle: Boolean, selected: { type: Boolean, default: null }, eager: Boolean });
 const emit = defineEmits(['open', 'focused']);
 const failed = ref(false);
+// On a cold start the image server can answer before it's ready: try twice more before showing the name
+const tries = ref(0);
+function onErr() { if (tries.value < 2) setTimeout(() => tries.value++, 1200 * (tries.value + 1)); else failed.value = true; }
 const src = computed(() => cover(props.rom));
 const installed = computed(() => !!store.installed[props.rom.id]);
 const fresh = computed(() => isNew(props.rom));

@@ -313,11 +313,13 @@ watch(viewKey, async () => {
   if (key) {
     for (let i = 0; i < 30; i++) {
       const el = root.querySelector(`[data-key="${CSS.escape(key)}"]`);
-      if (el) { el.focus({ preventScroll: true }); el.scrollIntoView({ block: 'center', inline: 'center' }); return; }
+      // centre it inside its own list; .main itself never scrolls (it did, and cut the Home banner in half)
+      if (el) { el.focus({ preventScroll: true }); el.scrollIntoView({ block: 'center', inline: 'center' }); root.scrollTop = 0; root.scrollLeft = 0; return; }
       await new Promise((r) => setTimeout(r, 50));
     }
   }
   focusFirst(root);
+  root.scrollTop = 0; root.scrollLeft = 0;
 });
 </script>
 

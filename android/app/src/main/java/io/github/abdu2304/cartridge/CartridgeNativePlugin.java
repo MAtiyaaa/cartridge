@@ -188,11 +188,14 @@ public class CartridgeNativePlugin extends Plugin {
             try {
                 Display d = secondary();
                 if (d == null) { call.reject("No second screen"); return; }
-                if (companion != null && companion.getDisplay().getDisplayId() == d.getDisplayId() && url.equals(companionUrl)) { call.resolve(); return; }
+                if (companion != null && companion.isShowing() && companion.getDisplay().getDisplayId() == d.getDisplayId() && url.equals(companionUrl)) { call.resolve(); return; }
                 hide();
                 companionUrl = url;
-                companion = new Companion(getActivity(), d, url);
-                companion.show();
+                final Companion c = new Companion(getActivity(), d, url);
+                companion = c;
+                // closed by the system (or anything else): forget it, so the next show opens it again
+                c.setOnDismissListener((x) -> { if (companion == c) { companion = null; companionUrl = null; } });
+                c.show();
                 call.resolve();
             } catch (Exception e) {
                 companion = null;
@@ -214,7 +217,8 @@ public class CartridgeNativePlugin extends Plugin {
     static class Companion extends Presentation {
         private final String url;
         private WebView web;
-        Companion(Context ctx, Display display, String url) { super(ctx, display); this.url = url; }
+        // A back gesture on the second screen used to close it for good; it stays until Cartridge hides it
+        Companion(Context ctx, Display display, String url) { super(ctx, display); this.url = url; setCancelable(false); }
 
         @Override
         protected void onCreate(Bundle b) {

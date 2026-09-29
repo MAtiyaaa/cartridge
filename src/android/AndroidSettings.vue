@@ -30,6 +30,8 @@
     <div class="subh"><Icon name="mdiMonitorScreenshot" :size="22" />Dual screen</div>
     <Toggle :model-value="opt('dualScreen')" label="Use the second screen" :desc="displays.secondary ? `Shows the highlighted game, your downloads and touch controls on ${displays.secondary.name || 'the second screen'}. Turn off to leave it free for other apps.` : 'No second screen found right now. On dual-screen devices like the AYN Thor, the bottom screen shows the highlighted game, your downloads and touch controls.'" @update:model-value="(v) => set({ dualScreen: v })" />
 
+    <Toggle :model-value="opt('heroBlend')" label="Blend the top bar with the art (preview)" desc="The top bar takes a deep shade of the game art on screen, and the art fades into it. A prototype: turn it off to go back to the plain bar." @update:model-value="(v) => set({ heroBlend: v })" />
+
     <div class="subh"><Icon name="mdiGamepadVariantOutline" :size="22" />Controller</div>
     <div class="row wrap"><span class="lbl">Button layout</span>
       <div class="seg">

@@ -64,7 +64,9 @@ function setup() {
   if (k === key && frame) return true;
   key = k;
   c.width = w; c.height = h;
-  ctx = c.getContext('2d', { alpha: true, desynchronized: true });
+  // not desynchronized on Android: the WebView then only shows a new frame when something else repaints,
+  // so the background stood still unless you tapped around
+  ctx = c.getContext('2d', { alpha: true, desynchronized: !ANDROID });
   frame = RENDERERS[mode.value](ctx, w, h, S, pal, light.value);
   return true;
 }

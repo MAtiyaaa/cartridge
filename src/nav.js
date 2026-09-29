@@ -88,11 +88,36 @@ function inScope(el, scope) { return el && scope.contains(el) && el.hasAttribute
 // Moving up and down keeps to the column you started in (a short item in between doesn't pull you
 // sideways); moving left or right sets a new column.
 let colX = null, colFrom = null;
+// Where focus last was. If a list re-renders under it (new downloads, play times, a sync) the element
+// can vanish; the next press then carries on from the same item, or the nearest one, instead of jumping
+// back to the first item on the page.
+let lastSpot = null;
+document.addEventListener('focusin', (e) => {
+  const el = e.target;
+  if (!el?.hasAttribute?.('data-focus')) return;
+  const r = el.getBoundingClientRect();
+  lastSpot = { key: el.dataset.key || '', x: r.left + r.width / 2, y: r.top + r.height / 2 };
+});
+function recoverFocus(scope) {
+  if (!lastSpot) return false;
+  let el = lastSpot.key ? scope.querySelector(`[data-key="${CSS.escape(lastSpot.key)}"]`) : null;
+  if (!el || !el.hasAttribute('data-focus')) {
+    let best = Infinity;
+    for (const [c, r] of focusables(scope, true)) {
+      const d = Math.hypot(r.left + r.width / 2 - lastSpot.x, r.top + r.height / 2 - lastSpot.y);
+      if (d < best) { best = d; el = c; }
+    }
+  }
+  if (!el) return false;
+  el.focus({ preventScroll: true });
+  scrollIntoViewSmart(el);
+  return true;
+}
 function move(dir) {
   const layer = topLayer();
   const scope = layer?.el || document.body;
   const cur = document.activeElement;
-  if (!inScope(cur, scope)) { focusFirst(scope); return; }
+  if (!inScope(cur, scope)) { if (!recoverFocus(scope)) focusFirst(scope); return; }
   const c = cur.getBoundingClientRect();
   const cx = c.left + c.width / 2, cy = c.top + c.height / 2;
   const vertical = dir === 'up' || dir === 'down';
