@@ -69,7 +69,6 @@
           </div>
           <div v-if="dl && dl.status === 'error'" class="chip red" style="align-self: flex-start">Last attempt failed: {{ dl.error }}</div>
           <div class="dest"><Icon name="mdiFolderArrowDownOutline" :size="16" /><span class="mono">{{ marked ? 'Marked as installed by you' : installedPath || target?.path || 'No folder set for this system' }}</span><span v-if="space" class="muted">· {{ bytes(space.free) }} free</span></div>
-          <component :is="ReadyToPlay" v-if="ReadyToPlay && ap?.supported" :ap="ap" />
         </div>
         <div class="g-cover">
           <img v-if="coverSrc && !coverFail" :src="coverSrc" @error="coverFail = true" />
@@ -79,7 +78,8 @@
 
       <section class="g-body">
         <div class="col">
-          <component :is="GameBundle" v-if="GameBundle && ap?.bundle.extras" :ap="ap" :name="base.name" style="margin-bottom: 22px" />
+          <component :is="ReadyToPlay" v-if="ReadyToPlay && ap?.supported" :ap="ap" />
+          <component :is="GameBundle" v-if="GameBundle && ap?.bundle.extras" :ap="ap" />
           <template v-if="summary">
             <div class="shelf-title"><Icon name="mdiTextBoxOutline" :size="20" />About</div>
             <p class="summary">{{ summary }}</p>
