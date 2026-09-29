@@ -53,6 +53,8 @@
   <SteamEmu v-if="store.modal?.type === 'steam-emu'" :key="JSON.stringify(store.modal.props)" v-bind="store.modal.props" />
   <ArtPicker v-if="store.modal?.type === 'art'" :key="store.modal.props.query || ''" v-bind="store.modal.props" />
   <GameTimeline v-if="store.modal?.type === 'timeline'" v-bind="store.modal.props" />
+  <FirstTour v-if="store.modal?.type === 'tour'" />
+  <ManualViewer v-if="store.modal?.type === 'manual'" v-bind="store.modal.props" />
   <IdleScreen v-if="store.config?.configured" />
 
   <div class="pops">
@@ -73,8 +75,8 @@
 </template>
 
 <script setup>
-import { computed, onMounted, onBeforeUnmount, ref, watch, nextTick } from 'vue';
-import { store, loadConfig, loadLibrary, loadArt, back, tab, go, call, toast, builtinKb, askText, GRADE, activeTabs, TAB_DEFS } from './store.js';
+import { computed, onMounted, onBeforeUnmount, ref, watch, nextTick, defineAsyncComponent } from 'vue';
+import { store, loadConfig, loadLibrary, loadArt, back, tab, go, call, toast, choose, builtinKb, askText, GRADE, activeTabs, TAB_DEFS } from './store.js';
 import { pushLayer, focusFirst } from './nav.js';
 import { setSoundEnabled, setSoundStyle, sfx } from './sfx.js';
 import { applyTheme, CARD_SIZES } from './themes.js';
@@ -92,6 +94,9 @@ import FolderPicker from './components/FolderPicker.vue';
 import Menu from './components/Menu.vue';
 import ArtPicker from './components/ArtPicker.vue';
 import GameTimeline from './components/GameTimeline.vue';
+import FirstTour from './components/FirstTour.vue';
+// the manual reader brings pdf.js: loaded the first time a manual opens, not at start
+const ManualViewer = defineAsyncComponent(() => import('./components/ManualViewer.vue'));
 import IdleScreen from './components/IdleScreen.vue';
 import SteamCollections from './components/SteamCollections.vue';
 import SteamPreview from './components/SteamPreview.vue';
@@ -113,8 +118,10 @@ import RaGame from './views/RaGame.vue';
 import TrophyGame from './views/TrophyGame.vue';
 import Genres from './views/Genres.vue';
 import Collections from './views/Collections.vue';
+import EmuSetup from './views/EmuSetup.vue';
+import ShortcutHealth from './views/ShortcutHealth.vue';
 
-const views = { achievements: Achievements, 'ra-game': RaGame, 'trophy-game': TrophyGame, home: Home, library: Gallery, consoles: Consoles, platform: Gallery, collection: Gallery, genre: Gallery, genres: Genres, collections: Collections, game: Game, downloads: Downloads, settings: Settings, search: Search, 'steam-console': SteamConsole, 'steam-missing': SteamMissing };
+const views = { achievements: Achievements, 'ra-game': RaGame, 'trophy-game': TrophyGame, home: Home, library: Gallery, consoles: Consoles, platform: Gallery, collection: Gallery, genre: Gallery, genres: Genres, collections: Collections, game: Game, downloads: Downloads, settings: Settings, search: Search, 'steam-console': SteamConsole, 'steam-missing': SteamMissing, 'emu-setup': EmuSetup, 'steam-health': ShortcutHealth };
 // the tabs you picked in Look & Feel → Top bar, in your order
 const tabs = computed(() => activeTabs().map((name) => ({ name, ...TAB_DEFS[name] })));
 const mainEl = ref(null);
@@ -208,6 +215,9 @@ onMounted(async () => {
   call('app:startGame').then(openGame).catch(() => {});
   window.cart.on('open-game', openGame);
   setTimeout(steamReport, 2500);
+  // 0.9: a new install goes through emulator Setup once, after connecting to RomM
+  if (store.config.configured && !store.config.setupDone) go('emu-setup', { first: true });
+  setTimeout(checkMoved, 6000);
   if (store.config.configured) call('server:status').then((c) => (store.connection = c)).catch(() => {});
   pushLayer(document.body, {
     back: () => { if (viewHandler('back') !== false) return; back(); },
@@ -221,9 +231,26 @@ onMounted(async () => {
     lt: () => cycleTab(-1),
     rt: () => cycleTab(1),
     select: () => (viewHandler('select') !== false ? undefined : tab('downloads')),
-    start: () => { store.quickMenu = !store.quickMenu; },
+    start: () => { if (viewHandler('start') !== false) return; store.quickMenu = !store.quickMenu; },
   });
 });
+// connected for the first time (the RomM step just finished): emulators next
+watch(() => store.config?.configured, (v, was) => { if (v && !was && !store.config.setupDone) go('emu-setup', { first: true }); });
+// An emulator Cartridge's shortcuts use isn't where it was (an update renamed the AppImage, or it
+// moved): offer Shortcut health, once per set of paths
+async function checkMoved() {
+  const m = await call('steam:moved').catch(() => []);
+  if (!m.length) return;
+  const sig = m.map((x) => x.exe).join('|');
+  if (sessionStorage.getItem('movedSeen') === sig) return;
+  sessionStorage.setItem('movedSeen', sig);
+  const n = m.reduce((a, x) => a + x.shortcuts, 0);
+  const v = await choose({ title: 'An emulator moved', message: `${m.map((x) => x.exe).join('\n')}\n\nisn't there any more${n ? `, and ${n} Steam shortcut${n === 1 ? ' uses' : 's use'} it` : ''}. Cartridge can look for it and fix ${n === 1 ? 'the shortcut' : 'them'}.`, options: [
+    { label: 'Fix it', sub: 'Shortcut health', value: 'fix', icon: 'mdiAutoFix' },
+    { label: 'Later', value: 'later', icon: 'mdiClockOutline' },
+  ] });
+  if (v === 'fix') { await call('setup:scan').catch(() => {}); go('steam-health'); }
+}
 onBeforeUnmount(() => clearInterval(clockT));
 
 watch(() => store.config?.ui && JSON.stringify(store.config.ui), () => { applyTheme(store.config.ui); setSoundStyle(store.config.ui.soundPack, store.config.ui.volume); });
@@ -274,24 +301,24 @@ watch(viewKey, async () => {
 
 <style scoped>
 .tab-trig { margin: 0 4px; }
-.top-search { display: flex; align-items: center; gap: 8px; flex: 0 1 260px; min-width: 130px; height: 40px; padding: 0 10px 0 14px; border-radius: 999px; background: rgba(255, 255, 255, 0.06); border: 1px solid var(--line); color: var(--muted); cursor: text; transition: border-color 0.14s, background 0.14s; }
+.top-search { display: flex; align-items: center; gap: 8px; flex: 0 1 260px; min-width: 130px; height: 40px; padding: 0 10px 0 14px; border-radius: 999px; background: var(--s2); color: var(--muted); cursor: text; transition: border-color 0.14s, background 0.14s; }
 .top-search.on, .top-search:focus-within { background: rgba(255, 255, 255, 0.1); border-color: var(--primary-l); color: var(--text); }
 .top-search:focus-within { box-shadow: var(--ring); }
-.top-search input { flex: 1; min-width: 0; height: 100%; font: inherit; font-size: 14px; color: var(--text); background: none; border: 0; outline: none; }
+.top-search input { flex: 1; min-width: 0; height: 100%; font: inherit; font-size: var(--t-sm); color: var(--text); background: none; border: 0; outline: none; }
 .top-search input:focus { box-shadow: none !important; }
 .top-search input::placeholder { color: var(--muted); }
 .top-search .clear { background: none; border: 0; color: var(--muted); padding: 4px; display: grid; place-items: center; }
-.backbtn { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; background: rgba(255, 255, 255, 0.08); margin-right: -6px; }
+.backbtn { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; background: var(--s2); margin-right: -6px; }
 .backbtn:active { background: rgba(255, 255, 255, 0.2); }
-.tab-badge { position: absolute; top: 2px; right: 6px; min-width: 16px; height: 16px; border-radius: 8px; background: var(--peach); color: var(--on-primary); font-size: 10px; font-weight: 700; display: grid; place-items: center; padding: 0 4px; }
+.tab-badge { position: absolute; top: 2px; right: 6px; min-width: 16px; height: 16px; border-radius: var(--r-md); background: var(--peach); color: var(--on-primary); font-size: var(--t-xs); font-weight: 700; display: grid; place-items: center; padding: 0 4px; }
 .pops { position: fixed; top: 76px; right: 24px; z-index: 80; display: flex; flex-direction: column; gap: 10px; pointer-events: none; }
-.pop { display: flex; gap: 14px; align-items: center; width: 380px; padding: 12px 16px 12px 12px; border-radius: 14px; background: rgba(18, 20, 32, 0.92); box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.12); }
-.pop-icon { width: 60px; height: 60px; border-radius: 10px; overflow: hidden; flex: none; display: grid; place-items: center; background: rgba(0, 0, 0, 0.35); }
+.pop { display: flex; gap: 14px; align-items: center; width: 380px; padding: 12px 16px 12px 12px; border-radius: var(--r-lg); background: rgba(18, 20, 32, 0.92); box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.12); }
+.pop-icon { width: 60px; height: 60px; border-radius: var(--r-md); overflow: hidden; flex: none; display: grid; place-items: center; background: rgba(0, 0, 0, 0.35); }
 .pop-icon img { width: 100%; height: 100%; object-fit: cover; }
 .pop-body { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-.pop-kind { display: flex; gap: 6px; align-items: center; font-size: 11.5px; letter-spacing: 0.04em; color: #cfd6e4; }
-.pop-name { font-family: var(--display); font-weight: 700; font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.pop-game { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pop-kind { display: flex; gap: 6px; align-items: center; font-size: var(--t-xs); letter-spacing: 0.04em; color: #cfd6e4; }
+.pop-name { font-family: var(--display); font-weight: 700; font-size: var(--t-md); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pop-game { font-size: var(--t-xs); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pop-enter-active, .pop-leave-active { transition: opacity 0.3s, transform 0.35s var(--ease); }
 .pop-enter-from { opacity: 0; transform: translateX(40px); }
 .pop-leave-to { opacity: 0; transform: translateY(-12px); }

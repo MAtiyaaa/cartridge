@@ -69,14 +69,14 @@ onBeforeUnmount(() => layer.pop());
 .qm { position: absolute; top: 0; right: 0; bottom: 0; width: 400px; padding: 26px 20px; display: flex; flex-direction: column; gap: 8px; background: rgba(14, 16, 24, 0.94); border-left: 1px solid var(--line-2); box-shadow: -30px 0 80px rgba(0, 0, 0, 0.6); animation: slide 0.3s var(--ease); overflow-y: auto; }
 @keyframes slide { from { transform: translateX(60px); opacity: 0; } }
 .qm-head { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
-.qm-title { font-family: var(--display); font-weight: 600; font-size: 20px; }
+.qm-title { font-family: var(--display); font-weight: 600; font-size: var(--t-lg); }
 .qm-sync { padding: 14px 16px; display: flex; flex-direction: column; gap: 8px; margin-bottom: 8px; }
-.qm-item { display: flex; align-items: center; gap: 14px; padding: 13px 14px; border-radius: 8px; transition: background 0.15s; }
+.qm-item { display: flex; align-items: center; gap: 14px; padding: 13px 14px; border-radius: var(--r-md); transition: background 0.15s; }
 .qm-item div { display: flex; flex-direction: column; gap: 2px; }
-.qm-item b { font-weight: 500; font-size: 14.5px; }
-.qm-item small { color: var(--muted); font-size: 12px; }
-.qm-item:hover { background: rgba(255, 255, 255, 0.06); }
-.qm-item:focus { background: rgba(var(--primary-rgb), 0.22); }
+.qm-item b { font-weight: 500; font-size: var(--t-sm); }
+.qm-item small { color: var(--muted); font-size: var(--t-xs); }
+.qm-item:hover { background: var(--s2); }
+.qm-item:focus { background: var(--focus); color: var(--on-focus); box-shadow: none; }
 .qm-item.danger { color: #ffa39c; }
 .qm-item.upd { background: var(--grad); color: var(--on-primary); }
 .qm-item.upd small { color: #2b1f45; }

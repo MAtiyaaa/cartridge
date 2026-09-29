@@ -138,40 +138,40 @@ onMounted(async () => { await load(); focusFirst(el.value); });
 
 <style scoped>
 .ra { padding-top: 4px; }
-.ra-signin { max-width: 760px; margin: 30px auto; padding: 28px 30px; display: flex; flex-direction: column; gap: 18px; border-radius: 14px; }
+.ra-signin { max-width: 760px; margin: 30px auto; padding: 28px 30px; display: flex; flex-direction: column; gap: 18px; border-radius: var(--r-lg); }
 .ra-signin-head { display: flex; gap: 20px; align-items: center; }
-.ra-trophy { width: 76px; height: 76px; border-radius: 16px; display: grid; place-items: center; flex: none; background: linear-gradient(145deg, #f5c542, #b8801a); color: #2a1a00; box-shadow: 0 10px 30px rgba(245, 197, 66, 0.3); }
+.ra-trophy { width: 76px; height: 76px; border-radius: var(--r-lg); display: grid; place-items: center; flex: none; background: linear-gradient(145deg, #f5c542, #b8801a); color: #2a1a00; box-shadow: 0 10px 30px rgba(245, 197, 66, 0.3); }
 .ra-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-.big { font-size: 30px; }
-.small { font-size: 13px; }
+.big { font-size: var(--t-xl); }
+.small { font-size: var(--t-sm); }
 .ra-head { display: flex; align-items: center; gap: 20px; margin: 4px 0 26px; }
-.ra-avatar { width: 88px; height: 88px; border-radius: 16px; object-fit: cover; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45), 0 0 0 2px rgba(255, 255, 255, 0.1); flex: none; }
+.ra-avatar { width: 88px; height: 88px; border-radius: var(--r-lg); object-fit: cover; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45), 0 0 0 2px rgba(255, 255, 255, 0.1); flex: none; }
 .ra-avatar.ph { display: grid; place-items: center; background: rgba(255, 255, 255, 0.08); }
 .ra-who { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
-.ra-stats { display: flex; gap: 18px; flex-wrap: wrap; color: #d4d8e2; font-size: 14px; }
+.ra-stats { display: flex; gap: 18px; flex-wrap: wrap; color: #d4d8e2; font-size: var(--t-sm); }
 .ra-stats .stat { display: inline-flex; align-items: center; gap: 6px; }
-.ra-presence { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); max-width: 720px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.ra-unlock { flex: none; width: 340px; display: flex; gap: 14px; padding: 14px; border-radius: 12px; text-align: left; transition: transform 0.14s ease-out; }
+.ra-presence { display: inline-flex; align-items: center; gap: 8px; font-size: var(--t-sm); color: var(--muted); max-width: 720px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ra-unlock { flex: none; width: 340px; display: flex; gap: 14px; padding: 14px; border-radius: var(--r-md); text-align: left; transition: transform 0.14s ease-out; }
 .ra-unlock:focus { transform: scale(1.03); }
-.ra-badge { width: 64px; height: 64px; border-radius: 8px; flex: none; box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4); }
+.ra-badge { width: 64px; height: 64px; border-radius: var(--r-md); flex: none; box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4); }
 .ra-u-body { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
-.ra-u-title { font-family: var(--display); font-weight: 600; font-size: 15.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.ra-u-desc { font-size: 12.5px; color: #c3c9d4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-.ra-u-meta { display: flex; gap: 10px; align-items: center; font-size: 11.5px; color: var(--muted); }
+.ra-u-title { font-family: var(--display); font-weight: 600; font-size: var(--t-md); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ra-u-desc { font-size: var(--t-xs); color: #c3c9d4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.ra-u-meta { display: flex; gap: 10px; align-items: center; font-size: var(--t-xs); color: var(--muted); }
 .ra-u-meta .pts { color: var(--gold); font-weight: 600; }
-.chip.hc { font-size: 9.5px; padding: 2px 6px; background: rgba(255, 90, 90, 0.18); color: #ff9b9b; }
-.ra-u-game { font-size: 11.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chip.hc { font-size: var(--t-xs); padding: 2px 6px; background: rgba(255, 90, 90, 0.18); color: #ff9b9b; }
+.ra-u-game { font-size: var(--t-xs); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ra-games { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 14px; padding-bottom: 30px; }
-.ra-game { display: flex; gap: 14px; align-items: center; padding: 12px 14px; border-radius: 12px; text-align: left; transition: transform 0.14s ease-out; position: relative; }
+.ra-game { display: flex; gap: 14px; align-items: center; padding: 12px 14px; border-radius: var(--r-md); text-align: left; transition: transform 0.14s ease-out; position: relative; }
 .ra-game:focus { transform: scale(1.02); }
-.ra-gicon { width: 72px; height: 72px; border-radius: 8px; flex: none; object-fit: cover; }
+.ra-gicon { width: 72px; height: 72px; border-radius: var(--r-md); flex: none; object-fit: cover; }
 .ra-g-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 5px; }
-.ra-g-title { font-family: var(--display); font-weight: 600; font-size: 15.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.ra-g-sub { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ra-g-title { font-family: var(--display); font-weight: 600; font-size: var(--t-md); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ra-g-sub { font-size: var(--t-xs); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .inlib { color: var(--green-l); }
 .ra-bar { height: 6px; }
 .ra-bar i { background: linear-gradient(90deg, #f5c542, #ffdf80); }
-.ra-g-prog { font-size: 12px; color: #c3c9d4; }
+.ra-g-prog { font-size: var(--t-xs); color: #c3c9d4; }
 .mastered { color: var(--gold); flex: none; }
 @media (max-width: 1100px) { .ra-fields { grid-template-columns: 1fr; } }
 </style>

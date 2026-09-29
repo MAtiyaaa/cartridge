@@ -49,14 +49,14 @@ const sticks = computed(() => (pad.value?.axes || []).slice(0, 4).map((v, i) => 
 <style scoped>
 .ct { padding: 16px 18px; display: flex; flex-direction: column; gap: 12px; }
 .ct-top { display: flex; align-items: center; gap: 12px; }
-.ct-top b { font-family: var(--display); font-size: 16px; }
+.ct-top b { font-family: var(--display); font-size: var(--t-md); }
 .ct-id { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 60vw; }
-.small { font-size: 12.5px; }
+.small { font-size: var(--t-xs); }
 .ct-btns { display: flex; flex-wrap: wrap; gap: 6px; }
-.ct-b { padding: 4px 9px; border-radius: 7px; background: rgba(255, 255, 255, 0.06); font-size: 12px; font-weight: 600; color: var(--muted); min-width: 30px; text-align: center; }
+.ct-b { padding: 4px 9px; border-radius: var(--r-sm); background: var(--s2); font-size: var(--t-xs); font-weight: 600; color: var(--muted); min-width: 30px; text-align: center; }
 .ct-b.on { background: var(--primary); color: #fff; }
 .ct-bars { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px 18px; }
-.ct-bars > div { display: grid; grid-template-columns: 58px 1fr 40px; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); }
+.ct-bars > div { display: grid; grid-template-columns: 58px 1fr 40px; align-items: center; gap: 8px; font-size: var(--t-xs); color: var(--muted); }
 .ct-bars i { position: relative; height: 8px; border-radius: 4px; background: rgba(255, 255, 255, 0.08); overflow: hidden; }
 .ct-bars em { position: absolute; left: 0; top: 0; bottom: 0; background: var(--primary-l); border-radius: 4px; }
 .ct-bars i.mid::after { content: ''; position: absolute; left: 50%; top: 0; bottom: 0; width: 1px; background: rgba(255, 255, 255, 0.3); }

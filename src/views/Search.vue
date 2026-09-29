@@ -54,6 +54,6 @@ useView(
 </script>
 
 <style scoped>
-.s-title { font-family: var(--display); font-size: 34px; margin: 4px 0 10px; }
-.s-tip { font-size: 15px; }
+.s-title { font-family: var(--display); font-size: var(--t-2xl); margin: 4px 0 10px; }
+.s-tip { font-size: var(--t-md); }
 </style>

@@ -40,8 +40,8 @@ const DEFAULT_CONFIG = {
   biosPath: '',
   paths: {},
   downloads: { concurrency: 2, esdeM3uFolders: true, flattenSingleFile: true },
-  ui: { gridSize: 'md', hideEmpty: true, sounds: true, bgStyle: 'waves', theme: 'purple', mediaBar: true, logos: true, pointer: 'auto', scale: 'auto', keyboard: 'auto',
-    customColor: '', surface: 'glass', text: 'normal', font: 'outfit', cardShape: 'rounded', density: 'normal', cardTitles: true,
+  ui: { gridSize: 'md', hideEmpty: true, sounds: true, bgStyle: 'solid', theme: 'cartridge', mediaBar: true, logos: true, pointer: 'auto', scale: 'auto', keyboard: 'auto',
+    customColor: '', surface: 'solid', text: 'normal', font: 'cartridge', cardShape: 'rounded', density: 'normal', cardTitles: true,
     motion: 'normal', effects: 'auto', soundPack: 'soft', volume: 'medium', wallpaper: '', wallDim: 'medium',
     colors: { highlight: '', buttons: '', bars: '', background: '' } },
   sync: { onLaunch: true, everyMinutes: 60 },
@@ -49,7 +49,7 @@ const DEFAULT_CONFIG = {
   ra: { user: '', key: '' }, // RetroAchievements username + web API key
   trophies: { sources: {}, sync: true, popups: true, device: '' }, // PS3/PS4/Xbox 360/Vita trophies from emulators
   graphics: 'auto', // auto (GPU, falls back on failure) | software
-  configVersion: 2,
+  configVersion: 3,
   configured: false,
 };
 
@@ -70,8 +70,9 @@ if (!fs.existsSync(CONFIG_FILE)) {
     try { fs.mkdirSync(USER_DATA, { recursive: true }); fs.copyFileSync(path.join(old, f), path.join(USER_DATA, f)); } catch {}
   }
 }
+const freshConfig = !fs.existsSync(CONFIG_FILE);
 let config = loadJson(CONFIG_FILE, {});
-const rawVersion = config.configVersion || 1;
+const rawVersion = freshConfig ? DEFAULT_CONFIG.configVersion : config.configVersion || 1; // a new install starts on today's defaults
 config = deepMerge(DEFAULT_CONFIG, config);
 if (rawVersion < 2) {
   // 0.1.1/0.1.2 saved 'software' as a default, not a user choice: move everyone to Auto (GPU)
@@ -79,6 +80,15 @@ if (rawVersion < 2) {
   if (config.graphics === 'hardware') config.graphics = 'auto';
   config.configVersion = 2;
   try { fs.mkdirSync(USER_DATA, { recursive: true }); fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2), { mode: 0o600 }); } catch {}
+}
+if (rawVersion < 3 && config.configured) {
+  // 0.9's new look: settings still at the old defaults (saved as values, not choices) move to it;
+  // anything someone picked stays. Existing users have set up already, so Setup isn't forced on them.
+  const u = config.ui, was = { theme: 'purple', surface: 'glass', font: 'outfit', bgStyle: 'waves' }, now = { theme: 'cartridge', surface: 'solid', font: 'cartridge', bgStyle: 'solid' };
+  for (const k of Object.keys(was)) if (u[k] === was[k]) u[k] = now[k];
+  if (!config.setupDone) config.setupDone = 'before 0.9'; // Setup is in Settings → Steam for them
+  config.configVersion = 3;
+  try { fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2), { mode: 0o600 }); } catch {}
 }
 
 // ---------------------------------------------------------------- graphics
@@ -1665,7 +1675,7 @@ const steamMgr = require('./steamManager')({
   gameIconPng: async (rom) => { if (!rom) return null; const u = await gameIcon({ key: 'rom-' + rom.id, name: rom.name, year: rom.year ? new Date(rom.year > 1e11 ? rom.year : rom.year * 1000).getFullYear() : null }).catch(() => null); return u ? asPng(await fetchImage(u)) : null; },
   logoFile: async (rom) => { if (!rom) return null; await logoFor({ id: rom.id, name: rom.name, romm: rom.logo }).catch(() => null); const c = logoCache[rom.id]; return c?.file ? path.join(LOGO_DIR, c.file) : null; },
   emulationRoots: () => { const emu = readEmuDeckSettings(); return require('./trophies').emulationRoots([emu.emulationPath, config.romsRoot && path.dirname(config.romsRoot)].filter(Boolean)); },
-  isGamescope,
+  isGamescope, version: app.getVersion(), osInfo: (() => { try { return (fs.readFileSync('/etc/os-release', 'utf8').match(/^PRETTY_NAME="?([^"\n]+)/m) || [])[1] || os.release(); } catch { return os.release(); } })(),
 });
 // ---------------------------------------------------------------- 0.8: play time, server status, edits, uploads
 // RetroArch's runtime logs (playlists/logs/<core>/<game>.lrtl, when "Save runtime log" is on):
@@ -1929,8 +1939,82 @@ const handlers08 = {
   'upload:start': (o) => uploadFile(o),
   'upload:cancel': ({ path: f }) => { uploads.get(f)?.abort.abort(); return true; },
 };
+// ---------------------------------------------------------------- 0.9: library check and repair
+// Every downloaded game checked against RomM's own record, the way a finished download is: sizes,
+// and md5/sha1 where RomM hashes the file itself (not zip/7z/rar/chd). Only reads: nothing is deleted
+// here; a damaged game is re-downloaded when you choose to.
+let verifyRun = null;
+async function verifyLibrary() {
+  if (verifyRun) return verifyRun.promise;
+  const ac = new AbortController();
+  const it = { abort: ac, currentFile: null };
+  verifyRun = { ac, promise: (async () => {
+    const ids = Object.keys(installedMap).map(Number).filter((id) => installedMap[id] && installedMap[id] !== MARKED);
+    const byId = romIndexMain();
+    const out = { checked: 0, damaged: [], skipped: 0 };
+    for (const [i, id] of ids.entries()) {
+      if (ac.signal.aborted) break;
+      const lr = byId.get(id);
+      broadcast('verify-progress', { done: i, total: ids.length, name: lr?.name || '' });
+      let rom;
+      try { rom = await api(`/api/roms/${id}`); } catch { out.skipped++; continue; }
+      const where = installedMap[id];
+      const files = (rom.files || []).slice();
+      const st = await fsp.stat(where).catch(() => null);
+      if (!st) { out.damaged.push({ romId: id, name: rom.name, why: 'Its files are gone' }); continue; }
+      // PS4/PS5 games unpacked from a zip can't be compared with the zip RomM has
+      if (isFolderSystem(rom) && files.length === 1 && /\.zip$/i.test(files[0].file_name) && st.isDirectory()) { out.skipped++; continue; }
+      const prefix = rom.full_path + '/';
+      const pairs = st.isDirectory() ? files.map((f) => [path.join(where, f.full_path.startsWith(prefix) ? f.full_path.slice(prefix.length) : f.file_name), f]) : [[where, files[0]]];
+      const bad = [];
+      for (const [file, f] of pairs) {
+        try { const r = await checkFile(file, f, it); if (r) bad.push([path.basename(file), r.why]); } catch (e) { if (ac.signal.aborted) break; }
+      }
+      out.checked++;
+      if (bad.length) out.damaged.push({ romId: id, name: rom.name, why: bad[0][1] === 'missing' ? `${bad[0][0]} is missing` : `${bad[0][0]} doesn't match RomM's record`, files: bad.length });
+    }
+    broadcast('verify-progress', null);
+    out.cancelled = ac.signal.aborted;
+    return out;
+  })().finally(() => { verifyRun = null; }) };
+  return verifyRun.promise;
+}
+
+// ---------------------------------------------------------------- 0.9: Setup, shortcut health, per-game emulator
+const handlers09 = {
+  'setup:overview': () => steamMgr.setupOverview(),
+  'setup:scan': async ({ drives } = {}) => { await steamMgr.scanEmulators({ drives: !!drives }); return steamMgr.setupOverview(); },
+  'setup:confirm': ({ path: f, id }) => steamMgr.confirm(f, id),
+  'setup:use': ({ key, file, as, args }) => steamMgr.useFile(key, file, { as, args }),
+  'setup:report': () => steamMgr.setupReport(),
+  'setup:done': () => { config.setupDone = Date.now(); saveConfig(); return true; },
+  // a game's manual (PDF) from RomM, kept in manuals/ so it opens offline next time
+  'rom:manual': async ({ romId }) => {
+    const dir = path.join(USER_DATA, 'manuals'), f = path.join(dir, `${Number(romId)}.pdf`);
+    if (fs.existsSync(f)) return fs.readFileSync(f);
+    const rom = await api(`/api/roms/${Number(romId)}`);
+    if (!rom.path_manual) throw new Error('RomM has no manual for this game.');
+    const base = await resolveBase();
+    const r = await fetch(`${base}/assets/romm/resources/${String(rom.path_manual).split('/').map(encodeURIComponent).join('/')}`, { headers: authHeaders() });
+    if (!r.ok) throw new Error(`RomM could not send the manual (error ${r.status})`);
+    const buf = Buffer.from(await r.arrayBuffer());
+    await fsp.mkdir(dir, { recursive: true });
+    fs.writeFileSync(f, buf);
+    return buf;
+  },
+  'library:verify': () => verifyLibrary(),
+  'library:verifyCancel': () => { verifyRun?.ac.abort(); return true; },
+  'steam:health': () => steamMgr.health(),
+  'steam:consoleCollections': () => steamMgr.syncConsoleCollections(),
+  'steam:healthFix': ({ appids }) => steamMgr.healthFix(appids || []),
+  'steam:moved': () => steamMgr.movedEmulators(),
+  'steam:gameEmu': ({ romId }) => ({ current: steamMgr.gameEmu(romId), key: steamMgr.forRom(romId).console }),
+  'steam:gameEmuOptions': ({ key }) => steamMgr.candidatesFor(key),
+  'steam:setGameEmu': ({ romId, id }) => steamMgr.setGameEmu(romId, id),
+};
 const handlers = {
   ...trophySvc.handlers,
+  ...handlers09,
   ...colHandlers,
   ...handlers08,
   'config:get': () => config,
@@ -1945,6 +2029,7 @@ const handlers = {
     return config;
   },
   'wallpaper:clear': () => { for (const f of fs.readdirSync(USER_DATA)) if (/^wallpaper\./.test(f)) try { fs.rmSync(path.join(USER_DATA, f)); } catch {} config.ui.wallpaper = ''; saveConfig(); return config; },
+  'clip:write': ({ text }) => { require('electron').clipboard.writeText(String(text || '')); return true; },
   'clip:read': async () => String((await require('electron').clipboard.readText()) || '').trim().slice(0, 4000),
   'logo:get': (r) => logoFor(r),
   'ra:signin': async ({ user, key }) => {
@@ -2121,7 +2206,8 @@ const handlers = {
     const isD = (e) => e.isDirectory() || (e.isSymbolicLink() && isDir(path.join(d, e.name)));
     const dirs = entries.filter((e) => isD(e) && (o.hidden ? !['.', '..', '.cache', '.Trash-1000'].includes(e.name) : !e.name.startsWith('.'))).map((e) => e.name).sort((a, b) => a.localeCompare(b));
     const exts = Array.isArray(o.files) ? o.files.map((x) => '.' + String(x).toLowerCase()) : null;
-    const files = exts ? entries.filter((e) => !isD(e) && !e.name.startsWith('.') && exts.includes(path.extname(e.name).toLowerCase())).map((e) => e.name).sort((a, b) => a.localeCompare(b)) : undefined;
+    // files: a list of extensions, or '*' for any file (picking an emulator, whatever it's called)
+    const files = exts || o.files === '*' ? entries.filter((e) => !isD(e) && !e.name.startsWith('.') && (!exts || exts.includes(path.extname(e.name).toLowerCase()))).map((e) => e.name).sort((a, b) => a.localeCompare(b)) : undefined;
     return { path: path.resolve(d), parent: path.dirname(path.resolve(d)), dirs, files };
   },
   'fs:mkdir': async (dir) => { await fsp.mkdir(dir, { recursive: true }); return true; },

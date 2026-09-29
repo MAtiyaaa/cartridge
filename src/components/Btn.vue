@@ -45,9 +45,9 @@ const cls = computed(() => {
 });
 </script>
 <style>
-.pb { display: inline-grid; place-items: center; height: 22px; min-width: 22px; padding: 0 6px; border-radius: 11px; font: 700 11px/1 var(--body), sans-serif; color: #0b0d12; background: #d9dee8; box-shadow: 0 1px 0 rgba(0, 0, 0, 0.35); flex: none; vertical-align: middle; }
+.pb { display: inline-grid; place-items: center; height: 22px; min-width: 22px; padding: 0 6px; border-radius: var(--r-md); font: 700 11px/1 var(--body), sans-serif; color: #0b0d12; background: #d9dee8; box-shadow: 0 1px 0 rgba(0, 0, 0, 0.35); flex: none; vertical-align: middle; }
 .pb.face { width: 22px; padding: 0; }
-.pb.shoulder, .pb.sys, .pb.other { border-radius: 6px; background: #c7cdd8; font-size: 10px; }
+.pb.shoulder, .pb.sys, .pb.other { border-radius: var(--r-sm); background: #c7cdd8; font-size: var(--t-xs); }
 .pb.shoulder { min-width: 28px; }
 .pb.sys { width: 28px; padding: 0; }
 .pb-ico { width: 14px; height: 14px; fill: none; stroke: #0b0d12; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }

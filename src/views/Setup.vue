@@ -219,34 +219,34 @@ onMounted(async () => { await nextTick(); focusFirst(el.value); });
 </script>
 
 <style scoped>
-.setup { position: relative; z-index: 1; height: 100%; overflow-y: auto; padding: 40px 20px 60px; display: flex; flex-direction: column; align-items: center; gap: 18px; background: radial-gradient(1200px 600px at 50% -10%, rgba(var(--primary-rgb), 0.22), transparent 60%); }
+.setup { position: relative; z-index: 1; height: 100%; overflow-y: auto; padding: 40px 20px 60px; display: flex; flex-direction: column; align-items: center; gap: 18px; background: var(--s0); }
 .hero { text-align: center; display: flex; flex-direction: column; align-items: center; gap: 8px; }
-.hero .logo { width: 64px; height: 64px; border-radius: 12px; background: linear-gradient(135deg, var(--primary-l), var(--primary-d)); display: grid; place-items: center; box-shadow: 0 10px 40px rgba(var(--primary-rgb), 0.4); }
-.hero h1 { font-size: 40px; font-weight: 800; letter-spacing: -0.02em; }
+.hero .logo { width: 64px; height: 64px; border-radius: var(--r-md); background: linear-gradient(135deg, var(--primary-l), var(--primary-d)); display: grid; place-items: center; box-shadow: 0 10px 40px rgba(var(--primary-rgb), 0.4); }
+.hero h1 { font-size: var(--t-2xl); font-weight: 800; letter-spacing: -0.02em; }
 .hero p { margin: 0; }
-.steps { display: flex; gap: 20px; color: var(--dim); font-size: 13px; }
+.steps { display: flex; gap: 20px; color: var(--dim); font-size: var(--t-sm); }
 .steps .on { color: var(--primary-l); font-weight: 500; }
 .card-s { width: min(820px, 100%); padding: 26px; display: flex; flex-direction: column; gap: 18px; }
-.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.grid2 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; }
 .stack { display: flex; flex-direction: column; gap: 10px; }
-.small { font-size: 13px; margin: 0; line-height: 1.5; }
-.lbl { width: 110px; color: var(--muted); font-size: 13px; }
+.small { font-size: var(--t-sm); margin: 0; line-height: 1.5; }
+.lbl { width: 110px; color: var(--muted); font-size: var(--t-sm); }
 .wrap { flex-wrap: wrap; }
 .end { justify-content: flex-end; }
-.toggle-adv { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 13px; padding: 6px; border-radius: 8px; align-self: flex-start; }
+.toggle-adv { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: var(--t-sm); padding: 6px; border-radius: var(--r-md); align-self: flex-start; }
 .toggle-adv:focus { box-shadow: var(--ring); }
 .results { display: flex; flex-direction: column; gap: 8px; }
-.res { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 7px; font-size: 14px; }
+.res { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: var(--r-sm); font-size: var(--t-sm); }
 .res.ok { background: rgba(63, 185, 80, 0.1); color: #7ee787; }
 .res.bad { background: rgba(218, 54, 51, 0.1); color: #ff9b95; }
-.mono { font-family: ui-monospace, monospace; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-h3 { font-size: 15px; }
+.mono { font-family: ui-monospace, monospace; font-size: var(--t-sm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+h3 { font-size: var(--t-md); }
 .qr { display: flex; gap: 20px; align-items: center; padding: 16px; }
-.qr-img { width: 190px; height: 190px; flex: none; background: #fff; border-radius: 10px; padding: 8px; }
+.qr-img { width: 190px; height: 190px; flex: none; background: #fff; border-radius: var(--r-md); padding: 8px; }
 .qr-img :deep(svg) { width: 100%; height: 100%; display: block; }
 .qr-t { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; min-width: 0; }
 .qr-t .mono { white-space: normal; word-break: break-all; }
 
 .qr-wait { display: flex; align-items: center; gap: 6px; }
-.qr-code { font-family: ui-monospace, monospace; font-size: 16px; letter-spacing: 0.08em; }
+.qr-code { font-family: ui-monospace, monospace; font-size: var(--t-md); letter-spacing: 0.08em; }
 </style>

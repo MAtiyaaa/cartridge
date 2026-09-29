@@ -53,20 +53,20 @@ onBeforeUnmount(() => layer?.pop());
 <style scoped>
 .tl { width: min(720px, 94vw); max-height: 88vh; display: flex; flex-direction: column; }
 .tl-head { display: flex; gap: 18px; align-items: center; }
-.tl-head h2 { margin: 2px 0 10px; font-size: 24px; line-height: 1.15; }
-.tl-cover { width: 76px; aspect-ratio: 2 / 3; object-fit: cover; border-radius: 8px; box-shadow: 0 8px 20px rgba(0, 0, 0, 0.45); flex: none; }
+.tl-head h2 { margin: 2px 0 10px; font-size: var(--t-xl); line-height: 1.15; }
+.tl-cover { width: 76px; aspect-ratio: 2 / 3; object-fit: cover; border-radius: var(--r-md); box-shadow: 0 8px 20px rgba(0, 0, 0, 0.45); flex: none; }
 .tl-stats { display: flex; gap: 22px; }
 .tl-stats > div { display: flex; flex-direction: column; gap: 2px; }
-.tl-stats b { font-family: var(--display); font-size: 20px; font-weight: 700; line-height: 1; }
-.tl-stats span { font-size: 10.5px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+.tl-stats b { font-family: var(--display); font-size: var(--t-lg); font-weight: 700; line-height: 1; }
+.tl-stats span { font-size: var(--t-xs); color: var(--muted); font-weight: 600; }
 .tl-list { position: relative; overflow-y: auto; min-height: 0; flex: 1; padding: 4px 4px 4px 2px; display: flex; flex-direction: column; }
 /* the line the dots sit on */
 .tl-list::before { content: ''; position: absolute; left: 17px; top: 18px; bottom: 18px; width: 2px; background: linear-gradient(180deg, rgba(var(--primary-rgb), 0.6), rgba(var(--primary-rgb), 0.12)); }
-.tl-e { flex: none; position: relative; display: flex; gap: 14px; padding: 8px 10px 8px 0; border-radius: 10px; outline: none; }
+.tl-e { flex: none; position: relative; display: flex; gap: 14px; padding: 8px 10px 8px 0; border-radius: var(--r-md); outline: none; }
 .tl-e:focus { background: rgba(255, 255, 255, 0.05); box-shadow: var(--ring); }
 .tl-dot { flex: none; width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: color-mix(in srgb, var(--primary) 30%, #12141d); border: 2px solid rgba(var(--primary-rgb), 0.7); color: #fff; z-index: 1; }
 .tl-body { display: flex; flex-direction: column; gap: 2px; padding-top: 1px; min-width: 0; }
-.tl-when { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--primary-t); font-weight: 700; }
-.tl-what { font-family: var(--display); font-size: 16px; font-weight: 600; }
-.tl-sub { font-size: 13px; color: var(--muted); }
+.tl-when { font-size: var(--t-xs); color: var(--primary-t); font-weight: 700; }
+.tl-what { font-family: var(--display); font-size: var(--t-md); font-weight: 600; }
+.tl-sub { font-size: var(--t-sm); color: var(--muted); }
 </style>
