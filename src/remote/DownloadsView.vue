@@ -97,7 +97,7 @@ const clear = (d) => act(d, 'dl:clear');
 .dd-none { padding: 16px; border-radius: 16px; border: 1px dashed var(--line-2); color: var(--dim); font-size: 13px; text-align: center; }
 .dd-it { display: flex; align-items: center; gap: 12px; padding: 10px 10px 10px 10px; border-radius: 16px; background: rgba(255, 255, 255, 0.05); border: 1px solid var(--line); }
 .dd-it.done, .dd-it.cancelled { opacity: 0.7; }
-.dd-cov { flex: none; width: 42px; height: 56px; border-radius: 8px; overflow: hidden; background: linear-gradient(160deg, #2a2346, #12141d); }
+.dd-cov { flex: none; width: 42px; height: 56px; border-radius: 8px; overflow: hidden; background: linear-gradient(160deg, #26262b, #151518); }
 .dd-cov img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .dd-b { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
 .dd-b b { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

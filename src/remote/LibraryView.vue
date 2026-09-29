@@ -188,9 +188,9 @@ async function send(d) {
 .lv-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 16px 12px; }
 .lv-card { display: flex; flex-direction: column; gap: 7px; text-align: left; color: var(--text); }
 .lv-card:active .lv-art { transform: scale(0.97); }
-.lv-art { position: relative; aspect-ratio: 2 / 3; border-radius: var(--card-r, 10px); overflow: hidden; background: linear-gradient(160deg, #1d2231, #10131b); box-shadow: 0 8px 22px rgba(0, 0, 0, 0.4), inset 0 0 0 1px rgba(255, 255, 255, 0.06); transition: transform 0.15s ease-out; }
+.lv-art { position: relative; aspect-ratio: 2 / 3; border-radius: var(--card-r, 10px); overflow: hidden; background: linear-gradient(160deg, #222226, #141417); box-shadow: 0 8px 22px rgba(0, 0, 0, 0.4), inset 0 0 0 1px rgba(255, 255, 255, 0.06); transition: transform 0.15s ease-out; }
 .lv-art img { width: 100%; height: 100%; object-fit: cover; object-position: center top; display: block; }
-.lv-ph { position: absolute; inset: 0; display: grid; place-items: center; color: rgba(255, 255, 255, 0.28); background: linear-gradient(160deg, #2a2346, #12141d 70%); }
+.lv-ph { position: absolute; inset: 0; display: grid; place-items: center; color: rgba(255, 255, 255, 0.28); background: linear-gradient(160deg, #26262b, #151518 70%); }
 .lv-have { position: absolute; top: 6px; right: 6px; display: inline-flex; align-items: center; gap: 2px; height: 20px; min-width: 20px; padding: 0 5px; justify-content: center; border-radius: 999px; background: rgba(63, 185, 80, 0.92); color: #06130a; font: 700 10.5px var(--body); box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4); }
 .lv-prog { position: absolute; left: 6px; right: 6px; bottom: 6px; height: 5px; border-radius: 3px; background: rgba(0, 0, 0, 0.65); overflow: hidden; }
 .lv-prog b { display: block; height: 100%; background: var(--grad); transition: width 0.3s; }

@@ -1,17 +1,14 @@
-## Cartridge 0.8.0 · Your Library, Alive
+## Cartridge 0.9.0 · Setup
 
-### New: upload to RomM from your phone
-- **Upload tab in the phone remote.** Pick a game file on your phone, check the console (Cartridge picks it from the file type), and it goes through your Cartridge device to RomM, with live progress for both steps. It's sent in small pieces, so big files work through a Cloudflare tunnel too, and a dropped piece is sent again by itself. Run a scan in RomM afterwards to add it to your library.
-- **Games on your device that RomM doesn't have.** The same tab lists the files in the device's console folders that aren't in RomM yet, found automatically. Upload one, or all at once.
-- Phones can only upload those files or the file they sent. They can't reach anything else on the device.
-
-### New: abdu2304's 0.7.8 to 0.8.1
+### New: abdu2304's 0.8.2 and 0.9.0
 Everything from the original Cartridge's latest releases is now part of this build:
-- **Play time, new Home rows, Timeline and Edit details.** Time played from Steam and RetroArch, Most played, Finish what you started and more, a game's history, and name, description and cover changes saved to RomM.
-- **Upload to RomM** (Settings → RomM), **Server status** (Settings → About), an **Idle screen**, **word suggestions** on the on-screen keyboard, **console backgrounds**, **Theme from this game**, **Refresh artwork in Steam** and **Free up space**.
-- **Steam launches fixed and every setup found:** RetroArch, Xbox and Xbox 360 games start, Steam ROM Manager shortcuts are recognised, an Emulator picker per console, Update for games already in Steam, Missing from Steam, PS Vita through Vita3K, and emulators from your distro, Flatpaks, AppImages and RetroArch anywhere.
-- **New console cards, genre tiles and Downloads screen**, collections split by console, a tidier library toolbar, and smoother scrolling, most of all in Game Mode.
-- **Colour-coded connection pill:** LAN green, Tunnel purple, Offline red.
-- QR pairing with RomM now asks for permission to change games (for Edit details and Upload). Paired before? Pair again, or sign in with your password.
+- **A new look.** Solid, dark and quiet around your game art, with bigger art, one type scale, one accent colour and a white highlight, plus a new logo. Themes, fonts and backgrounds you picked yourself stay. The phone remote and the second screen follow it too.
+- **Emulator setup** finds your emulators wherever they are (even renamed AppImages, by what's inside them), shows which emulator each console uses, and flags missing cores, BIOS files and Flatpak folder access. **BIOS from RomM** when it has them.
+- **Emulator for one game**, **Shortcut health** that fixes shortcuts whose emulator moved, and **console collections in Steam**.
+- **Check downloaded games** (Settings → Storage) against RomM and re-download damaged ones.
+- **Manuals** readable with the controller, a short **tour** of the controls, and **Copy setup report** for bug reports.
+- **Recently played across devices** through RomM, **trophy filters** and Hide from totals, and a **controller test** in Settings → About.
+- **Fixes:** Steam launch options back where they were, LT and RT work on the first press, snappier controls, touch scrolls like a phone, and sharper SteamGridDB backgrounds.
+- QR pairing with RomM asks for device access (for Recently played across devices). Paired before? Pair again to use it.
 
-On Android, the Steam options still only appear when Settings → Android → Steam & PC game apps is on.
+On Android, Emulator setup and the Steam options only appear when Settings → Android → Steam & PC game apps is on.
