@@ -1220,6 +1220,31 @@ function updatePowerBlock() {
 const DISC_EXT = new Set(['chd', 'cue', 'gdi', 'cdi', 'ccd', 'mds', 'iso', 'pbp', 'cso', 'rvz', 'wbfs']);
 const DESCRIPTOR = new Set(['cue', 'gdi', 'ccd', 'mds']);
 
+async function restoreBackup(it) {
+  const orig = it.backup.replace(/\.cartridge-old$/, '');
+  try {
+    await fsp.rm(orig, { recursive: true, force: true });
+    await fsp.rm(orig + '.partial', { recursive: true, force: true }).catch(() => {});
+    await fsp.rename(it.backup, orig);
+    it.backup = null;
+    log('re-download stopped, old copy back', path.basename(orig));
+    computeInstalled();
+  } catch (e) { log('restore after re-download failed', e.message); }
+}
+// Re-download a damaged game: its copy is moved aside (same drive, so it's instant), a fresh one is
+// downloaded, and the old copy is deleted only once the new one has passed its checks
+async function redownload(romId) {
+  const target = manifest[romId]?.path || installedMap[romId];
+  if (!target || target === MARKED) throw new Error('This game has no downloaded copy.');
+  const roots = new Set([config.romsRoot, ...(library?.platforms || []).map((pl) => platformPath(pl).path)].filter(Boolean).map((x) => path.resolve(x)));
+  if (roots.has(path.resolve(target))) throw new Error('Refusing to move a whole console folder');
+  const r = romIndexMain().get(romId);
+  if (!r) throw new Error('Game not found');
+  const backup = target.replace(/\/+$/, '') + '.cartridge-old';
+  await fsp.rm(backup, { recursive: true, force: true }).catch(() => {});
+  if (fs.existsSync(target)) await fsp.rename(target, backup);
+  return enqueue({ romId, name: r.name, platformSlug: r.platform_slug, platformName: r.platform_display_name, size: r.fs_size_bytes, cover: r.path_cover_small || r.url_cover, backup: fs.existsSync(backup) ? backup : null, redo: true });
+}
 function enqueue(job) {
   const existing = queue.find((q) => q.romId === job.romId && ['queued', 'downloading'].includes(q.status));
   if (existing) return existing.id;
@@ -1469,7 +1494,10 @@ async function runJob(it) {
     saveManifest();
     installedMap[rom.id] = finalPath;
     broadcast('installed-changed', { romId: rom.id, path: finalPath });
-    try { if (steamMgr.onDownloaded(rom.id)) broadcast('steam-auto', { romId: rom.id, name: rom.name, action: 'add' }); } catch (e) { log('steam auto add', e.message); }
+    // a re-download (library check): the new copy is in, so the old one kept aside goes
+    if (it.backup) { await fsp.rm(it.backup, { recursive: true, force: true }).catch(() => {}); it.backup = null; }
+    // a re-download is the same game as before: Steam already has it, so no automatic add
+    if (!it.redo) try { if (steamMgr.onDownloaded(rom.id)) broadcast('steam-auto', { romId: rom.id, name: rom.name, action: 'add' }); } catch (e) { log('steam auto add', e.message); }
   } catch (e) {
     // stopped on purpose: keep a status set since (paused, or queued again by Resume)
     if (ac.signal.aborted) { if (!['paused', 'queued'].includes(it.status)) it.status = 'cancelled'; }
@@ -1482,6 +1510,8 @@ async function runJob(it) {
       it.switched = true;
     }
     else { it.status = 'error'; it.error = e.message; }
+    // a re-download that didn't finish: the old copy goes back, so the game is never left missing
+    if (it.backup && ['error', 'cancelled'].includes(it.status)) await restoreBackup(it);
   }
   it.running = false;
   it.speed = 0;
@@ -2075,6 +2105,12 @@ const handlers09 = {
   'setup:confirm': ({ path: f, id }) => steamMgr.confirm(f, id),
   'setup:use': ({ key, file, as, args }) => steamMgr.useFile(key, file, { as, args }),
   'setup:report': () => steamMgr.setupReport(),
+  // give a Flatpak emulator your games folder (asked first in Setup): only its Flatpak permissions change
+  'setup:flatpakAllow': ({ id, dir }) => {
+    if (!/^[A-Za-z0-9_.-]+$/.test(String(id || '')) || !path.isAbsolute(String(dir || ''))) throw new Error('Not a Flatpak app or folder');
+    require('child_process').execFileSync('flatpak', ['override', '--user', `--filesystem=${dir}`, id], { timeout: 15000 });
+    return true;
+  },
   'setup:done': () => { config.setupDone = Date.now(); saveConfig(); return true; },
   // a game's manual (PDF) from RomM, kept in manuals/ so it opens offline next time
   'rom:manual': async ({ romId }) => {
@@ -2091,6 +2127,7 @@ const handlers09 = {
     return buf;
   },
   'library:verify': () => verifyLibrary(),
+  'library:redownload': ({ romId }) => redownload(Number(romId)),
   'library:verifyCancel': () => { verifyRun?.ac.abort(); return true; },
   'steam:health': () => steamMgr.health(),
   'steam:consoleCollections': () => steamMgr.syncConsoleCollections(),
@@ -2099,6 +2136,7 @@ const handlers09 = {
   'steam:gameEmu': ({ romId }) => ({ current: steamMgr.gameEmu(romId), key: steamMgr.forRom(romId).console }),
   'steam:gameEmuOptions': ({ key }) => steamMgr.candidatesFor(key),
   'steam:setGameEmu': ({ romId, id }) => steamMgr.setGameEmu(romId, id),
+  'steam:refreshGame': ({ romId }) => steamMgr.refreshGame(romId),
 };
 const handlers = {
   ...trophySvc.handlers,

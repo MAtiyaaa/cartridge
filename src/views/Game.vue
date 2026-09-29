@@ -451,7 +451,7 @@ async function pickGameEmu() {
   await call('steam:setGameEmu', { romId, id: v === '__console' ? null : v });
   const st = await call('steam:forRom', { romId }).catch(() => null);
   if (st?.inSteam && st.ours && st.console) {
-    const r = await call('steam:refresh', { key: st.console }).catch(() => null);
+    const r = await call('steam:refreshGame', { romId }).catch(() => null); // only this game's shortcut
     if (r?.count && !r.fixed) await applyChanges();
     toast(r?.fixed ? 'Its Steam shortcut now uses it' : 'Saved. Its Steam shortcut is being updated.', 'ok', 3000, 'mdiGamepadVariantOutline');
   } else toast('Saved. Used when it goes into Steam.', 'ok', 2600, 'mdiGamepadVariantOutline');

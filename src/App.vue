@@ -77,7 +77,7 @@
 
 <script setup>
 import { computed, onMounted, onBeforeUnmount, ref, watch, nextTick, defineAsyncComponent } from 'vue';
-import { store, loadConfig, loadLibrary, loadArt, back, tab, go, call, toast, choose, builtinKb, askText, GRADE, activeTabs, TAB_DEFS } from './store.js';
+import { store, loadConfig, loadLibrary, loadArt, back, tab, go, call, toast, choose, saveConfig, builtinKb, askText, GRADE, activeTabs, TAB_DEFS } from './store.js';
 import { pushLayer, focusFirst } from './nav.js';
 import { setSoundEnabled, setSoundStyle, sfx } from './sfx.js';
 import { applyTheme, CARD_SIZES } from './themes.js';
@@ -228,7 +228,7 @@ onMounted(async () => {
   if (steamOn) setTimeout(steamReport, 2500);
   // 0.9: a new install goes through emulator Setup once, after connecting to RomM
   if (steamOn && store.config.configured && !store.config.setupDone) go('emu-setup', { first: true });
-  if (steamOn) setTimeout(checkMoved, 6000);
+  if (steamOn) { setTimeout(checkMoved, 6000); setTimeout(setupNotice, 3500); }
   if (store.config.configured) call('server:status').then((c) => (store.connection = c)).catch(() => {});
   pushLayer(document.body, {
     back: () => { if (viewHandler('back') !== false) return; back(); },
@@ -247,9 +247,20 @@ onMounted(async () => {
 });
 // connected for the first time (the RomM step just finished): emulators next
 watch(() => store.config?.configured, (v, was) => { if (v && !was && !store.config.setupDone) go('emu-setup', { first: true }); });
+// People who set up before 0.9 skipped Emulator setup: tell them about it once
+async function setupNotice() {
+  if (store.config?.setupDone !== 'before 0.9' || store.config.ui.setupNotice || store.modal) return;
+  saveConfig({ ui: { setupNotice: Date.now() } });
+  const v = await choose({ title: 'New: Emulator setup', message: 'Cartridge can now find your emulators wherever they are, even renamed AppImages, and check each console before its games go into Steam: the emulator, its launch options, BIOS and folder access.\n\nIt’s always in Settings → Steam.', options: [
+    { label: 'Open Emulator setup', value: 'open', icon: 'mdiRadar' },
+    { label: 'Later', value: 'later', icon: 'mdiClockOutline' },
+  ] });
+  if (v === 'open') go('emu-setup');
+}
 // An emulator Cartridge's shortcuts use isn't where it was (an update renamed the AppImage, or it
 // moved): offer Shortcut health, once per set of paths
 async function checkMoved() {
+  if (store.modal) { setTimeout(checkMoved, 5000); return; } // one dialog at a time
   const m = await call('steam:moved').catch(() => []);
   if (!m.length) return;
   const sig = m.map((x) => x.exe).join('|');

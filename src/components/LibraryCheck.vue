@@ -25,7 +25,7 @@
 
 <script setup>
 import { onBeforeUnmount, ref } from 'vue';
-import { call, toast, confirm, romById, download, store } from '../store.js';
+import { call, toast, confirm } from '../store.js';
 import Icon from './Icon.vue';
 
 // Settings → Storage: check every downloaded game against RomM, and re-download the damaged ones
@@ -39,15 +39,12 @@ async function run() {
   try { res.value = await call('library:verify'); } catch (e) { toast(e.message, 'error'); }
   running.value = false; prog.value = null;
 }
+// the old copy is kept aside until the new one has passed its checks (and put back if it fails)
 async function redo(d) {
-  const rom = romById(d.romId);
-  if (!rom) return false;
-  await call('roms:delete', { romId: d.romId, path: store.installed[d.romId] }).catch(() => {});
-  await download(rom, { checkSpace: false });
-  return true;
+  try { await call('library:redownload', { romId: d.romId }); return true; } catch (e) { toast(e.message, 'error'); return false; }
 }
 async function fix(d) {
-  if (!(await confirm(`Re-download ${d.name}?`, 'The copy on this device is replaced with a fresh one from RomM.', 'Re-download'))) return;
+  if (!(await confirm(`Re-download ${d.name}?`, 'A fresh copy comes from RomM. The one on this device is kept until the new one has passed its check.', 'Re-download'))) return;
   if (await redo(d)) { res.value.damaged = res.value.damaged.filter((x) => x !== d); toast('Downloading again', 'ok', 2400, 'mdiDownload'); }
 }
 async function fixAll() {

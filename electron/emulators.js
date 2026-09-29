@@ -3,23 +3,26 @@
 // steam-rom-manager) and Steam ROM Manager's own presets (SteamGridDB/steam-rom-manager files/
 // presets), which are what people's working shortcuts use.
 //
+// pre: what goes before %command% (EmuDeck starts some with vblank_mode=0). below: [[version, args]]
+// for versions older than that, when the version is known.
 // Each standalone emulator: label, EmuDeck launcher scripts, AppImage file name pattern, Flatpak ids,
 // program names (distro packages), launch args ({ROM} the game, {DIR} its folder, {NAME} the file
 // name without extension), args per console where they differ, and the consoles it runs.
 // Consoles use Cartridge's keys (platformMap.js).
 const EMU = {
-  pcsx2: { label: 'PCSX2', scripts: ['pcsx2-qt.sh', 'pcsx2.sh'], app: /pcsx2/i, fp: ['net.pcsx2.PCSX2'], bin: ['pcsx2-qt', 'pcsx2'], args: '-batch -fullscreen -nogui "{ROM}"', for: ['ps2'] },
+  // PCSX2 before 1.7 (the old wx builds) took long options; the Qt builds since take -batch -fullscreen -nogui
+  pcsx2: { label: 'PCSX2', scripts: ['pcsx2-qt.sh', 'pcsx2.sh'], app: /pcsx2/i, fp: ['net.pcsx2.PCSX2'], bin: ['pcsx2-qt', 'pcsx2'], args: '-batch -fullscreen -nogui "{ROM}"', below: [['1.7', '--nogui --fullscreen "{ROM}"']], for: ['ps2'] },
   duckstation: { label: 'DuckStation', scripts: ['duckstation.sh'], app: /duckstation/i, fp: ['org.duckstation.DuckStation'], bin: ['duckstation-qt', 'duckstation'], args: '-batch -fullscreen -nogui "{ROM}"', for: ['psx'] },
-  dolphin: { label: 'Dolphin', scripts: ['dolphin-emu.sh'], app: /dolphin/i, fp: ['org.DolphinEmu.dolphin-emu'], bin: ['dolphin-emu'], args: '-b -e "{ROM}"', for: ['gc', 'wii'] },
-  cemu: { label: 'Cemu', scripts: ['cemu.sh'], app: /cemu/i, fp: ['info.cemu.Cemu'], bin: ['cemu', 'Cemu'], args: '-f -g "{ROM}"', for: ['wiiu'] },
-  eden: { label: 'Eden', scripts: ['eden.sh'], app: /eden/i, fp: ['dev.eden_emu.eden'], bin: ['eden'], args: '-f -g "{ROM}"', for: ['switch'] },
-  citron: { label: 'Citron', scripts: ['citron.sh'], app: /citron/i, fp: ['org.citron_emu.citron'], bin: ['citron'], args: '-f -g "{ROM}"', for: ['switch'] },
-  yuzu: { label: 'Yuzu', scripts: ['yuzu.sh', 'suyu.sh'], app: /(yuzu|sudachi|suyu)/i, fp: ['org.yuzu_emu.yuzu', 'org.sudachi_emu.sudachi'], bin: ['yuzu', 'sudachi', 'suyu'], args: '-f -g "{ROM}"', for: ['switch'] },
+  dolphin: { label: 'Dolphin', scripts: ['dolphin-emu.sh'], app: /dolphin/i, fp: ['org.DolphinEmu.dolphin-emu'], bin: ['dolphin-emu'], pre: ['vblank_mode=0'], args: '-b -e "{ROM}"', for: ['gc', 'wii'] },
+  cemu: { label: 'Cemu', scripts: ['cemu.sh'], app: /cemu/i, fp: ['info.cemu.Cemu'], bin: ['cemu', 'Cemu'], pre: ['vblank_mode=0'], args: '-f -g "{ROM}"', for: ['wiiu'] },
+  eden: { label: 'Eden', scripts: ['eden.sh'], app: /eden/i, fp: ['dev.eden_emu.eden'], bin: ['eden'], pre: ['vblank_mode=0'], args: '-f -g "{ROM}"', for: ['switch'] },
+  citron: { label: 'Citron', scripts: ['citron.sh'], app: /citron/i, fp: ['org.citron_emu.citron'], bin: ['citron'], pre: ['vblank_mode=0'], args: '-f -g "{ROM}"', for: ['switch'] },
+  yuzu: { label: 'Yuzu', scripts: ['yuzu.sh', 'suyu.sh'], app: /(yuzu|sudachi|suyu)/i, fp: ['org.yuzu_emu.yuzu', 'org.sudachi_emu.sudachi'], bin: ['yuzu', 'sudachi', 'suyu'], pre: ['vblank_mode=0'], args: '-f -g "{ROM}"', for: ['switch'] },
   ryujinx: { label: 'Ryujinx', scripts: ['ryujinx.sh'], app: /ryujinx/i, fp: ['io.github.ryubing.Ryujinx', 'org.ryujinx.Ryujinx'], bin: ['Ryujinx', 'ryujinx'], args: '--fullscreen "{ROM}"', for: ['switch'] },
   rpcs3: { label: 'RPCS3', scripts: ['rpcs3.sh'], app: /rpcs3/i, fp: ['net.rpcs3.RPCS3'], bin: ['rpcs3'], args: '--no-gui "{ROM}"', for: ['ps3'] },
   shadps4: { label: 'shadPS4', scripts: ['shadps4.sh'], app: /shadps4/i, fp: ['net.shadps4.shadPS4'], bin: ['shadps4'], args: '-g "{ROM}"', qtArgs: '-d -g "{ROM}"', for: ['ps4'] },
-  ppsspp: { label: 'PPSSPP', scripts: ['ppsspp.sh'], app: /ppsspp/i, fp: ['org.ppsspp.PPSSPP'], bin: ['PPSSPPSDL', 'ppsspp', 'PPSSPPQt'], args: '-f -g "{ROM}"', for: ['psp'] },
-  azahar: { label: 'Azahar', scripts: ['azahar.sh', 'lime3ds.sh', 'citra.sh'], app: /(azahar|lime3ds|citra)/i, fp: ['org.azahar_emu.Azahar', 'io.github.lime3ds.Lime3DS', 'org.citra_emu.citra'], bin: ['azahar', 'azahar-qt', 'lime3ds', 'lime3ds-gui', 'citra-qt'], args: '"{ROM}"', for: ['n3ds'] },
+  ppsspp: { label: 'PPSSPP', scripts: ['ppsspp.sh'], app: /ppsspp/i, fp: ['org.ppsspp.PPSSPP'], bin: ['PPSSPPSDL', 'ppsspp', 'PPSSPPQt'], args: '-f -g "{ROM}"', argsBy: { flatpak: '"{ROM}" --fullscreen', native: '--fullscreen "{ROM}"', appimage: '--fullscreen "{ROM}"' }, for: ['psp'] },
+  azahar: { label: 'Azahar', scripts: ['azahar.sh', 'lime3ds.sh', 'citra.sh'], app: /(azahar|lime3ds|citra)/i, fp: ['org.azahar_emu.Azahar', 'io.github.lime3ds.Lime3DS', 'org.citra_emu.citra'], bin: ['azahar', 'azahar-qt', 'lime3ds', 'lime3ds-gui', 'citra-qt'], args: '"{ROM}"', argsBy: { native: '-f "{ROM}"', appimage: '-f "{ROM}"' }, for: ['n3ds'] },
   melonds: { label: 'melonDS', scripts: ['melonds.sh'], app: /melonds/i, fp: ['net.kuribo64.melonDS'], bin: ['melonDS', 'melonds'], args: '"{ROM}" -f', for: ['nds'] },
   // xemu only loads a game given as -dvd_path; EmuDeck's launcher is xemu-emu.sh
   xemu: { label: 'xemu', scripts: ['xemu-emu.sh', 'xemu.sh'], app: /xemu/i, fp: ['app.xemu.xemu'], bin: ['xemu'], args: '-full-screen -dvd_path "{ROM}"', for: ['xbox'] },
@@ -102,10 +105,12 @@ const DIR_GAMES = new Set(['ps3', 'ps4', 'ps5', 'wiiu', 'psvita', 'scummvm', 'do
 
 // console -> standalone emulator ids, in the order above (first is preferred)
 function emulatorsFor(key) { return Object.keys(EMU).filter((id) => EMU[id].for.includes(key)); }
-// the launch args for one emulator, console and install kind
-function argsFor(id, key, src) {
+// the launch args for one emulator, console, install kind and (when known) version
+const older = (v, than) => { const a = String(v).split('.').map(Number), b = String(than).split('.').map(Number); for (let i = 0; i < Math.max(a.length, b.length); i++) { if ((a[i] || 0) !== (b[i] || 0)) return (a[i] || 0) < (b[i] || 0); } return false; };
+function argsFor(id, key, src, version) {
   const e = EMU[id];
   if (e.system?.[key]) return `--fullscreen --system "${e.system[key]}" "{ROM}"`;
+  if (version && /^\d+(\.\d+)*$/.test(version)) for (const [than, a] of e.below || []) if (older(version, than)) return a;
   return e.argsBy?.[src] || e.args;
 }
 const coreName = (c) => CORE_NAMES[c] || c.replace(/_/g, ' ');

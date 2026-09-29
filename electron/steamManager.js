@@ -304,42 +304,9 @@ module.exports = function createSteamManager(ctx) {
       prog({ step: 'looking', dirs: 0 });
       const w = await detect.walk(roots, { skip, ms: drives ? 45000 : 25000, onProgress: (p) => prog({ step: 'looking', dirs: p.dirs, dir: p.dir.replace(HOME, '~') }) });
       const cands = [...w.found, ...detect.menuEntries(HOME).map((m) => ({ path: m.path, kind: 'menu', desktop: m.desktop }))];
-      const items = [], seen = new Set();
-      let strings = 0;
-      for (const [i, cd] of cands.entries()) {
-        if (i % 20 === 0) { prog({ step: 'reading', done: i, total: cands.length }); await new Promise((r) => setImmediate(r)); }
-        const rp = real(cd.path);
-        if (seen.has(rp)) continue;
-        seen.add(rp);
-        let st; try { st = fs.statSync(rp); } catch { continue; }
-        const old = prev.get(cd.path);
-        if (old && old.size === st.size && old.mtime === st.mtimeMs && cd.kind !== 'menu') { items.push(old); continue; }
-        const it = { path: cd.path, size: st.size, mtime: st.mtimeMs, exec: !!(st.mode & 0o111) };
-        try {
-          if (cd.kind === 'unpacked') {
-            const dn = ls(cd.dir).find((n) => /\.desktop$/i.test(n));
-            const de = dn ? detect.parseDesktop(fs.readFileSync(path.join(cd.dir, dn), 'utf8')) : null;
-            Object.assign(it, { kind: 'unpacked', name: de?.name || '' }, detect.identify({ desktop: de, desktopFile: dn && dn.replace(/\.desktop$/i, ''), fileName: path.basename(cd.dir) }));
-          } else if (detect.appImageType(rp)) {
-            const info = detect.readAppImage(rp);
-            let idn = detect.identify({ ...info, fileName: path.basename(rp) });
-            // nothing readable inside (DwarFS, an unusual compression): the name is all there is, as before 0.9
-            if (idn.conf === 1 && !info.desktop && !info.appstream && idn.why?.every((w) => w === 'its file name')) idn = { ...idn, conf: 2 };
-            const version = info.appstream?.version || info.desktop?.version || (path.basename(rp).match(/(\d+\.\d+(?:\.\d+)?)/) || [])[1] || '';
-            Object.assign(it, { kind: 'appimage', fs: info.fs, comp: info.comp, name: info.desktop?.name || info.appstream?.name || '', version, upd: info.upd || '', readError: info.error || '' }, idn);
-          } else if (detect.isElf(rp)) {
-            const idn = cd.kind === 'menu' ? detect.identify({ desktop: cd.desktop, fileName: path.basename(rp) }) : detect.identifyProgram(rp, { strings: st.size > 5e6 && strings++ < 40 });
-            if (!idn.id) continue;
-            Object.assign(it, { kind: 'program' }, idn, { conf: Math.min(idn.conf, cd.kind === 'menu' ? 2 : idn.conf) });
-          } else if (cd.kind === 'menu') { // a launcher script someone put in the app menu
-            const idn = detect.identify({ desktop: cd.desktop, fileName: path.basename(rp) });
-            if (!idn.id) continue;
-            Object.assign(it, { kind: 'script' }, idn, { conf: Math.min(idn.conf, 2) });
-          } else continue;
-        } catch (e) { log('scan: could not read', cd.path, e.message); continue; }
-        if (!it.id && it.kind !== 'appimage') continue; // unknown AppImages stay listed, so you can say what they are
-        items.push(it);
-      }
+      // reading inside each file happens off the main thread, so the screen never freezes
+      prog({ step: 'reading', done: 0, total: cands.length });
+      const items = await detect.identifyInWorker(cands, [...prev.values()], (d) => prog({ step: 'reading', done: d, total: cands.length }), log);
       found = { at: Date.now(), items, srm: detect.srmConfigs(HOME), dirs: w.dirs, stopped: w.stopped, ms: w.ms, drives };
       try { fs.writeFileSync(FOUND_FILE, JSON.stringify(found)); } catch {}
       flatpaks = null; extraBins = null;
@@ -364,7 +331,7 @@ module.exports = function createSteamManager(ctx) {
     const emuApps = [path.join(HOME, 'Applications'), path.join(real(HOME), 'Applications')];
     for (const id of emulatorsFor(key)) {
       const e = EMU[id], found = [];
-      const mk = (exe, start, src, from, args) => found.push({ t: { exe, start, pre: [], command: true, args: args || argsFor(id, key, src), kind: e.kind || kindOf(key), how: src, from }, src });
+      const mk = (exe, start, src, from, args, version) => found.push({ t: { exe, start, pre: e.pre || [], command: true, args: args || argsFor(id, key, src, version), kind: e.kind || kindOf(key), how: src, from }, src });
       let wrap = { flatpak: false, appimage: false, text: '' };
       for (const d of L) for (const sc of e.scripts || []) if (exists(path.join(d, sc)) && !found.length) { mk(path.join(d, sc), d, 'emudeck', `EmuDeck ${e.label}`); wrap = wraps(path.join(d, sc)); }
       // One AppImage: the newest copy, found by name in the usual folders or by what's inside it
@@ -377,7 +344,8 @@ module.exports = function createSteamManager(ctx) {
       for (const x of foundFor(id)) if (x.kind === 'appimage' && !(wrap.appimage && (emuApps.includes(path.dirname(x.path)) || wrap.text.includes(path.basename(x.path))))) apps.push(x.path);
       const uniq = [...new Map(apps.map((p) => [real(p), p])).values()];
       const hit = uniq.filter((p) => !/qtlauncher/i.test(p)).sort((a, b) => mtime(b) - mtime(a))[0] || uniq[0];
-      if (hit) mk(hit, path.dirname(hit), 'appimage', path.basename(hit), /qtlauncher/i.test(hit) && e.qtArgs ? e.qtArgs : null);
+      // its version (read from inside it by Setup, else the file name) picks arguments that changed over time
+      if (hit) mk(hit, path.dirname(hit), 'appimage', path.basename(hit), /qtlauncher/i.test(hit) && e.qtArgs ? e.qtArgs : null, scanned(hit)?.version || (path.basename(hit).match(/(\d+\.\d+(?:\.\d+)?)/) || [])[1]);
       const fp = (e.fp || []).find((x) => flatpakApps().includes(x));
       if (fp && !wrap.flatpak) mk('/usr/bin/flatpak', '/usr/bin', 'flatpak', fp, `run ${fp} ${argsFor(id, key, 'flatpak')}`);
       const bin = findBin(e.bin) || foundFor(id).find((x) => x.kind === 'program' || x.kind === 'unpacked' || x.kind === 'script')?.path;
@@ -1104,7 +1072,7 @@ module.exports = function createSteamManager(ctx) {
     if (fpId) {
       if (!flatpakApps().includes(fpId)) add('bad', `The Flatpak ${fpId} isn't installed any more.`);
       const dir = romDirOf(key);
-      if (dir && exists(dir)) { const a = detect.flatpakCanSee(fpId, dir); if (a.known && !a.ok) add('bad', 'This Flatpak emulator has no access to your games folder, so games won’t open.', { fix: a.fix, copy: a.fix }); }
+      if (dir && exists(dir)) { const a = detect.flatpakCanSee(fpId, dir); if (a.known && !a.ok) add('bad', 'This Flatpak emulator has no access to your games folder, so games won’t open.', { fix: a.fix, copy: a.fix, allow: { id: fpId, dir: real(dir) } }); }
     } else if (!exists(t.exe)) add('bad', `The emulator isn't at ${t.exe.replace(HOME, '~')} any more.`, { relink: true });
     else {
       try { fs.accessSync(t.exe, fs.constants.X_OK); } catch { add('bad', `${path.basename(t.exe)} isn't allowed to run. Right-click it, Properties, and allow running it as a program (or run: chmod +x on it).`, { copy: `chmod +x "${t.exe}"` }); }
@@ -1131,7 +1099,7 @@ module.exports = function createSteamManager(ctx) {
       const ids = new Set([...emulatorsFor(c.key), ...(CORES[c.key] ? ['retroarch'] : [])]);
       const ok = cfg().confirmed || {};
       const unsure = (found?.items || []).filter((x) => x.id && ids.has(x.id) && x.conf < 2 && !ok[x.path] && exists(x.path)).map((x) => ({ path: x.path, short: shortPath(x.path), id: x.id, label: labelOf(x.id), why: x.why || [] }));
-      return { ...c, emus, emu: t?.how === 'yours' ? 'yours' : t?.emu || null, using: t ? { exe: shortPath(t.exe), how: t.how, from: t.from } : null, checks: preflight(c.key, t), unsure };
+      return { ...c, emus, emu: t?.how === 'yours' ? 'yours' : t?.emu || null, using: t ? { exe: shortPath(t.exe), how: t.how, from: t.from, rawExe: t.exe, start: t.start, lo: [...(t.pre || []), ...((t.pre || []).length ? ['%command%'] : []), t.args].join(' ') } : null, checks: preflight(c.key, t), unsure };
     }).sort((a, b) => b.games - a.games || a.platform.localeCompare(b.platform));
     const ok = cfg().confirmed || {};
     const unknown = (found?.items || []).filter((x) => x.kind === 'appimage' && !x.id && !ok[x.path] && exists(x.path)).map((x) => ({ path: x.path, short: shortPath(x.path), name: x.name || '', fs: x.fs, version: x.version }));
@@ -1352,6 +1320,28 @@ module.exports = function createSteamManager(ctx) {
       queueAdd(games.map((g) => ({ romId: g.romId, collections: reg[g.appid]?.collections || [] })));
       queueRemove(games.map((g) => g.appid)); // after queueAdd, which drops pending removals of the same game
       return { count: games.length };
+    },
+    // one game's shortcut to its current setup (after "Emulator for this game"), leaving the rest of
+    // its console alone: in place when Steam can be reached, else queued to be re-added
+    refreshGame: async (romId) => {
+      const g = overview().games.find((x) => x.romId === romId && x.inSteam && x.ours && x.file && x.appid);
+      if (!g) return { count: 0 };
+      const t = templateForGame(romId, g.console), mode = (cfg().modes || {})[g.console] || 'direct', sig = sigOf(t, mode);
+      if (!t || (reg[g.appid]?.sig === sig && !g.badLo)) return { count: 0 };
+      const env = environment();
+      const ig = installedGames().find((x) => x.rom.id === romId);
+      if (mode !== 'script' && ig?.file && env.account && await live.available(env.account.root)) {
+        const b = buildLaunch(ig.rom, ig.file, t);
+        if (!b.missing) {
+          const { target, launch } = launchFor(t, b.lo, b.args);
+          try {
+            if ((await live.updateShortcut(g.appid, { exe: target, start: q(t.start), lo: launch })) === 'ok') { Object.assign(reg[g.appid], { sig, exe: t.exe, emu: t.emu || null, emuExe: t.exe, mode, inPlace: Date.now() }); saveReg(); return { count: 1, fixed: 1 }; }
+          } catch (e) { log('steam live update', e.message); }
+        }
+      }
+      queueAdd([{ romId, collections: reg[g.appid]?.collections || [] }]);
+      queueRemove([g.appid]);
+      return { count: 1 };
     },
     liveInfo: async () => { const env = environment(); if (!env.account) return { on: false, flag: false }; return { on: await live.available(env.account.root), flag: live.flagOn(env.account.root) }; },
     liveEnable: () => { const env = environment(); if (!env.account) throw new Error('Steam was not found.'); fs.writeFileSync(path.join(env.account.root, live.FLAG), ''); return true; },

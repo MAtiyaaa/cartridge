@@ -437,4 +437,63 @@ function flatpakCanSee(id, target, home = require('os').homedir()) {
   return { ok: !!hit, known: true, why: hit ? `allowed through ${hit}` : 'no permission for that folder', fix: `flatpak override --user --filesystem="${tgt}" ${id}` };
 }
 
-module.exports = { missingFuse2, flatpakCanSee, appImageType, isElf, readAppImage, parseDesktop, parseAppStream, identify, identifyProgram, walk, menuEntries, srmConfigs, extraBinDirs, execName, FAMILY, KNOWN };
+// ---------------------------------------------------------------- reading what each found file is
+// For each candidate from walk()/menuEntries(): which emulator it is, with its version. Files that
+// haven't changed since the last scan (same size and date) keep what was read then.
+function identifyAll(cands, prevList = [], onProgress, log) {
+  const prev = new Map(prevList.map((x) => [x.path, x]));
+  const realp = (p) => { try { return fs.realpathSync(p); } catch { return p; } };
+  const ls = (p) => { try { return fs.readdirSync(p); } catch { return []; } };
+  const real = realp;
+  const items = [], seen = new Set();
+  let strings = 0;
+  for (const [i, cd] of cands.entries()) {
+    if (i % 20 === 0) { onProgress?.(i); }
+    const rp = real(cd.path);
+    if (seen.has(rp)) continue;
+    seen.add(rp);
+    let st; try { st = fs.statSync(rp); } catch { continue; }
+    const old = prev.get(cd.path);
+    if (old && old.size === st.size && old.mtime === st.mtimeMs && cd.kind !== 'menu') { items.push(old); continue; }
+    const it = { path: cd.path, size: st.size, mtime: st.mtimeMs, exec: !!(st.mode & 0o111) };
+    try {
+      if (cd.kind === 'unpacked') {
+        const dn = ls(cd.dir).find((n) => /\.desktop$/i.test(n));
+        const de = dn ? parseDesktop(fs.readFileSync(path.join(cd.dir, dn), 'utf8')) : null;
+        Object.assign(it, { kind: 'unpacked', name: de?.name || '' }, identify({ desktop: de, desktopFile: dn && dn.replace(/\.desktop$/i, ''), fileName: path.basename(cd.dir) }));
+      } else if (appImageType(rp)) {
+        const info = readAppImage(rp);
+        let idn = identify({ ...info, fileName: path.basename(rp) });
+        // nothing readable inside (DwarFS, an unusual compression): the name is all there is, as before 0.9
+        if (idn.conf === 1 && !info.desktop && !info.appstream && idn.why?.every((w) => w === 'its file name')) idn = { ...idn, conf: 2 };
+        const version = info.appstream?.version || info.desktop?.version || (path.basename(rp).match(/(\d+\.\d+(?:\.\d+)?)/) || [])[1] || '';
+        Object.assign(it, { kind: 'appimage', fs: info.fs, comp: info.comp, name: info.desktop?.name || info.appstream?.name || '', version, upd: info.upd || '', readError: info.error || '' }, idn);
+      } else if (isElf(rp)) {
+        const idn = cd.kind === 'menu' ? identify({ desktop: cd.desktop, fileName: path.basename(rp) }) : identifyProgram(rp, { strings: st.size > 5e6 && strings++ < 40 });
+        if (!idn.id) continue;
+        Object.assign(it, { kind: 'program' }, idn, { conf: Math.min(idn.conf, cd.kind === 'menu' ? 2 : idn.conf) });
+      } else if (cd.kind === 'menu') { // a launcher script someone put in the app menu
+        const idn = identify({ desktop: cd.desktop, fileName: path.basename(rp) });
+        if (!idn.id) continue;
+        Object.assign(it, { kind: 'script' }, idn, { conf: Math.min(idn.conf, 2) });
+      } else continue;
+    } catch (e) { log?.('scan: could not read', cd.path, e.message); continue; }
+    if (!it.id && it.kind !== 'appimage') continue; // unknown AppImages stay listed, so you can say what they are
+    items.push(it);
+  }
+  return items;
+}
+// The same in a worker thread; inline if a worker can't start
+function identifyInWorker(cands, prevList, onProgress, log) {
+  return new Promise((resolve) => {
+    let w;
+    const inline = () => resolve(identifyAll(cands, prevList, onProgress, log));
+    try { w = new (require('worker_threads').Worker)(path.join(__dirname, 'detectWorker.js'), { workerData: { cands, prevList } }); } catch (e) { log?.('scan worker', e.message); return inline(); }
+    let done = false;
+    w.on('message', (m) => { if (m.progress != null) onProgress?.(m.progress); else if (m.log) log?.(...m.log); else if (m.items) { done = true; resolve(m.items); } });
+    w.on('error', (e) => { log?.('scan worker failed, reading here', e.message); if (!done) { done = true; inline(); } });
+    w.on('exit', () => { if (!done) { done = true; inline(); } });
+  });
+}
+
+module.exports = { identifyAll, identifyInWorker, missingFuse2, flatpakCanSee, appImageType, isElf, readAppImage, parseDesktop, parseAppStream, identify, identifyProgram, walk, menuEntries, srmConfigs, extraBinDirs, execName, FAMILY, KNOWN };

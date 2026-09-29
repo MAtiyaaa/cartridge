@@ -17,7 +17,7 @@ This file is the short version every session needs. The full handoff (history, e
 - Work on the session's branch, never directly on `main`. **Standing instruction from the owner:** when an update is finished, built and launch-checked, open the PR and merge it to `main` to release it without asking again. Problems get fixed together afterwards.
 - **Never change `version` in `package.json` unless the owner asks for a release.** A version change on `main` builds and publishes a release to every user automatically.
 - Check every change builds: `npm ci --ignore-scripts && npx vite build` (the cloud container can't download Electron, so the full `npm run dist` may not work here).
-- There are no automated tests in the repo. Say plainly what was checked and what the owner must test on a device (controller, Game Mode, Steam, TV size).
+- `npm test` runs the detection tests in `test/` (CI runs it before every release build). Everything else is checked by hand: say plainly what was checked and what the owner must test on a device (controller, Game Mode, Steam, TV size).
 - Keep changes minimal and match the surrounding code: dense, short comments that explain why.
 - Before committing, grep the diff for private info (usernames, IPs, domains, emails, local paths). The repo is public.
 
@@ -141,6 +141,13 @@ LT/RT switch top tabs. LB/RB only switch sections inside a page. A select, B bac
 - steamManager: `scanEmulators` → `emulators-found.json`; `foundFor(id)` (conf ≥ 2 or `steam.confirmed[path]`) feeds `candidates()`; SRM configs as `srm:` candidates; learned templates with a missing exe are skipped. `setupOverview`, `preflight` (flatpak access, exec bit, FUSE 2, core, `bios.js` status), `useFile` (Browse), `health`/`healthFix` (relink live via `updateShortcut`), `movedEmulators` (start-up check), `setupReport` (scrubbed), `templateForGame` (`steam.gameEmus[romId]`), `syncConsoleCollections` (`steam.consoleCollections`). Reg entries carry `emu`/`emuExe`.
 - Views: `EmuSetup.vue` (route `emu-setup`, `first` on first launch until `config.setupDone`), `ShortcutHealth.vue` (`steam-health`), `FirstTour.vue` (modal `tour`, `ui.toured`), `ManualViewer.vue` (modal `manual`, pdf.js, loaded on demand), `LibraryCheck.vue` (Settings → Storage, `library:verify`). `fs:list` takes `files: '*'`; `clip:write`.
 - `npm test`: `test/detect.test.js` (fake homes, squashfs fixtures in `test/fixtures`). Not shipped in the AppImage.
+
+## 0.9.1
+- `emulators.js`: `pre` (what goes before `%command%`: `vblank_mode=0` for Cemu, Dolphin, Eden, Citron, yuzu, as EmuDeck), `below: [[version, args]]` (PCSX2 before 1.7), `argsFor(id, key, src, version)`; the AppImage's version comes from the scan (`scanned().version`) or its file name. Refreshed against EmuDeck's SRM parsers and SRM presets (PPSSPP, Azahar).
+- `detect.identifyAll` (reading inside found files) runs in `detectWorker.js` (`identifyInWorker`), inline if a worker can't start.
+- `redownload()` in main.js (`library:redownload`): the copy is renamed `<path>.cartridge-old`, deleted after the new one passes, put back on error or cancel (`restoreBackup`); `it.redo` skips the automatic Steam add.
+- `steamManager.refreshGame(romId)` (`steam:refreshGame`) updates one shortcut; `setup:flatpakAllow` runs `flatpak override --user --filesystem`; `setupNotice` in App.vue (once, `ui.setupNotice`, for `setupDone === 'before 0.9'`); start-up dialogs wait for each other.
+- CI runs `npm test` before building.
 
 ## Releases (full steps: HANDOFF D8)
 Only when the owner asks. Bump `version` and `build.releaseInfo.releaseName` ("Cartridge X.Y.Z") in `package.json`, put only this version's notes in `RELEASE_NOTES.md` (heading `## Cartridge X.Y.Z · Title`), add them to the top of `CHANGELOG.md`, grouped as New / Changed / Fixed with bold lead-ins. CI builds, launch-checks and publishes.
