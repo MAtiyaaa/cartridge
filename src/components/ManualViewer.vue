@@ -79,6 +79,6 @@ onBeforeUnmount(() => { layer?.pop(); io?.disconnect(); doc?.destroy?.(); });
 .mv-top .hint { display: flex; align-items: center; gap: 6px; font-size: var(--t-sm); color: var(--muted); }
 .spacer { flex: 1; }
 .mv-pages { flex: 1; overflow: auto; display: flex; flex-direction: column; align-items: center; gap: var(--s-4); padding: var(--s-5) 0 var(--s-8); outline: none; }
-.mv-page { background: #fff; box-shadow: var(--shadow-card); border-radius: 2px; min-height: 200px; }
+.mv-page { flex: none; background: #fff; box-shadow: var(--shadow-card); border-radius: 2px; min-height: 200px; }
 .center { flex: 1; }
 </style>

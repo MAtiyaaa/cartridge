@@ -65,7 +65,10 @@ async function fix(appids) {
   load();
 }
 async function act(p) {
-  if (canFix(p)) return fix([p.appid]);
+  const fixes = p.issues.filter((i) => i.fix);
+  // more than one fix for this shortcut (say the emulator moved and the game is gone): say what happens first
+  if (fixes.length > 1 && !(await confirm(p.name, fixes.map((i) => `${i.text}\n→ ${i.fix.label}`).join('\n\n'), 'Do both'))) return;
+  if (fixes.length) return fix([p.appid]);
   const i = p.issues[0];
   const tip = i.kind === 'emulator' ? 'Cartridge couldn’t find that emulator anywhere. Run Setup to find it, or pick another one for this console.' : i.kind === 'core' ? 'Open RetroArch, then Main Menu → Online Updater → Core Downloader, and install it.' : i.kind === 'flatpak' ? 'Install it again from your software centre, or pick another emulator in Setup.' : 'Open the shortcut in Steam (Properties) to fix it by hand.';
   await confirm(p.name, `${p.issues.map((x) => x.text).join('\n')}\n\n${tip}`, 'OK');

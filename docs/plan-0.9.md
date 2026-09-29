@@ -1,6 +1,6 @@
 # Cartridge 0.9 plan
 
-Agreed with the owner, not built yet. 0.9 fully nails the Linux experience; 0.9.x is fixes only; 1.0 brings Android. Nothing here is started until the owner says go.
+Agreed with the owner and built in 0.9.0 (direction B picked for the design). Still open: RetroDECK command line launching, Flatpak Steam launching, BIOS copied into emulator folders (not done: the rule stands). 0.9 fully nails the Linux experience; 0.9.x is fixes only; 1.0 brings Android. Nothing here is started until the owner says go.
 
 ## 1. Setup (headline)
 

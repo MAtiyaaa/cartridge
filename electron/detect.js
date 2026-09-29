@@ -405,7 +405,7 @@ function missingFuse2(file) {
 }
 
 // Can this Flatpak app open that folder? Reads its permissions and any overrides (never changes them).
-// { ok, known, why } — known is false when the permissions couldn't be read.
+// { ok, known, why }: known is false when the permissions couldn't be read.
 function flatpakCanSee(id, target, home = require('os').homedir()) {
   const realp = (p) => { try { return fs.realpathSync(p); } catch { return p; } };
   const tgt = realp(target);
