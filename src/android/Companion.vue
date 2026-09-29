@@ -5,20 +5,21 @@
     <main class="body">
       <Transition name="cfade" mode="out-in">
         <!-- Game -->
-        <section v-if="tab === 'game' && rom" :key="'g' + rom.id" class="view gv" data-scroll>
-          <div class="hero"><Art class="fill" :src="heroSrc" :blur="hero?.blur" /><div class="hero-shade" /></div>
-          <!-- the box art peeks in from the right; the logo leads -->
-          <Art class="peek" :src="coverSrc"><div class="ph"><PIcon v-if="platform" :p="platform" :size="44" /></div></Art>
-          <div class="gv-main">
-            <div class="eyebrow row"><PIcon v-if="platform" :p="platform" :size="16" />{{ rom.platform_display_name || platform?.display_name }}</div>
-            <GameLogo :logo="gameLogo" :name="rom.name" cls="t-title" :area="30000" :max-w="340" :max-h="130" fixed />
-            <div v-if="gameLogo" class="gv-name">{{ rom.name }}</div>
-            <div class="meta">
-              <span v-if="yr">{{ yr }}</span>
-              <span v-if="info.genres">{{ info.genres }}</span>
-              <span v-if="rom.fs_size_bytes">{{ bytes(rom.fs_size_bytes) }}</span>
-              <span v-if="info.rating" class="row gold"><Icon name="mdiStar" :size="14" />{{ rating(info.rating) }}</span>
+        <section v-if="tab === 'game' && rom" :key="'g' + rom.id" ref="gvEl" class="view gv" data-scroll :style="{ '--p': gvP, '--sy': gvY }" @scroll.passive="gvScroll">
+          <div class="hero gv-hero"><Art class="fill" :src="heroSrc" :blur="hero?.blur" /><div class="hero-shade" /></div>
+          <div class="gv-head">
+            <div class="gv-main">
+              <div class="eyebrow row"><PIcon v-if="platform" :p="platform" :size="16" />{{ rom.platform_display_name || platform?.display_name }}</div>
+              <div class="gv-logo"><GameLogo :logo="gameLogo" :name="rom.name" cls="t-title" :area="24000" :max-w="300" :max-h="116" fixed /></div>
+              <div v-if="gameLogo" class="gv-name">{{ rom.name }}</div>
+              <div class="meta">
+                <span v-if="yr">{{ yr }}</span>
+                <span v-if="info.genres">{{ info.genres }}</span>
+                <span v-if="rom.fs_size_bytes">{{ bytes(rom.fs_size_bytes) }}</span>
+                <span v-if="info.rating" class="row gold"><Icon name="mdiStar" :size="14" />{{ rating(info.rating) }}</span>
+              </div>
             </div>
+            <Art class="gv-cover" :src="coverSrc"><div class="ph"><PIcon v-if="platform" :p="platform" :size="40" /></div></Art>
           </div>
 
           <div v-if="summary" class="sum">
@@ -26,15 +27,18 @@
             <button v-if="summary.length > 160" class="more" @click="bioOpen = !bioOpen">{{ bioOpen ? 'Show less' : 'Show more' }}<Icon :name="bioOpen ? 'mdiChevronUp' : 'mdiChevronDown'" :size="16" /></button>
           </div>
 
-          <div v-if="dlActive" class="inline-dl">
-            <div class="row between"><span>{{ dl.status === 'queued' ? 'Queued' : 'Downloading' }}</span><span class="num">{{ pctOf(dl) }}%<template v-if="dl.speed"> · {{ bytes(dl.speed) }}/s</template></span></div>
-            <div class="bar"><i :style="{ width: pctOf(dl) + '%' }" /></div>
-          </div>
-          <div class="acts gv-acts">
-            <button class="pill primary" @click="cmd({ open: true, romId: rom.id })"><Icon name="mdiOpenInNew" :size="19" />Open</button>
-            <span v-if="installed" class="pill ok"><Icon name="mdiCheckCircle" :size="18" />On this device</span>
-            <button v-else-if="dlActive" class="pill" @click="call('dl:cancel', dl.id)"><Icon name="mdiClose" :size="19" />Cancel</button>
-            <button v-else class="pill" :disabled="busyDl" @click="startDl"><Icon name="mdiDownload" :size="19" />Download</button>
+          <!-- pinned above the dock: Open and Download are always on screen -->
+          <div class="gv-acts">
+            <div v-if="dlActive" class="inline-dl">
+              <div class="row between"><span>{{ dl.status === 'queued' ? 'Queued' : 'Downloading' }}</span><span class="num">{{ pctOf(dl) }}%<template v-if="dl.speed"> · {{ bytes(dl.speed) }}/s</template></span></div>
+              <div class="bar"><i :style="{ width: pctOf(dl) + '%' }" /></div>
+            </div>
+            <div class="acts">
+              <button class="pill primary" @click="cmd({ open: true, romId: rom.id })"><Icon name="mdiOpenInNew" :size="19" />Open</button>
+              <span v-if="installed" class="pill ok"><Icon name="mdiCheckCircle" :size="18" />On this device</span>
+              <button v-else-if="dlActive" class="pill" @click="call('dl:cancel', dl.id)"><Icon name="mdiClose" :size="19" />Cancel</button>
+              <button v-else class="pill" :disabled="busyDl" @click="startDl"><Icon name="mdiDownload" :size="19" />Download</button>
+            </div>
           </div>
         </section>
 
@@ -287,6 +291,15 @@ const collArt = computed(() => groupArt(collRoms.value));
 const collStrip = computed(() => strip(collRoms.value));
 const collOnDevice = computed(() => (selColl.value ? romsOfCollection(selColl.value.id).filter((r) => store.installed[r.id]).length : 0));
 const coverSrc = computed(() => rom.value && cover(rom.value, true));
+// Scrolling the game view: the art drifts slower than the page and fades, the logo and box art ease back
+const gvEl = ref(null), gvY = ref(0), gvP = ref(0);
+let gvRaf = 0;
+function gvScroll(e) {
+  const t = e.target;
+  if (gvRaf) return;
+  gvRaf = requestAnimationFrame(() => { gvRaf = 0; gvY.value = Math.round(t.scrollTop); gvP.value = Math.min(1, t.scrollTop / 220).toFixed(3); });
+}
+watch(() => rom.value?.id, () => { gvY.value = 0; gvP.value = 0; });
 const gameLogo = computed(() => (rom.value && store.config.ui.logos !== false ? logoOf(rom.value) : null));
 const hero = computed(() => rom.value && backdropOf(detail.value ? { ...rom.value, shot: detail.value.merged_screenshots?.[0] || rom.value.shot } : rom.value));
 const heroSrc = computed(() => hero.value?.src || '');
@@ -488,14 +501,19 @@ html, body { touch-action: pan-x pan-y; }
   .cover { width: 104px; height: 140px; }
 }
 
-/* Game (0.9.3): the logo leads, the box art peeks in from the right edge, then the story and the buttons */
-.gv { overflow-x: hidden; }
-.gv .peek { position: absolute; right: -46px; top: 104px; width: 158px; height: 212px; border-radius: 10px; background: var(--s2); transform: rotate(7deg); box-shadow: 0 24px 50px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.12); z-index: 0; animation: gv-peek 0.4s var(--ease) both; }
-@keyframes gv-peek { from { opacity: 0; transform: translateX(40px) rotate(12deg); } }
-.gv-main { position: relative; z-index: 1; display: flex; flex-direction: column; gap: 6px; margin-top: 118px; padding-right: 128px; min-height: 176px; justify-content: flex-end; }
-.gv-main :deep(.game-logo) { margin: 4px 0 2px; filter: drop-shadow(0 6px 22px rgba(0, 0, 0, 0.6)); }
+/* Game (0.9.4): the logo leads with the box art standing beside it; Open and Download stay pinned above the
+   dock. Scrolling moves the art slower than the page (parallax) and eases the logo and box art back. */
+.gv { overflow-x: hidden; padding-bottom: 80px; } /* the dock is 72px tall with its gap; sticky offsets start inside this padding */
+.gv .gv-hero { transform: translate3d(0, calc(var(--sy, 0) * 0.45px), 0) scale(calc(1 + var(--p, 0) * 0.06)); opacity: calc(1 - var(--p, 0) * 0.55); transform-origin: 50% 0; will-change: transform, opacity; }
+.gv-head { position: relative; z-index: 1; display: flex; align-items: flex-end; gap: 16px; margin-top: 112px; }
+.gv-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.gv-logo { transform: scale(calc(1 - var(--p, 0) * 0.1)); transform-origin: 0 100%; }
+.gv-logo :deep(.game-logo) { margin: 2px 0 0; filter: drop-shadow(0 6px 22px rgba(0, 0, 0, 0.6)); }
 .gv-name { font-size: 12.5px; font-weight: 600; color: rgba(255, 255, 255, 0.62); letter-spacing: 0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gv .gv-cover { position: relative; flex: none; width: 112px; height: 152px; border-radius: 10px; background: var(--s2); box-shadow: 0 18px 40px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.14); transform: translate3d(0, calc(var(--sy, 0) * -0.12px), 0) scale(calc(1 - var(--p, 0) * 0.08)); transform-origin: 100% 100%; animation: gv-in 0.42s var(--ease) both; }
+@keyframes gv-in { from { opacity: 0; transform: translate3d(18px, 0, 0) scale(0.94); } }
 .gv .sum { position: relative; z-index: 1; }
-.gv-acts { position: relative; z-index: 1; padding-top: 2px; }
-.gv-acts .pill { flex: 1; justify-content: center; }
+.gv-acts { position: sticky; bottom: 0; z-index: 3; margin-top: auto; display: flex; flex-direction: column; gap: 10px; padding: 16px 0 6px; background: linear-gradient(180deg, rgba(12, 13, 16, 0) 0%, var(--s0) 34%); }
+.gv-acts .acts { flex-wrap: nowrap; }
+.gv-acts .pill { flex: 1; justify-content: center; min-width: 0; }
 </style>

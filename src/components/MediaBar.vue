@@ -1,13 +1,13 @@
 <template>
   <div class="media" :class="{ empty: !cur.src }">
-    <img v-for="(l, i) in layers" :key="i" :src="l.src || undefined" :class="{ on: l.on }" decoding="async" alt="" />
+    <img v-for="(l, i) in layers" :key="i" :src="l.src || undefined" :class="{ on: l.on, low: l.low }" decoding="async" alt="" />
   </div>
 </template>
 <script setup>
 import { reactive, watch } from 'vue';
 // Two stacked images; the next one is decoded off-screen first, then swapped in with a short fade.
 const props = defineProps({ src: String });
-const layers = reactive([{ src: '', on: false }, { src: '', on: false }]);
+const layers = reactive([{ src: '', on: false, low: false }, { src: '', on: false, low: false }]);
 let idx = 0;
 const cur = layers[0];
 let token = 0;
@@ -21,6 +21,7 @@ watch(() => props.src, async (src) => {
   if (my !== token) return; // user already moved on
   const next = 1 - idx;
   layers[next].src = src;
+  layers[next].low = im.naturalWidth > 0 && im.naturalWidth < innerWidth * 0.6; // a small screenshot: android.css softens it
   layers[next].on = true;
   layers[idx].on = false;
   idx = next;
