@@ -33,6 +33,15 @@ export function glideBy(sc, dx = 0, dy = 0) {
   st.raf = requestAnimationFrame(step);
 }
 export const glideTo = (sc, top) => sc && glideBy(sc, 0, top - (anims.get(sc)?.ty ?? sc.scrollTop));
+// Scroll so the element sits where it should: the distance comes from where it is drawn right now, so it is
+// measured from the live scroll position. (glideBy adds to the running animation's end point, which counts
+// the distance still to go twice when presses come quickly and overshoots the row.)
+function glideFit(sc, dx, dy) {
+  if (!sc || (!dx && !dy)) return;
+  const a = anims.get(sc);
+  if (a) { cancelAnimationFrame(a.raf); anims.delete(sc); }
+  glideBy(sc, dx, dy);
+}
 const layers = [];
 
 export function pushLayer(el, handlers = {}) {
@@ -90,7 +99,14 @@ function move(dir) {
   if (!vertical || colFrom !== cur) colX = cx;
   const wantX = colX;
   let best = null, bestScore = Infinity;
-  for (const [el, r] of focusables(scope, true)) {
+  const all = focusables(scope, true);
+  // Left and right stay on the row you are in. Only when nothing else shares it (a lone button) may they
+  // reach for a neighbour on another row, so the end of a shelf doesn't jump to the shelf above or below.
+  const sideways = !vertical;
+  const sameRow = (r) => Math.min(c.bottom, r.bottom) - Math.max(c.top, r.top) > Math.min(c.height, r.height) * 0.25;
+  const rowLock = sideways && all.some(([el, r]) => el !== cur && sameRow(r));
+  for (const [el, r] of all) {
+    if (rowLock && !sameRow(r)) continue;
     if (el === cur) continue;
     if ((dir === 'left' || dir === 'right') && el.hasAttribute('data-nofirst') && !cur.hasAttribute('data-nofirst')) continue; // the end of a row never jumps up to the search box
     const x = r.left + r.width / 2, y = r.top + r.height / 2;
@@ -129,18 +145,18 @@ function scrollIntoViewSmart(el) {
   if (row) {
     const rr = row.getBoundingClientRect();
     const pad = Math.min(160, rr.width * 0.18);
-    if (r.left < rr.left + pad) glideBy(row, r.left - rr.left - pad, 0);
-    else if (r.right > rr.right - pad) glideBy(row, r.right - rr.right + pad, 0);
+    if (r.left < rr.left + pad) glideFit(row, r.left - rr.left - pad, 0);
+    else if (r.right > rr.right - pad) glideFit(row, r.right - rr.right + pad, 0);
   }
   const sc = el.closest('[data-scroll]');
   if (!sc) return;
   const s = sc.getBoundingClientRect();
   // nothing focusable above this one: show the top of the page too (a game's banner, a page header)
   const first = [...sc.querySelectorAll('[data-focus]')].find((x) => !x.disabled && x.offsetParent !== null);
-  if (first === el) { glideTo(sc, 0); return; }
+  if (first === el) { glideFit(sc, 0, -sc.scrollTop); return; }
   const vpad = Math.min(120, s.height * 0.2);
-  if (r.top < s.top + vpad) glideBy(sc, 0, r.top - s.top - vpad);
-  else if (r.bottom > s.bottom - vpad) glideBy(sc, 0, r.bottom - s.bottom + vpad);
+  if (r.top < s.top + vpad) glideFit(sc, 0, r.top - s.top - vpad);
+  else if (r.bottom > s.bottom - vpad) glideFit(sc, 0, r.bottom - s.bottom + vpad);
 }
 
 export function dispatch(action) {

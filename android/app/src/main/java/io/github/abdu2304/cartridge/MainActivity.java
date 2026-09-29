@@ -1,9 +1,11 @@
 package io.github.abdu2304.cartridge;
 
 import android.os.Bundle;
+import android.view.Display;
 import android.view.InputDevice;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
+import android.view.WindowManager;
 import android.webkit.WebSettings;
 
 import androidx.core.view.WindowCompat;
@@ -31,6 +33,22 @@ public class MainActivity extends BridgeActivity {
         s.setLoadWithOverviewMode(true);
         s.setMediaPlaybackRequiresUserGesture(false);
         applyImmersive();
+        highRefresh();
+    }
+
+    /** Ask for the display's fastest mode at its current size (120 Hz on the Thor). WebViews otherwise often settle at 60. */
+    private void highRefresh() {
+        try {
+            Display d = getWindowManager().getDefaultDisplay();
+            Display.Mode cur = d.getMode(), best = cur;
+            for (Display.Mode m : d.getSupportedModes()) {
+                if (m.getPhysicalWidth() == cur.getPhysicalWidth() && m.getPhysicalHeight() == cur.getPhysicalHeight() && m.getRefreshRate() > best.getRefreshRate()) best = m;
+            }
+            WindowManager.LayoutParams lp = getWindow().getAttributes();
+            lp.preferredDisplayModeId = best.getModeId();
+            lp.preferredRefreshRate = best.getRefreshRate();
+            getWindow().setAttributes(lp);
+        } catch (Exception ignored) {}
     }
 
     public void setImmersive(boolean on) {
@@ -52,7 +70,7 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onWindowFocusChanged(boolean hasFocus) {
         super.onWindowFocusChanged(hasFocus);
-        if (hasFocus) applyImmersive();
+        if (hasFocus) { applyImmersive(); highRefresh(); }
     }
 
     private CartridgeNativePlugin plugin() {

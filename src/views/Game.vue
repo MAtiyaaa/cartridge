@@ -56,7 +56,8 @@
               <button class="btn" data-focus @click="setMark(false)"><Icon name="mdiCheckboxBlankOffOutline" />Unmark</button>
             </template>
             <template v-else-if="installedPath">
-              <button class="btn ok xl" data-focus data-autofocus @click="toast(installedPath, 'info', 4000, 'mdiFolder')"><Icon name="mdiCheckCircle" />Ready to play</button>
+              <button v-if="ap?.supported" class="btn primary xl" data-focus data-autofocus :disabled="ap.st.launching" @click="ap.launch()"><Icon name="mdiPlay" :size="24" />Play</button>
+              <button v-else class="btn ok xl" data-focus data-autofocus @click="toast(installedPath, 'info', 4000, 'mdiFolder')"><Icon name="mdiCheckCircle" />Ready to play</button>
               <button class="btn" data-focus @click="redownload"><Icon name="mdiRefresh" />Re-download</button>
               <button class="btn danger" data-focus @click="remove"><Icon name="mdiDeleteOutline" />Delete</button>
             </template>
@@ -77,6 +78,8 @@
 
       <section class="g-body">
         <div class="col">
+          <component :is="ReadyToPlay" v-if="ReadyToPlay && ap?.supported" :ap="ap" />
+          <component :is="GameBundle" v-if="GameBundle && ap?.bundle.extras" :ap="ap" />
           <template v-if="summary">
             <div class="shelf-title"><Icon name="mdiTextBoxOutline" :size="20" />About</div>
             <p class="summary">{{ summary }}</p>
@@ -147,7 +150,7 @@
 
 <script setup>
 import { addGame, removeGame, applyChanges } from '../steam.js';
-import { computed, onMounted, ref, nextTick, watch } from 'vue';
+import { computed, onMounted, ref, nextTick, watch, defineAsyncComponent, getCurrentScope, shallowRef } from 'vue';
 import { store, call, img, go, cover, bytes, year, rating, toast, confirm, download, downloadFor, romById, platformById, isNew, setBg, logoOf, resetLogos, artFor, choose, openModal, allRoms, visible, isFavourite, addToCollection, playOf, playtimeText, ago, loadPlay, askText, saveConfig } from '../store.js';
 import { useView } from '../useView.js';
 import { IS_ANDROID } from '../platform.js';
@@ -451,7 +454,7 @@ async function pickGameEmu() {
   await call('steam:setGameEmu', { romId, id: v === '__console' ? null : v });
   const st = await call('steam:forRom', { romId }).catch(() => null);
   if (st?.inSteam && st.ours && st.console) {
-    const r = await call('steam:refresh', { key: st.console }).catch(() => null);
+    const r = await call('steam:refreshGame', { romId }).catch(() => null); // only this game's shortcut
     if (r?.count && !r.fixed) await applyChanges();
     toast(r?.fixed ? 'Its Steam shortcut now uses it' : 'Saved. Its Steam shortcut is being updated.', 'ok', 3000, 'mdiGamepadVariantOutline');
   } else toast('Saved. Used when it goes into Steam.', 'ok', 2600, 'mdiGamepadVariantOutline');
@@ -459,6 +462,15 @@ async function pickGameEmu() {
 
 // More options: custom artwork from SteamGridDB, plus handy extras
 let steamInfo = null;
+// Android Expansion: Play, the Ready to play check and game bundles. The dynamic imports sit behind the build
+// mode so the desktop bundle never carries them.
+const ReadyToPlay = import.meta.env.MODE === 'android' ? defineAsyncComponent(() => import('../android/ReadyToPlay.vue')) : null;
+const GameBundle = import.meta.env.MODE === 'android' ? defineAsyncComponent(() => import('../android/GameBundle.vue')) : null;
+const ap = shallowRef(null);
+if (import.meta.env.MODE === 'android') {
+  const scope = getCurrentScope();
+  import('../android/play.js').then((m) => scope.run(() => { ap.value = m.usePlay({ romId: () => props.romId, base: () => base.value, detail: () => detail.value, installedPath: () => installedPath.value, dl: () => dl.value, space: () => space.value }); }));
+}
 const PC_SLUGS = /^(win|windows|win3x|pc|dos)$/i; // PC games (Android: open in GameNative, GameHub or Winlator)
 async function more() {
   const has = artFor(props.romId);
@@ -481,6 +493,7 @@ async function more() {
   if (trophySystem.value) opts.push({ label: tro.value ? 'Change linked trophies' : 'Link to trophies', sub: 'Pick which emulator trophy set belongs to this game', value: 'trophies', icon: 'mdiLinkVariant' });
   // Android: Steam options only when Settings → Android → Steam & PC game apps is on
   const steamOn = !IS_ANDROID || store.config.android?.steamApps === true;
+  if (ap.value?.supported && ap.value.cands.length) opts.push({ label: 'Emulator for this game', sub: ap.value.cands.length > 1 ? 'Choose which installed emulator opens it' : 'Only one is installed', value: 'emu', icon: 'mdiGamepadVariantOutline' });
   if (IS_ANDROID && steamOn && PC_SLUGS.test(base.value.platform_slug || '')) opts.push({ label: 'Open in a PC game app', sub: installedPath.value ? 'GameNative, GameHub or Winlator' : 'Downloads it first', value: 'pcapp', icon: 'mdiMicrosoftWindows' });
   if (installedPath.value && steamOn) {
     const st = await call('steam:forRom', { romId: Number(props.romId) }).catch(() => null);
@@ -507,6 +520,7 @@ async function more() {
     ] });
     if (!v) return;
   }
+  if (v === 'emu') { await ap.value?.pickEmulator(); return; }
   if (import.meta.env.MODE === 'android' && v === 'pcapp') { const { openInPcApp } = await import('../android/pcApps.js'); await openInPcApp({ ...base.value, id: Number(props.romId) }, installedPath.value); return; }
   if (v === 'fav') {
     const on = !fav.value;

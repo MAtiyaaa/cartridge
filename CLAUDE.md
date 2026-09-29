@@ -17,7 +17,7 @@ This file is the short version every session needs. The full handoff (history, e
 - Work on the session's branch, never directly on `main`. **Standing instruction from the owner:** when an update is finished, built and launch-checked, open the PR and merge it to `main` to release it without asking again. Problems get fixed together afterwards.
 - **Never change `version` in `package.json` unless the owner asks for a release.** A version change on `main` builds and publishes a release to every user automatically.
 - Check every change builds: `npm ci --ignore-scripts && npx vite build` (the cloud container can't download Electron, so the full `npm run dist` may not work here).
-- There are no automated tests in the repo. Say plainly what was checked and what the owner must test on a device (controller, Game Mode, Steam, TV size).
+- `npm test` runs the detection tests in `test/` (CI runs it before every release build). Everything else is checked by hand: say plainly what was checked and what the owner must test on a device (controller, Game Mode, Steam, TV size).
 - Keep changes minimal and match the surrounding code: dense, short comments that explain why.
 - Before committing, grep the diff for private info (usernames, IPs, domains, emails, local paths). The repo is public.
 
@@ -142,6 +142,13 @@ LT/RT switch top tabs. LB/RB only switch sections inside a page. A select, B bac
 - Views: `EmuSetup.vue` (route `emu-setup`, `first` on first launch until `config.setupDone`), `ShortcutHealth.vue` (`steam-health`), `FirstTour.vue` (modal `tour`, `ui.toured`), `ManualViewer.vue` (modal `manual`, pdf.js, loaded on demand), `LibraryCheck.vue` (Settings → Storage, `library:verify`). `fs:list` takes `files: '*'`; `clip:write`.
 - `npm test`: `test/detect.test.js` (fake homes, squashfs fixtures in `test/fixtures`). Not shipped in the AppImage.
 
+## 0.9.1
+- `emulators.js`: `pre` (what goes before `%command%`: `vblank_mode=0` for Cemu, Dolphin, Eden, Citron, yuzu, as EmuDeck), `below: [[version, args]]` (PCSX2 before 1.7), `argsFor(id, key, src, version)`; the AppImage's version comes from the scan (`scanned().version`) or its file name. Refreshed against EmuDeck's SRM parsers and SRM presets (PPSSPP, Azahar).
+- `detect.identifyAll` (reading inside found files) runs in `detectWorker.js` (`identifyInWorker`), inline if a worker can't start.
+- `redownload()` in main.js (`library:redownload`): the copy is renamed `<path>.cartridge-old`, deleted after the new one passes, put back on error or cancel (`restoreBackup`); `it.redo` skips the automatic Steam add.
+- `steamManager.refreshGame(romId)` (`steam:refreshGame`) updates one shortcut; `setup:flatpakAllow` runs `flatpak override --user --filesystem`; `setupNotice` in App.vue (once, `ui.setupNotice`, for `setupDone === 'before 0.9'`); start-up dialogs wait for each other.
+- CI runs `npm test` before building.
+
 ## Releases (full steps: HANDOFF D8)
 Only when the owner asks. Bump `version` and `build.releaseInfo.releaseName` ("Cartridge X.Y.Z") in `package.json`, put only this version's notes in `RELEASE_NOTES.md` (heading `## Cartridge X.Y.Z · Title`), add them to the top of `CHANGELOG.md`, grouped as New / Changed / Fixed with bold lead-ins. CI builds, launch-checks and publishes.
 
@@ -153,3 +160,4 @@ Only when the owner asks. Bump `version` and `build.releaseInfo.releaseName` ("C
 - Here the session opens the PR and MAtiyaaa merges it (the upstream owner's standing merge instruction applies to upstream).
 - Phone upload: `/phone-upload/start|<id>?offset=|<id>/finish` in `remote-server.js` (8 MB pieces into `phone-uploads/`, then the device's `upload:start`; the copy is deleted when RomM is done). Phones may `upload:start` only paths from `upload:list` or their own upload. Phone UI: `src/remote/UploadView.vue`.
 - Upstream releases are merged as their own fork version (abdu2304 0.7.0 became 0.7.3). `yauzl` and the other backend packages Android needs are listed in `NODE_DEPS` in `scripts/build-android.mjs`.
+- Android Expansion (0.9.2): `src/android/emulators.js` (emulator profiles from ES-DE's Android rules, `CONSOLES`, `BIOS`, `planLaunch`), `play.js` (`usePlay`, Ready to play checks, fixes, launch), `bundle.js` (RomM file categories -> base/update/DLC), `ReadyToPlay.vue`, `GameBundle.vue`. Native `packages`/`launchGame`/`device` in `CartridgeNativePlugin.java`; every emulator package must be in the manifest `<queries>` (`npm test` checks). `electron/androidPlay.js`: `android:scan`, `android:bios`. Game.vue loads all of it behind `import.meta.env.MODE === 'android'`. Add emulators in `emulators.js` only. MainActivity asks for the highest refresh mode.

@@ -60,6 +60,7 @@
           </div>
           <div v-for="k in (c.using ? c.checks : []).filter((x) => x.level === 'bad' || x.level === 'warn')" :key="k.text" class="check" :class="k.level">
             <Icon :name="k.level === 'bad' ? 'mdiAlertCircle' : 'mdiAlert'" :size="18" /><span>{{ k.text }}</span>
+            <button v-if="k.allow" class="btn small" data-focus @click="allowFlatpak(k.allow)"><Icon name="mdiFolderKeyOutline" :size="16" />Allow access</button>
             <button v-if="k.copy" class="btn small" data-focus @click="copy(k.copy)"><Icon name="mdiContentCopy" :size="16" />Copy the command</button>
             <button v-if="k.bios && bios[c.key]" class="btn small" data-focus @click="getBios(c)"><Icon name="mdiChip" :size="16" />Get {{ bios[c.key] }} from RomM</button>
           </div>
@@ -72,7 +73,7 @@
 
 <script setup>
 import { computed, onMounted, onBeforeUnmount, ref, nextTick } from 'vue';
-import { call, toast, go, choose, pickFolder, store, romsOf, visiblePlatforms, openModal, saveConfig } from '../store.js';
+import { call, toast, go, choose, confirm, askText, pickFolder, store, romsOf, visiblePlatforms, openModal, saveConfig } from '../store.js';
 import { addGame } from '../steam.js';
 import { useView } from '../useView.js';
 import { ensureFocus } from '../nav.js';
@@ -149,6 +150,10 @@ async function more() {
   if (v === 'report') { const t = await call('setup:report'); await copy(t, 'Setup report copied'); }
   if (v === 'health') go('steam-health');
 }
+async function allowFlatpak(a) {
+  if (!(await confirm('Allow access?', `Lets ${a.id} open files in\n${a.dir}\n\nOnly this Flatpak's permissions change (the same as running flatpak override). You can undo it in Flatseal or with flatpak override --reset.`, 'Allow'))) return;
+  try { await call('setup:flatpakAllow', a); toast('Access allowed', 'ok', 2400); await load(); } catch (e) { toast(e.message, 'error', 6000); }
+}
 async function copy(text, msg = 'Copied') { try { await call('clip:write', { text }); toast(msg, 'ok', 2400, 'mdiContentCopy'); } catch (e) { toast(e.message, 'error'); } }
 async function confirmIt(path, id) { await call('setup:confirm', { path, id }); await load(); }
 async function nameIt(u) {
@@ -165,6 +170,7 @@ async function open(c) {
     ...(c.emu === 'yours' ? [{ label: 'Set by you', sub: c.using?.exe, value: 'noop', selected: true, icon: 'mdiPencil' }] : []),
     { label: 'Browse to an emulator…', sub: 'Any file, any folder', value: 'browse', icon: 'mdiFolderSearchOutline' },
     { label: 'Test with one game', sub: 'Adds one downloaded game to Steam to try it', value: 'test', icon: 'mdiPlayCircleOutline' },
+    ...(c.using ? [{ label: 'Type your own launch options', sub: c.using.lo, value: 'lo', icon: 'mdiConsoleLine' }] : []),
     { label: 'More options for this console', value: 'console', icon: 'mdiTune' },
   ];
   const v = await choose({ title: c.platform, message: c.checks.filter((k) => k.level !== 'bad' && k.level !== 'warn').map((k) => k.text).join('\n') || undefined, options: opts });
@@ -172,6 +178,7 @@ async function open(c) {
   if (v.startsWith('emu:')) { await call('steam:setEmu', { key: c.key, id: v.slice(4) }); await load(); return; }
   if (v === 'console') return go('steam-console', { ckey: c.key });
   if (v === 'test') return testOne(c);
+  if (v === 'lo') return ownLaunch(c);
   if (v === 'browse') {
     const file = await pickFolder({ title: `Emulator for ${c.platform}`, subtitle: 'Pick the program, AppImage or launcher script', start: store.info.home, files: '*', hidden: true });
     if (!file) return;
@@ -186,11 +193,27 @@ async function open(c) {
     if (r?.ok) { toast(`${c.platform} games will use ${base(file)}`, 'ok', 3000); await load(); }
   }
 }
+// a downloaded game of this console that isn't in Steam yet goes in; then what to do with it
 async function testOne(c) {
   const pl = visiblePlatforms().filter((p) => [p.slug, p.fs_slug].some((s) => s === c.slug || s === c.fs_slug));
-  const rom = pl.flatMap((p) => romsOf(p.id)).find((r) => store.installed[r.id]);
-  if (!rom) return toast(`Download a ${c.platform} game first, then test with it.`, 'info', 4000);
+  let rom = null;
+  for (const r of pl.flatMap((p) => romsOf(p.id)).filter((r) => store.installed[r.id])) {
+    const st = await call('steam:forRom', { romId: r.id }).catch(() => null);
+    if (st && !st.inSteam && !st.queued && !st.needsFolder) { rom = r; break; }
+  }
+  if (!rom) return toast(`Download a ${c.platform} game that isn't in Steam yet, then test with it.`, 'info', 5000);
   await addGame(rom);
+  const st = await call('steam:forRom', { romId: rom.id }).catch(() => null);
+  if (!st?.inSteam && !st?.queued) return;
+  await confirm(`Now start ${rom.name} in Steam`, `Find it in your Steam library and press Play.\n\nIf it doesn't start: open Shortcut health (More on this page), pick another emulator for ${c.platform}, or type your own launch options for it here.`, 'OK');
+}
+// your own arguments for this console's emulator ({ROM} is the game); things that must run first go before %command%
+async function ownLaunch(c) {
+  const lo = await askText({ title: `Launch options for ${c.platform}`, value: c.using.lo, placeholder: '-fullscreen "{ROM}"' });
+  if (lo === null || lo === undefined) return;
+  if (!/\{ROM\}|\{SERIAL\}|\{DIR\}|\{NAME\}/.test(lo)) return toast('Put {ROM} where the game goes', 'error', 4000);
+  try { await call('steam:setTemplate', { key: c.key, template: { exe: c.using.rawExe, start: c.using.start, lo } }); toast(`${c.platform} games will start with your launch options`, 'ok', 3000); await load(); }
+  catch (e) { toast(e.message, 'error'); }
 }
 async function finish() {
   await call('setup:done'); store.config.setupDone = Date.now(); go('home');

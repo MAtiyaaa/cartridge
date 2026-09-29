@@ -22,6 +22,8 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: Tests (emulator detection on fake homes)
+        run: npm test
       - name: Publish to this repository
         # package.json names abdu2304/cartridge; a fork updates from its own releases instead (baked into the AppImage)
         run: |

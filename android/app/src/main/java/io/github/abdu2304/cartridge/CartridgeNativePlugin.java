@@ -19,6 +19,7 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
 import android.os.Handler;
+import android.provider.DocumentsContract;
 import android.os.Looper;
 import android.provider.Settings;
 import android.view.Display;
@@ -325,6 +326,129 @@ public class CartridgeNativePlugin extends Plugin {
             call.resolve();
         } catch (Exception e) {
             call.reject(e.getMessage());
+        }
+    }
+
+
+    // ------------------------------------------------------------ emulators
+    /** Which of these packages are installed (Android 11+ only shows the ones listed in the manifest's queries). */
+    @PluginMethod
+    public void packages(PluginCall call) {
+        JSArray out = new JSArray();
+        try {
+            PackageManager pm = getContext().getPackageManager();
+            JSArray list = call.getArray("list");
+            for (int n = 0; list != null && n < list.length(); n++) {
+                String pkg = list.getString(n);
+                try {
+                    android.content.pm.PackageInfo p = pm.getPackageInfo(pkg, 0);
+                    JSObject o = new JSObject();
+                    o.put("pkg", pkg);
+                    o.put("version", p.versionName == null ? "" : p.versionName);
+                    o.put("label", String.valueOf(pm.getApplicationLabel(p.applicationInfo)));
+                    out.put(o);
+                } catch (PackageManager.NameNotFoundException ignored) {}
+            }
+        } catch (Exception ignored) {}
+        JSObject res = new JSObject();
+        res.put("apps", out);
+        call.resolve(res);
+    }
+
+    /** This device's name, for "Installed on ...". */
+    @PluginMethod
+    public void device(PluginCall call) {
+        JSObject o = new JSObject();
+        o.put("manufacturer", Build.MANUFACTURER);
+        o.put("model", Build.MODEL);
+        o.put("sdk", Build.VERSION.SDK_INT);
+        call.resolve(o);
+    }
+
+    /** A file on shared storage as the documents URI most emulators expect (what ES-DE hands them too). */
+    private String safUri(File f) {
+        String p = f.getAbsolutePath();
+        try { p = f.getCanonicalPath(); } catch (Exception ignored) {}
+        String ext = Environment.getExternalStorageDirectory().getAbsolutePath();
+        String docId;
+        if (p.equals(ext) || p.startsWith(ext + "/")) docId = "primary:" + (p.length() > ext.length() ? p.substring(ext.length() + 1) : "");
+        else if (p.startsWith("/storage/")) {
+            String rest = p.substring(9);
+            int s = rest.indexOf('/');
+            docId = s < 0 ? rest + ":" : rest.substring(0, s) + ":" + rest.substring(s + 1);
+        } else docId = "primary:" + p;
+        return DocumentsContract.buildDocumentUri("com.android.externalstorage.documents", docId).toString();
+    }
+
+    /** Fills {ROM}, {SAF}, {PROVIDER} and {EXT} in an intent value. shared[0] is set when a provider URI was used. */
+    private String expand(String s, File f, Uri[] shared) {
+        if (s == null) return "";
+        if (s.contains("{ROM}")) s = s.replace("{ROM}", f.getAbsolutePath());
+        if (s.contains("{EXT}")) s = s.replace("{EXT}", Environment.getExternalStorageDirectory().getAbsolutePath());
+        if (s.contains("{SAF}")) s = s.replace("{SAF}", safUri(f));
+        if (s.contains("{PROVIDER}")) {
+            String uri;
+            try {
+                if (shared[0] == null) shared[0] = FileProvider.getUriForFile(getContext(), getContext().getPackageName() + ".fileprovider", f);
+                uri = shared[0].toString();
+            } catch (Exception e) { uri = safUri(f); }
+            s = s.replace("{PROVIDER}", uri);
+        }
+        return s;
+    }
+
+    /** Opens a game in an emulator with the intent the emulator documents (built in src/android/emulators.js). */
+    @PluginMethod
+    public void launchGame(PluginCall call) {
+        String pkg = call.getString("pkg", ""), path = call.getString("path", "");
+        if (pkg.isEmpty() || path.isEmpty()) { call.reject("Nothing to open"); return; }
+        File file = new File(path);
+        if (!file.exists()) { call.reject("That game isn't on this device any more"); return; }
+        try {
+            Uri[] shared = new Uri[1];
+            Intent i = new Intent();
+            String action = call.getString("action", "");
+            if (!action.isEmpty()) i.setAction(action);
+            String act = call.getString("activity", "");
+            if (act.isEmpty()) {
+                Intent l = getContext().getPackageManager().getLaunchIntentForPackage(pkg);
+                if (l == null) { call.reject("That emulator isn't installed"); return; }
+                i.setComponent(l.getComponent());
+            } else i.setClassName(pkg, act.startsWith(".") ? pkg + act : act);
+            String cat = call.getString("category", "");
+            if (!cat.isEmpty()) i.addCategory(cat);
+            String data = call.getString("data", "");
+            if (!data.isEmpty()) i.setData(Uri.parse(expand(data, file, shared)));
+            JSObject extras = call.getObject("extras");
+            if (extras != null) {
+                java.util.Iterator<String> keys = extras.keys();
+                while (keys.hasNext()) { String k = keys.next(); i.putExtra(k, expand(extras.optString(k, ""), file, shared)); }
+            }
+            JSObject bools = call.getObject("bools");
+            if (bools != null) {
+                java.util.Iterator<String> keys = bools.keys();
+                while (keys.hasNext()) { String k = keys.next(); i.putExtra(k, bools.optBoolean(k, false)); }
+            }
+            int flags = Intent.FLAG_ACTIVITY_NEW_TASK;
+            JSArray fl = call.getArray("flags");
+            for (int n = 0; fl != null && n < fl.length(); n++) {
+                String x = fl.getString(n);
+                if ("clearTask".equals(x)) flags |= Intent.FLAG_ACTIVITY_CLEAR_TASK;
+                if ("clearTop".equals(x)) flags |= Intent.FLAG_ACTIVITY_CLEAR_TOP;
+            }
+            if (shared[0] != null) {
+                flags |= Intent.FLAG_GRANT_READ_URI_PERMISSION;
+                try { getContext().grantUriPermission(pkg, shared[0], Intent.FLAG_GRANT_READ_URI_PERMISSION); } catch (Exception ignored) {}
+            }
+            i.addFlags(flags);
+            getActivity().startActivity(i);
+            call.resolve();
+        } catch (android.content.ActivityNotFoundException e) {
+            call.reject("Android could not find that emulator. Is it installed?");
+        } catch (SecurityException e) {
+            call.reject("This version of the emulator can't be started by another app. Update it, or pick another emulator for this game.");
+        } catch (Exception e) {
+            call.reject("Could not open the game: " + e.getMessage());
         }
     }
 

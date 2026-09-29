@@ -1,11 +1,13 @@
-## Cartridge 0.9.1 · Handheld Fixes
+## Cartridge 0.9.2 · The Android Expansion
+
+Includes everything from abdu2304's 0.9.1 (launch options checked against EmuDeck and Steam ROM Manager, your own launch options, Flatpak access, Emulator setup notice).
+
+### New
+- **A real Play button on Android.** Press Play and the game opens in the right emulator: PPSSPP, Dolphin, Azahar and other 3DS emulators, melonDS, DuckStation, NetherSX2 and ARMSX2, Eden, Flycast, Cemu, aPS3e and more, plus RetroArch with the right core for everything else. Cartridge finds what is installed, and only asks an emulator to open a game the way a frontend does. It never installs or changes an emulator.
+- **Ready to play, on every game.** A section on the game page that says what stands between you and the game: ROM, Emulator, BIOS, Core, Update and Storage. Ready shows **Ready to play** with every check green. If not, it says how many things are needed and what they are, and **Fix everything** does what Cartridge can (allow file access, download the game, open the emulator's download page). BIOS files are never downloaded or copied: it tells you what is missing. Android hides other apps' folders, so where a BIOS or RetroArch core can't be checked you confirm it once with **I have it**.
+- **Pick the emulator per game or per console.** More → Emulator for this game, or **Change emulator**. Settings → Android → Emulators lists what was found.
+- **Game bundles.** A game with an update and DLC shows as one: base game, the newest update (for example Update 3.0.4), DLC counted and expandable, each with a check for what is on this device, and "Installed on AYN Thor". The base game is what gets opened, never the update or DLC file.
 
 ### Fixed
-- **Settings fit on handheld screens.** On shorter screens like the AYN Thor, the bottom of every Settings page was cut off, so About never showed fully. The side menu and the page now each scroll within the screen.
-- **Console cards and the game preview on Android.** Some Android versions ignore a colour effect the new look relies on, so console cards came out flat grey and the game preview on Home had no dark shade behind the text, making it hard to read. Both now have a fallback and look right everywhere.
-- **Console logos missing on the Consoles screen.** If a logo download failed once (a slow or dropped connection), Cartridge treated that console as having no logo for a week. It now only gives up when the logo really doesn't exist, and tries again otherwise. Consoles affected before are checked again.
-- **Fetch all logos did nothing** for games whose logo lookup had failed recently. It now tries them again, and says when a SteamGridDB key is needed.
-- **Smoother on Android.** The animated background now uses the lighter mode on Android (the one the Deck uses in Game Mode): it draws at a lower resolution and frame rate and pauses while you move around. You can still pick Full in Look & Feel.
-
-### Changed
-- **The second screen matches the new look:** solid dark panels, a flat accent button, white highlights and the new type, without the old glows and gradients. The phone remote's Controls tab follows it too.
+- **D-pad right on a shelf is steady.** Pressing right quickly no longer overshoots the row, and the end of a shelf no longer jumps to the shelf above or below.
+- **Smoother at 120 Hz.** The app asks Android for the screen's fastest mode, so scrolling and focus moves run at 120 on screens that support it.
