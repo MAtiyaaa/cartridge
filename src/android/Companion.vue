@@ -69,11 +69,6 @@
               </button>
             </div>
           </template>
-          <div class="folder">
-            <Icon name="mdiFolderOutline" :size="19" />
-            <span class="path">{{ selPlat.target?.path || 'No folder set' }}</span>
-            <span class="chip" :class="selPlat.target?.source === 'custom' ? 'primary' : selPlat.target?.exists ? 'green' : ''">{{ selPlat.target?.source === 'custom' ? 'Custom' : selPlat.target?.exists ? 'Found' : selPlat.target?.path ? 'Will create' : 'Not set' }}</span>
-          </div>
           <div class="gv-acts"><div class="acts"><button class="pill primary" @click="cmd({ open: true, platformId: selPlat.id })"><Icon name="mdiOpenInNew" :size="19" />Open {{ selPlat.display_name || selPlat.name }}</button></div></div>
         </section>
 
@@ -428,8 +423,6 @@ html, body { touch-action: pan-x pan-y; }
 .summary { margin: 0; color: #c3c9d4; font-size: 14px; line-height: 1.6; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .summary.open { display: block; }
 .more { display: inline-flex; align-items: center; gap: 4px; min-height: 40px; color: var(--primary-t); font: 600 13.5px var(--body); }
-.folder { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 14px; background: var(--s1); border: 1px solid var(--line); color: var(--muted); }
-.folder .path { flex: 1; min-width: 0; font-family: ui-monospace, 'JetBrains Mono', monospace; font-size: 12px; color: var(--text); overflow-wrap: anywhere; }
 
 /* centred states (idle, no downloads) */
 .center { align-items: center; justify-content: center; text-align: center; gap: 10px; padding-top: 10px; }
@@ -514,10 +507,11 @@ html, body { touch-action: pan-x pan-y; }
 
 /* Game (0.9.4): the logo leads with the box art standing beside it; Open and Download stay pinned above the
    dock. Scrolling moves the art slower than the page (parallax) and eases the logo and box art back. */
-.gv { overflow-x: hidden; padding-bottom: 80px; } /* the dock is 72px tall with its gap; sticky offsets start inside this padding */
+.gv { overflow-x: hidden; padding-bottom: 80px; }
+.gv > * { flex-shrink: 0; } /* a fixed-height flex column shrank the games row (overflow-x lets it) to a sliver */ /* the dock is 72px tall with its gap; sticky offsets start inside this padding */
 .gv .gv-hero { transform: translate3d(0, calc(var(--sy, 0) * 0.45px), 0) scale(calc(1 + var(--p, 0) * 0.06)); opacity: calc(1 - var(--p, 0) * 0.55); transform-origin: 50% 0; will-change: transform, opacity; }
 .gv-head { position: relative; z-index: 1; display: flex; align-items: flex-end; gap: 16px; margin-top: 112px; }
-.gv-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.gv-main { position: relative; z-index: 2; flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
 .gv-logo { transform: scale(calc(1 - var(--p, 0) * 0.1)); transform-origin: 0 100%; }
 .gv-logo :deep(.game-logo) { margin: 2px 0 0; filter: drop-shadow(0 6px 22px rgba(0, 0, 0, 0.6)); }
 .gv-name { font-size: 12.5px; font-weight: 600; color: rgba(255, 255, 255, 0.62); letter-spacing: 0.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -533,7 +527,7 @@ html, body { touch-action: pan-x pan-y; }
    and a row of games to tap. Sizes are fixed (no aspect-ratio, older WebViews). */
 .sys-mark { display: block; height: 64px; width: auto; max-width: 100%; object-fit: contain; object-position: left bottom; filter: brightness(0) invert(1) drop-shadow(0 6px 22px rgba(0, 0, 0, 0.6)); }
 .gv-main .t-title { margin-top: 2px; }
-.fan { position: relative; flex: none; width: 136px; height: 152px; transform: translate3d(0, calc(var(--sy, 0) * -0.12px), 0); animation: gv-in 0.42s var(--ease) both; }
+.fan { position: relative; z-index: 1; flex: none; width: 150px; margin-left: -8px; height: 152px; transform: translate3d(0, calc(var(--sy, 0) * -0.12px), 0); animation: gv-in 0.42s var(--ease) both; }
 .fan-c { position: absolute; right: calc(var(--i) * 22px); bottom: 0; width: 100px; height: 136px; border-radius: 9px; background: var(--s2); box-shadow: 0 16px 34px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.14); transform: rotate(calc((var(--i) - (var(--n) - 1) / 2) * -6deg)); transform-origin: 50% 100%; z-index: calc(10 - var(--i)); }
 .gv .summary { position: relative; z-index: 1; }
 .c-sec { position: relative; z-index: 1; display: flex; align-items: baseline; gap: 10px; margin-top: 4px; font-family: var(--display); font-size: 16px; font-weight: 700; }
@@ -545,5 +539,4 @@ html, body { touch-action: pan-x pan-y; }
 .c-game:active .s-cover { transform: scale(0.95); }
 .c-on { position: absolute; right: 5px; bottom: 5px; color: var(--green-l); filter: drop-shadow(0 1px 4px rgba(0, 0, 0, 0.8)); }
 .c-name { font-size: 12px; font-weight: 500; color: #cfd4de; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.gv .folder { position: relative; z-index: 1; }
 </style>

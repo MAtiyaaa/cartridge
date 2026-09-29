@@ -1,9 +1,9 @@
-## Cartridge 0.9.7 · Logos and Collections
+## Cartridge 0.9.8 · Bar and Bottom Screen
 
 ### Changed
-- **Consoles lead with their logo.** On Home and at the top of a console's page, the console's wordmark now takes the place of its written name, the same way a game's logo does. The name sits small above it.
-- **A new second screen for consoles, collections, series and genres.** They now use the game view's layout: the console logo or the collection's name up top, its covers fanned beside it, a row of its games to tap (games on this device first, with a tick), and Open pinned above the dock.
-- **The top bar is plain again.** The tinted top bar that blended into the art (a preview in 0.9.5) is gone, along with its setting.
+- **The top bar is back in your theme's colour.** It is a deep shade of the theme you picked, solid behind the tabs and fading out just below them. The Home and game banners start in the same colour and fade down, so the bar and the art read as one piece. Page headers below it stay clear.
+- **No folder path on the second screen.** Highlighting a console no longer shows where its games are stored.
 
 ### Fixed
-- **Collections and Series tiles on Android.** On some Android WebViews the tiles showed as a thin, tall outline with no picture. Older WebViews line up the insides of buttons differently, which squeezed the picture box to nothing. Buttons now lay out the same everywhere.
+- **Game covers on the second screen.** On the Thor the row of games under a console, collection, series or genre was squashed into thin strips. The covers keep their full size now, and the row scrolls under the pinned Open button when space runs out.
+- **Titles no longer sit under the covers.** A series logo on its Home tile, and a console logo or collection name on the second screen, are kept clear of the fanned covers and drawn above them.

@@ -5,7 +5,7 @@
       <CoverImg v-if="bg" class="bg" :class="{ blur: bg.blur }" :src="bg.src" />
       <div class="shade" />
       <div class="lead">
-        <GameLogo v-if="c.series && logo" :logo="logo" :name="c.name" cls="lead-t" :area="9000" :max-w="170" :max-h="70" />
+        <GameLogo v-if="c.series && logo" :logo="logo" :name="c.name" cls="lead-t" :area="8000" :max-w="140" :max-h="64" />
         <div v-else class="badge"><Icon :name="c.favorite ? 'mdiStar' : c.smart ? 'mdiAutoFix' : c.icon || 'mdiBookmarkMultipleOutline'" :size="30" /></div>
       </div>
       <div class="fan"><CoverImg v-for="(a, i) in fan" :key="a + i" :src="a" :style="{ '--i': i, '--n': fan.length }" /></div>
@@ -63,10 +63,10 @@ const logo = computed(() => (props.c.series && store.config.ui.logos !== false &
 .art .bg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .art .bg.blur { filter: blur(18px) saturate(1.3) brightness(0.8); transform: scale(1.2); }
 .art .shade { position: absolute; inset: 0; background: linear-gradient(90deg, rgba(8, 8, 16, 0.82) 0%, rgba(8, 8, 16, 0.35) 55%, rgba(8, 8, 16, 0.55) 100%); }
-.lead { position: absolute; left: 18px; top: 0; bottom: 0; display: flex; align-items: center; max-width: 52%; }
+.lead { position: absolute; z-index: 2; left: 18px; top: 0; bottom: 0; display: flex; align-items: center; max-width: calc(100% - 190px); } /* stays clear of the fan (150px + inset), and above it */
 .badge { width: 58px; height: 58px; border-radius: var(--r-lg); display: grid; place-items: center; color: #fff; background: rgba(255, 255, 255, 0.14); backdrop-filter: blur(6px); box-shadow: 0 8px 20px rgba(0, 0, 0, 0.35); }
 .lead :deep(.lead-t) { font-family: var(--display); font-weight: 700; font-size: var(--t-lg); line-height: 1.1; text-shadow: 0 3px 14px rgba(0, 0, 0, 0.6); }
-.fan { position: absolute; right: 16px; bottom: 16px; top: 16px; width: 150px; }
+.fan { position: absolute; z-index: 1; right: 16px; bottom: 16px; top: 16px; width: 150px; }
 .fan img { position: absolute; right: calc(var(--i) * 34px); bottom: 0; height: 148px; width: 99px; object-fit: cover; border-radius: var(--r-sm); box-shadow: 0 8px 22px rgba(0, 0, 0, 0.6); transform: rotate(calc((var(--i) - (var(--n) - 1) / 2) * -5deg)); z-index: calc(10 - var(--i)); }
 body.light-fx .badge { backdrop-filter: none; }
 .coll:focus .mosaic, .coll:focus .art { transform: translateY(-5px) scale(1.04); box-shadow: var(--ring); }
