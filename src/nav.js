@@ -99,15 +99,17 @@ function move(dir) {
   if (!vertical || colFrom !== cur) colX = cx;
   const wantX = colX;
   let best = null, bestScore = Infinity;
-  const all = focusables(scope, true);
+  // Zones (0.9.2): the D-pad never leaves the part of the screen you're in. The page is a zone, so
+  // up never lands on the top bar (LT/RT and Y reach that); Settings' right side is one too, left
+  // with B, like other console menus.
+  const zone = cur.closest('[data-zone]');
+  const all = focusables(scope, true).filter(([el]) => el !== cur && (!zone || zone.contains(el)));
   // Left and right stay on the row you are in. Only when nothing else shares it (a lone button) may they
   // reach for a neighbour on another row, so the end of a shelf doesn't jump to the shelf above or below.
-  const sideways = !vertical;
   const sameRow = (r) => Math.min(c.bottom, r.bottom) - Math.max(c.top, r.top) > Math.min(c.height, r.height) * 0.25;
-  const rowLock = sideways && all.some(([el, r]) => el !== cur && sameRow(r));
+  const rowLock = !vertical && all.some(([, r]) => sameRow(r));
   for (const [el, r] of all) {
     if (rowLock && !sameRow(r)) continue;
-    if (el === cur) continue;
     if ((dir === 'left' || dir === 'right') && el.hasAttribute('data-nofirst') && !cur.hasAttribute('data-nofirst')) continue; // the end of a row never jumps up to the search box
     const x = r.left + r.width / 2, y = r.top + r.height / 2;
     let primary, secondary;

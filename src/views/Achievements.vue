@@ -30,7 +30,7 @@ function set(t) { store.achTab = t; }
 .ach { padding-top: 16px; }
 .ach-switch { display: flex; align-items: center; gap: 10px; margin: 0 0 18px; }
 .ach-tab { display: inline-flex; align-items: center; gap: 10px; height: 44px; padding: 0 18px; border-radius: 999px; background: var(--s2); color: var(--muted); font-family: var(--display); font-weight: 600; font-size: var(--t-md); }
-.ach-tab.on { background: rgba(255, 255, 255, 0.14); color: var(--text); border-color: rgba(255, 255, 255, 0.28); }
+.ach-tab.on { background: var(--sel); color: var(--text); }
 .ra-mark { height: 20px; width: auto; }
 .tg-mark { position: relative; width: 30px; height: 22px; display: inline-block; }
 .tg-mark .grade { position: absolute; left: 0; top: 0; }

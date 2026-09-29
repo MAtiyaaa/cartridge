@@ -33,7 +33,7 @@
         <div class="clock">{{ clock }}</div>
       </div>
     </header>
-    <main class="main" ref="mainEl">
+    <main class="main" ref="mainEl" data-zone>
       <component :is="views[store.route.name]" :key="viewKey" v-bind="store.route.params" />
     </main>
     <footer class="hintbar">
@@ -324,7 +324,7 @@ watch(viewKey, async () => {
 <style scoped>
 .tab-trig { margin: 0 4px; }
 .top-search { display: flex; align-items: center; gap: 8px; flex: 0 1 260px; min-width: 130px; height: 40px; padding: 0 10px 0 14px; border-radius: 999px; background: var(--s2); color: var(--muted); cursor: text; transition: border-color 0.14s, background 0.14s; }
-.top-search.on, .top-search:focus-within { background: rgba(255, 255, 255, 0.1); border-color: var(--primary-l); color: var(--text); }
+.top-search.on, .top-search:focus-within { background: var(--sel); border-color: transparent; color: var(--text); }
 .top-search:focus-within { box-shadow: var(--ring); }
 .top-search input { flex: 1; min-width: 0; height: 100%; font: inherit; font-size: var(--t-sm); color: var(--text); background: none; border: 0; outline: none; }
 .top-search input:focus { box-shadow: none !important; }

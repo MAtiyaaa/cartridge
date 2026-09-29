@@ -6,7 +6,7 @@
         <Icon :name="s.icon" :size="20" />{{ s.label }}
       </button>
     </nav>
-    <section class="pane" data-scroll ref="paneEl">
+    <section class="pane" data-scroll data-zone ref="paneEl">
       <Transition name="fadeup" mode="out-in" @after-enter="afterSection">
         <div :key="sec" class="pane-in">
           <template v-if="sec === 'conn'">
@@ -682,7 +682,7 @@ onMounted(async () => { space.value = await call('fs:space', store.config.romsRo
 .rail { display: flex; flex-direction: column; gap: 4px; padding-top: 10px; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding-bottom: 24px; }
 .rail > * { flex: none; }
 .rail-item { display: flex; align-items: center; gap: 14px; padding: 13px 16px; border-radius: var(--r-md); color: var(--muted); font-weight: 500; transition: background 0.15s, color 0.15s; }
-.rail-item.on { color: var(--text); background: var(--s2); box-shadow: inset 3px 0 0 var(--primary); }
+.rail-item.on { color: var(--text); background: var(--sel); }
 .rail-item:focus { background: var(--focus); color: var(--on-focus); box-shadow: none; }
 .pane { min-height: 0; min-width: 0; overflow-x: hidden; overflow-y: auto; padding: 6px 12px 60px 24px; }
 .pane-in { display: flex; flex-direction: column; gap: 16px; max-width: 860px; }
@@ -698,13 +698,14 @@ onMounted(async () => { space.value = await call('fs:space', store.config.romsRo
 .plist { display: flex; flex-direction: column; gap: 6px; }
 .prow { display: grid; grid-template-columns: 30px 210px 1fr auto; align-items: center; gap: 14px; padding: 10px 14px; border-radius: var(--r-md); background: var(--s2); }
 .prow:focus { background: var(--focus); color: var(--on-focus); box-shadow: none; }
-.prow:focus .pp, .prow:focus .muted { color: rgba(12, 13, 16, 0.75); }
+.prow:focus .pp, .prow:focus .muted { color: var(--on-focus-dim); }
 .pn { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pp { color: var(--muted); }
 .about { display: flex; align-items: center; gap: 22px; padding: 22px; }
 .swatches { display: flex; flex-wrap: wrap; gap: 10px; }
 .swatch { width: 74px; height: 50px; border-radius: var(--r-md); display: flex; align-items: flex-end; padding: 6px 8px; font-size: var(--t-xs); font-weight: 600; color: #fff; text-shadow: 0 1px 4px rgba(0,0,0,.6); box-shadow: inset 0 0 0 1px rgba(255,255,255,.15); }
-.swatch.on { box-shadow: 0 0 0 2px #fff, 0 0 0 5px var(--primary); }
+/* a colour can't take the grey fill: chosen is a soft ring, focus the full white one */
+.swatch.on { box-shadow: 0 0 0 3px var(--s0), 0 0 0 5px rgba(255, 255, 255, 0.45); }
 .swatch { position: relative; }
 .swatch i { position: absolute; top: 6px; right: 6px; width: 12px; height: 12px; border-radius: 50%; box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.7); }
 .swatch.custom { background: conic-gradient(from 90deg, #f55, #fd5, #5f8, #5df, #85f, #f5c, #f55); flex-direction: column; justify-content: space-between; align-items: flex-start; }
@@ -730,7 +731,7 @@ onMounted(async () => { space.value = await call('fs:space', store.config.romsRo
 .bgnow-t small { font-size: var(--t-xs); color: var(--muted); }
 .bgnow-c { display: inline-flex; align-items: center; gap: 2px; font-size: var(--t-sm); font-weight: 600; color: var(--primary-t); }
 .bgtile { position: relative; display: flex; flex-direction: column; gap: 2px; padding: 10px; border-radius: var(--r-md); background: var(--s2); text-align: left; }
-.bgtile.on { border-color: var(--primary-l); background: rgba(var(--primary-rgb), 0.18); }
+.bgtile.on { background: var(--sel); }
 .bgtile b { font-size: var(--t-sm); font-weight: 600; margin-top: 6px; }
 .bgtile small { font-size: var(--t-xs); color: var(--muted); }
 .bgp { position: relative; height: 54px; border-radius: var(--r-sm); overflow: hidden; background: var(--xmb); }
@@ -752,7 +753,7 @@ onMounted(async () => { space.value = await call('fs:space', store.config.romsRo
 .fonttile { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 12px 8px; border-radius: var(--r-md); background: var(--s2); }
 .fonttile b { font-size: var(--t-xl); font-weight: 600; line-height: 1.1; }
 .fonttile span { font-size: var(--t-xs); color: var(--muted); }
-.fonttile.on { border-color: var(--primary-l); background: rgba(var(--primary-rgb), 0.18); }
+.fonttile.on { background: var(--sel); }
 .steam-grid { width: 130px; border-radius: var(--r-sm); box-shadow: 0 14px 34px rgba(0, 0, 0, 0.5); flex: none; }
 .fadeup-enter-active, .fadeup-leave-active { transition: opacity 0.15s, transform 0.2s var(--ease); }
 .fadeup-enter-from { opacity: 0; transform: translateX(10px); }
