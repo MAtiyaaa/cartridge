@@ -422,10 +422,47 @@ const MARKS_FILE = path.join(USER_DATA, 'marked.json');
 const marks = loadJson(MARKS_FILE, {}); // romId -> { at }
 function saveMarks() { try { fs.writeFileSync(MARKS_FILE, JSON.stringify(marks, null, 1)); } catch {} }
 const titleId = (s) => (String(s || '').match(/\b(CUSA|PPSA)\d{5}\b/i) || [])[0]?.toUpperCase() || '';
+// Where a console's games may be: its folder, the other names that console's folder can have (psp and
+// PSP, gc and gamecube), and one level of subfolders (psp/ISO, a folder per game).
+const GAME_EXT = /\.(iso|cso|chd|pbp|zso|bin|cue|m3u|gdi|img|rvz|wbfs|gcz|gcm|nsp|xci|nsz|xcz|3ds|cci|cia|cxi|nds|dsi|gba|gbc|gb|sfc|smc|nes|n64|z64|v64|md|gen|smd|sms|gg|pce|ws|wsc|ngp|ngc|a26|lnx|zip|7z|rar|wux|wua|rpx|elf|vpk|pkg)$/i;
+const nameKey = (s) => String(s || '').toLowerCase().replace(/\.[a-z0-9]{1,4}$/i, '').replace(/[^a-z0-9]+/g, '');
+function gameIndex(platform) {
+  const dirs = [];
+  const main = platformPath(platform).path;
+  if (main) dirs.push(main);
+  const root = config.romsRoot;
+  if (root && !config.paths[platform.slug]) {
+    const want = new Set([...(PLATFORM_MAP[platform.slug] || []), platform.fs_slug, platform.slug].filter(Boolean).map((n) => n.toLowerCase()));
+    for (const n of listDirNames(root)) if (want.has(n.toLowerCase())) dirs.push(path.join(root, n));
+  }
+  const exact = new Map(), byKey = new Map(), top = new Set();
+  const add = (full, name, isDir) => {
+    const lo = name.toLowerCase();
+    if (!exact.has(lo)) exact.set(lo, full);
+    if (isDir || GAME_EXT.test(name)) { const k = nameKey(name); if (k.length >= 3 && !byKey.has(k)) byKey.set(k, full); }
+  };
+  for (const dir of [...new Set(dirs.map((d) => path.resolve(d)))]) {
+    let list;
+    try { list = fs.readdirSync(dir, { withFileTypes: true }); } catch { continue; }
+    for (const e of list) {
+      if (e.name.startsWith('.') || /\.part$/.test(e.name)) continue;
+      const full = path.join(dir, e.name);
+      if (dir === path.resolve(main)) top.add(e.name);
+      add(full, e.name, e.isDirectory());
+      // one level down (psp/ISO/, per-game folders): only small folders, never a whole library
+      if (e.isDirectory() && list.length < 5000) {
+        let sub = [];
+        try { sub = fs.readdirSync(full, { withFileTypes: true }); } catch {}
+        if (sub.length <= 3000) for (const f of sub) if (!f.name.startsWith('.') && !/\.part$/.test(f.name) && (f.isDirectory() ? false : GAME_EXT.test(f.name))) add(path.join(full, f.name), f.name, false);
+      }
+    }
+  }
+  return { main, top, exact, byKey };
+}
 function installedState(roms, platform) {
-  const dir = platformPath(platform).path;
-  let entries = new Set();
-  if (dir) { try { entries = new Set(fs.readdirSync(dir)); } catch {} }
+  const idx = gameIndex(platform);
+  const dir = idx.main;
+  const entries = idx.top;
   const out = {};
   let ids = null;
   for (const rom of roms) {
@@ -433,6 +470,9 @@ function installedState(roms, platform) {
     if (m && fs.existsSync(m.path)) { out[rom.id] = m.path; continue; }
     const hit = candidatesFor(rom).find((n) => entries.has(n));
     if (hit) { out[rom.id] = path.join(dir, hit); continue; }
+    // the same name in another case or folder, or the same game under another extension (.cso for .iso)
+    const loose = candidatesFor(rom).map((n) => idx.exact.get(n.toLowerCase())).find(Boolean) || idx.byKey.get(nameKey(rom.fs_name));
+    if (loose) { out[rom.id] = loose; continue; }
     if (isFolderSystem(rom) && dir) {
       const stem = String(rom.fs_name || '').replace(/\.(zip|7z|rar)$/i, '');
       if (stem && entries.has(stem)) { out[rom.id] = path.join(dir, stem); continue; }

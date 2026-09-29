@@ -26,4 +26,26 @@ header .sys {
 .systile .glyph { -webkit-mask-image: none; mask-image: none; filter: saturate(0.6) brightness(1.1); opacity: 0.4; }
 
 /* Game page banner from a small screenshot: soften it instead of showing it blocky across the page */
-.g-banner-img.lowres:not(.blur) { filter: blur(10px) saturate(1.2) brightness(0.8); transform: scale(1.08); }
+.g-banner-img.lowres:not(.blur) { filter: blur(10px) saturate(1.2) brightness(0.8) !important; transform: scale(1.08) !important; }
+
+/* Home hero: the shade that keeps the title and story readable, in plain colours (the WebView dropped the
+   color-mix version, so bright art sat right behind the text), drawn above the art, and a small
+   screenshot softened instead of stretched blocky. */
+.media img { z-index: 0 !important; }
+.media img.low { filter: blur(8px) saturate(1.15) !important; transform: scale(1.06) !important; }
+/* the art fades out into the page (any theme colour) instead of ending in a dark box */
+.media { background: transparent !important; -webkit-mask-image: linear-gradient(180deg, #000 55%, transparent 100%); mask-image: linear-gradient(180deg, #000 55%, transparent 100%); }
+.media::after {
+  z-index: 1 !important;
+  background: linear-gradient(90deg, rgba(0, 0, 0, 0.8) 0%, rgba(0, 0, 0, 0.6) 36%, rgba(0, 0, 0, 0.15) 72%, rgba(0, 0, 0, 0) 100%) !important;
+}
+.home .hero-in { z-index: 2 !important; }
+
+/* Game page on a 720p handheld: Play / Download sit on screen without scrolling. A shorter banner, and the
+   HowLongToBeat card moves below the buttons. The banner shade is in plain colours too. */
+.g-banner { height: clamp(200px, 36vh, 560px) !important; }
+.g-info > .beat { order: 3; }
+.g-info > .chip, .g-info > .dest { order: 2; }
+.g-banner-shade { background: linear-gradient(90deg, var(--s0) 0%, transparent 70%), linear-gradient(0deg, var(--s0) 0%, transparent 62%), linear-gradient(rgba(0, 0, 0, 0.2), rgba(0, 0, 0, 0.2)) !important; }
+.home .hero-in .summary { color: rgba(255, 255, 255, 0.84) !important; text-shadow: 0 1px 14px rgba(0, 0, 0, 0.7); }
+.home .hero-in .meta, .home .hero-in .eyebrow { text-shadow: 0 1px 12px rgba(0, 0, 0, 0.6); }

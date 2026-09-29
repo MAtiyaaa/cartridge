@@ -119,7 +119,14 @@ function fitHero() {
   else if (over < -12 && logoMaxH.value < 140) logoMaxH.value = Math.min(140, logoMaxH.value + Math.floor(-over - 8));
 }
 let ro;
-onMounted(() => { if (window.ResizeObserver) { ro = new ResizeObserver(() => requestAnimationFrame(fitHero)); if (heroEl.value) ro.observe(heroEl.value); } });
+// Fit again once the logo image arrives and after the view's entrance animation: coming back from a
+// game, the first fit ran before either and the top of the hero stayed cut off
+const refit = () => requestAnimationFrame(fitHero);
+onMounted(() => {
+  if (window.ResizeObserver) { ro = new ResizeObserver(refit); if (heroEl.value) ro.observe(heroEl.value); }
+  heroEl.value?.addEventListener('load', refit, true);
+  el.value?.addEventListener('animationend', refit);
+});
 onBeforeUnmount(() => ro?.disconnect());
 const heroRom = ref(null);
 const heroSys = ref(null);
