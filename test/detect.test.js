@@ -142,7 +142,7 @@ test('distro packages: programs on PATH and system cores', () => {
   const c = candidates(H, ['n64', 'gc', 'psp']);
   assert.match(c.n64[0], /retroarch -L ".*mupen64plus_next_libretro\.so" "\{ROM\}"/);
   assert.match(c.gc[0], /dolphin-emu -b -e/);
-  assert.match(c.psp[0], /PPSSPPSDL -f -g/);
+  assert.match(c.psp[0], /PPSSPPSDL --fullscreen "\{ROM\}"/);
 });
 
 test('AppImages in the usual folder, by name', () => {
@@ -185,4 +185,12 @@ test('Steam ROM Manager setup is used when present', () => {
   });
   const c = candidates(H, ['psx'], { scan: true });
   assert.ok(c.psx.some((x) => /Steam ROM Manager/.test(x) && /-batch -fullscreen "\{ROM\}"/.test(x)), c.psx.join('\n'));
+});
+
+test('arguments by version, and what EmuDeck puts first', () => {
+  const E = require(path.join(ROOT, 'electron/emulators.js'));
+  assert.strictEqual(E.argsFor('pcsx2', 'ps2', 'appimage', '1.6.0'), '--nogui --fullscreen "{ROM}"');
+  assert.strictEqual(E.argsFor('pcsx2', 'ps2', 'appimage', '2.2.0'), '-batch -fullscreen -nogui "{ROM}"');
+  assert.strictEqual(E.argsFor('pcsx2', 'ps2', 'appimage'), '-batch -fullscreen -nogui "{ROM}"'); // version unknown: today's flags
+  assert.deepStrictEqual(E.EMU.eden.pre, ['vblank_mode=0']);
 });

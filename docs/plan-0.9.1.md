@@ -1,6 +1,6 @@
 # Cartridge 0.9.1 notes
 
-Agreed list, not built yet.
+Agreed list, built in 0.9.1. Items 6, 11, 13 and 14 moved to 0.9.2 (docs/plan-0.9.2.md).
 
 ## Launch arguments
 1. Refresh the emulator database (`electron/emulators.js`) from the latest EmuDeck SRM parsers and Steam ROM Manager presets: those are tested on real Steam. Check an emulator's own source only where neither covers it (new forks) or the two disagree. Keep the special cases (shadPS4 Qt launcher `-d -g` and `eboot.bin`, xemu, Xenia, RPCS3, Vita3K, MAME, ares).
@@ -10,17 +10,13 @@ Agreed list, not built yet.
 
 ## Fixes to 0.9.0
 5. Setup doesn't freeze the screen: reading inside AppImages and programs (xz unpacking, the strings search) moves to a background worker.
-6. Measure Home's full-width art without the GPU; a cheaper version under reduced effects if it costs too much.
 7. Re-downloading a damaged game downloads the new copy first, then replaces the old one.
 8. "Emulator for this game" updates only that game's shortcut, not the whole console.
 9. Existing users get a one-time "New: Emulator setup" prompt.
 10. A button (after you confirm) to give a Flatpak emulator access to your games folder. The copyable command stays.
-11. Review the screens the redesign didn't cover: Trophies and Achievements, Search, Quick Menu, keyboard, a console's page in Settings → Steam, the Steam changes preview, the idle screen, the second first-run step, and Emulator setup, Shortcut health and the manual reader at 1080p and 4K, with touch and mouse. Fix anything clipped or off the design system; layouts stay.
 
 ## Housekeeping
 12. CLAUDE.md: the tests line; CI runs `npm test` before the build.
-13. Tests for Shortcut health, relinking, the per-game emulator and the library check move into `test/` where they don't need the app running.
-14. HANDOFF.md updated for 0.9.
 
 ## Left out (owner's call)
 RetroDECK launching and Flatpak Steam launching stay as they are in 0.9.0 (detected, with a warning).

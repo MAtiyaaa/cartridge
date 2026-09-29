@@ -21,6 +21,8 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: Tests (emulator detection on fake homes)
+        run: npm test
       - name: Build AppImage
         run: npm run dist
       - name: Launch check (must open and render before anything is published)
