@@ -20,6 +20,7 @@
       <button class="qm-item" data-focus :data-autofocus="store.update.state === 'ready' ? undefined : ''" :disabled="busy" @click="run(() => resync())"><Icon name="mdiSync" /><div><b>Resync library</b><small>Pull new and changed games from RomM</small></div></button>
       <button class="qm-item" data-focus :disabled="busy" @click="run(scanServer)"><Icon name="mdiRadar" /><div><b>Scan server for new ROMs</b><small>RomM rescans its folders, then Cartridge resyncs</small></div></button>
       <button class="qm-item" data-focus @click="rescan"><Icon name="mdiHarddisk" /><div><b>Rescan this device</b><small>Refresh which games are installed</small></div></button>
+      <button v-if="IS_ANDROID && store.androidDisplays?.secondary" class="qm-item" data-focus @click="toggleSecond"><Icon name="mdiMonitorScreenshot" /><div><b>Second screen</b><small>{{ store.config.android?.dualScreen !== false ? 'On' : 'Off' }}</small></div></button>
       <button class="qm-item" data-focus @click="toggleSounds"><Icon :name="store.config.ui.sounds ? 'mdiVolumeHigh' : 'mdiVolumeOff'" /><div><b>UI sounds</b><small>{{ store.config.ui.sounds ? 'On' : 'Off' }}</small></div></button>
       <button class="qm-item" data-focus @click="nav('downloads')"><Icon name="mdiDownload" /><div><b>Downloads</b><small>{{ activeCount ? `${activeCount} active` : 'Queue and history' }}</small></div></button>
       <button class="qm-item" data-focus @click="phone"><Icon name="mdiCellphoneLink" /><div><b>Connect a phone</b><small>Use your phone as a remote and second screen</small></div></button>
@@ -38,12 +39,15 @@ import { pushLayer, focusFirst } from '../nav.js';
 import { setSoundEnabled } from '../sfx.js';
 import Icon from './Icon.vue';
 import Logo from './Logo.vue';
+import { IS_ANDROID } from '../platform.js';
 
 const el = ref(null);
 const busy = computed(() => ['running', 'scanning'].includes(store.sync.state));
 const total = computed(() => (store.libVersion, store.lib ? Object.values(store.lib.roms).reduce((s, l) => s + l.length, 0) : 0));
 const activeCount = computed(() => store.downloads.filter((d) => ['queued', 'downloading'].includes(d.status)).length);
 const close = () => (store.quickMenu = false);
+// Android dual-screen devices: turn the bottom screen back on (or off) without digging into Settings
+const toggleSecond = () => saveConfig({ android: { dualScreen: store.config.android?.dualScreen === false } });
 function run(fn) { close(); fn(); }
 function nav(n) { close(); tab(n); }
 function phone() { store.settingsSection = 'remote'; nav('settings'); }

@@ -129,7 +129,7 @@ export const BIOS = {
 // Builds that aren't in the list above (forks, betas, renamed packages): matched by the words in their
 // package name or app name, and started with their family's intent. A found fork is keyed "<id>~<package>".
 export const FAMILIES = {
-  ppsspp: ['ppsspp'], dolphin: ['dolphin', 'dolphinemu'], azahar: ['azahar', 'citra', 'lime3ds', 'mandarine', 'borked3ds'],
+  ppsspp: ['ppsspp'], dolphin: ['dolphin', 'dolphinemu'], azahar: ['azahar', 'azaharplus', 'citra', 'lime3ds', 'mandarine', 'borked3ds'],
   melonds: ['melonds', 'melondualds'], duckstation: ['duckstation'], nethersx2: ['aethersx2', 'nethersx2'], armsx2: ['armsx2', 'pcsx2'],
   eden: ['eden', 'yuzu', 'sudachi', 'citron', 'suyu', 'torzu', 'strato'], kenjinx: ['kenjinx', 'ryujinx'], flycast: ['flycast', 'reicast'],
   cemu: ['cemu'], retroarch: ['retroarch'], aps3e: ['aps3e'], drastic: ['drastic'], redream: ['redream'],
@@ -143,13 +143,15 @@ export function familyOf(pkg, label = '') {
   return null;
 }
 export const baseId = (id) => String(id || '').split('~')[0];
-export const emuName = (id, found = {}) => (id?.includes('~') ? found[id]?.label : null) || EMUS[baseId(id)]?.name || id;
+// The installed app's own name ("Azahar Plus", "Citron"), not the family's, so you see what you actually have
+export const emuName = (id, found = {}) => found[id]?.label || EMUS[baseId(id)]?.name || id;
 
 export function candidatesFor(key, found, cfg = {}, romId) {
   const c = CONSOLES[key];
   if (!c) return [];
   const have = (b) => Object.keys(found).filter((id) => baseId(id) === b).sort((x, y) => x.includes('~') - y.includes('~'));
-  const ids = [...c.emus.flatMap(have), ...(c.cores.length ? have('retroarch') : [])];
+  const seen = new Set(); // one entry per installed app, even when two profiles point at the same package
+  const ids = [...c.emus.flatMap(have), ...(c.cores.length ? have('retroarch') : [])].filter((id) => { const p = found[id]?.pkg || id; if (seen.has(p)) return false; seen.add(p); return true; });
   const first = [cfg.gameEmus?.[romId], cfg.emus?.[key]].filter((x) => x && ids.includes(x));
   return [...new Set([...first, ...ids])];
 }

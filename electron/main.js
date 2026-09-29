@@ -426,6 +426,8 @@ const titleId = (s) => (String(s || '').match(/\b(CUSA|PPSA)\d{5}\b/i) || [])[0]
 // PSP, gc and gamecube), and one level of subfolders (psp/ISO, a folder per game).
 const GAME_EXT = /\.(iso|cso|chd|pbp|zso|bin|cue|m3u|gdi|img|rvz|wbfs|gcz|gcm|nsp|xci|nsz|xcz|3ds|cci|cia|cxi|nds|dsi|gba|gbc|gb|sfc|smc|nes|n64|z64|v64|md|gen|smd|sms|gg|pce|ws|wsc|ngp|ngc|a26|lnx|zip|7z|rar|wux|wua|rpx|elf|vpk|pkg)$/i;
 const nameKey = (s) => String(s || '').toLowerCase().replace(/\.[a-z0-9]{1,4}$/i, '').replace(/[^a-z0-9]+/g, '');
+// the same without region and dump tags: "Game - Sub (USA) [v1.01].cso" and "Game: Sub.iso" both give "gamesub"
+const baseKey = (s) => nameKey(String(s || '').replace(/\.[a-z0-9]{1,4}$/i, '').replace(/\s*[([][^)\]]*[)\]]/g, ''));
 function gameIndex(platform) {
   const dirs = [];
   const main = platformPath(platform).path;
@@ -435,11 +437,14 @@ function gameIndex(platform) {
     const want = new Set([...(PLATFORM_MAP[platform.slug] || []), platform.fs_slug, platform.slug].filter(Boolean).map((n) => n.toLowerCase()));
     for (const n of listDirNames(root)) if (want.has(n.toLowerCase())) dirs.push(path.join(root, n));
   }
-  const exact = new Map(), byKey = new Map(), top = new Set();
+  const exact = new Map(), byKey = new Map(), byBase = new Map(), top = new Set();
   const add = (full, name, isDir) => {
     const lo = name.toLowerCase();
     if (!exact.has(lo)) exact.set(lo, full);
-    if (isDir || GAME_EXT.test(name)) { const k = nameKey(name); if (k.length >= 3 && !byKey.has(k)) byKey.set(k, full); }
+    if (isDir || GAME_EXT.test(name)) {
+      const k = nameKey(name); if (k.length >= 3 && !byKey.has(k)) byKey.set(k, full);
+      const b = baseKey(name); if (b.length >= 4) byBase.set(b, byBase.has(b) && byBase.get(b) !== full ? null : full); // null: more than one file, too unsure
+    }
   };
   for (const dir of [...new Set(dirs.map((d) => path.resolve(d)))]) {
     let list;
@@ -457,7 +462,7 @@ function gameIndex(platform) {
       }
     }
   }
-  return { main, top, exact, byKey };
+  return { main, top, exact, byKey, byBase };
 }
 function installedState(roms, platform) {
   const idx = gameIndex(platform);
@@ -471,7 +476,8 @@ function installedState(roms, platform) {
     const hit = candidatesFor(rom).find((n) => entries.has(n));
     if (hit) { out[rom.id] = path.join(dir, hit); continue; }
     // the same name in another case or folder, or the same game under another extension (.cso for .iso)
-    const loose = candidatesFor(rom).map((n) => idx.exact.get(n.toLowerCase())).find(Boolean) || idx.byKey.get(nameKey(rom.fs_name));
+    const loose = candidatesFor(rom).map((n) => idx.exact.get(n.toLowerCase())).find(Boolean) || idx.byKey.get(nameKey(rom.fs_name))
+      || idx.byBase.get(baseKey(rom.fs_name)) || idx.byBase.get(baseKey(rom.name));
     if (loose) { out[rom.id] = loose; continue; }
     if (isFolderSystem(rom) && dir) {
       const stem = String(rom.fs_name || '').replace(/\.(zip|7z|rar)$/i, '');

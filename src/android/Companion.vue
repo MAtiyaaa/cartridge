@@ -350,14 +350,14 @@ function release() { clearTimeout(holdT); holdT = null; }
 function turnOff() { showSettings.value = false; cmd({ dualScreen: false }); }
 
 // ---------------- startup
-cart.on('remote:state', (s) => { if (s) store.companion = s; });
+cart.on('remote:state', (s) => { if (s && !(s.seq && store.companion?.seq > s.seq)) store.companion = s; }); // newest only
 // Look & Feel changed on the top screen: theme, colours, fonts, background and wallpaper follow here
 cart.on('remote:config', (c) => { if (c) store.config = c; });
 onMounted(async () => {
   await loadConfig();
   applyTheme(store.config.ui);
   watch(() => JSON.stringify(store.config?.ui || {}), () => applyTheme(store.config.ui));
-  try { store.companion = (await call('remote:get')) || store.companion; } catch {}
+  try { const c = await call('remote:get'); if (c && !(store.companion?.seq > c.seq)) store.companion = c; } catch {}
   await loadLibrary().catch(() => {});
   loadArt();
   try { store.downloads = await call('dl:list'); } catch {}

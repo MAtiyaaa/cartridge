@@ -7,7 +7,7 @@ import { dispatch } from '../nav.js';
 import { padKind } from '../pad.js';
 
 let extras = () => ({});
-let focused = {}, t = null, started = false;
+let focused = {}, t = null, started = false, seq = 0;
 
 export function publish() {
   clearTimeout(t);
@@ -20,10 +20,11 @@ export function publish() {
     else if (focused.collectionId) st.collectionId = focused.collectionId;
     else if (r.name === 'platform') st.platformId = Number(p.platformId);
     else if (r.name === 'collection') st.collectionId = p.collectionId;
+    st.seq = Date.now() * 1000 + (++seq % 1000); // requests can arrive out of order: the newest wins (second screen showed an older game)
     st.family = padKind.value; // touch buttons are drawn for the controller used here
     Object.assign(st, extras());
     call('remote:state', st).catch(() => {});
-  }, 100);
+  }, 60);
 }
 
 export function startPublisher({ extra, onCmd } = {}) {

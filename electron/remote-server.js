@@ -239,7 +239,7 @@ module.exports = function createRemoteServer(opts) {
     'remote:pair:deny': () => { pairing = null; send('remote:pair:done', { ok: false, denied: true }); return true; },
     'remote:battery': (b) => { battery = b && typeof b.level === 'number' ? { level: b.level, charging: !!b.charging } : null; return true; },
     'remote:address': (a) => { extraAddress = typeof a === 'string' ? a : ''; return true; },
-    'remote:state': (s) => { companion = s; send('remote:state', s); return true; },
+    'remote:state': (s) => { if (s?.seq && companion?.seq && s.seq < companion.seq) return true; companion = s; send('remote:state', s); return true; }, // older than what we have: dropped
     'remote:get': () => companion,
     'remote:cmd': (c) => { send('remote:cmd', c); return true; },
     'remote:info': () => info(),

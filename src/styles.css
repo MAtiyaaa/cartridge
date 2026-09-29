@@ -112,7 +112,7 @@ img { -webkit-user-drag: none; }
 .spin { animation: spin 1.1s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-.main { position: relative; overflow: hidden; }
+.main { position: relative; overflow: hidden; overflow: clip; } /* clip: focusing a card mid-transition used to scroll .main itself (native scrollIntoView), leaving the Home banner cut off */
 .view { position: absolute; inset: 0; overflow-y: auto; overflow-x: hidden; padding: var(--s-3) var(--s-7) var(--s-6); animation: viewIn var(--d-med) var(--ease); }
 @media (max-width: 1400px) { .view { padding-left: 36px; padding-right: 36px; } }
 @keyframes viewIn { from { opacity: 0; } }
@@ -162,14 +162,14 @@ body.surface-glass .glass { background: var(--glass-bg); border: 1px solid var(-
 .btn.primary:focus-visible, .pad-mode .btn.primary:focus { box-shadow: var(--ring); }
 
 /* ---------- box art cards ---------- */
-.card { position: relative; display: flex; flex-direction: column; gap: 9px; width: var(--card-w); flex: none; border-radius: 8px; }
+.card { position: relative; display: flex; flex-direction: column; gap: 9px; width: var(--card-w); min-width: 0; flex: none; border-radius: 8px; }
 .card .art { position: relative; aspect-ratio: 2 / 3; border-radius: var(--card-r); overflow: hidden; background: var(--s2); box-shadow: var(--shadow-card); transition: transform var(--d-fast) var(--ease); will-change: transform; } /* the ring shows at once, only the lift animates */
 .card .art img { width: 100%; height: 100%; object-fit: cover; object-position: center top; display: block; }
 .card .art::after { content: ''; position: absolute; inset: 0; border-radius: inherit; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.07); pointer-events: none; }
-.card .ph { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: flex-end; padding: 14px; gap: 6px; font-family: var(--display); font-weight: 700; font-size: var(--t-md); line-height: 1.2; background: var(--s2); }
-.card .ph small { font-family: var(--body); font-weight: 500; font-size: var(--t-xs); color: var(--muted); }
+.card .ph { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: flex-end; padding: 14px; gap: 6px; overflow: hidden; overflow-wrap: anywhere; font-family: var(--display); font-weight: 700; font-size: var(--t-md); line-height: 1.2; background: var(--s2); }
+.card .ph small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; font-family: var(--body); font-weight: 500; font-size: var(--t-xs); color: var(--muted); }
 .card .title { font-size: var(--t-sm); font-weight: 500; line-height: 1.3; color: var(--text); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; padding: 0 2px; transition: color 0.2s; }
-.card .sub { font-size: var(--t-xs); color: var(--muted); margin-top: -5px; padding: 0 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.card .sub { font-size: var(--t-xs); color: var(--muted); margin-top: -5px; padding: 0 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; min-width: 0; } /* a long console name stays under its own card */
 .card:focus { box-shadow: none !important; }
 .card:focus .art, .card:focus-visible .art { transform: translateY(-4px) scale(1.06); box-shadow: var(--ring), var(--shadow-card); }
 .card:focus .art .shine { display: none; }
