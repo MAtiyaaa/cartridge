@@ -21,7 +21,8 @@
         <button v-if="store.lastSearch" class="clear" tabindex="-1" @mousedown.prevent @click="clearSearch"><Icon name="mdiClose" :size="16" /></button>
         <Btn v-else b="Y" />
       </label>
-      <div class="sys">
+      <!-- the status area opens the Quick Menu, which shows the same things in more detail -->
+      <button class="sys" tabindex="-1" aria-label="Quick Menu" @click="store.quickMenu = !store.quickMenu">
         <div v-if="syncBusy" class="item sync-pill"><Icon name="mdiSync" :size="16" class="spin" />{{ syncLabel }}</div>
         <div v-if="steam.progress" class="item sync-pill"><Icon name="mdiSteam" :size="16" />{{ steamProgressLabel(steam.progress) }}</div>
         <div v-if="activeDl.length" class="item">
@@ -31,7 +32,7 @@
         <div class="item net" :class="store.connection.route === 'local' ? 'ok' : store.connection.base ? 'remote' : 'bad'" :title="store.connection.base">{{ store.connection.route === 'local' ? 'LAN' : store.connection.base ? 'Tunnel' : 'Offline' }}</div>
         <div v-if="battery" class="item"><Icon :name="batteryIcon" :size="18" />{{ battery.level }}%</div>
         <div class="clock">{{ clock }}</div>
-      </div>
+      </button>
     </header>
     <main class="main" ref="mainEl" data-zone>
       <component :is="views[store.route.name]" :key="viewKey" v-bind="store.route.params" />
@@ -199,7 +200,7 @@ function viewHandler(action) {
 onMounted(async () => {
   tick(); clockT = setInterval(tick, 10000);
   navigator.getBattery?.().then((b) => {
-    const upd = () => { battery.value = b.level === 1 && b.charging && !b.dischargingTime ? null : { level: Math.round(b.level * 100), charging: b.charging }; };
+    const upd = () => { battery.value = b.level === 1 && b.charging && !b.dischargingTime ? null : { level: Math.round(b.level * 100), charging: b.charging, toFull: b.chargingTime, toEmpty: b.dischargingTime }; store.battery = battery.value; };
     // desktops report a permanently full "battery"; hide it there
     if (!(b.level === 1 && b.charging && b.chargingTime === 0)) { upd(); b.onlevelchange = upd; b.onchargingchange = upd; }
   }).catch(() => {});

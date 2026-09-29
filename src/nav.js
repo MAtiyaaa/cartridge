@@ -135,6 +135,7 @@ function move(dir) {
   const rowLock = !vertical && all.some(([, r]) => sameRow(r));
   for (const [el, r] of all) {
     if (rowLock && !sameRow(r)) continue;
+    if (vertical && sameRow(r)) continue; // up/down never move along the row (the lifted focused card sat a few px higher, so down on the last row went right)
     if ((dir === 'left' || dir === 'right') && el.hasAttribute('data-nofirst') && !cur.hasAttribute('data-nofirst')) continue; // the end of a row never jumps up to the search box
     const x = r.left + r.width / 2, y = r.top + r.height / 2;
     let primary, secondary;

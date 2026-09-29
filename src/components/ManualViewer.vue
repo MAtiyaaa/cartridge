@@ -68,7 +68,10 @@ onMounted(async () => {
   try {
     const data = await call('rom:manual', { romId: props.romId });
     const pdfjs = await loadPdf();
-    doc = await pdfjs.getDocument({ data: new Uint8Array(data) }).promise;
+    // Android's backend sends base64 (see android-main.js); Electron sends the bytes
+    const bytes = data?.b64 ? Uint8Array.from(atob(data.b64), (ch) => ch.charCodeAt(0)) : new Uint8Array(data?.type === 'Buffer' ? data.data : data);
+    if (!bytes.length) throw new Error('The manual came back empty.');
+    doc = await pdfjs.getDocument({ data: bytes }).promise;
     pages.value = doc.numPages;
     await nextTick();
     io = new IntersectionObserver((es) => es.forEach((e) => e.isIntersecting && draw(Number(e.target.dataset.page))), { root: scroller.value, rootMargin: '100% 0px' });

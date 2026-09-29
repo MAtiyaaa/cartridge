@@ -142,7 +142,9 @@
     </template>
 
     <div v-if="viewer !== null" class="viewer" @click="viewer = null">
-      <img :src="img(shots[viewer])" />
+      <!-- keyed, so a new picture never shows the last one while it loads (fast LB/RB used to repeat an image) -->
+      <Icon v-if="vShown !== shots[viewer]" name="mdiLoading" :size="40" class="spin vload" />
+      <img :key="shots[viewer]" :src="img(shots[viewer])" :class="{ on: vShown === shots[viewer] }" @load="vShown = shots[viewer]" />
       <div class="vhint"><Btn b="LB" /><Btn b="RB" />{{ viewer + 1 }} / {{ shots.length }}<Btn b="B" style="margin-left: 12px" />Close</div>
     </div>
   </div>
@@ -167,6 +169,9 @@ const el = ref(null);
 const detail = ref(null);
 const coverFail = ref(false);
 const viewer = ref(null);
+const vShown = ref(''); // the screenshot that has finished loading in the viewer
+// load the neighbours ahead, so stepping through is instant
+watch(viewer, (i) => { if (i === null) return; const n = shots.value.length; for (const d of [1, -1]) { const im = new Image(); im.src = img(shots.value[(i + d + n) % n]); } });
 const space = ref(null);
 
 const cached = computed(() => romById(props.romId));
@@ -626,6 +631,10 @@ onMounted(async () => {
 .fact span { font-size: var(--t-xs); color: var(--muted); font-weight: 600; }
 .fact b { font-weight: 500; font-size: var(--t-sm); }
 .viewer { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.94); z-index: 40; display: grid; place-items: center; animation: fade 0.2s; }
+.viewer > * { grid-area: 1 / 1; }
+.viewer .vload { color: var(--muted); }
+.viewer img { opacity: 0; transition: opacity 0.14s ease-out; }
+.viewer img.on { opacity: 1; }
 .viewer img { max-width: 94vw; max-height: 84vh; border-radius: var(--r-sm); box-shadow: 0 30px 80px rgba(0, 0, 0, 0.7); }
 .vhint { position: absolute; bottom: 26px; display: flex; gap: 8px; align-items: center; color: var(--muted); font-size: var(--t-sm); }
 @media (max-width: 1100px) { .g-body { grid-template-columns: minmax(0, 1fr) 200px; gap: 28px; } .g-cover, .facts { width: 200px; } .g-cover { margin-top: -150px; } .g-banner-logo { right: 270px; } }

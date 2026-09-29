@@ -50,18 +50,6 @@ header .sys {
 .home .hero-in .meta, .home .hero-in .eyebrow { text-shadow: 0 1px 12px rgba(0, 0, 0, 0.6); }
 
 
-/* Top bar (0.9.7): the theme's own colour (--tint-rgb, its deep shade from themes.js), solid behind the tabs and
-   easing out just below it; the Home and game banners start in the same colour and fade down, so the bar and the
-   art read as one piece. The bar's own fade reaches only a little way down, so page headers stay clear. */
-.statusbar { position: relative; z-index: 2; background: rgba(var(--tint-rgb), 0.96); }
-.statusbar::after { /* the fade below the bar: solid under the tabs, so the background never shows through a thinning bar */
-  content: ''; position: absolute; left: 0; right: 0; top: 100%; height: 30px; pointer-events: none;
-  background: linear-gradient(180deg, rgba(var(--tint-rgb), 0.96) 0%, rgba(var(--tint-rgb), 0.7) 22%, rgba(var(--tint-rgb), 0.36) 48%, rgba(var(--tint-rgb), 0.12) 74%, rgba(var(--tint-rgb), 0) 100%);
-}
-.media::before, .g-banner::before {
-  content: ''; position: absolute; left: 0; right: 0; top: 0; height: 42%; z-index: 1; pointer-events: none;
-  background: linear-gradient(180deg, rgba(var(--tint-rgb), 0.62) 0%, rgba(var(--tint-rgb), 0.4) 26%, rgba(var(--tint-rgb), 0.18) 56%, rgba(var(--tint-rgb), 0.05) 80%, rgba(var(--tint-rgb), 0) 100%);
-}
 /* the fade into the page, eased (an even ramp reads as a hard edge) */
 .media { -webkit-mask-image: linear-gradient(180deg, #000 0%, #000 42%, rgba(0, 0, 0, 0.93) 52%, rgba(0, 0, 0, 0.78) 62%, rgba(0, 0, 0, 0.56) 72%, rgba(0, 0, 0, 0.32) 82%, rgba(0, 0, 0, 0.12) 91%, transparent 100%) !important; mask-image: linear-gradient(180deg, #000 0%, #000 42%, rgba(0, 0, 0, 0.93) 52%, rgba(0, 0, 0, 0.78) 62%, rgba(0, 0, 0, 0.56) 72%, rgba(0, 0, 0, 0.32) 82%, rgba(0, 0, 0, 0.12) 91%, transparent 100%) !important; }
 .g-banner { background: transparent !important; }
