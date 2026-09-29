@@ -21,15 +21,24 @@
       </header>
 
       <section class="sc-lo glass">
+        <!-- the emulators installed for this console; new shortcuts use the one picked here -->
+        <div class="lo emu-row"><span>Emulator</span>
+          <button class="btn small" data-focus :data-key="'emu-pick'" :disabled="!con.emus.length" @click="pickEmu"><Icon name="mdiSwapHorizontal" :size="18" />{{ emuLabel }}</button>
+        </div>
         <template v-if="con.template">
-          <div class="lo"><span>Target</span><b class="mono">{{ con.template.exe }}</b></div>
+          <div class="lo"><span>Target</span><b class="mono">{{ con.template.target || con.template.exe }}</b></div>
           <div v-if="con.template.start" class="lo"><span>Start in</span><b class="mono">{{ con.template.start }}</b></div>
-          <div class="lo"><span>Launch options</span><b class="mono">{{ con.template.lo }}</b></div>
+          <div class="lo"><span>Launch options</span><b class="mono">{{ con.template.target ? con.template.launch || '(empty)' : con.template.lo }}</b></div>
           <div v-if="con.template.from && con.template.how !== 'yours'" class="muted small">{{ con.template.how === 'learned' ? 'Copied from your Steam shortcut for ' + con.template.from : 'Found: ' + con.template.from }}</div>
         </template>
         <div v-else class="muted">No emulator found for this console. Press More → Edit to set one.</div>
       </section>
 
+      <div v-if="con.outdated && !steam.queue.total" class="ss-queue">
+        <Icon name="mdiUpdate" :size="22" />
+        <div class="ss-q-t"><b>{{ con.outdated }} game{{ con.outdated === 1 ? '' : 's' }} in Steam use{{ con.outdated === 1 ? 's' : '' }} an older setup</b><small>Update them to start with the emulator and options above.</small></div>
+        <button class="btn primary" data-focus @click="refresh"><Icon name="mdiRefresh" />Update</button>
+      </div>
       <div v-if="steam.queue.total" class="ss-queue">
         <Icon name="mdiSteam" :size="22" />
         <div class="ss-q-t"><b>{{ steam.queue.total }} change{{ steam.queue.total === 1 ? '' : 's' }} waiting</b><small>Steam restarts to take {{ steam.queue.total === 1 ? 'it' : 'them' }}.</small></div>
@@ -63,7 +72,7 @@ import PIcon from '../components/PIcon.vue';
 const props = defineProps({ ckey: String });
 const el = ref(null);
 const ov = ref(null);
-const HOW = { learned: 'From your shortcuts', yours: 'Set by you', emudeck: 'EmuDeck', appimage: 'AppImage', flatpak: 'Flatpak' };
+const HOW = { learned: 'From your shortcuts', yours: 'Set by you', emudeck: 'EmuDeck', appimage: 'AppImage', flatpak: 'Flatpak', native: 'Installed program' };
 const con = computed(() => ov.value?.consoles.find((c) => c.key === props.ckey) || null);
 const games = computed(() => (ov.value?.games || []).filter((g) => g.console === props.ckey).sort((a, b) => a.name.localeCompare(b.name)));
 const missing = computed(() => games.value.filter((g) => !g.inSteam && g.file && g.queued !== 'add'));
@@ -96,6 +105,29 @@ async function addAll() {
   const cols = await pickCollections(props.ckey, null, list.length > 1);
   if (cols == null) return;
   steam.queue = await call('steam:queueAdd', list.map((g) => ({ romId: g.romId, collections: cols })));
+  await apply();
+}
+const emuLabel = computed(() => {
+  const c = con.value;
+  if (c.emu === 'yours') return 'Set by you';
+  return c.emus.find((e) => e.id === c.emu)?.label || (c.emus.length ? 'Automatic' : 'None installed');
+});
+async function pickEmu() {
+  const c = con.value;
+  const v = await choose({
+    title: `Emulator for ${c.platform}`, message: 'Installed on this device. New shortcuts start with this one.',
+    options: c.emus.map((e) => ({ label: e.label, sub: e.sub, value: e.id, icon: e.id === 'learned' ? 'mdiSteam' : e.id.startsWith('ra:') ? 'mdiAlphaRBoxOutline' : 'mdiGamepadVariantOutline', selected: e.id === c.emu })),
+  });
+  if (!v || v === c.emu) return;
+  await call('steam:setEmu', { key: c.key, id: v });
+  toast(`${c.platform} uses ${c.emus.find((e) => e.id === v)?.label}`, 'ok', 2500, 'mdiCheck');
+  await load();
+}
+async function refresh() {
+  const r = await call('steam:refresh', { key: props.ckey }).catch((e) => { toast(e.message, 'error'); return null; });
+  if (!r?.count) return;
+  if (r.fixed === r.count) { toast(`Fixed ${r.fixed} shortcut${r.fixed === 1 ? '' : 's'} in Steam`, 'ok', 2500, 'mdiCheck'); return load(); }
+  steam.queue = await call('steam:overview').then((o) => o.queue).catch(() => steam.queue);
   await apply();
 }
 async function more() {
@@ -132,6 +164,7 @@ onMounted(async () => { await load(); await nextTick(); ensureFocus(el.value); }
 .sc-lo { padding: 14px 20px; display: flex; flex-direction: column; gap: 8px; margin-bottom: 18px; }
 .lo { display: flex; gap: 16px; font-size: 13px; min-width: 0; }
 .lo span { width: 120px; flex: none; color: var(--muted); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 600; padding-top: 2px; }
+.emu-row { align-items: center; }
 .lo b { font-weight: 400; min-width: 0; word-break: break-all; }
 .small { font-size: 12px; }
 .ss-queue { display: flex; align-items: center; gap: 14px; padding: 14px 18px; border-radius: 12px; background: rgba(var(--primary-rgb), 0.2); border: 1px solid rgba(var(--primary-l-rgb), 0.5); margin-bottom: 18px; }

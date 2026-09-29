@@ -72,10 +72,52 @@ function readShortcuts(acc) {
   const f = files(acc).shortcuts;
   if (!exists(f)) return [];
   const data = parseVdf(fs.readFileSync(f));
-  return Object.values(data.shortcuts || data.Shortcuts || {}).map((e) => ({
-    appid: (e.appid ?? 0) >>> 0, name: e.AppName || e.appname || '', exe: unq(e.Exe || e.exe), exeRaw: e.Exe || e.exe || '',
-    start: unq(e.StartDir || ''), lo: e.LaunchOptions || '', last: e.LastPlayTime || 0,
-  }));
+  return Object.values(data.shortcuts || data.Shortcuts || {}).map((e) => {
+    const exeRaw = e.Exe || e.exe || '';
+    let exe = unq(exeRaw), lo = e.LaunchOptions || '';
+    // Steam ROM Manager (EmuDeck's setup) puts the arguments in Target: '"xemu-emu.sh" -full-screen
+    // -dvd_path "game.iso"' with empty Launch options. Read it as the exe plus "%command% <args>"
+    const toks = tokenize(exeRaw);
+    if (toks.length > 1 && /^["']/.test(exeRaw.trim())) {
+      exe = toks[0].val;
+      const extra = toks.slice(1).map((t) => t.raw).join(' ');
+      lo = /%command%/.test(lo) ? lo.replace('%command%', `%command% ${extra}`) : `%command% ${extra}${lo ? ' ' + lo : ''}`;
+    }
+    return { appid: (e.appid ?? 0) >>> 0, name: e.AppName || e.appname || '', exe, exeRaw, start: unq(e.StartDir || ''), lo, loRaw: e.LaunchOptions || '', last: e.LastPlayTime || 0 };
+  });
+}
+// Steam's text VDF (localconfig.vdf): { key: value | { ... } }
+function parseTextVdf(t) {
+  const re = /"((?:[^"\\]|\\.)*)"|([{}])/g;
+  const root = {}, stack = [root];
+  let key = null, m;
+  while ((m = re.exec(t))) {
+    if (m[2] === '{') { const o = {}; stack[stack.length - 1][key ?? ''] = o; stack.push(o); key = null; }
+    else if (m[2] === '}') { if (stack.length > 1) stack.pop(); key = null; }
+    else if (key === null) key = m[1];
+    else { stack[stack.length - 1][key] = m[1].replace(/\\(.)/g, '$1'); key = null; }
+  }
+  return root;
+}
+// Play time Steam keeps per app, shortcuts included: appid -> { min, last (ms) }. Shortcuts show
+// up under their 32-bit id, or as the long game id ((appid << 32) | 0x02000000) in some versions.
+function readPlaytime(acc) {
+  let t; try { t = fs.readFileSync(path.join(acc.root, 'userdata', acc.id, 'config', 'localconfig.vdf'), 'utf8'); } catch { return {}; }
+  const v = parseTextVdf(t);
+  const lower = (o) => Object.fromEntries(Object.entries(o || {}).map(([k, x]) => [k.toLowerCase(), x]));
+  const apps = lower(lower(lower(lower(lower(v).userlocalconfigstore).software).valve).steam).apps || {};
+  const out = {};
+  for (const [id, a] of Object.entries(apps)) {
+    if (!a || typeof a !== 'object') continue;
+    const min = Number(a.Playtime ?? a.playtime ?? 0), last = Number(a.LastPlayed ?? a.lastplayed ?? 0);
+    if (!min && !last) continue;
+    let key = id;
+    if (id.length > 12) { try { key = String(Number(BigInt(id) >> 32n) >>> 0); } catch {} } // long game id
+    else if (Number(id) < 0) key = String(Number(id) >>> 0);
+    const prev = out[key];
+    out[key] = { min: Math.max(prev?.min || 0, min), last: Math.max(prev?.last || 0, last * 1000) };
+  }
+  return out;
 }
 // Collections the user made (dynamic, filter-based ones can't hold chosen games)
 function readCollections(acc) {
@@ -167,7 +209,7 @@ module.exports = function createSteamManager(ctx) {
     if (gi < 0) {
       gi = args.findIndex((t) => /\/roms\/[^/]+\//i.test(t.val));
       if (gi >= 0) {
-        const v = args[gi].val;
+        const v = args[gi].val.replace(/^Z:(?=\/)/i, ''); // Xenia's Windows-style path
         const m = v.match(/^(.*?\/roms\/)([^/]+)\/(.*)$/i); // the first roms/ (Wii U keeps its own roms/ inside)
         folder = m[2]; romRoot = m[1]; sample = v;
         const rest = m[3].split('/');
@@ -188,7 +230,8 @@ module.exports = function createSteamManager(ctx) {
       folder = emu[1]; kind = /eboot\.bin$/i.test(args[gi].val) ? 'eboot' : 'path'; sample = args[gi].val;
     }
     const slug = folderSlug(folder);
-    const placeholder = kind === 'serial' || kind === 'titleid' ? args[gi].raw.replace(/[A-Z]{4}\d{5}/, '{SERIAL}') : args[gi].raw.replace(args[gi].val, '{ROM}');
+    const zp = /^Z:\//i.test(args[gi].val) ? args[gi].val.slice(0, 2) : '';
+    const placeholder = kind === 'serial' || kind === 'titleid' ? args[gi].raw.replace(/[A-Z]{4}\d{5}/, '{SERIAL}') : args[gi].raw.replace(args[gi].val, zp + '{ROM}');
     const argT = args.map((t, i) => (i === gi ? placeholder : t.raw));
     const preT = stripFramegen(pre).map((t) => t.raw);
     let start = sc.start;
@@ -233,69 +276,80 @@ module.exports = function createSteamManager(ctx) {
     try { flatpaks = execFileSync('flatpak', ['list', '--app', '--columns=application'], { encoding: 'utf8', timeout: 8000 }).split('\n').map((s) => s.trim()).filter(Boolean); } catch { flatpaks = []; }
     return flatpaks;
   }
-  // console -> emulators to try: [launcher script names, AppImage name pattern, flatpak id, default args]
-  const EMUS = {
-    ps2: [['pcsx2-qt.sh', 'pcsx2.sh'], /pcsx2/i, 'net.pcsx2.PCSX2', '-batch -fullscreen -nogui "{ROM}"'],
-    psx: [['duckstation.sh'], /duckstation/i, 'org.duckstation.DuckStation', '-batch -fullscreen "{ROM}"'],
-    gc: [['dolphin-emu.sh'], /dolphin/i, 'org.DolphinEmu.dolphin-emu', '-b -e "{ROM}"'],
-    wii: [['dolphin-emu.sh'], /dolphin/i, 'org.DolphinEmu.dolphin-emu', '-b -e "{ROM}"'],
-    wiiu: [['cemu.sh'], /cemu/i, 'info.cemu.Cemu', '-f -g "{ROM}"'],
-    switch: [['eden.sh', 'citron.sh', 'yuzu.sh', 'ryujinx.sh'], /(eden|citron|yuzu|sudachi|suyu)/i, 'org.yuzu_emu.yuzu', '-f -g "{ROM}"'],
-    ps3: [['rpcs3.sh'], /rpcs3/i, 'net.rpcs3.RPCS3', '--no-gui "{ROM}"'],
-    ps4: [['shadps4.sh'], /shadps4/i, 'net.shadps4.shadPS4', '-g "{ROM}"'],
-    psp: [['ppsspp.sh'], /ppsspp/i, 'org.ppsspp.PPSSPP', '"{ROM}"'],
-    n3ds: [['azahar.sh', 'lime3ds.sh', 'citra.sh'], /(azahar|lime3ds|citra)/i, 'org.azahar_emu.Azahar', '"{ROM}"'],
-    nds: [['melonds.sh'], /melonds/i, 'net.kuribo64.melonDS', '"{ROM}"'],
-    xbox: [['xemu.sh'], /xemu/i, 'app.xemu.xemu', '-dvd_path "{ROM}"'],
-    xbox360: [['xenia.sh'], null, null, '"{ROM}"'],
-    psvita: [['vita3k.sh'], /vita3k/i, null, '"{ROM}"'],
-  };
-  // retro consoles go through RetroArch with a core
-  const CORES = {
-    nes: ['mesen', 'fceumm', 'nestopia'], snes: ['snes9x', 'bsnes'], gb: ['gambatte', 'sameboy', 'mgba'], gbc: ['gambatte', 'sameboy', 'mgba'], gba: ['mgba'],
-    genesis: ['genesis_plus_gx', 'picodrive'], megadrive: ['genesis_plus_gx', 'picodrive'], mastersystem: ['genesis_plus_gx'], gamegear: ['genesis_plus_gx'], segacd: ['genesis_plus_gx'],
-    n64: ['mupen64plus_next', 'parallel_n64'], pcengine: ['mednafen_pce_fast', 'mednafen_pce'], dreamcast: ['flycast'], saturn: ['mednafen_saturn', 'yabasanshiro'],
-    arcade: ['fbneo', 'mame'], atari2600: ['stella'], atarilynx: ['handy', 'mednafen_lynx'], ngp: ['mednafen_ngp'], ngpc: ['mednafen_ngp'], wonderswan: ['mednafen_wswan'], wonderswancolor: ['mednafen_wswan'],
-  };
-  function coreDirs() { return [path.join(HOME, '.var/app/org.libretro.RetroArch/config/retroarch/cores'), path.join(HOME, '.config/retroarch/cores'), '/usr/lib/libretro', '/usr/lib64/libretro']; }
-  function findTemplate(key) {
-    const L = launchersDirs();
-    const spec = EMUS[key];
-    if (spec) {
-      const [scripts, re, fp, args] = spec;
-      for (const d of L) for (const s of scripts) if (exists(path.join(d, s))) return { exe: path.join(d, s), start: d, pre: [], command: true, args, kind: key === 'ps4' ? 'eboot' : key === 'wiiu' ? 'rpx' : 'path', how: 'emudeck', from: 'EmuDeck launcher' };
-      if (re) {
+  // what emulators exist and how each starts: electron/emulators.js (only installed ones are offered)
+  const { EMU, CORES, RA_FIRST, emulatorsFor, argsFor, coreName, DISC_FIRST, GAME_EXT, DIR_GAMES } = require('./emulators');
+  const BIN_DIRS = () => [...new Set([...(process.env.PATH || '').split(':'), '/usr/bin', '/usr/local/bin', '/usr/games', '/app/bin', path.join(HOME, '.local/bin'), '/var/lib/flatpak/exports/bin'].filter((d) => d && d.startsWith('/') && !d.includes('/tmp/.mount_')))];
+  const findBin = (names) => { for (const d of BIN_DIRS()) for (const n of names || []) { const f = path.join(d, n); if (exists(f) && !isDir(f)) return f; } return null; };
+  const kindOf = (key) => (key === 'ps4' ? 'eboot' : key === 'wiiu' ? 'rpx' : 'path');
+  // Every emulator for this console that is installed here: [{ id, label, t }]. Each copy is listed
+  // (someone can have both the Flatpak and an AppImage); the first copy keeps the plain id.
+  function candidates(key) {
+    const L = launchersDirs(), out = [];
+    // An EmuDeck launcher is often a wrapper: dolphin-emu.sh runs the Dolphin Flatpak, pcsx2-qt.sh the
+    // AppImage in ~/Applications. Then that copy is the same install and is not listed again.
+    const wraps = (script) => { let t = ''; try { t = fs.readFileSync(script, 'utf8'); } catch {} return { flatpak: /flatpak/i.test(t), appimage: /\.AppImage/i.test(t) }; };
+    const emuApps = [path.join(HOME, 'Applications'), path.join(real(HOME), 'Applications')];
+    for (const id of emulatorsFor(key)) {
+      const e = EMU[id], found = [];
+      const mk = (exe, start, src, from, args) => found.push({ t: { exe, start, pre: [], command: true, args: args || argsFor(id, key, src), kind: e.kind || kindOf(key), how: src, from }, src });
+      let wrap = { flatpak: false, appimage: false };
+      for (const d of L) for (const sc of e.scripts || []) if (exists(path.join(d, sc)) && !found.length) { mk(path.join(d, sc), d, 'emudeck', `EmuDeck ${e.label}`); wrap = wraps(path.join(d, sc)); }
+      if (e.app) {
         for (const d of APP_DIRS()) {
-          const hit = ls(d).filter((n) => re.test(n) && /\.appimage$/i.test(n) && !/qtlauncher/i.test(n)).sort().pop()
-            || ls(d).filter((n) => re.test(n) && /\.appimage$/i.test(n)).sort().pop();
-          if (hit) {
-            const qt = /qtlauncher/i.test(hit);
-            return { exe: path.join(d, hit), start: d, pre: [], command: true, args: qt ? '-d -g "{ROM}"' : args, kind: key === 'ps4' ? 'eboot' : key === 'wiiu' ? 'rpx' : 'path', how: 'appimage', from: hit };
-          }
+          if (found.some((f) => f.src === 'appimage') || (wrap.appimage && emuApps.includes(d))) continue;
+          const apps = ls(d).filter((n) => e.app.test(n) && /\.appimage$/i.test(n));
+          const hit = apps.filter((n) => !/qtlauncher/i.test(n)).sort().pop() || apps.sort().pop();
+          if (hit) mk(path.join(d, hit), d, 'appimage', hit, /qtlauncher/i.test(hit) && e.qtArgs ? e.qtArgs : null);
         }
       }
-      if (fp && flatpakApps().includes(fp)) return { exe: '/usr/bin/flatpak', start: '/usr/bin', pre: [], command: true, args: `run ${fp} ${args}`, kind: key === 'ps4' ? 'eboot' : key === 'wiiu' ? 'rpx' : 'path', how: 'flatpak', from: fp };
+      const fp = (e.fp || []).find((x) => flatpakApps().includes(x));
+      if (fp && !wrap.flatpak) mk('/usr/bin/flatpak', '/usr/bin', 'flatpak', fp, `run ${fp} ${argsFor(id, key, 'flatpak')}`);
+      const bin = findBin(e.bin);
+      if (bin && !/flatpak\/exports/.test(bin)) mk(bin, path.dirname(bin), 'native', bin);
+      const SRC = { emudeck: 'EmuDeck', appimage: 'AppImage', flatpak: 'Flatpak', native: 'Installed' };
+      found.forEach((f, i) => out.push({ id: i ? `${id}@${f.src}` : id, label: found.length > 1 ? `${e.label} · ${SRC[f.src]}` : e.label, t: f.t }));
     }
-    const cores = CORES[key];
-    if (cores) {
-      const core = coreDirs().flatMap((d) => cores.map((c) => path.join(d, `${c}_libretro.so`))).find(exists);
-      if (core) {
-        for (const d of L) if (exists(path.join(d, 'retroarch.sh'))) return { exe: path.join(d, 'retroarch.sh'), start: d, pre: [], command: true, args: `-L "${core}" "{ROM}"`, kind: 'path', how: 'emudeck', from: 'EmuDeck RetroArch' };
-        if (flatpakApps().includes('org.libretro.RetroArch')) return { exe: '/usr/bin/flatpak', start: '/usr/bin', pre: [], command: true, args: `run org.libretro.RetroArch -L "${core}" "{ROM}"`, kind: 'path', how: 'flatpak', from: 'RetroArch (Flatpak)' };
+    // RetroArch, from every place it can be installed, with each core that copy has. The sandboxed
+    // (Flatpak, EmuDeck) RetroArch gets the core by name and finds it in its own cores folder: a full
+    // path breaks when it sees home under another path (Bazzite: /var/home). Others get the full path.
+    const homes = [...new Set([HOME, real(HOME)])];
+    const flatCores = homes.map((h) => path.join(h, '.var/app/org.libretro.RetroArch/config/retroarch/cores'));
+    const nativeCores = [...homes.map((h) => path.join(h, '.config/retroarch/cores')), '/usr/lib/libretro', '/usr/lib64/libretro', '/usr/lib/x86_64-linux-gnu/libretro', '/usr/local/lib/libretro'];
+    const sources = [];
+    const raSh = L.map((d) => path.join(d, 'retroarch.sh')).find(exists);
+    if (raSh) sources.push({ src: 'EmuDeck', exe: raSh, start: path.dirname(raSh), pre: '', dirs: flatCores, byName: true, from: 'EmuDeck RetroArch' });
+    if (flatpakApps().includes('org.libretro.RetroArch') && !(raSh && wraps(raSh).flatpak)) sources.push({ src: 'Flatpak', exe: '/usr/bin/flatpak', start: '/usr/bin', pre: 'run org.libretro.RetroArch ', dirs: flatCores, byName: true, from: 'RetroArch (Flatpak)' });
+    for (const d of APP_DIRS()) { const hit = ls(d).filter((n) => /^retroarch.*\.appimage$/i.test(n)).sort().pop(); if (hit) { sources.push({ src: 'AppImage', exe: path.join(d, hit), start: d, pre: '', dirs: [path.join(d, hit + '.home/.config/retroarch/cores'), ...nativeCores], from: hit }); break; } }
+    const raBin = findBin(['retroarch']);
+    if (raBin && !/flatpak\/exports/.test(raBin)) sources.push({ src: 'Installed', exe: raBin, start: path.dirname(raBin), pre: '', dirs: nativeCores, from: raBin });
+    for (const root of steamRoots()) { const d = path.join(root, 'steamapps/common/RetroArch'); if (exists(path.join(d, 'retroarch'))) { sources.push({ src: 'Steam', exe: path.join(d, 'retroarch'), start: d, pre: '', dirs: [path.join(d, 'cores')], from: 'RetroArch on Steam' }); break; } }
+    const ras = [];
+    sources.forEach((so, si) => {
+      for (const c of CORES[key] || []) {
+        const file = so.dirs.map((d) => path.join(d, `${c}_libretro.so`)).find(exists);
+        if (!file) continue;
+        const core = so.byName ? `${c}_libretro.so` : `"${real(file)}"`;
+        ras.push({ id: 'ra:' + c + (si ? '@' + so.src.toLowerCase() : ''), label: `RetroArch · ${coreName(c)}${sources.length > 1 ? ' · ' + so.src : ''}`,
+          t: { exe: so.exe, start: so.start, pre: [], command: true, args: `${so.pre}-L ${core} "{ROM}"`, kind: 'path', how: so.src === 'EmuDeck' ? 'emudeck' : so.src === 'Flatpak' ? 'flatpak' : so.src === 'AppImage' ? 'appimage' : 'native', from: so.from } });
       }
-    }
-    return null;
+    });
+    return RA_FIRST.has(key) ? [...ras, ...out] : [...out, ...ras];
   }
-
+  function findTemplate(key) { return candidates(key)[0]?.t || null; }
   // ---------------------------------------------------------------- per-game details
   function serialOf(rom, p) {
     const tag = String(rom.fs_name || '') + ' ' + String(rom.name || '');
     const m = tag.match(/\b([A-Z]{4}\d{5})\b/);
     if (m) return m[1];
     // a folder game: PS3_GAME/PARAM.SFO holds the serial
-    for (const f of [path.join(p, 'PS3_GAME', 'PARAM.SFO'), path.join(p, 'PARAM.SFO')]) {
+    // (also one folder down: a download folder holding the game folder)
+    const sfos = [path.join(p, 'PS3_GAME', 'PARAM.SFO'), path.join(p, 'PARAM.SFO'), path.join(p, 'sce_sys', 'param.sfo')];
+    if (isDir(p)) for (const n of ls(p)) if (isDir(path.join(p, n))) sfos.push(path.join(p, n, 'PS3_GAME', 'PARAM.SFO'), path.join(p, n, 'sce_sys', 'param.sfo'));
+    for (const f of sfos) {
       try { const b = fs.readFileSync(f); const s = b.toString('latin1').match(/[A-Z]{4}\d{5}/); if (s) return s[0]; } catch {}
     }
+    // an ISO inside a folder
+    if (isDir(p)) { const iso = ls(p).find((n) => /\.iso$/i.test(n)); if (iso) p = path.join(p, iso); }
     // a disc image: look for the serial near the start of the ISO (PS3_DISC.SFB / PARAM.SFO)
     try {
       const fd = fs.openSync(p, 'r'); const b = Buffer.alloc(1024 * 1024);
@@ -304,6 +358,23 @@ module.exports = function createSteamManager(ctx) {
       if (s) return s[0];
     } catch {}
     return null;
+  }
+  // Vita title ID (PCSE00000): from the name, else from the start of the .pkg/.vpk (its content ID)
+  function vitaTitleId(rom, file) {
+    const m = (String(rom.fs_name || '') + ' ' + String(rom.name || '') + ' ' + path.basename(file || '')).match(/\b(PCS[A-Z]\d{5})\b/);
+    if (m) return m[1];
+    try {
+      const f = isDir(file) ? path.join(file, ls(file).find((n) => /\.(pkg|vpk)$/i.test(n)) || '') : file;
+      const fd = fs.openSync(f, 'r'); const b = Buffer.alloc(256 * 1024); fs.readSync(fd, b, 0, b.length, 0); fs.closeSync(fd);
+      const s = b.toString('latin1').match(/PCS[A-Z]\d{5}/); if (s) return s[0];
+    } catch {}
+    return null;
+  }
+  // Vita3K keeps installed games in <pref>/ux0/app/<title ID>
+  function vitaInstalled(id) {
+    const prefs = [path.join(HOME, '.local/share/Vita3K/Vita3K'), path.join(HOME, '.local/share/Vita3K'), ...ctx.emulationRoots().map((r) => path.join(r, 'storage/Vita3K'))];
+    for (const c of [path.join(HOME, '.config/Vita3K/config.yml'), path.join(HOME, '.local/share/Vita3K/Vita3K/config.yml')]) { try { const m = fs.readFileSync(c, 'utf8').match(/^pref-path:\s*(.+)$/m); if (m) prefs.unshift(m[1].trim().replace(/^['"]|['"]$/g, '')); } catch {} }
+    return prefs.some((p) => isDir(path.join(p, 'ux0/app', id)));
   }
   function rpcs3Knows(serial) {
     for (const f of [path.join(HOME, '.config/rpcs3/games.yml'), path.join(HOME, '.var/app/net.rpcs3.RPCS3/config/rpcs3/games.yml')]) {
@@ -338,7 +409,9 @@ module.exports = function createSteamManager(ctx) {
       rr = rr.endsWith('/') ? rr : rr + '/';
       if (rf.startsWith(rr)) return (root.endsWith('/') ? root : root + '/') + rf.slice(rr.length);
     }
-    return file;
+    // no shortcut style to follow: the real path, which sandboxed (Flatpak) emulators can always
+    // open, unlike a symlinked home such as /home on Bazzite and other image-based systems
+    return rf;
   }
   // What goes in place of the game in the launch options
   function gameRef(rom, file, t) {
@@ -355,13 +428,38 @@ module.exports = function createSteamManager(ctx) {
       const e = findEboot(file);
       return { ROM: styled(e || file, t), fallback: 'path' };
     }
+    if (t.kind === 'vitaid') { // installed in Vita3K? then by title ID; otherwise it can't start yet
+      const id = vitaTitleId(rom, file);
+      const how = 'in Vita3K first (File → Install .pkg or .vpk), then add it to Steam.';
+      return id && vitaInstalled(id) ? { SERIAL: id } : { missing: id ? `Install ${id} ${how}` : `Install this game ${how}` };
+    }
     if (t.kind === 'eboot') { const e = findEboot(file); return { ROM: styled(e || file, t) }; }
     if (t.kind === 'rpx' && isDir(file)) { // Wii U game folder: code/<name>.rpx
       const code = path.join(file, 'code');
       const rpx = ls(code).find((n) => /\.rpx$/i.test(n));
       return { ROM: styled(rpx ? path.join(code, rpx) : file, t) };
     }
+    // a game kept as a folder: the emulator gets the game file inside (RetroArch, xemu and most
+    // others can't open a folder). Consoles that take folders keep it.
+    const key = keyOf(rom.platform_slug, rom.platform_fs_slug);
+    if (isDir(file) && !DIR_GAMES.has(key)) { const f = playableFile(file, key); if (f) return { ROM: styled(f, t) }; }
     return { ROM: styled(file, t) };
+  }
+  // the file to start in a game folder: a playlist or disc descriptor, then the console's game
+  // extensions in order, else the biggest file. Looks two folders deep.
+  function playableFile(dir, key) {
+    const files = [];
+    const walk = (d, depth) => { for (const n of ls(d)) { const f = path.join(d, n); if (isDir(f)) { if (depth < 2) walk(f, depth + 1); } else files.push(f); } };
+    walk(dir, 0);
+    if (!files.length) return null;
+    const ext = (f) => path.extname(f).slice(1).toLowerCase();
+    for (const e of [...DISC_FIRST, ...(GAME_EXT[key] || [])]) {
+      const hits = files.filter((f) => ext(f) === e);
+      // a playlist named like the folder wins (ES-DE "Game.m3u/Game.m3u"), else the shallowest
+      if (hits.length) return hits.sort((a, b) => (path.basename(b, '.' + e) === path.basename(dir).replace(/\.m3u$/i, '')) - (path.basename(a, '.' + e) === path.basename(dir).replace(/\.m3u$/i, '')) || a.split('/').length - b.split('/').length)[0];
+    }
+    const junk = /\.(txt|nfo|jpe?g|png|pdf|md|sav|srm|state\d*|dat|xml|sfv|md5|sha1)$/i;
+    return files.filter((f) => !junk.test(f)).sort((a, b) => (fs.statSync(b).size || 0) - (fs.statSync(a).size || 0))[0] || null;
   }
 
   // ---------------------------------------------------------------- templates for every console
@@ -377,16 +475,25 @@ module.exports = function createSteamManager(ctx) {
     const own = cfg().templates?.[key];
     if (own && own.exe) return { ...own, how: 'yours' };
     if (Date.now() - learnedAt > 60000) refreshLearned();
-    if (learned[key]) return learned[key];
-    return findTemplate(key);
+    // an emulator picked on the console page
+    const pick = (cfg().emus || {})[key];
+    if (pick && pick !== 'learned') { const c = candidates(key).find((x) => x.id === pick); if (c) return { ...c.t, emu: c.id }; }
+    if (learned[key]) return { ...learned[key], emu: 'learned' };
+    const c = candidates(key)[0];
+    return c ? { ...c.t, emu: c.id } : null;
   }
+  // what a shortcut was made with, to spot ones made before the console's setup changed
+  // v2: arguments written into Target like Steam ROM Manager (0.7.11)
+  const sigOf = (t, mode) => (t ? ['v2', mode || 'direct', t.exe, (t.pre || []).join(' '), t.args].join('|') : '');
   function buildLaunch(rom, file, t) {
     const ref = gameRef(rom, file, t);
     let args = t.args;
     if (ref.fallback === 'path') args = args.replace(/"?%RPCS3_GAMEID%:\{SERIAL\}"?/, '"{ROM}"').replace(/(^|\s)(["']?)\{SERIAL\}\2(?=\s|$)/, '$1"{ROM}"');
-    args = args.replace(/\{ROM\}/g, ref.ROM || '').replace(/\{SERIAL\}/g, ref.SERIAL || '');
+    const romPath = ref.ROM || '';
+    args = args.replace(/\{ROM\}/g, romPath).replace(/\{SERIAL\}/g, ref.SERIAL || '')
+      .replace(/\{DIR\}/g, romPath ? path.dirname(romPath) : '').replace(/\{NAME\}/g, romPath ? path.basename(romPath).replace(/\.[^.]+$/, '') : ''); // MAME: folder and set name
     const lo = [...(t.pre || []), ...(t.command ? ['%command%'] : []), args].filter(Boolean).join(' ');
-    return { lo, fallback: ref.fallback };
+    return { lo, args, fallback: ref.fallback, missing: ref.missing };
   }
 
   // ---------------------------------------------------------------- library view
@@ -407,7 +514,18 @@ module.exports = function createSteamManager(ctx) {
     return out;
   }
   // Which downloaded games are already in Steam (ours, or added some other way)
-  const nameKey = (n) => String(n || '').toLowerCase().replace(/[™®©]/g, '').replace(/\s+/g, ' ').trim();
+  // names compare on letters and digits only: "Ratchet & Clank : Into the Nexus™" = "Ratchet & Clank: Into the Nexus"
+  const nameKey = (n) => String(n || '').toLowerCase().replace(/[™®©]/g, '').replace(/&/g, ' and ').replace(/[^a-z0-9]+/g, ' ').trim();
+  // a game's serial (PS3 BLUS30405, PS4 CUSA12345): from its name, else read from the game itself (cached)
+  const serialCache = new Map();
+  function gameSerial(g) {
+    const k = g.rom.id + '|' + g.file;
+    if (serialCache.has(k)) return serialCache.get(k);
+    let s = (String(g.rom.fs_name + ' ' + (g.file ? path.basename(g.file) : '')).match(/\b([A-Z]{4}\d{5})\b/) || [])[1] || null;
+    if (!s && g.file && ['ps3', 'psp', 'psvita'].includes(g.key)) { try { s = serialOf(g.rom, g.file) || null; } catch {} }
+    serialCache.set(k, s);
+    return s;
+  }
   // a game added live whose shortcut Steam hasn't saved to disk yet
   function liveHit(g) {
     const hit = Object.entries(reg).find(([, r]) => r.live && r.romId === g.rom.id);
@@ -416,7 +534,7 @@ module.exports = function createSteamManager(ctx) {
   function inSteamIndex(scs) {
     const byPath = new Map(), byName = new Map();
     for (const sc of scs) {
-      for (const t of tokenize(sc.lo)) if (t.val.startsWith('/')) byPath.set(normPath(t.val), sc);
+      for (const t of tokenize(sc.lo)) { const v = t.val.replace(/^Z:(?=\/)/i, ''); if (v.startsWith('/')) byPath.set(normPath(v), sc); } // Z: = Xenia under Proton
       const serial = (sc.lo.match(/%RPCS3_GAMEID%:([A-Z]{4}\d{5})/) || sc.lo.match(/(?:^|\s)["']?((?:CUSA|PPSA)\d{5})\b/) || [])[1];
       if (serial) byPath.set('serial:' + serial, sc);
       let con = null;
@@ -429,7 +547,7 @@ module.exports = function createSteamManager(ctx) {
       const f = g.file && normPath(g.file);
       if (f && byPath.has(f)) return byPath.get(f);
       if (f) for (const [k, sc] of byPath) if (k.startsWith(f + '/')) return sc; // eboot inside a game folder
-      const serial = (String(g.rom.fs_name + ' ' + (g.file ? path.basename(g.file) : '')).match(/\b([A-Z]{4}\d{5})\b/) || [])[1];
+      const serial = gameSerial(g);
       if (serial && byPath.has('serial:' + serial)) return byPath.get('serial:' + serial);
       // same name: only when it's for the same console (or Cartridge can't tell which console)
       const short = SHORT[g.key] || g.platform?.display_name || '';
@@ -444,17 +562,29 @@ module.exports = function createSteamManager(ctx) {
     const env = refreshLearned();
     const scs = env.account ? readShortcuts(env.account) : [];
     const find = inSteamIndex(scs);
+    const tFor = {};
     const games = installedGames().map((g) => {
       const sc = find(g) || liveHit(g);
       const ours = sc && reg[sc.appid];
       const queued = queue.add.some((a) => a.romId === g.rom.id) ? 'add' : sc && queue.remove.includes(sc.appid) ? 'remove' : null;
-      return { romId: g.rom.id, name: g.rom.name, console: g.key, platform: g.platform.display_name, inSteam: !!sc, ours: !!ours, appid: sc?.appid || null, queued, file: g.file };
+      // a game that can't be added yet (Vita: not installed in Vita3K) says why
+      const t = sc || !g.file ? null : (tFor[g.key] !== undefined ? tFor[g.key] : (tFor[g.key] = templateFor(g.key)));
+      const blocked = t?.kind === 'vitaid' ? gameRef(g.rom, g.file, t).missing || null : null;
+      // ours with arguments in Target but "%command%" in Launch options (Steam's own default): won't start
+      const badLo = !!(ours && !ours.loFixed && sc.exeRaw && tokenize(sc.exeRaw).length > 1 && /^\s*%command%\s*$/.test(sc.loRaw || ''));
+      return { romId: g.rom.id, name: g.rom.name, console: g.key, platform: g.platform.display_name, inSteam: !!sc, ours: !!ours, appid: sc?.appid || null, queued, file: g.file, blocked, badLo };
     });
     const keys = [...new Set(games.map((g) => g.console))];
     const consoles = keys.map((k) => {
       const t = templateFor(k);
       const ps = games.filter((g) => g.console === k);
-      return { key: k, label: SHORT[k] || ps[0]?.platform || k, platform: ps[0]?.platform || k, games: ps.length, inSteam: ps.filter((g) => g.inSteam).length, template: t ? { exe: t.exe, start: t.start, lo: [...(t.pre || []), ...(t.command ? ['%command%'] : []), t.args].join(' '), how: t.how, from: t.from, kind: t.kind } : null, mode: (cfg().modes || {})[k] || 'direct' };
+      return { key: k, label: SHORT[k] || ps[0]?.platform || k, platform: ps[0]?.platform || k, games: ps.length, inSteam: ps.filter((g) => g.inSteam).length, template: t ? { exe: t.exe, start: t.start, lo: [...(t.pre || []), ...(t.command ? ['%command%'] : []), t.args].join(' '), how: t.how, from: t.from, kind: t.kind,
+        // exactly what goes in Steam (see plan): arguments in Target unless something wraps the command
+        ...(!(t.pre || []).length && !/%RPCS3_GAMEID%/.test(t.args) ? { target: `${q(t.exe)} ${t.args}`, launch: '' } : { target: q(t.exe), launch: [...(t.pre || []), ...(t.command ? ['%command%'] : []), t.args].join(' ') }) } : null, mode: (cfg().modes || {})[k] || 'direct',
+        // installed emulators to pick from, and which one new shortcuts use
+        emus: [...(learned[k] ? [{ id: 'learned', label: 'From your Steam shortcuts', sub: learned[k].from }] : []), ...candidates(k).map((c) => ({ id: c.id, label: c.label, sub: c.t.from }))],
+        emu: t?.how === 'yours' ? 'yours' : t?.emu || null,
+        outdated: t ? ps.filter((g) => g.inSteam && g.ours && (g.badLo || reg[g.appid]?.sig !== sigOf(t, (cfg().modes || {})[k]))).length : 0 };
     }).sort((a, b) => a.platform.localeCompare(b.platform));
     return {
       steam: env.installed ? (env.account ? { account: env.account.name, accounts: env.accounts.map((a) => a.name), running: env.running, flatpak: env.account.flatpak } : { error: 'Steam is installed but no account has signed in yet. Open Steam once, then come back.' }) : { error: 'Steam was not found on this device.' },
@@ -475,6 +605,23 @@ module.exports = function createSteamManager(ctx) {
     return out;
   }
 
+  // Play time and last played for downloaded games that are in Steam: romId -> { min, last }
+  function playtime() {
+    const env = environment();
+    if (!env.account) return {};
+    const scs = readShortcuts(env.account);
+    const find = inSteamIndex(scs);
+    const pt = readPlaytime(env.account);
+    const out = {};
+    for (const g of installedGames()) {
+      const sc = find(g) || liveHit(g);
+      if (!sc) continue;
+      const p = pt[String(sc.appid >>> 0)] || {};
+      const last = Math.max(p.last || 0, (sc.last || 0) * 1000);
+      if (p.min || last) out[g.rom.id] = { min: p.min || 0, last, src: 'Steam' };
+    }
+    return out;
+  }
   // One game: is it in Steam, and would Cartridge know how to add it?
   function forRom(romId) {
     const env = environment();
@@ -525,12 +672,17 @@ module.exports = function createSteamManager(ctx) {
       let name = g.rom.name.replace(/\s+/g, ' ').trim();
       const always = cfg().consoleInName === 'always';
       if (always || nameCount[name.toLowerCase()] > 1 || (names.has(name.toLowerCase()) && !find(scs, g))) name = `${name} (${SHORT[g.key] || g.platform.display_name})`;
-      const { lo, fallback } = buildLaunch(g.rom, g.file, t);
-      let exe = t.exe, start = t.start, launch = lo;
-      if (mode === 'script') { exe = scriptPath(); start = path.dirname(scriptPath()); launch = String(g.rom.id); }
-      const appid = shortcutId(q(exe), name);
+      const { lo, args, fallback, missing } = buildLaunch(g.rom, g.file, t);
+      if (missing) { skipped.push({ romId: a.romId, name: g.rom.name, why: missing }); continue; }
+      let exe = t.exe, start = t.start, launch = lo, target = q(t.exe);
+      // Like Steam ROM Manager (EmuDeck's setup): the arguments go in Target and Launch options stay
+      // empty. Kept as "%command% ..." only when something must wrap the command (env vars, wrappers)
+      // or for RPCS3's %RPCS3_GAMEID% form, which is read from the launch options.
+      if (!(t.pre || []).length && !/%RPCS3_GAMEID%/.test(args)) { target = `${q(t.exe)} ${args}`.trim(); launch = ''; }
+      if (mode === 'script') { exe = scriptPath(); start = path.dirname(scriptPath()); launch = String(g.rom.id); target = q(exe); }
+      const appid = shortcutId(target, name);
       entries.push({
-        romId: g.rom.id, console: g.key, name, exe, start, lo: launch, directLo: lo, directExe: t.exe, directStart: t.start, appid, how: t.how, from: t.from, fallback,
+        romId: g.rom.id, console: g.key, sig: sigOf(t, mode), name, exe, target, start, lo: launch, directLo: lo, directExe: t.exe, directStart: t.start, appid, how: t.how, from: t.from, fallback,
         proton: /\.exe$/i.test(t.exe) ? (cfg().proton || 'proton_experimental') : null,
         collections: a.collections || [],
       });
@@ -541,7 +693,7 @@ module.exports = function createSteamManager(ctx) {
   }
   function preview() {
     const p = plan();
-    return { account: p.account.name, entries: p.entries.map((e) => ({ romId: e.romId, name: e.name, target: q(e.exe), start: q(e.start), lo: e.lo, how: e.how, from: e.from, fallback: e.fallback, collections: e.collections, proton: e.proton })), skipped: p.skipped, removing: p.removing };
+    return { account: p.account.name, entries: p.entries.map((e) => ({ romId: e.romId, name: e.name, target: e.target, start: q(e.start), lo: e.lo, how: e.how, from: e.from, fallback: e.fallback, collections: e.collections, proton: e.proton })), skipped: p.skipped, removing: p.removing };
   }
 
   // ---------------------------------------------------------------- launch script (optional mode)
@@ -565,7 +717,9 @@ module.exports = function createSteamManager(ctx) {
   }
 
   // ---------------------------------------------------------------- artwork
-  async function writeArt(e, grid) {
+  // style: undefined = Cartridge's artwork (yours, RomM's), 'top' = SteamGridDB's most popular,
+  // or one of SteamGridDB's styles (alternate, blurred, no_logo, material)
+  async function writeArt(e, grid, style) {
     fs.mkdirSync(grid, { recursive: true });
     const rom = ctx.romById(e.romId);
     const out = {};
@@ -574,20 +728,51 @@ module.exports = function createSteamManager(ctx) {
       try { const buf = await getter(); if (buf) { fs.writeFileSync(f, buf); out[name] = true; } } catch (err) { log('steam art', name, err.message); }
     };
     const art = ctx.artFor(e.romId) || {};
+    const sg = style ? (style === 'top' ? undefined : style) : undefined;
     const cover = art.grid || rom?.path_cover_large || rom?.path_cover_small || rom?.url_cover;
     const hero = art.hero || rom?.shot || null;
-    await put(`${e.appid}p.png`, async () => (cover ? ctx.fetchImage(cover) : ctx.sgdbImage(rom?.name, 'grid')));
-    await put(`${e.appid}_hero.png`, async () => (hero ? ctx.fetchImage(hero) : ctx.sgdbImage(rom?.name, 'hero')));
+    const fromSgdb = async (kind, fallback) => (await ctx.sgdbImage(rom?.name, kind, sg).catch(() => null)) || (fallback ? ctx.fetchImage(fallback) : null);
+    await put(`${e.appid}p.png`, async () => (style ? fromSgdb('grid', cover) : cover ? ctx.fetchImage(cover) : ctx.sgdbImage(rom?.name, 'grid')));
+    await put(`${e.appid}_hero.png`, async () => (style ? fromSgdb('hero', hero) : hero ? ctx.fetchImage(hero) : ctx.sgdbImage(rom?.name, 'hero')));
     await put(`${e.appid}.png`, async () => { // wide banner: SteamGridDB's, else cut from the background
-      const w = await ctx.sgdbImage(rom?.name, 'wide').catch(() => null);
+      const w = await ctx.sgdbImage(rom?.name, 'wide', sg).catch(() => null);
       if (w) return w;
       const src = hero ? await ctx.fetchImage(hero) : null;
       return src ? ctx.cropTo(src, 920, 430) : null;
     });
     await put(`${e.appid}_logo.png`, async () => { const l = await ctx.logoFile(rom); return l ? fs.readFileSync(l) : null; });
+    // the shortcut's icon (library list, recent games): SteamGridDB's square icon, else the cover cut square
+    await put(`${e.appid}_icon.png`, async () => {
+      const ic = await ctx.gameIconPng(rom).catch(() => null);
+      if (ic) return ic;
+      const src = cover ? await ctx.fetchImage(cover).catch(() => null) : null;
+      return src ? ctx.cropTo(src, 256, 256) : null;
+    });
     return out;
   }
 
+  // Refresh the artwork of every shortcut Cartridge added: new files in Steam's grid folder, and
+  // straight into the running Steam when it can be reached (else Steam shows them after a restart)
+  async function refreshArt(style) {
+    const env = environment();
+    if (!env.account) throw new Error('Steam was not found on this device.');
+    if (style && !ctx.getConfig().sgdbKey) throw new Error('Add a SteamGridDB API key in Settings → Look & feel first.');
+    const have = new Set(readShortcuts(env.account).map((x) => x.appid >>> 0));
+    const ours = Object.entries(reg).filter(([id, r]) => r.romId && (have.has(Number(id) >>> 0) || r.live));
+    if (!ours.length) return { count: 0 };
+    const grid = files(env.account).grid;
+    const liveOn = await live.available(env.account.root).catch(() => false);
+    let n = 0;
+    for (const [id, r] of ours) {
+      const appid = Number(id) >>> 0;
+      ctx.broadcast('steam-progress', { step: 'art', done: n, total: ours.length, name: r.name });
+      await writeArt({ appid, romId: r.romId }, grid, style);
+      if (liveOn) await live.setArtwork(appid, { dir: grid, id: appid }).catch((e) => log('steam live art refresh', e.message));
+      n++;
+    }
+    ctx.broadcast('steam-progress', null);
+    return { count: n, live: liveOn };
+  }
   // ---------------------------------------------------------------- apply
   function lastStatus() {
     const f = path.join(JOB_DIR, 'last.status.json');
@@ -608,12 +793,12 @@ module.exports = function createSteamManager(ctx) {
     for (const e of p.entries) for (const c of e.collections || []) (collections[c] ||= []).push(e.appid >>> 0);
     const add = p.entries.map((e) => ({
       proton: e.proton,
-      entry: { appid: e.appid >>> 0, AppName: e.name, Exe: q(e.exe), StartDir: q(e.start), icon: '', ShortcutPath: '', LaunchOptions: e.lo, IsHidden: 0, AllowDesktopConfig: 1, AllowOverlay: 1, OpenVR: 0, Devkit: 0, DevkitGameID: '', DevkitOverrideAppID: 0, LastPlayTime: 0, FlatpakAppID: '', tags: {} },
+      entry: { appid: e.appid >>> 0, AppName: e.name, Exe: e.target, StartDir: q(e.start), icon: exists(path.join(f.grid, `${e.appid}_icon.png`)) ? path.join(f.grid, `${e.appid}_icon.png`) : '', ShortcutPath: '', LaunchOptions: e.lo, IsHidden: 0, AllowDesktopConfig: 1, AllowOverlay: 1, OpenVR: 0, Devkit: 0, DevkitGameID: '', DevkitOverrideAppID: 0, LastPlayTime: 0, FlatpakAppID: '', tags: {} },
     }));
     const removeIds = p.removing.map((r) => r.appid >>> 0);
-    for (const id of removeIds) if (reg[id]) for (const n of [`${id}p.png`, `${id}.png`, `${id}_hero.png`, `${id}_logo.png`]) { try { fs.rmSync(path.join(f.grid, n), { force: true }); } catch {} }
+    for (const id of removeIds) if (reg[id]) for (const n of [`${id}p.png`, `${id}.png`, `${id}_hero.png`, `${id}_logo.png`, `${id}_icon.png`]) { try { fs.rmSync(path.join(f.grid, n), { force: true }); } catch {} }
     // our registry first, so the launch script knows the games before Steam starts them
-    for (const e of p.entries) reg[e.appid] = { romId: e.romId, name: e.name, console: e.console, exe: e.exe, mode: (cfg().modes || {})[e.console] || 'direct', at: Date.now(), account: p.account.id, collections: e.collections };
+    for (const e of p.entries) reg[e.appid] = { romId: e.romId, name: e.name, console: e.console, exe: e.exe, sig: e.sig, mode: (cfg().modes || {})[e.console] || 'direct', at: Date.now(), account: p.account.id, collections: e.collections };
     for (const id of removeIds) { if (reg[id]) gone[id] = reg[id]; delete reg[id]; }
     saveReg();
     writeScript();
@@ -647,11 +832,11 @@ module.exports = function createSteamManager(ctx) {
     put({ state: 'writing' });
     let added = 0;
     for (const e of p.entries) {
-      const id = await live.addShortcut({ name: e.name, exe: q(e.exe), start: q(e.start), lo: e.lo, art: { dir: f.grid, id: e.appid }, proton: e.proton, collections: e.collections });
+      const id = await live.addShortcut({ name: e.name, exe: e.target, start: q(e.start), lo: e.lo, art: { dir: f.grid, id: e.appid }, proton: e.proton, collections: e.collections });
       if (id !== (e.appid >>> 0)) {
         reg[id] = reg[e.appid]; delete reg[e.appid];
         // Steam stored its own copy of the artwork: drop ours, named after the old id
-        for (const n of [`${e.appid}p.png`, `${e.appid}.png`, `${e.appid}_hero.png`, `${e.appid}_logo.png`]) { try { fs.rmSync(path.join(f.grid, n), { force: true }); } catch {} }
+        for (const n of [`${e.appid}p.png`, `${e.appid}.png`, `${e.appid}_hero.png`, `${e.appid}_logo.png`, `${e.appid}_icon.png`]) { try { fs.rmSync(path.join(f.grid, n), { force: true }); } catch {} }
       }
       reg[id].live = true; // Steam may save its shortcuts file a while later: count it as in Steam now
       added++;
@@ -798,10 +983,33 @@ module.exports = function createSteamManager(ctx) {
     overview, preview, apply, undo, restartSteam, removeAllOurs, queueAdd, queueRemove, queueClear, queueInfo, test, setTemplate, setMode, verifyCollections,
     collections: () => { const env = environment(); return env.account ? readCollections(env.account) : []; },
     // live changes: is Steam's interface reachable, and turning on its local debugging port
+    // pick the emulator new shortcuts use for a console (clears a hand-edited setup for it)
+    setEmu: (key, id) => { const c = cfg(); c.emus ||= {}; if (id) c.emus[key] = id; else delete c.emus[key]; if (c.templates?.[key]) delete c.templates[key]; ctx.saveConfig(); return true; },
+    // re-add this console's games Cartridge put in Steam, so they use the current emulator setup
+    refresh: async (key) => {
+      const t = templateFor(key), sig = sigOf(t, (cfg().modes || {})[key]);
+      let games = overview().games.filter((g) => g.console === key && g.inSteam && g.ours && g.file && g.appid && (g.badLo || reg[g.appid]?.sig !== sig));
+      // only "%command%" left in Launch options and the setup is current: clear it in place (keeps play time)
+      const env = environment();
+      const fixable = games.filter((g) => g.badLo && reg[g.appid]?.sig === sig);
+      if (fixable.length && env.account && await live.available(env.account.root)) {
+        const scs = readShortcuts(env.account);
+        let fixed = 0;
+        for (const g of fixable) { const sc = scs.find((x) => x.appid === g.appid); if (sc && (await live.settle(g.appid, sc.exeRaw, '')) === 'ok') { reg[g.appid].loFixed = Date.now(); fixed++; } }
+        saveReg();
+        games = games.filter((g) => !reg[g.appid]?.loFixed); // anything not fixed in place is re-added
+        if (!games.length) return { count: fixed, fixed };
+      }
+      if (!games.length) return { count: 0 };
+      queueAdd(games.map((g) => ({ romId: g.romId, collections: reg[g.appid]?.collections || [] })));
+      queueRemove(games.map((g) => g.appid)); // after queueAdd, which drops pending removals of the same game
+      return { count: games.length };
+    },
     liveInfo: async () => { const env = environment(); if (!env.account) return { on: false, flag: false }; return { on: await live.available(env.account.root), flag: live.flagOn(env.account.root) }; },
     liveEnable: () => { const env = environment(); if (!env.account) throw new Error('Steam was not found.'); fs.writeFileSync(path.join(env.account.root, live.FLAG), ''); return true; },
-    onDownloaded, onDeleted, lastStatus, writeScript, startupReport, forRom, fixCollections, played,
+    onDownloaded, onDeleted, lastStatus, writeScript, startupReport, forRom, fixCollections, played, playtime, steamRoots, refreshArt,
+    addedAt: (romId) => Math.min(...Object.values(reg).filter((r) => r.romId === romId && r.at).map((r) => r.at), Infinity),
     // exposed for tests
-    _learnOne: learnOne, _tokenize: tokenize, _buildLaunch: buildLaunch, _learnAll: learnAll,
+    _learnOne: learnOne, _tokenize: tokenize, _buildLaunch: buildLaunch, _learnAll: learnAll, _candidates: candidates,
   };
 };

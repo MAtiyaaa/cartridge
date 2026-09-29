@@ -30,6 +30,8 @@ This file is the short version every session needs. The full handoff (history, e
 - Test that it launches before anything is released. Release notes say exactly what changed.
 - Nothing private in the repo or releases.
 - Cartridge never touches saves, never downloads or launches emulators itself, and never modifies emulator files.
+- **Cartridge is for everyone, not the owner's setup.** Users run SteamOS, Bazzite, other image-based systems and ordinary desktop distros, with emulators from EmuDeck, Flatpak, AppImages, distro packages or Steam (RetroArch), in any mix and any version. Never hard-code the owner's paths, emulators or choices. Detect what is installed, prefer what the user already uses (their Steam shortcuts), let them pick, and fail with a clear message rather than a wrong guess. Test Steam and emulator changes against several setups (EmuDeck, Flatpak only, distro packages, AppImages, nothing installed), not one.
+- Paths: home can be a symlink (/home to /var/home on Bazzite and Fedora Atomic), and sandboxed (Flatpak) apps may not follow it. Hand emulators real paths, or names they resolve themselves (RetroArch cores).
 
 ## Controls (don't change without asking)
 LT/RT switch top tabs. LB/RB only switch sections inside a page. A select, B back, X download or page action, Y search or More, Start Quick Menu, Select Downloads. Every screen must work with a controller, touch and mouse, at 1280x800, 1920x1080 and 3840x2160, with nothing clipped.
@@ -80,6 +82,50 @@ LT/RT switch top tabs. LB/RB only switch sections inside a page. A select, B bac
 - Helper in Game Mode polls every 100 ms and writes at once (Game Mode restarts Steam immediately).
 - Game page More: artwork options grouped under "Change metadata".
 
+## 0.7.8
+- Emulators per console: `EMUS` (standalone, args copied from EmuDeck's SRM parsers) and `CORES` in `steamManager.js`; `candidates(key)` lists what is installed. RetroArch cores go by name (`-L snes9x_libretro.so`), never a full path (Flatpak RetroArch on /var/home can't see /home paths). Xbox: `xemu-emu.sh -full-screen -dvd_path`. Xbox 360: `"Z:{ROM}"`.
+- `templateFor`: yours > picked (`config.steam.emus[key]`) > learned > first candidate. Shortcuts store `sig`; `outdated` counts ours with another sig; `steam:refresh` re-adds them.
+- `readShortcuts` splits args out of Exe (SRM `appendArgsToExecutable`) into `%command% <args>`; `Z:` paths understood.
+- Icons: `<appid>_icon.png` in grid (SGDB icon via `gameIconPng`, else cover cropped); live `SetShortcutIcon`, helper sets `icon`.
+- Library: series merged by word subset (`STOP` words), games de-duplicated; Gallery `groups` splits collection/genre by console; `GenreTile.vue`.
+
+## 0.7.9
+- Emulator detection covers every install kind: `EMU` (per emulator: EmuDeck `scripts`, AppImage `app` pattern, Flatpak ids `fp`, program names `bin`, `args`) and `EMUS` (console -> emulator ids). `candidates()` lists each copy found (first keeps the plain id, others `id@src`). RetroArch from EmuDeck, Flatpak, AppImage, distro package or Steam, each with its own cores; only the sandboxed ones get cores by name.
+- `styled()` returns the real path when no learned path style applies.
+- The session tested detection with fake homes for EmuDeck, Flatpak-only, distro packages, AppImages + Steam RetroArch, and nothing installed (not in the repo).
+
+## 0.7.10
+- `electron/emulators.js` is the emulator database (all known, from EmuDeck's SRM parsers and SRM's `files/presets`): `EMU` (sources, args, `argsBy` per install kind, ares `system` names, `for` consoles), `CORES`, `RA_FIRST`. Only installed ones are offered. Add emulators there, not in steamManager.
+- An EmuDeck launcher that runs a Flatpak or an AppImage in ~/Applications hides that copy (the script text is read). RetroArch's Flatpak is hidden when EmuDeck's retroarch.sh wraps it.
+- Launch placeholders: `{ROM}`, `{SERIAL}`, `{DIR}` (game folder), `{NAME}` (file name without extension, for MAME).
+
+## 0.7.11
+- Shortcuts are SRM style: `plan()` puts `"exe" args` in Target (`entry.target`, used for the appid, the helper `Exe` and live `SetShortcutExe`) and leaves Launch options empty. `%command%` form only with `pre` (env vars, wrappers) or `%RPCS3_GAMEID%`. `sigOf` starts with `v2`, so older shortcuts show Update.
+- Folder games: `gameRef` hands the emulator the file inside (`playableFile`: `DISC_FIRST` m3u/cue/gdi..., then `GAME_EXT[key]`, else the biggest file) unless the console takes folders (`DIR_GAMES`).
+- In Steam matching: `nameKey` (letters and digits, & = and, no ™), `gameSerial` reads PS3/PSP/Vita serials from the game when the name lacks one.
+- Vita: `vita3k` kind `vitaid`: `-F -r <title ID>` only when `ux0/app/<id>` exists (Vita3K pref path); otherwise `missing`, shown as `blocked` in the overview and skipped in `plan()`.
+- `src/views/SteamMissing.vue` (route `steam-missing`) replaces "Add N missing". Gallery toolbar: Show/Sort menus, More (Surprise me, Select, Get all); series header uses a game cover (`headArt`).
+
+## 0.7.12
+- Real Steam put "%command%" into a live-added shortcut's empty Launch options, which broke launching (args are in Target). `steamLive.settle()` reads the shortcut back (`RegisterForAppDetails`, `strShortcutLaunchOptions`) and sets it again until it sticks. Overview `badLo` (ours, args in Exe, Launch options exactly `%command%`) counts as outdated; `steam:refresh` clears it in place (`reg[id].loFixed`), else re-adds.
+- Smoothness (measured without the GPU): scroll containers `will-change: scroll-position` (`.view`, `.shelf`, `.shelves`, `.menu-list`, `[data-scroll]`, `[data-hscroll]`), so scrolling doesn't repaint the one full-screen `.shell` layer. The vignette is painted as `.shell`'s background (`body:has(.xmb-vignette)`), one full-screen layer fewer. Light effects draw the canvas at full size below 4K (stretching it cost the software compositor more). Light effects animate only the card lift, not the shadow.
+
+## 0.7.13
+- Console cards (owner picked "Showcase" from mockups): `SysTile` only sets `--sys-a`/`--sys-b` (consoleColors, else a hue from the slug); the look is `.systile` in `styles.css`. The picture (`.glyph`) stays inside the card (top/right inset, height from the card, fade mask to the left); the old bottom strip is gone. PIcon's inline size is overridden inside `.glyph`.
+- Consoles header: title plus `.stats` (big numbers, small labels). Top bar connection: `.net` pill (light green LAN, light purple Tunnel, light red Offline on a dark see-through pill), no dot.
+
+## 0.8.0 (Your Library, Alive)
+- Play time: `steamManager.playtime()` (localconfig.vdf `apps/<appid>` Playtime/LastPlayed via `parseTextVdf`/`readPlaytime`, long game ids folded to 32-bit) plus RetroArch `.lrtl` runtime logs by file name (`retroarchRuntime` in main.js). `play:stats` -> `store.play`, `playOf`, `playtimeText`; reloaded on the `installed` event.
+- Home shelves (Home.vue): Finish what you started, Most played (`GameCard extra`), Short games, Top rated you haven't played, Local multiplayer. Trophy row: `.ach-day` markers and `.ach-when` times.
+- Game page More: Edit details (`rom:edit`, PUT /api/roms/{id} form name/summary/url_cover), Timeline (`rom:timeline` + `GameTimeline.vue`), Theme from this game (cover colour via canvas; `romimg` responses carry ACAO *; `ui.gameTheme` keeps the old theme, cleared when a theme is picked in Settings). HLTB card loads `/assets/scrappers/hltb.png` from the RomM server.
+- Settings → RomM (`RommUpload.vue`): `upload:list` (files in console folders not in RomM), `upload:start` (RomM 4 chunked /api/roms/upload/start, PUT chunks, /complete; older servers POST /api/roms). QR pairing requests `roms.write`. Settings → About: `ServerStatus.vue` (`server:health`).
+- Idle screen `IdleScreen.vue` (`ui.idle` minutes, default 5; its layer eats the waking press). Keyboard `mode: 'game'` suggests titles and words.
+- Backgrounds: `bgRenderers.js` keeps waves/ribbons, adds ps2, wii, wiiu, switch, ds, n3ds, xbox, xbox360 with `BG_BASE` CSS bases and a neutral vignette (`body.bg-console`). Picker is one row plus a grouped menu (Menu `heading`).
+- Steam: `steam:refreshArt` (style: undefined = Cartridge art, 'top', or SteamGridDB styles), `steamLive.setArtwork`. Storage drives include console folders and list `consoles`; Free up space pre-selects games unplayed for 2 months.
+
+## 0.8.1
+- `.net` pill colour coded: nearly solid dark green (LAN), purple (Tunnel), red (Offline) backgrounds with a matching edge.
+
 ## Releases (full steps: HANDOFF D8)
 Only when the owner asks. Bump `version` and `build.releaseInfo.releaseName` ("Cartridge X.Y.Z") in `package.json`, put only this version's notes in `RELEASE_NOTES.md` (heading `## Cartridge X.Y.Z · Title`), add them to the top of `CHANGELOG.md`, grouped as New / Changed / Fixed with bold lead-ins. CI builds, launch-checks and publishes.
 
@@ -89,4 +135,5 @@ Only when the owner asks. Bump `version` and `build.releaseInfo.releaseName` ("C
 - Upstream (abdu2304/cartridge) is merged with merge commits; where both sides built the same feature, upstream's version is kept.
 - Releases here publish from this repository (AppImage and a signed APK); versions follow this fork's own numbering.
 - Here the session opens the PR and MAtiyaaa merges it (the upstream owner's standing merge instruction applies to upstream).
+- Phone upload: `/phone-upload/start|<id>?offset=|<id>/finish` in `remote-server.js` (8 MB pieces into `phone-uploads/`, then the device's `upload:start`; the copy is deleted when RomM is done). Phones may `upload:start` only paths from `upload:list` or their own upload. Phone UI: `src/remote/UploadView.vue`.
 - Upstream releases are merged as their own fork version (abdu2304 0.7.0 became 0.7.3). `yauzl` and the other backend packages Android needs are listed in `NODE_DEPS` in `scripts/build-android.mjs`.

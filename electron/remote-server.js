@@ -22,9 +22,10 @@ const LAN_CHANNELS = new Set([
   'config:get', 'app:info', 'library:get', 'installed:get', 'art:all', 'logo:get', 'syslogo:get', 'icon:get',
   'platforms:paths', 'dl:list', 'dl:add', 'dl:cancel', 'dl:retry', 'dl:clear', 'dl:move', 'dl:pauseAll', 'dl:resumeAll', 'api:get',
   'remote:info', 'remote:get', 'remote:cmd', 'remote:unpair',
+  'upload:list', 'upload:start', 'upload:cancel', // Upload to RomM (start is limited to detected files and phone uploads)
 ]);
 // Events a phone receives (the rest stay on the device)
-const LAN_EVENTS = new Set(['library', 'installed', 'installed-changed', 'downloads', 'sync', 'remote:state', 'remote:config', 'remote:info', 'logos-progress', 'remote:link']);
+const LAN_EVENTS = new Set(['library', 'installed', 'installed-changed', 'downloads', 'sync', 'remote:state', 'remote:config', 'remote:info', 'logos-progress', 'remote:link', 'upload']);
 const API_OK = /^\/api\/roms\/\d+$/; // RomM reads a phone may make through the device (game details)
 
 const sha = (s) => crypto.createHash('sha256').update(String(s)).digest('hex');
@@ -77,6 +78,7 @@ module.exports = function createRemoteServer(opts) {
   }
   // toLocal=false: the event already reached the device's own window (desktop broadcast)
   function send(ch, data, toLocal = true) {
+    if (ch === 'upload') phoneUploadSettled(data);
     const pub = ch === 'remote:config' ? publicConfig(data) : data;
     for (const c of clients) {
       if (!c.lan) write(c, ch, data);
@@ -246,11 +248,55 @@ module.exports = function createRemoteServer(opts) {
     'remote:peers': () => peers(),
   };
 
+  // ------------------------------------------------------------- uploads from a phone
+  // A file picked on the phone comes in as numbered pieces (small enough for tunnels like Cloudflare,
+  // resumable by offset), lands in a temporary folder on the device and goes on to RomM with the
+  // device's own Upload to RomM. The temporary copy is deleted once RomM has it (or it failed).
+  const UP_DIR = path.join(dataDir, 'phone-uploads');
+  const phoneUps = new Map(); // id -> { file, size, platformId }
+  const phoneFiles = new Map(); // file -> id, once handed to Upload to RomM
+  try { for (const d of fs.readdirSync(UP_DIR)) fs.rmSync(path.join(UP_DIR, d), { recursive: true, force: true }); } catch {} // leftovers from last time
+  function phoneUploadStart({ name, size, platformId }) {
+    const clean = path.basename(String(name || '')).replace(/[\\/:*?"<>|\x00-\x1f]/g, '_').slice(0, 200);
+    if (!clean || clean.startsWith('.')) throw new Error('That file name is not allowed');
+    if (!Number(size) || !Number(platformId)) throw new Error('Pick a console first');
+    const id = rand(8), dir = path.join(UP_DIR, id);
+    fs.mkdirSync(dir, { recursive: true });
+    const file = path.join(dir, clean);
+    fs.writeFileSync(file, '');
+    phoneUps.set(id, { file, size: Number(size), platformId: Number(platformId) });
+    return { id, received: 0 };
+  }
+  async function phoneUploadChunk(id, offset, req) {
+    const u = phoneUps.get(id);
+    if (!u) throw Object.assign(new Error('Upload not found. Start it again.'), { code: 404 });
+    const have = fs.statSync(u.file).size;
+    if (Number(offset) !== have) return { received: have }; // resume from what arrived
+    await new Promise((ok, bad) => { const ws = fs.createWriteStream(u.file, { flags: 'a' }); req.pipe(ws); ws.on('finish', ok); ws.on('error', bad); req.on('error', bad); });
+    const now = fs.statSync(u.file).size;
+    if (now > u.size) { fs.rmSync(path.dirname(u.file), { recursive: true, force: true }); phoneUps.delete(id); throw new Error('More data than the file size'); }
+    return { received: now };
+  }
+  async function phoneUploadFinish(id) {
+    const u = phoneUps.get(id);
+    if (!u) throw new Error('Upload not found. Start it again.');
+    if (fs.statSync(u.file).size !== u.size) throw new Error('The file did not arrive completely');
+    phoneUps.delete(id);
+    phoneFiles.set(u.file, id);
+    await invokeData('upload:start', { path: u.file, platformId: u.platformId });
+    return { path: u.file };
+  }
+  function phoneUploadSettled(d) {
+    if (!d?.path || !phoneFiles.has(d.path) || !['done', 'error', 'cancelled'].includes(d.state)) return;
+    phoneFiles.delete(d.path);
+    fs.rm(path.dirname(d.path), { recursive: true, force: true }, () => {});
+  }
+
   // ------------------------------------------------------------- HTTP
   function cors(res) {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Headers', 'content-type, x-cart-token');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, OPTIONS');
   }
   function readBody(req) {
     return new Promise((resolve, reject) => {
@@ -279,6 +325,12 @@ module.exports = function createRemoteServer(opts) {
     if (ch === 'remote:unpair') { removePhones(phone.id); return { ok: true, data: true }; }
     if (ch === 'api:get' && !API_OK.test(String(arg?.path || ''))) return { ok: false, error: 'Not allowed from a phone' };
     if (ch === 'remote:cmd' && arg?.tab === 'settings') return { ok: false, error: 'Settings stay on the device' };
+    // a phone may only upload what Upload to RomM found in the console folders, or a file it sent itself
+    if (ch === 'upload:start') {
+      const f = String(arg?.path || '');
+      const listed = (await invokeData('upload:list').catch(() => ({ files: [] }))).files || [];
+      if (!phoneFiles.has(f) && !listed.some((x) => x.path === f)) return { ok: false, error: 'Not allowed from a phone' };
+    }
     const r = await localCall(ch, arg);
     if (ch === 'config:get' && r.ok) r.data = publicConfig(r.data);
     if (ch === 'app:info' && r.ok) r.data = { version: r.data?.version, gamescope: r.data?.gamescope };
@@ -307,6 +359,16 @@ module.exports = function createRemoteServer(opts) {
         if (isLan && (url.pathname === '/' || url.pathname === '/remote')) { res.writeHead(302, { Location: '/remote/' + url.search }); return res.end(); }
         if (isLan && url.pathname.startsWith('/remote/')) return serveFile(res, remoteDir, url.pathname.slice(8), 'remote.html');
 
+        if (isLan && url.pathname.startsWith('/phone-upload/')) {
+          if (!authed) return json(res, 403, { ok: false, error: 'Not paired' });
+          const [, , id, act] = url.pathname.split('/');
+          try {
+            if (id === 'start') return json(res, 200, { ok: true, data: phoneUploadStart(JSON.parse((await readBody(req)) || '{}')) });
+            if (act === 'finish') return json(res, 200, { ok: true, data: await phoneUploadFinish(id) });
+            if (req.method === 'PUT') return json(res, 200, { ok: true, data: await phoneUploadChunk(id, url.searchParams.get('offset'), req) });
+          } catch (e) { return json(res, e.code === 404 ? 404 : 200, { ok: false, error: e.message }); }
+          res.writeHead(404); return res.end();
+        }
         if (url.pathname.startsWith('/ipc/')) {
           if (!authed) return json(res, 403, { ok: false, error: 'Not paired' });
           const ch = decodeURIComponent(url.pathname.slice(5));

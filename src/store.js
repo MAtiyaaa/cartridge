@@ -33,7 +33,18 @@ export const store = reactive({
   trophySync: { state: 'idle' },
   trophyScan: null,
   pops: [], // "Trophy unlocked" pop-ups
+  play: {}, // romId -> { min, last, src }: play time from Steam and RetroArch (0.8)
 });
+
+// ---------------- play time (Steam's own numbers for games in Steam, plus RetroArch's logs)
+export async function loadPlay() { try { store.play = (await call('play:stats')) || {}; } catch {} }
+export const playOf = (id) => store.play[id] || null;
+export function playtimeText(min) {
+  if (!min) return '';
+  if (min < 60) return `${min} min`;
+  const h = min / 60;
+  return `${h < 10 ? Math.round(h * 10) / 10 : Math.round(h)} h`;
+}
 
 // ---------------- routing
 export function go(name, params = {}) {
@@ -269,7 +280,8 @@ export function when(ms) {
   return new Date(ms).toLocaleDateString();
 }
 rd.on('library', (lib) => setLib(lib));
-rd.on('installed', (m) => { store.installed = m; });
+let playT = 0;
+rd.on('installed', (m) => { store.installed = m; clearTimeout(playT); playT = setTimeout(loadPlay, 800); }); // RetroArch times match installed files
 rd.on('sync', (s) => { store.sync = s; });
 rd.on('update', (u) => {
   if (u.state === 'ready' && store.update.state !== 'ready') toast(`Cartridge ${u.version} is ready. Restart from the Quick Menu to update.`, 'ok', 6000, 'mdiUpdate');
@@ -299,11 +311,23 @@ function autoCollections() {
   if (autoCache.v === store.libVersion) return autoCache.list;
   const rs = allRoms().filter(visible);
   const list = AUTO.map((a) => ({ id: a.id, name: a.name, icon: a.icon, description: a.description, auto: true, rom_ids: a.pick(rs).map((r) => r.id) })).filter((c) => c.rom_ids.length);
-  // Series: RomM's franchise data, any series with at least two games
-  const by = new Map();
-  for (const r of rs) for (const f of r.series || []) (by.get(f) || by.set(f, []).get(f)).push(r);
-  const series = [...by].filter(([, l]) => l.length >= 2).sort((a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0]))
-    .map(([name, l]) => ({ id: 'series-' + name, name, icon: 'mdiBookshelf', auto: true, series: true, description: 'Series', rom_ids: l.sort((a, b) => (a.year || 9e15) - (b.year || 9e15)).map((r) => r.id) }));
+  // Series: RomM's franchise data, any series with at least two games. Near-identical names are one
+  // series ("Mario" and "Mario Bros.", "Ratchet & Clank" and "Ratchet & Clank Future"): a name whose
+  // words include a shorter series' words joins it. A game is in each series once.
+  const STOP = new Set(['the', 'series', 'bros', 'brothers', 'super', 'of', 'and', 'a']);
+  const words = (n) => String(n).toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim().split(' ').filter((w) => w && !STOP.has(w));
+  const names = [...new Set(rs.flatMap((r) => r.series || []))].sort((a, b) => words(a).length - words(b).length || a.length - b.length);
+  const groups = []; // { name, words, ids: Set }
+  const groupOf = new Map();
+  for (const n of names) {
+    const w = words(n);
+    const g = w.length && groups.find((x) => x.words.every((y) => w.includes(y)));
+    if (g) groupOf.set(n, g);
+    else { const ng = { name: n, words: w, roms: new Map() }; groups.push(ng); groupOf.set(n, ng); }
+  }
+  for (const r of rs) for (const f of r.series || []) groupOf.get(f)?.roms.set(r.id, r);
+  const series = groups.filter((g) => g.roms.size >= 2).sort((a, b) => b.roms.size - a.roms.size || a.name.localeCompare(b.name))
+    .map((g) => ({ id: 'series-' + g.name, name: g.name, icon: 'mdiBookshelf', auto: true, series: true, description: 'Series', rom_ids: [...g.roms.values()].sort((a, b) => (a.year || 9e15) - (b.year || 9e15)).map((r) => r.id) }));
   autoCache = { v: store.libVersion, list: [...list, ...series] };
   return autoCache.list;
 }
@@ -314,7 +338,8 @@ export const seriesLists = () => autoCollections().filter((c) => c.series);
 export function collectionById(id) { return allCollections().find((c) => c.id === id); }
 export function romsOfCollection(id) {
   const c = collectionById(id);
-  return c ? c.rom_ids.map((rid) => romIndex.get(rid)).filter((r) => r && visible(r)) : [];
+  // each game once, even if the collection lists it twice
+  return c ? [...new Set(c.rom_ids)].map((rid) => romIndex.get(rid)).filter((r) => r && visible(r)) : [];
 }
 export const myCollections = () => collections().filter((c) => c.mine && !c.smart);
 export const favourites = () => collections().find((c) => c.favorite && c.mine && !c.smart) || null;

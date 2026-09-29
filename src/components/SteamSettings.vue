@@ -19,7 +19,8 @@
         </div>
 
         <div class="row wrap">
-          <button class="btn primary" data-focus :disabled="!missing.length" @click="addMissing"><Icon name="mdiPlaylistPlus" />{{ missing.length ? `Add ${missing.length} missing game${missing.length === 1 ? '' : 's'}` : 'Every game is in Steam' }}</button>
+          <button class="btn primary" data-focus :disabled="!notIn" @click="go('steam-missing')"><Icon name="mdiFormatListChecks" />{{ notIn ? `${notIn} missing from Steam` : 'Every game is in Steam' }}</button>
+          <button class="btn" data-focus :disabled="steam.busy || !ov.ours" @click="refreshArt"><Icon name="mdiImageRefreshOutline" />Refresh artwork</button>
           <button class="btn" data-focus @click="restartSteam"><Icon name="mdiRestart" />Restart Steam</button>
         </div>
 
@@ -62,8 +63,8 @@
 
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue';
-import { store, call, confirm, toast, go, romById } from '../store.js';
-import { steam, applyChanges, restartSteam, pickCollections } from '../steam.js';
+import { store, call, confirm, toast, go, romById, choose } from '../store.js';
+import { steam, applyChanges, restartSteam } from '../steam.js';
 import Icon from './Icon.vue';
 import Toggle from './Toggle.vue';
 import PIcon from './PIcon.vue';
@@ -71,11 +72,10 @@ import PIcon from './PIcon.vue';
 const ov = ref(null);
 const missingCols = ref([]);
 const sc = computed(() => store.config.steam || {});
-const HOW = { learned: 'From your shortcuts', yours: 'Set by you', emudeck: 'EmuDeck', appimage: 'AppImage', flatpak: 'Flatpak' };
+const HOW = { learned: 'From your shortcuts', yours: 'Set by you', emudeck: 'EmuDeck', appimage: 'AppImage', flatpak: 'Flatpak', native: 'Installed program' };
 const nameOpts = [{ v: 'clash', l: 'Only on clashes' }, { v: 'always', l: 'Always' }];
 const inSteam = computed(() => ov.value?.games.filter((g) => g.inSteam).length || 0);
-// only games Cartridge knows how to start (consoles without an emulator are shown below)
-const missing = computed(() => (ov.value?.games || []).filter((g) => !g.inSteam && g.queued !== 'add' && ov.value.consoles.find((c) => c.key === g.console)?.template));
+const notIn = computed(() => (ov.value?.games.length || 0) - inSteam.value);
 async function load() {
   try { ov.value = await call('steam:overview'); steam.queue = ov.value.queue; } catch (e) { ov.value = { steam: { error: e.message }, games: [], consoles: [] }; }
   call('steam:verify').then((m) => (missingCols.value = m || [])).catch(() => {});
@@ -92,17 +92,29 @@ async function enableLive() {
   try { await call('steam:liveEnable'); toast('Live changes turned on. Restart Steam once to use them.', 'ok', 5000, 'mdiSteam'); } catch (e) { toast(e.message, 'error'); }
   loadLive();
 }
+// New artwork for every game Cartridge put in Steam, in the style you pick
+async function refreshArt() {
+  const v = await choose({ title: 'Refresh artwork', message: `For the ${ov.value.ours} game${ov.value.ours === 1 ? '' : 's'} Cartridge added to Steam`, options: [
+    { label: 'Your Cartridge artwork', sub: 'Covers and backgrounds you picked, else RomM\'s', value: 'mine', icon: 'mdiImageOutline' },
+    { label: 'SteamGridDB · most popular', sub: 'The top rated art for each game', value: 'top', icon: 'mdiStarOutline' },
+    { label: 'SteamGridDB · clean', sub: 'Covers without logos', value: 'no_logo', icon: 'mdiImageFilterCenterFocus' },
+    { label: 'SteamGridDB · alternate', sub: 'Fan-made takes on the box art', value: 'alternate', icon: 'mdiPaletteOutline' },
+    { label: 'SteamGridDB · blurred', sub: 'Soft, blurred art', value: 'blurred', icon: 'mdiBlur' },
+    { label: 'SteamGridDB · material', sub: 'Flat, minimal art', value: 'material', icon: 'mdiShapeOutline' },
+  ] });
+  if (!v) return;
+  steam.busy = true;
+  try {
+    const r = await call('steam:refreshArt', { style: v === 'mine' ? undefined : v });
+    if (!r.count) toast('No games from Cartridge in Steam yet', 'info', 3000);
+    else if (r.live) toast(`New artwork for ${r.count} game${r.count === 1 ? '' : 's'} is in Steam`, 'ok', 3500, 'mdiImageRefreshOutline');
+    else if (await confirm('Artwork ready', `New artwork for ${r.count} game${r.count === 1 ? '' : 's'} is saved. Steam shows it after a restart.`, 'Restart Steam')) restartSteam();
+  } catch (e) { toast(e.message, 'error', 6000); }
+  steam.busy = false; steam.progress = null;
+}
 async function setC(patch) { store.config.steam = await call('steam:setConfig', patch); }
 async function apply() { if (await applyChanges()) load(); }
 async function clearQueue() { steam.queue = await call('steam:queueClear'); load(); }
-async function addMissing() {
-  const list = missing.value;
-  const keys = [...new Set(list.map((g) => g.console))];
-  const cols = await pickCollections(keys.length === 1 ? keys[0] : null, keys.length === 1 ? null : [], keys.length > 1);
-  if (cols == null) return;
-  steam.queue = await call('steam:queueAdd', list.map((g) => ({ romId: g.romId, collections: cols })));
-  await apply();
-}
 // console logo: RomM's icon for the platform of any of its games
 const platOf = (c) => { const r = (ov.value?.games || []).filter((g) => g.console === c.key).map((g) => romById(g.romId)).find(Boolean); return r ? { slug: r.platform_slug, fs_slug: r.platform_fs_slug } : { slug: c.key }; };
 async function undo() {

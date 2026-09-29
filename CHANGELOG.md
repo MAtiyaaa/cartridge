@@ -2,6 +2,24 @@
 
 Every Cartridge release, newest first. Each GitHub release only lists its own changes.
 
+## Cartridge 0.8.0 · Your Library, Alive
+
+### New: upload to RomM from your phone
+- **Upload tab in the phone remote.** Pick a game file on your phone, check the console (Cartridge picks it from the file type), and it goes through your Cartridge device to RomM, with live progress for both steps. It's sent in small pieces, so big files work through a Cloudflare tunnel too, and a dropped piece is sent again by itself. Run a scan in RomM afterwards to add it to your library.
+- **Games on your device that RomM doesn't have.** The same tab lists the files in the device's console folders that aren't in RomM yet, found automatically. Upload one, or all at once.
+- Phones can only upload those files or the file they sent. They can't reach anything else on the device.
+
+### New: abdu2304's 0.7.8 to 0.8.1
+Everything from the original Cartridge's latest releases is now part of this build:
+- **Play time, new Home rows, Timeline and Edit details.** Time played from Steam and RetroArch, Most played, Finish what you started and more, a game's history, and name, description and cover changes saved to RomM.
+- **Upload to RomM** (Settings → RomM), **Server status** (Settings → About), an **Idle screen**, **word suggestions** on the on-screen keyboard, **console backgrounds**, **Theme from this game**, **Refresh artwork in Steam** and **Free up space**.
+- **Steam launches fixed and every setup found:** RetroArch, Xbox and Xbox 360 games start, Steam ROM Manager shortcuts are recognised, an Emulator picker per console, Update for games already in Steam, Missing from Steam, PS Vita through Vita3K, and emulators from your distro, Flatpaks, AppImages and RetroArch anywhere.
+- **New console cards, genre tiles and Downloads screen**, collections split by console, a tidier library toolbar, and smoother scrolling, most of all in Game Mode.
+- **Colour-coded connection pill:** LAN green, Tunnel purple, Offline red.
+- QR pairing with RomM now asks for permission to change games (for Edit details and Upload). Paired before? Pair again, or sign in with your password.
+
+On Android, the Steam options still only appear when Settings → Android → Steam & PC game apps is on.
+
 ## Cartridge 0.7.5 · Steam & Polish
 
 ### New: abdu2304's 0.7.5, 0.7.6 and 0.7.7
@@ -162,6 +180,126 @@ Everything from the original Cartridge's latest two releases is now part of this
 
 ### Also in this release
 - Everything from 0.5.5 (smoother held D-pad scrolling, Home fixes, LT / RT switch tabs).
+
+## Cartridge 0.8.1 · Connection Colours (abdu2304)
+
+Included in this fork from 0.8.0.
+
+### Changed
+- **The connection pill in the top bar is colour coded.** LAN is a green pill, Tunnel a purple one and Offline a red one, each with a matching edge. They look the same on every background colour.
+
+## Cartridge 0.8.0 · Your Library, Alive (abdu2304)
+
+Included in this fork from 0.8.0.
+
+### New
+- **Play time.** Cartridge reads how long you've played each game from Steam, and from RetroArch's own logs when "Save runtime log" is on. The game page shows it (for example "12 h played · 2 d ago").
+- **New Home rows.** Most played, Finish what you started, Short games (under 5 hours to beat), Top rated you haven't played, and Local multiplayer. Each only shows up when it has enough games.
+- **Timeline.** Game page → More → Timeline: when the game was added to RomM, downloaded, added to Steam, your first and latest trophy, and when you last played, with your total time.
+- **Edit details.** Game page → More → Edit details: change the name and description, or use the cover you picked from SteamGridDB, and save it to RomM for every device.
+- **Theme from this game.** Game page → More: Cartridge takes its colours from the game's cover. "Back to your own theme" in the same menu undoes it.
+- **Upload to RomM.** Settings → RomM lists files in your console folders that RomM doesn't have yet, and uploads them one by one or all at once. Run a scan in RomM afterwards to add them to your library.
+- **Server status.** Settings → About shows your RomM server: online or not, LAN or tunnel, response time, version, how many consoles and games it holds, library size and where its metadata comes from.
+- **Idle screen.** After a few minutes without input, your games' artwork drifts by with a big clock. Any button wakes it, and that press does nothing else. Choose 3, 5, 10 or 15 minutes, or turn it off, in Look & feel.
+- **Word suggestions on the on-screen keyboard.** When searching, your game names appear above the keys as you type. Pick a whole title, or finish the word you're typing.
+- **Console backgrounds.** New backgrounds in the style of the PlayStation 2, Wii, Wii U, Switch, Nintendo DS, Nintendo 3DS, Xbox and Xbox 360, each with its own colours and motion. The brighter ones are toned down so text stays readable.
+- **Refresh artwork in Steam.** Settings → Steam → Refresh artwork gives every game Cartridge added new art: your own picks, or SteamGridDB's most popular, clean, alternate, blurred or material styles. It goes straight into Steam when Steam can be reached, otherwise after a restart.
+- **Free up space.** Settings → Storage picks games you haven't played for two months (biggest first) for you to check before deleting. Nothing is deleted until you press Delete.
+
+### Changed
+- **HowLongToBeat card.** The game page shows a small card with the HowLongToBeat logo (from your RomM server) and the times as big numbers, each with a bar.
+- **Latest achievements on Home show when you unlocked them.** Each shows the time ("12 min ago" today), with Today, Yesterday or the day between them, like a timeline.
+- **Background picker.** Look & feel shows the background you're using in one row, and Change opens a list: your theme colours (XMB Waves, Ribbons), the consoles, and Still, Game artwork or Wallpaper. Bokeh, Blades, Dots and Glow are gone; if you used one, you now get XMB Waves.
+- **Storage by drive.** Each drive shows which consoles download to it, including console folders on other drives.
+- **QR pairing asks RomM for permission to change games,** for Edit details and Upload. If you paired before 0.8, pair again, or sign in with your password, to use them.
+
+
+## Cartridge 0.7.13 · Console Cards (abdu2304)
+
+Included in this fork from 0.8.0.
+
+### Changed
+- **New console cards.** Each card is filled with the console's own colours, with a glossy top edge, the controller picture large on the right fading out to the left, and the game count in a small pill. The selected card lifts with a glow in the console's colour. The same cards are used on Home.
+- **New Consoles header.** A clean "Consoles" title with big numbers underneath: consoles, games, on this device and last sync.
+- **LAN and Tunnel label.** The coloured dot is gone. The top bar shows a light green "LAN" or a light purple "Tunnel" on a dark see-through pill, so it stays readable on any background colour.
+
+### Fixed
+- The console picture and the colour strip were cut off at the bottom and right edges of each card. The picture now always sits inside the card.
+- "1 games" now reads "1 game".
+
+## Cartridge 0.7.12 · Smoother (abdu2304)
+
+Included in this fork from 0.8.0.
+
+### Fixed
+- **Games added to Steam no longer get `%command%` in their Launch options.** When Cartridge added a game while Steam was running, Steam filled in `%command%` by itself, and with the emulator's settings in Target that stopped RetroArch, Xbox, Xbox 360, 3DS and Dreamcast games from starting. Cartridge now checks what Steam saved after adding a game and clears it again.
+- **Games already affected are fixed with Update.** Their console page in Settings → Steam shows Update; pressing it clears `%command%` in place, so play time and the shortcut stay as they are.
+
+### Changed
+- **Smoother moving around, most of all in Game Mode.** Rows, shelves and lists now scroll without redrawing the whole screen, the background is drawn in a way that is cheaper to show, and focusing a game no longer redraws its shadow on every frame in reduced effects mode. In tests without the GPU this cut the drawing work while moving around by about a third. Nothing looks different.
+
+## Cartridge 0.7.11 · Launch Fix (abdu2304)
+
+Included in this fork from 0.8.0.
+
+### Fixed
+- **RetroArch and Xbox games should now start.** Games kept in a folder (multi-disc PS1, Dreamcast, cue/bin and m3u sets) were handed to the emulator as a folder, which RetroArch and xemu can't open. Cartridge now points the shortcut at the game file inside: the .m3u playlist, the .cue or .gdi, or the console's game file.
+- **Shortcuts are written the way Steam ROM Manager writes them.** The emulator and its arguments go in Target, and Launch options stay empty, exactly like EmuDeck's own shortcuts (for example `"xemu-emu.sh" -full-screen -dvd_path "Sonic Riders.iso"`). Launch options are only used when something has to wrap the command. Games you already added show an **Update** button on their console page in Settings → Steam; press it to rewrite them.
+- **PS3 games you added to Steam yourself are recognised.** RPCS3 shortcuts that start a game by its serial (`%RPCS3_GAMEID%:BCUS...`) now count as In Steam, and names match even when punctuation or ™ differ.
+
+### New
+- **Missing from Steam list.** Settings → Steam shows "N missing from Steam". It opens a list of every downloaded game with no shortcut, grouped by console. A adds one, X adds all.
+- **PS Vita games installed in Vita3K.** Vita games must be installed inside Vita3K first (File → Install .pkg or .vpk). Once installed, Cartridge adds them to Steam and Vita3K starts them by title ID. Games not installed yet say so instead of making a shortcut that won't work.
+- **Series show a picture** in their header, taken from their games.
+
+### Changed
+- **Tidier library toolbar.** Show and Sort are each one button with a menu. Surprise me, Select games and Get all are together under More.
+- A highlighted game in a collection or series no longer covers the console heading above it.
+
+## Cartridge 0.7.10 · Emulator List (abdu2304)
+
+Included in this fork from 0.8.0.
+
+### Changed
+- **The Emulator picker only lists what you have, once.** EmuDeck's launchers are often a wrapper: `dolphin-emu.sh` runs the Dolphin Flatpak, `pcsx2-qt.sh` runs the AppImage in ~/Applications. Cartridge now reads the launcher and doesn't list that same copy again. A copy that really is separate (an AppImage in another folder) is still listed.
+- **Cartridge knows many more emulators**, taken from EmuDeck's and Steam ROM Manager's setups: MAME (arcade), ares (NES, SNES, N64, Game Boy, Mega Drive and more), simple64 and Parallel Launcher (N64), bsnes (SNES), Nestopia (NES), Stella (Atari 2600), Ymir (Saturn), ScummVM and BigPEmu, plus Flycast for NAOMI and Atomiswave. They're only offered when installed.
+- **Many more RetroArch cores and consoles**, including Atari, Amiga, MSX, PC Engine CD, Neo Geo, WonderSwan, 3DO and DOS.
+- Flycast gets its fullscreen option when it isn't started through EmuDeck.
+
+## Cartridge 0.7.9 · Every Setup (abdu2304)
+
+Included in this fork from 0.8.0.
+
+### Changed
+- **Cartridge finds your emulators however you installed them.** Settings → Steam used to look only for EmuDeck launchers, AppImages and one Flatpak per emulator. It now also finds:
+  - **Programs from your distro** (for example `dolphin-emu`, `pcsx2-qt`, `retroarch` on your PATH).
+  - **More Flatpaks**: Ryujinx (Ryubing), Lime3DS and Citra, Eden, Citron, Sudachi, mGBA, Flycast, melonDS, Rosalie's Mupen GUI.
+  - **RetroArch from anywhere**: EmuDeck, Flatpak, AppImage, your distro, or RetroArch on Steam, each with the cores it has.
+- **Every copy is listed.** If you have an emulator twice (say the Flatpak and an AppImage), both show in the Emulator picker and you choose.
+- **Standalone emulators for more consoles**: mGBA for Game Boy, GBC and GBA, Rosalie's Mupen GUI for N64, Flycast for Dreamcast, next to RetroArch.
+
+### Fixed
+- **Games on a symlinked home folder** (Bazzite and other image-based systems) are now given to emulators by their real path, which sandboxed emulators can always open.
+
+## Cartridge 0.7.8 · Launch Fixes (abdu2304)
+
+Included in this fork from 0.8.0.
+
+### Fixed
+- **RetroArch games didn't start** (NES, SNES, Game Boy, N64, Dreamcast and the rest). Cartridge gave RetroArch the full path to its core, which the Flatpak RetroArch can't see on systems like Bazzite, where home is under /var/home. Cores now go by name, the way EmuDeck's Steam ROM Manager setup does it, and RetroArch finds them itself.
+- **Xbox games didn't start.** Cartridge looked for the wrong EmuDeck launcher and left out xemu's options. It now uses `xemu-emu.sh -full-screen -dvd_path "<game>"`, like EmuDeck.
+- **Xbox 360 games didn't start.** Xenia runs under Proton, so the game now gets a Windows path (`"Z:<game>"`), like EmuDeck.
+- **Shortcuts made by Steam ROM Manager weren't recognised.** ROM Manager puts the arguments in Target and leaves Launch options empty. Cartridge now reads them, so those games show as In Steam and their setup is copied for new games.
+- **The same game could show twice in a series**, and near-identical series ("Mario" and "Mario Bros.") showed separately. They are now one series.
+- Launch options for PS1, PSP, DS and Switch (Ryujinx) now match EmuDeck's.
+
+### New
+- **Pick the emulator for each console (Settings → Steam → a console → Emulator).** Lists the emulators installed for that console, including RetroArch with each core you have, for example DuckStation or RetroArch · SwanStation for PS1. New shortcuts use your pick.
+- **Update games already in Steam.** When a console's setup changes, its page says how many games use the older setup, and **Update** replaces those shortcuts.
+- **Game icons in Steam.** Added games get an icon: SteamGridDB's square icon, or the cover cut square.
+- **New genre tiles**, each in its own colour with a genre icon and a column of covers.
+- **Collections, series and genres are split by console**, with the console's logo on each section, when they span more than one.
+- **New Downloads screen when nothing is downloading.**
 
 ## Cartridge 0.7.7 · Steam Logo Fix (abdu2304)
 

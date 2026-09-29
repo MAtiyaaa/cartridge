@@ -47,7 +47,8 @@ module.exports = function steamLive({ log = () => {} } = {}) {
   // Add one shortcut; returns Steam's appid for it. art: { dir, id } where files are <id>p.png etc.
   async function addShortcut({ name, exe, start, lo, art, proton, collections }) {
     const appid = await run(`(async () => {
-      const id = await SteamClient.Apps.AddShortcut(${J(name)}, ${J(exe)}, ${J(start)}, ${J(lo)});
+      // created with the program alone, then the full Target (program plus arguments) is set
+      const id = await SteamClient.Apps.AddShortcut(${J(name)}, ${J((String(exe).match(/^"[^"]*"|^\S+/) || [exe])[0])}, ${J(start)}, ${J(lo)});
       // AddShortcut can name the shortcut after the exe; set everything explicitly
       SteamClient.Apps.SetShortcutName(id, ${J(name)});
       SteamClient.Apps.SetShortcutExe(id, ${J(exe)});
@@ -56,7 +57,14 @@ module.exports = function steamLive({ log = () => {} } = {}) {
       return id;
     })()`);
     if (!appid) throw new Error('Steam did not create the shortcut');
+    await settle(appid, exe, lo);
     if (proton) await run(`SteamClient.Apps.SpecifyCompatTool(${appid}, ${J(proton)})`).catch((e) => log('steam live proton', e.message));
+    await setArtwork(appid, art);
+    if (collections?.length) await addToCollections(appid, collections).catch((e) => log('steam live collections', e.message));
+    return appid >>> 0;
+  }
+  // cover, background, logo, wide banner and icon for a shortcut: art = { dir, id } where files are <id>p.png etc.
+  async function setArtwork(appid, art) {
     for (const [suffix, type] of ASSETS) {
       const f = art && path.join(art.dir, `${art.id}${suffix}.png`);
       if (!f || !fs.existsSync(f)) continue;
@@ -71,8 +79,12 @@ module.exports = function steamLive({ log = () => {} } = {}) {
         return true;
       })()`).catch((e) => log('steam live logo position', e.message));
     }
-    if (collections?.length) await addToCollections(appid, collections).catch((e) => log('steam live collections', e.message));
-    return appid >>> 0;
+    // icon: Steam keeps a path to it, so it gets its own copy named after Steam's appid
+    const icon = art && path.join(art.dir, `${art.id}_icon.png`);
+    if (icon && fs.existsSync(icon)) {
+      const mine = path.join(art.dir, `${appid >>> 0}_icon.png`);
+      try { if (mine !== icon) fs.copyFileSync(icon, mine); await run(`SteamClient.Apps.SetShortcutIcon(${appid}, ${J(mine)}), true`); } catch (e) { log('steam live icon', e.message); }
+    }
   }
   // Steam's collection store lives in the same page (used by Decky plugins such as TabMaster)
   async function addToCollections(appid, names) {
@@ -91,8 +103,30 @@ module.exports = function steamLive({ log = () => {} } = {}) {
       return true;
     })()`);
   }
+  // Steam can fill in "%command%" on a new shortcut after we set empty Launch options, and with the
+  // arguments in Target that stops the game starting. Read back what Steam kept and set it again
+  // until it sticks. Also used to repair shortcuts that already have it.
+  async function settle(appid, exe, lo) {
+    return run(`(async () => {
+      const id = ${appid >>> 0}, want = ${J(lo)}, exe = ${J(exe)};
+      const read = () => new Promise((res) => {
+        let reg = null; const t = setTimeout(() => { try { reg?.unregister(); } catch {} res(window.appDetailsStore?.GetAppDetails?.(id) || null); }, 1500);
+        try { reg = SteamClient.Apps.RegisterForAppDetails(id, (d) => { clearTimeout(t); try { reg?.unregister(); } catch {} res(d); }); } catch { clearTimeout(t); res(window.appDetailsStore?.GetAppDetails?.(id) || null); }
+      });
+      for (let i = 0; i < 6; i++) {
+        await new Promise((r) => setTimeout(r, 400));
+        const d = await read();
+        const got = d ? (d.strShortcutLaunchOptions ?? d.strLaunchOptions) : undefined;
+        if (got === undefined) { SteamClient.Apps.SetShortcutLaunchOptions(id, want); return 'unknown'; }
+        if (got === want && (d.strShortcutExe === undefined || d.strShortcutExe === exe)) return 'ok';
+        if (d.strShortcutExe !== undefined && d.strShortcutExe !== exe) SteamClient.Apps.SetShortcutExe(id, exe);
+        SteamClient.Apps.SetShortcutLaunchOptions(id, want);
+      }
+      return 'retried';
+    })()`, 20000).then((r) => { if (r !== 'ok') log('steam live launch options', appid >>> 0, r); return r; }).catch((e) => log('steam live settle', e.message));
+  }
   const removeShortcut = (appid) => run(`SteamClient.Apps.RemoveShortcut(${appid >>> 0}), true`);
   // What SteamGridDB's Decky plugin does after changing artwork
   const restart = () => run('SteamClient.User.StartRestart(false), true', 5000);
-  return { available, addShortcut, removeShortcut, restart, flagOn, FLAG };
+  return { available, addShortcut, removeShortcut, settle, setArtwork, restart, flagOn, FLAG };
 };

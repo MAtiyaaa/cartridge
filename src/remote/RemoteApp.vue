@@ -48,6 +48,7 @@
           </section>
           <LibraryView v-else-if="tab === 'library'" :key="'lib' + hub.selected" class="pane" />
           <DownloadsView v-else-if="tab === 'dl'" key="dl" class="pane" />
+          <UploadView v-else-if="tab === 'upload'" :key="'up' + hub.selected" class="pane" />
           <DevicesView v-else key="devs" class="pane" @connect="tapDevice" @add="adding = true" />
         </Transition>
       </template>
@@ -133,12 +134,14 @@ import LibraryView from './LibraryView.vue';
 import DownloadsView from './DownloadsView.vue';
 import DevicesView from './DevicesView.vue';
 import SignIn from './SignIn.vue';
+import UploadView from './UploadView.vue';
 
 setPointerPref('touch');
 const TABS = [
   { id: 'now', label: 'Now', icon: 'mdiCardsOutline' },
   { id: 'library', label: 'Library', icon: 'mdiViewGridOutline' },
   { id: 'dl', label: 'Downloads', icon: 'mdiTrayArrowDown' },
+  { id: 'upload', label: 'Upload', icon: 'mdiCloudUploadOutline' },
   { id: 'devices', label: 'Devices', icon: 'mdiDevices' },
 ];
 const tab = ref('now');
@@ -261,8 +264,8 @@ html, body { touch-action: pan-x pan-y; overscroll-behavior: none; }
 .pill.wide { width: 100%; }
 .pill:disabled { opacity: 0.55; }
 .textbtn { min-height: 44px; color: var(--muted); font: 600 14px var(--body); }
-.dock { position: relative; z-index: 3; display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; margin: 0 12px calc(env(safe-area-inset-bottom) + 10px); padding: 6px; border-radius: 26px; background: rgba(12, 14, 22, 0.68); border: 1px solid var(--line-2); backdrop-filter: blur(22px) saturate(1.3); box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45); }
-.d-tab { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; height: 56px; border-radius: 20px; color: var(--muted); font: 500 11.5px var(--body); transition: background 0.2s, color 0.2s; }
+.dock { position: relative; z-index: 3; display: grid; grid-template-columns: repeat(5, 1fr); gap: 2px; margin: 0 12px calc(env(safe-area-inset-bottom) + 10px); padding: 6px; border-radius: 26px; background: rgba(12, 14, 22, 0.68); border: 1px solid var(--line-2); backdrop-filter: blur(22px) saturate(1.3); box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45); }
+.d-tab { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; height: 56px; border-radius: 20px; color: var(--muted); font: 500 11px var(--body); transition: background 0.2s, color 0.2s; }
 .d-tab.on { color: #fff; background: rgba(var(--primary-rgb), 0.28); }
 .badge { position: absolute; top: 6px; right: calc(50% - 22px); min-width: 16px; height: 16px; border-radius: 8px; background: var(--peach); color: var(--on-primary); font-size: 10px; font-weight: 700; display: grid; place-items: center; padding: 0 4px; }
 .scrim { position: fixed; inset: 0; z-index: 20; display: flex; align-items: flex-end; background: rgba(3, 4, 8, 0.55); backdrop-filter: blur(4px); }

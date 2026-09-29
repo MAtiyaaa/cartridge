@@ -28,7 +28,7 @@
           <svg width="22" height="22" viewBox="0 0 36 36" class="ring"><circle cx="18" cy="18" r="15" fill="none" stroke="rgba(255,255,255,.12)" stroke-width="4" /><circle cx="18" cy="18" r="15" fill="none" stroke="url(#rg)" stroke-width="4" stroke-linecap="round" :stroke-dasharray="`${dlPct * 0.943} 100`" transform="rotate(-90 18 18)" /><defs><linearGradient id="rg"><stop offset="0" style="stop-color: var(--primary-l)" /><stop offset="1" style="stop-color: var(--peach)" /></linearGradient></defs></svg>
           {{ dlPct }}%
         </div>
-        <div class="item" :title="store.connection.base"><span class="dot" :class="store.connection.route === 'local' ? 'ok' : store.connection.base ? 'remote' : 'bad'" />{{ store.connection.route === 'local' ? 'LAN' : store.connection.base ? 'Tunnel' : 'Offline' }}</div>
+        <div class="item net" :class="store.connection.route === 'local' ? 'ok' : store.connection.base ? 'remote' : 'bad'" :title="store.connection.base">{{ store.connection.route === 'local' ? 'LAN' : store.connection.base ? 'Tunnel' : 'Offline' }}</div>
         <div v-if="battery" class="item"><Icon :name="batteryIcon" :size="18" />{{ battery.level }}%</div>
         <div class="clock">{{ clock }}</div>
       </div>
@@ -53,6 +53,8 @@
   <SteamPreview v-if="store.modal?.type === 'steam-preview'" v-bind="store.modal.props" />
   <SteamEmu v-if="store.modal?.type === 'steam-emu'" :key="JSON.stringify(store.modal.props)" v-bind="store.modal.props" />
   <ArtPicker v-if="store.modal?.type === 'art'" :key="store.modal.props.query || ''" v-bind="store.modal.props" />
+  <GameTimeline v-if="store.modal?.type === 'timeline'" v-bind="store.modal.props" />
+  <IdleScreen v-if="store.config?.configured" />
 
   <div class="pops">
     <TransitionGroup name="pop">
@@ -90,6 +92,8 @@ import Grade from './components/Grade.vue';
 import FolderPicker from './components/FolderPicker.vue';
 import Menu from './components/Menu.vue';
 import ArtPicker from './components/ArtPicker.vue';
+import GameTimeline from './components/GameTimeline.vue';
+import IdleScreen from './components/IdleScreen.vue';
 import SteamCollections from './components/SteamCollections.vue';
 import SteamPreview from './components/SteamPreview.vue';
 import SteamEmu from './components/SteamEmu.vue';
@@ -103,6 +107,7 @@ import Gallery from './views/Gallery.vue';
 import Consoles from './views/Consoles.vue';
 import Game from './views/Game.vue';
 import Downloads from './views/Downloads.vue';
+import SteamMissing from './views/SteamMissing.vue';
 import SteamConsole from './views/SteamConsole.vue';
 import Settings from './views/Settings.vue';
 import Search from './views/Search.vue';
@@ -112,7 +117,7 @@ import TrophyGame from './views/TrophyGame.vue';
 import Genres from './views/Genres.vue';
 import Collections from './views/Collections.vue';
 
-const views = { achievements: Achievements, 'ra-game': RaGame, 'trophy-game': TrophyGame, home: Home, library: Gallery, consoles: Consoles, platform: Gallery, collection: Gallery, genre: Gallery, genres: Genres, collections: Collections, game: Game, downloads: Downloads, settings: Settings, search: Search, 'steam-console': SteamConsole };
+const views = { achievements: Achievements, 'ra-game': RaGame, 'trophy-game': TrophyGame, home: Home, library: Gallery, consoles: Consoles, platform: Gallery, collection: Gallery, genre: Gallery, genres: Genres, collections: Collections, game: Game, downloads: Downloads, settings: Settings, search: Search, 'steam-console': SteamConsole, 'steam-missing': SteamMissing };
 // the tabs you picked in Look & Feel → Top bar, in your order
 const tabs = computed(() => activeTabs().map((name) => ({ name, ...TAB_DEFS[name] })));
 const mainEl = ref(null);
@@ -124,7 +129,7 @@ function onSearch(e) {
 }
 async function searchOsk() {
   if (!builtinKb()) return;
-  const v = await askText({ title: 'Search games', value: store.lastSearch, placeholder: 'Game name' });
+  const v = await askText({ title: 'Search games', value: store.lastSearch, placeholder: 'Game name', mode: 'game' });
   if (v == null) return;
   store.lastSearch = v;
   if (v.trim() && store.route.name !== 'search') go('search');
