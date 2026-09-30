@@ -13,7 +13,7 @@ A smooth first run on the Ribbons background, A for next, B for back. It replace
    - **EmuDeck (Recommended):** Cartridge downloads EmuDeck's official app and opens it; the user picks emulators there and EmuDeck installs them. EmuDeck's app is a desktop window, so in Game Mode Cartridge says to switch to Desktop Mode for this step and picks up where it left off.
    - **RetroDECK:** installed from Flathub in the background with a progress bar (works in Game Mode too), then opened for its own first-run setup.
    - **I'll set up emulators myself:** Continue; the system scan (step 8) finds whatever is installed.
-   - Cartridge waits and scans again when the user comes back. Owner-approved exception to "never downloads emulators": Cartridge may download and open EmuDeck's official app, or install RetroDECK from Flathub, only when the user picks it. Cartridge never installs individual emulators itself.
+   - Cartridge waits and scans again when the user comes back. Owner-approved exception (confirmed) to "never downloads emulators": Cartridge may download and open EmuDeck's official app, or install RetroDECK from Flathub, only when the user picks it. Cartridge never installs individual emulators itself.
 7. **RomM:** "Do you have a RomM server?"
    - **Yes:** sign in (local, remote or tunnel, with the connection test).
    - **No:** a short, friendly "What is RomM", then **Set up RomM on this device** (section 1), **Set it up on another computer** (QR code to RomM's own guide), or **Later**.
