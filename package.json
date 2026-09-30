@@ -1,7 +1,7 @@
 {
   "name": "cartridge",
   "productName": "Cartridge",
-  "version": "0.9.9",
+  "version": "0.9.10",
   "description": "Controller-first RomM client for SteamOS, Bazzite and Android",
   "main": "electron/main.js",
   "author": "abdu2304",
@@ -52,7 +52,7 @@
       }
     ],
     "releaseInfo": {
-      "releaseName": "Cartridge 0.9.9 · Quick Menu",
+      "releaseName": "Cartridge 0.9.10 · Fuse Bridge",
       "releaseNotesFile": "RELEASE_NOTES.md"
     }
   },

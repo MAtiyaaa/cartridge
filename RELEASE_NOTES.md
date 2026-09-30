@@ -1,16 +1,6 @@
-## Cartridge 0.9.9 · Quick Menu
+## Cartridge 0.9.10 · Fuse Bridge
 
 ### New
-- **A new Quick Menu.** It opens with the time and date, then a status card: battery (level, charging and how, time to full or left, and on Android the temperature and power draw), the server connection and your library. Below that are six quick tiles (Resync, Downloads, Screenshot, Sounds, Second screen or Fullscreen, Settings) and a short list for the rest.
-- **Tap the status area to open it.** The connection pill, battery and clock in the top bar now open the Quick Menu.
-- **Series logos.** A series shows its logo instead of its written name at the top of Home, at the top of its page and on the second screen, like games do.
-
-### Changed
-- **Second screen for consoles, collections, series and genres.** One full screen with no scrolling: the art fills it, three covers stand in the middle, the logo or name sits below, and Open is in the same place as a game's Open. The row of games is gone.
-- **Buttons stay put on a game's second screen.** Show more, Open, Download and On this device are always in the same place, whatever the game's header or description is like. A download's progress shows above the buttons without moving them.
-- **The top bar is plain again.** The coloured fade from 0.9.8 is off.
-
-### Fixed
-- **Manuals on Android.** A manual opened to nothing: the PDF reached the viewer as an empty file. It now arrives whole.
-- **Screenshots.** Stepping through screenshots quickly kept showing the previous picture until the next one loaded. Each picture now shows only once it has loaded, and the ones either side load ahead.
-- **D-pad down on the last row.** Pressing down on a bottom row moved right. Up and down now never move along the row.
+- **Other apps can open Cartridge on the right page.** Game launchers like Fuse can open Home, Library, Consoles, Downloads or Settings, a console's page, a game's page or a search, or start a resync. On Android they use a `cartridge://` link; on the desktop they start the AppImage with the link (like `Cartridge-x86_64.AppImage cartridge://downloads`), and a Cartridge that is already open takes it over. A game or console that isn't in your library opens Library or Consoles with a note instead. Web pages can't open these links. The details for launcher developers are in `docs/FUSE_BRIDGE.md`.
+- **Back takes you back to Fuse.** When Fuse opens Cartridge on Android, pressing Back on the page it opened returns to Fuse, and downloads keep going in the background. Opened any other way, Back works as before.
+- **Download status for other apps.** Fuse can see what Cartridge is downloading and how far along it is, whether it's connected to your server, and the games it downloaded last, so new games show up in Fuse on their own. On Android an app needs the "Read Cartridge download status" permission for this; on the desktop it's a small file, `~/.local/state/cartridge/status.json`. Your server address, account and tokens are never in it.

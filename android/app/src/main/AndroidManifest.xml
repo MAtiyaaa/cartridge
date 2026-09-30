@@ -26,6 +26,14 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
+            <!-- Fuse bridge (docs/FUSE_BRIDGE.md): other apps open a page with cartridge:// links.
+                 Not BROWSABLE, so web pages can't. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:scheme="cartridge" />
+            </intent-filter>
+
         </activity>
 
         <service
@@ -42,7 +50,21 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths"></meta-data>
         </provider>
+
+        <!-- Fuse bridge: read-only download status for apps holding READ_STATUS (no server details) -->
+        <provider
+            android:name=".CartridgeStatusProvider"
+            android:authorities="${applicationId}.status"
+            android:exported="true"
+            android:readPermission="${applicationId}.permission.READ_STATUS" />
     </application>
+
+    <!-- Lets other apps (Fuse) read the status provider above. Normal: granted to any app that asks for it. -->
+    <permission
+        android:name="${applicationId}.permission.READ_STATUS"
+        android:protectionLevel="normal"
+        android:label="@string/status_permission_label"
+        android:description="@string/status_permission_description" />
 
     <!-- Permissions -->
 

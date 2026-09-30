@@ -536,6 +536,26 @@ public class CartridgeNativePlugin extends Plugin {
         });
     }
 
+    // ------------------------------------------------------------ Fuse bridge (docs/FUSE_BRIDGE.md)
+    /** Back on the first page after Fuse opened Cartridge: Fuse comes back to the front. The task only
+     *  moves behind, so downloads keep going (DownloadService). */
+    @PluginMethod
+    public void returnToCaller(PluginCall call) {
+        main.post(() -> { try { getActivity().moveTaskToBack(true); } catch (Exception ignored) {} });
+        call.resolve();
+    }
+
+    /** The status other apps read through CartridgeStatusProvider (built by electron/fuseStatus.js). */
+    @PluginMethod
+    public void publishStatus(PluginCall call) {
+        try {
+            CartridgeStatusProvider.publish(getContext(), call.getData());
+            call.resolve();
+        } catch (Exception e) {
+            call.reject("Could not save the status: " + e.getMessage());
+        }
+    }
+
     // ------------------------------------------------------------ background downloads
     @PluginMethod
     public void setBusy(PluginCall call) {
