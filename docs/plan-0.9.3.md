@@ -107,3 +107,6 @@ Later (1.0): "Set up RomM on this device" (Podman on Bazzite; not stock SteamOS)
 
 ## Owner to test on a device
 Controller feel and LT/RT at launch, touch, rumble in Game Mode, PS4 first launch, Xenia on the Ally, trophies across the two devices, RPCS3 and Vita3K installs, 1080p handheld and 4K TV.
+
+## Reminders for the owner
+- A stray `v2.3.1` tag is in the repo (not a release; it deletes most of the code compared with 0.9.2). The owner said not to delete it yet: ask again when 0.9.3 is being built.
