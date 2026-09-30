@@ -111,6 +111,8 @@ export async function afterMount() {
   Native.addListener('pad', (e) => pad(nav, e));
   App.addListener('backButton', () => dispatch('back'));
   App.addListener('resume', () => { call('android:resume').catch(() => {}); });
+  // Fuse bridge: cartridge:// links, Back to Fuse, status for other apps (before any dialog below waits)
+  (await import('./fuse.js')).startFuse();
 
   // Keep downloads alive in the background with a foreground notification
   let busy = false;

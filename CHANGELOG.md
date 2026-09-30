@@ -2,6 +2,13 @@
 
 Every Cartridge release, newest first. Each GitHub release only lists its own changes.
 
+## Cartridge 0.9.10 · Fuse Bridge
+
+### New
+- **Other apps can open Cartridge on the right page.** Game launchers like Fuse can open Home, Library, Consoles, Downloads or Settings, a console's page, a game's page or a search, or start a resync. On Android they use a `cartridge://` link; on the desktop they start the AppImage with the link (like `Cartridge-x86_64.AppImage cartridge://downloads`), and a Cartridge that is already open takes it over. A game or console that isn't in your library opens Library or Consoles with a note instead. Web pages can't open these links. The details for launcher developers are in `docs/FUSE_BRIDGE.md`.
+- **Back takes you back to Fuse.** When Fuse opens Cartridge on Android, pressing Back on the page it opened returns to Fuse, and downloads keep going in the background. Opened any other way, Back works as before.
+- **Download status for other apps.** Fuse can see what Cartridge is downloading and how far along it is, whether it's connected to your server, and the games it downloaded last, so new games show up in Fuse on their own. On Android an app needs the "Read Cartridge download status" permission for this; on the desktop it's a small file, `~/.local/state/cartridge/status.json`. Your server address, account and tokens are never in it.
+
 ## Cartridge 0.9.9 · Quick Menu
 
 ### New

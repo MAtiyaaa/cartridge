@@ -7,6 +7,7 @@ const crypto = require('crypto');
 const { Readable } = require('stream');
 const { pipeline } = require('stream/promises');
 const PLATFORM_MAP = require('./platformMap');
+const fuseStatus = require('./fuseStatus');
 
 // Note: never add 'no-sandbox' here. Appending it at runtime (after Chromium has
 // started its zygote) makes renderers crash with "/dev/shm ... No such process".
@@ -105,10 +106,13 @@ try { if (fs.statSync(LOG_FILE).size > 512 * 1024) fs.renameSync(LOG_FILE, LOG_F
 // running one. If that one stopped answering (a hung start used to need a Steam restart), it is
 // ended and this launch carries on.
 const argGame = (argv = process.argv) => { const i = argv.indexOf('--game'); const v = i >= 0 ? Number(argv[i + 1]) : NaN; return Number.isFinite(v) ? v : null; };
+// A cartridge:// link from another app (Fuse, docs/FUSE_BRIDGE.md), kept until the window takes it (app:deeplink)
+const argLink = (argv = process.argv) => argv.find((a) => typeof a === 'string' && a.length <= 2048 && /^cartridge:\/\//i.test(a)) || null;
 const BEAT_FILE = path.join(USER_DATA, 'running.json');
 let startGame = argGame();
+let startLink = argLink();
 if (!process.env.CARTRIDGE_SMOKE && !process.env.CARTRIDGE_MULTI) {
-  if (!app.requestSingleInstanceLock({ game: startGame })) {
+  if (!app.requestSingleInstanceLock({ game: startGame, link: startLink })) {
     let beat = null;
     try { beat = JSON.parse(fs.readFileSync(BEAT_FILE, 'utf8')); } catch {}
     const alive = beat && Date.now() - beat.t < 20000;
@@ -127,6 +131,8 @@ if (!process.env.CARTRIDGE_SMOKE && !process.env.CARTRIDGE_MULTI) {
       if (win && !win.isDestroyed()) { if (win.isMinimized()) win.restore(); win.show(); win.focus(); }
       const g = data?.game ?? argGame(argv);
       if (g) broadcast('open-game', g);
+      const l = data?.link ?? argLink(argv);
+      if (l) { startLink = l; if (win && !win.isDestroyed()) win.webContents.send('deeplink', l); }
     });
     app.on('will-quit', () => { try { fs.rmSync(BEAT_FILE, { force: true }); } catch {} });
   }
@@ -1724,7 +1730,20 @@ let win;
 function broadcast(ch, data) {
   if (win && !win.isDestroyed()) win.webContents.send(ch, data);
   remoteServer?.send(ch, data, false); // phones connected to this device
+  fuseStatus.changed(ch, data);
 }
+
+// Status for other apps (Fuse, docs/FUSE_BRIDGE.md): downloads, connection, recent games, nothing about the
+// server or account. The Linux desktop writes a file; Android sends it to the WebView for CartridgeStatusProvider.
+const onAndroid = !!require('electron').__android;
+fuseStatus.setup({
+  build: () => ({ version: app.getVersion(), queue, manifest, syncedAt: library?.syncedAt || 0,
+    // the top bar's pill: LAN or Tunnel is connected, Offline is not; null before the first check
+    connected: !config.configured ? false : activeBase == null ? null : !!activeBase }),
+  file: !onAndroid && process.platform === 'linux' ? fuseStatus.statusFile() : null,
+  send: onAndroid ? (s) => { if (win && !win.isDestroyed()) win.webContents.send('fuse:status', s); } : null,
+  log,
+});
 
 // Interface size. The UI is laid out for 1920x1080 (what the Ally shows in Game Mode). Bigger
 // windows, like a 4K TV, zoom in by the same ratio so text and art keep their size on screen.
@@ -2461,6 +2480,8 @@ const handlers = {
   'steam:setConfig': (patch) => { config.steam = { ...(config.steam || {}), ...patch }; saveConfig(); return config.steam; },
   'steam:setPath': ({ romId, path: p }) => { if (!isDir(p) && !fs.existsSync(p)) throw new Error('That folder does not exist'); marks[romId] = { ...(marks[romId] || { at: Date.now() }), path: p }; saveMarks(); return true; },
   'app:startGame': () => { const g = startGame; startGame = null; return g; },
+  'app:deeplink': () => { const l = startLink; startLink = null; return l; },
+  'fuse:status': () => fuseStatus.current(),
   'update:get': () => ({ ...updateState, current: app.getVersion(), supported: !!autoUpdater }),
   'update:check': async () => { if (!autoUpdater) throw new Error('Updates work in the AppImage build only'); await autoUpdater.checkForUpdates(); return updateState; },
   'update:install': () => { if (updateState.state === 'ready') autoUpdater.quitAndInstall(true, true); },
@@ -2543,4 +2564,4 @@ app.on('child-process-gone', (_e, d) => {
   }
 });
 app.on('window-all-closed', () => app.quit());
-app.on('will-quit', () => writeQueue()); // keep the latest progress for the next start
+app.on('will-quit', () => { writeQueue(); fuseStatus.close(); }); // keep the latest progress for the next start; the status file says idle

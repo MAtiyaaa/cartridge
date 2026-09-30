@@ -61,6 +61,10 @@ export function tab(name) {
   store.history = [];
   store.route = { name, params: {} };
 }
+// Back with nowhere left to go. Android sets it when Fuse opened Cartridge (src/android/fuse.js).
+let onRootBack = null;
+export function setRootBack(fn) { onRootBack = fn; }
+export function rootBack() { return onRootBack ? onRootBack() : false; }
 
 // ---------------- toasts
 let tid = 1;

@@ -78,7 +78,8 @@
 
 <script setup>
 import { computed, onMounted, onBeforeUnmount, ref, watch, nextTick, defineAsyncComponent } from 'vue';
-import { store, loadConfig, loadLibrary, loadArt, back, tab, go, call, toast, choose, saveConfig, builtinKb, askText, GRADE, activeTabs, TAB_DEFS } from './store.js';
+import { store, loadConfig, loadLibrary, loadArt, back, rootBack, tab, go, call, toast, choose, saveConfig, builtinKb, askText, GRADE, activeTabs, TAB_DEFS } from './store.js';
+import { desktopLinks } from './links.js';
 import { pushLayer, focusFirst } from './nav.js';
 import { setSoundEnabled, setSoundStyle, sfx } from './sfx.js';
 import { applyTheme, CARD_SIZES } from './themes.js';
@@ -224,6 +225,8 @@ onMounted(async () => {
   const openGame = (id) => { if (id && store.lib) { store.quickMenu = false; go('game', { romId: Number(id) }); } };
   call('app:startGame').then(openGame).catch(() => {});
   window.cart.on('open-game', openGame);
+  // cartridge:// links from other apps (Fuse). Android takes them in src/android/fuse.js.
+  if (!IS_ANDROID) desktopLinks();
   // Android: Steam and emulator setup only when Settings → Android → Steam & PC game apps is on
   const steamOn = !IS_ANDROID || store.config?.android?.steamApps;
   if (steamOn) setTimeout(steamReport, 2500);
@@ -232,7 +235,7 @@ onMounted(async () => {
   if (steamOn) { setTimeout(checkMoved, 6000); setTimeout(setupNotice, 3500); }
   if (store.config.configured) call('server:status').then((c) => (store.connection = c)).catch(() => {});
   pushLayer(document.body, {
-    back: () => { if (viewHandler('back') !== false) return; back(); },
+    back: () => { if (viewHandler('back') !== false) return; if (!back()) rootBack(); },
     // Bumpers only switch sections inside a page (Achievements, consoles, collections). Top tabs are LT / RT.
     lb: () => { viewHandler('lb'); },
     rb: () => { viewHandler('rb'); },
