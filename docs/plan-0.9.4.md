@@ -5,8 +5,9 @@ Ideas agreed with the owner for the update after 0.9.3. Not built yet; details a
 ## 1. Set up RomM on this device
 So people without a RomM server aren't put off. Offered in the onboarding's RomM step ("No, set one up on this device") and in Settings → RomM.
 - Done in the background, no technical questions: Cartridge checks for Podman and uses it if present (Bazzite has it; recent SteamOS may ship it, to be confirmed). If it's missing, Cartridge fetches a user-level Podman without touching the read-only system (to be researched per system; fail with a clear message rather than a wrong guess).
-- RomM's own `docker-compose.yml` is the reference (RomM, MariaDB, Valkey). Passwords and secrets are generated; an admin account is created and Cartridge signs in with it.
-- Questions asked: the server's name; where RomM keeps its files (custom location, or the same ROMs folder as EmuDeck or RetroDECK when found, with the folder layout RomM expects).
+- RomM's own `docker-compose.yml` is the reference (RomM, MariaDB, Valkey). Only the internal secrets nobody types (database password, RomM's auth key) are generated.
+- **Your RomM account is yours:** the onboarding page asks you to choose your own username and password (with a confirm field and a show/hide toggle). That becomes RomM's admin account, and Cartridge signs in with it. Nothing random, and you can use it to sign in to RomM from any other device or browser.
+- Other questions asked: the server's name; where RomM keeps its files (custom location, or the same ROMs folder as EmuDeck or RetroDECK when found, with the folder layout RomM expects).
 - Progress bar while the images download and the server starts. Starts with the device (a Podman user service), keeps running in Game Mode, survives reboots and RomM updates.
 - Optional afterwards: metadata keys (IGDB, ScreenScraper) for covers and details, with Skip.
 - Honest limits shown in the UI: the server is only reachable while this device is on.
