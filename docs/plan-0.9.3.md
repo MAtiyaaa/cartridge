@@ -13,7 +13,7 @@ Already done on the branch: the Settings list has no grey box for the current se
 6. **`/tmp/.mount_` shortcuts.** Shortcuts made while an AppImage was running point inside its temporary mount and look "moved" after every reboot. Recognise them and point them at the real AppImage.
 7. **Remove from Steam** has to be chosen twice.
 8. **shadPS4 GR2 fork detected as shadPS4.** Forks get their own identity (see C3).
-9. **Xenia found on the Bazzite PC, not on the ROG Ally** (same `xenia.sh`). EmuDeck launchers are only looked for in the Emulation folder EmuDeck's settings name, or next to Cartridge's ROMs folder. Look in every usual place (SD cards, `~/Emulation`, EmuDeck and RetroDECK paths). Confirm with Setup's "Copy report" from the Ally.
+9. **Emulator lists sorted A to Z.** In the Emulators tab (Emulator setup, a console's emulator choice, "Which one?"), emulators and consoles are listed alphabetically instead of in the order they were found. (Replaces the Xenia-on-the-Ally report, which turned out to be a non-issue: Xenia was found, just listed out of order.)
 10. **PS4 games fail on their first launch** from a Cartridge shortcut; they work after the game is opened once from shadPS4, and again after Cartridge changes the launch options. Read the shadPS4 Qt launcher's source for what it creates per game, and make the shortcut not need that first run. Never write into shadPS4's files.
 11. **Text Standard, High contrast and Soft** look the same (the colour sets are nearly identical). Make them clearly different.
 12. **Game page:** Ready to play, Re-download, Delete, Manual and More stay on one row.
@@ -109,7 +109,7 @@ Only for games that need installing. ISOs and folders stay as they are.
 14. HANDOFF.md updated for 0.9.
 
 ## K. For everyone, not one setup (agreed after the audit)
-1. **Xenia and BigPEmu found however they're installed**, not only through EmuDeck's launcher script (the Linux build, the Windows build through Wine or Proton, AppImage, Flatpak where one exists). Also find out why the same `xenia.sh` is found on the owner's Bazzite PC and not on the ROG Ally (Setup's "Copy report" from both).
+1. **Xenia and BigPEmu found however they're installed**, not only through EmuDeck's launcher script (the Linux build, the Windows build through Wine or Proton, AppImage, Flatpak where one exists).
 2. **Flatpak Steam gets the same features as native Steam.** Shortcuts launched from Flatpak Steam run inside its sandbox, so emulators outside it are started through `flatpak-spawn --host` (Steam's Flatpak needs permission to talk to Flatpak; Cartridge asks first and sets it with `flatpak override --user`, like the existing Allow access). Cartridge's own Steam entry, artwork, collections, play time and instant changes work the same. Tested against a fake Flatpak Steam home.
 3. **Report a problem** (Settings → About): shows the setup report (already scrubbed of private info) so the user can read it first, copies it, and opens GitHub's new issue page with it filled in. In Game Mode, where a browser is awkward, a QR code for the same page.
 4. **Graphics:** AMD first (Steam Deck, Bazzite). NVIDIA desktops are out of scope for now.
@@ -119,7 +119,7 @@ Only for games that need installing. ISOs and folders stay as they are.
 Moved to 0.9.4 (docs/plan-0.9.4.md), with everything involved in it, so it's built once, together with RomM and EmuDeck/RetroDECK setup.
 
 ## Owner to test on a device
-Controller feel and LT/RT at launch, touch, rumble in Game Mode, PS4 first launch, Xenia on the Ally, trophies across the two devices, RPCS3 and Vita3K installs, 1080p handheld and 4K TV.
+Controller feel and LT/RT at launch, touch, rumble in Game Mode, PS4 first launch, trophies across the two devices, RPCS3 and Vita3K installs, 1080p handheld and 4K TV.
 
 ## Reminders for the owner
 - A stray `v2.3.1` tag is in the repo (not a release; it deletes most of the code compared with 0.9.2). The owner said not to delete it yet: ask again when 0.9.3 is being built.
