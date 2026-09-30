@@ -134,7 +134,7 @@ A smooth first run on the Ribbons background, A for next, B for back. It replace
 - **Settings → About → Run the welcome again** at any time.
 - A replay starts from your current settings: steps already done show their green check (RomM signed in, EmuDeck found, instant Steam changes on), and nothing is reset, signed out or removed. Leaving halfway keeps everything as it was.
 
-Later (1.0): "Set up RomM on this device" (Podman on Bazzite; not stock SteamOS) and full translations.
+Later (0.9.4): "Set up RomM on this device" (see docs/plan-0.9.4.md). Full translations stay for 1.0.
 
 ## Owner to test on a device
 Controller feel and LT/RT at launch, touch, rumble in Game Mode, PS4 first launch, Xenia on the Ally, trophies across the two devices, RPCS3 and Vita3K installs, 1080p handheld and 4K TV.
