@@ -124,6 +124,11 @@ A smooth first run on the Ribbons background, A for next, B for back. It replace
 9. **Optional extras,** each with Skip: SteamGridDB key, RetroAchievements sign-in.
 10. **Done.**
 
+**Existing users** (already signed in when they update to 0.9.3):
+- Once, after updating: "New: a fresh welcome and system scan. Take a look?" with Take a look / Not now (like the 0.9.1 Emulator setup notice).
+- **Settings → About → Run the welcome again** at any time.
+- A replay starts from your current settings: steps already done show their green check (RomM signed in, EmuDeck found, instant Steam changes on), and nothing is reset, signed out or removed. Leaving halfway keeps everything as it was.
+
 Later (1.0): "Set up RomM on this device" (Podman on Bazzite; not stock SteamOS) and full translations.
 
 ## Owner to test on a device
