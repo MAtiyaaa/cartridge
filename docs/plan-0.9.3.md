@@ -39,7 +39,12 @@ Already done on the branch: the Settings list has no grey box for the current se
 Only for games that need installing. ISOs and folders stay as they are.
 1. **PS3 `.pkg` (RPCS3):** when the download finishes, Downloads shows "Install in RPCS3" on that item plus a notice; nothing installs until pressed. Runs `rpcs3 --installpkg <pkg>`, and the `.rap` too if it came with the game (RPCS3's installer copies it where it belongs).
 2. **Vita `.vpk`, `.zip`, `.pkg` (Vita3K):** same box, "Install in Vita3K". `Vita3K <file.vpk|.zip>` installs (it may start the game after). `.pkg` needs its zRIF key: ask for it or read it from a file that came with the game (`--pkg <file> --zrif <key>`).
-3. **After installing:** find the installed game in the emulator's own game folder and make the Steam shortcut to that (RPCS3 by game ID, Vita3K `-r <title ID>`).
+3. **After installing:** the game no longer lives in the ROMs folder, it lives inside the emulator's own storage. Cartridge finds it there and makes the Steam shortcut to that:
+   - RPCS3: `dev_hdd0/game/<title ID>` (the `.rap` in `dev_hdd0/home/<user>/exdata`). `dev_hdd0` is found the same way trophies already find it: RPCS3's `vfs.yml` first (it can be moved anywhere), then EmuDeck's `Emulation/storage/rpcs3`, `~/.config/rpcs3`, the Flatpak's config. Launch by game ID (`%RPCS3_GAMEID%:<ID>`), so the path never goes into the shortcut. The title ID comes from the PKG header before installing, so Cartridge knows which folder to wait for.
+   - Vita3K: `ux0/app/<title ID>` in Vita3K's pref path (already read by the `vitaid` launch), launched with `-r <title ID>`.
+   - The game counts as installed from there (library, Storage, Delete, Library check). Delete asks before removing a game from the emulator's storage, since it's no longer just a download.
+   - After a successful install, offer to delete the downloaded PKG, VPK or ZIP (it's no longer needed to play).
+   - Update and DLC PKGs install into the same game folder; they're shown as extras of the game, not as new games.
 4. **PS4 `.pkg`:** Cartridge extracts it itself, like PS4 zips today (offer, extract into the console folder, delete the PKG, add to Steam). shadPS4 has had no PKG installer since after 0.7.0 and 0.7.0's was only in its window. Written from the published PKG format, not copied from shadPS4 (GPL; Cartridge is MIT). Unencrypted ("fake") PKGs only. The biggest item here.
 5. PS4 zips keep today's method.
 
