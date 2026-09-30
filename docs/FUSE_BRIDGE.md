@@ -1,15 +1,15 @@
 # Fuse bridge
 
-From 0.9.10, other apps can hand over to Cartridge and see what it is doing. It was made for [Fuse](https://github.com/MAtiyaaa/fuse), an open-source game launcher, but any app can use it. This page is the contract, protocol version 2.
+From 0.9.10, other apps can hand over to Cartridge and see what it is doing. It was made for [Fuse](https://github.com/MAtiyaaa/fuse), an open-source game launcher, but any app can use it. This page is the contract, protocol version 3.
 
-Cartridge 0.9.10 speaks protocol 1. Protocol 2 (later versions) adds the download queue game by game and every downloaded game with its RomM metadata and pictures; everything protocol 1 has is unchanged (see Backwards compatibility).
+Cartridge 0.9.10 speaks protocol 1. Protocol 2 adds the download queue game by game and every downloaded game with its RomM metadata and pictures. Protocol 3 adds uploads: an app hands over a game's files and Cartridge, once the user confirms, uploads them to RomM and reports how it goes. Everything earlier protocols have is unchanged (see Backwards compatibility).
 
 Two parts:
 
 1. **Links.** `cartridge://...` opens a page in Cartridge (Android intents, or a command-line argument on the Linux desktop).
 2. **Status.** A read-only snapshot of downloads (in total and game by game), the connection, recent games and the downloaded games with their metadata and pictures (an Android content provider, or a JSON file on the Linux desktop).
 
-Nothing in either part can download, delete, launch a game or change a setting, and nothing exposes the RomM server address, the account, tokens or API keys.
+Nothing in either part can download, delete, launch a game or change a setting, and nothing exposes the RomM server address, the account, tokens or API keys. The upload link (protocol 3) only shows what would be uploaded: nothing is sent before the user confirms it on that page.
 
 ## Links
 
@@ -27,16 +27,41 @@ Nothing in either part can download, delete, launch a game or change a setting, 
 | `cartridge://game/{romId}` | That game's page (`romId` is RomM's rom id) |
 | `cartridge://search?q={text}&platform={slug}` | Search with the text filled in |
 | `cartridge://bios/{slug}` | That console's page, which has the BIOS button (RomM's BIOS files for it) |
+| `cartridge://upload?request={file}` | Protocol 3: a game to upload to RomM (see Uploads below), shown for the user to confirm |
 
 Rules:
 
 - The scheme, route, slug and parameter names are case-insensitive. Values are URL-encoded; in the query `+` is a space.
-- `from=fuse` marks a link from Fuse (see Back below). `v` is the protocol version the caller speaks (`1` or `2`); it is accepted and ignored for now. Unknown parameters are ignored.
+- `from=fuse` marks a link from Fuse (see Back below). `v` is the protocol version the caller speaks (`1` to `3`); it is accepted and ignored for now. Unknown parameters are ignored.
 - Anything else (another scheme, an unknown route, a missing or non-numeric id, extra path parts, broken %-encoding, more than 2048 characters) is ignored. Search text is cut to 200 characters.
 - `{slug}` is matched against each RomM platform's `slug`, then its `fs_slug` (the folder name). On Android the same console under another name also matches (the aliases in `src/android/emulators.js`, so `genesis` and `megadrive` both find `genesis-slash-megadrive`).
 - A game that isn't in the library opens Library, a console that isn't opens Consoles, each with a short note.
 - `platform` on `search` is accepted but ignored: Search has no console filter.
 - Cartridge waits for its settings, and for game and console links its library (up to 20 seconds), so a link that starts Cartridge works. If Cartridge isn't connected to a RomM server yet, it shows Setup and ignores the link.
+
+### Uploads (protocol 3)
+
+An app hands over a game it has on this device (Fuse: a game's options, "Upload to RomM") as an **upload request**:
+
+```json
+{
+  "v": 1,
+  "from": "fuse",
+  "title": "Pepsiman",
+  "platform": "psx",
+  "files": [
+    { "path": "/storage/emulated/0/ROMs/psx/Pepsiman/Pepsiman.m3u", "name": "Pepsiman.m3u", "folder": "", "size": 58 },
+    { "path": "/storage/emulated/0/ROMs/psx/Pepsiman/Pepsiman (Disc 1).chd", "name": "Pepsiman (Disc 1).chd", "folder": "", "size": 412000000 },
+    { "path": "/storage/emulated/0/ROMs/psx/Pepsiman/dlc/Extra.bin", "name": "Extra.bin", "folder": "dlc", "size": 1024 }
+  ]
+}
+```
+
+- `v` must be `1`. `title` is shown; `platform` is matched like `{slug}` in links. `files`: 1 to 500, each an absolute `path` Cartridge reads with its own file access, and `folder`, where it goes inside the game on RomM: empty for the game itself, or a relative, forward-slashed folder such as `dlc` or `update` (RomM's categories). `..`, absolute folders, backslashes and the same file twice are refused. `name` and `size` are informational: Cartridge uses the file's own name and size.
+- The request is at most 256 KB. **Linux desktop:** the app writes it to a `.json` file and passes its absolute path as `request` (`cartridge://upload?request=%2Fhome%2Fyou%2F.cache%2Ffuse%2Fcartridge-upload%2F1.json&from=fuse&v=3`); Cartridge only reads it. **Android:** the link has no `request`; the JSON travels in the intent's string extra `io.github.matiyaaa.fuse.extra.UPLOAD` (`Intent.ACTION_VIEW` with the link, sent to Cartridge's package). Cartridge reads the paths itself, which needs its All files access; files it can't read are listed.
+- The page shows the game, the console on RomM, every file grouped as game, DLC, updates and other, and the total size, with anything that stops the upload: a file that is missing or can't be read, or a console RomM doesn't have yet. **Upload** starts it; Back or Cancel drops the request.
+- The first file (the one that names the game: a launch file or an `.m3u`) is uploaded into the console's folder with RomM's chunked upload. Cartridge then asks RomM to scan that console (with a password sign-in; other sign-ins wait for RomM to find it, for example when it watches its folders) and looks the game up. The other files go into that game's folder (`rom_id` and `folder` on `/api/roms/upload/start`), which needs RomM 5.3 or newer; with an older RomM a game with several files is refused before anything is sent. A file RomM already has is skipped. One upload runs at a time; the rest wait.
+- Progress is on the page and in the status's `uploads` (below). Uploads don't survive Cartridge closing: one that was still going is reported as failed.
 
 ### Back returns to Fuse (Android)
 
@@ -120,6 +145,23 @@ The downloads in the order Cartridge's Downloads page shows them: the games down
 | `total` | `total` | long / null | The game's size in bytes, `null` while it isn't known |
 | `position` | `position` | int | The row's place in this list, from `0` |
 
+### Uploads (protocol 3)
+
+The games handed over with `cartridge://upload` that the user confirmed, newest first, up to 50 (the unfinished ones and the last 20 finished). Updated with the status.
+
+| Field (file) | Column (Android) | Type | Meaning |
+|---|---|---|---|
+| `id` | `id` | text | Cartridge's id for the upload |
+| `title` | `title` | text | The game's name from the request |
+| `platformSlug` | `platform_slug` | text | The request's `platform` |
+| `state` | `state` | text | `waiting` (another upload runs first), `uploading`, `scanning` (sent; RomM is adding the game), `done`, `failed` or `cancelled`. New states may be added; show an unknown one as it is. |
+| `sent` | `sent` | long | Bytes uploaded so far (all files) |
+| `total` | `total` | long / null | All files' size in bytes |
+| `files` | `files` | int | How many files |
+| `romId` | `rom_id` | long / null | The game on RomM once Cartridge found it there |
+| `error` | `error` | text / null | Why it failed, in words for the user (never a server address) |
+| `updatedAt` | `updated_at` | long, epoch ms | When it last changed |
+
 ### Games (protocol 2)
 
 One row per game Cartridge downloaded and still has on disk (its downloads list, the same games as `recent` but all of them and only while the file or folder exists), newest download first. Games Cartridge found on disk but didn't download, and games marked as installed by hand, are not in it.
@@ -157,12 +199,12 @@ Other apps can't sign in to RomM, so Cartridge hands over picture files it has i
 ### Android: content provider
 
 - Authority `io.github.abdu2304.cartridge.status` (`${applicationId}.status`), exported, read-only.
-- `content://io.github.abdu2304.cartridge.status/status`: one row. `content://io.github.abdu2304.cartridge.status/recent`: up to 20 rows, newest first. Protocol 2 adds `content://io.github.abdu2304.cartridge.status/queue` (up to 100 rows, in order) and `content://io.github.abdu2304.cartridge.status/games` (one row per downloaded game). Other URIs return `null` from `query` (so do `/queue` and `/games` on Cartridge 0.9.10); insert, update and delete throw `UnsupportedOperationException`.
+- `content://io.github.abdu2304.cartridge.status/status`: one row. `content://io.github.abdu2304.cartridge.status/recent`: up to 20 rows, newest first. Protocol 2 adds `content://io.github.abdu2304.cartridge.status/queue` (up to 100 rows, in order) and `content://io.github.abdu2304.cartridge.status/games` (one row per downloaded game); protocol 3 adds `content://io.github.abdu2304.cartridge.status/uploads`. Other URIs return `null` from `query` (so do `/queue` and `/games` on Cartridge 0.9.10); insert, update and delete throw `UnsupportedOperationException`.
 - Pictures: `content://io.github.abdu2304.cartridge.status/image/{romId}/{cover|logo|screenshot}`, the URIs in the `cover`, `logo` and `screenshot` columns. Open them with `openInputStream` or `openFileDescriptor(uri, "r")`; any other mode throws `SecurityException`, and a picture that isn't there (any more) throws `FileNotFoundException`. The column's URI carries `?v={number}`, which changes when the picture does, so image caches keyed on the URI load the new one; the provider ignores it and the URI works without it. `getType` gives `image/png`, `image/jpeg`, `image/webp` or `image/gif` (read from the file). Same permission as the tables.
 - Reading needs `io.github.abdu2304.cartridge.permission.READ_STATUS`, protection level `normal`: declare it with `<uses-permission>` and Android grants it at install, with no prompt. Android grants a permission defined by another app only when that app is already installed, so if Fuse was installed before Cartridge 0.9.10 some Android versions grant it only after Fuse is reinstalled or updated. Treat a `SecurityException` as "no status".
 - A projection may name any of the columns; a column this version doesn't have comes back `null`.
-- `/status` and `/recent` get `notifyChange` with each new snapshot, `/queue` when its rows changed, and `/games` and `/image` (which reaches every picture URI below it) when the games list changed, so a `ContentObserver` sees changes.
-- The provider answers even when Cartridge isn't running (Android starts its process just for the provider, without the UI). It then reports the last snapshot as it stood when Cartridge stopped: `connected` null, `active_downloads` 0, `queued_downloads` the games that were downloading or queued (they carry on at the next start), `progress` and the current game null, and in `/queue` those games' `state` is `queued`. `/games` and the pictures work as usual. Before Cartridge has ever published, the row has zeros and nulls and the tables are empty.
+- `/status` and `/recent` get `notifyChange` with each new snapshot, `/queue` and `/uploads` when their rows changed, and `/games` and `/image` (which reaches every picture URI below it) when the games list changed, so a `ContentObserver` sees changes.
+- The provider answers even when Cartridge isn't running (Android starts its process just for the provider, without the UI). It then reports the last snapshot as it stood when Cartridge stopped: `connected` null, `active_downloads` 0, `queued_downloads` the games that were downloading or queued (they carry on at the next start), `progress` and the current game null, and in `/queue` those games' `state` is `queued`; in `/uploads` an upload that was still going is `failed`. `/games` and the pictures work as usual. Before Cartridge has ever published, the row has zeros and nulls and the tables are empty.
 
 ```kotlin
 val uri = Uri.parse("content://io.github.abdu2304.cartridge.status/status")
@@ -192,12 +234,13 @@ contentResolver.query(games, arrayOf("rom_id", "title", "genres", "cover"), null
 - Readable by your user only (mode 600).
 - When Cartridge quits it writes a last snapshot the same way the Android provider reports a stopped Cartridge: `connected` null, nothing downloading, the unfinished games counted as queued (and `queued` in `queue`). After a crash the last snapshot stays; `updatedAt` shows its age.
 - Only on the Linux desktop build. On Android the embedded backend sends the snapshot to the app, which hands it to the provider.
+- Protocol 3: it also has `uploads`; when Cartridge quits, an upload that was still going is written as `failed`.
 - Protocol 2: it also has `queue` and `games`. In `games`, `cover`, `logo` and `screenshot` are absolute paths of files in Cartridge's own folder (`~/.config/Cartridge/imgcache/...` and `.../logos/...`), readable by your user. Covers and screenshots from the image cache have no file extension: read the type from the content (PNG, JPEG, WebP or GIF). A file can go away (Settings, Clear cache) before the next snapshot; treat a missing file as no picture.
 - With the games in it the file is bigger (roughly 1 to 2 KB a game, mostly the summaries) and is still rewritten with each change while something downloads.
 
 ```json
 {
-  "protocol": 2,
+  "protocol": 3,
   "version": "0.9.11",
   "connected": true,
   "activeDownloads": 1,
@@ -214,6 +257,9 @@ contentResolver.query(games, arrayOf("rom_id", "title", "genres", "cover"), null
     { "romId": 1300, "title": "Chrono Trigger", "platformSlug": "snes", "state": "downloading", "received": 1728053, "total": 4194304, "position": 0 },
     { "romId": 1301, "title": "EarthBound", "platformSlug": "snes", "state": "queued", "received": 0, "total": 3145728, "position": 1 },
     { "romId": 1234, "title": "Super Metroid", "platformSlug": "snes", "state": "done", "received": 3145728, "total": 3145728, "position": 2 }
+  ],
+  "uploads": [
+    { "id": "umg2x1", "title": "Pepsiman", "platformSlug": "psx", "state": "uploading", "sent": 104857600, "total": 412001082, "files": 3, "romId": null, "error": null, "updatedAt": 1790000120000 }
   ],
   "games": [
     {
@@ -241,6 +287,7 @@ contentResolver.query(games, arrayOf("rom_id", "title", "genres", "cover"), null
 ## Security
 
 - Links only change what's on screen, or start a resync. They are checked strictly (ids are digits, slugs are short, total length is capped) and anything unknown is ignored.
+- The upload link only shows a page. Cartridge reads the named files, lists them with their sizes and uploads nothing until the user presses Upload there; it never deletes or changes them. A request is checked strictly (absolute paths, folders inside the game, at most 500 files and 256 KB), and on the desktop Cartridge only reads the request file.
 - Web pages can't open them: no `BROWSABLE` on Android, no URL handler on Linux.
 - The status is read-only: behind a permission on Android, your user only on Linux. It holds game titles, platform slugs, local paths and RomM's metadata of downloaded games, never the server address, username, password, tokens, API keys or settings.
 - Pictures are handed over as files Cartridge already has, never as RomM addresses (those would need your sign-in). On Android the provider opens only the picture files it was given for a game, only inside Cartridge's own storage and only for reading.
@@ -252,6 +299,7 @@ contentResolver.query(games, arrayOf("rom_id", "title", "genres", "cover"), null
 - Cartridge 0.9.9 and older have no bridge: `cartridge://home` doesn't resolve, the provider isn't there and there is no status file. Fuse then opens Cartridge the normal way.
 - Apps that don't use the bridge are unaffected.
 - Later versions may add routes, parameters, fields and columns; clients should ignore what they don't know.
+- Protocol 3 only adds: the `upload` link, the `uploads` field in the file and the `/uploads` URI, and `protocol` reads `3`. A client should offer uploads only when `protocol >= 3`; older versions ignore the link.
 - Protocol 2 only adds: the `queue` and `games` fields in the file, the `/queue`, `/games` and `/image/...` URIs, and `protocol` reads `2`. Every protocol 1 field, column, URI and meaning is the same, so a client written for 1 keeps working if it accepts `protocol >= 1` (Fuse does) and ignores fields it doesn't know.
 - A client that uses the new tables should check `protocol >= 2`, or treat a `null` cursor from `/queue` or `/games` (and missing `queue` and `games` in the file) as "not available": that is Cartridge 0.9.10.
 
@@ -260,6 +308,7 @@ contentResolver.query(games, arrayOf("rom_id", "title", "genres", "cover"), null
 - `src/android/deeplink.js`: the link parser and console matching (both builds), tests in `test/deeplink.test.js`.
 - `src/links.js`: opens the page; the desktop's link listener.
 - `src/android/fuse.js`: Android links (`App.getLaunchUrl`, `appUrlOpen`), Back to Fuse, passing the status and the games list to native.
-- `electron/fuseStatus.js`: the snapshot, the queue rows, the games rows (`metaOf`, `keepMeta`, `gameRows`), the status file; tests in `test/fuse-status.test.js`.
+- `electron/fuseUpload.js`: upload requests (`parseRequest`, `readRequest`), the check shown before uploading and the uploads themselves (`createUploads`); tests in `test/fuse-upload.test.js`. `src/views/FuseUpload.vue`: the page. `CartridgeNativePlugin.takeFuseUpload`: the Android request.
+- `electron/fuseStatus.js`: the snapshot, the queue and upload rows, the games rows (`metaOf`, `keepMeta`, `gameRows`), the status file; tests in `test/fuse-status.test.js`.
 - `electron/main.js`: links on the command line and from a second launch (`app:deeplink`), `fuse:status`, `fuse:games`, status updates on each broadcast; the games' fuller metadata (`fuse-meta.json` in the user data folder, kept at download, sync and Edit details) and their pictures (`bridgeImages`, fetched once by `warm` through the image cache).
 - `CartridgeStatusProvider.java` (tables, pictures in `openFile`, the games list in `fuse-games.json` in the app's files folder) and `CartridgeNativePlugin.java` (`publishStatus`, `publishGames`, `returnToCaller`); the link filter, provider and permission in `AndroidManifest.xml`.

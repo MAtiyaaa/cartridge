@@ -13,6 +13,8 @@ export const store = reactive({
   installed: {},
   sync: { state: 'idle' },
   downloads: [],
+  fuseUploads: [], // games Fuse handed over to upload to RomM (electron/fuseUpload.js), newest first
+  fuseUpload: null, // the request of the last cartridge://upload link, until its page reads it
   bg: '',
   route: { name: 'home', params: {} },
   history: [],
@@ -298,6 +300,8 @@ rd.on('installed-changed', ({ romId, path }) => {
   else delete store.installed[romId];
 });
 call('dl:list').then((l) => { store.downloads = l; }).catch(() => {});
+rd.on('fuse-uploads', (list) => { store.fuseUploads = list; });
+call('fuse:upload:list').then((l) => { store.fuseUploads = l; }).catch(() => {});
 
 // ---------------- collections
 // RomM's collections (yours and smart ones), plus ones Cartridge makes from the library: series,

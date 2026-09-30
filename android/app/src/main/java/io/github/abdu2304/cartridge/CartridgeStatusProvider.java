@@ -27,26 +27,28 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Read-only status for other apps, like the Fuse launcher (docs/FUSE_BRIDGE.md), protocol 2:
+ * Read-only status for other apps, like the Fuse launcher (docs/FUSE_BRIDGE.md), protocol 3:
  * content://&lt;package&gt;.status/status (one row), /recent (the last 20 downloads, newest first), /queue (the
- * downloads game by game), /games (every downloaded game with its RomM metadata) and /image/&lt;romId&gt;/&lt;kind&gt;
- * (that game's cover, logo or screenshot, opened read-only). Other apps need the READ_STATUS permission.
+ * downloads game by game), /games (every downloaded game with its RomM metadata), /uploads (the games Fuse handed
+ * over to upload to RomM, newest first) and /image/&lt;romId&gt;/&lt;kind&gt; (that game's cover, logo or screenshot,
+ * opened read-only). Other apps need the READ_STATUS permission.
  * Everything comes from the app (CartridgeNativePlugin.publishStatus and publishGames, built by
  * electron/fuseStatus.js) and is kept in SharedPreferences and a file, so this answers while Cartridge isn't running.
  * Nothing about the server, the account or the settings is ever in it, and pictures are only files in the app's storage.
  */
 public class CartridgeStatusProvider extends ContentProvider {
-    static final int PROTOCOL = 2;
+    static final int PROTOCOL = 3;
     private static final String PREFS = "fuse-status";
     private static final String KEY = "snapshot";
     // The games list is big (full summaries) and changes rarely: a file of its own, not part of the status that is
     // saved every 500 ms while something downloads
     private static final String GAMES_FILE = "fuse-games.json";
-    private static final int STATUS = 1, RECENT = 2, QUEUE = 3, GAMES = 4, IMAGE = 5, MAX_RECENT = 20;
+    private static final int STATUS = 1, RECENT = 2, QUEUE = 3, GAMES = 4, IMAGE = 5, UPLOADS = 6, MAX_RECENT = 20;
     static final String[] STATUS_COLUMNS = { "protocol", "version", "connected", "active_downloads", "queued_downloads", "progress", "current_title", "current_platform", "library_changed_at", "updated_at" };
     static final String[] RECENT_COLUMNS = { "rom_id", "title", "platform_slug", "path", "finished_at" };
     static final String[] QUEUE_COLUMNS = { "rom_id", "title", "platform_slug", "state", "received", "total", "position" };
     static final String[] GAMES_COLUMNS = { "rom_id", "path", "title", "platform_slug", "summary", "year", "genres", "developer", "publisher", "rating", "players", "series", "cover", "logo", "screenshot", "updated_at" };
+    static final String[] UPLOADS_COLUMNS = { "id", "title", "platform_slug", "state", "sent", "total", "files", "rom_id", "error", "updated_at" };
     static final List<String> IMAGES = Arrays.asList("cover", "logo", "screenshot");
 
     // Set once the running app has published. Before that the snapshot is from an earlier run: nothing is
@@ -65,6 +67,7 @@ public class CartridgeStatusProvider extends ContentProvider {
         uris.addURI(authority(getContext()), "recent", RECENT);
         uris.addURI(authority(getContext()), "queue", QUEUE);
         uris.addURI(authority(getContext()), "games", GAMES);
+        uris.addURI(authority(getContext()), "uploads", UPLOADS);
         uris.addURI(authority(getContext()), "image/#/*", IMAGE);
         return true;
     }
@@ -90,11 +93,13 @@ public class CartridgeStatusProvider extends ContentProvider {
         if (at > s.optLong("libraryChangedAt", 0)) s.put("libraryChangedAt", at);
         // the queue's rows change with the queue, or with this run's first snapshot (downloading stops reading as queued)
         boolean queue = !live || !String.valueOf(was.optJSONArray("queue")).equals(String.valueOf(s.optJSONArray("queue")));
+        boolean uploads = !live || !String.valueOf(was.optJSONArray("uploads")).equals(String.valueOf(s.optJSONArray("uploads")));
         c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString(KEY, s.toString()).apply();
         live = true;
         changed(c, "status");
         changed(c, "recent");
         if (queue) changed(c, "queue");
+        if (uploads) changed(c, "uploads");
     }
 
     // ------------------------------------------------------------ games
@@ -230,7 +235,7 @@ public class CartridgeStatusProvider extends ContentProvider {
     @Override
     public Cursor query(Uri uri, String[] projection, String selection, String[] selectionArgs, String sortOrder) {
         int m = uris.match(uri);
-        if (m != STATUS && m != RECENT && m != QUEUE && m != GAMES) return null;
+        if (m != STATUS && m != RECENT && m != QUEUE && m != GAMES && m != UPLOADS) return null;
         Context ctx = getContext();
         JSONObject s = m == GAMES ? null : stored(ctx);
         java.util.List<Map<String, Object>> rows = new java.util.ArrayList<>();
@@ -284,6 +289,29 @@ public class CartridgeStatusProvider extends ContentProvider {
                 rows.add(r);
             }
             c = cursor(QUEUE_COLUMNS, projection, rows);
+        } else if (m == UPLOADS) {
+            boolean running = live;
+            JSONArray list = s.optJSONArray("uploads");
+            for (int i = 0; list != null && i < list.length(); i++) {
+                JSONObject u = list.optJSONObject(i);
+                if (u == null || u.optString("id", "").isEmpty()) continue;
+                String state = u.optString("state", "");
+                boolean going = "waiting".equals(state) || "uploading".equals(state) || "scanning".equals(state);
+                Map<String, Object> r = new HashMap<>();
+                r.put("id", u.optString("id"));
+                r.put("title", u.optString("title", ""));
+                r.put("platform_slug", u.optString("platformSlug", ""));
+                // Cartridge stopped: an upload can't carry on
+                r.put("state", !running && going ? "failed" : state);
+                r.put("sent", Math.max(0L, u.optLong("sent", 0)));
+                r.put("total", u.optLong("total", 0) > 0 ? Long.valueOf(u.optLong("total")) : null);
+                r.put("files", Math.max(0, u.optInt("files", 0)));
+                r.put("rom_id", u.optLong("romId", 0) > 0 ? Long.valueOf(u.optLong("romId")) : null);
+                r.put("error", !running && going ? "Cartridge was closed before the upload finished." : text(u, "error"));
+                r.put("updated_at", u.optLong("updatedAt", 0));
+                rows.add(r);
+            }
+            c = cursor(UPLOADS_COLUMNS, projection, rows);
         } else {
             JSONArray list = gamesList(ctx);
             Uri images = Uri.parse("content://" + authority(ctx) + "/image");
@@ -337,6 +365,7 @@ public class CartridgeStatusProvider extends ContentProvider {
         if (m == RECENT) return "vnd.android.cursor.dir/vnd." + authority(getContext()) + ".recent";
         if (m == QUEUE) return "vnd.android.cursor.dir/vnd." + authority(getContext()) + ".queue";
         if (m == GAMES) return "vnd.android.cursor.dir/vnd." + authority(getContext()) + ".games";
+        if (m == UPLOADS) return "vnd.android.cursor.dir/vnd." + authority(getContext()) + ".uploads";
         if (m == IMAGE) {
             // getType isn't permission checked: without READ_STATUS it must not tell which games have pictures
             Context c = getContext();

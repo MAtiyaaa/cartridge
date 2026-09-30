@@ -7,7 +7,7 @@ const os = require('os');
 const path = require('path');
 const fuseStatus = require('../electron/fuseStatus');
 
-const KEYS = ['protocol', 'version', 'connected', 'activeDownloads', 'queuedDownloads', 'progress', 'currentTitle', 'currentPlatform', 'libraryChangedAt', 'updatedAt', 'recent', 'queue'].sort();
+const KEYS = ['protocol', 'version', 'connected', 'activeDownloads', 'queuedDownloads', 'progress', 'currentTitle', 'currentPlatform', 'libraryChangedAt', 'updatedAt', 'recent', 'queue', 'uploads'].sort();
 const queue = [
   { romId: 1, name: 'Chrono Trigger', platformSlug: 'snes', status: 'downloading', received: 50, total: 100 },
   { romId: 2, name: 'Super Metroid', platformSlug: 'snes', status: 'queued', received: 0, total: 300 },
@@ -20,7 +20,7 @@ for (let i = 1; i <= 25; i++) manifest[i] = { path: `/roms/snes/${i}.sfc`, platf
 test('the snapshot has exactly the documented fields and nothing about the server', () => {
   const s = fuseStatus.snapshot({ version: '0.9.10', queue, connected: true, syncedAt: 5000, manifest, server: 'http://secret', token: 'x' }, 9000);
   assert.deepStrictEqual(Object.keys(s).sort(), KEYS);
-  assert.strictEqual(s.protocol, 2);
+  assert.strictEqual(s.protocol, 3);
   assert.strictEqual(s.version, '0.9.10');
   assert.strictEqual(s.connected, true);
   assert.strictEqual(s.activeDownloads, 1);
@@ -33,6 +33,23 @@ test('the snapshot has exactly the documented fields and nothing about the serve
   assert.strictEqual(s.recent.length, 20);
   assert.deepStrictEqual(s.recent[0], { romId: 25, title: 'Game 25', platformSlug: 'snes', path: '/roms/snes/25.sfc', finishedAt: 1025 });
   assert.ok(!JSON.stringify(s).includes('secret'));
+});
+
+test('uploads from Fuse: newest first, known states only, bytes kept in range, nothing else', () => {
+  const uploads = [
+    { id: 'u2', title: 'Pepsiman', platformSlug: 'psx', state: 'uploading', sent: 900, total: 600, files: 2, romId: null, error: null, updatedAt: 7, path: '/secret/p.chd', current: 'p.chd' },
+    { id: 'u1', title: 'Metroid', platformSlug: 'gba', state: 'done', sent: 10, total: 10, files: 1, romId: 42, updatedAt: 5 },
+    { id: 'u0', title: 'Odd', platformSlug: 'gba', state: 'thinking', sent: 0, total: 0 },
+    { title: 'No id', state: 'done' },
+  ];
+  const s = fuseStatus.snapshot({ version: '0.9.11', queue: [], manifest: {}, uploads }, 1);
+  assert.deepStrictEqual(s.uploads, [
+    { id: 'u2', title: 'Pepsiman', platformSlug: 'psx', state: 'uploading', sent: 600, total: 600, files: 2, romId: null, error: null, updatedAt: 7 },
+    { id: 'u1', title: 'Metroid', platformSlug: 'gba', state: 'done', sent: 10, total: 10, files: 1, romId: 42, error: null, updatedAt: 5 },
+  ]);
+  assert.ok(!JSON.stringify(s).includes('secret'));
+  // closing Cartridge fails what was still going
+  assert.deepStrictEqual(fuseStatus.closed(s, 2).uploads.map((u) => u.state), ['failed', 'done']);
 });
 
 test('an idle snapshot', () => {
@@ -191,7 +208,7 @@ test('the games go out on their own, only when they change; the file carries que
   assert.ok(!('games' in sent[0]), 'the status has no games list (Android keeps them apart)');
   assert.strictEqual(games[0][0].cover, cover);
   const a = JSON.parse(fs.readFileSync(file, 'utf8'));
-  assert.strictEqual(a.protocol, 2);
+  assert.strictEqual(a.protocol, 3);
   assert.deepStrictEqual(a.queue.map((q) => q.state), ['downloading', 'queued']);
   assert.deepStrictEqual(a.games.map((g) => [g.romId, g.title, g.summary.length]), [[42, 'Chrono Trigger', summary.length]]);
   // progress: the status goes out, the games aren't even rebuilt
@@ -225,9 +242,10 @@ test('the Android provider serves the documented tables and read-only pictures',
   assert.deepStrictEqual(cols('RECENT_COLUMNS'), ['rom_id', 'title', 'platform_slug', 'path', 'finished_at']); // protocol 1, unchanged
   assert.deepStrictEqual(cols('QUEUE_COLUMNS'), ['rom_id', 'title', 'platform_slug', 'state', 'received', 'total', 'position']);
   assert.deepStrictEqual(cols('GAMES_COLUMNS'), ['rom_id', 'path', 'title', 'platform_slug', 'summary', 'year', 'genres', 'developer', 'publisher', 'rating', 'players', 'series', 'cover', 'logo', 'screenshot', 'updated_at']);
-  for (const p of ['"status"', '"recent"', '"queue"', '"games"', '"image/#/*"']) assert.ok(java.includes(`addURI(authority(getContext()), ${p}`), p);
+  assert.deepStrictEqual(cols('UPLOADS_COLUMNS'), ['id', 'title', 'platform_slug', 'state', 'sent', 'total', 'files', 'rom_id', 'error', 'updated_at']);
+  for (const p of ['"status"', '"recent"', '"queue"', '"games"', '"uploads"', '"image/#/*"']) assert.ok(java.includes(`addURI(authority(getContext()), ${p}`), p);
   assert.ok(/if \(!"r"\.equals\(mode\)\) throw new SecurityException/.test(java), 'pictures open read-only');
   const doc = fs.readFileSync(path.join(__dirname, '../docs/FUSE_BRIDGE.md'), 'utf8');
-  for (const c of [...cols('QUEUE_COLUMNS'), ...cols('GAMES_COLUMNS')]) assert.ok(doc.includes('`' + c + '`'), `${c} is documented`);
+  for (const c of [...cols('QUEUE_COLUMNS'), ...cols('GAMES_COLUMNS'), ...cols('UPLOADS_COLUMNS')]) assert.ok(doc.includes('`' + c + '`'), `${c} is documented`);
   assert.ok(doc.includes(`protocol version ${fuseStatus.PROTOCOL}`));
 });

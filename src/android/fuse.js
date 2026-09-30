@@ -22,6 +22,11 @@ function receive(url) {
   const link = parseDeepLink(url);
   if (!link) return;
   if (link.from === 'fuse') fromFuse = true;
+  if (link.route === 'upload') {
+    // the request travels with the intent: the plugin keeps it until taken
+    Native.takeFuseUpload().then((r) => openLink({ ...link, params: { ...link.params, json: r?.json || null } }, { keyOf: consoleKey })).catch(() => {});
+    return;
+  }
   openLink(link, { keyOf: consoleKey });
 }
 

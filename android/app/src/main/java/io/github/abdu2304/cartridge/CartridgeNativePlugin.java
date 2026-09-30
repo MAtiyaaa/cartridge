@@ -571,6 +571,47 @@ public class CartridgeNativePlugin extends Plugin {
         }
     }
 
+    // ------------------------------------------------------------ uploads from Fuse
+    // The upload request Fuse sends with cartridge://upload (docs/FUSE_BRIDGE.md): JSON naming a game's files by
+    // path, which Cartridge reads with its own file access. Kept until the page takes it; nothing is uploaded before
+    // the user confirms there.
+    private static final String EXTRA_UPLOAD = "io.github.matiyaaa.fuse.extra.UPLOAD";
+    private static final int MAX_UPLOAD_REQUEST = 256 * 1024;
+    private String fuseUpload = null;
+
+    @Override
+    protected void handleOnNewIntent(Intent intent) {
+        super.handleOnNewIntent(intent);
+        keepUpload(intent);
+    }
+
+    private synchronized void keepUpload(Intent intent) {
+        if (intent == null || !Intent.ACTION_VIEW.equals(intent.getAction())) return;
+        Uri data = intent.getData();
+        if (data == null || !"cartridge".equalsIgnoreCase(data.getScheme()) || !"upload".equalsIgnoreCase(data.getHost())) return;
+        try {
+            String json = intent.getStringExtra(EXTRA_UPLOAD);
+            intent.removeExtra(EXTRA_UPLOAD); // taken once
+            if (json != null && json.length() <= MAX_UPLOAD_REQUEST) fuseUpload = json;
+        } catch (RuntimeException e) {
+            // extras another app sent that don't unparcel
+        }
+    }
+
+    /** The upload request of the last cartridge://upload link, once; { json: null } when there is none. */
+    @PluginMethod
+    public void takeFuseUpload(PluginCall call) {
+        String json;
+        synchronized (this) {
+            if (fuseUpload == null && getActivity() != null) keepUpload(getActivity().getIntent());
+            json = fuseUpload;
+            fuseUpload = null;
+        }
+        JSObject r = new JSObject();
+        r.put("json", json);
+        call.resolve(r);
+    }
+
     // ------------------------------------------------------------ background downloads
     @PluginMethod
     public void setBusy(PluginCall call) {

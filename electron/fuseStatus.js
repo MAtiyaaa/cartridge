@@ -1,20 +1,21 @@
 // Status for other apps, like the Fuse launcher (docs/FUSE_BRIDGE.md): what is downloading (in total and game by
-// game), whether Cartridge is connected, when the library last changed, the games downloaded last, and every
-// downloaded game with its RomM metadata and pictures. The Linux desktop writes it all to
+// game), whether Cartridge is connected, when the library last changed, the games downloaded last, every
+// downloaded game with its RomM metadata and pictures, and the games Fuse handed over to upload to RomM. The Linux desktop writes it all to
 // $XDG_STATE_HOME/cartridge/status.json; on Android main.js sends the status and the games list to the WebView,
 // which hands them to CartridgeStatusProvider. Never anything about the server (address, account, tokens) or settings.
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
 
-const PROTOCOL = 2; // 2 added the queue and the games; everything in 1 is unchanged
+const PROTOCOL = 3; // 2 added the queue and the games, 3 the uploads; everything before is unchanged
 const RECENT = 20;
 const QUEUE = 100; // rows: downloading and waiting come first, so only old history is left out
+const UPLOADS = 50;
 const SUMMARY = 8000; // characters of RomM's text (the library keeps 400 for the UI)
 const NAMES = 12; // genres and series per game
 const EVERY = 500; // ms, at most one write per
 
-// state: { version, queue (download items), connected (true/false/null), syncedAt, manifest, changedAt }
+// state: { version, queue (download items), connected (true/false/null), syncedAt, manifest, changedAt, uploads }
 function snapshot(state, now = Date.now()) {
   const queue = Array.isArray(state.queue) ? state.queue : [];
   const down = queue.filter((d) => d.status === 'downloading');
@@ -42,7 +43,22 @@ function snapshot(state, now = Date.now()) {
     updatedAt: now,
     recent,
     queue: queueRows(queue),
+    uploads: uploadRows(state.uploads),
   };
+}
+
+// The games Fuse handed over to upload (electron/fuseUpload.js), newest first
+const UPLOAD_STATES = new Set(['waiting', 'uploading', 'scanning', 'done', 'failed', 'cancelled']);
+function uploadRows(list) {
+  return (Array.isArray(list) ? list : [])
+    .filter((u) => u && typeof u.id === 'string' && UPLOAD_STATES.has(u.state))
+    .slice(0, UPLOADS)
+    .map((u) => {
+      const total = Number(u.total) > 0 ? Math.round(u.total) : null;
+      const sent = Math.max(0, Math.round(Number(u.sent) || 0));
+      return { id: u.id, title: String(u.title || ''), platformSlug: String(u.platformSlug || ''), state: u.state, sent: total ? Math.min(sent, total) : sent, total,
+        files: Math.max(0, Number(u.files) || 0), romId: Number(u.romId) > 0 ? Number(u.romId) : null, error: u.error ? String(u.error) : null, updatedAt: Number(u.updatedAt) || 0 };
+    });
 }
 
 // Queue states under the names the Downloads page shows (a stopped download is 'cancelled' inside, "Paused" on screen)
@@ -151,7 +167,10 @@ function gameRows(state) {
 // What is left once Cartridge has closed: nothing downloading (the queue carries on at the next start)
 function closed(s, now = Date.now()) {
   return { ...s, connected: null, activeDownloads: 0, queuedDownloads: s.activeDownloads + s.queuedDownloads, progress: null, currentTitle: null, currentPlatform: null,
-    queue: (s.queue || []).map((q) => (q.state === 'downloading' ? { ...q, state: 'queued' } : q)), updatedAt: now };
+    queue: (s.queue || []).map((q) => (q.state === 'downloading' ? { ...q, state: 'queued' } : q)),
+    // an upload can't carry on after Cartridge closes
+    uploads: (s.uploads || []).map((u) => (['waiting', 'uploading', 'scanning'].includes(u.state) ? { ...u, state: 'failed', error: 'Cartridge was closed before the upload finished.' } : u)),
+    updatedAt: now };
 }
 
 function statusFile(env = process.env, home = os.homedir()) {
@@ -211,7 +230,7 @@ function flush() {
   return s;
 }
 
-const WATCH = new Set(['downloads', 'connection', 'library', 'installed', 'installed-changed', 'images']);
+const WATCH = new Set(['downloads', 'connection', 'library', 'installed', 'installed-changed', 'images', 'fuse-uploads']);
 const GAMES = new Set(['library', 'installed', 'installed-changed', 'images']); // 'images': main.js has new pictures
 // main.js calls this for every broadcast; the ones that matter here are written at most every 500 ms
 function changed(ch, data) {
@@ -247,4 +266,4 @@ function close() {
   if (s) write(opts.file, { ...closed(s), games: gamesList });
 }
 
-module.exports = { PROTOCOL, snapshot, closed, queueRows, metaOf, keepMeta, gameRows, statusFile, setup, changed, current: flush, currentGames, close };
+module.exports = { PROTOCOL, snapshot, closed, queueRows, uploadRows, metaOf, keepMeta, gameRows, statusFile, setup, changed, current: flush, currentGames, close };

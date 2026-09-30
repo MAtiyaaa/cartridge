@@ -7,6 +7,7 @@ const crypto = require('crypto');
 const { Readable } = require('stream');
 const { pipeline } = require('stream/promises');
 const PLATFORM_MAP = require('./platformMap');
+const fuseUpload = require('./fuseUpload');
 const fuseStatus = require('./fuseStatus');
 
 // Note: never add 'no-sandbox' here. Appending it at runtime (after Chromium has
@@ -723,7 +724,8 @@ const SCAN_SOURCES = {
   flashpoint: 'FLASHPOINT_API_ENABLED', hltb: 'HLTB_API_ENABLED', sgdb: 'STEAMGRIDDB_API_ENABLED',
   libretro: 'LIBRETRO_API_ENABLED', steam: 'STEAM_API_ENABLED',
 };
-async function scanServer() {
+// platforms: RomM platform ids to scan (all by default); quiet: no progress in the top bar (an upload's own scan)
+async function scanServer({ platforms = [], quiet = false } = {}) {
   const s = config.server;
   if (s.auth !== 'password' || !s.username) throw new Error('Server scans need username & password sign-in');
   const base = await resolveBase();
@@ -742,12 +744,12 @@ async function scanServer() {
     const finish = (fn, v) => { clearTimeout(t); sock.close(); fn(v); };
     const t = setTimeout(() => finish(reject, new Error('Scan timed out')), 4 * 3600e3);
     sock.on('connect', () => {
-      broadcast('sync', { state: 'scanning', label: 'Scanning server…' });
-      sock.emit('scan', { platforms: [], type: 'quick', apis });
+      if (!quiet) broadcast('sync', { state: 'scanning', label: 'Scanning server…' });
+      sock.emit('scan', { platforms, type: 'quick', apis });
     });
     sock.on('connect_error', (e) => finish(reject, new Error('Could not open scan connection: ' + e.message)));
-    sock.on('scan:scanning_platform', (p) => { lastPlatform = p?.display_name || p?.name || ''; broadcast('sync', { state: 'scanning', label: `Scanning ${lastPlatform}` }); });
-    sock.on('scan:scanning_rom', (r) => broadcast('sync', { state: 'scanning', label: `Scanning ${lastPlatform}: ${r?.name || r?.fs_name || ''}` }));
+    sock.on('scan:scanning_platform', (p) => { lastPlatform = p?.display_name || p?.name || ''; if (!quiet) broadcast('sync', { state: 'scanning', label: `Scanning ${lastPlatform}` }); });
+    sock.on('scan:scanning_rom', (r) => { if (!quiet) broadcast('sync', { state: 'scanning', label: `Scanning ${lastPlatform}: ${r?.name || r?.fs_name || ''}` }); });
     sock.on('scan:done', (stats) => finish(resolve, stats || {}));
     sock.on('scan:done_ko', (msg) => finish(reject, new Error(typeof msg === 'string' ? msg : 'Scan failed')));
   });
@@ -1220,6 +1222,7 @@ async function setArt({ id, kind, url }) {
 const queue = []; // items
 let nextId = 1;
 let psbId = null;
+let fuseUploads = null; // uploads Fuse handed over (set up with the upload code below)
 
 function publicItem(it) {
   const { abort, ...rest } = it;
@@ -1288,7 +1291,7 @@ function emitQueueThrottled() {
 }
 
 function updatePowerBlock() {
-  const active = queue.some((q) => q.status === 'downloading' || q.status === 'queued');
+  const active = queue.some((q) => q.status === 'downloading' || q.status === 'queued') || !!fuseUploads?.busy();
   if (active && psbId === null) psbId = powerSaveBlocker.start('prevent-app-suspension');
   if (!active && psbId !== null) { powerSaveBlocker.stop(psbId); psbId = null; }
 }
@@ -1799,7 +1802,7 @@ function bridgeImages(id, r) {
   };
 }
 fuseStatus.setup({
-  build: () => ({ version: app.getVersion(), queue, manifest, syncedAt: library?.syncedAt || 0,
+  build: () => ({ version: app.getVersion(), queue, manifest, syncedAt: library?.syncedAt || 0, uploads: fuseUploads?.list() || [],
     // the top bar's pill: LAN or Tunnel is connected, Offline is not; null before the first check
     connected: !config.configured ? false : activeBase == null ? null : !!activeBase }),
   games: bridgeOn ? () => ({ manifest, roms: romIndexMain(), meta: bridgeMeta, images: bridgeImages }) : null,
@@ -2171,6 +2174,19 @@ async function uploadFile({ path: f, platformId }) {
   })().then(() => put({ pct: 100, state: 'done' }), (e) => put({ state: st.abort.signal.aborted ? 'cancelled' : 'error', error: st.abort.signal.aborted ? null : e.message }));
   return { path: f, state: 'uploading' };
 }
+// Games Fuse hands over to upload (electron/fuseUpload.js, docs/FUSE_BRIDGE.md): checked and shown first, sent
+// only after the user confirms here, one at a time; kept in fuse-uploads.json for the Fuse status
+const FUSE_UPLOADS_FILE = path.join(USER_DATA, 'fuse-uploads.json');
+fuseUploads = fuseUpload.createUploads({
+  fetch: (...a) => fetch(...a), fsp,
+  base: () => resolveBase(), headers: () => authHeaders(), api: (p, o) => api(p, o),
+  heartbeat: () => api('/api/heartbeat'),
+  scan: (platforms) => scanServer({ platforms, quiet: true }),
+  denied: DENIED_WRITE,
+  onChange: (list) => { broadcast('fuse-uploads', list); updatePowerBlock(); },
+  save: (list) => saveJson(FUSE_UPLOADS_FILE, list),
+});
+fuseUploads.restore(loadJson(FUSE_UPLOADS_FILE, []));
 const handlers08 = {
   // local play time plus where each game was last played (this device or another one in RomM)
   'play:stats': async () => {
@@ -2196,6 +2212,14 @@ const handlers08 = {
   'upload:list': () => ({ files: uploadCandidates(), active: [...uploads.values()].map(({ path: p, pct, state, error }) => ({ path: p, pct, state, error })) }),
   'upload:start': (o) => uploadFile(o),
   'upload:cancel': ({ path: f }) => { uploads.get(f)?.abort.abort(); return true; },
+  // Fuse: read and check an upload request ({ request: file } from a desktop link, { json } from Android)
+  'fuse:upload:open': async (src) => fuseUploads.prepare(await fuseUpload.readRequest(src, fsp)),
+  'fuse:upload:start': ({ token, platformId }) => {
+    const p = library?.platforms?.find((x) => x.id === Number(platformId));
+    return fuseUploads.start({ token, platform: p && { id: p.id, name: p.display_name || p.name } });
+  },
+  'fuse:upload:cancel': ({ id }) => fuseUploads.cancel(String(id || '')),
+  'fuse:upload:list': () => fuseUploads.list(),
 };
 // ---------------------------------------------------------------- 0.9: library check and repair
 // Every downloaded game checked against RomM's own record, the way a finished download is: sizes,
