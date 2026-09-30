@@ -10,7 +10,7 @@ So people without a RomM server aren't put off. Offered in the onboarding's RomM
 - Other questions asked: the server's name; where RomM keeps its files (custom location, or the same ROMs folder as EmuDeck or RetroDECK when found, with the folder layout RomM expects).
 - Progress bar while the images download and the server starts. Starts with the device (a Podman user service), keeps running in Game Mode, survives reboots and RomM updates.
 - Optional afterwards: metadata keys (IGDB, ScreenScraper) for covers and details, with Skip.
-- Honest limits shown in the UI: the server is only reachable while this device is on.
+- **Said once, right after choosing to set up RomM on this device,** before anything starts: "Your RomM server is only reachable while this device is on and online."
 - RomM without containers isn't used: RomM only supports its manual setup for development, and it needs a database server, Valkey and system libraries that a read-only system can't install.
 
 ## 2. Texture packs and patches on the game page
