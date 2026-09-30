@@ -17,9 +17,25 @@ So people without a RomM server aren't put off. Offered in the onboarding's RomM
 Like ArmSX2's PS2 downloads, for every console that supports them.
 - **Game page:** an "Extras" row lists texture packs and patches found for that game (by serial or title ID, which Cartridge already reads for several consoles), with size, author and Install / Remove.
 - **Settings → Texture packs:** what's installed per emulator, sizes, where each emulator looks, and a way to fix a folder.
-- **Where to install, read from each emulator's own settings** (never assumed; a changed folder is followed): PCSX2 `[Folders] Textures`, DuckStation `[Folders] Textures`, Dolphin's Load folder, Eden, Citron, yuzu, Ryujinx mod folders (`load/<title ID>`), Azahar and Citra `load/textures/<title ID>`, PPSSPP `PSP/TEXTURES/<game ID>`, Cemu graphic packs, Xenia patches. RPCS3 has no texture replacement; its patches come from RPCS3's own patch list.
+- **Where to install, read from each emulator's own settings file** (checked in their source code; a folder the user changed is followed, and the emulator's own default is used only when the setting is empty). Found in the settings file of each install (native, Flatpak under `~/.var/app/...`, EmuDeck's, or a portable folder next to the program):
+  - PCSX2: `PCSX2.ini` `[Folders] Textures` (default `textures`, relative to PCSX2's data folder), then `<serial>/replacements`.
+  - DuckStation: `settings.ini` `[Folders] Textures` (default `textures`), then per game.
+  - Dolphin: `Dolphin.ini` `[General] LoadPath` (empty means the `Load` folder in Dolphin's user folder), then `Textures/<game ID>`.
+  - PPSSPP: the memory stick folder, moved with `memstick_dir.txt`, then `PSP/TEXTURES/<game ID>`.
+  - Azahar and Citra: `load/textures/<title ID>` in the user folder (a portable `user` folder next to the program wins).
+  - Cemu: `graphicPacks` in its user data folder.
+  - Eden, Citron, yuzu: `qt-config.ini` load directory, then `<title ID>` (key to confirm in their source when building). Ryujinx: its data folder's `mods/contents/<title ID>` (to confirm).
+  - If a settings file can't be read or points nowhere, Cartridge says so and lets the user pick the folder; it never guesses.
+- **Turning packs on is the user's job, and Cartridge says exactly how** after installing, for that emulator (Cartridge never changes emulator settings):
+  - PCSX2: Graphics → Texture Replacement → Load Textures (`[EmuCore/GS] LoadTextureReplacements`).
+  - DuckStation: Enhancements → Texture Replacement → Enable Texture Replacements.
+  - Dolphin: Graphics → Advanced → Load Custom Textures.
+  - Azahar and Citra: Graphics → Use Custom Textures.
+  - Cemu: tick the pack in Graphic Packs.
+  - PPSSPP: on by default (Replace textures).
+  - Cartridge reads the setting and shows "Custom textures are off in PCSX2" with those steps when it's off, and a check when it's on.
 - **Sources** (to be researched and confirmed before building): GameBanana's public API (texture packs and mods for Switch, 3DS, GameCube, Wii, PS2, PSP and more), the emulators' official patch lists (PCSX2 and RPCS3 patches, Xenia Canary's game-patches), and other hosts only where they have a stable, public way to list files.
-- **Rules to agree:** installing writes into an emulator's texture or mod folder, which bends "never modifies emulator files". Proposal: allowed only for those folders, only for packs Cartridge installed (recorded like D3 in the 0.9.3 plan), and removal only of what Cartridge put there. Emulator settings are never changed; where an emulator needs "load custom textures" turned on, Cartridge says how.
+- **Agreed rule:** installing writes only into the emulator's texture or mod folder (the one exception to "never modifies emulator files" here); only packs Cartridge installed are recorded (like the 0.9.3 installs) and only those can be removed. Emulator settings are never changed.
 - Big packs (several GB) use the download queue, space check and checksums like games.
 
 ## Later (1.0)
