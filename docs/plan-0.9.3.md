@@ -90,9 +90,9 @@ Only for games that need installing. ISOs and folders stay as they are.
 4. **Discuss: clutter across the app.** Look & Feel, the game page's More menu, and the app overall. Show options first. The direction to propose:
    - One main action per screen, big and obvious; everything else one level down, grouped, never a long flat list.
    - Show nothing that's empty or not available (no dead rows, no disabled buttons for things that don't apply).
-   - One shared "sheet" pattern for secondary things (game page More, filters, Extras in 0.9.4), so every screen works the same way.
+   - One shared "sheet" pattern for secondary things (game page More, filters, Add-ons in 0.9.4), so every screen works the same way.
    - Settings: fewer tabs (RomM merged, Emulators new), each split into a few clear groups; rarely used options under "Advanced".
-   - This also sets up 0.9.4's Extras (textures, patches, cheats, mods) so they add one entry on the game page, not several.
+   - This also sets up 0.9.4's Add-ons (textures, patches, cheats, mods) so they add one entry on the game page, not several.
 
 ## H. Smarter
 1. Better recommendations on Home and better similar games on the game page (**Discuss**: approach first).
@@ -114,32 +114,8 @@ Only for games that need installing. ISOs and folders stay as they are.
 4. **Graphics:** AMD first (Steam Deck, Bazzite). NVIDIA desktops are out of scope for now.
 5. **Languages:** English only for now; multi-language support is for 1.0 or later.
 
-## L. New onboarding (agreed)
-A smooth first run on the Ribbons background, A for next, B for back. It replaces the current first-run steps.
-1. **Welcome** animation: "Welcome to Cartridge" and one line on what it is.
-2. **What should we call you?** Used for a greeting on Home and as the default device name.
-3. **Language:** the step is there, English only for now (translations are for 1.0).
-4. **Controller check:** press A.
-5. **Instant Steam changes:** explain briefly, then Turn on (Cartridge sets Steam's remote debugging switch itself, the same as the Settings → Steam button; Steam restarts once). No Decky install needed.
-6. **EmuDeck or RetroDECK:** Cartridge only checks; it never downloads or installs them. If either is found, a green check ("Good news, you already have EmuDeck", or RetroDECK). If neither: "For the best experience, install EmuDeck" (RetroDECK mentioned as the other option), with a QR code and link to each one's official page, and Continue. The system scan (step 8) still finds whatever emulators are installed.
-7. **RomM:** "Do you have a RomM server?" Yes: sign in (local, remote or tunnel, with the connection test). No: a short, friendly "What is RomM", then a QR code to RomM's own setup guide, and "I'll do it later".
-8. **Let us scan your system.** One animated step after RomM (so console folders can be matched to RomM's consoles, and a fresh EmuDeck install is included). It replaces sending new users to Emulator setup, and shows results live as they come in:
-   - **Emulators found,** per console, with where each came from (EmuDeck, RetroDECK, AppImage, Flatpak, distro package, Steam). The standard emulator for each console is picked by default (C4); another copy or a fork can be picked right there.
-   - **Programs Cartridge isn't sure about** get the "Which one?" choice in place: Not an emulator, It's a fork (of which emulator), It's an emulator (C3). A fork chosen here is offered for that console and per game.
-   - **Games and console folders:** the ROMs folder (EmuDeck's or RetroDECK's when found) and each console folder matched to RomM's consoles, with a way to fix a wrong match.
-   - **Already in Steam:** how many shortcuts were found, and whether to bring your own ones under Cartridge (C7), or leave them.
-   - **BIOS** status per console, and anything else that needs attention (it goes to the Issues list, A5).
-   - Everything here can be changed later in Settings → Emulators. Skip is always there.
-9. **Optional extras,** each with Skip: SteamGridDB key, RetroAchievements sign-in.
-10. **Add Cartridge to Steam:** the last step before the main page, since the first run is usually in Desktop Mode. One button (the existing "add Cartridge itself" flow with its artwork); skipped when Cartridge is already in Steam or was started from Steam.
-11. **Done,** with a smooth transition into the main page.
-
-**Existing users** (already signed in when they update to 0.9.3):
-- Once, after updating: "New: a fresh welcome and system scan. Take a look?" with Take a look / Not now (like the 0.9.1 Emulator setup notice).
-- **Settings → About → Run the welcome again** at any time.
-- A replay starts from your current settings: steps already done show their green check (RomM signed in, EmuDeck found, instant Steam changes on), and nothing is reset, signed out or removed. Leaving halfway keeps everything as it was.
-
-Later (0.9.4): "Set up RomM on this device" (see docs/plan-0.9.4.md). Full translations stay for 1.0.
+## L. Onboarding
+Moved to 0.9.4 (docs/plan-0.9.4.md), with everything involved in it, so it's built once, together with RomM and EmuDeck/RetroDECK setup.
 
 ## Owner to test on a device
 Controller feel and LT/RT at launch, touch, rumble in Game Mode, PS4 first launch, Xenia on the Ally, trophies across the two devices, RPCS3 and Vita3K installs, 1080p handheld and 4K TV.
