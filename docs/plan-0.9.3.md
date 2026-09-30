@@ -84,5 +84,12 @@ Only for games that need installing. ISOs and folders stay as they are.
 13. Tests for Shortcut health, relinking, the per-game emulator and the library check move into `test/` where they don't need the app running.
 14. HANDOFF.md updated for 0.9.
 
+## K. For everyone, not one setup (agreed after the audit)
+1. **Xenia and BigPEmu found however they're installed**, not only through EmuDeck's launcher script (the Linux build, the Windows build through Wine or Proton, AppImage, Flatpak where one exists). Also find out why the same `xenia.sh` is found on the owner's Bazzite PC and not on the ROG Ally (Setup's "Copy report" from both).
+2. **Flatpak Steam gets the same features as native Steam.** Shortcuts launched from Flatpak Steam run inside its sandbox, so emulators outside it are started through `flatpak-spawn --host` (Steam's Flatpak needs permission to talk to Flatpak; Cartridge asks first and sets it with `flatpak override --user`, like the existing Allow access). Cartridge's own Steam entry, artwork, collections, play time and instant changes work the same. Tested against a fake Flatpak Steam home.
+3. **Report a problem** (Settings → About): shows the setup report (already scrubbed of private info) so the user can read it first, copies it, and opens GitHub's new issue page with it filled in. In Game Mode, where a browser is awkward, a QR code for the same page.
+4. **Graphics:** AMD first (Steam Deck, Bazzite). NVIDIA desktops are out of scope for now.
+5. **Languages:** English only for now; multi-language support is for 1.0 or later.
+
 ## Owner to test on a device
 Controller feel and LT/RT at launch, touch, rumble in Game Mode, PS4 first launch, Xenia on the Ally, trophies across the two devices, RPCS3 and Vita3K installs, 1080p handheld and 4K TV.
