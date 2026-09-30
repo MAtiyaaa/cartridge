@@ -43,6 +43,8 @@ import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
 
+import org.json.JSONArray;
+
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
@@ -553,6 +555,19 @@ public class CartridgeNativePlugin extends Plugin {
             call.resolve();
         } catch (Exception e) {
             call.reject("Could not save the status: " + e.getMessage());
+        }
+    }
+
+    /** The downloaded games other apps read through CartridgeStatusProvider's /games (built by electron/fuseStatus.js). */
+    @PluginMethod
+    public void publishGames(PluginCall call) {
+        JSONArray games = call.getData().optJSONArray("games");
+        if (games == null) { call.reject("No games list"); return; }
+        try {
+            CartridgeStatusProvider.publishGames(getContext(), games);
+            call.resolve();
+        } catch (Exception e) {
+            call.reject("Could not save the games: " + e.getMessage());
         }
     }
 

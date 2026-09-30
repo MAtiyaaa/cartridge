@@ -52,7 +52,20 @@ export function startFuse() {
     Native.publishStatus(s).catch(() => { last = ''; });
   };
   cart.on('fuse:status', publish);
-  const refresh = () => call('fuse:status').then(publish).catch(() => {});
+  // The downloaded games with their metadata (/games): big, so sent on their own and only when they change
+  let lastGames = '';
+  const publishGames = (games) => {
+    if (!Array.isArray(games)) return;
+    const key = JSON.stringify(games);
+    if (key === lastGames) return;
+    lastGames = key;
+    Native.publishGames({ games }).catch(() => { lastGames = ''; });
+  };
+  cart.on('fuse:games', publishGames);
+  const refresh = () => {
+    call('fuse:status').then(publish).catch(() => {});
+    call('fuse:games').then(publishGames).catch(() => {});
+  };
   App.addListener('resume', refresh);
   cart.on('android:reconnected', refresh);
   refresh();
