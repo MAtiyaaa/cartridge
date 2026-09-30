@@ -106,7 +106,7 @@ Only for games that need installing. ISOs and folders stay as they are.
 5. **Languages:** English only for now; multi-language support is for 1.0 or later.
 
 ## L. New onboarding (agreed)
-A smooth first run on the Ribbons background, A for next, B for back. It replaces the current first-run steps and leads into Emulator setup.
+A smooth first run on the Ribbons background, A for next, B for back. It replaces the current first-run steps.
 1. **Welcome** animation: "Welcome to Cartridge" and one line on what it is.
 2. **What should we call you?** Used for a greeting on Home and as the default device name.
 3. **Language:** the step is there, English only for now (translations are for 1.0).
@@ -114,8 +114,15 @@ A smooth first run on the Ribbons background, A for next, B for back. It replace
 5. **Instant Steam changes:** explain briefly, then Turn on (Cartridge sets Steam's remote debugging switch itself, the same as the Settings → Steam button; Steam restarts once). No Decky install needed.
 6. **EmuDeck or RetroDECK:** if found, a green check ("Good news, you already have EmuDeck"). If neither, a short explanation and **Get EmuDeck**, which downloads and opens EmuDeck's official installer; the user picks emulators there, and Cartridge scans again when they come back. The owner allows this one exception to "never downloads emulators": Cartridge may download and open official installers when the user asks.
 7. **RomM:** "Do you have a RomM server?" Yes: sign in (local, remote or tunnel, with the connection test). No: a short, friendly "What is RomM", then a QR code to RomM's own setup guide, and "I'll do it later".
-8. **Optional extras,** each with Skip: SteamGridDB key, RetroAchievements sign-in.
-9. **Emulator setup,** then done.
+8. **Let us scan your system.** One animated step after RomM (so console folders can be matched to RomM's consoles, and a fresh EmuDeck install is included). It replaces sending new users to Emulator setup, and shows results live as they come in:
+   - **Emulators found,** per console, with where each came from (EmuDeck, RetroDECK, AppImage, Flatpak, distro package, Steam). The standard emulator for each console is picked by default (C4); another copy or a fork can be picked right there.
+   - **Programs Cartridge isn't sure about** get the "Which one?" choice in place: Not an emulator, It's a fork (of which emulator), It's an emulator (C3). A fork chosen here is offered for that console and per game.
+   - **Games and console folders:** the ROMs folder (EmuDeck's or RetroDECK's when found) and each console folder matched to RomM's consoles, with a way to fix a wrong match.
+   - **Already in Steam:** how many shortcuts were found, and whether to bring your own ones under Cartridge (C7), or leave them.
+   - **BIOS** status per console, and anything else that needs attention (it goes to the Issues list, A5).
+   - Everything here can be changed later in Settings → Emulators. Skip is always there.
+9. **Optional extras,** each with Skip: SteamGridDB key, RetroAchievements sign-in.
+10. **Done.**
 
 Later (1.0): "Set up RomM on this device" (Podman on Bazzite; not stock SteamOS) and full translations.
 
