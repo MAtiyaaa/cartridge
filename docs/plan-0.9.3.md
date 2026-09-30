@@ -37,6 +37,7 @@ Already done on the branch: the Settings list has no grey box for the current se
 10. **More emulators, and their real names.** The database already has several per console (Switch: Eden, Citron, yuzu, Sudachi, suyu, Ryujinx and Ryubing; 3DS: Azahar, Citra, Lime3DS; N64: RMG, simple64, ares...) plus RetroArch cores for 68 consoles. Two gaps:
     - Family members are shown under the family's name (a Citra install is labelled "Azahar", Sudachi "Yuzu"). Show the name of what's actually installed.
     - Add the popular standalones still missing, with launch options from their own docs, EmuDeck and SRM: DeSmuME (DS), Redream (Dreamcast), Mednafen (Saturn, PS1 and more), mupen64plus (N64), Snes9x and Mesen (SNES, NES), Play! (PS2), Kronos (Saturn), torzu (Switch), Dolphin forks (PrimeHack, Slippi) and Xenia Edge next to Canary. Forks without a known entry use C3.
+    - **Launch options must be right the first time.** For every new or changed emulator: read the argument parser in the emulator's own source code (the real answer, per version), then cross-check with SRM's presets and EmuDeck. Where they disagree, the source wins, and version differences go into `below`/`argsBy`. Where possible, run the real program with its help flag in a fake home. Each emulator gets a test of the exact launch line in `test/`. An emulator whose launch options can't be confirmed this way isn't added; its RetroArch core stays the way to play.
 
 ## D. Installing games that need it
 Only for games that need installing. ISOs and folders stay as they are.
