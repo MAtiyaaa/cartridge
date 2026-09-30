@@ -116,7 +116,11 @@ A smooth first run on the Ribbons background, A for next, B for back. It replace
 3. **Language:** the step is there, English only for now (translations are for 1.0).
 4. **Controller check:** press A.
 5. **Instant Steam changes:** explain briefly, then Turn on (Cartridge sets Steam's remote debugging switch itself, the same as the Settings → Steam button; Steam restarts once). No Decky install needed.
-6. **EmuDeck or RetroDECK:** if found, a green check ("Good news, you already have EmuDeck"). If neither, a short explanation and **Get EmuDeck**, which downloads and opens EmuDeck's official installer; the user picks emulators there, and Cartridge scans again when they come back. The owner allows this one exception to "never downloads emulators": Cartridge may download and open official installers when the user asks.
+6. **EmuDeck or RetroDECK:** if either is found, a green check ("Good news, you already have EmuDeck", or RetroDECK). If neither, "Get your emulators" with a choice:
+   - **EmuDeck (Recommended):** separate emulators, set up for handhelds, and what Cartridge's launch options are built on. Downloads and opens EmuDeck's official installer; the user picks emulators there.
+   - **RetroDECK:** everything in one app, installed from Flathub (`net.retrodeck.retrodeck`) with a progress bar, then opened for its own first-run setup.
+   - **I'll set up emulators myself:** skip; the system scan (step 8) finds whatever is installed.
+   - Either way, Cartridge waits and scans again when the user comes back. The owner allows this one exception to "never downloads emulators": Cartridge may download and open official installers (EmuDeck's, RetroDECK from Flathub) when the user asks.
 7. **RomM:** "Do you have a RomM server?" Yes: sign in (local, remote or tunnel, with the connection test). No: a short, friendly "What is RomM", then a QR code to RomM's own setup guide, and "I'll do it later".
 8. **Let us scan your system.** One animated step after RomM (so console folders can be matched to RomM's consoles, and a fresh EmuDeck install is included). It replaces sending new users to Emulator setup, and shows results live as they come in:
    - **Emulators found,** per console, with where each came from (EmuDeck, RetroDECK, AppImage, Flatpak, distro package, Steam). The standard emulator for each console is picked by default (C4); another copy or a fork can be picked right there.
