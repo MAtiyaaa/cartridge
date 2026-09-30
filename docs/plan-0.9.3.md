@@ -56,8 +56,8 @@ Only for games that need installing. ISOs and folders stay as they are.
 5. RetroAchievements tab gets the same console filter and sort as Trophies & Gamerscore (latest, most complete, A to Z...).
 
 ## F. Look
-1. **Console backgrounds** redone, except Ribbons and XMB (**Discuss**: show options).
-2. **Headers on Home (media bar) and the game page:** a little bigger, blend into the background, sharp art only.
+1. **Console backgrounds** rebuilt from scratch, except Ribbons and XMB. The owner finds the current ones very poor and cheap looking; the new ones must look premium, not a patch on the old ones (**Discuss**: show options first).
+2. **Headers on Home (media bar) and the game page:** bigger than now, and they must blend into the background with no visible edge. Sharp, highest resolution art only, never blurry.
 3. **SteamGridDB images:** always the highest resolution, then the next one down. Add to Steam, Home header and the idle screen.
 4. **Idle screen:** game logo and console logo instead of text; 4K art or the next best.
 5. **Consoles:** company logos (Sega, Nintendo, Sony...) at text height instead of the name. A console's page drops the folder path under its title.
