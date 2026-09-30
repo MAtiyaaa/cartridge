@@ -13,10 +13,16 @@ So people without a RomM server aren't put off. Offered in the onboarding's RomM
 - **Said once, right after choosing to set up RomM on this device,** before anything starts: "Your RomM server is only reachable while this device is on and online."
 - RomM without containers isn't used: RomM only supports its manual setup for development, and it needs a database server, Valkey and system libraries that a read-only system can't install.
 
-## 2. Texture packs and patches on the game page
-Like ArmSX2's PS2 downloads, for every console that supports them.
-- **Game page:** an "Extras" row lists texture packs and patches found for that game (by serial or title ID, which Cartridge already reads for several consoles), with size, author and Install / Remove.
-- **Settings → Texture packs:** what's installed per emulator, sizes, where each emulator looks, and a way to fix a folder.
+## 2. Extras: texture packs, patches, cheats and mods
+Like ArmSX2's PS2 downloads, for every console that supports them. How ArmSX2 does it: a curated catalogue in its own repository (about 490 PS2 packs, converted to ASTC for phones), each pack tagged with the games it belongs to so it installs itself in the right place, checksum-checked, with packs for your own games listed first; patches and cheats are picked per game and installed together. Cartridge follows the same model, but its catalogue points at the original sources (ArmSX2's ASTC packs are made for phones, not PCs).
+- **Catalogue sources, one per kind** (each confirmed before building; only sources with a stable public listing):
+  - Patches: PCSX2's official patches repository (pnach per serial), RPCS3's own patch list, Xenia Canary's game-patches, Cemu's graphic packs repository, Dolphin's built-in game patches.
+  - Cheats: libretro's cheat database (many consoles), PPSSPP's cheat database, a public Switch cheats database, Dolphin Gecko codes.
+  - Texture packs and mods: GameBanana's public API (Switch, 3DS, GameCube, Wii, PS2, PSP and more), plus the PS2 texture pack list ArmSX2's catalogue is built from, pointed at the original PC packs.
+  - Cartridge keeps a small index of these in its own cache, matched to games by serial or title ID; nothing is hosted by Cartridge.
+- **Per emulator:** patches and cheats go where that emulator reads them (for example PCSX2's `cheats`/`patches` folders, PPSSPP's `PSP/Cheats`, Switch emulators' `load/<title ID>`, Dolphin's game settings), found the same way as texture folders below. Where an emulator only takes patches through its own window (RPCS3's patch manager), Cartridge shows what's available and how to turn it on there, rather than editing RPCS3's files.
+- **No clutter:** one "Extras" entry on the game page, shown only when something exists for that game (with a small count, and a mark when something is installed). It opens one sheet with Textures, Patches, Cheats and Mods tabs, only the tabs that have something. Each item: name, author, size, what it does, Install / Remove; patches and cheats are ticked and installed together.
+- **Settings:** no new tab. "Extras" is a group in the Emulators tab: what's installed per emulator, sizes, where each emulator looks, and a way to fix a folder.
 - **Where to install, read from each emulator's own settings file** (checked in their source code; a folder the user changed is followed, and the emulator's own default is used only when the setting is empty). Found in the settings file of each install (native, Flatpak under `~/.var/app/...`, EmuDeck's, or a portable folder next to the program):
   - PCSX2: `PCSX2.ini` `[Folders] Textures` (default `textures`, relative to PCSX2's data folder), then `<serial>/replacements`.
   - DuckStation: `settings.ini` `[Folders] Textures` (default `textures`), then per game.

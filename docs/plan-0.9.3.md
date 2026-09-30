@@ -87,7 +87,12 @@ Only for games that need installing. ISOs and folders stay as they are.
 1. Connection, Library & Sync and RomM merge into one **RomM** tab.
 2. Title case for all headers and dividers in Settings and the Quick Menu.
 3. Quick Menu: "Resync library" and "Scan server" become one "Refresh Library" (scans when the sign-in allows it, otherwise resyncs).
-4. **Discuss:** Look & Feel is cluttered; the game page's More menu is cluttered; clutter across the app. Options first.
+4. **Discuss: clutter across the app.** Look & Feel, the game page's More menu, and the app overall. Show options first. The direction to propose:
+   - One main action per screen, big and obvious; everything else one level down, grouped, never a long flat list.
+   - Show nothing that's empty or not available (no dead rows, no disabled buttons for things that don't apply).
+   - One shared "sheet" pattern for secondary things (game page More, filters, Extras in 0.9.4), so every screen works the same way.
+   - Settings: fewer tabs (RomM merged, Emulators new), each split into a few clear groups; rarely used options under "Advanced".
+   - This also sets up 0.9.4's Extras (textures, patches, cheats, mods) so they add one entry on the game page, not several.
 
 ## H. Smarter
 1. Better recommendations on Home and better similar games on the game page (**Discuss**: approach first).
