@@ -91,5 +91,19 @@ Only for games that need installing. ISOs and folders stay as they are.
 4. **Graphics:** AMD first (Steam Deck, Bazzite). NVIDIA desktops are out of scope for now.
 5. **Languages:** English only for now; multi-language support is for 1.0 or later.
 
+## L. New onboarding (agreed)
+A smooth first run on the Ribbons background, A for next, B for back. It replaces the current first-run steps and leads into Emulator setup.
+1. **Welcome** animation: "Welcome to Cartridge" and one line on what it is.
+2. **What should we call you?** Used for a greeting on Home and as the default device name.
+3. **Language:** the step is there, English only for now (translations are for 1.0).
+4. **Controller check:** press A.
+5. **Instant Steam changes:** explain briefly, then Turn on (Cartridge sets Steam's remote debugging switch itself, the same as the Settings → Steam button; Steam restarts once). No Decky install needed.
+6. **EmuDeck or RetroDECK:** if found, a green check ("Good news, you already have EmuDeck"). If neither, a short explanation and **Get EmuDeck**, which downloads and opens EmuDeck's official installer; the user picks emulators there, and Cartridge scans again when they come back. The owner allows this one exception to "never downloads emulators": Cartridge may download and open official installers when the user asks.
+7. **RomM:** "Do you have a RomM server?" Yes: sign in (local, remote or tunnel, with the connection test). No: a short, friendly "What is RomM", then a QR code to RomM's own setup guide, and "I'll do it later".
+8. **Optional extras,** each with Skip: SteamGridDB key, RetroAchievements sign-in.
+9. **Emulator setup,** then done.
+
+Later (1.0): "Set up RomM on this device" (Podman on Bazzite; not stock SteamOS) and full translations.
+
 ## Owner to test on a device
 Controller feel and LT/RT at launch, touch, rumble in Game Mode, PS4 first launch, Xenia on the Ally, trophies across the two devices, RPCS3 and Vita3K installs, 1080p handheld and 4K TV.
