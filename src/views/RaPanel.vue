@@ -57,9 +57,15 @@
           </button>
         </div>
 
-        <div class="shelf-title" style="margin-top: 18px"><Icon name="mdiHistory" :size="20" />Recently played<span class="count">{{ data.played.length }}</span></div>
+        <div class="ra-gh">
+          <div class="shelf-title" style="margin: 0"><Icon name="mdiHistory" :size="20" />Recently played<span class="count">{{ played.length }}</span></div>
+          <div class="spacer" />
+          <!-- which console and the order, as on Trophies & Gamerscore (0.9.3 E5) -->
+          <button class="btn small" :class="{ primary: show !== 'all' }" data-focus @click="pickShow"><Icon name="mdiEyeOutline" :size="18" />{{ show === 'all' ? 'All consoles' : show }}</button>
+          <button class="btn small" data-focus @click="pickSort"><Icon name="mdiSortVariant" :size="18" />{{ SORTS.find((x) => x.v === sort).l }}</button>
+        </div>
         <div class="ra-games">
-          <button v-for="g in data.played" :key="g.gameId" class="ra-game glass" data-focus :data-key="'ra-' + g.gameId" @click="openGame(g.gameId)" @focus="focusGame(g)">
+          <button v-for="g in played" :key="g.gameId" class="ra-game glass" data-focus :data-key="'ra-' + g.gameId" @click="openGame(g.gameId)" @focus="focusGame(g)">
             <img class="ra-gicon" :src="img(g.icon)" loading="lazy" />
             <div class="ra-g-body">
               <div class="ra-g-title">{{ g.title }}</div>
@@ -77,7 +83,7 @@
 
 <script setup>
 import { computed, onMounted, ref } from 'vue';
-import { store, call, img, go, toast, saveConfig, setBg } from '../store.js';
+import { store, call, img, go, toast, saveConfig, setBg, choose } from '../store.js';
 import { useView } from '../useView.js';
 import { focusFirst } from '../nav.js';
 import Icon from '../components/Icon.vue';
@@ -92,6 +98,24 @@ const error = ref('');
 const data = ref(null);
 
 const fmt = (n) => (n || 0).toLocaleString();
+const show = ref('all'), sort = ref('latest');
+const SORTS = [{ v: 'latest', l: 'Latest', icon: 'mdiClockOutline' }, { v: 'most', l: 'Most complete', icon: 'mdiProgressCheck' }, { v: 'least', l: 'Least complete', icon: 'mdiProgressClock' }, { v: 'name', l: 'A to Z', icon: 'mdiSortAlphabeticalAscending' }];
+const played = computed(() => {
+  const l = (data.value?.played || []).filter((g) => show.value === 'all' || g.console === show.value);
+  if (sort.value === 'most') return [...l].sort((a, b) => pctOf(b) - pctOf(a));
+  if (sort.value === 'least') return [...l].sort((a, b) => pctOf(a) - pctOf(b));
+  if (sort.value === 'name') return [...l].sort((a, b) => a.title.localeCompare(b.title));
+  return l; // RetroAchievements sends them latest first
+});
+async function pickShow() {
+  const cons = [...new Set((data.value?.played || []).map((g) => g.console).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  const v = await choose({ title: 'Show', options: [{ label: 'All consoles', value: 'all', icon: 'mdiViewGridOutline', selected: show.value === 'all' }, ...cons.map((c) => ({ label: c, value: c, icon: 'mdiGamepadVariantOutline', selected: show.value === c }))] });
+  if (v) show.value = v;
+}
+async function pickSort() {
+  const v = await choose({ title: 'Sort by', options: SORTS.map((x) => ({ label: x.l, value: x.v, icon: x.icon, selected: sort.value === x.v })) });
+  if (v) sort.value = v;
+}
 const pctOf = (g) => (g.total ? Math.round((g.earned / g.total) * 100) : 0);
 function ago(d) {
   if (!d) return '';
@@ -161,6 +185,8 @@ onMounted(async () => { await load(); focusFirst(el.value); });
 .ra-u-meta .pts { color: var(--gold); font-weight: 600; }
 .chip.hc { font-size: var(--t-xs); padding: 2px 6px; background: rgba(255, 90, 90, 0.18); color: #ff9b9b; }
 .ra-u-game { font-size: var(--t-xs); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ra-gh { display: flex; align-items: center; gap: var(--s-2); margin: 18px 0 var(--s-3); }
+.ra-gh .spacer { flex: 1; }
 .ra-games { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 14px; padding-bottom: 30px; }
 .ra-game { display: flex; gap: 14px; align-items: center; padding: 12px 14px; border-radius: var(--r-md); text-align: left; transition: transform 0.14s ease-out; position: relative; }
 .ra-game:focus { transform: scale(1.02); }

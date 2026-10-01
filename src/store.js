@@ -134,6 +134,12 @@ export async function resync() {
   try { return await call('library:sync'); }
   catch (e) { toast(e.message, 'error'); return null; }
 }
+// one Refresh Library: RomM scans for new files when allowed, then a resync
+export async function refreshLibrary() {
+  store.manualSync = true;
+  try { return await call('library:refresh'); }
+  catch (e) { toast(e.message, 'error', 6000); return null; }
+}
 export async function scanServer() {
   toast('Asking RomM to scan for new files…', 'info', 3000, 'mdiRadar');
   try {

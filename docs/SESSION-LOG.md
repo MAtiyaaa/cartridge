@@ -6,6 +6,19 @@ The branch for 0.9.3 work is `claude/relaxed-fermat-30pigp`. Pull it before star
 
 ---
 
+## 2 Oct 2026 (night run) · 0.9.3 F released, 0.9.3 G (plan G2, G3, E3, E4, E5)
+
+- **F** merged (PR #24) after a green test build; E's release passed.
+- **PCSX2 patches: not built yet.** PCSX2's CRC is a 32-bit XOR of the game's ELF (`Elfheader.cpp` GetCRC), but most PS2 games are CHD, and PCSX2's own patch database lives in `patches.zip` inside its install (AppImage). Needs: reading the ELF from CHD/ISO (or PCSX2's game list cache), and reading `patches.zip`; switching on is per game in `gamesettings/<SERIAL>_<CRC>.ini` `[Patches] Enable = <name>`. Researched, not started.
+- **G3** Quick Menu: one Refresh Library (`library:refresh` in main.js: scan when allowed, then sync; `refreshLibrary` in store.js).
+- **G2** title case: Quick Menu items, Settings headings Top Bar, Undo & Clean Up, Storage Manager, Check Downloaded Games.
+- **E3** Achievements tab switch: plain "Trophies & Gamerscore", marks both 20 px; the duplicated CSS in Achievements.vue (a known cleanup) removed.
+- **E4** "Hide"/"Unhide" on a trophy game; Settings → Achievements → Hidden Games (`loadHidden`, names from `trophies:overview`).
+- **E5** RetroAchievements tab: console filter and sort for Recently played (`played` computed in RaPanel.vue).
+- Checked: `npm test` 39 pass, `vite build`, screenshots of the Achievements tab and Settings → Achievements at 1280x800 and 1920x1080.
+
+---
+
 ## 2 Oct 2026 (night run) · 0.9.3 E released, 0.9.3 F (PS4 patches)
 
 - **E** merged (PR #23) after a green test build; D's release passed.

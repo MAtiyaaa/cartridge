@@ -2331,6 +2331,14 @@ const handlers = {
   'library:reset': () => { library = null; installedMap = {}; try { fs.rmSync(LIBRARY_FILE); } catch {} broadcast('library', null); return true; },
   'library:sync': () => syncLibrary(),
   'library:scan': async () => { const stats = await scanServer(); const res = await syncLibrary(); return { stats, ...res }; },
+  // Quick Menu's one Refresh Library (0.9.3 G3): RomM scans its folders when the sign-in may ask it
+  // to, then Cartridge resyncs; without that right it only resyncs
+  'library:refresh': async () => {
+    let scanned = false;
+    try { await scanServer(); scanned = true; } catch (e) { log('refresh: scan skipped', e.message); }
+    const res = await syncLibrary();
+    return { scanned, ...res };
+  },
   'installed:get': () => installedMap,
   'installed:rescan': () => computeInstalled(),
   'server:test': async (srv) => {
