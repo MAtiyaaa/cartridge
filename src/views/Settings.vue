@@ -177,7 +177,7 @@
             </template>
             <Toggle :model-value="ui.hideEmpty" label="Hide empty systems" @update:model-value="(v) => saveConfig({ ui: { hideEmpty: v } })" />
 
-            <div class="subh"><Icon name="mdiDockTop" :size="20" />Top bar</div>
+            <div class="subh"><Icon name="mdiDockTop" :size="20" />Top Bar</div>
             <p class="muted small" style="margin-top: -6px">Pick which tabs show at the top and their order. LT and RT move through them in this order. Settings always stays.</p>
             <div class="tabs-edit">
               <div v-for="(t, i) in tabRows" :key="t.name" class="tab-row" :class="{ off: !t.on }">
@@ -285,6 +285,17 @@
             <Toggle v-if="tcfg.sync !== false" :model-value="tcfg.syncIcons !== false" label="Sync trophy pictures" desc="Stores small copies of trophy pictures in RomM too (about 150 to 300 KB per game), so every device shows them, not just the one that played" @update:model-value="(v) => setT({ syncIcons: v })" />
             <Toggle :model-value="tcfg.popups !== false" label="Trophy pop-ups" desc="Shows a pop-up when a trophy unlocks while Cartridge is open" @update:model-value="(v) => setT({ popups: v })" />
             <Toggle :model-value="ui.trophyOnGames !== false" label="Trophies on game pages" desc="PS3, PS4, Xbox 360 and PS Vita games show their trophies" @update:model-value="(v) => saveConfig({ ui: { trophyOnGames: v } })" />
+            <template v-if="hiddenGames.length">
+              <div class="subh" style="margin-top: 14px"><Icon name="mdiEyeOffOutline" :size="20" />Hidden Games</div>
+              <p class="muted small" style="margin-top: -8px">Left out of your totals and latest unlocks. Unhide one to count it again.</p>
+              <div class="stack">
+                <button v-for="h in hiddenGames" :key="h.key" class="lrow" data-focus @click="unhideGame(h)">
+                  <Icon name="mdiTrophyOutline" :size="22" />
+                  <div class="l-mid"><b>{{ h.title }}</b><span class="l-sub">{{ h.sub }}</span></div>
+                  <span class="l-end"><Btn b="A" />Unhide</span>
+                </button>
+              </div>
+            </template>
           </template>
 
           <template v-else-if="sec === 'steam'">
@@ -528,7 +539,22 @@ const keyboards = [{ v: 'auto', l: 'Auto' }, { v: 'builtin', l: 'Built-in' }, { 
 const trophySrc = ref([]);
 const tcfg = computed(() => store.config.trophies || {});
 const deviceName = ref(store.config.trophies?.device || '');
-const loadSrc = () => call('trophies:sources').then((r) => (trophySrc.value = r)).catch(() => {});
+const loadSrc = () => { call('trophies:sources').then((r) => (trophySrc.value = r)).catch(() => {}); loadHidden(); };
+// trophy games hidden from the totals (0.9.3 E4): named from the trophies overview
+const hiddenGames = ref([]);
+async function loadHidden() {
+  const keys = store.config.trophies?.hidden || [];
+  if (!keys.length) { hiddenGames.value = []; return; }
+  const ov = await call('trophies:overview').catch(() => null);
+  const byKey = new Map((ov?.games || []).map((g) => [g.key, g]));
+  hiddenGames.value = keys.map((k) => { const g = byKey.get(k); return { key: k, title: g?.title || k, sub: g ? `${g.total ? `${g.earned || 0} of ${g.total} trophies` : ''}` : 'Not on this device right now' }; });
+}
+async function unhideGame(h) {
+  const list = await call('trophies:hide', { key: h.key, hidden: false });
+  store.config.trophies = { ...(store.config.trophies || {}), hidden: list };
+  toast(`${h.title} counts in your totals again`, 'ok', 2600, 'mdiEyeOutline');
+  loadHidden();
+}
 watch(() => store.trophyVer, loadSrc);
 loadSrc();
 async function saveDevice() {
