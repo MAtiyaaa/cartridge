@@ -6,6 +6,17 @@ The branch for 0.9.3 work is `claude/relaxed-fermat-30pigp`. Pull it before star
 
 ---
 
+## 2 Oct 2026 (night run) · 0.9.3 G released, 0.9.3 H (plan G1, K3, F7, E7)
+
+- **G** merged (PR #25) from `claude/relaxed-fermat-30pigp-release-g`, a branch holding exactly the commit G's test build passed on (newer local commits were not in that build). That branch can be deleted.
+- **G1** Settings: Connection, Library & Sync and RomM are one `romm` section (`OLD_SEC` maps old `conn`/`sync`/`folders` values).
+- **K3** `src/components/ReportProblem.vue` in About: `setup:report` (already scrubbed), Copy, GitHub new-issue link with the report (cut at 6000 chars), QR code (first 1200 chars).
+- **F7** GameCard: `extra` (device name, play time) on its own wrapping line (`.card .sub.extra`).
+- **E7** TrophyPanel: `shadNoKey` from the sources' `note === 'nokey'`, a short guide.
+- Checked: `npm test` 39 pass, `vite build`, screenshots (RomM tab, Report a problem with QR, Recently played) at 1280x800 and 1920x1080.
+
+---
+
 ## 2 Oct 2026 (night run) · 0.9.3 F released, 0.9.3 G (plan G2, G3, E3, E4, E5)
 
 - **F** merged (PR #24) after a green test build; E's release passed.
