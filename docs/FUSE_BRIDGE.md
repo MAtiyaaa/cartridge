@@ -2,7 +2,7 @@
 
 From 0.9.10, other apps can hand over to Cartridge and see what it is doing. It was made for [Fuse](https://github.com/MAtiyaaa/fuse), an open-source game launcher, but any app can use it. This page is the contract, protocol version 3.
 
-Cartridge 0.9.10 speaks protocol 1. Protocol 2 adds the download queue game by game and every downloaded game with its RomM metadata and pictures. Protocol 3 adds uploads: an app hands over a game's files and Cartridge, once the user confirms, uploads them to RomM and reports how it goes. Everything earlier protocols have is unchanged (see Backwards compatibility).
+Cartridge 0.9.10 speaks protocol 1 and Cartridge 0.9.11 protocol 3. Protocol 2 adds the download queue game by game and every downloaded game with its RomM metadata and pictures. Protocol 3 adds uploads: an app hands over a game's files and Cartridge, once the user confirms, uploads them to RomM and reports how it goes. Everything earlier protocols have is unchanged (see Backwards compatibility).
 
 Two parts:
 
@@ -107,7 +107,7 @@ Both platforms publish the same snapshot. It is rebuilt when downloads, the conn
 
 | Field (file) | Column (Android) | Type | Meaning |
 |---|---|---|---|
-| `protocol` | `protocol` | int | `2` (`1` in Cartridge 0.9.10). New fields may be added; a new number means new tables or fields, and says so under Backwards compatibility. |
+| `protocol` | `protocol` | int | `3` (`1` in Cartridge 0.9.10). New fields may be added; a new number means new tables or fields, and says so under Backwards compatibility. |
 | `version` | `version` | text | Cartridge's version (Android: the APK's versionName) |
 | `connected` | `connected` | bool / int 0-1 / null | Connected as the top bar shows it: `true` for LAN or Tunnel, `false` for Offline or no server set up, `null` when not known (not checked yet, or Cartridge isn't running) |
 | `activeDownloads` | `active_downloads` | int | Games downloading now |
