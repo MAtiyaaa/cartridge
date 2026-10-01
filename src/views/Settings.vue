@@ -10,8 +10,10 @@
       <!-- the old page goes at once, so a quick press to the right always lands on the new one (A13) -->
       <Transition name="fadeup">
         <div :key="sec" class="pane-in">
-          <template v-if="sec === 'conn'">
-            <h1>Connection</h1>
+          <!-- one RomM tab (0.9.3 G1): connection, library and sync, upload -->
+          <template v-if="sec === 'romm'">
+            <h1>RomM</h1>
+            <div class="subh"><Icon name="mdiServerNetwork" :size="20" />Connection</div>
             <div class="card-s glass">
               <div class="kv"><span>Local</span><span class="mono">{{ srv.localUrl || '—' }}</span></div>
               <div class="kv"><span>Remote</span><span class="mono">{{ srv.remoteUrl || '—' }}</span></div>
@@ -24,10 +26,8 @@
               <button class="btn" data-focus @click="reconnect"><Icon name="mdiLanConnect" />Reconnect</button>
               <button class="btn danger" data-focus @click="signOut"><Icon name="mdiLogout" />Sign out</button>
             </div>
-          </template>
 
-          <template v-else-if="sec === 'sync'">
-            <h1>Library &amp; Sync</h1>
+            <div class="subh" style="margin-top: 14px"><Icon name="mdiSync" :size="20" />Library &amp; Sync</div>
             <div class="card-s glass">
               <div class="kv"><span>Last sync</span><span>{{ ago(store.lib?.syncedAt) }}</span></div>
               <div class="kv"><span>Library</span><span>{{ total }} games · {{ store.lib?.platforms.filter((p) => p.rom_count).length || 0 }} systems</span></div>
@@ -41,11 +41,7 @@
             <Toggle :model-value="store.config.sync.onLaunch" label="Resync when Cartridge starts" desc="Picks up games you added to RomM since last time" @update:model-value="(v) => saveConfig({ sync: { onLaunch: v } })" />
             <div class="row"><span class="lbl">Auto resync</span><div class="seg"><button v-for="m in every" :key="m.v" data-focus :class="{ on: store.config.sync.everyMinutes === m.v }" @click="saveConfig({ sync: { everyMinutes: m.v } })">{{ m.l }}</button></div></div>
             <p class="muted small">“Scan server” asks RomM to look through its own folders for files you copied in, then resyncs. It needs username &amp; password sign-in.</p>
-          </template>
-
-          <template v-else-if="sec === 'romm'">
-            <h1>RomM</h1>
-            <RommUpload />
+            <div style="margin-top: 14px"><RommUpload /></div>
           </template>
           <template v-else-if="sec === 'storage'">
             <h1>Storage</h1>
@@ -332,6 +328,7 @@
             </div>
             <ServerStatus />
             <ControllerTest />
+            <ReportProblem />
             <div class="card-s glass">
               <div class="kv"><span>Game Mode</span><span>{{ store.info.gamescope ? 'Yes (gamescope)' : 'No (desktop)' }}</span></div>
               <div class="kv"><span>Controller</span><span>{{ padInfo?.name || input.padName || 'Press any button' }}</span></div>
@@ -366,15 +363,15 @@ import LibraryCheck from '../components/LibraryCheck.vue';
 import RommUpload from '../components/RommUpload.vue';
 import ServerStatus from '../components/ServerStatus.vue';
 import ControllerTest from '../components/ControllerTest.vue';
+import ReportProblem from '../components/ReportProblem.vue';
 import { padInfo } from '../pad.js';
 
 const el = ref(null);
 const paneEl = ref(null);
-const sec = ref(store.settingsSection === 'folders' ? 'emu' : store.settingsSection || 'conn');
+const OLD_SEC = { folders: 'emu', conn: 'romm', sync: 'romm' }; // sections merged in 0.9.3
+const sec = ref(OLD_SEC[store.settingsSection] || store.settingsSection || 'romm');
 const sections = [
-  { id: 'conn', label: 'Connection', icon: 'mdiServerNetwork' },
-  { id: 'sync', label: 'Library & Sync', icon: 'mdiSync' },
-  { id: 'romm', label: 'RomM', icon: 'mdiCloudUploadOutline' },
+  { id: 'romm', label: 'RomM', icon: 'mdiServerNetwork' },
   { id: 'storage', label: 'Storage', icon: 'mdiHarddisk' },
   { id: 'emu', label: 'Emulators', icon: 'mdiGamepadVariantOutline' },
   { id: 'dl', label: 'Downloads', icon: 'mdiTrayArrowDown' },
