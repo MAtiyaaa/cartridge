@@ -153,7 +153,7 @@ LT/RT switch top tabs. LB/RB only switch sections inside a page. A select, B bac
 - Cartridge theme accent is white (`bgAccent` keeps the brand colour for animated backgrounds). `applyTheme` sets `--focus` (white, or `colors.highlight`), `--on-focus`/`--on-focus-dim` by luminance, `--sel` (chosen, not focused), `--knob`. Near-white picks stay white (`accentOf`).
 - Selected states use a `--sel` fill, never stripes or outlines; the active top tab has a faint outline. A focused `.btn.primary` also gets the ring.
 - `nav.js` zones: `move()` never leaves the nearest `[data-zone]` (App `<main>`, Settings `.pane`). Settings' B returns to the rail.
-- Old 0.9.2 notes are in `docs/plan-0.9.3.md`.
+- The 0.9.3 plan is `docs/plan-0.9.3.md`, 0.9.4 is `docs/plan-0.9.4.md`. Work in progress and decisions made in chat are logged in `docs/SESSION-LOG.md` (read its newest entry first).
 
 ## Releases (full steps: HANDOFF D8)
 Only when the owner asks. Bump `version` and `build.releaseInfo.releaseName` ("Cartridge X.Y.Z") in `package.json`, put only this version's notes in `RELEASE_NOTES.md` (heading `## Cartridge X.Y.Z · Title`), add them to the top of `CHANGELOG.md`, grouped as New / Changed / Fixed with bold lead-ins. CI builds, launch-checks and publishes.
