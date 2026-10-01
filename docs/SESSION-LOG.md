@@ -6,6 +6,27 @@ The branch for 0.9.3 work is `claude/relaxed-fermat-30pigp`. Pull it before star
 
 ---
 
+## 2 Oct 2026 · Morning summary of the night run (read this first)
+
+**Released overnight**, each after npm test, vite build, screenshots and a green branch test build (PRs #22 to #28):
+- **0.9.3 D** Vita games through Vita3K; PS3 `.rap` licences found in the download or RomM, no install without; package games wait for the install before Steam; shorter grouped More menu.
+- **0.9.3 E** PS3 patches (RPCS3's own list, saved in RPCS3's patch settings).
+- **0.9.3 F** PS4 patches (shadPS4's own patch files).
+- **0.9.3 G** Refresh Library, title case, plain Trophies tab, Hide and Hidden Games, RetroAchievements filter and sort.
+- **0.9.3 H** One RomM tab in Settings, Report a problem, full device names, shadPS4 trophy key guide.
+- **0.9.3 I** Score and age rating badges, logos on the idle screen.
+- **0.9.3 J** RomM data read defensively (contract test), per-game emulator test, CLAUDE.md 0.9.3 summary.
+
+**Needs the owner**
+- Pick options for the Discuss items: `docs/options-0.9.3.md` (E2, F1, F6, G4, H1, I1).
+- shadPS4 first-launch: the direct core test or the `shad_log.txt` tail (see the evening entry).
+- Device tests: Install in RPCS3 with a `.rap` from RomM, Get licence on Tokyo Jungle, Vita installs, Patches on a PS3 and a PS4 game, Report a problem QR, Refresh Library.
+- The stray release branches `claude/relaxed-fermat-30pigp-release-g` and `-release-i` can be deleted (each holds an exact tested commit that was merged).
+
+**Not done** (reasons in the entries below): PCSX2 patches, E1, E6, F2, F3, F5, K1, K2, J6, J11, HANDOFF.md rewrite, H2's start-up RomM version check.
+
+---
+
 ## 2 Oct 2026 (night run) · 0.9.3 J (plan H2, J13, CLAUDE.md)
 
 - **H2** `electron/romm.js`: `slimRom`, `userOf`, `logoPath`, `hltbHours` moved out of main.js and hardened (`arr`/`str`/`obj` guards). `test/romm.test.js`: a RomM 4 game, an old server's bare game, null and odd values. Not done from H2: a RomM version check at start that turns features off cleanly.
