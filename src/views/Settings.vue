@@ -290,7 +290,7 @@
           <template v-else-if="sec === 'steam'">
             <h1>Steam</h1>
             <SteamSettings />
-            <div class="subh" style="margin-top: 10px"><Icon name="mdiApplicationOutline" :size="20" />Cartridge itself</div>
+            <div class="subh" style="margin-top: 10px"><Icon name="mdiApplicationOutline" :size="20" />Cartridge</div>
             <div class="about glass">
               <img src="../../steam-art/grid.png" class="steam-grid" />
               <div style="display: flex; flex-direction: column; gap: 10px">

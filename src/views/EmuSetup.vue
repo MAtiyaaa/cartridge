@@ -44,14 +44,14 @@
 
       <div class="sec-title">Consoles<span class="count">{{ ov.consoles.length }}</span></div>
       <div class="stack">
-        <template v-for="c in ov.consoles" :key="c.key">
+        <template v-for="c in consoles" :key="c.key">
           <button class="lrow con" data-focus :data-key="'c-' + c.key" @click="open(c)">
             <PIcon :p="{ slug: c.slug, fs_slug: c.fs_slug }" :size="32" />
             <div class="l-mid">
               <b>{{ c.platform }}</b>
               <span class="l-sub">{{ usingText(c) }}</span>
             </div>
-            <span class="status" :class="state(c).k">{{ state(c).t }}</span>
+            <span class="status" :class="state(c).k"><Icon v-if="state(c).k === 'ok'" name="mdiCheck" :size="14" />{{ state(c).t }}</span>
           </button>
           <div v-for="u in c.unsure" :key="u.path" class="ask">
             <span>Is <b class="mono">{{ u.short }}</b> {{ u.label }}?</span>
@@ -103,6 +103,11 @@ const facts = computed(() => {
   else if (o.steam.flatpak) out.push({ t: 'Steam is a Flatpak: it may not start emulators outside it', k: 'warn', i: 'mdiAlert' });
   if (o.scanned?.stopped) out.push({ t: 'The scan stopped early: Browse for anything missing', k: 'warn', i: 'mdiAlert' });
   return out;
+});
+// consoles still to sort out first, finished ones (Ready) below them, A to Z within each (0.9.3 C2)
+const consoles = computed(() => {
+  const l = ov.value?.consoles || [];
+  return [...l.filter((c) => state(c).k !== 'ok'), ...l.filter((c) => state(c).k === 'ok')];
 });
 const emuLabel = (c) => c.emus.find((e) => e.id === c.emu)?.label || (c.emu === 'yours' ? 'Set by you' : '');
 function usingText(c) {
@@ -156,12 +161,36 @@ async function allowFlatpak(a) {
 }
 async function copy(text, msg = 'Copied') { try { await call('clip:write', { text }); toast(msg, 'ok', 2400, 'mdiContentCopy'); } catch (e) { toast(e.message, 'error'); } }
 async function confirmIt(path, id) { await call('setup:confirm', { path, id }); await load(); }
+const emuList = () => ov.value.known.filter((k) => k.for.length || k.id === 'retroarch').sort((a, b) => a.label.localeCompare(b.label)).map((k) => ({ label: k.label, value: k.id }));
+// "Which one?": not an emulator, a fork of one (started with that one's options, shown by its own
+// name), or an emulator. B on a later step goes back a step (0.9.3 C3).
 async function nameIt(u) {
-  const v = await choose({ title: 'Which emulator is this?', message: u.short, options: [
-    ...ov.value.known.filter((k) => k.for.length || k.id === 'retroarch').sort((a, b) => a.label.localeCompare(b.label)).map((k) => ({ label: k.label, value: k.id })),
-    { label: 'Not an emulator', value: 'none', icon: 'mdiClose' },
-  ] });
-  if (v) { await confirmIt(u.path, v); toast(v === 'none' ? 'Left out' : 'Noted', 'ok', 2000); }
+  for (;;) {
+    const kind = await choose({ title: 'Which One?', message: u.short, options: [
+      { label: 'Not an Emulator', value: 'none', icon: 'mdiClose' },
+      { label: "It's a Fork", sub: 'A version of an emulator under another name, like BB Launcher for shadPS4', value: 'fork', icon: 'mdiSourceFork' },
+      { label: "It's an Emulator", value: 'emu', icon: 'mdiGamepadVariantOutline' },
+    ] });
+    if (!kind) return;
+    if (kind === 'none') { await confirmIt(u.path, 'none'); return toast('Left out', 'ok', 2000); }
+    if (kind === 'emu') {
+      const v = await choose({ title: "It's an Emulator", message: u.short, options: emuList() });
+      if (!v) continue;
+      await confirmIt(u.path, v); return toast('Noted', 'ok', 2000);
+    }
+    if (await forkIt(u.path, null, u.name || base(u.path))) return;
+  }
+}
+// a fork: which emulator it comes from (skipped when known), then its name. False when backed out.
+async function forkIt(file, of, name) {
+  for (;;) {
+    const id = of || await choose({ title: 'A Fork of Which Emulator?', message: base(file), options: emuList() });
+    if (!id) return false;
+    const n = await askText({ title: 'Name of the Fork', value: String(name).replace(/\.appimage$/i, ''), placeholder: 'BB Launcher' });
+    if (n === null || n === undefined) { if (of) return false; continue; }
+    try { await call('setup:fork', { path: file, of: id, name: n.trim() || base(file) }); toast('Noted as a fork', 'ok', 2000); await load(); return true; }
+    catch (e) { toast(e.message, 'error'); return false; }
+  }
 }
 // one console: pick an emulator, Browse to one, or add one game to try it
 async function open(c) {
@@ -169,6 +198,7 @@ async function open(c) {
     ...c.emus.map((e) => ({ label: e.label, sub: e.sub, value: 'emu:' + e.id, selected: c.emu === e.id, icon: 'mdiGamepadVariantOutline' })),
     ...(c.emu === 'yours' ? [{ label: 'Set by you', sub: c.using?.exe, value: 'noop', selected: true, icon: 'mdiPencil' }] : []),
     { label: 'Browse to an emulator…', sub: 'Any file, any folder', value: 'browse', icon: 'mdiFolderSearchOutline' },
+    ...(c.emus.some((e) => e.path && !e.fork) ? [{ label: 'One of these is a fork…', sub: 'Show it by its own name, used only when picked', value: 'fork', icon: 'mdiSourceFork' }] : []),
     { label: 'Test with one game', sub: 'Adds one downloaded game to Steam to try it', value: 'test', icon: 'mdiPlayCircleOutline' },
     ...(c.using ? [{ label: 'Type your own launch options', sub: c.using.lo, value: 'lo', icon: 'mdiConsoleLine' }] : []),
     { label: 'More options for this console', value: 'console', icon: 'mdiTune' },
@@ -177,6 +207,11 @@ async function open(c) {
   if (!v || v === 'noop') return;
   if (v.startsWith('emu:')) { await call('steam:setEmu', { key: c.key, id: v.slice(4) }); await load(); return; }
   if (v === 'console') return go('steam-console', { ckey: c.key });
+  if (v === 'fork') {
+    const e = await choose({ title: 'Which One Is a Fork?', options: c.emus.filter((x) => x.path && !x.fork).map((x) => ({ label: x.label, sub: x.sub, value: x })) });
+    if (e) await forkIt(e.path, e.id.split('@')[0], base(e.path));
+    return;
+  }
   if (v === 'test') return testOne(c);
   if (v === 'lo') return ownLaunch(c);
   if (v === 'browse') {

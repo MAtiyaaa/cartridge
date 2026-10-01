@@ -6,6 +6,33 @@ The branch for 0.9.3 work is `claude/relaxed-fermat-30pigp`. Pull it before star
 
 ---
 
+## 1 Oct 2026 · 0.9.3 stage 2 (section C)
+
+**Owner's decisions in chat**: "start building the next best thing", so section C after stage 1. Nothing goes to `main` or releases until the owner has tried a test build.
+
+**Built**
+- **C3 + A8 forks.** "Which One?" on an AppImage Cartridge couldn't name (Settings → Emulators → Emulator setup) is now three steps: Not an Emulator, It's a Fork (pick which emulator, then its name, the file name by default), It's an Emulator (the full list A to Z). B on a later step goes back a step. A console's menu also has "One of these is a fork…" for a copy that was found as the emulator itself. Saved in `config.steam.forks[path] = { of, name }` (`markFork`, `setup:fork`). Known forks are recognised by name: `FORKS` in `emulators.js` (shadPS4 GR2, BB Launcher, PrimeHack, Slippi). A fork starts with its emulator's launch options, is listed by its own name last ("BB Launcher · fork of shadPS4"), and is never the default.
+- **C4 + C5 order.** A console's default is the first non-fork candidate: EmuDeck, then RetroDECK (only when there's no EmuDeck), then AppImage, Flatpak, installed program. The way your own Steam shortcuts start games is a second choice, used by default only when nothing else is found (`templateFor`).
+- **RetroDECK** (read from its `run_game.sh`): `flatpak run net.retrodeck.retrodeck -s <console> "<game>"`, RetroDECK picks its own emulator for that console. Not offered for consoles whose games are folders (RetroDECK reads a folder as `Game/Game`). Labelled "RetroDECK" everywhere.
+- **C6.** Steam ROM Manager setups are no longer a choice; the emulators they point at are still found, and they still count in the setup report.
+- **C7 Take over.** Console page (Settings → Steam → a console) More: "Take over your own shortcuts (N)" for games in Steam that Cartridge didn't add. With the live connection they're changed in place (same appid, play time and collections kept) and registered as Cartridge's (`takenOver: true`); otherwise removed and added again. Asks first; existing shortcuts are still kept exactly until you pick it.
+- **C2.** Emulator setup lists consoles that need something first and Ready ones (with a check mark) at the bottom.
+- **C8** Steam settings text now describes the order above, about the user's own system. **C9** "Cartridge itself" is "Cartridge".
+- **C10 real names.** What is installed is shown by its own name: a Citra or Lime3DS install isn't called Azahar, Sudachi/suyu/torzu aren't yuzu, Ryubing isn't Ryujinx (`REAL_NAMES`, `realName`).
+
+**Checked here**: `npm test` (18 pass: new tests for forks, real names, RetroDECK and SRM), `vite build`, screenshots with fake data at 1280x800 and 1920x1080 (Emulator setup, Which One?, B going back a step).
+
+**Owner to test on a device**
+- Name an unknown AppImage as a fork (for example BB Launcher as shadPS4): it shows as "BB Launcher · fork of shadPS4" in the PS4 list, and PS4 games still default to shadPS4.
+- Take over on a console with games you added yourself, with and without the live connection; check play time stays (live) and the games start.
+- If you have RetroDECK (without EmuDeck): pick RetroDECK for a console and start a game from Steam.
+
+**Not done yet / next**
+- C10's new emulators (DeSmuME, Redream, Mednafen, mupen64plus, Snes9x, Mesen, Play!, Kronos, torzu standalone entry, PrimeHack and Slippi as full entries, Xenia Edge): each needs its launch options read from its own source first, with a launch-line test.
+- Then D, E, F (Discuss items: options shown first), G, H, K, J.
+
+---
+
 ## 1 Oct 2026 · 0.9.3 stage 1 (section A, B4, B5, test builds)
 
 **Owner's decisions in chat**

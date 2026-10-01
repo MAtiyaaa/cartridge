@@ -25,7 +25,7 @@
         </div>
         <!-- Emulator setup and Shortcut health live in Settings → Emulators (0.9.3) -->
         <div class="subh"><Icon name="mdiGamepadVariantOutline" :size="20" />Emulators</div>
-        <p class="muted small" style="margin-top: -8px">Pick a console to see its games in Steam and how they start. Cartridge copies Target, Start in and Launch options from shortcuts you already have (Steam ROM Manager, EmuDeck or your own), minus frame generation wrappers. Consoles with no shortcut yet use the emulator it finds: EmuDeck, then AppImages, then Flatpaks.</p>
+        <p class="muted small" style="margin-top: -8px">Pick a console to see its games in Steam and how they start. Each console uses one emulator found on this device: EmuDeck's first, then RetroDECK (when there is no EmuDeck), then AppImages, Flatpaks and installed programs. The way your own Steam shortcuts start games is offered as another choice for each console.</p>
         <div class="ss-emus">
           <button v-for="c in ov.consoles" :key="c.key" class="ss-emu" data-focus :data-key="'emu-' + c.key" @click="go('steam-console', { ckey: c.key })">
             <div class="ss-e-logo"><PIcon :p="platOf(c)" :size="44" /></div>
@@ -73,7 +73,7 @@ import PIcon from './PIcon.vue';
 const ov = ref(null);
 const missingCols = ref([]);
 const sc = computed(() => store.config.steam || {});
-const HOW = { learned: 'From your shortcuts', yours: 'Set by you', emudeck: 'EmuDeck', appimage: 'AppImage', flatpak: 'Flatpak', native: 'Installed program' };
+const HOW = { learned: 'From your shortcuts', yours: 'Set by you', emudeck: 'EmuDeck', appimage: 'AppImage', flatpak: 'Flatpak', native: 'Installed program', retrodeck: 'RetroDECK' };
 const nameOpts = [{ v: 'clash', l: 'Only on clashes' }, { v: 'always', l: 'Always' }];
 const inSteam = computed(() => ov.value?.games.filter((g) => g.inSteam).length || 0);
 const notIn = computed(() => (ov.value?.games.length || 0) - inSteam.value);

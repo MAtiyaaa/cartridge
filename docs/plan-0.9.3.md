@@ -4,7 +4,7 @@ One big release, agreed with the owner. Built and tested in stages; nothing ship
 
 Already done on the branch: the Settings list has no grey box for the current section (the page follows the list as you move), only brighter text.
 
-**Progress** (details in `docs/SESSION-LOG.md`): stage 1 built on 1 Oct: A1, A3, A4, A5 (with C1), A6, A7, A9, A10, A11, A12, A13, A14, B4, B5, and a test build for every branch push. Waiting on a device: A2. Comes with C3: A8.
+**Progress** (details in `docs/SESSION-LOG.md`): stage 1 built on 1 Oct: A1, A3, A4, A5 (with C1), A6, A7, A9, A10, A11, A12, A13, A14, B4, B5, and a test build for every branch push. Stage 2 (1 Oct): A8, C2 to C9 and the C10 real names. Waiting on a device: A2. Still to do in C: C10's new emulators (each needs its launch options read from its own source first).
 
 ## A. Bugs
 1. **Top bar tabs select like Settings.** The current or focused tab is a full white box (or the Highlights colour) with contrasting text, the same as the Settings list. (Owner's "highlight missing on Home and Library".)

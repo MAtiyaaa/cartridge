@@ -2038,6 +2038,7 @@ const handlers09 = {
   'setup:overview': () => steamMgr.setupOverview(),
   'setup:scan': async ({ drives } = {}) => { await steamMgr.scanEmulators({ drives: !!drives }); return steamMgr.setupOverview(); },
   'setup:confirm': ({ path: f, id }) => steamMgr.confirm(f, id),
+  'setup:fork': ({ path: f, of, name }) => steamMgr.markFork(f, of, name),
   'setup:use': ({ key, file, as, args }) => steamMgr.useFile(key, file, { as, args }),
   'setup:report': () => steamMgr.setupReport(),
   // give a Flatpak emulator your games folder (asked first in Setup): only its Flatpak permissions change
@@ -2333,6 +2334,7 @@ const handlers = {
   'steam:liveInfo': () => steamMgr.liveInfo(),
   'steam:setEmu': ({ key, id }) => steamMgr.setEmu(key, id),
   'steam:refresh': ({ key }) => steamMgr.refresh(key),
+  'steam:takeOver': ({ key }) => steamMgr.takeOver(key),
   'steam:refreshArt': ({ style }) => steamMgr.refreshArt(style),
   'steam:liveEnable': () => steamMgr.liveEnable(),
   'steam:queueAdd': (items) => steamMgr.queueAdd(items),

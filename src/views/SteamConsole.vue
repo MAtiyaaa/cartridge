@@ -72,7 +72,7 @@ import PIcon from '../components/PIcon.vue';
 const props = defineProps({ ckey: String });
 const el = ref(null);
 const ov = ref(null);
-const HOW = { learned: 'From your shortcuts', yours: 'Set by you', emudeck: 'EmuDeck', appimage: 'AppImage', flatpak: 'Flatpak', native: 'Installed program' };
+const HOW = { learned: 'From your shortcuts', yours: 'Set by you', emudeck: 'EmuDeck', appimage: 'AppImage', flatpak: 'Flatpak', native: 'Installed program', retrodeck: 'RetroDECK' };
 const con = computed(() => ov.value?.consoles.find((c) => c.key === props.ckey) || null);
 const games = computed(() => (ov.value?.games || []).filter((g) => g.console === props.ckey).sort((a, b) => a.name.localeCompare(b.name)));
 const missing = computed(() => games.value.filter((g) => !g.inSteam && g.file && g.queued !== 'add'));
@@ -130,6 +130,15 @@ async function refresh() {
   steam.queue = await call('steam:overview').then((o) => o.queue).catch(() => steam.queue);
   await apply();
 }
+// your own shortcuts for this console start with Cartridge's setup (kept exactly until you pick this)
+async function takeOver(c) {
+  if (!(await confirm(`Take over ${c.own} shortcut${c.own === 1 ? '' : 's'}?`, `${c.platform} games you added to Steam yourself will start the same way as the ones Cartridge added. Their names stay.\n\nWith Steam's live connection they're changed in place, so play time and collections stay. Otherwise they're removed and added again.`, 'Take over'))) return;
+  const r = await call('steam:takeOver', { key: c.key }).catch((e) => { toast(e.message, 'error'); return null; });
+  if (!r?.count) return;
+  if (!r.queued) { toast(`Took over ${r.fixed} shortcut${r.fixed === 1 ? '' : 's'}`, 'ok', 2500, 'mdiCheck'); return load(); }
+  steam.queue = await call('steam:overview').then((o) => o.queue).catch(() => steam.queue);
+  await apply();
+}
 async function more() {
   const c = con.value;
   const v = await choose({
@@ -139,10 +148,12 @@ async function more() {
       { label: 'Test', sub: 'Checks the Target exists and can run', value: 'test', icon: 'mdiPlayCircleOutline' },
       { label: 'Start games directly', sub: 'Steam runs the emulator itself (recommended)', value: 'direct', icon: 'mdiRocketLaunchOutline', selected: c.mode !== 'script' },
       { label: 'Start games through Cartridge', sub: 'A small script: if the game is gone, Cartridge opens on it', value: 'script', icon: 'mdiScriptTextOutline', selected: c.mode === 'script' },
+      ...(c.own && c.template ? [{ label: `Take over your own shortcuts (${c.own})`, sub: 'Games you added to Steam another way start like the rest', value: 'take', icon: 'mdiSwapHorizontal' }] : []),
     ],
   });
   if (v === 'test') { const r = await call('steam:test', { key: c.key }); toast(r.ok ? r.note : r.error, r.ok ? 'ok' : 'error', 4500); return; }
   if (v === 'direct' || v === 'script') { await call('steam:setMode', { key: c.key, mode: v }); toast(v === 'script' ? 'New shortcuts start through Cartridge' : 'New shortcuts start the emulator directly', 'ok', 3000); load(); return; }
+  if (v === 'take') return takeOver(c);
   if (v !== 'edit') return;
   const t = c.template || { exe: '', start: '', lo: '%command% "{ROM}"' };
   const r = await openModal('steam-emu', { ckey: c.key, label: c.label, how: t.how, exe: t.exe, start: t.start, lo: t.lo });

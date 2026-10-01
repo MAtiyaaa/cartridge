@@ -87,10 +87,10 @@ function setup(name, build) {
   return H;
 }
 // candidates per console, as "label => exe args" with the home shown as ~ (after a scan when asked)
-function candidates(H, keys, { scan = false, confirmed = {} } = {}) {
+function candidates(H, keys, { scan = false, confirmed = {}, forks = {} } = {}) {
   const code = `
     const m = require(${JSON.stringify(path.join(ROOT, 'electron/steamManager.js'))});
-    const cfg = { steam: { confirmed: ${JSON.stringify(confirmed)} } };
+    const cfg = { steam: { confirmed: ${JSON.stringify(confirmed)}, forks: ${JSON.stringify(forks)} } };
     const sm = m({ USER_DATA: ${JSON.stringify(H + '/.config/Cartridge')}, log() {}, PLATFORM_MAP: require(${JSON.stringify(path.join(ROOT, 'electron/platformMap'))}), getConfig: () => cfg, saveConfig() {}, broadcast() {},
       emulationRoots: () => [${JSON.stringify(H + '/Emulation')}].filter((d) => require('fs').existsSync(d)), getLibrary: () => null, installed: () => ({}), romById: () => null, isGamescope: () => false, artFor: () => ({}), MARKED: 'm', markedPath: () => null });
     (async () => {
@@ -174,17 +174,49 @@ test('nothing installed', () => {
   assert.deepStrictEqual([c.snes.length, c.ps2.length, c.switch.length], [0, 0, 0]);
 });
 
-test('Steam ROM Manager setup is used when present', () => {
+test('Steam ROM Manager setups are not offered, the emulator is (0.9.3 C6)', () => {
   const H = setup('srm', ({ w }) => {
-    w('/Apps/duck/DuckStation-x64.AppImage');
+    w('/Applications/DuckStation-x64.AppImage');
     fs.mkdirSync(path.join(TMP, 'home-srm/.config/steam-rom-manager/userData'), { recursive: true });
     fs.writeFileSync(path.join(TMP, 'home-srm/.config/steam-rom-manager/userData/userConfigurations.json'), JSON.stringify([
-      { parserType: 'Glob', configTitle: 'Sony PlayStation - DuckStation', executable: { path: path.join(TMP, 'home-srm/Apps/duck/DuckStation-x64.AppImage') }, executableArgs: '-batch -fullscreen "${filePath}"', romDirectory: '/somewhere/roms/psx' },
+      { parserType: 'Glob', configTitle: 'Sony PlayStation - DuckStation', executable: { path: path.join(TMP, 'home-srm/Applications/DuckStation-x64.AppImage') }, executableArgs: '-batch -fullscreen "${filePath}"', romDirectory: '/somewhere/roms/psx' },
       { parserType: 'Epic', configTitle: 'Epic', executable: { path: '/x' } },
     ]));
   });
   const c = candidates(H, ['psx'], { scan: true });
-  assert.ok(c.psx.some((x) => /Steam ROM Manager/.test(x) && /-batch -fullscreen "\{ROM\}"/.test(x)), c.psx.join('\n'));
+  assert.ok(!c.psx.some((x) => /Steam ROM Manager/.test(x)), c.psx.join('\n'));
+  assert.ok(c.psx.some((x) => /DuckStation-x64\.AppImage/.test(x)), c.psx.join('\n'));
+});
+
+test('forks are listed by their own name, last, and never picked by default (0.9.3 C3/C4)', () => {
+  const H = setup('forks', ({ w }) => {
+    w('/Applications/shadPS4-v0.9.0.AppImage');
+    w('/Applications/shadPS4-GR2-build.AppImage'); // known fork, by name
+    w('/Applications/Dolphin-x86_64.AppImage');
+    w('/Applications/MyDolphinBuild.AppImage'); // marked a fork by you
+  });
+  const c = candidates(H, ['ps4', 'gc'], { forks: { [H + '/Applications/MyDolphinBuild.AppImage']: { of: 'dolphin', name: 'My Build' } } });
+  assert.match(c.ps4[0], /^shadPS4 => .*shadPS4-v0\.9\.0\.AppImage/, c.ps4.join('\n'));
+  assert.match(c.ps4[c.ps4.length - 1], /^shadPS4 GR2 · fork of shadPS4 => .*GR2-build/, c.ps4.join('\n'));
+  assert.match(c.gc[0], /^Dolphin => .*Dolphin-x86_64\.AppImage -b -e/, c.gc.join('\n'));
+  assert.match(c.gc[c.gc.length - 1], /^My Build · fork of Dolphin => .*MyDolphinBuild\.AppImage -b -e/, c.gc.join('\n'));
+});
+
+test('what is installed is shown by its real name (a Citra install is not "Azahar")', () => {
+  const H = setup('realname', ({ w }) => { w('/Applications/citra-qt.AppImage'); w('/Applications/sudachi.AppImage'); });
+  const c = candidates(H, ['n3ds', 'switch']);
+  assert.match(c.n3ds[0], /^Citra => /, c.n3ds.join('\n'));
+  assert.ok(c.switch.some((x) => /^Sudachi => /.test(x)), c.switch.join('\n'));
+});
+
+test('RetroDECK only without EmuDeck, first, and not for consoles whose games are folders (0.9.3 C5)', () => {
+  const H = setup('retrodeck', ({ flatpaks, w }) => { flatpaks.push('net.retrodeck.retrodeck'); w('/Applications/pcsx2-Qt.AppImage'); });
+  const c = candidates(H, ['ps2', 'ps3']);
+  assert.match(c.ps2[0], /^RetroDECK => \/usr\/bin\/flatpak run net\.retrodeck\.retrodeck -s ps2 "\{ROM\}"/, c.ps2.join('\n'));
+  assert.ok(c.ps2.some((x) => /pcsx2-Qt\.AppImage/.test(x)));
+  assert.ok(!c.ps3.some((x) => /RetroDECK/.test(x)));
+  const E = setup('retrodeck-emudeck', ({ flatpaks, w }) => { flatpaks.push('net.retrodeck.retrodeck'); w('/Emulation/tools/launchers/pcsx2-qt.sh'); });
+  assert.ok(!candidates(E, ['ps2']).ps2.some((x) => /RetroDECK/.test(x)));
 });
 
 test('arguments by version, and what EmuDeck puts first', () => {
