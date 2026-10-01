@@ -375,6 +375,8 @@ module.exports = function createSteamManager(ctx) {
       const bin = findBin(e.bin) || foundFor(id).find((x) => x.kind === 'program' || x.kind === 'unpacked' || x.kind === 'script')?.path;
       if (bin && !/flatpak\/exports/.test(bin)) mk(bin, path.dirname(bin), 'native', bin, null, null, realName(id, bin));
       const SRC = { emudeck: 'EmuDeck', appimage: 'AppImage', flatpak: 'Flatpak', native: 'Installed' };
+      // an emulator that is itself a fork (PrimeHack) is listed with the forks, never the default
+      if (e.forkOf) { found.forEach((f, i) => forksOut.push({ id: i ? `${id}@${f.src}` : id, label: `${f.name} · fork of ${EMU[e.forkOf]?.label || e.forkOf}${found.length > 1 ? ' · ' + SRC[f.src] : ''}`, fork: true, t: f.t })); continue; }
       found.forEach((f, i) => out.push({ id: i ? `${id}@${f.src}` : id, label: found.length > 1 ? `${f.name} · ${SRC[f.src]}` : f.name, t: f.t }));
     }
     // RetroDECK, for people who use it instead of EmuDeck (0.9.3, C5): it starts the game with the

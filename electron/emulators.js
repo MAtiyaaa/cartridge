@@ -48,6 +48,24 @@ const EMU = {
     label: 'ares', scripts: ['ares-emu.sh'], fp: ['dev.ares.ares'], bin: ['ares'], args: '--fullscreen "{ROM}"',
     system: { atari2600: 'Atari 2600', wonderswan: 'WonderSwan', wonderswancolor: 'WonderSwan Color', colecovision: 'ColecoVision', msx: 'MSX', msx2: 'MSX2', pcenginecd: 'PC Engine CD', pcengine: 'PC Engine', n64: 'Nintendo 64', n64dd: 'Nintendo 64DD', fds: 'Famicom Disk System', gba: 'Game Boy Advance', gbc: 'Game Boy Color', gb: 'Game Boy', nes: 'Famicom', snes: 'Super Famicom', sega32x: 'Mega 32X', segacd: 'Mega CD', gamegear: 'Game Gear', genesis: 'Mega Drive', megadrive: 'Mega Drive', mastersystem: 'Master System', 'sg-1000': 'SG-1000', zxspectrum: 'ZX Spectrum', ngp: 'Neo Geo Pocket', ngpc: 'Neo Geo Pocket Color' },
   },
+  // 0.9.3 B. Each launch line read from the emulator's own argument parser (file in brackets).
+  // DeSmuME (commandline.cpp): the game is the one argument left; fullscreen is its own setting
+  desmume: { label: 'DeSmuME', fp: ['org.desmume.DeSmuME'], bin: ['desmume'], args: '"{ROM}"', for: ['nds'] },
+  // mupen64plus-ui-console (main.c): options first, the game last
+  mupen64plus: { label: 'Mupen64Plus', bin: ['mupen64plus'], args: '--fullscreen "{ROM}"', for: ['n64'] },
+  // Snes9x GTK (gtk_s9x.cpp): the game only; fullscreen on open is its own setting
+  snes9x: { label: 'Snes9x', fp: ['com.snes9x.Snes9x'], bin: ['snes9x-gtk'], args: '"{ROM}"', for: ['snes', 'sfc'] },
+  // Mesen 2 (CommandLineHelper.cs): any existing file is the game, --fullscreen
+  mesen: { label: 'Mesen', app: /^mesen/i, bin: ['Mesen'], args: '--fullscreen "{ROM}"', for: ['nes', 'fds', 'famicom', 'snes', 'sfc', 'gb', 'gbc', 'gba', 'pcengine', 'pcenginecd', 'mastersystem', 'gamegear', 'wonderswan', 'wonderswancolor'] },
+  // Play! (ui_qt/main.cpp): --disc boots a disc image
+  play: { label: 'Play!', app: /^play(!|[-_])/i, fp: ['org.purei.Play'], bin: ['Play'], args: '--fullscreen --disc "{ROM}"', for: ['ps2'] },
+  // Kronos (port/qt/Arguments.cpp): -a starts at once, -i the disc image
+  kronos: { label: 'Kronos', app: /kronos/i, bin: ['kronos'], args: '-a -f -i "{ROM}"', for: ['saturn'] },
+  // PrimeHack, a Dolphin fork (UICommon/CommandLineParse.cpp, same as Dolphin's); EmuDeck installs the Flatpak
+  primehack: { label: 'PrimeHack', forkOf: 'dolphin', scripts: ['primehack.sh'], app: /primehack/i, fp: ['io.github.shiiion.primehack'], pre: ['vblank_mode=0'], args: '-b -e "{ROM}"', for: ['gc', 'wii'] },
+  // Xenia Edge, the native Linux Xenia (xenia_main.cc: the game is the positional "target";
+  // emulator_window.cc: fullscreen). EmuDeck: ~/Applications/Xenia.AppImage behind xenia-emu.sh
+  xeniaedge: { label: 'Xenia Edge', scripts: ['xenia-emu.sh'], app: /xenia/i, args: '--fullscreen=true "{ROM}"', for: ['xbox360'] },
 };
 EMU.ares.for = Object.keys(EMU.ares.system);
 
