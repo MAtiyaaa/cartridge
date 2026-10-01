@@ -447,42 +447,8 @@ let installedMap = {};
 let playSyncAt = 0; // last play-session sync with RomM (0: do it on the next request)
 
 // Transparent game logo from RomM (ScreenScraper "logo" media, or an ES-DE gamelist marquee)
-function logoPath(r) {
-  const p = r.ss_metadata?.logo_path || r.gamelist_metadata?.marquee_path || null;
-  if (!p) return null;
-  return /^(https?:)?\/\//.test(p) || p.startsWith('/assets/') ? p : '/assets/romm/resources/' + p.replace(/^\//, '');
-}
-function slimRom(r) {
-  const md = r.metadatum || {};
-  return {
-    id: r.id, name: r.name || r.fs_name_no_ext, fs_name: r.fs_name, fs_name_no_ext: r.fs_name_no_ext,
-    platform_id: r.platform_id, platform_slug: r.platform_slug, platform_fs_slug: r.platform_fs_slug,
-    platform_display_name: r.platform_display_name, fs_size_bytes: r.fs_size_bytes,
-    path_cover_small: r.path_cover_small, path_cover_large: r.path_cover_large, url_cover: r.url_cover,
-    shot: (r.merged_screenshots || [])[0] || null,
-    logo: logoPath(r),
-    ra_id: r.ra_id || null,
-    has_notes: !!(r.has_notes || r.all_user_notes?.length || r.rom_user?.note_raw_markdown),
-    summary: (r.summary || '').slice(0, 400),
-    regions: r.regions || [], files: (r.files || []).map((f) => ({ file_name: f.file_name })),
-    year: md.first_release_date || null, genres: (md.genres || []).slice(0, 3),
-    developer: (md.developers?.[0] || md.companies?.[0] || ''), rating: md.average_rating || null,
-    created_at: r.created_at, has_file_on_disk: r.has_file_on_disk !== false,
-    // 0.7: series, modes, popularity and length for the automatic collections and filters
-    igdb_id: r.igdb_id || null, series: [...new Set(md.franchises || [])].slice(0, 3), modes: md.game_modes || [], players: md.player_count || '',
-    votes: r.igdb_metadata?.total_rating_count || 0, hours: hltbHours(r.hltb_metadata?.main_story),
-    similar: (r.igdb_metadata?.similar_games || []).slice(0, 12).map((g) => g.id),
-    user: userOf(r.rom_user),
-  };
-}
-// HowLongToBeat keeps times in seconds
-const hltbHours = (v) => (v > 0 ? Math.round((v > 1000 ? v / 3600 : v) * 10) / 10 : null);
-// the signed-in user's own fields for a game in RomM (play status, backlog, playing now, hidden)
-function userOf(u) {
-  if (!u) return null;
-  const o = { status: u.status || null, backlog: !!u.backlogged, playing: !!u.now_playing, hidden: !!u.hidden, played: u.last_played ? Date.parse(u.last_played) || null : null };
-  return o.status || o.backlog || o.playing || o.hidden || o.played ? o : null;
-}
+// what Cartridge keeps of a RomM game (electron/romm.js, tested against several RomM versions)
+const { slimRom, userOf } = require('./romm');
 
 function publicLibrary() {
   if (!library) return null;
