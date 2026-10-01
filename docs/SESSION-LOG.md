@@ -6,6 +6,14 @@ The branch for 0.9.3 work is `claude/relaxed-fermat-30pigp`. Pull it before star
 
 ---
 
+## 1 Oct 2026 (evening) · Decisions before the night run
+
+- **PS4 .pkg (D4): dropped** by the owner. Don't build it.
+- **shadPS4**: `-i` (no IPC) before `-d` did NOT help: still a black screen for a while, then it closes. So the IPC handshake is not the cause. Next step, asked of the owner: start the shadPS4 core directly (the version the Qt launcher selected, `versionSelected` in the launcher's settings under `~/.local/share/shadPS4QtLauncher`) with `-g "<eboot.bin>" -f true`, and send the tail of `~/.local/share/shadPS4/log/shad_log.txt` after a failed launch. Don't change PS4 shortcuts in code until there is a log or that test result.
+- **Night run**: the owner is in Dubai (UTC+4) and runs out of credits until 1:30 a.m. there (21:30 UTC). A scheduled wake at 21:31 UTC continues the work unattended: first make sure 0.9.3 D (commit after 02f8039) is merged and released, then build patches (D7: RPCS3 first, then shadPS4, PCSX2), releasing each finished, tested part as the next letter (0.9.3 E, F...) by the usual rule (test build green, then PR and merge). Log every part here.
+
+---
+
 ## 1 Oct 2026 · 0.9.3 D, with fixes from the owner's first PS3 package test
 
 **Owner reported** (photo): an installed PS3 package game (NPUA80523) failed to boot from Steam with "Failed to decrypt content", and the game didn't appear on the PS3 console page in Steam settings (had to add it from the game page). Asked that D (Vita) be checked for the same before release; D's automatic merge was cancelled until then.
