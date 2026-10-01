@@ -6,6 +6,15 @@ The branch for 0.9.3 work is `claude/relaxed-fermat-30pigp`. Pull it before star
 
 ---
 
+## 2 Oct 2026 (night run) · 0.9.3 J (plan H2, J13, CLAUDE.md)
+
+- **H2** `electron/romm.js`: `slimRom`, `userOf`, `logoPath`, `hltbHours` moved out of main.js and hardened (`arr`/`str`/`obj` guards). `test/romm.test.js`: a RomM 4 game, an old server's bare game, null and odd values. Not done from H2: a RomM version check at start that turns features off cleanly.
+- **J13** `test/detect.test.js`: emulator for one game beats the console pick and falls back when gone (`_templateFor`, `_templateForGame` exported for tests).
+- **CLAUDE.md**: a 0.9.3 section summarising everything shipped in parts A to I.
+- 43 tests pass. K1 (Xenia Windows build through Wine, BigPEmu) not done: BigPEmu is closed source, so its launch options can't be confirmed from source (the rule for new emulators).
+
+---
+
 ## 2 Oct 2026 (night run) · 0.9.3 H released, 0.9.3 I (plan F8, F4) and the Discuss options
 
 - **H** merged (PR #26).

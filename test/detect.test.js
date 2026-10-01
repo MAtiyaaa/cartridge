@@ -248,3 +248,19 @@ test('arguments by version, and what EmuDeck puts first', () => {
   assert.strictEqual(E.argsFor('pcsx2', 'ps2', 'appimage'), '-batch -fullscreen -nogui "{ROM}"'); // version unknown: today's flags
   assert.deepStrictEqual(E.EMU.eden.pre, ['vblank_mode=0']);
 });
+
+test('emulator for one game beats the console pick; a pick that is gone falls back', () => {
+  const H = setup('pergame', ({ w, flatpaks }) => {
+    w('/Applications/pcsx2-v2.2.0-linux-appimage-x64-Qt.AppImage');
+    flatpaks.push('net.pcsx2.PCSX2');
+  });
+  const code = (gameEmus) => `
+    const m = require(${JSON.stringify(path.join(ROOT, 'electron/steamManager.js'))});
+    const cfg = { steam: { emus: { ps2: 'pcsx2@flatpak' }, gameEmus: ${JSON.stringify(gameEmus)} } };
+    const sm = m({ USER_DATA: ${JSON.stringify(H + '/.config/Cartridge')}, log() {}, PLATFORM_MAP: require(${JSON.stringify(path.join(ROOT, 'electron/platformMap'))}), getConfig: () => cfg, saveConfig() {}, broadcast() {},
+      emulationRoots: () => [], getLibrary: () => null, installed: () => ({}), romById: () => null, isGamescope: () => false, artFor: () => ({}), MARKED: 'm', markedPath: () => null });
+    console.log(JSON.stringify([sm._templateFor('ps2').emu, sm._templateForGame(5, 'ps2').emu, sm._templateForGame(6, 'ps2').emu]));`;
+  const run = (g) => JSON.parse(execFileSync(process.execPath, ['-e', code(g)], { env: { ...process.env, HOME: H, SHELL: '/bin/false', PATH: `${H}/bin:/usr/bin:/bin` }, encoding: 'utf8' }).trim().split('\n').pop());
+  assert.deepStrictEqual(run({ 5: 'pcsx2' }), ['pcsx2@flatpak', 'pcsx2', 'pcsx2@flatpak']);
+  assert.deepStrictEqual(run({ 5: 'gone-emulator' }), ['pcsx2@flatpak', 'pcsx2@flatpak', 'pcsx2@flatpak']);
+});

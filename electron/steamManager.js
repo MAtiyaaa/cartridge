@@ -1466,7 +1466,7 @@ module.exports = function createSteamManager(ctx) {
     gameEmu: (romId) => (cfg().gameEmus || {})[romId] || null,
     addedAt: (romId) => Math.min(...Object.values(reg).filter((r) => r.romId === romId && r.at).map((r) => r.at), Infinity),
     // exposed for tests
-    _learnOne: learnOne, _tokenize: tokenize, _buildLaunch: buildLaunch, _learnAll: learnAll, _candidates: candidates, _startOf: startOf,
+    _learnOne: learnOne, _tokenize: tokenize, _buildLaunch: buildLaunch, _learnAll: learnAll, _candidates: candidates, _startOf: startOf, _templateFor: templateFor, _templateForGame: templateForGame,
   };
   return api;
 };
