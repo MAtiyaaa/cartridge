@@ -160,3 +160,61 @@ test('Vita: delete refuses anything that is not exactly the game Cartridge insta
   assert.strictEqual(P.safeToRemove({ ...ok, dir: path.join(pref, 'ux0/user/00/savedata/PCSE00001') }, [pref]).ok, false);
   assert.strictEqual(P.safeToRemove({ ...ok, dir: app }, [pref]).ok, false);
 });
+
+// ---------------------------------------------------------------- licences (Failed to decrypt content)
+function psnPkg(file, contentId, drm = 2) {
+  fakePkg(file, { contentId });
+  const b = fs.readFileSync(file);
+  b.writeUInt32BE(3, 12); // three metadata packets: DRM type first
+  const meta = Buffer.alloc(36);
+  meta.writeUInt32BE(1, 0); meta.writeUInt32BE(4, 4); meta.writeUInt32BE(drm, 8);
+  b.copy(meta, 12, 0xc0, 0xc0 + 24);
+  meta.copy(b, 0xc0);
+  fs.writeFileSync(file, b);
+}
+const CID = 'UP0001-NPUA80523_00-GAME000000000000';
+
+test('licences: right name, wrong name renamed, missing, or already in RPCS3', () => {
+  const hdd = path.join(TMP, 'lic/dev_hdd0'); fs.mkdirSync(path.join(hdd, 'game'), { recursive: true });
+  const d = path.join(TMP, 'lic/dl');
+  psnPkg(path.join(d, 'Game.pkg'), CID);
+  assert.strictEqual(P.packagesIn(d).pkgs[0].needsRap, true);
+  assert.deepStrictEqual(P.licencePlan(P.packagesIn(d), [hdd]).map((l) => l.from), ['missing']);
+  fs.writeFileSync(path.join(d, 'licence.rap'), Buffer.alloc(16, 1));
+  const plan = P.licencePlan(P.packagesIn(d), [hdd]);
+  assert.deepStrictEqual(plan.map((l) => l.from), ['renamed']);
+  const staged = P.stageLicences(plan, path.join(TMP, 'lic/tmp'));
+  assert.deepStrictEqual(staged.map((f) => path.basename(f)), [CID + '.rap']);
+  fs.renameSync(path.join(d, 'licence.rap'), path.join(d, CID + '.rap'));
+  assert.deepStrictEqual(P.licencePlan(P.packagesIn(d), [hdd]).map((l) => l.from), ['download']);
+  fs.rmSync(path.join(d, CID + '.rap'));
+  fs.mkdirSync(path.join(hdd, 'home/00000001/exdata'), { recursive: true });
+  fs.writeFileSync(path.join(hdd, 'home/00000001/exdata', CID + '.rap'), Buffer.alloc(16, 1));
+  assert.deepStrictEqual(P.licencePlan(P.packagesIn(d), [hdd]).map((l) => l.from), ['rpcs3']);
+  // a free game needs none
+  psnPkg(path.join(TMP, 'lic/free/Game.pkg'), 'UP0001-NPUA80524_00-GAME000000000000', 3);
+  assert.deepStrictEqual(P.licencePlan(P.packagesIn(path.join(TMP, 'lic/free')), [hdd]), []);
+});
+
+test('an installed PSN game: content ID and licence need from its EBOOT.BIN', () => {
+  const g = path.join(TMP, 'npd/NPUA80523/USRDIR'); fs.mkdirSync(g, { recursive: true });
+  const b = Buffer.alloc(0x200); b.write('SCE\0', 0, 'latin1');
+  b.write('NPD\0', 0x80, 'latin1'); b.writeInt32BE(3, 0x84); b.writeInt32BE(2, 0x88); b.writeInt32BE(0, 0x8c); b.write(CID, 0x90, 'latin1');
+  fs.writeFileSync(path.join(g, 'EBOOT.BIN'), b);
+  assert.deepStrictEqual(P.npdOf(path.dirname(g)), { contentId: CID, needsRap: true });
+});
+
+test('Vita: an install with no licence is reported, not called ready', async () => {
+  const pref = path.join(TMP, 'vlic');
+  fs.mkdirSync(path.join(pref, 'ux0/app'), { recursive: true });
+  const exe = path.join(TMP, 'fake-vita3k-nolic');
+  fs.writeFileSync(exe, `#!/bin/sh\nmkdir -p "${pref}/ux0/app/PCSE00123/sce_sys"\nprintf '\\0PSF TITLE_ID PCSE00123' > "${pref}/ux0/app/PCSE00123/sce_sys/param.sfo"\n`);
+  fs.chmodSync(exe, 0o755);
+  const item = await P.vitaContent(path.join(TMP, 'vita/vpk'));
+  let out = await P.installVita({ cmd: { exe, args: [] }, prefs: [pref], item });
+  assert.strictEqual(out[0].licenced, false);
+  fs.mkdirSync(path.join(pref, 'ux0/app/PCSE00123/sce_sys/package'), { recursive: true });
+  fs.writeFileSync(path.join(pref, 'ux0/app/PCSE00123/sce_sys/package/work.bin'), 'x');
+  out = await P.installVita({ cmd: { exe, args: [] }, prefs: [pref], item });
+  assert.strictEqual(out[0].licenced, true);
+});

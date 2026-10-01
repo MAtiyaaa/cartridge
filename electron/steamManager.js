@@ -430,6 +430,8 @@ module.exports = function createSteamManager(ctx) {
   }
   function findTemplate(key) { return candidates(key)[0]?.t || null; }
   // ---------------------------------------------------------------- per-game details
+  const pkgSeen = new Map();
+  const hasPs3Pkg = (file) => { if (!file) return false; if (!pkgSeen.has(file)) { let n = 0; try { n = require('./pkgInstall').packagesIn(file).pkgs.length; } catch {} pkgSeen.set(file, n > 0); } return pkgSeen.get(file); };
   const isRpcs3 = (t) => /rpcs3/i.test(`${t?.exe || ''} ${t?.args || ''}`);
   // How Cartridge runs RPCS3 (or Vita3K) to install a package: the PS3 setup's own RPCS3 (EmuDeck's launcher,
   // the Flatpak, an AppImage or a program), with what goes before RPCS3's own options
@@ -527,6 +529,8 @@ module.exports = function createSteamManager(ctx) {
     const inst = ctx.installRecord?.(rom.id);
     if (inst?.emu === 'rpcs3' && isRpcs3(t)) return t.kind === 'serial' ? { SERIAL: inst.serial } : { ROM: `%RPCS3_GAMEID%:${inst.serial}` };
     if (inst?.emu === 'vita3k' && t.kind === 'vitaid') return { SERIAL: inst.serial };
+    // a PS3 game that came as .pkg starts only once installed in RPCS3 (game page: Install in RPCS3)
+    if (!inst && isRpcs3(t) && hasPs3Pkg(file)) return { missing: 'Install it in RPCS3 first: open the game and press Install in RPCS3.' };
     if (t.kind === 'serial') {
       const serial = serialOf(rom, file);
       if (serial && rpcs3Knows(serial)) return { SERIAL: serial };
@@ -712,7 +716,7 @@ module.exports = function createSteamManager(ctx) {
       const queued = queue.add.some((a) => a.romId === g.rom.id) ? 'add' : sc && queue.remove.includes(sc.appid) ? 'remove' : null;
       // a game that can't be added yet (Vita: not installed in Vita3K) says why
       const t = sc || !g.file ? null : (cfg().gameEmus || {})[g.rom.id] ? templateForGame(g.rom.id, g.key) : (tFor[g.key] !== undefined ? tFor[g.key] : (tFor[g.key] = templateFor(g.key)));
-      const blocked = t?.kind === 'vitaid' ? gameRef(g.rom, g.file, t).missing || null : null;
+      const blocked = t && (t.kind === 'vitaid' || isRpcs3(t)) ? gameRef(g.rom, g.file, t).missing || null : null;
       // ours with arguments in Target but "%command%" in Launch options (Steam's own default): won't start
       const badLo = !!(ours && !ours.inPlace && sc.exeRaw && tokenize(sc.exeRaw).length > 1 && ours.mode !== 'script'); // arguments in Target (0.7.11 to 0.8.1): Update moves them back
       return { romId: g.rom.id, name: g.rom.name, console: g.key, platform: g.platform.display_name, inSteam: !!sc, ours: !!ours, appid: sc?.appid || null, queued, file: g.file, blocked, badLo };
@@ -1399,11 +1403,11 @@ module.exports = function createSteamManager(ctx) {
     },
     // one game's shortcut to its current setup (after "Emulator for this game"), leaving the rest of
     // its console alone: in place when Steam can be reached, else queued to be re-added
-    refreshGame: async (romId) => {
+    refreshGame: async (romId, { force = false } = {}) => {
       const g = overview().games.find((x) => x.romId === romId && x.inSteam && x.ours && x.file && x.appid);
       if (!g) return { count: 0 };
       const t = templateForGame(romId, g.console), mode = (cfg().modes || {})[g.console] || 'direct', sig = sigOf(t, mode);
-      if (!t || (reg[g.appid]?.sig === sig && !g.badLo)) return { count: 0 };
+      if (!t || (reg[g.appid]?.sig === sig && !g.badLo && !force)) return { count: 0 };
       const env = environment();
       const ig = installedGames().find((x) => x.rom.id === romId);
       if (mode !== 'script' && ig?.file && env.account && await live.available(env.account.root)) {

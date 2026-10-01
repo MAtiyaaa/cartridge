@@ -12,6 +12,12 @@ Every Cartridge release, newest first. Each GitHub release only lists its own ch
 - After installing, Cartridge offers to delete the downloaded file, which isn't needed to play any more.
 - **Safe delete.** Delete can also remove a game Cartridge installed in Vita3K, after a clear confirmation and the same checks as for RPCS3. Only that game's folder goes; saves, DLC and licences stay.
 
+- **Licences.** A Vita game installed without a licence now says so, instead of looking ready and then not starting.
+
+### Fixed
+- **PS3 games from packages: "Failed to decrypt content".** PSN games need their licence file, and RPCS3 only finds it under the exact name `<content ID>.rap`. Cartridge now hands RPCS3 the licence under that name, whatever the file in RomM is called. If there's none, it asks you for the `.rap` before installing. Games already installed without one get an **Add licence (.rap)** button on their game page.
+- **PS3 games from packages and Steam.** Before they're installed, they show on the PS3 console page as needing to be installed in RPCS3 first, instead of getting a shortcut that can't start. Once installed, a shortcut Cartridge already made is updated to start the game from RPCS3. If **Add automatically** is on, a new shortcut is added; otherwise the game shows on the console page ready to add.
+
 ## Cartridge 0.9.3 C · PS3 games from packages
 
 ### New

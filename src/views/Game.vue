@@ -58,6 +58,7 @@
             <template v-else-if="installedPath">
               <button v-if="pkgBusy" class="btn xl" data-focus data-autofocus @click="cancelPkg"><Icon name="mdiLoading" class="spin" :size="22" />{{ pkgProg?.opens ? `Close ${emuName} to finish` : `Installing in ${emuName}` }}{{ pkgProg?.of > 1 ? ` · ${pkgProg.step} of ${pkgProg.of}` : '' }}</button>
               <button v-else-if="needsInstall" class="btn primary xl" data-focus data-autofocus @click="installPkg"><Icon name="mdiPackageDown" :size="22" />Install in {{ emuName }}</button>
+              <button v-else-if="pkg?.licenceMissing?.length" class="btn primary xl" data-focus data-autofocus @click="addLicence"><Icon name="mdiKeyOutline" :size="22" />Add licence (.rap)</button>
               <button v-else class="btn ok xl" data-focus data-autofocus @click="toast(installedPath, 'info', 4000, 'mdiFolder')"><Icon name="mdiCheckCircle" />Ready to play</button>
               <button class="btn icon-btn" data-focus title="Re-download" @click="redownload"><Icon name="mdiRefresh" /><span>Re-download</span></button>
               <button class="btn danger icon-btn" data-focus title="Delete" :disabled="deleting != null" @click="remove"><Ring v-if="deleting != null" :pct="deleting" :size="22" /><Icon v-else name="mdiDeleteOutline" /><span>{{ deleting != null ? 'Deleting' : 'Delete' }}</span></button>
@@ -150,7 +151,7 @@
 <script setup>
 import { addGame, removeGame, applyChanges } from '../steam.js';
 import { computed, onMounted, onBeforeUnmount, ref, nextTick, watch } from 'vue';
-import { store, call, img, go, cover, bytes, year, rating, toast, confirm, download, downloadFor, romById, platformById, isNew, setBg, logoOf, resetLogos, artFor, choose, openModal, allRoms, visible, isFavourite, addToCollection, playOf, playtimeText, ago, loadPlay, askText, saveConfig } from '../store.js';
+import { store, call, img, go, cover, bytes, year, rating, toast, confirm, download, downloadFor, romById, platformById, isNew, setBg, logoOf, resetLogos, artFor, choose, openModal, allRoms, visible, isFavourite, addToCollection, playOf, playtimeText, ago, loadPlay, askText, saveConfig, pickFolder } from '../store.js';
 import { useView } from '../useView.js';
 import { ensureFocus, focusFirst } from '../nav.js';
 import Icon from '../components/Icon.vue';
@@ -252,6 +253,7 @@ const offPkg = window.cart.on('pkg-progress', (p) => { if (p.romId === Number(pr
 onBeforeUnmount(() => { try { offPkg?.(); } catch {} });
 async function installPkg() {
   const p = pkg.value, emu = emuName.value;
+  const raps = {};
   if (!p?.cmd) return toast(`${emu} wasn’t found. Set it up in Settings → Emulators.`, 'error', 6000);
   let zrif;
   if (p.emu === 'vita3k') {
@@ -263,19 +265,39 @@ async function installPkg() {
     const how = p.opens ? 'Vita3K opens and starts the game once it is installed. Close Vita3K to finish.' : 'Vita3K installs it into its own storage, without opening its window.';
     if (!(await confirm('Install in Vita3K?', `${how}\n\n${p.cmd} · ${p.titleIds[0]}`, 'Install'))) return;
   } else {
+    // a PSN game needs its licence (.rap) or RPCS3 can't decrypt it
+    for (const l of p.needsLicence || []) {
+      const v = await choose({ title: 'Licence needed', message: `${l.titleId} needs its licence file to start: ${l.contentId}.rap\n\nIt didn't come with the download and RPCS3 doesn't have it. Without it RPCS3 says "Failed to decrypt content".`, options: [
+        { label: 'Pick the licence file (.rap)…', value: 'pick', icon: 'mdiKeyOutline' },
+        { label: 'Install without it', sub: 'Add it later from this page', value: 'skip', icon: 'mdiArrowRight' },
+      ] });
+      if (!v) return;
+      if (v === 'pick') { const f = await pickRap(l.contentId); if (!f) return; raps[l.contentId] = f; }
+    }
     const what = [`${p.pkgs} package${p.pkgs === 1 ? '' : 's'}`, p.updates ? `${p.updates} update${p.updates === 1 ? '' : 's'}` : '', p.licences ? `${p.licences} licence file${p.licences === 1 ? '' : 's'}` : ''].filter(Boolean).join(', ');
     if (!(await confirm('Install in RPCS3?', `RPCS3 (${p.cmd}) installs ${what} into its own storage, without opening its window. Big games take a few minutes.`, 'Install'))) return;
   }
   pkgProg.value = { state: 'running', step: 0, of: 0, opens: p.opens };
   try {
-    const r = await call('pkg:install', { romId: Number(props.romId), zrif });
-    toast(`${base.value.name} is installed in ${emu} (${r.serial})`, 'ok', 4000, 'mdiCheckCircle');
+    const r = await call('pkg:install', { romId: Number(props.romId), zrif, raps });
+    if (r.licenceMissing?.[0]?.vita) toast(`${base.value.name} is installed in Vita3K, but it has no licence, so it won't start. Install it from its .pkg with its zRIF key instead.`, 'error', 9000, 'mdiKeyOutline');
+    else if (r.licenceMissing?.length) toast(`${base.value.name} is installed in ${emu}, but its licence (${r.licenceMissing[0].contentId}.rap) is missing, so it won't start yet. Add it from this page.`, 'error', 9000, 'mdiKeyOutline');
+    else toast(`${base.value.name} is installed in ${emu} (${r.serial})`, 'ok', 4000, 'mdiCheckCircle');
     await loadPkg();
     if (r.created && (await confirm('Delete the downloaded package?', `It isn't needed to play any more: the game is in ${emu} now.\n${installedPath.value}`, 'Delete', true))) {
       try { await call('pkg:dropDownload', { romId: Number(props.romId) }); toast('Package deleted', 'ok', 2400, 'mdiDeleteOutline'); } catch (e) { toast(e.message, 'error'); }
     }
   } catch (e) { toast(e.message, 'error', 8000); }
   pkgProg.value = null;
+  loadPkg();
+}
+const pickRap = (cid) => pickFolder({ title: 'Licence file (.rap)', subtitle: `${cid}.rap (any name works, Cartridge gives RPCS3 the right one)`, start: store.info.home, files: '*', hidden: true });
+// a licence for a game already installed in RPCS3 (its install had none, or it had another name)
+async function addLicence() {
+  const cid = pkg.value?.licenceMissing?.[0]?.contentId;
+  const f = await pickRap(cid);
+  if (!f) return;
+  try { await call('pkg:addLicence', { romId: Number(props.romId), file: f }); toast('Licence added. The game can start now.', 'ok', 3500, 'mdiKeyOutline'); } catch (e) { toast(e.message, 'error', 7000); }
   loadPkg();
 }
 async function cancelPkg() {
@@ -548,6 +570,7 @@ async function more() {
   }
   opts.push({ label: 'Refresh details from RomM', value: 'refresh', icon: 'mdiRefresh' });
   if (installedPath.value) opts.push({ label: 'Show file location', value: 'path', icon: 'mdiFolderOutline' });
+  if (pkg.value?.licenceMissing?.length) opts.push({ label: 'Add licence (.rap)', sub: `${pkg.value.licenceMissing[0].contentId}.rap: without it RPCS3 can't decrypt the game`, value: 'rap', icon: 'mdiKeyOutline' });
   if (pkg.value?.pkgs && pkg.value.installed && !pkgBusy.value) opts.push({ label: `Install again in ${emuName.value}`, sub: pkg.value.emu === 'vita3k' ? 'Installs the downloaded file over it' : 'For updates or DLC added to this game', value: 'pkg', icon: 'mdiPackageDown' });
   let v = await choose({ title: base.value.name, options: opts });
   if (!v) return;
@@ -584,6 +607,7 @@ async function more() {
   if (v === 'trophies') { await linkTrophies(); return; }
   if (v === 'path') { toast(installedPath.value, 'info', 5000, 'mdiFolder'); return; }
   if (v === 'pkg') { await installPkg(); return; }
+  if (v === 'rap') { await addLicence(); return; }
   if (v === 'refresh') { try { detail.value = await call('api:get', { path: `/api/roms/${props.romId}` }); resetLogos(props.romId); toast('Details refreshed', 'ok', 2000, 'mdiRefresh'); } catch (e) { toast(e.message, 'error'); } return; }
   if (v === 'reset') { store.art = { ...store.art }; delete store.art[props.romId]; await call('art:reset', { id: props.romId }); resetLogos(props.romId); toast('Artwork reset', 'ok', 2000, 'mdiRestore'); return; }
   if (!store.config.sgdbKey) { toast('Add a SteamGridDB API key in Settings → Look & feel first', 'error', 4500); return; }

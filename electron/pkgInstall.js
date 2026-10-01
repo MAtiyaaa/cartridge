@@ -27,17 +27,18 @@ function pkgInfo(file) {
     const platform = h.readUInt16BE(6), metaOff = h.readUInt32BE(8), metaCount = h.readUInt32BE(12);
     const contentId = h.toString('latin1', 0x30, 0x30 + 36).replace(/\0[\s\S]*$/, '');
     const titleId = contentId.slice(7, 16);
-    let contentType = null, flags = 0;
+    let contentType = null, flags = 0, drm = null;
     if (metaOff && metaCount && metaCount < 64) {
       const m = Buffer.alloc(4096);
       const n = fs.readSync(fd, m, 0, m.length, metaOff);
       for (let i = 0, o = 0; i < metaCount && o + 8 <= n; i++) {
         const id = m.readUInt32BE(o), size = m.readUInt32BE(o + 4);
-        if (size === 4 && o + 12 <= n) { if (id === 2) contentType = m.readUInt32BE(o + 8); if (id === 3) flags = m.readUInt32BE(o + 8); }
+        if (size === 4 && o + 12 <= n) { if (id === 1) drm = m.readUInt32BE(o + 8); if (id === 2) contentType = m.readUInt32BE(o + 8); if (id === 3) flags = m.readUInt32BE(o + 8); }
         o += 8 + size;
       }
     }
-    return { file, contentId, titleId: SERIAL.test(titleId) ? titleId : null, platform, contentType, patch: !!(flags & 0x10) };
+    // DRM type 1 (network) and 2 (local) need a licence: <content ID>.rap in RPCS3's exdata
+    return { file, contentId, titleId: SERIAL.test(titleId) ? titleId : null, platform, contentType, patch: !!(flags & 0x10), drm, needsRap: drm === 1 || drm === 2 };
   } catch { return null; } finally { if (fd !== undefined) try { fs.closeSync(fd); } catch {} }
 }
 
@@ -53,6 +54,55 @@ function packagesIn(p) {
   const rank = (x) => (x.patch ? 2 : x.contentType === 5 ? 0 : 1);
   pkgs.sort((a, b) => rank(a) - rank(b) || path.basename(a.file).localeCompare(path.basename(b.file), undefined, { numeric: true }));
   return { licences: lic, pkgs, order: [...lic, ...pkgs.map((x) => x.file)], titleIds: [...new Set(pkgs.map((x) => x.titleId))] };
+}
+// Licences. RPCS3 copies a .rap into exdata under the file's own name and, when booting, looks for
+// exactly <content ID>.rap (main_window.cpp InstallFileInExData), so a .rap named anything else is
+// as good as none ("Failed to decrypt content"). licencePlan says, for each package that needs
+// one, where its licence comes from: already in RPCS3, in the download under its right name, a
+// .rap to copy under the right name (the only unmatched one, for the only package missing one,
+// or one you picked), or missing.
+const exdataHas = (hdds, cid) => hdds.some((h) => ls(path.join(h, 'home')).some((u) => fs.existsSync(path.join(h, 'home', u, 'exdata', cid + '.rap'))));
+function licencePlan(p, hdds, picked = {}) {
+  const need = [...new Map(p.pkgs.filter((x) => x.needsRap).map((x) => [x.contentId, x])).values()];
+  const raps = p.licences.filter((f) => /\.rap$/i.test(f));
+  const named = new Map(raps.map((f) => [path.basename(f).replace(/\.rap$/i, '').toUpperCase(), f]));
+  const out = need.map((x) => {
+    if (picked[x.contentId]) return { contentId: x.contentId, titleId: x.titleId, from: 'picked', file: picked[x.contentId] };
+    if (named.has(x.contentId.toUpperCase())) return { contentId: x.contentId, titleId: x.titleId, from: 'download', file: named.get(x.contentId.toUpperCase()) };
+    if (exdataHas(hdds, x.contentId)) return { contentId: x.contentId, titleId: x.titleId, from: 'rpcs3' };
+    return { contentId: x.contentId, titleId: x.titleId, from: 'missing' };
+  });
+  const loose = raps.filter((f) => !need.some((x) => x.contentId.toUpperCase() === path.basename(f).replace(/\.rap$/i, '').toUpperCase()));
+  const missing = out.filter((x) => x.from === 'missing');
+  if (missing.length === 1 && loose.length === 1) Object.assign(missing[0], { from: 'renamed', file: loose[0] });
+  return out;
+}
+// An installed PSN game's content ID and whether it needs a licence, from its EBOOT.BIN's NPD
+// header ("NPD\0", version, licence 1 network / 2 local / 3 free, type, content ID at +16)
+function npdOf(gameDir) {
+  let fd;
+  try {
+    fd = fs.openSync(path.join(gameDir, 'USRDIR', 'EBOOT.BIN'), 'r');
+    const b = Buffer.alloc(8192); const n = fs.readSync(fd, b, 0, b.length, 0);
+    const i = b.subarray(0, n).indexOf(Buffer.from('NPD\0', 'latin1'));
+    if (i < 0 || i + 0x40 > n) return null;
+    const licence = b.readInt32BE(i + 8), contentId = b.toString('latin1', i + 16, i + 16 + 36).replace(/\0[\s\S]*$/, '');
+    return /^[A-Z]{2}\d{4}-[A-Z]{4}\d{5}_\d\d-/.test(contentId) ? { contentId, needsRap: licence === 1 || licence === 2 } : null;
+  } catch { return null; } finally { if (fd !== undefined) try { fs.closeSync(fd); } catch {} }
+}
+// .rap files to hand RPCS3, each under its right name (copied into a temporary folder when renamed)
+function stageLicences(plan, tmpDir) {
+  const files = [];
+  for (const l of plan) {
+    if (l.from === 'download') files.push(l.file);
+    else if (l.from === 'renamed' || l.from === 'picked') {
+      fs.mkdirSync(tmpDir, { recursive: true });
+      const to = path.join(tmpDir, l.contentId + '.rap');
+      fs.copyFileSync(l.file, to);
+      files.push(to);
+    }
+  }
+  return files;
 }
 
 // RPCS3's dev_hdd0 folders, found the same way as its trophies (trophies.js): its vfs.yml first
@@ -171,6 +221,13 @@ async function vitaContent(p) {
 }
 const appsIn = (prefs) => new Map(prefs.flatMap((p) => ls(path.join(p, 'ux0/app')).map((n) => [path.join(p, 'ux0/app', n), n])));
 const vitaSfoId = (dir) => { try { return (fs.readFileSync(path.join(dir, 'sce_sys/param.sfo')).toString('latin1').match(/PCS[A-Z]\d{5}/) || [])[0] || null; } catch { return null; } };
+// A Vita game needs its licence to start: work.bin inside the game (NoNpDrm .vpk), or a .rif that
+// a .pkg install with its zRIF puts in ux0/license/<title ID>. Homebrew (not PCS...) needs none.
+function vitaLicenced(pref, id, dir) {
+  if (!VITA_ID.test(id)) return true;
+  if (fs.existsSync(path.join(dir, 'sce_sys/package/work.bin'))) return true;
+  return ls(path.join(pref, 'ux0/license', id)).some((n) => /\.rif$/i.test(n)) || ls(path.join(pref, 'ux0/license/app', id)).some((n) => /\.rif$/i.test(n));
+}
 // Runs Vita3K for one game; returns [{ serial, dir, created }] for what is in ux0/app afterwards
 async function installVita({ cmd, prefs, item, zrif, onStep = () => {}, signal }) {
   const before = appsIn(prefs);
@@ -187,7 +244,9 @@ async function installVita({ cmd, prefs, item, zrif, onStep = () => {}, signal }
     p.on('exit', () => { clearTimeout(timer); resolve(); });
   });
   const dir = [...appsIn(prefs)].find(([d, n]) => n === item.titleId && vitaSfoId(d) === item.titleId)?.[0];
-  return dir ? [{ serial: item.titleId, dir, created: ![...before.values()].includes(item.titleId) }] : [];
+  if (!dir) return [];
+  const pref = prefs.find((p) => dir.startsWith(path.join(p, 'ux0/app') + path.sep)) || prefs[0];
+  return [{ serial: item.titleId, dir, created: ![...before.values()].includes(item.titleId), licenced: vitaLicenced(pref, item.titleId, dir) }];
 }
 
 // Deleting a game from an emulator's storage: only one Cartridge installed, and only when all of
@@ -212,4 +271,4 @@ function safeToRemove(rec, roots) {
   return { ok: true, dir };
 }
 
-module.exports = { pkgInfo, packagesIn, rpcs3Hdds, sfoSerial, install, vitaPrefs, vitaContent, findZrif, installVita, safeToRemove };
+module.exports = { pkgInfo, packagesIn, licencePlan, stageLicences, exdataHas, npdOf, rpcs3Hdds, sfoSerial, install, vitaPrefs, vitaContent, findZrif, installVita, safeToRemove };

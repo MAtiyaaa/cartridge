@@ -6,6 +6,22 @@ The branch for 0.9.3 work is `claude/relaxed-fermat-30pigp`. Pull it before star
 
 ---
 
+## 1 Oct 2026 · 0.9.3 D, with fixes from the owner's first PS3 package test
+
+**Owner reported** (photo): an installed PS3 package game (NPUA80523) failed to boot from Steam with "Failed to decrypt content", and the game didn't appear on the PS3 console page in Steam settings (had to add it from the game page). Asked that D (Vita) be checked for the same before release; D's automatic merge was cancelled until then.
+
+**Cause and fix**
+- Licence: PSN packages (PKG metadata DRM type 1 or 2) need `<content ID>.rap` in RPCS3's `dev_hdd0/home/<user>/exdata`. RPCS3 copies a .rap under the file's own name, so a missing or differently named .rap means "Failed to decrypt content". `pkgInfo` reads the DRM type; `licencePlan` picks the licence (download under its right name, the only loose .rap renamed, one you picked, or already in RPCS3); `stageLicences` copies renamed ones into a temp folder under the right name before RPCS3 installs them. The install record keeps `needs` (content IDs). `installedLicences` (main.js) says what an installed game still lacks (`npdOf` reads the content ID from EBOOT.BIN's NPD header for games installed before this). UI: asks for the .rap before installing (or install without), "Add licence (.rap)" button and More item (`pkg:addLicence`, 16-byte .rap only).
+- Steam: `gameRef` returns `missing` for a PS3 game with packages that isn't installed yet, so the console page shows it blocked with the reason and plans skip it; the automatic add at download is held back for these (`it.notice === 'pkg'`); `afterInstall` updates the game's own shortcut (`refreshGame(romId, { force: true })`) or adds it when Add automatically is on. Not 100% sure this was the owner's console page case: re-check on device.
+- Vita (same check for D): Vita games were already blocked until installed; added `vitaLicenced` (work.bin in the game or a .rif in ux0/license) and a clear message when an install has no licence.
+- Tests: licence plan cases, NPD header, Steam waits for install, Vita licence. 32 pass.
+
+**shadPS4**: owner described the failure: black screen about 30 s, then it closes; works once after launching from shadPS4's own window. The core waits for the launcher's START over IPC with no time limit (`ipc.cpp` WaitForStart), so the leading theory is the headless launcher not sending it. Asked the owner to try `-i` (launcher's no-IPC switch) before `-d` in Steam launch options. Not changed in code yet.
+
+**PS4 .pkg (D4)**: recommended leaving it out (needs fake-PKG keys in a public MIT repo); waiting on the owner.
+
+---
+
 ## 1 Oct 2026 · 0.9.3 D (Vita games through Vita3K)
 
 **Owner said**: shadPS4 PS4 games still don't start the first time (after 0.9.3). Asked them for: whether they pressed Update on the PS4 console page, what a failed launch looks like, and `ls` of `~/Documents/Apps`, `~/.local/share/shadPS4`, `~/.local/share/shadPS4QtLauncher` plus the tail of `shad_log.txt`. Read the Qt launcher again (`src/main.cpp`, `qt_gui/main_window.cpp`, `ipc/ipc_client.cpp`): `-d` reads `vm_versionSelected` from the launcher's settings in its launcher dir (`<cwd>/launcher` if present, else `~/.local/share/shadPS4QtLauncher`); the core is started with the launcher's working folder and IPC (`SHADPS4_ENABLE_IPC`, `#IPC_END` then `RUN`/`START`); a RESTART request restarts it from the core's own folder. No cause proven yet: waiting on the owner's answers. Note: if the `user` folder next to the AppImage is the only shadPS4 data, `startOf` leaves Start in unchanged.
