@@ -111,4 +111,68 @@ function rpcs3Set(dir, changes, mine = {}) {
   return rec;
 }
 
-module.exports = { parseSfo, sfoAt, rpcs3Dirs, ps3Version, rpcs3List, rpcs3Set, load, dump };
+// ---------------------------------------------------------------- shadPS4
+// shadPS4's user folder (common/path_util.cpp: ~/.local/share/shadPS4, or $XDG_DATA_HOME) holds
+// patches/<repository>/files.json ({ "<file>.xml": [serials] }) and the XML files. A patch is a
+// <Metadata Name AppVer Author Note isEnabled> element; the launcher shows those whose AppVer is the
+// game's version, or "mask" (any version), and turns one on by writing isEnabled="true"
+// (qt_gui/cheats_patches.cpp, common/memory_patcher.cpp). Only that attribute is changed here.
+function shadDirs(home = os.homedir()) {
+  const data = process.env.XDG_DATA_HOME || path.join(home, '.local/share');
+  return [...new Set([path.join(data, 'shadPS4'), path.join(home, '.local/share/shadPS4')])].filter((d) => exists(path.join(d, 'patches')));
+}
+// a PS4 game's version: an update folder next to it (Game-UPDATE, Game-patch) wins over the game
+function ps4Version(gameDir) {
+  for (const d of [`${gameDir}-UPDATE`, `${gameDir}-patch`, gameDir]) { const s = sfoAt(path.join(d, 'sce_sys', 'param.sfo')); if (s.APP_VER) return s.APP_VER; }
+  return null;
+}
+const unXml = (v) => String(v).replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
+const attrsOf = (tag) => Object.fromEntries([...tag.matchAll(/([\w:-]+)\s*=\s*"([^"]*)"/g)].map((m) => [m[1], m[2]]));
+function shadFiles(userDir, serial) {
+  const out = [];
+  const pd = path.join(userDir, 'patches');
+  let repos = []; try { repos = fs.readdirSync(pd, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name); } catch {}
+  for (const repo of repos) {
+    let map = {}; try { map = JSON.parse(fs.readFileSync(path.join(pd, repo, 'files.json'), 'utf8')); } catch { continue; }
+    const file = Object.keys(map).find((f) => Array.isArray(map[f]) && map[f].includes(serial));
+    if (file && exists(path.join(pd, repo, file))) out.push({ repo, file, full: path.join(pd, repo, file) });
+  }
+  return out;
+}
+function shadList(userDir, serial, version, mine = {}) {
+  const out = [];
+  for (const f of shadFiles(userDir, serial)) {
+    let xml = ''; try { xml = fs.readFileSync(f.full, 'utf8'); } catch { continue; }
+    for (const m of xml.matchAll(/<Metadata\b([^>]*?)\/?>/g)) {
+      const a = attrsOf(m[1]);
+      if (!(a.AppVer === version || a.AppVer === 'mask')) continue;
+      const key = ['shadps4', f.repo, f.file, a.Name, a.AppVer].join('\u0001');
+      const on = a.isEnabled === 'true';
+      out.push({ key, repo: f.repo, file: f.file, name: a.Name, appVer: a.AppVer, description: unXml(a.Name || ''), version: a.AppVer === 'mask' ? 'All' : a.AppVer, author: unXml(a.Author || ''), notes: unXml(a.Note || ''), group: f.repo, on, by: on ? (mine[key] ? 'cartridge' : 'emulator') : null });
+    }
+  }
+  return out.sort((a, b) => a.description.localeCompare(b.description));
+}
+// sets isEnabled on the matching <Metadata> tags; the rest of each file stays byte for byte
+function shadSet(userDir, changes, mine = {}) {
+  const rec = { ...mine };
+  const byFile = new Map();
+  for (const c of changes) { if (!c.on && !rec[c.key]) continue; const f = path.join(userDir, 'patches', c.repo, c.file); (byFile.get(f) || byFile.set(f, []).get(f)).push(c); }
+  for (const [f, list] of byFile) {
+    let xml = fs.readFileSync(f, 'utf8');
+    xml = xml.replace(/<Metadata\b([^>]*?)(\/?)>/g, (whole, body, slash) => {
+      const a = attrsOf(body);
+      const c = list.find((x) => x.name === a.Name && x.appVer === a.AppVer);
+      if (!c) return whole;
+      const val = c.on ? 'true' : 'false';
+      const nb = /\bisEnabled\s*=\s*"[^"]*"/.test(body) ? body.replace(/\bisEnabled\s*=\s*"[^"]*"/, `isEnabled="${val}"`) : `${body.replace(/\s*$/, '')} isEnabled="${val}"`;
+      return `<Metadata${nb}${slash}>`;
+    });
+    if (!exists(f + '.cartridge-backup')) fs.copyFileSync(f, f + '.cartridge-backup');
+    fs.writeFileSync(f + '.tmp', xml); fs.renameSync(f + '.tmp', f);
+    for (const c of list) { if (c.on) rec[c.key] = true; else delete rec[c.key]; }
+  }
+  return rec;
+}
+
+module.exports = { parseSfo, sfoAt, rpcs3Dirs, ps3Version, rpcs3List, rpcs3Set, shadDirs, ps4Version, shadList, shadSet, load, dump };

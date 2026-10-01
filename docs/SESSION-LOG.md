@@ -6,6 +6,15 @@ The branch for 0.9.3 work is `claude/relaxed-fermat-30pigp`. Pull it before star
 
 ---
 
+## 2 Oct 2026 (night run) · 0.9.3 E released, 0.9.3 F (PS4 patches)
+
+- **E** merged (PR #23) after a green test build; D's release passed.
+- **F: shadPS4 patches** (read from the Qt launcher's `common/memory_patcher.cpp` and `qt_gui/cheats_patches.cpp`): `shadDirs` (`$XDG_DATA_HOME/shadPS4` or `~/.local/share/shadPS4`, with `patches/`), `ps4Version` (APP_VER from `<game>-UPDATE`, `<game>-patch`, else the game's `sce_sys/param.sfo`), `shadList` (each repository's `files.json` maps XML files to serials; `<Metadata>` with AppVer equal to the game's, or `mask` = any version), `shadSet` (only the `isEnabled` attribute of the matching tags changes, the rest of the file stays byte for byte; one-time `.cartridge-backup` next to it). main.js: `ps4PatchState`, `EMU_PATCH` table (rpcs3, shadps4) behind `patches:list`/`patches:apply`; `patchMine` keeps one record per emulator. Game page: Patches for PS3 and PS4 games.
+- Tests: shadPS4 list by version and mask, only isEnabled changes, never turns off the user's. 39 pass.
+- **PCSX2 next**: its patches are `.pnach` files named by the game's CRC (computed by PCSX2 from the game's ELF), switched on per game in `gamesettings/<SERIAL>_<CRC>.ini` `[Patches] Enable = <name>`. Needs reading the ISO's SYSTEM.CNF and ELF to get the CRC: read PCSX2's source for exactly how before building.
+
+---
+
 ## 2 Oct 2026 (night run) · 0.9.3 D released, 0.9.3 E (PS3 patches)
 
 - **0.9.3 D** merged (PR #22) at the start of the night run; its test build had passed.
