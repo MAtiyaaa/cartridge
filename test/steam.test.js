@@ -25,8 +25,9 @@ function startFor(name, dirs) {
   return execFileSync(process.execPath, ['-e', code], { env: { ...process.env, HOME: H, XDG_DATA_HOME: '' }, encoding: 'utf8' }).trim().split('\n').pop();
 }
 
-test('no stray user folder: starts next to the AppImage, as before', () => {
-  assert.strictEqual(startFor('plain', ['.local/share/shadPS4']), '~/Documents/Apps');
+test('never next to the AppImage, as shadPS4\'s own shortcuts (they start inside its temporary mount)', () => {
+  assert.strictEqual(startFor('plain', ['.local/share/shadPS4', '.local/share/shadPS4QtLauncher']), '~/.local/share/shadPS4QtLauncher');
+  assert.strictEqual(startFor('fresh', []), '~');
 });
 test('a stray user folder next to the AppImage is avoided when shadPS4 has its normal data folder', () => {
   assert.strictEqual(startFor('stray', ['Documents/Apps/user', '.local/share/shadPS4', '.local/share/shadPS4QtLauncher']), '~/.local/share/shadPS4QtLauncher');

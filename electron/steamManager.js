@@ -570,13 +570,15 @@ module.exports = function createSteamManager(ctx) {
   // shadPS4 and its Qt launcher read their settings, keys, chosen version and patches from a folder
   // named "user" in the folder they start in, else from ~/.local/share/shadPS4 (shadPS4's
   // common/path_util.cpp; the launcher starts the emulator in its own working folder). shadPS4's own
-  // Steam shortcuts start inside the AppImage's mount, where there is never one. Starting next to the
-  // AppImage picked up a stray "user" folder there, so games only started sometimes (A10). Start
-  // where there is none, unless that folder is the only shadPS4 data there is (a portable install).
+  // Steam shortcuts start inside the AppImage's own temporary mount (Start in /tmp/.mount_..., seen on
+  // the owner's device), never next to the AppImage. Cartridge's started next to it and games only
+  // started sometimes (A10). So never start there, unless a "user" folder there is the only shadPS4
+  // data (a portable install).
   function startOf(t) {
-    if (!t || !/shadps4/i.test(t.exe || '') || !t.start || !exists(path.join(t.start, 'user'))) return t?.start;
+    if (!t || !/shadps4/i.test(t.exe || '') || !t.start) return t?.start;
     const data = process.env.XDG_DATA_HOME || path.join(HOME, '.local/share');
-    if (!isDir(path.join(data, 'shadPS4')) && !isDir(path.join(HOME, '.local/share/shadPS4'))) return t.start;
+    const portable = exists(path.join(t.start, 'user'));
+    if (portable && !isDir(path.join(data, 'shadPS4')) && !isDir(path.join(HOME, '.local/share/shadPS4'))) return t.start;
     for (const d of [path.join(data, 'shadPS4QtLauncher'), path.join(data, 'shadPS4'), HOME]) if (isDir(d) && !exists(path.join(d, 'user'))) return d;
     return t.start;
   }
