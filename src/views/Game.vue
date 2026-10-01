@@ -58,7 +58,7 @@
             <template v-else-if="installedPath">
               <button v-if="pkgBusy" class="btn xl" data-focus data-autofocus @click="cancelPkg"><Icon name="mdiLoading" class="spin" :size="22" />{{ pkgProg?.opens ? `Close ${emuName} to finish` : `Installing in ${emuName}` }}{{ pkgProg?.of > 1 ? ` · ${pkgProg.step} of ${pkgProg.of}` : '' }}</button>
               <button v-else-if="needsInstall" class="btn primary xl" data-focus data-autofocus @click="installPkg"><Icon name="mdiPackageDown" :size="22" />Install in {{ emuName }}</button>
-              <button v-else-if="pkg?.licenceMissing?.length" class="btn primary xl" data-focus data-autofocus @click="addLicence"><Icon name="mdiKeyOutline" :size="22" />Add licence (.rap)</button>
+              <button v-else-if="pkg?.licenceMissing?.length" class="btn primary xl" data-focus data-autofocus @click="addLicence"><Icon name="mdiKeyOutline" :size="22" />Get licence (.rap)</button>
               <button v-else class="btn ok xl" data-focus data-autofocus @click="toast(installedPath, 'info', 4000, 'mdiFolder')"><Icon name="mdiCheckCircle" />Ready to play</button>
               <button class="btn icon-btn" data-focus title="Re-download" @click="redownload"><Icon name="mdiRefresh" /><span>Re-download</span></button>
               <button class="btn danger icon-btn" data-focus title="Delete" :disabled="deleting != null" @click="remove"><Ring v-if="deleting != null" :pct="deleting" :size="22" /><Icon v-else name="mdiDeleteOutline" /><span>{{ deleting != null ? 'Deleting' : 'Delete' }}</span></button>
@@ -151,7 +151,7 @@
 <script setup>
 import { addGame, removeGame, applyChanges } from '../steam.js';
 import { computed, onMounted, onBeforeUnmount, ref, nextTick, watch } from 'vue';
-import { store, call, img, go, cover, bytes, year, rating, toast, confirm, download, downloadFor, romById, platformById, isNew, setBg, logoOf, resetLogos, artFor, choose, openModal, allRoms, visible, isFavourite, addToCollection, playOf, playtimeText, ago, loadPlay, askText, saveConfig, pickFolder } from '../store.js';
+import { store, call, img, go, cover, bytes, year, rating, toast, confirm, download, downloadFor, romById, platformById, isNew, setBg, logoOf, resetLogos, artFor, choose, openModal, allRoms, visible, isFavourite, addToCollection, playOf, playtimeText, ago, loadPlay, askText, saveConfig } from '../store.js';
 import { useView } from '../useView.js';
 import { ensureFocus, focusFirst } from '../nav.js';
 import Icon from '../components/Icon.vue';
@@ -253,7 +253,6 @@ const offPkg = window.cart.on('pkg-progress', (p) => { if (p.romId === Number(pr
 onBeforeUnmount(() => { try { offPkg?.(); } catch {} });
 async function installPkg() {
   const p = pkg.value, emu = emuName.value;
-  const raps = {};
   if (!p?.cmd) return toast(`${emu} wasn’t found. Set it up in Settings → Emulators.`, 'error', 6000);
   let zrif;
   if (p.emu === 'vita3k') {
@@ -265,23 +264,18 @@ async function installPkg() {
     const how = p.opens ? 'Vita3K opens and starts the game once it is installed. Close Vita3K to finish.' : 'Vita3K installs it into its own storage, without opening its window.';
     if (!(await confirm('Install in Vita3K?', `${how}\n\n${p.cmd} · ${p.titleIds[0]}`, 'Install'))) return;
   } else {
-    // a PSN game needs its licence (.rap) or RPCS3 can't decrypt it
-    for (const l of p.needsLicence || []) {
-      const v = await choose({ title: 'Licence needed', message: `${l.titleId} needs its licence file to start: ${l.contentId}.rap\n\nIt didn't come with the download and RPCS3 doesn't have it. Without it RPCS3 says "Failed to decrypt content".`, options: [
-        { label: 'Pick the licence file (.rap)…', value: 'pick', icon: 'mdiKeyOutline' },
-        { label: 'Install without it', sub: 'Add it later from this page', value: 'skip', icon: 'mdiArrowRight' },
-      ] });
-      if (!v) return;
-      if (v === 'pick') { const f = await pickRap(l.contentId); if (!f) return; raps[l.contentId] = f; }
-    }
-    const what = [`${p.pkgs} package${p.pkgs === 1 ? '' : 's'}`, p.updates ? `${p.updates} update${p.updates === 1 ? '' : 's'}` : '', p.licences ? `${p.licences} licence file${p.licences === 1 ? '' : 's'}` : ''].filter(Boolean).join(', ');
-    if (!(await confirm('Install in RPCS3?', `RPCS3 (${p.cmd}) installs ${what} into its own storage, without opening its window. Big games take a few minutes.`, 'Install'))) return;
+    // PSN games need their licence (.rap) next to the .pkg: found in the download or in RomM, and
+    // nothing is installed without it
+    const what = [`${p.pkgs} package${p.pkgs === 1 ? '' : 's'}`, p.updates ? `${p.updates} update${p.updates === 1 ? '' : 's'}` : ''].filter(Boolean).join(', ');
+    const lic = p.needsLicence?.length ? `Licence: ${p.needsLicence.map((l) => l.contentId + '.rap').join(', ')} isn't in the download, so Cartridge looks for it in RomM. If it isn't there, nothing is installed.`
+      : p.licences ? `Licence: found (${p.licences} .rap file${p.licences === 1 ? '' : 's'}), installed with it.` : 'Licence: this game doesn\'t need one, or RPCS3 already has it.';
+    if (!(await confirm('Install in RPCS3?', `RPCS3 (${p.cmd}) installs ${what} into its own storage, without opening its window. Big games take a few minutes.\n\nPS3 games from the store need their licence file (.rap) next to the .pkg.\n${lic}`, 'Install'))) return;
   }
   pkgProg.value = { state: 'running', step: 0, of: 0, opens: p.opens };
   try {
-    const r = await call('pkg:install', { romId: Number(props.romId), zrif, raps });
+    const r = await call('pkg:install', { romId: Number(props.romId), zrif });
     if (r.licenceMissing?.[0]?.vita) toast(`${base.value.name} is installed in Vita3K, but it has no licence, so it won't start. Install it from its .pkg with its zRIF key instead.`, 'error', 9000, 'mdiKeyOutline');
-    else if (r.licenceMissing?.length) toast(`${base.value.name} is installed in ${emu}, but its licence (${r.licenceMissing[0].contentId}.rap) is missing, so it won't start yet. Add it from this page.`, 'error', 9000, 'mdiKeyOutline');
+    else if (r.licenceMissing?.length) toast(`${base.value.name} is installed in ${emu}, but RPCS3 didn't take its licence (${r.licenceMissing[0].contentId}.rap), so it won't start yet.`, 'error', 9000, 'mdiKeyOutline');
     else toast(`${base.value.name} is installed in ${emu} (${r.serial})`, 'ok', 4000, 'mdiCheckCircle');
     await loadPkg();
     if (r.created && (await confirm('Delete the downloaded package?', `It isn't needed to play any more: the game is in ${emu} now.\n${installedPath.value}`, 'Delete', true))) {
@@ -291,13 +285,9 @@ async function installPkg() {
   pkgProg.value = null;
   loadPkg();
 }
-const pickRap = (cid) => pickFolder({ title: 'Licence file (.rap)', subtitle: `${cid}.rap (any name works, Cartridge gives RPCS3 the right one)`, start: store.info.home, files: '*', hidden: true });
-// a licence for a game already installed in RPCS3 (its install had none, or it had another name)
+// a licence for a game already installed in RPCS3 without one: found in its download or in RomM
 async function addLicence() {
-  const cid = pkg.value?.licenceMissing?.[0]?.contentId;
-  const f = await pickRap(cid);
-  if (!f) return;
-  try { await call('pkg:addLicence', { romId: Number(props.romId), file: f }); toast('Licence added. The game can start now.', 'ok', 3500, 'mdiKeyOutline'); } catch (e) { toast(e.message, 'error', 7000); }
+  try { await call('pkg:addLicence', { romId: Number(props.romId) }); toast('Licence added. The game can start now.', 'ok', 3500, 'mdiKeyOutline'); } catch (e) { toast(e.message, 'error', 9000); }
   loadPkg();
 }
 async function cancelPkg() {
@@ -541,48 +531,53 @@ let steamInfo = null;
 async function more() {
   const has = artFor(props.romId);
   const u = cached.value?.user;
-  const opts = [
-    { label: fav.value ? 'Remove from favourites' : 'Add to favourites', sub: 'Saved in RomM', value: 'fav', icon: fav.value ? 'mdiHeartOff' : 'mdiHeartOutline' },
-    { label: 'Play status', sub: statusText.value || 'None', value: 'status', icon: 'mdiProgressCheck' },
-    { label: 'Add to a collection', sub: 'Yours in RomM, or a new one', value: 'col', icon: 'mdiBookmarkPlusOutline' },
-    { label: u?.hidden ? 'Unhide game' : 'Hide game', sub: u?.hidden ? 'Show it in lists again' : 'Keep it out of Home, Library and Search', value: 'hide', icon: u?.hidden ? 'mdiEyeOutline' : 'mdiEyeOffOutline' },
-    { label: 'Change metadata', sub: 'Cover, logo and background from SteamGridDB', value: 'art', icon: 'mdiImageEditOutline' },
+  // grouped (0.9.3): the everyday things first, the rest in two lists. B in a list goes back here.
+  const play = [], details = [
+    { label: 'Change cover', sub: 'SteamGridDB', value: 'grid', icon: 'mdiImageEditOutline' },
+    { label: 'Change logo', sub: 'SteamGridDB', value: 'logo', icon: 'mdiFormatTitle' },
+    { label: 'Change background', sub: 'SteamGridDB', value: 'hero', icon: 'mdiPanoramaVariantOutline' },
+    ...(Object.keys(has).length ? [{ label: 'Reset artwork', sub: 'Back to RomM and automatic logo', value: 'reset', icon: 'mdiRestore' }] : []),
     { label: 'Edit details', sub: 'Name, description and cover, saved to RomM', value: 'edit', icon: 'mdiPencilOutline' },
-    { label: 'Timeline', sub: 'Added, downloaded, played, trophies', value: 'timeline', icon: 'mdiTimelineClockOutline' },
+    { label: 'Refresh details from RomM', value: 'refresh', icon: 'mdiRefresh' },
     ...(coverSrc.value ? [{ label: 'Theme from this game', sub: 'Cartridge takes its colours from the cover', value: 'theme', icon: 'mdiPaletteOutline' }] : []),
     ...(store.config.ui.gameTheme ? [{ label: 'Back to your own theme', sub: store.config.ui.gameTheme.name ? `Now using ${store.config.ui.gameTheme.name}` : '', value: 'untheme', icon: 'mdiUndoVariant' }] : []),
   ];
-  if (folderSystem.value) {
-    if (marked.value) opts.push({ label: 'Unmark as installed', sub: 'Only removes the mark, no files are touched', value: 'unmark', icon: 'mdiCheckboxBlankOffOutline' });
-    else if (!installedPath.value) opts.push({ label: 'Mark as installed', sub: 'For games you extracted yourself', value: 'mark', icon: 'mdiCheckboxMarkedCircleOutline' });
-  }
-  if (trophySystem.value) opts.push({ label: tro.value ? 'Change linked trophies' : 'Link to trophies', sub: 'Pick which emulator trophy set belongs to this game', value: 'trophies', icon: 'mdiLinkVariant' });
   if (installedPath.value) {
     const st = await call('steam:forRom', { romId: Number(props.romId) }).catch(() => null);
     if (st?.steam) {
-      if (st.queued === 'add') opts.push({ label: 'Waiting to be added to Steam', sub: 'Apply from Settings → Steam', value: 'steamapply', icon: 'mdiSteam' });
-      else if (st.inSteam) opts.push({ label: 'Remove from Steam', sub: st.ours ? 'Only the shortcut, not the game' : 'Added outside Cartridge', value: 'steamrm', icon: 'mdiSteam' });
-      else opts.push({ label: 'Add to Steam', sub: 'Launches with your emulator setup', value: 'steamadd', icon: 'mdiSteam' });
+      if (st.queued === 'add') play.push({ label: 'Waiting to be added to Steam', sub: 'Apply from Settings → Steam', value: 'steamapply', icon: 'mdiSteam' });
+      else if (st.inSteam) play.push({ label: 'Remove from Steam', sub: st.ours ? 'Only the shortcut, not the game' : 'Added outside Cartridge', value: 'steamrm', icon: 'mdiSteam' });
+      else play.push({ label: 'Add to Steam', sub: 'Launches with your emulator setup', value: 'steamadd', icon: 'mdiSteam' });
       const ge = await call('steam:gameEmu', { romId: Number(props.romId) }).catch(() => null);
-      opts.push({ label: 'Emulator for this game', sub: ge?.current ? 'Its own pick' : 'Same as its console', value: 'gameemu', icon: 'mdiGamepadVariantOutline' });
+      play.push({ label: 'Emulator for this game', sub: ge?.current ? 'Its own pick' : 'Same as its console', value: 'gameemu', icon: 'mdiGamepadVariantOutline' });
       steamInfo = st;
     }
   }
-  opts.push({ label: 'Refresh details from RomM', value: 'refresh', icon: 'mdiRefresh' });
-  if (installedPath.value) opts.push({ label: 'Show file location', value: 'path', icon: 'mdiFolderOutline' });
-  if (pkg.value?.licenceMissing?.length) opts.push({ label: 'Add licence (.rap)', sub: `${pkg.value.licenceMissing[0].contentId}.rap: without it RPCS3 can't decrypt the game`, value: 'rap', icon: 'mdiKeyOutline' });
-  if (pkg.value?.pkgs && pkg.value.installed && !pkgBusy.value) opts.push({ label: `Install again in ${emuName.value}`, sub: pkg.value.emu === 'vita3k' ? 'Installs the downloaded file over it' : 'For updates or DLC added to this game', value: 'pkg', icon: 'mdiPackageDown' });
-  let v = await choose({ title: base.value.name, options: opts });
-  if (!v) return;
-  // artwork choices in their own list, so More stays short
-  if (v === 'art') {
-    v = await choose({ title: 'Change metadata', message: base.value.name, options: [
-      { label: 'Change cover', sub: 'SteamGridDB', value: 'grid', icon: 'mdiImageEditOutline' },
-      { label: 'Change logo', sub: 'SteamGridDB', value: 'logo', icon: 'mdiFormatTitle' },
-      { label: 'Change background', sub: 'SteamGridDB', value: 'hero', icon: 'mdiPanoramaVariantOutline' },
-      ...(Object.keys(has).length ? [{ label: 'Reset artwork', sub: 'Back to RomM and automatic logo', value: 'reset', icon: 'mdiRestore' }] : []),
-    ] });
+  if (pkg.value?.pkgs && pkg.value.installed && !pkgBusy.value) play.push({ label: `Install again in ${emuName.value}`, sub: pkg.value.emu === 'vita3k' ? 'Installs the downloaded file over it' : 'For updates or DLC added to this game', value: 'pkg', icon: 'mdiPackageDown' });
+  if (folderSystem.value) {
+    if (marked.value) play.push({ label: 'Unmark as installed', sub: 'Only removes the mark, no files are touched', value: 'unmark', icon: 'mdiCheckboxBlankOffOutline' });
+    else if (!installedPath.value) play.push({ label: 'Mark as installed', sub: 'For games you extracted yourself', value: 'mark', icon: 'mdiCheckboxMarkedCircleOutline' });
+  }
+  if (trophySystem.value) play.push({ label: tro.value ? 'Change linked trophies' : 'Link to trophies', sub: 'Pick which emulator trophy set belongs to this game', value: 'trophies', icon: 'mdiLinkVariant' });
+  if (installedPath.value) play.push({ label: 'Show file location', value: 'path', icon: 'mdiFolderOutline' });
+  const top = [
+    { label: fav.value ? 'Remove from favourites' : 'Add to favourites', sub: 'Saved in RomM', value: 'fav', icon: fav.value ? 'mdiHeartOff' : 'mdiHeartOutline' },
+    { label: 'Play status', sub: statusText.value || 'None', value: 'status', icon: 'mdiProgressCheck' },
+    { label: 'Add to a collection', sub: 'Yours in RomM, or a new one', value: 'col', icon: 'mdiBookmarkPlusOutline' },
+    { label: 'Timeline', sub: 'Added, downloaded, played, trophies', value: 'timeline', icon: 'mdiTimelineClockOutline' },
+    ...(play.length ? [{ label: 'Steam and emulator', sub: play.map((o) => o.label).slice(0, 2).join(', ') + (play.length > 2 ? '…' : ''), value: 'g:play', icon: 'mdiGamepadVariantOutline' }] : []),
+    { label: 'Details and artwork', sub: 'Cover, logo, background, name, theme', value: 'g:details', icon: 'mdiImageEditOutline' },
+    { label: u?.hidden ? 'Unhide game' : 'Hide game', sub: u?.hidden ? 'Show it in lists again' : 'Keep it out of Home, Library and Search', value: 'hide', icon: u?.hidden ? 'mdiEyeOutline' : 'mdiEyeOffOutline' },
+  ];
+  let v, at = null;
+  for (;;) {
+    v = await choose({ title: base.value.name, options: top.map((o) => ({ ...o, selected: o.value === at })) });
     if (!v) return;
+    if (!v.startsWith('g:')) break;
+    at = v;
+    const list = v === 'g:play' ? play : details;
+    v = await choose({ title: v === 'g:play' ? 'Steam and emulator' : 'Details and artwork', message: base.value.name, options: list });
+    if (v) break; // B: back to the first list
   }
   if (v === 'fav') {
     const on = !fav.value;
@@ -607,7 +602,6 @@ async function more() {
   if (v === 'trophies') { await linkTrophies(); return; }
   if (v === 'path') { toast(installedPath.value, 'info', 5000, 'mdiFolder'); return; }
   if (v === 'pkg') { await installPkg(); return; }
-  if (v === 'rap') { await addLicence(); return; }
   if (v === 'refresh') { try { detail.value = await call('api:get', { path: `/api/roms/${props.romId}` }); resetLogos(props.romId); toast('Details refreshed', 'ok', 2000, 'mdiRefresh'); } catch (e) { toast(e.message, 'error'); } return; }
   if (v === 'reset') { store.art = { ...store.art }; delete store.art[props.romId]; await call('art:reset', { id: props.romId }); resetLogos(props.romId); toast('Artwork reset', 'ok', 2000, 'mdiRestore'); return; }
   if (!store.config.sgdbKey) { toast('Add a SteamGridDB API key in Settings → Look & feel first', 'error', 4500); return; }

@@ -10,6 +10,9 @@
 
 - **Licences.** A Vita game installed without a licence now says so, instead of looking ready and then not starting.
 
+### Changed
+- **Game page More is shorter.** Favourites, Play status, Add to a collection, Timeline and Hide stay at the top. Steam, emulator and file options are under **Steam and emulator**; artwork, details and theme are under **Details and artwork**. B goes back to the first list.
+
 ### Fixed
-- **PS3 games from packages: "Failed to decrypt content".** PSN games need their licence file, and RPCS3 only finds it under the exact name `<content ID>.rap`. Cartridge now hands RPCS3 the licence under that name, whatever the file in RomM is called. If there's none, it asks you for the `.rap` before installing. Games already installed without one get an **Add licence (.rap)** button on their game page.
+- **PS3 games from packages: "Failed to decrypt content".** PSN games need their licence file (`.rap`) next to the `.pkg`, and RPCS3 only finds it under the exact name `<content ID>.rap`. Cartridge now finds the `.rap` itself, in the download or in RomM, and hands it to RPCS3 under that name whatever it's called. Without it, nothing is installed and Cartridge says "RAP file not found". The install screen says this before you start. Games already installed without one get a **Get licence (.rap)** button on their game page, which finds it the same way.
 - **PS3 games from packages and Steam.** Before they're installed, they show on the PS3 console page as needing to be installed in RPCS3 first, instead of getting a shortcut that can't start. Once installed, a shortcut Cartridge already made is updated to start the game from RPCS3. If **Add automatically** is on, a new shortcut is added; otherwise the game shows on the console page ready to add.

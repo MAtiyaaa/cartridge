@@ -1567,7 +1567,28 @@ function installedLicences(rec) {
   if (!need) { const n = pkgInst.npdOf(rec.dir); need = n?.needsRap ? [n.contentId] : []; }
   return need.filter((cid) => !pkgInst.exdataHas(hdds, cid)).map((contentId) => ({ contentId }));
 }
-async function installPkg(romId, zrif, raps = {}) {
+// .rap licences for a game from RomM: among the game's own files, or a RomM entry named after its
+// content ID or title ID. Downloaded into dir; returns { contentId: file }.
+async function rapsFromRomm(romId, need, dir) {
+  const out = {};
+  if (!need.length) return out;
+  const base = await resolveBase();
+  const cands = [];
+  try { for (const f of (await api(`/api/roms/${romId}`)).files || []) if (/\.rap$/i.test(f.file_name)) cands.push({ name: f.file_name, own: true, url: `${base}/api/roms/${f.id}/files/content/${encodeURIComponent(f.file_name)}` }); } catch {}
+  for (const pl of library?.platforms || []) for (const r of library.roms[pl.id] || []) {
+    const n = String(r.fs_name || '').toUpperCase();
+    if (n.endsWith('.RAP') && need.some((x) => n.includes(x.contentId.toUpperCase()) || n.includes(x.titleId || '~'))) cands.push({ name: r.fs_name, url: `${base}/api/roms/${r.id}/content/${encodeURIComponent(r.fs_name)}` });
+  }
+  const own = cands.filter((c) => c.own);
+  for (const x of need) {
+    const c = cands.find((k) => k.name.toUpperCase().includes(x.contentId.toUpperCase())) || cands.find((k) => x.titleId && k.name.toUpperCase().includes(x.titleId)) || (need.length === 1 && own.length === 1 ? own[0] : null);
+    if (!c) continue;
+    const dest = path.join(dir, 'romm', `${x.contentId}.rap`);
+    try { await downloadTo(c.url, dest, { abort: new AbortController() }, () => {}); if (fs.statSync(dest).size === 16) out[x.contentId] = dest; } catch (e) { log('rap from RomM', e.message); }
+  }
+  return out;
+}
+async function installPkg(romId, zrif) {
   if (pkgRun) throw new Error('Another game is being installed. Wait for it to finish.');
   const m = manifest[romId];
   if (!m?.path) throw new Error('Download the game first.');
@@ -1578,10 +1599,15 @@ async function installPkg(romId, zrif, raps = {}) {
   if (!hdds.length) throw new Error('RPCS3’s storage wasn’t found. Open RPCS3 once (it creates its folders), then try again.');
   const p = pkgInst.packagesIn(m.path);
   if (!p.pkgs.length) throw new Error('There’s no PS3 package in this game’s files.');
-  // licences first, each under the name RPCS3 looks for; .edat files as they came
-  const plan = pkgInst.licencePlan(p, hdds, raps || {});
+  // licences first, each under the name RPCS3 looks for (from the download, else from RomM); no
+  // install without them: the game couldn't start ("Failed to decrypt content")
   const tmp = path.join(os.tmpdir(), `cartridge-rap-${process.pid}-${Date.now()}`);
-  const files = [...pkgInst.stageLicences(plan, tmp), ...p.licences.filter((f) => /\.edat$/i.test(f)), ...p.pkgs.map((x) => x.file)];
+  let plan = pkgInst.licencePlan(p, hdds);
+  const fromRomm = await rapsFromRomm(romId, plan.filter((l) => l.from === 'missing'), tmp);
+  if (Object.keys(fromRomm).length) plan = pkgInst.licencePlan(p, hdds, fromRomm);
+  const lost = plan.filter((l) => l.from === 'missing');
+  if (lost.length) { fs.rmSync(tmp, { recursive: true, force: true }); throw new Error(`RAP file not found: ${lost[0].contentId}.rap. RPCS3 needs it next to the .pkg to install this game. Add it to the game in RomM, then install again.`); }
+  const files = [...pkgInst.stageLicences(plan, path.join(tmp, 'staged')), ...p.licences.filter((f) => /\.edat$/i.test(f)), ...p.pkgs.map((x) => x.file)];
   pkgRun = { romId, ac: new AbortController() };
   const send = (o) => broadcast('pkg-progress', { romId, ...o });
   try {
@@ -2394,25 +2420,30 @@ const handlers = {
     }
     return { pkgs: 0, installed: rec, running };
   },
-  'pkg:install': ({ romId, zrif, raps }) => installPkg(romId, zrif, raps),
-  // a licence (.rap) for a game already installed in RPCS3: handed to RPCS3 under its right name
-  'pkg:addLicence': async ({ romId, file }) => {
+  'pkg:install': ({ romId, zrif }) => installPkg(romId, zrif),
+  // the licence (.rap) for a game already installed in RPCS3 without one: found in its download or
+  // in RomM, handed to RPCS3 under its right name
+  'pkg:addLicence': async ({ romId }) => {
     const rec = installs[romId];
     if (rec?.emu !== 'rpcs3') throw new Error('This game isn’t installed in RPCS3 by Cartridge.');
     const need = installedLicences(rec);
     if (!need.length) return { ok: true };
     const cmd = steamMgr.rpcs3Command();
     if (!cmd) throw new Error('RPCS3 wasn’t found. Set it up in Settings → Emulators.');
-    let st; try { st = fs.statSync(file); } catch { throw new Error('That file isn’t there.'); }
-    if (!/\.rap$/i.test(file) || st.size !== 16) throw new Error('A licence file is a .rap file of 16 bytes.');
     const tmp = path.join(os.tmpdir(), `cartridge-rap-${process.pid}-${Date.now()}`);
     try {
-      const files = pkgInst.stageLicences([{ contentId: need[0].contentId, from: 'picked', file }], tmp);
+      const m = manifest[romId];
+      const local = m?.path && !m.installedIn ? pkgInst.packagesIn(m.path).licences.filter((f) => /\.rap$/i.test(f)) : [];
+      const named = (cid) => local.find((f) => path.basename(f).toUpperCase() === cid.toUpperCase() + '.RAP') || (need.length === 1 && local.length === 1 ? local[0] : null);
+      const picked = Object.fromEntries(need.map((n) => [n.contentId, named(n.contentId)]).filter(([, f]) => f));
+      Object.assign(picked, await rapsFromRomm(romId, need.filter((n) => !picked[n.contentId]), tmp));
+      const lost = need.filter((n) => !picked[n.contentId]);
+      if (lost.length) throw new Error(`RAP file not found: ${lost[0].contentId}.rap. Add it to this game in RomM, next to its .pkg.`);
+      const files = pkgInst.stageLicences(need.map((n) => ({ contentId: n.contentId, from: 'picked', file: picked[n.contentId] })), path.join(tmp, 'staged'));
       await pkgInst.install({ cmd, hdds: rpcs3Hdds(), files, titleIds: [] });
     } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
-    const still = installedLicences(rec);
-    if (still.length) throw new Error('RPCS3 didn’t take the licence. Check it is the one for this game.');
-    log('rpcs3 licence added', need[0].contentId);
+    if (installedLicences(rec).length) throw new Error('RPCS3 didn’t take the licence. Check it is the one for this game.');
+    log('rpcs3 licence added', need.map((n) => n.contentId).join(' '));
     return { ok: true };
   },
   'pkg:cancel': () => { pkgRun?.ac.abort(); return true; },

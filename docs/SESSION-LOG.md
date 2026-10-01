@@ -16,6 +16,8 @@ The branch for 0.9.3 work is `claude/relaxed-fermat-30pigp`. Pull it before star
 - Vita (same check for D): Vita games were already blocked until installed; added `vitaLicenced` (work.bin in the game or a .rif in ux0/license) and a clear message when an install has no licence.
 - Tests: licence plan cases, NPD header, Steam waits for install, Vita licence. 32 pass.
 
+**Then the owner asked** (photo of the long More menu): group More into sub menus; and .rap files live in RomM: never ask, find the .rap and install it with the .pkg, refuse with "RAP file not found" when it isn't anywhere, and say before installing that a .rap is needed. Done: `rapsFromRomm` (the game's own RomM files, then RomM entries named after the content ID or title ID; downloaded to a temp folder), `installPkg` throws "RAP file not found" when still missing, `pkg:addLicence` finds it the same way (no picker), button "Get licence (.rap)". More is now 7 items: favourites, play status, collection, timeline, Steam and emulator (list), Details and artwork (list), hide; B in a list returns to the first one (loop around `choose`).
+
 **shadPS4**: owner described the failure: black screen about 30 s, then it closes; works once after launching from shadPS4's own window. The core waits for the launcher's START over IPC with no time limit (`ipc.cpp` WaitForStart), so the leading theory is the headless launcher not sending it. Asked the owner to try `-i` (launcher's no-IPC switch) before `-d` in Steam launch options. Not changed in code yet.
 
 **PS4 .pkg (D4)**: recommended leaving it out (needs fake-PKG keys in a public MIT repo); waiting on the owner.
