@@ -6,6 +6,24 @@ The branch for 0.9.3 work is `claude/relaxed-fermat-30pigp`. Pull it before star
 
 ---
 
+## 1 Oct 2026 · 0.9.3 D (Vita games through Vita3K)
+
+**Owner said**: shadPS4 PS4 games still don't start the first time (after 0.9.3). Asked them for: whether they pressed Update on the PS4 console page, what a failed launch looks like, and `ls` of `~/Documents/Apps`, `~/.local/share/shadPS4`, `~/.local/share/shadPS4QtLauncher` plus the tail of `shad_log.txt`. Read the Qt launcher again (`src/main.cpp`, `qt_gui/main_window.cpp`, `ipc/ipc_client.cpp`): `-d` reads `vm_versionSelected` from the launcher's settings in its launcher dir (`<cwd>/launcher` if present, else `~/.local/share/shadPS4QtLauncher`); the core is started with the launcher's working folder and IPC (`SHADPS4_ENABLE_IPC`, `#IPC_END` then `RUN`/`START`); a RESTART request restarts it from the core's own folder. No cause proven yet: waiting on the owner's answers. Note: if the `user` folder next to the AppImage is the only shadPS4 data, `startOf` leaves Start in unchanged.
+
+**Built**
+- `pkgInstall.js`: `vitaPrefs` (config.yml pref-path, defaults, EmuDeck storage), `vitaContent` (Vita .pkg by header platform 2, else .vpk/.zip title ID from `sce_sys/param.sfo` via yauzl; zRIF from a small text file, `KO5i...`), `installVita` (Vita3K main.cpp: `--pkg <f> --zrif <k>` installs headless and quits; a .vpk/.zip installs then opens and boots, so Cartridge waits for it to close). `safeToRemove` is now per emulator (`RULES`: RPCS3 dev_hdd0/game + PARAM.SFO, Vita3K ux0/app + sce_sys/param.sfo). Vita3K's `--deleted-id` is never used (it deletes savedata).
+- `main.js`: `installPkg` hands Vita games to `installVitaGame`; `pkg:check` is async and says `emu`, `emuName`, `needsZrif`, `opens`; `emuRoots(emu)`; delete and `pkg:dropDownload` work for both emulators. `steamManager`: `emuCommand(key, re)`, `vita3kCommand`, recorded Vita games start by title ID.
+- UI: Game page says Install in Vita3K, asks for a zRIF when none came with the game, "Close Vita3K to finish" while it is open.
+- Tests: Vita title ID from a .vpk (a small stored zip built in the test), zRIF from a text file, install through a stand-in Vita3K, delete refusals including savedata. 28 pass.
+
+**Release**: version 0.9.6, "0.9.3 D".
+
+**Owner to test**: a Vita .vpk and a .pkg (with and without a zRIF text file), Install in Vita3K in Game Mode, play from Steam, delete both ways.
+
+**Next**: shadPS4 once the owner answers; D4 PS4 .pkg; D7 patches.
+
+---
+
 ## 1 Oct 2026 · 0.9.3 C (PS3 packages through RPCS3)
 
 **Owner's decisions in chat**: skip Redream, Mednafen and torzu. 0.9.3 B was released before this.

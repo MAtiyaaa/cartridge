@@ -115,20 +115,101 @@ async function install({ cmd, hdds, files, titleIds, onStep = () => {}, signal }
 }
 function newestIn(dir) { let t = 0; for (const n of ls(dir)) { try { t = Math.max(t, fs.statSync(path.join(dir, n)).mtimeMs); } catch {} } return t; }
 
-// Deleting a game from RPCS3's storage: only one Cartridge installed, and only when all of this
-// holds (plan D3): recorded as created by Cartridge; the folder name is a serial and nothing else;
-// its real path (links followed) sits directly in one of RPCS3's game folders; its own PARAM.SFO
-// says the same serial. Returns { ok, dir } or { ok: false, why }.
-function safeToRemove(rec, hdds) {
-  if (!rec || rec.emu !== 'rpcs3' || !rec.created) return { ok: false, why: 'Cartridge didn’t install this game in RPCS3.' };
-  if (!SERIAL.test(rec.serial || '') || path.basename(rec.dir || '') !== rec.serial) return { ok: false, why: 'The folder isn’t named after the game’s serial.' };
+// ---------------------------------------------------------------- Vita through Vita3K (D2)
+// Vita3K (main.cpp, config.cpp): `--pkg <file> --zrif <key>` installs with no window and quits;
+// a .vpk or .zip given as the game installs it, then opens Vita3K and starts it, so Cartridge
+// waits for Vita3K to close. Its own --deleted-id is never used: it deletes saves too.
+const VITA_ID = /^PCS[A-Z]\d{5}$/;
+// Vita3K's pref path (where ux0 lives): its config.yml "pref-path", else its default, EmuDeck's storage
+function vitaPrefs(home = os.homedir(), emulationRoots = []) {
+  const out = [];
+  for (const c of [path.join(home, '.config/Vita3K/config.yml'), path.join(home, '.local/share/Vita3K/Vita3K/config.yml')]) {
+    try { const m = fs.readFileSync(c, 'utf8').match(/^pref-path:\s*(.+)$/m); const v = m && m[1].trim().replace(/^['"]|['"]$/g, ''); if (v) out.push(v); } catch {}
+  }
+  out.push(path.join(home, '.local/share/Vita3K/Vita3K'), path.join(home, '.local/share/Vita3K'), ...emulationRoots.map((r) => path.join(r, 'storage/Vita3K')));
+  const seen = new Set();
+  return out.filter((p) => isDir(path.join(p, 'ux0')) && !seen.has(real(p)) && seen.add(real(p)));
+}
+// the title ID in a Vita game's sce_sys/param.sfo (inside a .vpk/.zip, read with yauzl)
+function zipTitleId(file) {
+  return new Promise((resolve) => {
+    let yauzl; try { yauzl = require('yauzl'); } catch { return resolve(null); }
+    yauzl.open(file, { lazyEntries: true }, (err, zip) => {
+      if (err) return resolve(null);
+      let done = false;
+      const end = (v) => { if (!done) { done = true; try { zip.close(); } catch {} resolve(v); } };
+      zip.on('entry', (e) => {
+        if (!/(^|\/)sce_sys\/param\.sfo$/i.test(e.fileName) || e.uncompressedSize > 1 << 20) return zip.readEntry();
+        zip.openReadStream(e, (er, st) => {
+          if (er) return end(null);
+          const parts = []; st.on('data', (d) => parts.push(d));
+          st.on('end', () => end((Buffer.concat(parts).toString('latin1').match(/PCS[A-Z]\d{5}/) || [])[0] || null));
+          st.on('error', () => end(null));
+        });
+      });
+      zip.on('end', () => end(null)); zip.on('error', () => end(null));
+      zip.readEntry();
+    });
+  });
+}
+// A zRIF (the key a Vita .pkg needs, base64 starting KO5i) from a small text file that came with it
+function findZrif(files) {
+  for (const f of files.filter((x) => /\.(zrif|txt|tsv|rif64)$/i.test(x))) {
+    try { if (fs.statSync(f).size > 256 * 1024) continue; const m = fs.readFileSync(f, 'latin1').match(/KO5i[0-9A-Za-z+/=]{40,}/); if (m) return m[0]; } catch {}
+  }
+  return null;
+}
+// What a downloaded Vita game holds: { kind: 'pkg' | 'vpk', file, titleId, zrif }, or null
+async function vitaContent(p) {
+  const files = [];
+  const walk = (d, depth) => { for (const n of ls(d).sort()) { const f = path.join(d, n); if (isDir(f)) { if (depth < 2) walk(f, depth + 1); } else files.push(f); } };
+  if (isDir(p)) walk(p, 0); else files.push(p);
+  const pkg = files.map((f) => (/\.pkg$/i.test(f) ? pkgInfo(f) : null)).find((x) => x && x.platform === 2 && VITA_ID.test(x.contentId.slice(7, 16)));
+  if (pkg) return { kind: 'pkg', file: pkg.file, titleId: pkg.contentId.slice(7, 16), zrif: findZrif(files) };
+  for (const f of files.filter((x) => /\.(vpk|zip)$/i.test(x))) { const id = await zipTitleId(f); if (id) return { kind: 'vpk', file: f, titleId: id, zrif: null }; }
+  return null;
+}
+const appsIn = (prefs) => new Map(prefs.flatMap((p) => ls(path.join(p, 'ux0/app')).map((n) => [path.join(p, 'ux0/app', n), n])));
+const vitaSfoId = (dir) => { try { return (fs.readFileSync(path.join(dir, 'sce_sys/param.sfo')).toString('latin1').match(/PCS[A-Z]\d{5}/) || [])[0] || null; } catch { return null; } };
+// Runs Vita3K for one game; returns [{ serial, dir, created }] for what is in ux0/app afterwards
+async function installVita({ cmd, prefs, item, zrif, onStep = () => {}, signal }) {
+  const before = appsIn(prefs);
+  const env = { ...process.env };
+  for (const k of ['LD_PRELOAD', 'LD_LIBRARY_PATH', 'APPDIR', 'APPIMAGE', 'ARGV0', 'OWD']) delete env[k];
+  const args = item.kind === 'pkg' ? ['--pkg', item.file, '--zrif', zrif || item.zrif] : [item.file];
+  onStep({ step: 1, of: 1, file: path.basename(item.file), opens: item.kind !== 'pkg' });
+  await new Promise((resolve, reject) => {
+    const p = spawn(cmd.exe, [...cmd.args, ...args], { env, stdio: 'ignore' });
+    const kill = () => { try { p.kill(); } catch {} };
+    const timer = setTimeout(kill, 3 * 60 * 60e3);
+    signal?.addEventListener('abort', kill, { once: true });
+    p.on('error', (e) => { clearTimeout(timer); reject(new Error(`Vita3K didn't start: ${e.message}`)); });
+    p.on('exit', () => { clearTimeout(timer); resolve(); });
+  });
+  const dir = [...appsIn(prefs)].find(([d, n]) => n === item.titleId && vitaSfoId(d) === item.titleId)?.[0];
+  return dir ? [{ serial: item.titleId, dir, created: ![...before.values()].includes(item.titleId) }] : [];
+}
+
+// Deleting a game from an emulator's storage: only one Cartridge installed, and only when all of
+// this holds (plan D3): recorded as created by Cartridge; the folder name is a serial and nothing
+// else; its real path (links followed) sits directly in the emulator's game folder (RPCS3
+// dev_hdd0/game, Vita3K ux0/app); the game's own PARAM.SFO says the same serial. roots: RPCS3's
+// dev_hdd0 folders or Vita3K's pref paths. Returns { ok, dir } or { ok: false, why }.
+const RULES = {
+  rpcs3: { name: 'RPCS3', id: SERIAL, games: (r) => path.join(r, 'game'), serialOf: sfoSerial },
+  vita3k: { name: 'Vita3K', id: VITA_ID, games: (r) => path.join(r, 'ux0/app'), serialOf: vitaSfoId },
+};
+function safeToRemove(rec, roots) {
+  const R = RULES[rec?.emu];
+  if (!R || !rec.created) return { ok: false, why: `Cartridge didn’t install this game${R ? ' in ' + R.name : ''}.` };
+  if (!R.id.test(rec.serial || '') || path.basename(rec.dir || '') !== rec.serial) return { ok: false, why: 'The folder isn’t named after the game’s serial.' };
   let lst; try { lst = fs.lstatSync(rec.dir); } catch { return { ok: false, why: 'The game’s folder is gone.' }; }
   if (lst.isSymbolicLink() || !lst.isDirectory()) return { ok: false, why: 'The game’s folder is a link, not a folder.' };
   const dir = real(rec.dir);
-  const games = hdds.map((h) => real(path.join(h, 'game')));
-  if (!games.includes(path.dirname(dir)) || games.includes(dir)) return { ok: false, why: 'The folder isn’t inside RPCS3’s game folder.' };
-  if (sfoSerial(dir) !== rec.serial) return { ok: false, why: 'The game’s PARAM.SFO is missing or names another game.' };
+  const games = roots.map((r) => real(R.games(r)));
+  if (!games.includes(path.dirname(dir)) || games.includes(dir)) return { ok: false, why: `The folder isn’t inside ${R.name}’s game folder.` };
+  if (R.serialOf(dir) !== rec.serial) return { ok: false, why: 'The game’s PARAM.SFO is missing or names another game.' };
   return { ok: true, dir };
 }
 
-module.exports = { pkgInfo, packagesIn, rpcs3Hdds, sfoSerial, install, safeToRemove };
+module.exports = { pkgInfo, packagesIn, rpcs3Hdds, sfoSerial, install, vitaPrefs, vitaContent, findZrif, installVita, safeToRemove };

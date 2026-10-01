@@ -98,3 +98,65 @@ test('delete from RPCS3 refuses anything that is not exactly the game Cartridge 
   const stray = path.join(TMP, 'del/other/BLUS30001'); sfo(stray, 'BLUS30001');
   assert.strictEqual(P.safeToRemove({ ...ok, dir: stray }, [hdd]).ok, false);
 });
+
+// ---------------------------------------------------------------- Vita through Vita3K
+// a .vpk is a zip: one stored (uncompressed) entry is enough for Cartridge to read its title ID
+function crc32(b) { let c, crc = 0xffffffff; for (const x of b) { c = (crc ^ x) & 0xff; for (let k = 0; k < 8; k++) c = c & 1 ? (c >>> 1) ^ 0xedb88320 : c >>> 1; crc = (crc >>> 8) ^ c; } return (crc ^ 0xffffffff) >>> 0; }
+function fakeVpk(file, entries) {
+  const locals = [], centrals = []; let off = 0;
+  for (const [name, data] of Object.entries(entries)) {
+    const n = Buffer.from(name), d = Buffer.from(data, 'latin1'), crc = crc32(d);
+    const l = Buffer.alloc(30); l.writeUInt32LE(0x04034b50, 0); l.writeUInt16LE(10, 4); l.writeUInt32LE(crc, 14); l.writeUInt32LE(d.length, 18); l.writeUInt32LE(d.length, 22); l.writeUInt16LE(n.length, 26);
+    const c = Buffer.alloc(46); c.writeUInt32LE(0x02014b50, 0); c.writeUInt16LE(20, 4); c.writeUInt16LE(10, 6); c.writeUInt32LE(crc, 16); c.writeUInt32LE(d.length, 20); c.writeUInt32LE(d.length, 24); c.writeUInt16LE(n.length, 28); c.writeUInt32LE(off, 42);
+    locals.push(l, n, d); centrals.push(c, n); off += 30 + n.length + d.length;
+  }
+  const cd = Buffer.concat(centrals), e = Buffer.alloc(22);
+  e.writeUInt32LE(0x06054b50, 0); e.writeUInt16LE(Object.keys(entries).length, 8); e.writeUInt16LE(Object.keys(entries).length, 10); e.writeUInt32LE(cd.length, 12); e.writeUInt32LE(off, 16);
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, Buffer.concat([...locals, cd, e]));
+}
+const vitaSfo = (dir, id) => { fs.mkdirSync(path.join(dir, 'sce_sys'), { recursive: true }); fs.writeFileSync(path.join(dir, 'sce_sys/param.sfo'), Buffer.from(`\0PSF TITLE_ID\0${id}\0`, 'latin1')); };
+
+test('Vita: title ID from a .vpk, a .pkg with its zRIF from a text file next to it', async () => {
+  const v = path.join(TMP, 'vita/vpk/Game.vpk');
+  fakeVpk(v, { 'eboot.bin': 'x', 'sce_sys/param.sfo': '\0PSF TITLE_ID\0PCSE00123\0' });
+  assert.deepStrictEqual(await P.vitaContent(path.dirname(v)), { kind: 'vpk', file: v, titleId: 'PCSE00123', zrif: null });
+  const d = path.join(TMP, 'vita/pkg');
+  fakePkg(path.join(d, 'Game.pkg'), { contentId: 'EP0001-PCSB00456_00-0000000000000000', platform: 2, type: 0x15 });
+  fs.writeFileSync(path.join(d, 'key.txt'), 'zRIF: KO5ifR1dQd3iMmBgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==\n');
+  const c = await P.vitaContent(d);
+  assert.strictEqual(c.kind, 'pkg'); assert.strictEqual(c.titleId, 'PCSB00456'); assert.match(c.zrif, /^KO5ifR1dQd3/);
+  // a PS3 package is not a Vita game
+  assert.strictEqual(await P.vitaContent(path.join(TMP, 'roms/ps3/Game')), null);
+});
+
+test('Vita: installs a .pkg through a stand-in Vita3K with --pkg and --zrif', async () => {
+  const pref = path.join(TMP, 'vita3k-pref');
+  fs.mkdirSync(path.join(pref, 'ux0/app'), { recursive: true });
+  const exe = path.join(TMP, 'fake-vita3k');
+  fs.writeFileSync(exe, `#!/bin/sh\necho "$@" > "${TMP}/vargs"\nmkdir -p "${pref}/ux0/app/PCSB00456/sce_sys"\nprintf '\\0PSF TITLE_ID PCSB00456' > "${pref}/ux0/app/PCSB00456/sce_sys/param.sfo"\n`);
+  fs.chmodSync(exe, 0o755);
+  const item = await P.vitaContent(path.join(TMP, 'vita/pkg'));
+  const out = await P.installVita({ cmd: { exe, args: [] }, prefs: [pref], item });
+  assert.deepStrictEqual(out.map((g) => [g.serial, g.created]), [['PCSB00456', true]]);
+  assert.strictEqual(fs.readFileSync(path.join(TMP, 'vargs'), 'utf8').trim(), `--pkg ${item.file} --zrif ${item.zrif}`);
+});
+
+test('Vita: delete refuses anything that is not exactly the game Cartridge installed', () => {
+  const pref = path.join(TMP, 'vdel');
+  const app = path.join(pref, 'ux0/app');
+  vitaSfo(path.join(app, 'PCSE00001'), 'PCSE00001');
+  const ok = { emu: 'vita3k', serial: 'PCSE00001', dir: path.join(app, 'PCSE00001'), created: true };
+  assert.strictEqual(P.safeToRemove(ok, [pref]).ok, true);
+  assert.strictEqual(P.safeToRemove({ ...ok, created: false }, [pref]).ok, false);
+  assert.strictEqual(P.safeToRemove({ ...ok, emu: 'rpcs3' }, [pref]).ok, false); // checked against the wrong emulator's rules
+  vitaSfo(path.join(app, 'PCSE00002'), 'PCSE00009');
+  assert.strictEqual(P.safeToRemove({ ...ok, serial: 'PCSE00002', dir: path.join(app, 'PCSE00002') }, [pref]).ok, false);
+  const outside = path.join(TMP, 'vdel-out/PCSE00003'); vitaSfo(outside, 'PCSE00003');
+  fs.symlinkSync(outside, path.join(app, 'PCSE00003'));
+  assert.strictEqual(P.safeToRemove({ ...ok, serial: 'PCSE00003', dir: path.join(app, 'PCSE00003') }, [pref]).ok, false);
+  // savedata, or the app folder itself, never
+  vitaSfo(path.join(pref, 'ux0/user/00/savedata/PCSE00001'), 'PCSE00001');
+  assert.strictEqual(P.safeToRemove({ ...ok, dir: path.join(pref, 'ux0/user/00/savedata/PCSE00001') }, [pref]).ok, false);
+  assert.strictEqual(P.safeToRemove({ ...ok, dir: app }, [pref]).ok, false);
+});
