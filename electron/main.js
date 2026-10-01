@@ -1636,6 +1636,31 @@ function afterInstall(romId) {
     else if (!st.inSteam && steamMgr.onDownloaded(romId)) broadcast('steam-auto', { romId, action: 'add' });
   } catch (e) { log('steam after install', e.message); }
 }
+// ---------------------------------------------------------------- 0.9.3 D7: emulator patches
+// The emulator's own patch list for a game, switched on in the emulator's own patch settings.
+// patches.json: the ones Cartridge turned on (only those can it turn off), per emulator.
+const patchesMod = require('./patches');
+const PATCHES_FILE = path.join(USER_DATA, 'patches.json');
+let patchMine = loadJson(PATCHES_FILE, {});
+// a PS3 game's serial: from its install record, its PARAM.SFO, else its name
+function ps3Serial(romId, where) {
+  if (installs[romId]?.serial) return installs[romId].serial;
+  for (const f of [path.join(where || '', 'PS3_GAME', 'PARAM.SFO'), path.join(where || '', 'PARAM.SFO')]) { const s = patchesMod.sfoAt(f).TITLE_ID; if (s) return s; }
+  const r = romIndexMain().get(Number(romId));
+  return (`${r?.fs_name || ''} ${r?.name || ''} ${path.basename(where || '')}`.match(/\b([A-Z]{4}\d{5})\b/) || [])[1] || null;
+}
+function patchState(romId) {
+  const r = romIndexMain().get(Number(romId));
+  if (!/ps3/i.test(`${r?.platform_slug} ${r?.platform_fs_slug}`)) return { emu: null };
+  const where = installedMap[romId];
+  if (!where) return { emu: 'rpcs3', why: 'Download the game first.' };
+  const serial = ps3Serial(romId, where);
+  if (!serial) return { emu: 'rpcs3', why: 'Cartridge couldn’t read this game’s serial (BLUS12345 and so on). Patches for disc images are listed in RPCS3 itself.' };
+  const dir = patchesMod.rpcs3Dirs()[0];
+  if (!dir || !fs.existsSync(path.join(dir.patches, 'patch.yml'))) return { emu: 'rpcs3', serial, why: 'RPCS3’s patch list isn’t on this device yet. In RPCS3: Manage → Game Patches → Download latest patches. Then come back.' };
+  const version = patchesMod.ps3Version(installs[romId]?.dir || where, rpcs3Hdds(), serial);
+  return { emu: 'rpcs3', serial, version, dir };
+}
 // D2: a Vita game through Vita3K (.pkg with its zRIF installs with no window; a .vpk or .zip
 // opens Vita3K, which starts the game once installed: the install finishes when it closes)
 async function installVitaGame(romId, zrif) {
@@ -2459,6 +2484,27 @@ const handlers = {
     installedMap[romId] = rec.dir;
     broadcast('installed-changed', { romId, path: rec.dir });
     return true;
+  },
+  'patches:list': ({ romId }) => {
+    const st = patchState(romId);
+    if (!st.dir) return { emu: st.emu, emuName: 'RPCS3', serial: st.serial, why: st.why, list: [] };
+    return { emu: 'rpcs3', emuName: 'RPCS3', serial: st.serial, version: st.version, list: patchesMod.rpcs3List(st.dir, st.serial, st.version, patchMine.rpcs3 || {}) };
+  },
+  // changes: [{ key, on }]. Patches turned on in RPCS3 itself are never turned off here.
+  'patches:apply': ({ romId, changes }) => {
+    const st = patchState(romId);
+    if (!st.dir) throw new Error(st.why || 'No patches for this game.');
+    const list = patchesMod.rpcs3List(st.dir, st.serial, st.version, patchMine.rpcs3 || {});
+    const byKey = new Map(list.map((p) => [p.key, p]));
+    const todo = (changes || []).map((c) => {
+      const p = byKey.get(c.key);
+      if (!p || p.on === !!c.on || (p.by === 'emulator' && !c.on)) return null; // unchanged, or not Cartridge's to turn off
+      return { ...p, on: !!c.on };
+    }).filter(Boolean);
+    patchMine.rpcs3 = patchesMod.rpcs3Set(st.dir, todo, patchMine.rpcs3 || {});
+    saveJson(PATCHES_FILE, patchMine);
+    log('rpcs3 patches', st.serial, todo.map((c) => (c.on ? '+' : '-') + c.description).join(', '));
+    return { count: todo.length };
   },
   'dl:add': (job) => enqueue(job),
   'dl:list': () => queue.map(publicItem),

@@ -6,6 +6,16 @@ The branch for 0.9.3 work is `claude/relaxed-fermat-30pigp`. Pull it before star
 
 ---
 
+## 2 Oct 2026 (night run) · 0.9.3 D released, 0.9.3 E (PS3 patches)
+
+- **0.9.3 D** merged (PR #22) at the start of the night run; its test build had passed.
+- **E: RPCS3 patches** (`electron/patches.js`, read from RPCS3's `Utilities/bin_patch.cpp`): `rpcs3Dirs` (`~/.config/rpcs3` or the Flatpak's; `patches/` holds patch.yml, imported_patch.yml, `<serial>_patch.yml`; switches in `config/patch_config.yml`, older RPCS3 next to `patches/`), `parseSfo`, `ps3Version` (APP_VER, an installed update in dev_hdd0 wins), `rpcs3List(dir, serial, version, mine)` (matches Games > title > serial > [versions or All]), `rpcs3Set` (hash > description > title > serial > version > `Enabled: true`; turning off only what is in Cartridge's record; prunes empty maps; backup `patch_config.yml.cartridge-backup` once). YAML is read and written with js-yaml's FAILSAFE schema so `01.00` stays text (now a direct dependency). Record of what Cartridge turned on: `patches.json` (`patchMine.rpcs3`).
+- `main.js`: `patchState`, `ps3Serial`, handlers `patches:list`, `patches:apply`. UI: `src/components/PatchesSheet.vue` (modal `patches`: ticks, Apply, "On in RPCS3" rows can't be turned off), game page More → Steam and emulator → Patches (PS3 games on this device).
+- Tests: `test/patches.test.js` (SFO, version from an update, list by version, on/off keeps the user's entries, never turns off the user's). 37 pass.
+- Next: shadPS4 and PCSX2 patches (F), each from its own source.
+
+---
+
 ## 1 Oct 2026 (evening) · Decisions before the night run
 
 - **PS4 .pkg (D4): dropped** by the owner. Don't build it.

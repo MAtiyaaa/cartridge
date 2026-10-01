@@ -285,6 +285,14 @@ async function installPkg() {
   pkgProg.value = null;
   loadPkg();
 }
+// the emulator's patches for this game; nothing changes until Apply
+async function openPatches() {
+  let info;
+  try { info = await call('patches:list', { romId: Number(props.romId) }); } catch (e) { return toast(e.message, 'error'); }
+  const changes = await openModal('patches', { name: base.value.name, ...info });
+  if (!changes?.length) return;
+  try { const r = await call('patches:apply', { romId: Number(props.romId), changes }); toast(r.count ? `Saved in ${info.emuName}. They apply next time the game starts.` : 'Nothing changed', 'ok', 3500, 'mdiPuzzleOutline'); } catch (e) { toast(e.message, 'error', 7000); }
+}
 // a licence for a game already installed in RPCS3 without one: found in its download or in RomM
 async function addLicence() {
   try { await call('pkg:addLicence', { romId: Number(props.romId) }); toast('Licence added. The game can start now.', 'ok', 3500, 'mdiKeyOutline'); } catch (e) { toast(e.message, 'error', 9000); }
@@ -559,6 +567,7 @@ async function more() {
     else if (!installedPath.value) play.push({ label: 'Mark as installed', sub: 'For games you extracted yourself', value: 'mark', icon: 'mdiCheckboxMarkedCircleOutline' });
   }
   if (trophySystem.value) play.push({ label: tro.value ? 'Change linked trophies' : 'Link to trophies', sub: 'Pick which emulator trophy set belongs to this game', value: 'trophies', icon: 'mdiLinkVariant' });
+  if (installedPath.value && /ps3/i.test(`${base.value?.platform_slug} ${base.value?.platform_fs_slug}`)) play.push({ label: 'Patches', sub: 'From RPCS3’s patch list, saved in RPCS3', value: 'patches', icon: 'mdiPuzzleOutline' });
   if (installedPath.value) play.push({ label: 'Show file location', value: 'path', icon: 'mdiFolderOutline' });
   const top = [
     { label: fav.value ? 'Remove from favourites' : 'Add to favourites', sub: 'Saved in RomM', value: 'fav', icon: fav.value ? 'mdiHeartOff' : 'mdiHeartOutline' },
@@ -602,6 +611,7 @@ async function more() {
   if (v === 'trophies') { await linkTrophies(); return; }
   if (v === 'path') { toast(installedPath.value, 'info', 5000, 'mdiFolder'); return; }
   if (v === 'pkg') { await installPkg(); return; }
+  if (v === 'patches') { await openPatches(); return; }
   if (v === 'refresh') { try { detail.value = await call('api:get', { path: `/api/roms/${props.romId}` }); resetLogos(props.romId); toast('Details refreshed', 'ok', 2000, 'mdiRefresh'); } catch (e) { toast(e.message, 'error'); } return; }
   if (v === 'reset') { store.art = { ...store.art }; delete store.art[props.romId]; await call('art:reset', { id: props.romId }); resetLogos(props.romId); toast('Artwork reset', 'ok', 2000, 'mdiRestore'); return; }
   if (!store.config.sgdbKey) { toast('Add a SteamGridDB API key in Settings → Look & feel first', 'error', 4500); return; }
