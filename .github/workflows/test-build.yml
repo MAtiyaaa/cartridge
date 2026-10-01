@@ -28,6 +28,7 @@ jobs:
         run: |
           V=$(node -p "const v = require('./package.json').version.split('.'); v[2] = +v[2] + 1; v.join('.')")-test.${{ github.run_number }}
           npm version --no-git-tag-version "$V"
+          node -e "const f='package.json',p=require('./'+f);p.versionName=process.argv[1];require('fs').writeFileSync(f,JSON.stringify(p,null,2)+'\\n')" "$V"
           echo "VERSION=$V" >> "$GITHUB_ENV"
       - name: Build AppImage
         run: npm run dist

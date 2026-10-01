@@ -6,6 +6,40 @@ The branch for 0.9.3 work is `claude/relaxed-fermat-30pigp`. Pull it before star
 
 ---
 
+## 1 Oct 2026 · 0.9.3 B (more emulators)
+
+**Built** (`emulators.js`, each launch line read from the emulator's own argument parser, cloned into the scratchpad, not the repo):
+- DeSmuME `desmume "<game>"` (commandline.cpp: one positional; fullscreen is a setting), Flatpak `org.desmume.DeSmuME`.
+- Mupen64Plus `mupen64plus --fullscreen "<game>"` (ui-console main.c: game is the last argument).
+- Snes9x `snes9x-gtk "<game>"` (gtk_s9x.cpp), Flatpak `com.snes9x.Snes9x`.
+- Mesen 2 `Mesen --fullscreen "<game>"` (CommandLineHelper.cs), AppImage `Mesen.AppImage`, every system it emulates.
+- Play! `--fullscreen --disc "<game>"` (ui_qt/main.cpp), Flatpak `org.purei.Play`, AppImage `Play!-<hash>-x86_64.AppImage`.
+- Kronos `kronos -a -f -i "<game>"` (port/qt/Arguments.cpp).
+- PrimeHack: Dolphin's `-b -e` (its CommandLineParse.cpp is Dolphin's), `vblank_mode=0`; EmuDeck's `primehack.sh` wraps Flatpak `io.github.shiiion.primehack`. New `forkOf` in `EMU`: such an emulator goes to the forks list (never the default).
+- Xenia Edge (has207/xenia-edge, the native build EmuDeck installs as `~/Applications/Xenia.AppImage` behind `xenia-emu.sh`): `--fullscreen=true "<game>"` (xenia_main.cc positional `target`, cvar `fullscreen`). The old `xenia` entry (Canary under Proton, `xenia.sh`, `Z:` path) is unchanged.
+- **Not added** (rule: launch options confirmed from source or not at all): Redream (closed source; SRM's `-b -e` preset looks copied from Dolphin), Mednafen (mednafen.github.io blocked here), torzu (its hosts blocked here). Try again from a session that can reach them.
+- Test: one launch line per emulator in `test/detect.test.js` (19 pass).
+
+**Release**: version 0.9.4, `versionName` "0.9.3 B", release "Cartridge 0.9.3 B".
+
+**Owner to test**: any of these you have installed shows in Settings → Emulators for its console, and a game added to Steam with it starts.
+
+**Next**: 0.9.3 C, section D (installing PS3/Vita/PS4 packages, RPCS3 updates) and D7 patches.
+
+---
+
+## 1 Oct 2026 · Release naming for the rest of 0.9.3
+
+**Owner's decision in chat**: release each finished part of 0.9.3 straight to `main`, named "0.9.3 B", "0.9.3 C"... until the 0.9.3 plan is done, so their copy updates each time.
+
+**Done**: updates only install a higher number, so the number keeps going up (0.9.3 B is version 0.9.4, C is 0.9.5...) and the name is separate: `versionName` in `package.json` is what Settings → About, the Quick Menu and update messages show (`versionName()`/`nameOf()` in `main.js`; an update's name comes from its release title "Cartridge 0.9.3 B"). RomM, RetroAchievements and the log still get the number. Test builds set `versionName` to their test version. Rule written into `CLAUDE.md` → Releases. The 0.9.4 plan keeps its name; its number will be whatever comes next.
+
+**D7 patches**: owner chose option 1: patches come into 0.9.3, and Cartridge may turn on the patches it installed in each emulator's own patch settings (nothing else). Plan D7 and the 0.9.4 plan updated.
+
+**Owner asked about**: Cartridge staying running in SteamOS after closing. That is A14, fixed in 0.9.3 (see the stage 1 entry); needs checking on the Ally.
+
+---
+
 ## 1 Oct 2026 · 0.9.3 released (sections A, B4, B5, C)
 
 **Owner's decision in chat**: release now as 0.9.3 on `main` (overrides "nothing to main until tested"); problems get fixed by whichever account picks them up. Each later section should update 0.9.3 again.

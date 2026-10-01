@@ -219,6 +219,28 @@ test('RetroDECK only without EmuDeck, first, and not for consoles whose games ar
   assert.ok(!candidates(E, ['ps2']).ps2.some((x) => /RetroDECK/.test(x)));
 });
 
+test('0.9.3 B emulators: the exact launch line of each (read from their own source)', () => {
+  const H = setup('more', ({ w, flatpaks }) => {
+    for (const b of ['desmume', 'mupen64plus', 'snes9x-gtk', 'kronos']) w('/bin/' + b);
+    w('/Applications/Mesen.AppImage');
+    w('/Applications/Play!-abc123-x86_64.AppImage');
+    w('/Applications/xenia_edge_linux.AppImage');
+    flatpaks.push('io.github.shiiion.primehack');
+  });
+  const c = candidates(H, ['nds', 'n64', 'snes', 'nes', 'ps2', 'saturn', 'gc', 'xbox360']);
+  const line = (k, re) => assert.ok(c[k].some((x) => re.test(x)), k + ':\n' + c[k].join('\n'));
+  line('nds', /^DeSmuME => ~\/bin\/desmume "\{ROM\}"$/);
+  line('n64', /^Mupen64Plus => ~\/bin\/mupen64plus --fullscreen "\{ROM\}"$/);
+  line('snes', /^Snes9x => ~\/bin\/snes9x-gtk "\{ROM\}"$/);
+  line('snes', /^Mesen => ~\/Applications\/Mesen\.AppImage --fullscreen "\{ROM\}"$/);
+  line('nes', /^Mesen => .*Mesen\.AppImage --fullscreen "\{ROM\}"$/);
+  line('ps2', /^Play! => ~\/Applications\/Play!-abc123-x86_64\.AppImage --fullscreen --disc "\{ROM\}"$/);
+  line('saturn', /^Kronos => ~\/bin\/kronos -a -f -i "\{ROM\}"$/);
+  line('xbox360', /^Xenia Edge => ~\/Applications\/xenia_edge_linux\.AppImage --fullscreen=true "\{ROM\}"$/);
+  // PrimeHack is a Dolphin fork: listed as one, last, never the default
+  assert.match(c.gc[c.gc.length - 1], /^PrimeHack · fork of Dolphin => \/usr\/bin\/flatpak run io\.github\.shiiion\.primehack -b -e "\{ROM\}"$/, c.gc.join('\n'));
+});
+
 test('arguments by version, and what EmuDeck puts first', () => {
   const E = require(path.join(ROOT, 'electron/emulators.js'));
   assert.strictEqual(E.argsFor('pcsx2', 'ps2', 'appimage', '1.6.0'), '--nogui --fullscreen "{ROM}"');
