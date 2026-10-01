@@ -25,12 +25,17 @@ export async function openLink(link, { keyOf } = {}) {
   if (!link) return;
   // Cartridge may still be starting: settings first, then the library for games and consoles
   if (!(await until(() => store.config, 20000)) || !store.config.configured) return; // Setup is showing
-  if (['game', 'platform', 'bios'].includes(link.route)) await until(() => store.lib, 20000);
+  if (['game', 'platform', 'bios', 'upload'].includes(link.route)) await until(() => store.lib, 20000);
   store.quickMenu = false;
   const { route, params } = link;
   if (TABS.has(route)) return tab(route);
   if (route === 'sync') { resync(); return tab('home'); }
   if (route === 'search') { store.lastSearch = params.q; return show(link, 'search'); } // no console filter in Search: platform is ignored
+  if (route === 'upload') {
+    // a game from Fuse to upload to RomM: its page checks the files and asks first (views/FuseUpload.vue)
+    store.fuseUpload = { request: params.request || null, json: params.json || null, keyOf: keyOf || null, at: Date.now() };
+    return show(link, 'fuse-upload', { at: store.fuseUpload.at });
+  }
   if (route === 'game') {
     if (romById(params.romId)) return show(link, 'game', { romId: params.romId });
     tab('library');

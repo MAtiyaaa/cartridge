@@ -50,6 +50,15 @@ test('from=fuse is detected, other callers are named, junk is dropped', async ()
   assert.strictEqual(parseDeepLink('cartridge://library#top').route, 'library');
 });
 
+test('upload: from Fuse, with the request file on the desktop or nothing on Android', async () => {
+  const { parseDeepLink } = await load();
+  assert.deepStrictEqual(parseDeepLink('cartridge://upload?from=fuse&v=3'), { route: 'upload', params: {}, from: 'fuse' });
+  assert.deepStrictEqual(parseDeepLink('cartridge://upload?request=%2Fhome%2Fa%2F.cache%2Ffuse%2Fup-1.json&from=fuse&v=3'),
+    { route: 'upload', params: { request: '/home/a/.cache/fuse/up-1.json' }, from: 'fuse' });
+  for (const bad of ['cartridge://upload/x', 'cartridge://upload?request=relative.json', 'cartridge://upload?request=%2Ftmp%2Fa.txt',
+    'cartridge://upload?request=%2Ftmp%2F..%2Fetc%2Fa.json', 'cartridge://upload?request=%2Ftmp%2Fa%0A.json']) assert.strictEqual(parseDeepLink(bad), null, bad);
+});
+
 test('anything else is null', async () => {
   const { parseDeepLink } = await load();
   const bad = [

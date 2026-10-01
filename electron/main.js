@@ -7,6 +7,7 @@ const crypto = require('crypto');
 const { Readable } = require('stream');
 const { pipeline } = require('stream/promises');
 const PLATFORM_MAP = require('./platformMap');
+const fuseUpload = require('./fuseUpload');
 const fuseStatus = require('./fuseStatus');
 
 // Note: never add 'no-sandbox' here. Appending it at runtime (after Chromium has
@@ -214,6 +215,10 @@ function relaunch() {
   app.exit(0);
 }
 let manifest = loadJson(MANIFEST_FILE, {}); // romId -> { path, platformSlug, name, at }
+// RomM's metadata for the games in installed.json, for other apps (Fuse bridge /games, electron/fuseStatus.js).
+// The library keeps a 400 character summary and 3 genres for the UI; this keeps the full text for downloaded games.
+const BRIDGE_META_FILE = path.join(USER_DATA, 'fuse-meta.json');
+const bridgeMeta = loadJson(BRIDGE_META_FILE, null) || {}; // romId -> fuseStatus.keepMeta entry
 
 function loadJson(file, fallback) {
   try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch { return fallback; }
@@ -229,6 +234,7 @@ let remoteServer = null;
 const remoteHub = () => remoteServer || require('electron').__android?.remote || null;
 const saveConfig = () => { saveJson(CONFIG_FILE, config); remoteHub()?.configChanged(config); };
 const saveManifest = () => saveJson(MANIFEST_FILE, manifest);
+const saveBridgeMeta = () => { try { saveJson(BRIDGE_META_FILE, bridgeMeta, false); } catch (e) { log('bridge games save failed', e.message); } };
 
 // ---------------------------------------------------------------- server / api
 const trimUrl = (u) => (u || '').trim().replace(/\/+$/, '');
@@ -581,7 +587,7 @@ async function syncLibrary() {
       }));
       const withGames = platforms.filter((p) => p.rom_count > 0);
       const roms = {};
-      let i = 0;
+      let i = 0, metaNew = false;
       for (const p of withGames) {
         broadcast('sync', { state: 'running', label: p.display_name, done: i, total: withGames.length });
         const list = [];
@@ -594,6 +600,7 @@ async function syncLibrary() {
           });
           const items = Array.isArray(page) ? page : page.items || [];
           list.push(...items.map(slimRom));
+          for (const r of items) if (manifest[r.id] && fuseStatus.keepMeta(bridgeMeta, r)) metaNew = true; // full text for the Fuse bridge
           offset += items.length;
           if (Array.isArray(page) || items.length < 500 || offset >= (page.total ?? 0)) break;
         }
@@ -630,6 +637,8 @@ async function syncLibrary() {
       collections.sort((a, b) => (b.favorite - a.favorite) || a.name.localeCompare(b.name));
       library = { platforms, roms, firstSeen, syncedAt: Date.now(), base: activeBase, lastNew, collections };
       saveJson(LIBRARY_FILE, library, false);
+      for (const id of Object.keys(bridgeMeta)) if (!manifest[id]) { delete bridgeMeta[id]; metaNew = true; } // deleted games
+      if (metaNew) saveBridgeMeta();
       computeInstalled();
       const result = { state: 'done', added: lastNew.length, removed: Math.max(0, prevCount + lastNew.length - count), total: count, firstSync };
       broadcast('library', publicLibrary());
@@ -715,7 +724,8 @@ const SCAN_SOURCES = {
   flashpoint: 'FLASHPOINT_API_ENABLED', hltb: 'HLTB_API_ENABLED', sgdb: 'STEAMGRIDDB_API_ENABLED',
   libretro: 'LIBRETRO_API_ENABLED', steam: 'STEAM_API_ENABLED',
 };
-async function scanServer() {
+// platforms: RomM platform ids to scan (all by default); quiet: no progress in the top bar (an upload's own scan)
+async function scanServer({ platforms = [], quiet = false } = {}) {
   const s = config.server;
   if (s.auth !== 'password' || !s.username) throw new Error('Server scans need username & password sign-in');
   const base = await resolveBase();
@@ -734,12 +744,12 @@ async function scanServer() {
     const finish = (fn, v) => { clearTimeout(t); sock.close(); fn(v); };
     const t = setTimeout(() => finish(reject, new Error('Scan timed out')), 4 * 3600e3);
     sock.on('connect', () => {
-      broadcast('sync', { state: 'scanning', label: 'Scanning server…' });
-      sock.emit('scan', { platforms: [], type: 'quick', apis });
+      if (!quiet) broadcast('sync', { state: 'scanning', label: 'Scanning server…' });
+      sock.emit('scan', { platforms, type: 'quick', apis });
     });
     sock.on('connect_error', (e) => finish(reject, new Error('Could not open scan connection: ' + e.message)));
-    sock.on('scan:scanning_platform', (p) => { lastPlatform = p?.display_name || p?.name || ''; broadcast('sync', { state: 'scanning', label: `Scanning ${lastPlatform}` }); });
-    sock.on('scan:scanning_rom', (r) => broadcast('sync', { state: 'scanning', label: `Scanning ${lastPlatform}: ${r?.name || r?.fs_name || ''}` }));
+    sock.on('scan:scanning_platform', (p) => { lastPlatform = p?.display_name || p?.name || ''; if (!quiet) broadcast('sync', { state: 'scanning', label: `Scanning ${lastPlatform}` }); });
+    sock.on('scan:scanning_rom', (r) => { if (!quiet) broadcast('sync', { state: 'scanning', label: `Scanning ${lastPlatform}: ${r?.name || r?.fs_name || ''}` }); });
     sock.on('scan:done', (stats) => finish(resolve, stats || {}));
     sock.on('scan:done_ko', (msg) => finish(reject, new Error(typeof msg === 'string' ? msg : 'Scan failed')));
   });
@@ -772,28 +782,33 @@ async function handleImage(request) {
   }
   const target = u.searchParams.get('u');
   if (!target) return new Response('bad', { status: 400 });
-  const key = crypto.createHash('sha1').update(target).digest('hex');
-  const file = path.join(IMG_CACHE, key);
+  const file = imgCacheFile(target);
   try {
     const buf = await fsp.readFile(file);
     const type = (await fsp.readFile(file + '.type', 'utf8').catch(() => '')) || 'image/jpeg';
     return new Response(buf, { headers: { 'Content-Type': type, 'Cache-Control': 'max-age=31536000' } });
   } catch {}
   try {
-    let url, headers = {};
-    if (/^https?:\/\//.test(target)) url = target.replace(/^\/\//, 'https://');
-    else { url = (await resolveBase()) + (target.startsWith('/') ? '' : '/') + target; headers = authHeaders(); delete headers.Accept; }
-    if (url.startsWith('//')) url = 'https:' + url;
-    const r = await fetch(url, { headers, signal: AbortSignal.timeout(20000) });
-    if (!r.ok) return new Response('nf', { status: 404 });
-    const buf = Buffer.from(await r.arrayBuffer());
-    const type = r.headers.get('content-type') || 'image/jpeg';
-    fsp.mkdir(IMG_CACHE, { recursive: true }).then(() => Promise.all([fsp.writeFile(file, buf), fsp.writeFile(file + '.type', type)])).catch(() => {});
-    return new Response(buf, { headers: { 'Content-Type': type } });
+    const got = await remoteImage(target);
+    if (!got) return new Response('nf', { status: 404 });
+    keepImage(file, got).catch(() => {});
+    return new Response(got.buf, { headers: { 'Content-Type': got.type } });
   } catch {
     return new Response('err', { status: 502 });
   }
 }
+const imgCacheFile = (target) => path.join(IMG_CACHE, crypto.createHash('sha1').update(target).digest('hex'));
+// A RomM image (signed in) or a web one: { buf, type }, or null when the server has none. Throws when unreachable.
+async function remoteImage(target) {
+  let url, headers = {};
+  if (/^https?:\/\//.test(target)) url = target.replace(/^\/\//, 'https://');
+  else { url = (await resolveBase()) + (target.startsWith('/') ? '' : '/') + target; headers = authHeaders(); delete headers.Accept; }
+  if (url.startsWith('//')) url = 'https:' + url;
+  const r = await fetch(url, { headers, signal: AbortSignal.timeout(20000) });
+  if (!r.ok) return null;
+  return { buf: Buffer.from(await r.arrayBuffer()), type: r.headers.get('content-type') || 'image/jpeg' };
+}
+const keepImage = (file, { buf, type }) => fsp.mkdir(IMG_CACHE, { recursive: true }).then(() => Promise.all([fsp.writeFile(file, buf), fsp.writeFile(file + '.type', type)]));
 
 // ---------------------------------------------------------------- logos + custom artwork
 // Logos come from (in order) a logo the user picked, RomM's own logo, or SteamGridDB (free key).
@@ -1199,6 +1214,7 @@ async function setArt({ id, kind, url }) {
   if (!Object.keys(o).length) delete artOverrides[id];
   saveArt();
   if (kind === 'logo') delete logoCache[id];
+  fuseStatus.changed('images'); // the Fuse bridge shows the picked cover and logo too
   return artOverrides[id] || {};
 }
 
@@ -1206,6 +1222,7 @@ async function setArt({ id, kind, url }) {
 const queue = []; // items
 let nextId = 1;
 let psbId = null;
+let fuseUploads = null; // uploads Fuse handed over (set up with the upload code below)
 
 function publicItem(it) {
   const { abort, ...rest } = it;
@@ -1274,7 +1291,7 @@ function emitQueueThrottled() {
 }
 
 function updatePowerBlock() {
-  const active = queue.some((q) => q.status === 'downloading' || q.status === 'queued');
+  const active = queue.some((q) => q.status === 'downloading' || q.status === 'queued') || !!fuseUploads?.busy();
   if (active && psbId === null) psbId = powerSaveBlocker.start('prevent-app-suspension');
   if (!active && psbId !== null) { powerSaveBlocker.stop(psbId); psbId = null; }
 }
@@ -1554,6 +1571,7 @@ async function runJob(it) {
     it.path = finalPath;
     manifest[rom.id] = { path: finalPath, platformSlug: rom.platform_slug, name: rom.name || rom.fs_name, at: Date.now() };
     saveManifest();
+    if (fuseStatus.keepMeta(bridgeMeta, rom)) saveBridgeMeta(); // RomM's full details, for other apps (Fuse bridge)
     installedMap[rom.id] = finalPath;
     broadcast('installed-changed', { romId: rom.id, path: finalPath });
     // a re-download (library check): the new copy is in, so the old one kept aside goes
@@ -1733,15 +1751,64 @@ function broadcast(ch, data) {
   fuseStatus.changed(ch, data);
 }
 
-// Status for other apps (Fuse, docs/FUSE_BRIDGE.md): downloads, connection, recent games, nothing about the
-// server or account. The Linux desktop writes a file; Android sends it to the WebView for CartridgeStatusProvider.
+// Status for other apps (Fuse, docs/FUSE_BRIDGE.md): downloads (in total and game by game), connection, recent
+// games, and the downloaded games with their metadata and pictures; nothing about the server or account. The Linux
+// desktop writes a file; Android sends the status and the games to the WebView for CartridgeStatusProvider.
 const onAndroid = !!require('electron').__android;
+const bridgeOn = onAndroid || process.platform === 'linux';
+// Pictures of the bridge's games. Other apps can't sign in to RomM, so they get files Cartridge has: the image
+// cache and prepared logos. A downloaded game's missing picture is fetched once into the image cache, one at a time.
+const warmTried = new Set();
+const warmJobs = [];
+let warming = false;
+function warm(src) {
+  if (!bridgeOn || warmTried.has(src)) return;
+  warmTried.add(src);
+  warmJobs.push(src);
+  if (!warming) warmNext();
+}
+async function warmNext() {
+  warming = true;
+  let got = 0, told = Date.now();
+  while (warmJobs.length) {
+    const src = warmJobs.shift();
+    try {
+      const img = await remoteImage(src);
+      // a sign-in page from a proxy in front of RomM is no picture
+      if (img && !/^(text\/|application\/json)/i.test(img.type)) { await keepImage(imgCacheFile(src), img); got++; }
+    } catch { warmTried.delete(src); } // not reachable: tried again after the next change
+    if (got && Date.now() - told > 5000) { fuseStatus.changed('images'); got = 0; told = Date.now(); } // the games list is big: batch
+  }
+  warming = false;
+  if (got) fuseStatus.changed('images');
+}
+const cachedImg = (src) => { if (!src) return null; const f = imgCacheFile(src); return fs.existsSync(f) ? f : null; };
+function bridgeImages(id, r) {
+  const art = artOverrides[id] || {};
+  // the first source, from the cache or fetched once; until it is there, another one already cached
+  const pick = (...list) => {
+    const src = list.filter(Boolean);
+    const best = cachedImg(src[0]);
+    if (src.length && !best) warm(src[0]);
+    return best || src.slice(1).map(cachedImg).find(Boolean) || null;
+  };
+  // the trimmed logo the game page shows (logo:get); until one is made, the picked or RomM's logo as it is
+  const lc = logoCache[id];
+  const made = lc?.v === LOGO_VERSION && lc.file ? path.join(LOGO_DIR, lc.file) : null;
+  return {
+    cover: pick(art.grid, r?.path_cover_large, r?.path_cover_small, r?.url_cover),
+    logo: made && fs.existsSync(made) ? made : pick(art.logo, r?.logo),
+    screenshot: pick(r?.shot),
+  };
+}
 fuseStatus.setup({
-  build: () => ({ version: app.getVersion(), queue, manifest, syncedAt: library?.syncedAt || 0,
+  build: () => ({ version: app.getVersion(), queue, manifest, syncedAt: library?.syncedAt || 0, uploads: fuseUploads?.list() || [],
     // the top bar's pill: LAN or Tunnel is connected, Offline is not; null before the first check
     connected: !config.configured ? false : activeBase == null ? null : !!activeBase }),
+  games: bridgeOn ? () => ({ manifest, roms: romIndexMain(), meta: bridgeMeta, images: bridgeImages }) : null,
   file: !onAndroid && process.platform === 'linux' ? fuseStatus.statusFile() : null,
   send: onAndroid ? (s) => { if (win && !win.isDestroyed()) win.webContents.send('fuse:status', s); } : null,
+  sendGames: onAndroid ? (g) => { if (win && !win.isDestroyed()) win.webContents.send('fuse:games', g); } : null,
   log,
 });
 
@@ -2040,6 +2107,7 @@ async function editRom({ romId, name, summary, coverUrl, coverFile }) {
     const i = list.findIndex((x) => x.id === romId);
     if (i >= 0) { library.roms[pid][i] = { ...list[i], ...slim }; break; }
   }
+  if (manifest[romId] && fuseStatus.keepMeta(bridgeMeta, full)) saveBridgeMeta();
   saveLib();
   return slim;
 }
@@ -2106,6 +2174,19 @@ async function uploadFile({ path: f, platformId }) {
   })().then(() => put({ pct: 100, state: 'done' }), (e) => put({ state: st.abort.signal.aborted ? 'cancelled' : 'error', error: st.abort.signal.aborted ? null : e.message }));
   return { path: f, state: 'uploading' };
 }
+// Games Fuse hands over to upload (electron/fuseUpload.js, docs/FUSE_BRIDGE.md): checked and shown first, sent
+// only after the user confirms here, one at a time; kept in fuse-uploads.json for the Fuse status
+const FUSE_UPLOADS_FILE = path.join(USER_DATA, 'fuse-uploads.json');
+fuseUploads = fuseUpload.createUploads({
+  fetch: (...a) => fetch(...a), fsp,
+  base: () => resolveBase(), headers: () => authHeaders(), api: (p, o) => api(p, o),
+  heartbeat: () => api('/api/heartbeat'),
+  scan: (platforms) => scanServer({ platforms, quiet: true }),
+  denied: DENIED_WRITE,
+  onChange: (list) => { broadcast('fuse-uploads', list); updatePowerBlock(); },
+  save: (list) => saveJson(FUSE_UPLOADS_FILE, list),
+});
+fuseUploads.restore(loadJson(FUSE_UPLOADS_FILE, []));
 const handlers08 = {
   // local play time plus where each game was last played (this device or another one in RomM)
   'play:stats': async () => {
@@ -2131,6 +2212,14 @@ const handlers08 = {
   'upload:list': () => ({ files: uploadCandidates(), active: [...uploads.values()].map(({ path: p, pct, state, error }) => ({ path: p, pct, state, error })) }),
   'upload:start': (o) => uploadFile(o),
   'upload:cancel': ({ path: f }) => { uploads.get(f)?.abort.abort(); return true; },
+  // Fuse: read and check an upload request ({ request: file } from a desktop link, { json } from Android)
+  'fuse:upload:open': async (src) => fuseUploads.prepare(await fuseUpload.readRequest(src, fsp)),
+  'fuse:upload:start': ({ token, platformId }) => {
+    const p = library?.platforms?.find((x) => x.id === Number(platformId));
+    return fuseUploads.start({ token, platform: p && { id: p.id, name: p.display_name || p.name } });
+  },
+  'fuse:upload:cancel': ({ id }) => fuseUploads.cancel(String(id || '')),
+  'fuse:upload:list': () => fuseUploads.list(),
 };
 // ---------------------------------------------------------------- 0.9: library check and repair
 // Every downloaded game checked against RomM's own record, the way a finished download is: sizes,
@@ -2254,7 +2343,7 @@ const handlers = {
   'art:all': () => artOverrides,
   'art:search': (q) => sgdbArt(q),
   'art:set': (q) => setArt(q),
-  'art:reset': ({ id }) => { delete artOverrides[id]; delete logoCache[id]; saveArt(); saveLogoCache(); return {}; },
+  'art:reset': ({ id }) => { delete artOverrides[id]; delete logoCache[id]; saveArt(); saveLogoCache(); fuseStatus.changed('images'); return {}; },
   'logo:test': async ({ key }) => {
     const r = await fetch(SGDB_BASE() + '/search/autocomplete/zelda', { headers: { Authorization: 'Bearer ' + key }, signal: AbortSignal.timeout(12000) });
     return { ok: r.ok, status: r.status };
@@ -2482,6 +2571,7 @@ const handlers = {
   'app:startGame': () => { const g = startGame; startGame = null; return g; },
   'app:deeplink': () => { const l = startLink; startLink = null; return l; },
   'fuse:status': () => fuseStatus.current(),
+  'fuse:games': () => fuseStatus.currentGames(),
   'update:get': () => ({ ...updateState, current: app.getVersion(), supported: !!autoUpdater }),
   'update:check': async () => { if (!autoUpdater) throw new Error('Updates work in the AppImage build only'); await autoUpdater.checkForUpdates(); return updateState; },
   'update:install': () => { if (updateState.state === 'ready') autoUpdater.quitAndInstall(true, true); },
@@ -2499,7 +2589,7 @@ const handlers = {
   'app:relaunch': () => relaunch(),
   'app:graphics': () => ({ mode: useGpu ? 'hardware' : 'software', setting: config.graphics, status: app.getGPUFeatureStatus?.() }),
   'app:fullscreen': () => win.setFullScreen(!win.isFullScreen()),
-  'app:clearCache': async () => { await fsp.rm(IMG_CACHE, { recursive: true, force: true }); return true; },
+  'app:clearCache': async () => { await fsp.rm(IMG_CACHE, { recursive: true, force: true }); warmTried.clear(); fuseStatus.changed('images'); return true; },
 };
 
 // Desktop: the phone remote server (off until turned on in Settings → Phone remote)

@@ -121,10 +121,13 @@ export async function afterMount() {
     const active = store.downloads.filter((d) => ['queued', 'downloading'].includes(d.status));
     const cur = active.find((d) => d.status === 'downloading');
     const pct = cur && cur.total ? Math.round((cur.received / cur.total) * 100) : 0;
+    // uploads from Fuse keep the notification too (after the downloads)
+    const up = !active.length ? store.fuseUploads.find((u) => ['waiting', 'uploading', 'scanning'].includes(u.state)) : null;
+    if (up) return { busy: true, title: `Uploading ${up.title} to RomM`, percent: up.total ? Math.round((up.sent / up.total) * 100) : 0 };
     return { busy: active.length > 0, title: active.length > 1 ? `Downloading ${active.length} games` : `Downloading ${cur?.name || active[0]?.name || ''}`, percent: pct };
   };
   cart.on('android:busy', (b) => { busy = b; if (opt('backgroundDownloads') || !b) Native.setBusy({ ...note(), busy: b }).catch(() => {}); });
-  watch(() => store.downloads, () => {
+  watch(() => [store.downloads, store.fuseUploads], () => {
     if (!busy || !opt('backgroundDownloads') || Date.now() - lastNote < 1000) return;
     lastNote = Date.now();
     Native.setBusy(note()).catch(() => {});

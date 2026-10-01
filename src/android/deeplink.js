@@ -46,6 +46,15 @@ export function parseDeepLink(url) {
     const slug = rest.length === 1 ? slugOf(rest[0]) : null;
     return slug ? out(route, { slug }) : null;
   }
+  // Fuse hands over a game to upload to RomM. The desktop names the request file Fuse wrote; on Android the
+  // request comes with the intent (CartridgeNativePlugin.takeFuseUpload). Nothing uploads before the user confirms.
+  if (route === 'upload') {
+    if (rest.length) return null;
+    const r = query.request;
+    if (r == null || r === '') return out('upload');
+    return typeof r === 'string' && r.length <= 1024 && r.startsWith('/') && /\.json$/i.test(r) && !/[\u0000-\u001f\u007f]/.test(r) && !r.split('/').includes('..')
+      ? out('upload', { request: r }) : null;
+  }
   if (route === 'search') {
     if (rest.length) return null;
     const params = { q: String(query.q || '').replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, MAX_QUERY) };
