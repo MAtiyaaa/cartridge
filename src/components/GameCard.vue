@@ -12,7 +12,9 @@
       <div v-if="del != null" class="deleting"><Ring :pct="del" /><span>Deleting</span></div>
     </div>
     <div v-if="!hideTitle" class="title">{{ rom.name }}</div>
-    <div v-if="showPlatform || extra" class="sub">{{ [showPlatform && rom.platform_display_name, extra].filter(Boolean).join(' · ') }}</div>
+    <div v-if="showPlatform" class="sub">{{ rom.platform_display_name }}</div>
+    <!-- its own line, wrapping inside the card's width, never cut short (0.9.3 F7: device names) -->
+    <div v-if="extra" class="sub extra">{{ extra }}</div>
   </button>
 </template>
 <script setup>

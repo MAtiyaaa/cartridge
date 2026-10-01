@@ -169,6 +169,7 @@ body.surface-glass .glass { background: var(--glass-bg); border: 1px solid var(-
 .card .ph small { font-family: var(--body); font-weight: 500; font-size: var(--t-xs); color: var(--muted); }
 .card .title { font-size: var(--t-sm); font-weight: 500; line-height: 1.3; color: var(--text); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; padding: 0 2px; transition: color 0.2s; }
 .card .sub { font-size: var(--t-xs); color: var(--muted); margin-top: -5px; padding: 0 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.card .sub.extra { white-space: normal; overflow-wrap: anywhere; text-overflow: clip; line-height: 1.25; }
 .card:focus { box-shadow: none !important; }
 .card:focus .art, .card:focus-visible .art { transform: translateY(-4px) scale(1.06); box-shadow: var(--ring), var(--shadow-card); }
 .card:focus .art .shine { display: none; }
