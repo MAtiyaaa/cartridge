@@ -1,0 +1,44 @@
+name: Test build
+
+# A test AppImage for every push to a work branch (claude/...), to try on a device before release.
+# Nothing is published: the AppImage is attached to the run (Actions → this run → Artifacts).
+# Its version is the next one with "-test.<run>" (e.g. 0.9.3-test.12), shown in Settings → About;
+# package.json is only changed inside this job, never committed. Releases stay in release.yml.
+on:
+  push:
+    branches: ['claude/**']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  appimage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Tests (emulator detection on fake homes)
+        run: npm test
+      - name: Test version number
+        run: |
+          V=$(node -p "const v = require('./package.json').version.split('.'); v[2] = +v[2] + 1; v.join('.')")-test.${{ github.run_number }}
+          npm version --no-git-tag-version "$V"
+          echo "VERSION=$V" >> "$GITHUB_ENV"
+      - name: Build AppImage
+        run: npm run dist
+      - name: Launch check (must open and render)
+        run: |
+          sudo apt-get update -q && sudo apt-get install -y -q xvfb libfuse2t64 || sudo apt-get install -y -q xvfb libfuse2
+          cd release
+          CARTRIDGE_SMOKE=1 APPIMAGE_EXTRACT_AND_RUN=1 timeout 90 xvfb-run -a ./Cartridge-x86_64.AppImage 2>&1 | tee smoke.log
+          grep -q "SMOKE OK" smoke.log
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Cartridge-${{ env.VERSION }}
+          path: release/Cartridge-x86_64.AppImage
+          retention-days: 14

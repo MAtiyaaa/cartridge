@@ -11,6 +11,7 @@
         <button v-for="t in tabs" :key="t.name" class="tab" :class="{ active: activeTab === t.name }" @click="tab(t.name)">
           <Icon :name="t.icon" :size="18" /><span class="tab-label">{{ t.label }}</span>
           <span v-if="t.name === 'downloads' && activeDl.length" class="tab-badge">{{ activeDl.length }}</span>
+          <span v-if="t.name === 'settings' && store.issues" class="tab-dot" :title="`${store.issues} waiting in Settings → Emulators`" />
         </button>
         <Btn b="RT" class="tab-trig" />
       </nav>
@@ -217,7 +218,9 @@ onMounted(async () => {
   setTimeout(steamReport, 2500);
   // 0.9: a new install goes through emulator Setup once, after connecting to RomM
   if (store.config.configured && !store.config.setupDone) go('emu-setup', { first: true });
-  setTimeout(checkMoved, 6000);
+  // anything waiting for you (a moved emulator, games out of their collections, missing BIOS) shows as
+  // a dot on Settings and a list in Settings → Emulators, not a pop-up (0.9.3)
+  setTimeout(() => { if (store.config.configured) call('issues:list').then((l) => (store.issues = l.length)).catch(() => {}); }, 8000);
   setTimeout(setupNotice, 3500);
   if (store.config.configured) call('server:status').then((c) => (store.connection = c)).catch(() => {});
   pushLayer(document.body, {
@@ -241,27 +244,11 @@ watch(() => store.config?.configured, (v, was) => { if (v && !was && !store.conf
 async function setupNotice() {
   if (store.config?.setupDone !== 'before 0.9' || store.config.ui.setupNotice || store.modal) return;
   saveConfig({ ui: { setupNotice: Date.now() } });
-  const v = await choose({ title: 'New: Emulator setup', message: 'Cartridge can now find your emulators wherever they are, even renamed AppImages, and check each console before its games go into Steam: the emulator, its launch options, BIOS and folder access.\n\nIt’s always in Settings → Steam.', options: [
+  const v = await choose({ title: 'New: Emulator setup', message: 'Cartridge can now find your emulators wherever they are, even renamed AppImages, and check each console before its games go into Steam: the emulator, its launch options, BIOS and folder access.\n\nIt’s always in Settings → Emulators.', options: [
     { label: 'Open Emulator setup', value: 'open', icon: 'mdiRadar' },
     { label: 'Later', value: 'later', icon: 'mdiClockOutline' },
   ] });
   if (v === 'open') go('emu-setup');
-}
-// An emulator Cartridge's shortcuts use isn't where it was (an update renamed the AppImage, or it
-// moved): offer Shortcut health, once per set of paths
-async function checkMoved() {
-  if (store.modal) { setTimeout(checkMoved, 5000); return; } // one dialog at a time
-  const m = await call('steam:moved').catch(() => []);
-  if (!m.length) return;
-  const sig = m.map((x) => x.exe).join('|');
-  if (sessionStorage.getItem('movedSeen') === sig) return;
-  sessionStorage.setItem('movedSeen', sig);
-  const n = m.reduce((a, x) => a + x.shortcuts, 0);
-  const v = await choose({ title: 'An emulator moved', message: `${m.map((x) => x.exe).join('\n')}\n\nisn't there any more${n ? `, and ${n} Steam shortcut${n === 1 ? ' uses' : 's use'} it` : ''}. Cartridge can look for it and fix ${n === 1 ? 'the shortcut' : 'them'}.`, options: [
-    { label: 'Fix it', sub: 'Shortcut health', value: 'fix', icon: 'mdiAutoFix' },
-    { label: 'Later', value: 'later', icon: 'mdiClockOutline' },
-  ] });
-  if (v === 'fix') { await call('setup:scan').catch(() => {}); go('steam-health'); }
 }
 onBeforeUnmount(() => clearInterval(clockT));
 
@@ -322,6 +309,7 @@ watch(viewKey, async () => {
 .top-search .clear { background: none; border: 0; color: var(--muted); padding: 4px; display: grid; place-items: center; }
 .backbtn { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; background: var(--s2); margin-right: -6px; }
 .backbtn:active { background: rgba(255, 255, 255, 0.2); }
+.tab-dot { position: absolute; top: 6px; right: 6px; width: 8px; height: 8px; border-radius: 50%; background: #ffd978; }
 .tab-badge { position: absolute; top: 2px; right: 6px; min-width: 16px; height: 16px; border-radius: var(--r-md); background: var(--peach); color: var(--on-primary); font-size: var(--t-xs); font-weight: 700; display: grid; place-items: center; padding: 0 4px; }
 .pops { position: fixed; top: 76px; right: 24px; z-index: 80; display: flex; flex-direction: column; gap: 10px; pointer-events: none; }
 .pop { display: flex; gap: 14px; align-items: center; width: 380px; padding: 12px 16px 12px 12px; border-radius: var(--r-lg); background: rgba(18, 20, 32, 0.92); box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.12); }

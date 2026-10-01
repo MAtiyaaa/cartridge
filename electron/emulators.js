@@ -51,6 +51,23 @@ const EMU = {
 };
 EMU.ares.for = Object.keys(EMU.ares.system);
 
+// Forks that announce themselves in their name (0.9.3): found copies matching these are listed as
+// that fork, after the emulator itself, and never used unless picked. Anything else can be named a
+// fork of an emulator in Emulator setup ("Which one?").
+const FORKS = {
+  shadps4: [[/gr2/i, 'shadPS4 GR2'], [/bb[\s._-]?launcher/i, 'BB Launcher']],
+  dolphin: [[/primehack/i, 'PrimeHack'], [/slippi/i, 'Slippi Dolphin']],
+};
+// Members of one family sold under one entry above, shown by their real name (0.9.3: a Citra
+// install isn't "Azahar"). Matched on the program, script or Flatpak id.
+const REAL_NAMES = {
+  azahar: [[/lime3ds/i, 'Lime3DS'], [/citra/i, 'Citra']],
+  yuzu: [[/sudachi/i, 'Sudachi'], [/suyu/i, 'suyu'], [/torzu/i, 'torzu']],
+  ryujinx: [[/ryubing/i, 'Ryubing']],
+};
+const forkOf = (id, text) => (FORKS[id] || []).find(([re]) => re.test(String(text || '')))?.[1] || null;
+const realName = (id, text) => (REAL_NAMES[id] || []).find(([re]) => re.test(String(text || '')))?.[1] || EMU[id]?.label || id;
+
 // RetroArch cores per console, best first (EmuDeck's defaults lead)
 const CORES = {
   nes: ['mesen', 'fceumm', 'nestopia', 'quicknes'], fds: ['mesen', 'fceumm', 'nestopia'], famicom: ['mesen', 'fceumm', 'nestopia'],
@@ -115,4 +132,4 @@ function argsFor(id, key, src, version) {
 }
 const coreName = (c) => CORE_NAMES[c] || c.replace(/_/g, ' ');
 
-module.exports = { EMU, CORES, RA_FIRST, emulatorsFor, argsFor, coreName, DISC_FIRST, GAME_EXT, DIR_GAMES };
+module.exports = { EMU, CORES, RA_FIRST, emulatorsFor, argsFor, coreName, DISC_FIRST, GAME_EXT, DIR_GAMES, FORKS, forkOf, realName };

@@ -2,7 +2,7 @@
   <div class="view" data-scroll ref="el">
     <header class="page-head">
       <div style="min-width: 0">
-        <div class="eyebrow">Settings · Steam</div>
+        <div class="eyebrow">Settings · Emulators</div>
         <h1>{{ !h ? 'Shortcut health' : h.problems.length ? `${h.problems.length} shortcut${h.problems.length === 1 ? '' : 's'} would fail` : 'Every shortcut looks fine' }}</h1>
         <div class="lead">{{ !h ? 'Checking your Steam shortcuts…' : !h.steam ? 'Steam was not found on this device.' : `Checked ${h.checked} Steam shortcuts: emulators that moved, games that are gone, missing RetroArch cores, and ones made with an older setup.` }}</div>
       </div>

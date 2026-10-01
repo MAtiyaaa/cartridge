@@ -1451,6 +1451,29 @@ async function downloadBios(platformId, slug) {
   return { count: list.length, files: done, dir };
 }
 
+// A game deleted file by file, so its card can show real progress (0.9.3). Links are removed, never
+// followed. Big folder games (PS3, PS4, Switch) take a while; a single file is near instant.
+async function removeWithProgress(target, romId) {
+  const files = [];
+  const walk = async (p) => {
+    const st = await fsp.lstat(p).catch(() => null);
+    if (!st) return;
+    if (st.isDirectory()) { for (const n of await fsp.readdir(p).catch(() => [])) await walk(path.join(p, n)); }
+    else files.push([p, st.size]);
+  };
+  await walk(target);
+  const total = files.reduce((s, [, n]) => s + n, 0) || 1;
+  let done = 0, last = 0;
+  broadcast('delete-progress', { romId, pct: 0 });
+  for (const [f, n] of files) {
+    await fsp.rm(f, { force: true });
+    done += n;
+    if (Date.now() - last > 100) { last = Date.now(); broadcast('delete-progress', { romId, pct: Math.round((done / total) * 100) }); }
+  }
+  await fsp.rm(target, { recursive: true, force: true });
+  broadcast('delete-progress', { romId, pct: 100 });
+}
+
 // ---------------------------------------------------------------- storage manager
 // Like Steam's: each drive with what Cartridge's games use, what else uses it and what is free, and
 // every game on this device by size. Sizes are measured on disk (folders walked) and cached by mtime.
@@ -1610,7 +1633,7 @@ function createWindow() {
     autoHideMenuBar: true,
     title: 'Cartridge',
     icon: path.join(__dirname, '../build/icon.png'),
-    webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, backgroundThrottling: false },
+    webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false },
   });
   win.setMenuBarVisibility(false);
   if (process.env.VITE_DEV) win.loadURL('http://localhost:5173');
@@ -2015,6 +2038,7 @@ const handlers09 = {
   'setup:overview': () => steamMgr.setupOverview(),
   'setup:scan': async ({ drives } = {}) => { await steamMgr.scanEmulators({ drives: !!drives }); return steamMgr.setupOverview(); },
   'setup:confirm': ({ path: f, id }) => steamMgr.confirm(f, id),
+  'setup:fork': ({ path: f, of, name }) => steamMgr.markFork(f, of, name),
   'setup:use': ({ key, file, as, args }) => steamMgr.useFile(key, file, { as, args }),
   'setup:report': () => steamMgr.setupReport(),
   // give a Flatpak emulator your games folder (asked first in Setup): only its Flatpak permissions change
@@ -2049,6 +2073,28 @@ const handlers09 = {
   'steam:gameEmuOptions': ({ key }) => steamMgr.candidatesFor(key),
   'steam:setGameEmu': ({ romId, id }) => steamMgr.setGameEmu(romId, id),
   'steam:refreshGame': ({ romId }) => steamMgr.refreshGame(romId),
+  // 0.9.3: everything waiting for you, in one list (Settings → Emulators) instead of start-up pop-ups
+  'issues:list': () => {
+    const out = [];
+    const add = (kind, text, sub, fix) => out.push({ kind, text, sub: sub || '', fix });
+    try {
+      const miss = steamMgr.verifyCollections() || [];
+      if (miss.length) add('collections', `${miss.length} game${miss.length === 1 ? ' is' : 's are'} missing from ${[...new Set(miss.map((m) => m.collection))].join(', ')}`, 'Steam Cloud may have replaced your Steam collections', 'collections');
+    } catch {}
+    try {
+      const h = steamMgr.health();
+      const by = (k) => h.problems.filter((p) => p.issues.some((i) => i.kind === k)).length;
+      const n = { emulator: by('emulator'), game: by('game'), core: by('core'), flatpak: by('flatpak') };
+      if (n.emulator) add('moved', `${n.emulator} Steam shortcut${n.emulator === 1 ? ' points' : 's point'} at an emulator that isn't there any more`, 'Usually an update renamed it, or it moved', 'health');
+      if (n.game) add('game', `${n.game} Steam shortcut${n.game === 1 ? ' is' : 's are'} for a game that's gone from this device`, '', 'health');
+      if (n.core + n.flatpak) add('core', `${n.core + n.flatpak} Steam shortcut${n.core + n.flatpak === 1 ? ' needs' : 's need'} a missing RetroArch core or Flatpak`, '', 'health');
+    } catch (e) { log('issues: health', e.message); }
+    try {
+      for (const m of steamMgr.movedEmulators().filter((x) => !x.shortcuts)) add('setup', `Your launch setup points at ${m.exe}, which isn't there any more`, '', 'setup');
+      for (const c of steamMgr.setupOverview().consoles) for (const k of c.checks) if (k.bios && k.level === 'warn') add('bios', `${c.platform}: ${k.text}`, '', 'setup');
+    } catch (e) { log('issues: setup', e.message); }
+    return out;
+  },
 };
 const handlers = {
   ...trophySvc.handlers,
@@ -2201,7 +2247,7 @@ const handlers = {
     // never delete a whole console folder or the ROMs root
     const roots = new Set([config.romsRoot, ...(library?.platforms || []).map((pl) => platformPath(pl).path)].filter(Boolean).map((x) => path.resolve(x)));
     if (roots.has(path.resolve(target))) throw new Error('Refusing to delete a whole console folder');
-    await fsp.rm(target, { recursive: true, force: true });
+    await removeWithProgress(target, romId);
     delete manifest[romId];
     saveManifest();
     delete installedMap[romId];
@@ -2288,6 +2334,7 @@ const handlers = {
   'steam:liveInfo': () => steamMgr.liveInfo(),
   'steam:setEmu': ({ key, id }) => steamMgr.setEmu(key, id),
   'steam:refresh': ({ key }) => steamMgr.refresh(key),
+  'steam:takeOver': ({ key }) => steamMgr.takeOver(key),
   'steam:refreshArt': ({ style }) => steamMgr.refreshArt(style),
   'steam:liveEnable': () => steamMgr.liveEnable(),
   'steam:queueAdd': (items) => steamMgr.queueAdd(items),
@@ -2371,3 +2418,20 @@ app.on('child-process-gone', (_e, d) => {
   }
 });
 app.on('window-all-closed', () => app.quit());
+// Quit means gone (0.9.3): Steam counts Cartridge as running until every process it started has
+// ended, and one left behind kept SteamOS slow until a restart. Stop the work in flight, then exit
+// within 3 s whatever is still pending. The Steam helper runs outside Cartridge and isn't touched.
+let quitting = false;
+app.on('before-quit', () => {
+  if (quitting) return;
+  quitting = true;
+  log('quit');
+  setTimeout(() => app.exit(0), 3000).unref?.();
+  try { trophySvc.stop(); } catch {}
+  for (const it of queue) try { it.abort?.abort(); } catch {}
+  for (const u of uploads.values()) try { u.abort.abort(); } catch {}
+  try { verifyRun?.ac.abort(); } catch {}
+  if (fetchAll) fetchAll.stop = true;
+});
+// Steam's Exit game (and a shutdown) ask politely first: treat it like Quit
+for (const sig of ['SIGTERM', 'SIGINT', 'SIGHUP']) process.on(sig, () => { log('got', sig); app.quit(); setTimeout(() => app.exit(0), 3000).unref?.(); });

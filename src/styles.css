@@ -87,11 +87,11 @@ img { -webkit-user-drag: none; }
 .statusbar .spacer { min-width: 0; }
 .sys, .brand, .tabs { flex-shrink: 0; }
 .brand { display: flex; align-items: center; gap: 10px; font-family: var(--display); font-weight: 800; font-stretch: 100%; font-size: var(--t-lg); letter-spacing: -0.01em; }
-/* tabs: plain words, the current one white inside a faint outline */
+/* tabs: plain words; the current one is a full white box (or the Highlights colour), like a
+   selected row in Settings (0.9.3) */
 .tabs { display: flex; align-items: center; gap: 2px; margin-left: 20px; }
 .tab { position: relative; display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 14px; border-radius: var(--r-sm); color: var(--muted); font-weight: 600; font-size: var(--t-md); transition: color var(--d-fast), background var(--d-fast); }
-.tab.active { color: var(--text); }
-.tab.active { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.22); background: rgba(255, 255, 255, 0.04); }
+.tab.active, .tab.active:hover { background: var(--focus); color: var(--on-focus); }
 .tab:hover { color: var(--text); background: var(--s2); }
 .tab:focus-visible, .pad-mode .tab:focus { background: var(--focus); color: var(--on-focus); box-shadow: none; }
 .statusbar .spacer { flex: 1; }
