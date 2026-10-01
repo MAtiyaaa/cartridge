@@ -430,6 +430,18 @@ module.exports = function createSteamManager(ctx) {
   }
   function findTemplate(key) { return candidates(key)[0]?.t || null; }
   // ---------------------------------------------------------------- per-game details
+  const isRpcs3 = (t) => /rpcs3/i.test(`${t?.exe || ''} ${t?.args || ''}`);
+  // How Cartridge runs RPCS3 to install a package: the PS3 setup's own RPCS3 (EmuDeck's launcher,
+  // the Flatpak, an AppImage or a program), with what goes before RPCS3's own options
+  // (`run net.rpcs3.RPCS3` for the Flatpak). Null when no RPCS3 is set up.
+  function rpcs3Command() {
+    let t = templateFor('ps3');
+    if (!isRpcs3(t)) t = candidates('ps3').find((c) => !c.fork && isRpcs3(c.t))?.t;
+    if (!t) return null;
+    const toks = tokenize(t.args || '').map((x) => x.val);
+    const i = toks.findIndex((v) => /^-|\{|%/.test(v));
+    return { exe: t.exe, args: i < 0 ? toks : toks.slice(0, i), from: t.from };
+  }
   function serialOf(rom, p) {
     const tag = String(rom.fs_name || '') + ' ' + String(rom.name || '');
     const m = tag.match(/\b([A-Z]{4}\d{5})\b/);
@@ -508,6 +520,10 @@ module.exports = function createSteamManager(ctx) {
   }
   // What goes in place of the game in the launch options
   function gameRef(rom, file, t) {
+    // a PS3 game Cartridge installed into RPCS3 from its .pkg (0.9.3 D): started by its serial, so
+    // the path inside RPCS3's storage (which can be moved) never goes into the shortcut
+    const inst = ctx.installRecord?.(rom.id);
+    if (inst?.emu === 'rpcs3' && isRpcs3(t)) return t.kind === 'serial' ? { SERIAL: inst.serial } : { ROM: `%RPCS3_GAMEID%:${inst.serial}` };
     if (t.kind === 'serial') {
       const serial = serialOf(rom, file);
       if (serial && rpcs3Knows(serial)) return { SERIAL: serial };
@@ -1437,7 +1453,7 @@ module.exports = function createSteamManager(ctx) {
     liveInfo: async () => { const env = environment(); if (!env.account) return { on: false, flag: false }; return { on: await live.available(env.account.root), flag: live.flagOn(env.account.root) }; },
     liveEnable: () => { const env = environment(); if (!env.account) throw new Error('Steam was not found.'); fs.writeFileSync(path.join(env.account.root, live.FLAG), ''); return true; },
     onDownloaded, onDeleted, lastStatus, writeScript, startupReport, forRom, fixCollections, played, playtime, steamRoots, refreshArt,
-    scanEmulators, setupOverview, confirm, markFork, useFile, health, healthFix, movedEmulators, setupReport, syncConsoleCollections, preflight: (key) => preflight(key, templateFor(key)),
+    scanEmulators, rpcs3Command, setupOverview, confirm, markFork, useFile, health, healthFix, movedEmulators, setupReport, syncConsoleCollections, preflight: (key) => preflight(key, templateFor(key)),
     candidatesFor: (key) => az(candidates(key).map((c) => ({ id: c.id, label: c.label, sub: shortPath(c.t.how === 'flatpak' ? c.t.from : c.t.exe) }))),
     setGameEmu: (romId, id) => { const c = cfg(); c.gameEmus ||= {}; if (id) c.gameEmus[romId] = id; else delete c.gameEmus[romId]; ctx.saveConfig(); return true; },
     gameEmu: (romId) => (cfg().gameEmus || {})[romId] || null,

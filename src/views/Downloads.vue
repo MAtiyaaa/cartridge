@@ -54,7 +54,7 @@
     </section>
     <section v-if="finished.length">
       <div class="shelf-title"><Icon name="mdiHistory" :size="20" />History<span class="count">{{ finished.length }}</span></div>
-      <div class="list"><DlRow v-for="d in finished" :key="d.id" :d="d" :action="d.status === 'done' ? 'View game' : 'Resume'" @act="act" /></div>
+      <div class="list"><DlRow v-for="d in finished" :key="d.id" :d="d" :action="d.status === 'done' ? (d.notice === 'pkg' ? 'Install in RPCS3' : 'View game') : 'Resume'" @act="act" /></div>
     </section>
   </div>
 </template>
@@ -99,7 +99,7 @@ const DlRow = (props, { emit }) => {
     h('div', { class: 'thumb' }, d.cover ? [h('img', { src: img(d.cover) })] : []),
     h('div', { class: 'mid' }, [
       h('b', d.name),
-      h('span', { class: 'muted' }, d.status === 'error' ? d.error : d.status === 'done' ? d.path : `${d.platformName} · ${bytes(d.total)}${d.received && d.status !== 'done' ? ` · ${pct(d)}% saved` : ''}`),
+      h('span', { class: 'muted' }, d.status === 'error' ? d.error : d.status === 'done' ? (d.notice === 'pkg' ? 'PS3 package: install it in RPCS3 from the game page' : d.path) : `${d.platformName} · ${bytes(d.total)}${d.received && d.status !== 'done' ? ` · ${pct(d)}% saved` : ''}`),
     ]),
     h('span', { class: ['st', d.status] }, LABEL[d.status]),
     h('span', { class: 'act' }, [h(Btn, { b: 'A' }), props.action]),

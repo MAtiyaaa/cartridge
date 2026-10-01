@@ -36,3 +36,21 @@ test('a stray user folder next to the AppImage is avoided when shadPS4 has its n
 test('a portable install (its user folder is the only shadPS4 data) keeps starting there', () => {
   assert.strictEqual(startFor('portable', ['Documents/Apps/user']), '~/Documents/Apps');
 });
+
+// 0.9.3 D: a PS3 game Cartridge installed into RPCS3 starts by its serial, never a path in RPCS3's storage
+test('a PS3 game installed in RPCS3 starts by serial; any other emulator keeps the path', () => {
+  const H = path.join(TMP, 'ps3');
+  fs.mkdirSync(H + '/cfg', { recursive: true });
+  const code = `
+    const sm = require(${JSON.stringify(path.join(ROOT, 'electron/steamManager.js'))})({ USER_DATA: ${JSON.stringify(H + '/cfg')}, log() {}, PLATFORM_MAP: {}, getConfig: () => ({}), saveConfig() {}, broadcast() {},
+      emulationRoots: () => [], getLibrary: () => null, installed: () => ({}), romById: () => null, isGamescope: () => false, artFor: () => ({}), MARKED: 'm', markedPath: () => null,
+      installRecord: (id) => (id === 5 ? { emu: 'rpcs3', serial: 'BLUS30001', dir: '/x/dev_hdd0/game/BLUS30001', created: true } : null) });
+    const rom = { id: 5, platform_slug: 'ps3', fs_name: 'Game' };
+    console.log(JSON.stringify([
+      sm._buildLaunch(rom, '/roms/ps3/Game', { exe: '/usr/bin/flatpak', args: 'run net.rpcs3.RPCS3 --no-gui "{ROM}"', kind: 'path' }).args,
+      sm._buildLaunch(rom, '/roms/ps3/Game', { exe: '/x/rpcs3.sh', args: '--no-gui "%RPCS3_GAMEID%:{SERIAL}"', kind: 'serial' }).args,
+      sm._buildLaunch({ ...rom, id: 6 }, '/roms/ps3/Other.iso', { exe: '/x/rpcs3.sh', args: '--no-gui "{ROM}"', kind: 'path' }).args,
+    ]));`;
+  const out = JSON.parse(execFileSync(process.execPath, ['-e', code], { env: { ...process.env, HOME: H }, encoding: 'utf8' }).trim().split('\n').pop());
+  assert.deepStrictEqual(out, ['run net.rpcs3.RPCS3 --no-gui "%RPCS3_GAMEID%:BLUS30001"', '--no-gui "%RPCS3_GAMEID%:BLUS30001"', '--no-gui "/roms/ps3/Other.iso"']);
+});

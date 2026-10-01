@@ -6,6 +6,25 @@ The branch for 0.9.3 work is `claude/relaxed-fermat-30pigp`. Pull it before star
 
 ---
 
+## 1 Oct 2026 · 0.9.3 C (PS3 packages through RPCS3)
+
+**Owner's decisions in chat**: skip Redream, Mednafen and torzu. 0.9.3 B was released before this.
+
+**Built**
+- `electron/pkgInstall.js`: `pkgInfo` reads the PKG header the way RPCS3 does (Crypto/unpkg.h: magic, platform, metadata content type and patch flag, content ID; the install folder is content ID chars 7 to 15). `packagesIn` orders licences, game, DLC, then updates by name. `rpcs3Hdds` finds dev_hdd0 like trophies.js (vfs.yml, config folder, EmuDeck storage). `install` runs `<rpcs3> --headless --installpkg <file>` per file (rpcs3.cpp: headless installs with no window and always exits 0) with Cartridge's AppImage variables removed, then reads back which game folder appeared. `safeToRemove` holds every D3 check.
+- `main.js`: `installs.json` (`installs`, `installRecord` for steamManager), `installPkg`, handlers `pkg:check`, `pkg:install`, `pkg:cancel`, `pkg:dropDownload` (deletes the download, the manifest then points into RPCS3 with `installedIn: 'rpcs3'`), `roms:delete` takes `alsoEmu` and routes RPCS3 copies through `safeToRemove`, Library check skips games living in RPCS3. Finished downloads holding PS3 packages get `notice: 'pkg'`.
+- `steamManager.js`: `rpcs3Command()` (the PS3 setup's RPCS3 and what goes before its options), `gameRef` starts recorded games with `%RPCS3_GAMEID%:<serial>`.
+- UI: Game page Install in RPCS3 (progress, cancel), offer to delete the package, More "Install again in RPCS3", Delete asks download only or download and RPCS3 copy. Downloads and the finish toast point to it.
+- Tests: `test/pkg.test.js` (header, order, install through a stand-in RPCS3, vfs.yml, every delete refusal), serial launch in `test/steam.test.js`. 25 pass.
+
+**Release**: version 0.9.5, "0.9.3 C".
+
+**Owner to test**: a PS3 game from RomM as .pkg (with a .rap if it needs one, and an update if you have one): Install in RPCS3 in Game Mode, then play it from Steam; delete the package when offered; Delete from the game page afterwards.
+
+**Next**: D2 Vita through Vita3K, D4 PS4 .pkg, D7 patches.
+
+---
+
 ## 1 Oct 2026 · 0.9.3 B (more emulators)
 
 **Built** (`emulators.js`, each launch line read from the emulator's own argument parser, cloned into the scratchpad, not the repo):

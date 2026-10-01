@@ -220,6 +220,11 @@ function saveJson(file, data, pretty = true) {
 }
 const saveConfig = () => saveJson(CONFIG_FILE, config);
 const saveManifest = () => saveJson(MANIFEST_FILE, manifest);
+// Games Cartridge installed into an emulator's own storage (0.9.3 D: PS3 .pkg through RPCS3):
+// romId -> { emu, serial, dir, created, at, files }. Only these can be deleted from there.
+const INSTALLS_FILE = path.join(USER_DATA, 'installs.json');
+let installs = loadJson(INSTALLS_FILE, {});
+const saveInstalls = () => saveJson(INSTALLS_FILE, installs);
 
 // ---------------------------------------------------------------- server / api
 const trimUrl = (u) => (u || '').trim().replace(/\/+$/, '');
@@ -1410,6 +1415,8 @@ async function runJob(it) {
         finalPath = newFolder;
       }
     }
+    // a PS3 game as .pkg: Downloads offers to install it in RPCS3 (nothing installs until pressed)
+    try { if (pkgInst.packagesIn(finalPath).pkgs.length) it.notice = 'pkg'; } catch {}
     it.status = 'done';
     it.received = it.total;
     it.path = finalPath;
@@ -1546,6 +1553,37 @@ async function storageOverview() {
 
 // ---------------------------------------------------------------- self-update (GitHub Releases)
 let updateState = { state: 'idle' };
+// ---------------------------------------------------------------- 0.9.3 D: PS3 packages through RPCS3
+const pkgInst = require('./pkgInstall');
+let pkgRun = null; // one install at a time: { romId, ac }
+const rpcs3Hdds = () => pkgInst.rpcs3Hdds(os.homedir(), (() => { try { const emu = readEmuDeckSettings(); return require('./trophies').emulationRoots([emu.emulationPath, config.romsRoot && path.dirname(config.romsRoot)].filter(Boolean)); } catch { return []; } })());
+async function installPkg(romId) {
+  if (pkgRun) throw new Error('Another game is being installed. Wait for it to finish.');
+  const m = manifest[romId];
+  if (!m?.path) throw new Error('Download the game first.');
+  const cmd = steamMgr.rpcs3Command();
+  if (!cmd) throw new Error('RPCS3 wasn’t found. Set it up in Settings → Emulators.');
+  const hdds = rpcs3Hdds();
+  if (!hdds.length) throw new Error('RPCS3’s storage wasn’t found. Open RPCS3 once (it creates its folders), then try again.');
+  const p = pkgInst.packagesIn(m.path);
+  if (!p.pkgs.length) throw new Error('There’s no PS3 package in this game’s files.');
+  pkgRun = { romId, ac: new AbortController() };
+  const send = (o) => broadcast('pkg-progress', { romId, ...o });
+  try {
+    send({ state: 'running', step: 0, of: p.order.length });
+    const got = await pkgInst.install({ cmd, hdds, files: p.order, titleIds: p.titleIds, signal: pkgRun.ac.signal, onStep: (s) => send({ state: 'running', ...s }) });
+    const main = got.find((g) => g.created) || got.find((g) => g.touched) || got[0];
+    if (!main || !(main.created || main.touched)) throw new Error('RPCS3 didn’t install it. Open RPCS3 and install the .pkg there (File → Install Packages) to see why.');
+    const prev = installs[romId];
+    installs[romId] = { emu: 'rpcs3', serial: main.serial, dir: main.dir, created: !!(main.created || (prev?.created && prev.serial === main.serial)), at: Date.now(), files: p.order.map((f) => path.basename(f)) };
+    saveInstalls();
+    log('rpcs3 install', main.serial, main.created ? 'new' : 'updated', p.order.length, 'files');
+    send({ state: 'done', serial: main.serial });
+    return { ...installs[romId], updates: p.pkgs.filter((x) => x.patch).length };
+  } catch (e) { send({ state: 'error', error: e.message }); throw e; }
+  finally { pkgRun = null; }
+}
+
 let autoUpdater = null;
 // The name shown for a version: 0.9.3 is finished in parts named "0.9.3 B", "0.9.3 C"... while the
 // number underneath keeps going up (0.9.4, 0.9.5...), as updates only install a higher number.
@@ -1735,6 +1773,7 @@ const steamMgr = require('./steamManager')({
   gameIconPng: async (rom) => { if (!rom) return null; const u = await gameIcon({ key: 'rom-' + rom.id, name: rom.name, year: rom.year ? new Date(rom.year > 1e11 ? rom.year : rom.year * 1000).getFullYear() : null }).catch(() => null); return u ? asPng(await fetchImage(u)) : null; },
   logoFile: async (rom) => { if (!rom) return null; await logoFor({ id: rom.id, name: rom.name, romm: rom.logo }).catch(() => null); const c = logoCache[rom.id]; return c?.file ? path.join(LOGO_DIR, c.file) : null; },
   emulationRoots: () => { const emu = readEmuDeckSettings(); return require('./trophies').emulationRoots([emu.emulationPath, config.romsRoot && path.dirname(config.romsRoot)].filter(Boolean)); },
+  installRecord: (id) => installs[id] || null,
   isGamescope, version: app.getVersion(), osInfo: (() => { try { return (fs.readFileSync('/etc/os-release', 'utf8').match(/^PRETTY_NAME="?([^"\n]+)/m) || [])[1] || os.release(); } catch { return os.release(); } })(),
 });
 // ---------------------------------------------------------------- 0.8: play time, server status, edits, uploads
@@ -2019,6 +2058,7 @@ async function verifyLibrary() {
       let rom;
       try { rom = await api(`/api/roms/${id}`); } catch { out.skipped++; continue; }
       const where = installedMap[id];
+      if (manifest[id]?.installedIn) { out.skipped++; continue; } // installed into RPCS3: RomM has the .pkg, not this folder
       const files = (rom.files || []).slice();
       const st = await fsp.stat(where).catch(() => null);
       if (!st) { out.damaged.push({ romId: id, name: rom.name, why: 'Its files are gone' }); continue; }
@@ -2244,22 +2284,59 @@ const handlers = {
     return Object.keys(marks);
   },
   'roms:marks': () => Object.keys(marks),
-  'roms:delete': async ({ romId, path: p }) => {
+  'roms:delete': async ({ romId, path: p, alsoEmu }) => {
     let target = p || manifest[romId]?.path;
     // a hand-made mark has no files of its own: only remove the mark, never touch folders
     if (target === MARKED || (marks[romId] && !manifest[romId] && (!target || target === MARKED))) {
       delete marks[romId]; saveMarks(); computeInstalled(); try { steamMgr.onDeleted(romId); } catch {} return true;
     }
     if (!target) throw new Error('Nothing to delete');
-    // never delete a whole console folder or the ROMs root
-    const roots = new Set([config.romsRoot, ...(library?.platforms || []).map((pl) => platformPath(pl).path)].filter(Boolean).map((x) => path.resolve(x)));
-    if (roots.has(path.resolve(target))) throw new Error('Refusing to delete a whole console folder');
-    await removeWithProgress(target, romId);
+    // a game living in RPCS3's storage (its .pkg already gone), or its download plus the RPCS3
+    // copy when asked: only through every check in pkgInstall.safeToRemove (plan D3)
+    const inEmu = manifest[romId]?.installedIn === 'rpcs3';
+    if (inEmu || alsoEmu) {
+      const ok = pkgInst.safeToRemove(installs[romId], rpcs3Hdds());
+      if (!ok.ok) throw new Error(`Cartridge won't delete this from RPCS3: ${ok.why} Delete it in RPCS3 instead.`);
+      await removeWithProgress(ok.dir, romId);
+      delete installs[romId]; saveInstalls();
+      if (inEmu) target = null;
+    }
+    if (target) {
+      // never delete a whole console folder or the ROMs root
+      const roots = new Set([config.romsRoot, ...(library?.platforms || []).map((pl) => platformPath(pl).path)].filter(Boolean).map((x) => path.resolve(x)));
+      if (roots.has(path.resolve(target))) throw new Error('Refusing to delete a whole console folder');
+      await removeWithProgress(target, romId);
+    }
     delete manifest[romId];
     saveManifest();
     delete installedMap[romId];
     broadcast('installed-changed', { romId, path: null });
     try { if (steamMgr.onDeleted(romId)) broadcast('steam-auto', { romId, action: 'remove' }); } catch (e) { log('steam auto remove', e.message); }
+    return true;
+  },
+  // 0.9.3 D: PS3 packages installed through RPCS3
+  'pkg:check': ({ romId }) => {
+    const m = manifest[romId];
+    const rec = installs[romId] || null;
+    if (!m?.path || m.installedIn) return { pkgs: 0, installed: rec };
+    const r = pkgInst.packagesIn(m.path);
+    if (!r.pkgs.length) return { pkgs: 0, installed: rec };
+    const cmd = steamMgr.rpcs3Command();
+    return { pkgs: r.pkgs.length, updates: r.pkgs.filter((x) => x.patch).length, licences: r.licences.length, titleIds: r.titleIds, installed: rec, rpcs3: cmd ? cmd.from || path.basename(cmd.exe) : null, running: pkgRun?.romId === romId };
+  },
+  'pkg:install': ({ romId }) => installPkg(romId),
+  'pkg:cancel': () => { pkgRun?.ac.abort(); return true; },
+  // after installing: the downloaded .pkg isn't needed to play. The game then lives in RPCS3.
+  'pkg:dropDownload': async ({ romId }) => {
+    const m = manifest[romId], rec = installs[romId];
+    if (!m?.path || m.installedIn || !rec?.created) throw new Error('This game isn’t installed in RPCS3 by Cartridge.');
+    const roots = new Set([config.romsRoot, ...(library?.platforms || []).map((pl) => platformPath(pl).path)].filter(Boolean).map((x) => path.resolve(x)));
+    if (roots.has(path.resolve(m.path))) throw new Error('Refusing to delete a whole console folder');
+    await removeWithProgress(m.path, romId);
+    manifest[romId] = { ...m, path: rec.dir, installedIn: 'rpcs3', download: m.path };
+    saveManifest();
+    installedMap[romId] = rec.dir;
+    broadcast('installed-changed', { romId, path: rec.dir });
     return true;
   },
   'dl:add': (job) => enqueue(job),

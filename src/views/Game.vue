@@ -56,7 +56,9 @@
               <button class="btn" data-focus @click="setMark(false)"><Icon name="mdiCheckboxBlankOffOutline" />Unmark</button>
             </template>
             <template v-else-if="installedPath">
-              <button class="btn ok xl" data-focus data-autofocus @click="toast(installedPath, 'info', 4000, 'mdiFolder')"><Icon name="mdiCheckCircle" />Ready to play</button>
+              <button v-if="pkgBusy" class="btn xl" data-focus data-autofocus @click="cancelPkg"><Icon name="mdiLoading" class="spin" :size="22" />Installing in RPCS3{{ pkgProg?.of > 1 ? ` · ${pkgProg.step} of ${pkgProg.of}` : '' }}</button>
+              <button v-else-if="needsInstall" class="btn primary xl" data-focus data-autofocus @click="installPkg"><Icon name="mdiPackageDown" :size="22" />Install in RPCS3</button>
+              <button v-else class="btn ok xl" data-focus data-autofocus @click="toast(installedPath, 'info', 4000, 'mdiFolder')"><Icon name="mdiCheckCircle" />Ready to play</button>
               <button class="btn icon-btn" data-focus title="Re-download" @click="redownload"><Icon name="mdiRefresh" /><span>Re-download</span></button>
               <button class="btn danger icon-btn" data-focus title="Delete" :disabled="deleting != null" @click="remove"><Ring v-if="deleting != null" :pct="deleting" :size="22" /><Icon v-else name="mdiDeleteOutline" /><span>{{ deleting != null ? 'Deleting' : 'Delete' }}</span></button>
             </template>
@@ -147,7 +149,7 @@
 
 <script setup>
 import { addGame, removeGame, applyChanges } from '../steam.js';
-import { computed, onMounted, ref, nextTick, watch } from 'vue';
+import { computed, onMounted, onBeforeUnmount, ref, nextTick, watch } from 'vue';
 import { store, call, img, go, cover, bytes, year, rating, toast, confirm, download, downloadFor, romById, platformById, isNew, setBg, logoOf, resetLogos, artFor, choose, openModal, allRoms, visible, isFavourite, addToCollection, playOf, playtimeText, ago, loadPlay, askText, saveConfig } from '../store.js';
 import { useView } from '../useView.js';
 import { ensureFocus, focusFirst } from '../nav.js';
@@ -222,8 +224,50 @@ async function redownload() {
   dlNow();
 }
 async function remove() {
-  if (!(await confirm(`Delete ${base.value.name}?`, `Removes it from this device:\n${installedPath.value}\n\nIt stays on your RomM server.`, 'Delete', true))) return;
-  try { await call('roms:delete', { romId: props.romId, path: installedPath.value }); toast('Deleted from this device', 'ok', 2400, 'mdiDeleteOutline'); } catch (e) { toast(e.message, 'error'); }
+  const rec = pkg.value?.installed;
+  let alsoEmu = false;
+  if (rec?.created && store.installed[props.romId] === rec.dir) {
+    // only the copy in RPCS3 is left (the download was deleted after installing)
+    if (!(await confirm(`Delete ${base.value.name} from RPCS3?`, `Removes the game Cartridge installed in RPCS3:\n${rec.serial} · ${rec.dir}\n\nUpdates and DLC installed into it go with it. Saves, trophies and licences stay. It stays on your RomM server.`, 'Delete', true))) return;
+  } else if (rec?.created) {
+    const v = await choose({ title: `Delete ${base.value.name}?`, message: `The download is on this device, and Cartridge installed the game in RPCS3 (${rec.serial}).`, options: [
+      { label: 'Delete the download only', sub: installedPath.value, value: 'dl', icon: 'mdiDeleteOutline' },
+      { label: 'Delete the download and the game in RPCS3', sub: `${rec.dir} · updates and DLC go with it; saves, trophies and licences stay`, value: 'both', icon: 'mdiDeleteForeverOutline', danger: true },
+    ] });
+    if (!v) return;
+    alsoEmu = v === 'both';
+  } else if (!(await confirm(`Delete ${base.value.name}?`, `Removes it from this device:\n${installedPath.value}\n\nIt stays on your RomM server.`, 'Delete', true))) return;
+  try { await call('roms:delete', { romId: props.romId, path: installedPath.value, alsoEmu }); toast('Deleted from this device', 'ok', 2400, 'mdiDeleteOutline'); loadPkg(); } catch (e) { toast(e.message, 'error', 7000); }
+}
+// PS3 games that come as .pkg (0.9.3 D): installed through RPCS3 when you press Install. What's in
+// the download, whether Cartridge installed it, and the install's progress.
+const pkg = ref(null);
+const pkgProg = ref(null);
+const pkgBusy = computed(() => pkgProg.value?.state === 'running' || pkg.value?.running);
+const needsInstall = computed(() => pkg.value?.pkgs > 0 && !pkg.value.installed);
+async function loadPkg() { pkg.value = installedPath.value ? await call('pkg:check', { romId: Number(props.romId) }).catch(() => null) : null; }
+watch(installedPath, loadPkg);
+const offPkg = window.cart.on('pkg-progress', (p) => { if (p.romId === Number(props.romId)) pkgProg.value = p; });
+onBeforeUnmount(() => { try { offPkg?.(); } catch {} });
+async function installPkg() {
+  const p = pkg.value;
+  if (!p?.rpcs3) return toast('RPCS3 wasn’t found. Set it up in Settings → Emulators.', 'error', 6000);
+  const what = [`${p.pkgs} package${p.pkgs === 1 ? '' : 's'}`, p.updates ? `${p.updates} update${p.updates === 1 ? '' : 's'}` : '', p.licences ? `${p.licences} licence file${p.licences === 1 ? '' : 's'}` : ''].filter(Boolean).join(', ');
+  if (!(await confirm('Install in RPCS3?', `RPCS3 (${p.rpcs3}) installs ${what} into its own storage, without opening its window. Big games take a few minutes.`, 'Install'))) return;
+  pkgProg.value = { state: 'running', step: 0, of: 0 };
+  try {
+    const r = await call('pkg:install', { romId: Number(props.romId) });
+    toast(`${base.value.name} is installed in RPCS3 (${r.serial})`, 'ok', 4000, 'mdiCheckCircle');
+    await loadPkg();
+    if (r.created && (await confirm('Delete the downloaded package?', `It isn't needed to play any more: the game is in RPCS3 now.\n${installedPath.value}`, 'Delete', true))) {
+      try { await call('pkg:dropDownload', { romId: Number(props.romId) }); toast('Package deleted', 'ok', 2400, 'mdiDeleteOutline'); } catch (e) { toast(e.message, 'error'); }
+    }
+  } catch (e) { toast(e.message, 'error', 8000); }
+  pkgProg.value = null;
+  loadPkg();
+}
+async function cancelPkg() {
+  if (await confirm('Stop installing?', 'RPCS3 stops after the package it is on now.', 'Stop', true)) call('pkg:cancel');
 }
 // PS4 / PS5: games come as zips you extract yourself, so let the user mark them as installed
 const folderSystem = computed(() => ['ps4', 'ps5'].includes(base.value?.platform_slug) || ['ps4', 'ps5'].includes(base.value?.platform_fs_slug));
@@ -492,6 +536,7 @@ async function more() {
   }
   opts.push({ label: 'Refresh details from RomM', value: 'refresh', icon: 'mdiRefresh' });
   if (installedPath.value) opts.push({ label: 'Show file location', value: 'path', icon: 'mdiFolderOutline' });
+  if (pkg.value?.pkgs && pkg.value.installed && !pkgBusy.value) opts.push({ label: 'Install again in RPCS3', sub: 'For updates or DLC added to this game', value: 'pkg', icon: 'mdiPackageDown' });
   let v = await choose({ title: base.value.name, options: opts });
   if (!v) return;
   // artwork choices in their own list, so More stays short
@@ -526,6 +571,7 @@ async function more() {
   if (v === 'mark' || v === 'unmark') { await setMark(v === 'mark'); return; }
   if (v === 'trophies') { await linkTrophies(); return; }
   if (v === 'path') { toast(installedPath.value, 'info', 5000, 'mdiFolder'); return; }
+  if (v === 'pkg') { await installPkg(); return; }
   if (v === 'refresh') { try { detail.value = await call('api:get', { path: `/api/roms/${props.romId}` }); resetLogos(props.romId); toast('Details refreshed', 'ok', 2000, 'mdiRefresh'); } catch (e) { toast(e.message, 'error'); } return; }
   if (v === 'reset') { store.art = { ...store.art }; delete store.art[props.romId]; await call('art:reset', { id: props.romId }); resetLogos(props.romId); toast('Artwork reset', 'ok', 2000, 'mdiRestore'); return; }
   if (!store.config.sgdbKey) { toast('Add a SteamGridDB API key in Settings → Look & feel first', 'error', 4500); return; }
@@ -551,6 +597,7 @@ onMounted(async () => {
     if (!hero && detail.value.merged_screenshots?.[0]) setBg({ src: img(detail.value.merged_screenshots[0]) });
   } catch (e) { if (!cached.value) toast(e.message, 'error'); }
   loadRa();
+  loadPkg();
   loadTrophies();
   loadHltb();
   const p = platformById(base.value?.platform_id);
