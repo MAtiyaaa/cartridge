@@ -56,6 +56,7 @@
   <GameTimeline v-if="store.modal?.type === 'timeline'" v-bind="store.modal.props" />
   <FirstTour v-if="store.modal?.type === 'tour'" />
   <ManualViewer v-if="store.modal?.type === 'manual'" v-bind="store.modal.props" />
+  <PatchesSheet v-if="store.modal?.type === 'patches'" v-bind="store.modal.props" />
   <IdleScreen v-if="store.config?.configured" />
 
   <div class="pops">
@@ -98,6 +99,7 @@ import GameTimeline from './components/GameTimeline.vue';
 import FirstTour from './components/FirstTour.vue';
 // the manual reader brings pdf.js: loaded the first time a manual opens, not at start
 const ManualViewer = defineAsyncComponent(() => import('./components/ManualViewer.vue'));
+import PatchesSheet from './components/PatchesSheet.vue';
 import IdleScreen from './components/IdleScreen.vue';
 import SteamCollections from './components/SteamCollections.vue';
 import SteamPreview from './components/SteamPreview.vue';
