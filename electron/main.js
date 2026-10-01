@@ -1416,7 +1416,7 @@ async function runJob(it) {
       }
     }
     // a PS3 game as .pkg: Downloads offers to install it in RPCS3 (nothing installs until pressed)
-    try { if (pkgInst.packagesIn(finalPath).pkgs.length) it.notice = 'pkg'; } catch {}
+    try { if (pkgInst.packagesIn(finalPath).pkgs.length) { it.notice = 'pkg'; it.installIn = 'RPCS3'; } else if (/psvita/i.test(`${rom.platform_slug} ${rom.platform_fs_slug}`) && (await pkgInst.vitaContent(finalPath))) { it.notice = 'pkg'; it.installIn = 'Vita3K'; } } catch {}
     it.status = 'done';
     it.received = it.total;
     it.path = finalPath;
@@ -1427,7 +1427,7 @@ async function runJob(it) {
     // a re-download (library check): the new copy is in, so the old one kept aside goes
     if (it.backup) { await fsp.rm(it.backup, { recursive: true, force: true }).catch(() => {}); it.backup = null; }
     // a re-download is the same game as before: Steam already has it, so no automatic add
-    if (!it.redo) try { if (steamMgr.onDownloaded(rom.id)) broadcast('steam-auto', { romId: rom.id, name: rom.name, action: 'add' }); } catch (e) { log('steam auto add', e.message); }
+    if (!it.redo && it.notice !== 'pkg') try { if (steamMgr.onDownloaded(rom.id)) broadcast('steam-auto', { romId: rom.id, name: rom.name, action: 'add' }); } catch (e) { log('steam auto add', e.message); }
   } catch (e) {
     // stopped on purpose: keep a status set since (paused, or queued again by Resume)
     if (ac.signal.aborted) { if (!['paused', 'queued'].includes(it.status)) it.status = 'cancelled'; }
@@ -1556,30 +1556,113 @@ let updateState = { state: 'idle' };
 // ---------------------------------------------------------------- 0.9.3 D: PS3 packages through RPCS3
 const pkgInst = require('./pkgInstall');
 let pkgRun = null; // one install at a time: { romId, ac }
-const rpcs3Hdds = () => pkgInst.rpcs3Hdds(os.homedir(), (() => { try { const emu = readEmuDeckSettings(); return require('./trophies').emulationRoots([emu.emulationPath, config.romsRoot && path.dirname(config.romsRoot)].filter(Boolean)); } catch { return []; } })());
-async function installPkg(romId) {
+const emuRootsAll = () => { try { const emu = readEmuDeckSettings(); return require('./trophies').emulationRoots([emu.emulationPath, config.romsRoot && path.dirname(config.romsRoot)].filter(Boolean)); } catch { return []; } };
+const rpcs3Hdds = () => pkgInst.rpcs3Hdds(os.homedir(), emuRootsAll());
+const emuRoots = (emu) => (emu === 'vita3k' ? pkgInst.vitaPrefs(os.homedir(), emuRootsAll()) : rpcs3Hdds());
+// licences an installed RPCS3 game still lacks: [{ contentId }]. From what was recorded at install
+// time, else read from the game's EBOOT.BIN (games installed before this was recorded)
+function installedLicences(rec) {
+  const hdds = rpcs3Hdds();
+  let need = rec.needs;
+  if (!need) { const n = pkgInst.npdOf(rec.dir); need = n?.needsRap ? [n.contentId] : []; }
+  return need.filter((cid) => !pkgInst.exdataHas(hdds, cid)).map((contentId) => ({ contentId }));
+}
+// .rap licences for a game from RomM: among the game's own files, or a RomM entry named after its
+// content ID or title ID. Downloaded into dir; returns { contentId: file }.
+async function rapsFromRomm(romId, need, dir) {
+  const out = {};
+  if (!need.length) return out;
+  const base = await resolveBase();
+  const cands = [];
+  try { for (const f of (await api(`/api/roms/${romId}`)).files || []) if (/\.rap$/i.test(f.file_name)) cands.push({ name: f.file_name, own: true, url: `${base}/api/roms/${f.id}/files/content/${encodeURIComponent(f.file_name)}` }); } catch {}
+  for (const pl of library?.platforms || []) for (const r of library.roms[pl.id] || []) {
+    const n = String(r.fs_name || '').toUpperCase();
+    if (n.endsWith('.RAP') && need.some((x) => n.includes(x.contentId.toUpperCase()) || n.includes(x.titleId || '~'))) cands.push({ name: r.fs_name, url: `${base}/api/roms/${r.id}/content/${encodeURIComponent(r.fs_name)}` });
+  }
+  const own = cands.filter((c) => c.own);
+  for (const x of need) {
+    const c = cands.find((k) => k.name.toUpperCase().includes(x.contentId.toUpperCase())) || cands.find((k) => x.titleId && k.name.toUpperCase().includes(x.titleId)) || (need.length === 1 && own.length === 1 ? own[0] : null);
+    if (!c) continue;
+    const dest = path.join(dir, 'romm', `${x.contentId}.rap`);
+    try { await downloadTo(c.url, dest, { abort: new AbortController() }, () => {}); if (fs.statSync(dest).size === 16) out[x.contentId] = dest; } catch (e) { log('rap from RomM', e.message); }
+  }
+  return out;
+}
+async function installPkg(romId, zrif) {
   if (pkgRun) throw new Error('Another game is being installed. Wait for it to finish.');
   const m = manifest[romId];
   if (!m?.path) throw new Error('Download the game first.');
+  if (!pkgInst.packagesIn(m.path).pkgs.length) return installVitaGame(romId, zrif);
   const cmd = steamMgr.rpcs3Command();
   if (!cmd) throw new Error('RPCS3 wasn’t found. Set it up in Settings → Emulators.');
   const hdds = rpcs3Hdds();
   if (!hdds.length) throw new Error('RPCS3’s storage wasn’t found. Open RPCS3 once (it creates its folders), then try again.');
   const p = pkgInst.packagesIn(m.path);
   if (!p.pkgs.length) throw new Error('There’s no PS3 package in this game’s files.');
+  // licences first, each under the name RPCS3 looks for (from the download, else from RomM); no
+  // install without them: the game couldn't start ("Failed to decrypt content")
+  const tmp = path.join(os.tmpdir(), `cartridge-rap-${process.pid}-${Date.now()}`);
+  let plan = pkgInst.licencePlan(p, hdds);
+  const fromRomm = await rapsFromRomm(romId, plan.filter((l) => l.from === 'missing'), tmp);
+  if (Object.keys(fromRomm).length) plan = pkgInst.licencePlan(p, hdds, fromRomm);
+  const lost = plan.filter((l) => l.from === 'missing');
+  if (lost.length) { fs.rmSync(tmp, { recursive: true, force: true }); throw new Error(`RAP file not found: ${lost[0].contentId}.rap. RPCS3 needs it next to the .pkg to install this game. Add it to the game in RomM, then install again.`); }
+  const files = [...pkgInst.stageLicences(plan, path.join(tmp, 'staged')), ...p.licences.filter((f) => /\.edat$/i.test(f)), ...p.pkgs.map((x) => x.file)];
   pkgRun = { romId, ac: new AbortController() };
   const send = (o) => broadcast('pkg-progress', { romId, ...o });
   try {
-    send({ state: 'running', step: 0, of: p.order.length });
-    const got = await pkgInst.install({ cmd, hdds, files: p.order, titleIds: p.titleIds, signal: pkgRun.ac.signal, onStep: (s) => send({ state: 'running', ...s }) });
+    send({ state: 'running', step: 0, of: files.length });
+    const got = await pkgInst.install({ cmd, hdds, files, titleIds: p.titleIds, signal: pkgRun.ac.signal, onStep: (s) => send({ state: 'running', ...s }) }).finally(() => fs.rmSync(tmp, { recursive: true, force: true }));
     const main = got.find((g) => g.created) || got.find((g) => g.touched) || got[0];
     if (!main || !(main.created || main.touched)) throw new Error('RPCS3 didn’t install it. Open RPCS3 and install the .pkg there (File → Install Packages) to see why.');
     const prev = installs[romId];
-    installs[romId] = { emu: 'rpcs3', serial: main.serial, dir: main.dir, created: !!(main.created || (prev?.created && prev.serial === main.serial)), at: Date.now(), files: p.order.map((f) => path.basename(f)) };
+    installs[romId] = { emu: 'rpcs3', serial: main.serial, dir: main.dir, created: !!(main.created || (prev?.created && prev.serial === main.serial)), at: Date.now(), files: files.map((f) => path.basename(f)), needs: plan.map((l) => l.contentId) };
     saveInstalls();
-    log('rpcs3 install', main.serial, main.created ? 'new' : 'updated', p.order.length, 'files');
+    const licenceMissing = installedLicences(installs[romId]);
+    log('rpcs3 install', main.serial, main.created ? 'new' : 'updated', files.length, 'files', licenceMissing.length ? 'licence missing' : '');
     send({ state: 'done', serial: main.serial });
-    return { ...installs[romId], updates: p.pkgs.filter((x) => x.patch).length };
+    afterInstall(romId);
+    return { ...installs[romId], updates: p.pkgs.filter((x) => x.patch).length, licenceMissing };
+  } catch (e) { send({ state: 'error', error: e.message }); throw e; }
+  finally { pkgRun = null; }
+}
+
+// Once installed, its Steam shortcut can start it: one Cartridge added is updated to start it from
+// the emulator; otherwise it's added when Add automatically is on (it was held back at download)
+function afterInstall(romId) {
+  try {
+    const st = steamMgr.forRom(romId);
+    if (st.inSteam && st.ours) steamMgr.refreshGame(romId, { force: true }).then((r) => { if (r?.count && !r.fixed) broadcast('steam-auto', { romId, action: 'add' }); }).catch((e) => log('steam after install', e.message));
+    else if (!st.inSteam && steamMgr.onDownloaded(romId)) broadcast('steam-auto', { romId, action: 'add' });
+  } catch (e) { log('steam after install', e.message); }
+}
+// D2: a Vita game through Vita3K (.pkg with its zRIF installs with no window; a .vpk or .zip
+// opens Vita3K, which starts the game once installed: the install finishes when it closes)
+async function installVitaGame(romId, zrif) {
+  const m = manifest[romId];
+  const item = await pkgInst.vitaContent(m.path);
+  if (!item) throw new Error('There’s no Vita package (.pkg, .vpk or .zip) in this game’s files.');
+  const key = String(zrif || item.zrif || '').trim();
+  if (item.kind === 'pkg' && !/^KO5i[0-9A-Za-z+/=]{40,}$/.test(key)) throw new Error('This .pkg needs its zRIF key (it starts with KO5i).');
+  const cmd = steamMgr.vita3kCommand();
+  if (!cmd) throw new Error('Vita3K wasn’t found. Set it up in Settings → Emulators.');
+  const prefs = emuRoots('vita3k');
+  if (!prefs.length) throw new Error('Vita3K’s storage wasn’t found. Open Vita3K once and finish its setup (firmware included), then try again.');
+  pkgRun = { romId, ac: new AbortController() };
+  const send = (o) => broadcast('pkg-progress', { romId, ...o });
+  try {
+    send({ state: 'running', step: 0, of: 1, opens: item.kind !== 'pkg' });
+    const got = await pkgInst.installVita({ cmd, prefs, item, zrif: key, signal: pkgRun.ac.signal, onStep: (s) => send({ state: 'running', ...s }) });
+    const g = got[0];
+    if (!g) throw new Error('Vita3K didn’t install it. Open Vita3K and install the file there (File → Install) to see why.');
+    const prev = installs[romId];
+    installs[romId] = { emu: 'vita3k', serial: g.serial, dir: g.dir, created: !!(g.created || (prev?.created && prev.serial === g.serial)), at: Date.now(), files: [path.basename(item.file)] };
+    saveInstalls();
+    log('vita3k install', g.serial, g.created ? 'new' : 'again');
+    send({ state: 'done', serial: g.serial });
+    afterInstall(romId);
+    // without a licence Vita3K can't start it: say so instead of "installed"
+    return { ...installs[romId], updates: 0, licenceMissing: g.licenced ? [] : [{ contentId: g.serial, vita: true }] };
   } catch (e) { send({ state: 'error', error: e.message }); throw e; }
   finally { pkgRun = null; }
 }
@@ -2293,10 +2376,11 @@ const handlers = {
     if (!target) throw new Error('Nothing to delete');
     // a game living in RPCS3's storage (its .pkg already gone), or its download plus the RPCS3
     // copy when asked: only through every check in pkgInstall.safeToRemove (plan D3)
-    const inEmu = manifest[romId]?.installedIn === 'rpcs3';
+    const inEmu = !!manifest[romId]?.installedIn;
     if (inEmu || alsoEmu) {
-      const ok = pkgInst.safeToRemove(installs[romId], rpcs3Hdds());
-      if (!ok.ok) throw new Error(`Cartridge won't delete this from RPCS3: ${ok.why} Delete it in RPCS3 instead.`);
+      const rec = installs[romId], emu = rec?.emu === 'vita3k' ? 'Vita3K' : 'RPCS3';
+      const ok = pkgInst.safeToRemove(rec, emuRoots(rec?.emu));
+      if (!ok.ok) throw new Error(`Cartridge won't delete this from ${emu}: ${ok.why} Delete it in ${emu} instead.`);
       await removeWithProgress(ok.dir, romId);
       delete installs[romId]; saveInstalls();
       if (inEmu) target = null;
@@ -2315,25 +2399,62 @@ const handlers = {
     return true;
   },
   // 0.9.3 D: PS3 packages installed through RPCS3
-  'pkg:check': ({ romId }) => {
+  // emu: 'rpcs3' or 'vita3k'; emuName for the UI; cmd: the emulator found, or null
+  'pkg:check': async ({ romId }) => {
     const m = manifest[romId];
     const rec = installs[romId] || null;
-    if (!m?.path || m.installedIn) return { pkgs: 0, installed: rec };
+    const running = pkgRun?.romId === romId;
+    const lic = rec?.emu === 'rpcs3' ? installedLicences(rec) : [];
+    if (!m?.path || m.installedIn) return { pkgs: 0, installed: rec, emu: rec?.emu || null, emuName: rec?.emu === 'vita3k' ? 'Vita3K' : 'RPCS3', running, licenceMissing: lic };
     const r = pkgInst.packagesIn(m.path);
-    if (!r.pkgs.length) return { pkgs: 0, installed: rec };
-    const cmd = steamMgr.rpcs3Command();
-    return { pkgs: r.pkgs.length, updates: r.pkgs.filter((x) => x.patch).length, licences: r.licences.length, titleIds: r.titleIds, installed: rec, rpcs3: cmd ? cmd.from || path.basename(cmd.exe) : null, running: pkgRun?.romId === romId };
+    if (r.pkgs.length) {
+      const cmd = steamMgr.rpcs3Command();
+      const plan = pkgInst.licencePlan(r, rpcs3Hdds());
+      return { emu: 'rpcs3', emuName: 'RPCS3', pkgs: r.pkgs.length, updates: r.pkgs.filter((x) => x.patch).length, licences: plan.filter((l) => l.from !== 'missing' && l.from !== 'rpcs3').length, titleIds: r.titleIds, installed: rec, cmd: cmd ? cmd.from || path.basename(cmd.exe) : null, running,
+        needsLicence: rec ? [] : plan.filter((l) => l.from === 'missing').map((l) => ({ contentId: l.contentId, titleId: l.titleId })), licenceMissing: lic };
+    }
+    const v = await pkgInst.vitaContent(m.path).catch(() => null);
+    if (v) {
+      const cmd = steamMgr.vita3kCommand();
+      return { emu: 'vita3k', emuName: 'Vita3K', pkgs: 1, kind: v.kind, titleIds: [v.titleId], needsZrif: v.kind === 'pkg' && !v.zrif, opens: v.kind !== 'pkg', installed: rec, cmd: cmd ? cmd.from || path.basename(cmd.exe) : null, running };
+    }
+    return { pkgs: 0, installed: rec, running };
   },
-  'pkg:install': ({ romId }) => installPkg(romId),
+  'pkg:install': ({ romId, zrif }) => installPkg(romId, zrif),
+  // the licence (.rap) for a game already installed in RPCS3 without one: found in its download or
+  // in RomM, handed to RPCS3 under its right name
+  'pkg:addLicence': async ({ romId }) => {
+    const rec = installs[romId];
+    if (rec?.emu !== 'rpcs3') throw new Error('This game isn’t installed in RPCS3 by Cartridge.');
+    const need = installedLicences(rec);
+    if (!need.length) return { ok: true };
+    const cmd = steamMgr.rpcs3Command();
+    if (!cmd) throw new Error('RPCS3 wasn’t found. Set it up in Settings → Emulators.');
+    const tmp = path.join(os.tmpdir(), `cartridge-rap-${process.pid}-${Date.now()}`);
+    try {
+      const m = manifest[romId];
+      const local = m?.path && !m.installedIn ? pkgInst.packagesIn(m.path).licences.filter((f) => /\.rap$/i.test(f)) : [];
+      const named = (cid) => local.find((f) => path.basename(f).toUpperCase() === cid.toUpperCase() + '.RAP') || (need.length === 1 && local.length === 1 ? local[0] : null);
+      const picked = Object.fromEntries(need.map((n) => [n.contentId, named(n.contentId)]).filter(([, f]) => f));
+      Object.assign(picked, await rapsFromRomm(romId, need.filter((n) => !picked[n.contentId]), tmp));
+      const lost = need.filter((n) => !picked[n.contentId]);
+      if (lost.length) throw new Error(`RAP file not found: ${lost[0].contentId}.rap. Add it to this game in RomM, next to its .pkg.`);
+      const files = pkgInst.stageLicences(need.map((n) => ({ contentId: n.contentId, from: 'picked', file: picked[n.contentId] })), path.join(tmp, 'staged'));
+      await pkgInst.install({ cmd, hdds: rpcs3Hdds(), files, titleIds: [] });
+    } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
+    if (installedLicences(rec).length) throw new Error('RPCS3 didn’t take the licence. Check it is the one for this game.');
+    log('rpcs3 licence added', need.map((n) => n.contentId).join(' '));
+    return { ok: true };
+  },
   'pkg:cancel': () => { pkgRun?.ac.abort(); return true; },
   // after installing: the downloaded .pkg isn't needed to play. The game then lives in RPCS3.
   'pkg:dropDownload': async ({ romId }) => {
     const m = manifest[romId], rec = installs[romId];
-    if (!m?.path || m.installedIn || !rec?.created) throw new Error('This game isn’t installed in RPCS3 by Cartridge.');
+    if (!m?.path || m.installedIn || !rec?.created) throw new Error('Cartridge didn’t install this game in an emulator.');
     const roots = new Set([config.romsRoot, ...(library?.platforms || []).map((pl) => platformPath(pl).path)].filter(Boolean).map((x) => path.resolve(x)));
     if (roots.has(path.resolve(m.path))) throw new Error('Refusing to delete a whole console folder');
     await removeWithProgress(m.path, romId);
-    manifest[romId] = { ...m, path: rec.dir, installedIn: 'rpcs3', download: m.path };
+    manifest[romId] = { ...m, path: rec.dir, installedIn: rec.emu, download: m.path };
     saveManifest();
     installedMap[romId] = rec.dir;
     broadcast('installed-changed', { romId, path: rec.dir });

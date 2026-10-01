@@ -54,3 +54,18 @@ test('a PS3 game installed in RPCS3 starts by serial; any other emulator keeps t
   const out = JSON.parse(execFileSync(process.execPath, ['-e', code], { env: { ...process.env, HOME: H }, encoding: 'utf8' }).trim().split('\n').pop());
   assert.deepStrictEqual(out, ['run net.rpcs3.RPCS3 --no-gui "%RPCS3_GAMEID%:BLUS30001"', '--no-gui "%RPCS3_GAMEID%:BLUS30001"', '--no-gui "/roms/ps3/Other.iso"']);
 });
+
+test('a PS3 game that came as .pkg can only be added to Steam once installed in RPCS3', () => {
+  const H = path.join(TMP, 'ps3pkg');
+  const dl = path.join(H, 'roms/ps3/Game');
+  fs.mkdirSync(dl, { recursive: true }); fs.mkdirSync(H + '/cfg', { recursive: true });
+  const b = Buffer.alloc(0x100); b.writeUInt32BE(0x7f504b47, 0); b.writeUInt16BE(1, 6); b.write('UP0001-NPUA80523_00-GAME000000000000', 0x30, 'latin1');
+  fs.writeFileSync(path.join(dl, 'Game.pkg'), b);
+  const code = `
+    const sm = require(${JSON.stringify(path.join(ROOT, 'electron/steamManager.js'))})({ USER_DATA: ${JSON.stringify(H + '/cfg')}, log() {}, PLATFORM_MAP: {}, getConfig: () => ({}), saveConfig() {}, broadcast() {},
+      emulationRoots: () => [], getLibrary: () => null, installed: () => ({}), romById: () => null, isGamescope: () => false, artFor: () => ({}), MARKED: 'm', markedPath: () => null, installRecord: () => null });
+    const r = sm._buildLaunch({ id: 7, platform_slug: 'ps3', fs_name: 'Game' }, ${JSON.stringify(dl)}, { exe: '/x/rpcs3.sh', args: '--no-gui "{ROM}"', kind: 'path' });
+    console.log(JSON.stringify(r.missing || null));`;
+  const out = JSON.parse(execFileSync(process.execPath, ['-e', code], { env: { ...process.env, HOME: H }, encoding: 'utf8' }).trim().split('\n').pop());
+  assert.match(out, /Install it in RPCS3 first/);
+});

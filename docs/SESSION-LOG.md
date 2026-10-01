@@ -6,6 +6,50 @@ The branch for 0.9.3 work is `claude/relaxed-fermat-30pigp`. Pull it before star
 
 ---
 
+## 1 Oct 2026 (evening) · Decisions before the night run
+
+- **PS4 .pkg (D4): dropped** by the owner. Don't build it.
+- **shadPS4**: `-i` (no IPC) before `-d` did NOT help: still a black screen for a while, then it closes. So the IPC handshake is not the cause. Next step, asked of the owner: start the shadPS4 core directly (the version the Qt launcher selected, `versionSelected` in the launcher's settings under `~/.local/share/shadPS4QtLauncher`) with `-g "<eboot.bin>" -f true`, and send the tail of `~/.local/share/shadPS4/log/shad_log.txt` after a failed launch. Don't change PS4 shortcuts in code until there is a log or that test result.
+- **Night run**: the owner is in Dubai (UTC+4) and runs out of credits until 1:30 a.m. there (21:30 UTC). A scheduled wake at 21:31 UTC continues the work unattended: first make sure 0.9.3 D (commit after 02f8039) is merged and released, then build patches (D7: RPCS3 first, then shadPS4, PCSX2), releasing each finished, tested part as the next letter (0.9.3 E, F...) by the usual rule (test build green, then PR and merge). Log every part here.
+
+---
+
+## 1 Oct 2026 · 0.9.3 D, with fixes from the owner's first PS3 package test
+
+**Owner reported** (photo): an installed PS3 package game (NPUA80523) failed to boot from Steam with "Failed to decrypt content", and the game didn't appear on the PS3 console page in Steam settings (had to add it from the game page). Asked that D (Vita) be checked for the same before release; D's automatic merge was cancelled until then.
+
+**Cause and fix**
+- Licence: PSN packages (PKG metadata DRM type 1 or 2) need `<content ID>.rap` in RPCS3's `dev_hdd0/home/<user>/exdata`. RPCS3 copies a .rap under the file's own name, so a missing or differently named .rap means "Failed to decrypt content". `pkgInfo` reads the DRM type; `licencePlan` picks the licence (download under its right name, the only loose .rap renamed, one you picked, or already in RPCS3); `stageLicences` copies renamed ones into a temp folder under the right name before RPCS3 installs them. The install record keeps `needs` (content IDs). `installedLicences` (main.js) says what an installed game still lacks (`npdOf` reads the content ID from EBOOT.BIN's NPD header for games installed before this). UI: asks for the .rap before installing (or install without), "Add licence (.rap)" button and More item (`pkg:addLicence`, 16-byte .rap only).
+- Steam: `gameRef` returns `missing` for a PS3 game with packages that isn't installed yet, so the console page shows it blocked with the reason and plans skip it; the automatic add at download is held back for these (`it.notice === 'pkg'`); `afterInstall` updates the game's own shortcut (`refreshGame(romId, { force: true })`) or adds it when Add automatically is on. Not 100% sure this was the owner's console page case: re-check on device.
+- Vita (same check for D): Vita games were already blocked until installed; added `vitaLicenced` (work.bin in the game or a .rif in ux0/license) and a clear message when an install has no licence.
+- Tests: licence plan cases, NPD header, Steam waits for install, Vita licence. 32 pass.
+
+**Then the owner asked** (photo of the long More menu): group More into sub menus; and .rap files live in RomM: never ask, find the .rap and install it with the .pkg, refuse with "RAP file not found" when it isn't anywhere, and say before installing that a .rap is needed. Done: `rapsFromRomm` (the game's own RomM files, then RomM entries named after the content ID or title ID; downloaded to a temp folder), `installPkg` throws "RAP file not found" when still missing, `pkg:addLicence` finds it the same way (no picker), button "Get licence (.rap)". More is now 7 items: favourites, play status, collection, timeline, Steam and emulator (list), Details and artwork (list), hide; B in a list returns to the first one (loop around `choose`).
+
+**shadPS4**: owner described the failure: black screen about 30 s, then it closes; works once after launching from shadPS4's own window. The core waits for the launcher's START over IPC with no time limit (`ipc.cpp` WaitForStart), so the leading theory is the headless launcher not sending it. Asked the owner to try `-i` (launcher's no-IPC switch) before `-d` in Steam launch options. Not changed in code yet.
+
+**PS4 .pkg (D4)**: recommended leaving it out (needs fake-PKG keys in a public MIT repo); waiting on the owner.
+
+---
+
+## 1 Oct 2026 · 0.9.3 D (Vita games through Vita3K)
+
+**Owner said**: shadPS4 PS4 games still don't start the first time (after 0.9.3). Asked them for: whether they pressed Update on the PS4 console page, what a failed launch looks like, and `ls` of `~/Documents/Apps`, `~/.local/share/shadPS4`, `~/.local/share/shadPS4QtLauncher` plus the tail of `shad_log.txt`. Read the Qt launcher again (`src/main.cpp`, `qt_gui/main_window.cpp`, `ipc/ipc_client.cpp`): `-d` reads `vm_versionSelected` from the launcher's settings in its launcher dir (`<cwd>/launcher` if present, else `~/.local/share/shadPS4QtLauncher`); the core is started with the launcher's working folder and IPC (`SHADPS4_ENABLE_IPC`, `#IPC_END` then `RUN`/`START`); a RESTART request restarts it from the core's own folder. No cause proven yet: waiting on the owner's answers. Note: if the `user` folder next to the AppImage is the only shadPS4 data, `startOf` leaves Start in unchanged.
+
+**Built**
+- `pkgInstall.js`: `vitaPrefs` (config.yml pref-path, defaults, EmuDeck storage), `vitaContent` (Vita .pkg by header platform 2, else .vpk/.zip title ID from `sce_sys/param.sfo` via yauzl; zRIF from a small text file, `KO5i...`), `installVita` (Vita3K main.cpp: `--pkg <f> --zrif <k>` installs headless and quits; a .vpk/.zip installs then opens and boots, so Cartridge waits for it to close). `safeToRemove` is now per emulator (`RULES`: RPCS3 dev_hdd0/game + PARAM.SFO, Vita3K ux0/app + sce_sys/param.sfo). Vita3K's `--deleted-id` is never used (it deletes savedata).
+- `main.js`: `installPkg` hands Vita games to `installVitaGame`; `pkg:check` is async and says `emu`, `emuName`, `needsZrif`, `opens`; `emuRoots(emu)`; delete and `pkg:dropDownload` work for both emulators. `steamManager`: `emuCommand(key, re)`, `vita3kCommand`, recorded Vita games start by title ID.
+- UI: Game page says Install in Vita3K, asks for a zRIF when none came with the game, "Close Vita3K to finish" while it is open.
+- Tests: Vita title ID from a .vpk (a small stored zip built in the test), zRIF from a text file, install through a stand-in Vita3K, delete refusals including savedata. 28 pass.
+
+**Release**: version 0.9.6, "0.9.3 D".
+
+**Owner to test**: a Vita .vpk and a .pkg (with and without a zRIF text file), Install in Vita3K in Game Mode, play from Steam, delete both ways.
+
+**Next**: shadPS4 once the owner answers; D4 PS4 .pkg; D7 patches.
+
+---
+
 ## 1 Oct 2026 · 0.9.3 C (PS3 packages through RPCS3)
 
 **Owner's decisions in chat**: skip Redream, Mednafen and torzu. 0.9.3 B was released before this.

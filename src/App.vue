@@ -272,7 +272,7 @@ watch(() => store.downloads.map((d) => d.id + d.status).join(), () => {
     announced.add(d.id);
     if (dlPrimed) {
       if (d.notice === 'stale') toast(`${d.name} is ready. RomM's checksum for it looks out of date, so a rescan in RomM would fix that.`, 'info', 6000, 'mdiCheckCircle');
-      else if (d.notice === 'pkg') toast(`${d.name} is downloaded. Open it and press Install in RPCS3 to play it.`, 'ok', 6000, 'mdiPackageDown');
+      else if (d.notice === 'pkg') toast(`${d.name} is downloaded. Open it and press Install in ${d.installIn || 'RPCS3'} to play it.`, 'ok', 6000, 'mdiPackageDown');
       else toast(`${d.name} is ready to play`, 'ok', 3800, 'mdiCheckCircle');
       sfx.done();
     }
