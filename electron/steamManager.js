@@ -24,6 +24,8 @@ const ls = (p) => { try { return fs.readdirSync(p); } catch { return []; } };
 const real = (p) => { try { return fs.realpathSync(p); } catch { return p; } };
 const unq = (s) => String(s || '').trim().replace(/^"(.*)"$/, '$1');
 const q = (s) => `"${s}"`;
+// inside a running AppImage's temporary mount: gone once that app closes or the device restarts
+const isTempMount = (p) => /^\/tmp\/\.mount_/.test(String(p || ''));
 
 // ---------------------------------------------------------------- Steam install + account
 function steamRoots() {
@@ -179,6 +181,18 @@ module.exports = function createSteamManager(ctx) {
   const gone = (() => { try { return JSON.parse(fs.readFileSync(GONE_FILE, 'utf8')); } catch { return {}; } })();
   const live = require('./steamLive')({ log });
   const saveReg = () => { try { fs.writeFileSync(REG_FILE, JSON.stringify(reg, null, 1)); fs.writeFileSync(GONE_FILE, JSON.stringify(gone)); } catch {} };
+  // Removed live: Steam drops the shortcut at once but saves shortcuts.vdf later, so until then the
+  // file still lists it and the game kept showing "Remove from Steam" (A7). appid -> when removed.
+  const LIVE_GONE_FILE = path.join(USER_DATA, 'steam-live-removed.json');
+  const liveGone = (() => { try { return JSON.parse(fs.readFileSync(LIVE_GONE_FILE, 'utf8')); } catch { return {}; } })();
+  const saveLiveGone = () => { try { fs.writeFileSync(LIVE_GONE_FILE, JSON.stringify(liveGone)); } catch {} };
+  function shortcutsOf(acc) {
+    const all = readShortcuts(acc);
+    let changed = false;
+    for (const id of Object.keys(liveGone)) if (!all.some((s) => s.appid === Number(id) >>> 0) || Date.now() - liveGone[id] > 7 * 864e5) { delete liveGone[id]; changed = true; }
+    if (changed) saveLiveGone();
+    return all.filter((s) => !liveGone[s.appid]);
+  }
   const saveQueue = () => { try { fs.writeFileSync(QUEUE_FILE, JSON.stringify(queue)); } catch {} ctx.broadcast('steam-queue', queueInfo()); };
 
   // folder name under roms/ -> RomM slug (prefer slugs the library actually has)
@@ -251,7 +265,7 @@ module.exports = function createSteamManager(ctx) {
       try { l = learnOne(sc); } catch {}
       if (!l) continue;
       if (l.template.romRoot) roots.add(l.template.romRoot);
-      if (!exists(l.template.exe)) continue; // the emulator moved or was removed: never copy a broken setup (Shortcut health lists these)
+      if (!exists(l.template.exe) || isTempMount(l.template.exe)) continue; // the emulator moved or was removed: never copy a broken setup (Shortcut health lists these)
       const key = l.console;
       const sig = [l.template.exe, l.template.pre.join(' '), l.template.args].join('|');
       (by[key] ||= {});
@@ -532,7 +546,7 @@ module.exports = function createSteamManager(ctx) {
   function refreshLearned() {
     const env = environment();
     if (!env.account) { learned = {}; return env; }
-    try { learned = learnAll(readShortcuts(env.account)); } catch (e) { log('steam learn failed', e.message); learned = {}; }
+    try { learned = learnAll(shortcutsOf(env.account)); } catch (e) { log('steam learn failed', e.message); learned = {}; }
     learnedAt = Date.now();
     return env;
   }
@@ -553,10 +567,24 @@ module.exports = function createSteamManager(ctx) {
     if (pick) { const c = candidates(key).find((x) => x.id === pick); if (c) return { ...c.t, emu: c.id, perGame: true }; }
     return templateFor(key);
   }
+  // shadPS4 and its Qt launcher read their settings, keys, chosen version and patches from a folder
+  // named "user" in the folder they start in, else from ~/.local/share/shadPS4 (shadPS4's
+  // common/path_util.cpp; the launcher starts the emulator in its own working folder). shadPS4's own
+  // Steam shortcuts start inside the AppImage's mount, where there is never one. Starting next to the
+  // AppImage picked up a stray "user" folder there, so games only started sometimes (A10). Start
+  // where there is none, unless that folder is the only shadPS4 data there is (a portable install).
+  function startOf(t) {
+    if (!t || !/shadps4/i.test(t.exe || '') || !t.start || !exists(path.join(t.start, 'user'))) return t?.start;
+    const data = process.env.XDG_DATA_HOME || path.join(HOME, '.local/share');
+    if (!isDir(path.join(data, 'shadPS4')) && !isDir(path.join(HOME, '.local/share/shadPS4'))) return t.start;
+    for (const d of [path.join(data, 'shadPS4QtLauncher'), path.join(data, 'shadPS4'), HOME]) if (isDir(d) && !exists(path.join(d, 'user'))) return d;
+    return t.start;
+  }
   // what a shortcut was made with, to spot ones made before the console's setup changed
   // v2: arguments written into Target like Steam ROM Manager (0.7.11)
   // v3: the emulator in Target, its arguments in Launch options again (0.8.2)
-  const sigOf = (t, mode) => (t ? ['v3', mode || 'direct', t.exe, (t.pre || []).join(' '), t.args].join('|') : '');
+  // (shadPS4 also by its start folder, so shortcuts made in the wrong one show Update: 0.9.3)
+  const sigOf = (t, mode) => (t ? ['v3', mode || 'direct', t.exe, (t.pre || []).join(' '), t.args, ...(/shadps4/i.test(t.exe || '') ? [startOf(t)] : [])].join('|') : '');
   // Target is the emulator alone; Launch options hold its arguments and the game. Steam adds Launch
   // options after Target for shortcuts, so no "%command%" in front (a lone or leading %command% kept
   // games from starting). Only when something must run first (vblank_mode=0, an env var) is it
@@ -637,7 +665,7 @@ module.exports = function createSteamManager(ctx) {
   }
   function overview() {
     const env = refreshLearned();
-    const scs = env.account ? readShortcuts(env.account) : [];
+    const scs = env.account ? shortcutsOf(env.account) : [];
     const find = inSteamIndex(scs);
     const tFor = {};
     const games = installedGames().map((g) => {
@@ -655,11 +683,11 @@ module.exports = function createSteamManager(ctx) {
     const consoles = keys.map((k) => {
       const t = templateFor(k);
       const ps = games.filter((g) => g.console === k);
-      return { key: k, label: SHORT[k] || ps[0]?.platform || k, platform: ps[0]?.platform || k, games: ps.length, inSteam: ps.filter((g) => g.inSteam).length, template: t ? { exe: t.exe, start: t.start, lo: [...(t.pre || []), ...(t.command ? ['%command%'] : []), t.args].join(' '), how: t.how, from: t.from, kind: t.kind,
+      return { key: k, label: SHORT[k] || ps[0]?.platform || k, platform: ps[0]?.platform || k, games: ps.length, inSteam: ps.filter((g) => g.inSteam).length, template: t ? { exe: t.exe, start: startOf(t), lo: [...(t.pre || []), ...(t.command ? ['%command%'] : []), t.args].join(' '), how: t.how, from: t.from, kind: t.kind,
         // exactly what goes in Steam (see plan): arguments in Target unless something wraps the command
         ...launchFor(t, [...(t.pre || []), ...(t.command ? ['%command%'] : []), t.args].join(' '), t.args) } : null, mode: (cfg().modes || {})[k] || 'direct',
         // installed emulators to pick from, and which one new shortcuts use
-        emus: [...(learned[k] ? [{ id: 'learned', label: 'From your Steam shortcuts', sub: learned[k].from }] : []), ...candidates(k).map((c) => ({ id: c.id, label: c.label, sub: c.t.from }))],
+        emus: az([...(learned[k] ? [{ id: 'learned', label: 'From your Steam shortcuts', sub: learned[k].from }] : []), ...candidates(k).map((c) => ({ id: c.id, label: c.label, sub: c.t.from }))]),
         emu: t?.how === 'yours' ? 'yours' : t?.emu || null,
         outdated: t ? ps.filter((g) => g.inSteam && g.ours && (g.badLo || reg[g.appid]?.sig !== sigOf((cfg().gameEmus || {})[g.romId] ? templateForGame(g.romId, k) : t, (cfg().modes || {})[k]))).length : 0 };
     }).sort((a, b) => a.platform.localeCompare(b.platform));
@@ -676,7 +704,7 @@ module.exports = function createSteamManager(ctx) {
   function played() {
     const env = environment();
     if (!env.account) return {};
-    const find = inSteamIndex(readShortcuts(env.account));
+    const find = inSteamIndex(shortcutsOf(env.account));
     const out = {};
     for (const g of installedGames()) { const sc = find(g); if (sc?.last) out[g.rom.id] = sc.last * 1000; }
     return out;
@@ -686,7 +714,7 @@ module.exports = function createSteamManager(ctx) {
   function playtime() {
     const env = environment();
     if (!env.account) return {};
-    const scs = readShortcuts(env.account);
+    const scs = shortcutsOf(env.account);
     const find = inSteamIndex(scs);
     const pt = readPlaytime(env.account);
     const out = {};
@@ -705,7 +733,7 @@ module.exports = function createSteamManager(ctx) {
     const g = installedGames().find((x) => x.rom.id === romId);
     const out = { steam: !!env.account, installed: !!g, console: g?.key || consoleOfRom(romId), needsFolder: !!g && !g.file, inSteam: false, ours: false, appid: null, queued: null };
     if (!env.account || !g) return out;
-    const sc = inSteamIndex(readShortcuts(env.account))(g) || liveHit(g);
+    const sc = inSteamIndex(shortcutsOf(env.account))(g) || liveHit(g);
     out.inSteam = !!sc; out.ours = !!(sc && reg[sc.appid]); out.appid = sc?.appid || null;
     out.queued = queue.add.some((a) => a.romId === romId) ? 'add' : sc && queue.remove.includes(sc.appid) ? 'remove' : null;
     out.lastCollections = (cfg().lastCollections || {})[out.console] || null;
@@ -733,7 +761,7 @@ module.exports = function createSteamManager(ctx) {
   function plan() {
     const env = refreshLearned();
     if (!env.account) throw new Error(env.reason === 'nosteam' ? 'Steam was not found on this device.' : 'Open Steam once and sign in, then try again.');
-    const scs = readShortcuts(env.account);
+    const scs = shortcutsOf(env.account);
     const names = new Set(scs.map((s) => s.name.toLowerCase()));
     const byRom = new Map(installedGames().map((g) => [g.rom.id, g]));
     const entries = [], skipped = [];
@@ -751,11 +779,11 @@ module.exports = function createSteamManager(ctx) {
       if (always || nameCount[name.toLowerCase()] > 1 || (names.has(name.toLowerCase()) && !find(scs, g))) name = `${name} (${SHORT[g.key] || g.platform.display_name})`;
       const { lo, args, fallback, missing } = buildLaunch(g.rom, g.file, t);
       if (missing) { skipped.push({ romId: a.romId, name: g.rom.name, why: missing }); continue; }
-      let exe = t.exe, start = t.start, { target, launch } = launchFor(t, lo, args);
+      let exe = t.exe, start = startOf(t), { target, launch } = launchFor(t, lo, args);
       if (mode === 'script') { exe = scriptPath(); start = path.dirname(scriptPath()); launch = String(g.rom.id); target = q(exe); }
       const appid = shortcutId(target, name);
       entries.push({
-        romId: g.rom.id, console: g.key, sig: sigOf(t, mode), name, exe, target, start, lo: launch, directLo: lo, directExe: t.exe, directStart: t.start, appid, how: t.how, from: t.from, fallback, emu: t.emu || null,
+        romId: g.rom.id, console: g.key, sig: sigOf(t, mode), name, exe, target, start, lo: launch, directLo: lo, directExe: t.exe, directStart: startOf(t), appid, how: t.how, from: t.from, fallback, emu: t.emu || null,
         proton: /\.exe$/i.test(t.exe) ? (cfg().proton || 'proton_experimental') : null,
         // 0.9: console collections on: also the Steam collection named after its console. Only
         // Steam's own collections: Cartridge (RomM) collections are never copied into Steam.
@@ -785,7 +813,7 @@ module.exports = function createSteamManager(ctx) {
       if (!g || !t) { lines.push(`  ${r.romId}) ${ai ? `exec ${sh(ai)} --game ${r.romId}` : 'exit 1'} ;;`); continue; }
       const { lo } = buildLaunch(g.rom, g.file, t);
       const cmd = lo.replace('%command%', sh(t.exe));
-      lines.push(`  ${r.romId}) [ -e ${sh(g.file)} ] || ${ai ? `exec ${sh(ai)} --game ${r.romId}` : 'exit 1'}; cd ${sh(t.start)}; ${t.command ? cmd : `${sh(t.exe)} ${cmd}`}; exit $? ;;`);
+      lines.push(`  ${r.romId}) [ -e ${sh(g.file)} ] || ${ai ? `exec ${sh(ai)} --game ${r.romId}` : 'exit 1'}; cd ${sh(startOf(t))}; ${t.command ? cmd : `${sh(t.exe)} ${cmd}`}; exit $? ;;`);
     }
     lines.push(`  *) ${ai ? `exec ${sh(ai)} --game "$1"` : 'exit 1'} ;;`, 'esac', '');
     try { fs.writeFileSync(scriptPath(), lines.join('\n'), { mode: 0o755 }); } catch (e) { log('play.sh write failed', e.message); }
@@ -832,7 +860,7 @@ module.exports = function createSteamManager(ctx) {
     const env = environment();
     if (!env.account) throw new Error('Steam was not found on this device.');
     if (style && !ctx.getConfig().sgdbKey) throw new Error('Add a SteamGridDB API key in Settings → Look & feel first.');
-    const have = new Set(readShortcuts(env.account).map((x) => x.appid >>> 0));
+    const have = new Set(shortcutsOf(env.account).map((x) => x.appid >>> 0));
     const ours = Object.entries(reg).filter(([id, r]) => r.romId && (have.has(Number(id) >>> 0) || r.live));
     if (!ours.length) return { count: 0 };
     const grid = files(env.account).grid;
@@ -917,7 +945,8 @@ module.exports = function createSteamManager(ctx) {
       added++;
       saveReg();
     }
-    for (const id of removeIds) await live.removeShortcut(id);
+    for (const id of removeIds) { await live.removeShortcut(id); liveGone[id >>> 0] = Date.now(); }
+    saveLiveGone();
     log('steam live apply', added, 'added,', removeIds.length, 'removed');
     put({ state: 'done', added, removed: removeIds.length });
     return { added, removed: removeIds.length };
@@ -1094,13 +1123,13 @@ module.exports = function createSteamManager(ctx) {
     const consoles = [...keys.values()].map((c) => {
       const cands = candidates(c.key);
       const t = templateFor(c.key);
-      const emus = [...(learned[c.key] ? [{ id: 'learned', label: 'From your Steam shortcuts', sub: learned[c.key].from, how: 'learned' }] : []), ...cands.map((x) => ({ id: x.id, label: x.label, sub: shortPath(x.t.how === 'flatpak' ? x.t.from : x.t.exe), how: x.t.how }))];
+      const emus = az([...(learned[c.key] ? [{ id: 'learned', label: 'From your Steam shortcuts', sub: learned[c.key].from, how: 'learned' }] : []), ...cands.map((x) => ({ id: x.id, label: x.label, sub: shortPath(x.t.how === 'flatpak' ? x.t.from : x.t.exe), how: x.t.how }))]);
       // copies the scan wasn't sure about: you say whether they're this console's emulator
       const ids = new Set([...emulatorsFor(c.key), ...(CORES[c.key] ? ['retroarch'] : [])]);
       const ok = cfg().confirmed || {};
       const unsure = (found?.items || []).filter((x) => x.id && ids.has(x.id) && x.conf < 2 && !ok[x.path] && exists(x.path)).map((x) => ({ path: x.path, short: shortPath(x.path), id: x.id, label: labelOf(x.id), why: x.why || [] }));
       return { ...c, emus, emu: t?.how === 'yours' ? 'yours' : t?.emu || null, using: t ? { exe: shortPath(t.exe), how: t.how, from: t.from, rawExe: t.exe, start: t.start, lo: [...(t.pre || []), ...((t.pre || []).length ? ['%command%'] : []), t.args].join(' ') } : null, checks: preflight(c.key, t), unsure };
-    }).sort((a, b) => b.games - a.games || a.platform.localeCompare(b.platform));
+    }).sort((a, b) => a.platform.localeCompare(b.platform));
     const ok = cfg().confirmed || {};
     const unknown = (found?.items || []).filter((x) => x.kind === 'appimage' && !x.id && !ok[x.path] && exists(x.path)).map((x) => ({ path: x.path, short: shortPath(x.path), name: x.name || '', fs: x.fs, version: x.version }));
     const env = environment();
@@ -1113,6 +1142,7 @@ module.exports = function createSteamManager(ctx) {
       known: Object.entries(detect.KNOWN()).map(([id, e]) => ({ id, label: e.label, for: e.for || [] })),
     };
   }
+  const az = (l) => [...l.filter((e) => e.id === 'learned'), ...l.filter((e) => e.id !== 'learned').sort((a, b) => a.label.localeCompare(b.label))];
   const shortPath = (p) => String(p || '').replace(HOME, '~');
   const labelOf = (id) => (id === 'retroarch' ? 'RetroArch' : EMU[id]?.label || id);
   // "This file is <emulator>" (or 'none'): from Setup's questions and from Browse
@@ -1160,7 +1190,7 @@ module.exports = function createSteamManager(ctx) {
   function health() {
     const env = refreshLearned();
     if (!env.account) return { steam: false, problems: [] };
-    const scs = readShortcuts(env.account);
+    const scs = shortcutsOf(env.account);
     const byRom = new Map(installedGames().map((g) => [g.rom.id, g]));
     const problems = [];
     for (const sc of scs) {
@@ -1172,10 +1202,10 @@ module.exports = function createSteamManager(ctx) {
       const p = { appid: sc.appid, name: sc.name, ours: !!r, console: key, exe: shortPath(sc.exe), issues: [] };
       const fpId = sc.exe === '/usr/bin/flatpak' || /(^|\/)flatpak$/.test(sc.exe) ? (tokenize(sc.lo + ' ' + (sc.exeRaw || '')).map((t) => t.val).join(' ').match(/run\s+(?:--\S+\s+)*(\S+)/) || [])[1] : null;
       if (fpId && !flatpakApps().includes(fpId)) p.issues.push({ kind: 'flatpak', text: `The Flatpak ${fpId} isn't installed.` });
-      else if (!fpId && !exists(sc.exe)) {
+      else if (!fpId && (!exists(sc.exe) || isTempMount(sc.exe))) {
         const id = emuIdOf(sc.exe, r);
         const to = key ? replacementFor(id, sc.exe, key) : null;
-        p.issues.push({ kind: 'emulator', text: `The emulator isn't at ${shortPath(sc.exe)} any more.`, fix: to ? { to: shortPath(to.exe), label: `Point it at ${path.basename(to.exe)}` } : null });
+        p.issues.push({ kind: 'emulator', text: isTempMount(sc.exe) ? 'It points inside an AppImage\'s temporary folder, which is gone after a restart.' : `The emulator isn't at ${shortPath(sc.exe)} any more.`, fix: to ? { to: shortPath(to.exe), label: `Point it at ${path.basename(to.exe)}` } : null });
       }
       if (r) {
         const g = byRom.get(r.romId);
@@ -1202,7 +1232,7 @@ module.exports = function createSteamManager(ctx) {
     if (!env.account) throw new Error('Steam was not found.');
     const want = new Set(appids.map((x) => x >>> 0));
     const h = health().problems.filter((p) => want.has(p.appid >>> 0));
-    const scs = readShortcuts(env.account);
+    const scs = shortcutsOf(env.account);
     const liveOn = await live.available(env.account.root).catch(() => false);
     let fixed = 0, queued = 0; const left = [];
     const refreshKeys = new Set();
@@ -1230,7 +1260,7 @@ module.exports = function createSteamManager(ctx) {
   // Emulators Cartridge's shortcuts use that aren't where they were (checked on start: a few stats)
   function movedEmulators() {
     const gone = new Map();
-    for (const r of Object.values(reg)) if (r.emuExe && !exists(r.emuExe) && r.emuExe !== '/usr/bin/flatpak') gone.set(r.emuExe, (gone.get(r.emuExe) || 0) + 1);
+    for (const r of Object.values(reg)) if (r.emuExe && (!exists(r.emuExe) || isTempMount(r.emuExe)) && r.emuExe !== '/usr/bin/flatpak') gone.set(r.emuExe, (gone.get(r.emuExe) || 0) + 1);
     for (const [k, t] of Object.entries(cfg().templates || {})) if (t?.exe && !exists(t.exe)) gone.set(t.exe, gone.get(t.exe) || 0);
     return [...gone.entries()].map(([exe, n]) => ({ exe: shortPath(exe), shortcuts: n }));
   }
@@ -1240,7 +1270,7 @@ module.exports = function createSteamManager(ctx) {
     const env = environment();
     if (!env.account) throw new Error('Steam was not found.');
     const byRom = new Map(installedGames().map((g) => [g.rom.id, g]));
-    const have = new Set(readShortcuts(env.account).map((s) => s.appid >>> 0));
+    const have = new Set(shortcutsOf(env.account).map((s) => s.appid >>> 0));
     const collections = {};
     for (const [id, r] of Object.entries(reg)) {
       const g = byRom.get(r.romId);
@@ -1307,7 +1337,7 @@ module.exports = function createSteamManager(ctx) {
           if (b.missing) continue;
           const { target, launch } = launchFor(tg, b.lo, b.args);
           try {
-            if ((await live.updateShortcut(g.appid, { exe: target, start: q(tg.start), lo: launch })) === 'ok') {
+            if ((await live.updateShortcut(g.appid, { exe: target, start: q(startOf(tg)), lo: launch })) === 'ok') {
               Object.assign(reg[g.appid], { sig: sigFor(g.romId), exe: tg.exe, emu: tg.emu || null, emuExe: tg.exe, mode, inPlace: Date.now() }); delete reg[g.appid].loFixed; fixed++; // Steam saves its file later
             }
           } catch (e) { log('steam live update', e.message); }
@@ -1335,7 +1365,7 @@ module.exports = function createSteamManager(ctx) {
         if (!b.missing) {
           const { target, launch } = launchFor(t, b.lo, b.args);
           try {
-            if ((await live.updateShortcut(g.appid, { exe: target, start: q(t.start), lo: launch })) === 'ok') { Object.assign(reg[g.appid], { sig, exe: t.exe, emu: t.emu || null, emuExe: t.exe, mode, inPlace: Date.now() }); saveReg(); return { count: 1, fixed: 1 }; }
+            if ((await live.updateShortcut(g.appid, { exe: target, start: q(startOf(t)), lo: launch })) === 'ok') { Object.assign(reg[g.appid], { sig, exe: t.exe, emu: t.emu || null, emuExe: t.exe, mode, inPlace: Date.now() }); saveReg(); return { count: 1, fixed: 1 }; }
           } catch (e) { log('steam live update', e.message); }
         }
       }
@@ -1347,12 +1377,12 @@ module.exports = function createSteamManager(ctx) {
     liveEnable: () => { const env = environment(); if (!env.account) throw new Error('Steam was not found.'); fs.writeFileSync(path.join(env.account.root, live.FLAG), ''); return true; },
     onDownloaded, onDeleted, lastStatus, writeScript, startupReport, forRom, fixCollections, played, playtime, steamRoots, refreshArt,
     scanEmulators, setupOverview, confirm, useFile, health, healthFix, movedEmulators, setupReport, syncConsoleCollections, preflight: (key) => preflight(key, templateFor(key)),
-    candidatesFor: (key) => candidates(key).map((c) => ({ id: c.id, label: c.label, sub: shortPath(c.t.how === 'flatpak' ? c.t.from : c.t.exe) })),
+    candidatesFor: (key) => az(candidates(key).map((c) => ({ id: c.id, label: c.label, sub: shortPath(c.t.how === 'flatpak' ? c.t.from : c.t.exe) }))),
     setGameEmu: (romId, id) => { const c = cfg(); c.gameEmus ||= {}; if (id) c.gameEmus[romId] = id; else delete c.gameEmus[romId]; ctx.saveConfig(); return true; },
     gameEmu: (romId) => (cfg().gameEmus || {})[romId] || null,
     addedAt: (romId) => Math.min(...Object.values(reg).filter((r) => r.romId === romId && r.at).map((r) => r.at), Infinity),
     // exposed for tests
-    _learnOne: learnOne, _tokenize: tokenize, _buildLaunch: buildLaunch, _learnAll: learnAll, _candidates: candidates,
+    _learnOne: learnOne, _tokenize: tokenize, _buildLaunch: buildLaunch, _learnAll: learnAll, _candidates: candidates, _startOf: startOf,
   };
   return api;
 };

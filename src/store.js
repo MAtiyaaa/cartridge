@@ -33,6 +33,9 @@ export const store = reactive({
   trophyScan: null,
   pops: [], // "Trophy unlocked" pop-ups
   play: {}, // romId -> { min, last, src }: play time from Steam and RetroArch (0.8)
+  issues: 0, // things waiting in Settings → Emulators → Issues (0.9.3)
+  homeLists: {}, // a Home row opened with Show all (0.9.3)
+  deleting: {}, // romId -> percent deleted, while a game is being deleted (0.9.3)
 });
 
 // ---------------- play time (Steam's own numbers for games in Steam, plus RetroArch's logs)
@@ -259,6 +262,11 @@ rd.on('library', (lib) => setLib(lib));
 let playT = 0;
 rd.on('installed', (m) => { store.installed = m; clearTimeout(playT); playT = setTimeout(loadPlay, 800); }); // RetroArch times match installed files
 rd.on('sync', (s) => { store.sync = s; });
+// the ring stays a moment at 100% so the end is seen, then the card updates
+rd.on('delete-progress', ({ romId, pct }) => {
+  store.deleting = { ...store.deleting, [romId]: pct };
+  if (pct >= 100) setTimeout(() => { const d = { ...store.deleting }; delete d[romId]; store.deleting = d; }, 600);
+});
 rd.on('update', (u) => {
   if (u.state === 'ready' && store.update.state !== 'ready') toast(`Cartridge ${u.version} is ready. Restart from the Quick Menu to update.`, 'ok', 6000, 'mdiUpdate');
   store.update = u;
@@ -311,7 +319,7 @@ export function collections() { return (store.libVersion, store.lib?.collections
 export function allCollections() { return [...collections(), ...autoCollections()]; }
 export const autoLists = () => autoCollections().filter((c) => !c.series);
 export const seriesLists = () => autoCollections().filter((c) => c.series);
-export function collectionById(id) { return allCollections().find((c) => c.id === id); }
+export function collectionById(id) { return store.homeLists?.[id] || allCollections().find((c) => c.id === id); }
 export function romsOfCollection(id) {
   const c = collectionById(id);
   // each game once, even if the collection lists it twice

@@ -4,6 +4,8 @@ One big release, agreed with the owner. Built and tested in stages; nothing ship
 
 Already done on the branch: the Settings list has no grey box for the current section (the page follows the list as you move), only brighter text.
 
+**Progress** (details in `docs/SESSION-LOG.md`): stage 1 built on 1 Oct: A1, A3, A4, A5 (with C1), A6, A7, A9, A10, A11, A12, A13, A14, B4, B5, and a test build for every branch push. Waiting on a device: A2. Comes with C3: A8.
+
 ## A. Bugs
 1. **Top bar tabs select like Settings.** The current or focused tab is a full white box (or the Highlights colour) with contrasting text, the same as the Settings list. (Owner's "highlight missing on Home and Library".)
 2. **LT/RT at launch.** Chromium hides the controller until a "user gesture" and may not count the triggers. First test on a real pad which inputs unlock it; try reading the controller outside Chromium; a "Press any button" screen only as a last resort.

@@ -87,7 +87,11 @@ const onResize = () => { if (reduce.value) restart(); };
 window.addEventListener('resize', onResize);
 const vis = () => (document.hidden ? cancelAnimationFrame(raf) : start());
 document.addEventListener('visibilitychange', vis);
-onBeforeUnmount(() => { cancelAnimationFrame(raf); document.removeEventListener('visibilitychange', vis); window.removeEventListener('resize', onResize); });
+// not in front (a game is running from Steam, or another window is): no drawing at all (0.9.3, Ally)
+const away = () => cancelAnimationFrame(raf);
+window.addEventListener('blur', away);
+window.addEventListener('focus', start);
+onBeforeUnmount(() => { cancelAnimationFrame(raf); document.removeEventListener('visibilitychange', vis); window.removeEventListener('resize', onResize); window.removeEventListener('blur', away); window.removeEventListener('focus', start); });
 
 // ---------- your own wallpaper
 const wallUrl = computed(() => (store.config?.ui?.wallpaper ? 'romimg://img/?wp=1&t=' + store.config.ui.wallpaper : ''));

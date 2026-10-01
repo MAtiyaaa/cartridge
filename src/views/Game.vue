@@ -57,8 +57,8 @@
             </template>
             <template v-else-if="installedPath">
               <button class="btn ok xl" data-focus data-autofocus @click="toast(installedPath, 'info', 4000, 'mdiFolder')"><Icon name="mdiCheckCircle" />Ready to play</button>
-              <button class="btn" data-focus @click="redownload"><Icon name="mdiRefresh" />Re-download</button>
-              <button class="btn danger" data-focus @click="remove"><Icon name="mdiDeleteOutline" />Delete</button>
+              <button class="btn icon-btn" data-focus title="Re-download" @click="redownload"><Icon name="mdiRefresh" /><span>Re-download</span></button>
+              <button class="btn danger icon-btn" data-focus title="Delete" :disabled="deleting != null" @click="remove"><Ring v-if="deleting != null" :pct="deleting" :size="22" /><Icon v-else name="mdiDeleteOutline" /><span>{{ deleting != null ? 'Deleting' : 'Delete' }}</span></button>
             </template>
             <template v-else>
               <button class="btn primary xl" data-focus data-autofocus @click="dlNow"><Icon name="mdiDownload" :size="22" />{{ dl?.status === 'cancelled' ? 'Resume' : 'Download' }} · {{ bytes(base.fs_size_bytes) }}</button>
@@ -157,6 +157,7 @@ import PIcon from '../components/PIcon.vue';
 import GameLogo from '../components/GameLogo.vue';
 import Grade from '../components/Grade.vue';
 import GameCard from '../components/GameCard.vue';
+import Ring from '../components/Ring.vue';
 
 const props = defineProps({ romId: Number });
 const el = ref(null);
@@ -179,6 +180,7 @@ const shots = computed(() => detail.value?.merged_screenshots || (cached.value?.
 const summary = computed(() => detail.value?.summary || cached.value?.summary || '');
 const target = computed(() => platformById(base.value?.platform_id)?.target);
 const installedPath = computed(() => store.installed[props.romId]);
+const deleting = computed(() => store.deleting[props.romId] ?? null);
 const dl = computed(() => downloadFor(props.romId));
 const pct = computed(() => (dl.value?.total ? Math.floor((dl.value.received / dl.value.total) * 100) : 0));
 const md = computed(() => detail.value?.metadatum || {});
@@ -441,7 +443,7 @@ async function pickGameEmu() {
   const romId = Number(props.romId);
   const ge = await call('steam:gameEmu', { romId });
   const list = await call('steam:gameEmuOptions', { key: ge.key });
-  if (!list.length) return toast('No other emulator for this console was found. Run Emulator setup in Settings → Steam.', 'info', 5000);
+  if (!list.length) return toast('No other emulator for this console was found. Run Emulator setup in Settings → Emulators.', 'info', 5000);
   const v = await choose({ title: 'Emulator for this game', message: base.value.name, options: [
     { label: 'Same as its console', value: '__console', selected: !ge.current, icon: 'mdiArrowULeftTop' },
     ...list.map((c) => ({ label: c.label, sub: c.sub, value: c.id, selected: ge.current === c.id, icon: 'mdiGamepadVariantOutline' })),
@@ -566,10 +568,13 @@ onMounted(async () => {
 .g-banner-shade { position: absolute; inset: 0; background: linear-gradient(90deg, color-mix(in srgb, var(--s0) 80%, transparent) 0%, color-mix(in srgb, var(--s0) 30%, transparent) 45%, transparent 75%), linear-gradient(0deg, var(--s0) 0%, color-mix(in srgb, var(--s0) 45%, transparent) 35%, transparent 65%); }
 .g-banner-logo { position: absolute; left: var(--s-7); bottom: var(--s-5); right: 360px; display: flex; align-items: flex-end; }
 .g-hero { position: relative; display: flex; align-items: flex-start; justify-content: space-between; gap: 40px; padding: var(--s-4) var(--s-7) var(--s-5); }
-.g-info { display: flex; flex-direction: column; gap: var(--s-4); max-width: 760px; min-width: 0; }
+.g-info { display: flex; flex-direction: column; gap: var(--s-4); max-width: 860px; min-width: 0; }
 .g-title { font-family: var(--display); font-stretch: var(--display-stretch); font-size: clamp(var(--t-2xl), 5vw, 72px); font-weight: 800; line-height: 1; letter-spacing: -0.02em; }
 .g-meta { display: flex; align-items: center; gap: var(--s-4); flex-wrap: wrap; font-size: var(--t-md); font-weight: 500; color: var(--text); }
-.g-actions { display: flex; align-items: center; gap: var(--s-3); margin-top: var(--s-2); flex-wrap: wrap; }
+/* one row (0.9.3): the second buttons are a little tighter, and icon-only on narrow windows */
+.g-actions { display: flex; align-items: center; gap: var(--s-3); margin-top: var(--s-2); flex-wrap: nowrap; }
+.g-actions .btn:not(.xl) { padding: 0 var(--s-4); flex-shrink: 0; }
+@media (max-width: 1100px) { .g-actions .icon-btn span { display: none; } }
 .dlbox { width: 380px; padding: 12px 16px; display: flex; flex-direction: column; gap: 8px; }
 .dest { display: flex; align-items: center; gap: 8px; font-size: var(--t-xs); color: var(--muted); max-width: 700px; white-space: nowrap; min-width: 0; }
 .dest .mono { min-width: 0; }

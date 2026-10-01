@@ -2,7 +2,7 @@
   <div class="view" data-scroll ref="el">
     <header class="page-head">
       <div style="min-width: 0">
-        <div class="eyebrow">{{ first ? 'Setup' : 'Settings · Steam' }}</div>
+        <div class="eyebrow">{{ first ? 'Setup' : 'Settings · Emulators' }}</div>
         <h1>Emulators</h1>
         <div class="lead">
           <template v-if="scanning">Looking through your folders for emulators…</template>

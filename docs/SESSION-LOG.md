@@ -6,6 +6,39 @@ The branch for 0.9.3 work is `claude/relaxed-fermat-30pigp`. Pull it before star
 
 ---
 
+## 1 Oct 2026 · 0.9.3 stage 1 (section A, B4, B5, test builds)
+
+**Owner's decisions in chat**
+- Start building 0.9.3; Claude decides the design details, using the design references the owner picked. Nothing goes to `main` or releases until the owner has tried it.
+- Plugins: install ponytail, graphify, rtk, taste-skill, impeccable, img2threejs and the awesome-design-md references; not caveman. All were cloned and read (nothing harmful; rtk's checksum matched), but writing them into `.claude/` was blocked by the environment's safety check (it treats `.claude/` as Claude's own settings). Waiting for the owner to allow edits to `.claude/` in the permissions, or to add them from their own computer. One change planned for rtk: its hook auto-approves the commands it rewrites; ours would only rewrite.
+
+**Built**
+- **A10 shadPS4 (the main one).** Read in the source: shadPS4 (`common/path_util.cpp`) and its Qt launcher use a folder named `user` in the folder they start in, else `~/.local/share/shadPS4`; the launcher starts the emulator in its own working folder (`QDir::currentPath()`), and its own Steam shortcuts start inside the AppImage's mount, where there is never a `user` folder. Cartridge started it next to the AppImage, so a stray `user` folder there gave a different set of settings, keys, chosen version and patches. Now `startOf()` in `steamManager.js` picks a Start in with no `user` folder (the launcher's data folder, shadPS4's, or home), unless that portable folder is the only shadPS4 data. The start folder is part of shadPS4 shortcuts' signature, so existing ones show **Update** on their console page. Tests: `test/steam.test.js`.
+- **A14 lag and quitting.** The window can slow down in the background again (`backgroundThrottling` back to Chromium's default); the controller is read every 8 ms only while Cartridge is in front (250 ms otherwise); the animated background stops drawing when Cartridge isn't in front. Quit (and SIGTERM/SIGINT/SIGHUP, which Steam's Exit game sends) stops trophy polling, downloads, uploads and the library check, then exits within 3 s whatever is pending.
+- **A5 + C1.** New Settings → **Emulators** (replaces Console Folders in the list): an Issues list (`issues:list` in `main.js`: games missing from Steam collections, shortcuts that would fail, setups pointing at a missing emulator, missing BIOS), Emulator setup and Shortcut health (moved here from Settings → Steam), then Console Folders. No more pop-ups at start; a yellow dot on the Settings tab when something is waiting.
+- **A7.** Shortcuts removed live are hidden until Steam saves its file (`steam-live-removed.json`, `shortcutsOf()`), so a game no longer shows "Remove from Steam" again. With live changes on, adding or removing doesn't ask "Apply now or later".
+- **A4/A13.** Settings focuses the current section's list item (not the first), the old page leaves at once, and when a focused button disappears the D-pad stays in the part of the screen it was in (`lastZone` in `nav.js`).
+- **A3.** Up and down stay inside a scrolling list while it has more that way (`nav.js`), so the toolbar above the Library grid isn't reached early.
+- **A1** current top tab is a full white box. **A9** consoles and emulator lists A to Z (the one from your shortcuts first; which emulator is used by default is unchanged). **A11** High contrast and Soft text are clearly different. **A12** game page buttons on one row (icon only under 1100 px wide).
+- **A6.** Shortcuts or setups pointing inside `/tmp/.mount_...` are never learned from and show in Shortcut health and Issues.
+- **B4.** Deleting a game deletes file by file (`removeWithProgress`, links never followed) and shows a progress ring on its card and the Delete button (`Ring.vue`).
+- **B5.** Home rows show 15; a **Show all** card opens the whole row in the Library view in the row's own order ("As on Home"); collections, genres and consoles rows open their tabs.
+- **Test builds.** `.github/workflows/test-build.yml`: every push to `claude/...` builds the AppImage as version `<next>-test.<run>` (for example 0.9.3-test.4), runs the tests and the launch check, and attaches it to the run. Nothing is published; `release.yml` is untouched.
+
+**Checked here**: `npm test` (15 pass), `vite build`, syntax of every back-end file, and screenshots with fake data at 1280x800 and 1920x1080 (Home with Show all, the Show all page, Settings → Emulators). Not checked here: anything needing a device, Steam, or a controller.
+
+**Owner to test on a device** (with the test AppImage)
+- A10: re-add or Update a PS4 game, start it from Steam several times in a row in Game Mode. Also tell Claude whether `~/Documents/Apps/user` (a folder named `user` next to the shadPS4 AppImage) exists: that is the cause this fix assumes.
+- A14: on the Ally, CPU while a game runs with Cartridge open, and `ps -ef | grep -i cartridge` a few seconds after Quit and after Steam's Exit game.
+- A2: does the first LT/RT press work right after launch?
+- The rest: tabs, Settings focus, Library scrolling up, Remove from Steam, deleting a big game, Home rows at 1280x800 and on the TV.
+
+**Not done yet / next**
+- A2 needs a device first. A8 comes with C3 (forks).
+- Next stage: the rest of C (forks, standard emulator per console, launch option order, more emulators), then D, E, F (Discuss items: options shown first), G, H, K, J.
+
+---
+
 ## 1 Oct 2026 · Second account, first session
 
 **Context.** The owner is working from a second Claude account for about a week, then going back to the first. Nothing carries between accounts except the repo, so this log is the handover. Every update made here gets an entry. Before switching back, a "Start here" summary goes at the top.

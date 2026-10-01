@@ -61,10 +61,12 @@ async function afterQueue(what) {
   steam.queue = await call('steam:overview').then((o) => o.queue).catch(() => steam.queue);
   const n = steam.queue.total;
   const liveOn = (await call('steam:liveInfo').catch(() => null))?.on;
+  // Steam takes it while it runs: nothing to wait for, so no "Apply now or later?" question (A7)
+  if (liveOn) { await applyChanges(); return; }
   const v = await choose({
-    title: what, message: liveOn ? `Steam takes ${n > 1 ? `these ${n} changes` : 'the change'} while it runs. No restart needed.` : `Steam has to close for a moment to take ${n > 1 ? `these ${n} changes` : 'the change'}. Cartridge closes too if Steam started it${store.info.gamescope ? ' and Game Mode brings Steam back' : ''}.`,
+    title: what, message: `Steam has to close for a moment to take ${n > 1 ? `these ${n} changes` : 'the change'}. Cartridge closes too if Steam started it${store.info.gamescope ? ' and Game Mode brings Steam back' : ''}.`,
     options: [
-      { label: 'Apply now', sub: liveOn ? 'Straight into Steam' : 'Steam restarts', value: 'now', icon: 'mdiSteam' },
+      { label: 'Apply now', sub: 'Steam restarts', value: 'now', icon: 'mdiSteam' },
       { label: 'Later', sub: 'Keep it waiting, apply from Settings → Steam', value: 'later', icon: 'mdiClockOutline' },
     ],
   });
@@ -103,13 +105,13 @@ export async function restartSteam() {
   if (!(await confirm('Restart Steam?', 'Anything open in Steam closes, including Cartridge if Steam started it.', 'Restart Steam'))) return;
   await call('steam:restart'); toast('Restarting Steam…', 'info', 3000, 'mdiSteam');
 }
-// once after start: how the last change went, and collections Steam dropped
+// once after start: how the last change went
 export async function steamReport() {
   try {
     const r = await call('steam:report');
     if (r.last?.state === 'done' && (r.last.added || r.last.removed)) toast(`Steam updated: ${r.last.added ? `${r.last.added} added` : ''}${r.last.added && r.last.removed ? ', ' : ''}${r.last.removed ? `${r.last.removed} removed` : ''}.`, 'ok', 4500, 'mdiSteam');
     else if (r.last?.state === 'done' && r.last.restored) toast('Steam shortcuts are back to how they were.', 'ok', 4000, 'mdiSteam');
     else if (r.last?.state === 'error') toast('Steam changes failed: ' + r.last.error, 'error', 7000);
-    if (r.missing?.length) toast(`${r.missing.length} game${r.missing.length > 1 ? 's are' : ' is'} missing from ${[...new Set(r.missing.map((m) => m.collection))].join(', ')}. Steam Cloud may have replaced your collections. Fix it in Settings → Steam.`, 'info', 8000, 'mdiSteam');
+    // games missing from their collections: Settings → Emulators → Issues (0.9.3), no pop-up
   } catch {}
 }

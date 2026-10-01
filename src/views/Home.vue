@@ -53,7 +53,7 @@
           <div class="shelf-title"><Icon :name="s.icon" :size="20" />{{ s.title }}<span class="count">{{ s.count }}</span></div>
           <div class="shelf" data-hscroll>
             <template v-if="s.type === 'sys'">
-              <SysTile v-for="p in s.items" :key="p.id" :p="p" @open="openSys" @focused="focusSys" />
+              <SysTile v-for="p in s.items.slice(0, ROW)" :key="p.id" :p="p" @open="openSys" @focused="focusSys" />
             </template>
             <template v-else-if="s.type === 'ra'">
               <template v-for="(a, i) in s.items" :key="a.key">
@@ -69,14 +69,18 @@
               </template>
             </template>
             <template v-else-if="s.type === 'genre'">
-              <GenreTile v-for="c in s.items" :key="c.id" :g="c" @open="openCol" @focused="focusCol" />
+              <GenreTile v-for="c in s.items.slice(0, ROW)" :key="c.id" :g="c" @open="openCol" @focused="focusCol" />
             </template>
             <template v-else-if="s.type === 'col'">
-              <CollTile v-for="c in s.items" :key="c.id" :c="c" wide @open="openCol" @focused="focusCol" />
+              <CollTile v-for="c in s.items.slice(0, ROW)" :key="c.id" :c="c" wide @open="openCol" @focused="focusCol" />
             </template>
             <template v-else>
-              <GameCard v-for="r in s.items" :key="r.id" :rom="r" :show-platform="true" :extra="s.sub ? s.sub(r) : ''" @open="openGame" @focused="focusRom" />
+              <GameCard v-for="r in s.items.slice(0, ROW)" :key="r.id" :rom="r" :show-platform="true" :extra="s.sub ? s.sub(r) : ''" @open="openGame" @focused="focusRom" />
             </template>
+            <!-- a row shows its first 15; the 16th card opens the whole list (0.9.3) -->
+            <button v-if="s.type !== 'ra' && s.items.length > ROW" class="card show-all" :class="{ wide: s.type === 'col' || s.type === 'genre' || s.type === 'sys' }" data-focus :data-key="'all-' + s.id" @click="showAll(s)" @focus="clearHero">
+              <div class="art"><div class="sa-in"><Icon name="mdiViewGridOutline" :size="34" /><b>Show all</b><span>{{ s.items.length }}</span></div></div>
+            </button>
           </div>
         </div>
       </section>
@@ -86,7 +90,7 @@
 
 <script setup>
 import { computed, ref, nextTick, onMounted, onBeforeUnmount, watch } from 'vue';
-import { img, cover, collections, autoLists, seriesLists, genres, visible, store, go, allRoms, visiblePlatforms, romsOf, isNew, setBg, backdropOf, bytes, year, ago, rating, resync, downloadFor, download, romById, toast, logoOf, call, GRADE, loadPlay, playtimeText } from '../store.js';
+import { tab, img, cover, collections, autoLists, seriesLists, genres, visible, store, go, allRoms, visiblePlatforms, romsOf, isNew, setBg, backdropOf, bytes, year, ago, rating, resync, downloadFor, download, romById, toast, logoOf, call, GRADE, loadPlay, playtimeText } from '../store.js';
 import { useView } from '../useView.js';
 import { ensureFocus, glideTo } from '../nav.js';
 import Icon from '../components/Icon.vue';
@@ -197,17 +201,17 @@ const shelves = computed(() => {
   const out = [];
   // Mirrors RomM's home: recently added, random picks, then your stuff
   const playing = roms.filter((r) => r.user?.playing || r.user?.status === 'incomplete').sort((a, b) => lastPlay(b) - lastPlay(a));
-  if (playing.length) out.push({ id: 'playing', title: 'Continue playing', icon: 'mdiPlayCircleOutline', count: playing.length, items: playing.slice(0, 30) });
+  if (playing.length) out.push({ id: 'playing', title: 'Continue playing', icon: 'mdiPlayCircleOutline', count: playing.length, items: playing });
   // started (played a while, or marked in RomM) but not finished, and not already above
   const inPlaying = new Set(playing.map((r) => r.id));
   const started = roms.filter((r) => !inPlaying.has(r.id) && !DONE.has(r.user?.status) && (minsOf(r) >= 30 || r.user?.status === 'incomplete')).sort((a, b) => lastPlay(b) - lastPlay(a));
-  if (started.length) out.push({ id: 'started', title: 'Finish what you started', icon: 'mdiFlagCheckered', count: started.length, items: started.slice(0, 30) });
+  if (started.length) out.push({ id: 'started', title: 'Finish what you started', icon: 'mdiFlagCheckered', count: started.length, items: started });
   const lastPlayed = roms.filter(lastPlay).sort((a, b) => lastPlay(b) - lastPlay(a));
   // which device it was last played on (this one or another one in RomM)
-  if (lastPlayed.length) out.push({ id: 'played', title: 'Recently played', icon: 'mdiHistory', count: '', items: lastPlayed.slice(0, 30), sub: (r) => store.play[r.id]?.device || '' });
+  if (lastPlayed.length) out.push({ id: 'played', title: 'Recently played', icon: 'mdiHistory', count: '', items: lastPlayed, sub: (r) => store.play[r.id]?.device || '' });
   const most = roms.filter(minsOf).sort((a, b) => minsOf(b) - minsOf(a));
-  if (most.length) out.push({ id: 'most', title: 'Most played', icon: 'mdiChartBar', count: '', items: most.slice(0, 30), sub: (r) => playtimeText(minsOf(r)) });
-  const recent = [...roms].sort((a, b) => (b.created_at || '').localeCompare(a.created_at || '')).slice(0, 30);
+  if (most.length) out.push({ id: 'most', title: 'Most played', icon: 'mdiChartBar', count: '', items: most, sub: (r) => playtimeText(minsOf(r)) });
+  const recent = [...roms].sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
   out.push({ id: 'recent', title: 'Recently added', icon: 'mdiClockOutline', count: '', items: recent });
   if (!discoverSeed || discoverSeed.v !== store.libVersion) {
     const pool = roms.filter((r) => r.path_cover_small || r.url_cover);
@@ -217,25 +221,25 @@ const shelves = computed(() => {
   if (discoverSeed.items.length) out.push({ id: 'picks', title: 'Picks for you', icon: 'mdiDiceMultipleOutline', count: '', items: discoverSeed.items });
   // smart shelves, each only when it has enough games to be worth a row
   const short = roms.filter((r) => r.hours > 0 && r.hours <= 5 && !DONE.has(r.user?.status)).sort((a, b) => (b.rating || 0) - (a.rating || 0) || a.hours - b.hours);
-  if (short.length >= 4) out.push({ id: 'short', title: 'Short games', icon: 'mdiTimerSandComplete', count: short.length, items: short.slice(0, 30), sub: (r) => `${String(Math.round(r.hours * 2) / 2).replace(/\.5$/, '½')} h to beat` });
+  if (short.length >= 4) out.push({ id: 'short', title: 'Short games', icon: 'mdiTimerSandComplete', count: short.length, items: short, sub: (r) => `${String(Math.round(r.hours * 2) / 2).replace(/\.5$/, '½')} h to beat` });
   const unplayed = roms.filter((r) => (r.rating || 0) >= 80 && !lastPlay(r) && !minsOf(r) && !r.user?.status).sort((a, b) => (b.rating || 0) - (a.rating || 0) || (b.votes || 0) - (a.votes || 0));
-  if (unplayed.length >= 4) out.push({ id: 'toprated', title: "Top rated you haven't played", icon: 'mdiStarCircleOutline', count: '', items: unplayed.slice(0, 30) });
+  if (unplayed.length >= 4) out.push({ id: 'toprated', title: "Top rated you haven't played", icon: 'mdiStarCircleOutline', count: '', items: unplayed });
   const multi = roms.filter((r) => (r.modes || []).some((m) => /split.?screen|co-?op|multiplayer/i.test(m))).sort((a, b) => (b.rating || 0) - (a.rating || 0));
-  if (multi.length >= 4) out.push({ id: 'multi', title: 'Local multiplayer', icon: 'mdiAccountGroupOutline', count: multi.length, items: multi.slice(0, 30) });
+  if (multi.length >= 4) out.push({ id: 'multi', title: 'Local multiplayer', icon: 'mdiAccountGroupOutline', count: multi.length, items: multi });
   const onDevice = roms.filter((r) => store.installed[r.id]).sort((a, b) => a.name.localeCompare(b.name));
-  if (onDevice.length) out.push({ id: 'device', title: 'On this device', icon: 'mdiCheckCircleOutline', count: onDevice.length, items: onDevice.slice(0, 40) });
+  if (onDevice.length) out.push({ id: 'device', title: 'On this device', icon: 'mdiCheckCircleOutline', count: onDevice.length, items: onDevice });
   const fresh = roms.filter(isNew).sort((a, b) => (store.lib.firstSeen[b.id] || 0) - (store.lib.firstSeen[a.id] || 0));
-  if (fresh.length) out.push({ id: 'new', title: 'New since last sync', icon: 'mdiNewBox', count: fresh.length, items: fresh.slice(0, 40) });
+  if (fresh.length) out.push({ id: 'new', title: 'New since last sync', icon: 'mdiNewBox', count: fresh.length, items: fresh });
   if (raRecent.value.length) out.push({ id: 'ra', type: 'ra', title: 'Latest achievements', icon: 'mdiTrophyOutline', count: '', items: raRecent.value });
   const backlog = roms.filter((r) => r.user?.backlog).sort((a, b) => a.name.localeCompare(b.name));
-  if (backlog.length) out.push({ id: 'backlog', title: 'Backlog', icon: 'mdiBookClockOutline', count: backlog.length, items: backlog.slice(0, 40) });
+  if (backlog.length) out.push({ id: 'backlog', title: 'Backlog', icon: 'mdiBookClockOutline', count: backlog.length, items: backlog });
   const fav = collections().find((c) => c.favorite && c.mine && !c.smart);
   const favRoms = fav ? fav.rom_ids.map((id) => romById(id)).filter((r) => r && visible(r)) : [];
-  if (favRoms.length) out.push({ id: 'fav', title: 'Favourites', icon: 'mdiHeartOutline', count: favRoms.length, items: favRoms.slice(0, 40) });
+  if (favRoms.length) out.push({ id: 'fav', title: 'Favourites', icon: 'mdiHeartOutline', count: favRoms.length, items: favRoms });
   const cols = [...collections().filter((c) => c !== fav), ...autoLists()];
   if (cols.length) out.push({ id: 'col', type: 'col', title: 'Collections', icon: 'mdiBookmarkMultipleOutline', count: cols.length, items: cols });
   if (genres().length) out.push({ id: 'genres', type: 'genre', title: 'Genres', icon: 'mdiTagMultipleOutline', count: genres().length, items: genres() });
-  if (seriesLists().length) out.push({ id: 'series', type: 'col', title: 'Series', icon: 'mdiBookshelf', count: seriesLists().length, items: seriesLists().slice(0, 30) });
+  if (seriesLists().length) out.push({ id: 'series', type: 'col', title: 'Series', icon: 'mdiBookshelf', count: seriesLists().length, items: seriesLists() });
   out.push({ id: 'sys', type: 'sys', title: 'Consoles', icon: 'mdiGamepadSquareOutline', count: visiblePlatforms().length, items: visiblePlatforms() });
   return out;
 });
@@ -252,6 +256,16 @@ function focusCol(c) {
   setBg(backdropOf(r));
 }
 function openGame(r) { go('game', { romId: r.id }); }
+const ROW = 15;
+// Show all: the whole row as a list in the Library view, in the row's own order
+function showAll(s) {
+  if (s.type === 'col') return tab('collections');
+  if (s.type === 'genre') return tab('genres');
+  if (s.type === 'sys') return tab('consoles');
+  store.homeLists = { ...(store.homeLists || {}), ['home-' + s.id]: { id: 'home-' + s.id, name: s.title, icon: s.icon, rom_ids: s.items.map((r) => r.id), auto: true, ordered: true, description: 'From Home' } };
+  go('collection', { collectionId: 'home-' + s.id });
+}
+function clearHero() { heroRom.value = null; heroSys.value = null; heroCol.value = null; }
 function openCol(c) { if (c.genre) go('genre', { genre: c.name }); else go('collection', { collectionId: c.id }); }
 function openSys(p) { go('platform', { platformId: p.id }); }
 
@@ -299,6 +313,12 @@ onMounted(async () => { await nextTick(); ensureFocus(el.value); });
 .hero-enter-active { transition: opacity 0.14s ease-out; }
 .hero-leave-active { transition: opacity 0.1s ease-in; position: absolute; }
 .hero-enter-from, .hero-leave-to { opacity: 0; }
+.show-all .art { display: grid; place-items: center; background: var(--s2); }
+.show-all.wide { width: 250px; }
+.show-all.wide .art { aspect-ratio: auto; height: 140px; }
+.sa-in { display: flex; flex-direction: column; align-items: center; gap: var(--s-2); color: var(--text); }
+.sa-in b { font-family: var(--display); font-size: var(--t-md); font-weight: 700; }
+.sa-in span { font-size: var(--t-xs); color: var(--muted); }
 .ra-home { flex: none; width: 150px; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 14px 10px 12px; border-radius: var(--r-md); text-align: center; transition: transform var(--d-fast) var(--ease); }
 .ra-home:focus { transform: scale(1.05); }
 .ach-img { position: relative; width: 72px; height: 72px; display: grid; place-items: center; }

@@ -23,12 +23,7 @@
           <button class="btn" data-focus :disabled="steam.busy || !ov.ours" @click="refreshArt"><Icon name="mdiImageRefreshOutline" />Refresh artwork</button>
           <button class="btn" data-focus @click="restartSteam"><Icon name="mdiRestart" />Restart Steam</button>
         </div>
-        <!-- 0.9: find emulators anywhere, and check the shortcuts already in Steam -->
-        <div class="stack">
-          <button class="lrow" data-focus @click="go('emu-setup')"><Icon name="mdiRadar" :size="24" /><div class="l-mid"><b>Emulator setup</b><span class="l-sub">Find emulators wherever they are, pick one per console, check BIOS and access</span></div><Icon name="mdiChevronRight" :size="22" /></button>
-          <button class="lrow" data-focus @click="go('steam-health')"><Icon name="mdiStethoscope" :size="24" /><div class="l-mid"><b>Shortcut health</b><span class="l-sub">Steam shortcuts that would fail, and fixes for them</span></div><Icon name="mdiChevronRight" :size="22" /></button>
-        </div>
-
+        <!-- Emulator setup and Shortcut health live in Settings → Emulators (0.9.3) -->
         <div class="subh"><Icon name="mdiGamepadVariantOutline" :size="20" />Emulators</div>
         <p class="muted small" style="margin-top: -8px">Pick a console to see its games in Steam and how they start. Cartridge copies Target, Start in and Launch options from shortcuts you already have (Steam ROM Manager, EmuDeck or your own), minus frame generation wrappers. Consoles with no shortcut yet use the emulator it finds: EmuDeck, then AppImages, then Flatpaks.</p>
         <div class="ss-emus">
