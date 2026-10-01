@@ -6,6 +6,16 @@ The branch for 0.9.3 work is `claude/relaxed-fermat-30pigp`. Pull it before star
 
 ---
 
+## 1 Oct 2026 · 0.9.3 released (sections A, B4, B5, C)
+
+**Owner's decision in chat**: release now as 0.9.3 on `main` (overrides "nothing to main until tested"); problems get fixed by whichever account picks them up. Each later section should update 0.9.3 again.
+
+**Done**: version 0.9.3, release name "Cartridge 0.9.3", notes "Cartridge 0.9.3 · Emulators" in `RELEASE_NOTES.md` and `CHANGELOG.md`. Test build 3 of the same code passed tests and the launch check before merging.
+
+**Open question for the owner**: installed copies only update when the version number goes up (electron-updater compares versions, and electron-builder won't re-upload to a published release), so "update 0.9.3 again" can't reach people who already have 0.9.3. Each later section needs its own number (0.9.4, 0.9.5…, with the 0.9.4 plan renamed), or the release could be replaced for new downloads only. Ask before the next section ships.
+
+---
+
 ## 1 Oct 2026 · 0.9.3 stage 2 (section C)
 
 **Owner's decisions in chat**: "start building the next best thing", so section C after stage 1. Nothing goes to `main` or releases until the owner has tried a test build.
