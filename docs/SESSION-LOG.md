@@ -6,6 +6,17 @@ The branch for 0.9.3 work is `claude/relaxed-fermat-30pigp`. Pull it before star
 
 ---
 
+## 2 Oct 2026 (night run) · 0.9.3 H released, 0.9.3 I (plan F8, F4) and the Discuss options
+
+- **H** merged (PR #26).
+- **Options for every Discuss item** (E2 trophies overhaul, F1 console backgrounds, F6 connection pills, G4 clutter, H1 recommendations, I1 Syncthing) are in `docs/options-0.9.3.md`, with a recommendation each. Nothing built for them: the owner picks first.
+- **F8** Game.vue info box: `score` (igdb_metadata.aggregated_rating, else metadatum.average_rating, shown on 100, coloured) and `age` (igdb_metadata.age_ratings[].rating_cover_url image, else a text badge, PEGI white or ESRB black); the text "Rating" row hides when the badge shows. Field names are read defensively: verify against a real RomM response.
+- **F4** IdleScreen.vue: `GameLogo` and `ConsoleMark` in the caption (text when there is no logo).
+- Checked: `npm test` 39 pass, `vite build`, screenshots (info box badges at 1920x1080, idle screen at both sizes).
+- Not started tonight (need research or the owner): PCSX2 patches, E1, E6 (decrypting trophy00.trp), F2, F3, F5 (company logos need artwork), H2, K1, K2, J6, J11, J13, J14.
+
+---
+
 ## 2 Oct 2026 (night run) · 0.9.3 G released, 0.9.3 H (plan G1, K3, F7, E7)
 
 - **G** merged (PR #25) from `claude/relaxed-fermat-30pigp-release-g`, a branch holding exactly the commit G's test build passed on (newer local commits were not in that build). That branch can be deleted.

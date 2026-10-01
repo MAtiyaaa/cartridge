@@ -11,8 +11,9 @@
       </div>
       <Transition name="cap" mode="out-in">
         <div v-if="cur" :key="cur.k" class="idle-cap">
-          <div class="n">{{ cur.name }}</div>
-          <div class="p">{{ cur.platform }}</div>
+          <!-- the game's logo and the console's wordmark, words only when there's no logo (0.9.3 F4) -->
+          <GameLogo :logo="store.config?.ui?.logos !== false ? logoOf(cur.rom) : null" :name="cur.name" cls="n" :area="36000" :max-w="460" :max-h="150" />
+          <div class="p"><ConsoleMark :slug="cur.rom.platform_slug" :label="cur.platform" /></div>
         </div>
       </Transition>
       <div class="idle-hint"><Logo :size="22" />Press any button</div>
@@ -25,9 +26,11 @@
 // clock (Settings → Look & feel → Idle screen). Any button, key, touch or mouse movement wakes it,
 // and that first press only wakes it.
 import { computed, onBeforeUnmount, onMounted, ref, watch, nextTick } from 'vue';
-import { store, allRoms, visible, backdropOf } from '../store.js';
+import { store, allRoms, visible, backdropOf, logoOf } from '../store.js';
 import { pushLayer, lastInput } from '../nav.js';
 import Logo from './Logo.vue';
+import GameLogo from './GameLogo.vue';
+import ConsoleMark from './ConsoleMark.vue';
 
 const on = ref(false);
 const el = ref(null);
@@ -52,7 +55,7 @@ function pickPool() {
 function next() {
   if (!pool.length) return;
   const x = pool[at++ % pool.length];
-  shown.value = [...shown.value.slice(-1), { k: Date.now() + '-' + at, src: x.b.src, blur: x.b.blur, name: x.r.name, platform: x.r.platform_display_name }];
+  shown.value = [...shown.value.slice(-1), { k: Date.now() + '-' + at, src: x.b.src, blur: x.b.blur, name: x.r.name, platform: x.r.platform_display_name, rom: x.r }];
 }
 async function sleep() {
   if (on.value || !store.config?.configured) return;
@@ -112,9 +115,11 @@ defineExpose({ sleep, wake });
 .idle-clock { position: absolute; left: 56px; bottom: 52px; color: #fff; text-shadow: 0 4px 24px rgba(0, 0, 0, 0.6); }
 .idle-clock .t { font-family: var(--display); font-size: 96px; font-weight: 700; line-height: 1; letter-spacing: -0.03em; }
 .idle-clock .d { font-size: var(--t-lg); font-weight: 500; opacity: 0.85; margin-top: 8px; }
-.idle-cap { position: absolute; right: 56px; bottom: 56px; text-align: right; color: #fff; max-width: 40vw; text-shadow: 0 3px 18px rgba(0, 0, 0, 0.7); }
-.idle-cap .n { font-family: var(--display); font-size: var(--t-xl); font-weight: 700; }
-.idle-cap .p { font-size: var(--t-sm); opacity: 0.75; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 600; margin-top: 4px; }
+.idle-cap { position: absolute; right: 56px; bottom: 56px; display: flex; flex-direction: column; align-items: flex-end; gap: 14px; text-align: right; color: #fff; max-width: 40vw; text-shadow: 0 3px 18px rgba(0, 0, 0, 0.7); }
+.idle-cap :deep(.game-logo) { filter: drop-shadow(0 6px 24px rgba(0, 0, 0, 0.6)); }
+.idle-cap .p { font-size: var(--t-lg); }
+.idle-cap .n { font-family: var(--display); font-size: var(--t-xl); font-weight: 700; margin: 0; }
+.idle-cap .p { opacity: 0.85; font-weight: 600; }
 .idle-hint { position: absolute; top: 34px; right: 44px; display: flex; align-items: center; gap: 10px; color: rgba(255, 255, 255, 0.55); font-size: var(--t-sm); font-weight: 500; }
 .idle-enter-active, .idle-leave-active { transition: opacity 0.8s ease; }
 .idle-enter-from, .idle-leave-to { opacity: 0; }

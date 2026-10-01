@@ -1,9 +1,7 @@
-## Cartridge 0.9.3 H · One RomM tab, problem reports
+## Cartridge 0.9.3 I · Scores, ratings and the idle screen
 
 ### New
-- **Report a problem** (Settings → About): shows your setup report with personal details taken out, so you can read it first. Copy it, open a GitHub issue with it filled in, or scan a QR code to open the issue page on your phone (handy in Game Mode).
-- **shadPS4 trophy key guide.** When shadPS4 has no trophy key set, the Trophies & Gamerscore tab says so and shows the steps to add it. Cartridge never ships or downloads the key.
+- **Score and age rating on game pages.** The game's info box shows the critic score as a coloured badge (IGDB's critic score, else RomM's combined rating from its other metadata sources) and the age rating as its badge (RomM's rating image, else a PEGI or ESRB badge drawn from the text). Each is hidden when RomM has nothing, so it works without IGDB on the server.
 
 ### Changed
-- **One RomM tab in Settings.** Connection, Library & Sync and Upload to RomM are together under **RomM**, each with its own heading.
-- **Recently played from other devices:** the device name shows in full on its own line under the game, instead of being cut short.
+- **Idle screen:** the game's logo and the console's logo replace the plain text, over the sharpest art Cartridge has for the game.
