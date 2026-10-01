@@ -4,7 +4,7 @@ One big release, agreed with the owner. Built and tested in stages; nothing ship
 
 Already done on the branch: the Settings list has no grey box for the current section (the page follows the list as you move), only brighter text.
 
-**Progress** (details in `docs/SESSION-LOG.md`): stage 1 built on 1 Oct: A1, A3, A4, A5 (with C1), A6, A7, A9, A10, A11, A12, A13, A14, B4, B5, and a test build for every branch push. Stage 2 (1 Oct): A8, C2 to C9 and the C10 real names. Waiting on a device: A2. 0.9.3 B (1 Oct): C10's new emulators: DeSmuME, Mupen64Plus, Snes9x, Mesen, Play!, Kronos, PrimeHack (as a Dolphin fork), Xenia Edge. Left out because their source couldn't be read here (blocked hosts or closed source): Redream, Mednafen, torzu; their RetroArch cores (or the yuzu entry for torzu, which is named by its real name) stay the way to play.
+**Progress** (details in `docs/SESSION-LOG.md`): stage 1 built on 1 Oct: A1, A3, A4, A5 (with C1), A6, A7, A9, A10, A11, A12, A13, A14, B4, B5, and a test build for every branch push. Stage 2 (1 Oct): A8, C2 to C9 and the C10 real names. Waiting on a device: A2. 0.9.3 B (1 Oct): C10's new emulators: DeSmuME, Mupen64Plus, Snes9x, Mesen, Play!, Kronos, PrimeHack (as a Dolphin fork), Xenia Edge. Redream, Mednafen and torzu are left out (owner, 1 Oct: not needed). 0.9.3 C (1 Oct): D1 (PS3 .pkg through RPCS3), the RPCS3 half of D3 (serial launch, installs.json, safe delete with tests), D6 (updates and DLC in order). Still to do in D: D2 Vita, D3 for Vita3K, D4 PS4 .pkg, D7 patches.
 
 ## A. Bugs
 1. **Top bar tabs select like Settings.** The current or focused tab is a full white box (or the Highlights colour) with contrasting text, the same as the Settings list. (Owner's "highlight missing on Home and Library".)
