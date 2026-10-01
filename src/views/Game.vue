@@ -136,6 +136,12 @@
           </template>
         </div>
         <aside class="facts glass">
+          <!-- critic score and age rating as badges (0.9.3 F8); each hidden when RomM has nothing -->
+          <div v-if="score || age" class="badges">
+            <div v-if="score" class="score" :class="score.tone" :title="score.from"><b>{{ score.v }}</b><span>{{ score.label }}</span></div>
+            <img v-if="age?.img && !ageFail" class="age-img" :src="age.img" :alt="age.text" @error="ageFail = true" />
+            <div v-else-if="age" class="age" :class="age.kind">{{ age.text }}</div>
+          </div>
           <div v-for="f in facts" :key="f.k" class="fact"><span>{{ f.k }}</span><b>{{ f.v }}</b></div>
         </aside>
       </section>
@@ -190,6 +196,24 @@ const md = computed(() => detail.value?.metadatum || {});
 const yr = computed(() => year(base.value?.year));
 const dev = computed(() => base.value?.developer);
 const genres = computed(() => (base.value?.genres || []).slice(0, 3).join(' · '));
+// Score: IGDB's critic score, else RomM's combined rating (ScreenScraper, MobyGames, LaunchBox), on 100
+const score = computed(() => {
+  const ig = detail.value?.igdb_metadata || {};
+  const pick = [[ig.aggregated_rating, 'Critics', 'IGDB critic score'], [md.value.average_rating, 'Rating', 'RomM rating from its metadata sources']].find(([v]) => Number(v) > 0);
+  if (!pick) return null;
+  let v = Number(pick[0]); if (v <= 10) v *= 10;
+  v = Math.round(v);
+  return { v, label: pick[1], from: pick[2], tone: v >= 75 ? 'good' : v >= 50 ? 'mid' : 'low' };
+});
+// Age rating: RomM's rating image (IGDB), else a badge drawn from the text (PEGI 16, ESRB M)
+const ageFail = ref(false);
+const age = computed(() => {
+  const list = detail.value?.igdb_metadata?.age_ratings || [];
+  const withImg = list.find((a) => a?.rating_cover_url);
+  const text = (withImg?.rating ? `${withImg.category || ''} ${withImg.rating}` : md.value.age_ratings?.[0] || list[0]?.rating || '').toString().trim();
+  if (!text && !withImg) return null;
+  return { img: withImg?.rating_cover_url ? img(withImg.rating_cover_url) : null, text, kind: /pegi/i.test(text) ? 'pegi' : /esrb/i.test(text) ? 'esrb' : '' };
+});
 const facts = computed(() => {
   const r = base.value, m = md.value, out = [];
   if (m.publishers?.length) out.push({ k: 'Publisher', v: m.publishers.slice(0, 2).join(', ') });
@@ -197,7 +221,7 @@ const facts = computed(() => {
   if (m.franchises?.length) out.push({ k: 'Franchise', v: m.franchises[0] });
   if (m.game_modes?.length) out.push({ k: 'Modes', v: m.game_modes.join(', ') });
   if (m.player_count) out.push({ k: 'Players', v: m.player_count });
-  if (m.age_ratings?.length) out.push({ k: 'Rating', v: m.age_ratings.slice(0, 2).join(', ') });
+  if (m.age_ratings?.length && !age.value) out.push({ k: 'Rating', v: m.age_ratings.slice(0, 2).join(', ') });
   if (r.regions?.length) out.push({ k: 'Region', v: r.regions.join(', ') });
   if (detail.value?.languages?.length) out.push({ k: 'Languages', v: detail.value.languages.join(', ') });
   out.push({ k: 'File', v: r.fs_name });
@@ -690,6 +714,15 @@ onMounted(async () => {
 .beat-t i { display: block; height: 3px; border-radius: 3px; background: var(--s3); overflow: hidden; margin-top: 3px; }
 .beat-t em { display: block; height: 100%; border-radius: 3px; background: #4d95ff; }
 .rel { padding: 18px 20px 18px var(--s-7); margin: -8px 0 0 calc(-1 * var(--s-7)); scroll-padding: 0 var(--s-7); }
+.badges { display: flex; align-items: center; gap: var(--s-3); padding-bottom: var(--s-2); }
+.score { width: 52px; height: 52px; border-radius: var(--r-md); display: flex; flex-direction: column; align-items: center; justify-content: center; color: #0c0d10; flex: none; }
+.score b { font-family: var(--display); font-size: var(--t-lg); line-height: 1; }
+.score span { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; opacity: 0.8; }
+.score.good { background: #66cc33; } .score.mid { background: #ffcc33; } .score.low { background: #ff6874; }
+.age-img { height: 52px; width: auto; max-width: 90px; object-fit: contain; border-radius: 4px; }
+.age { min-width: 52px; height: 52px; padding: 0 8px; border-radius: var(--r-md); border: 2px solid currentColor; display: grid; place-items: center; font-family: var(--display); font-weight: 800; font-size: var(--t-sm); text-align: center; line-height: 1.1; box-sizing: border-box; }
+.age.pegi { background: #fff; color: #111; border-color: #111; }
+.age.esrb { background: #111; color: #fff; border-color: #fff; }
 .facts { width: 250px; padding: var(--s-4); display: flex; flex-direction: column; gap: var(--s-3); align-self: start; box-sizing: border-box; }
 .icon-btn span { font-size: var(--t-sm); }
 .fact { display: flex; flex-direction: column; gap: 2px; word-break: break-word; }
