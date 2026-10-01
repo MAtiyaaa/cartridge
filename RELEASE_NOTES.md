@@ -1,7 +1,5 @@
-## Cartridge 0.9.3 I · Scores, ratings and the idle screen
-
-### New
-- **Score and age rating on game pages.** The game's info box shows the critic score as a coloured badge (IGDB's critic score, else RomM's combined rating from its other metadata sources) and the age rating as its badge (RomM's rating image, else a PEGI or ESRB badge drawn from the text). Each is hidden when RomM has nothing, so it works without IGDB on the server.
+## Cartridge 0.9.3 J · Sturdier with every RomM version
 
 ### Changed
-- **Idle screen:** the game's logo and the console's logo replace the plain text, over the sharpest art Cartridge has for the game.
+- **RomM versions.** Cartridge reads each game from RomM so that a missing, empty or unexpected field (older servers, newer ones, or a broken entry) never stops a library sync. New tests cover a current RomM, an older one without metadata, and odd values.
+- **Emulator for this game** has a test making sure a game's own emulator pick always beats its console's, and falls back to the console's when that emulator is gone.
