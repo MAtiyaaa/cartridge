@@ -6,6 +6,16 @@ The branch for 0.9.3 work is `claude/relaxed-fermat-30pigp`. Pull it before star
 
 ---
 
+## 1 Oct 2026 · Release naming for the rest of 0.9.3
+
+**Owner's decision in chat**: release each finished part of 0.9.3 straight to `main`, named "0.9.3 B", "0.9.3 C"... until the 0.9.3 plan is done, so their copy updates each time.
+
+**Done**: updates only install a higher number, so the number keeps going up (0.9.3 B is version 0.9.4, C is 0.9.5...) and the name is separate: `versionName` in `package.json` is what Settings → About, the Quick Menu and update messages show (`versionName()`/`nameOf()` in `main.js`; an update's name comes from its release title "Cartridge 0.9.3 B"). RomM, RetroAchievements and the log still get the number. Test builds set `versionName` to their test version. Rule written into `CLAUDE.md` → Releases. The 0.9.4 plan keeps its name; its number will be whatever comes next.
+
+**Owner asked about**: Cartridge staying running in SteamOS after closing. That is A14, fixed in 0.9.3 (see the stage 1 entry); needs checking on the Ally.
+
+---
+
 ## 1 Oct 2026 · 0.9.3 released (sections A, B4, B5, C)
 
 **Owner's decision in chat**: release now as 0.9.3 on `main` (overrides "nothing to main until tested"); problems get fixed by whichever account picks them up. Each later section should update 0.9.3 again.

@@ -1547,6 +1547,13 @@ async function storageOverview() {
 // ---------------------------------------------------------------- self-update (GitHub Releases)
 let updateState = { state: 'idle' };
 let autoUpdater = null;
+// The name shown for a version: 0.9.3 is finished in parts named "0.9.3 B", "0.9.3 C"... while the
+// number underneath keeps going up (0.9.4, 0.9.5...), as updates only install a higher number.
+// Here from package.json "versionName", a release's from its title ("Cartridge 0.9.3 B").
+let VERSION_NAME = null;
+try { VERSION_NAME = require('../package.json').versionName || null; } catch {}
+const versionName = () => VERSION_NAME || app.getVersion();
+const nameOf = (i) => String(i?.releaseName || '').replace(/^Cartridge\s+/i, '').trim() || i?.version;
 function setupUpdater() {
   if (!app.isPackaged || !process.env.APPIMAGE) return; // only the real AppImage can replace itself
   try { ({ autoUpdater } = require('electron-updater')); } catch { return; }
@@ -1554,10 +1561,10 @@ function setupUpdater() {
   autoUpdater.autoInstallOnAppQuit = true;
   const set = (s) => { updateState = s; broadcast('update', { ...s, supported: true }); };
   autoUpdater.on('checking-for-update', () => set({ state: 'checking' }));
-  autoUpdater.on('update-available', (i) => set({ state: 'downloading', version: i.version, percent: 0 }));
+  autoUpdater.on('update-available', (i) => set({ state: 'downloading', version: nameOf(i), percent: 0 }));
   autoUpdater.on('download-progress', (p) => set({ ...updateState, state: 'downloading', percent: Math.round(p.percent) }));
-  autoUpdater.on('update-not-available', () => set({ state: 'current', version: app.getVersion() }));
-  autoUpdater.on('update-downloaded', (i) => set({ state: 'ready', version: i.version }));
+  autoUpdater.on('update-not-available', () => set({ state: 'current', version: versionName() }));
+  autoUpdater.on('update-downloaded', (i) => set({ state: 'ready', version: nameOf(i) }));
   autoUpdater.on('error', (e) => set({ state: 'error', error: String(e?.message || e).slice(0, 200) }));
   const check = () => autoUpdater.checkForUpdates().catch(() => {});
   setTimeout(check, 8000);
@@ -2357,10 +2364,10 @@ const handlers = {
   'steam:setConfig': (patch) => { config.steam = { ...(config.steam || {}), ...patch }; saveConfig(); return config.steam; },
   'steam:setPath': ({ romId, path: p }) => { if (!isDir(p) && !fs.existsSync(p)) throw new Error('That folder does not exist'); marks[romId] = { ...(marks[romId] || { at: Date.now() }), path: p }; saveMarks(); return true; },
   'app:startGame': () => { const g = startGame; startGame = null; return g; },
-  'update:get': () => ({ ...updateState, current: app.getVersion(), supported: !!autoUpdater }),
+  'update:get': () => ({ ...updateState, current: versionName(), supported: !!autoUpdater }),
   'update:check': async () => { if (!autoUpdater) throw new Error('Updates work in the AppImage build only'); await autoUpdater.checkForUpdates(); return updateState; },
   'update:install': () => { if (updateState.state === 'ready') autoUpdater.quitAndInstall(true, true); },
-  'app:info': () => ({ version: app.getVersion(), gamescope: isGamescope(), userData: USER_DATA, gpu: useGpu, home: os.homedir(), hostname: os.hostname() }),
+  'app:info': () => ({ version: versionName(), number: app.getVersion(), gamescope: isGamescope(), userData: USER_DATA, gpu: useGpu, home: os.homedir(), hostname: os.hostname() }),
   'app:scale': () => { const [w, h] = win.getContentSize(); return { auto: autoZoom(), current: currentZoom(), w, h, display }; },
   'app:quit': () => app.quit(),
   'app:screenshot': async () => {
