@@ -57,3 +57,11 @@ test('RomM version check: only a real old version counts as too old', () => {
   assert.strictEqual(rommTooOld('v2.0.0'), true);
   for (const v of ['3.0.0', '3.10.2', '4.3.0', 'development', 'unknown', '', null, 4]) assert.strictEqual(rommTooOld(v), false, String(v));
 });
+
+test('developer: the developers list wins over companies (whose first can be the publisher)', () => {
+  const { developerOf } = require('../electron/romm.js');
+  assert.strictEqual(developerOf({ metadatum: { companies: ['Sony Interactive', 'Insomniac'], developers: ['Insomniac Games'] } }), 'Insomniac Games');
+  assert.strictEqual(developerOf({ metadatum: { companies: ['Sony'] }, igdb_metadata: { developers: ['Ready at Dawn'] } }), 'Ready at Dawn');
+  assert.strictEqual(developerOf({ metadatum: { companies: ['Konami'] } }), 'Konami');
+  assert.strictEqual(developerOf({}), '');
+});

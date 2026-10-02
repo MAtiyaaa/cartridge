@@ -183,7 +183,7 @@ const base = computed(() => {
   if (!c && !d) return null;
   if (!d) return c;
   const md = d.metadatum || {};
-  return { ...c, ...d, name: d.name || d.fs_name_no_ext, year: md.first_release_date, rating: md.average_rating, genres: md.genres || [], developer: md.developers?.[0] || md.companies?.[0] || '', shot: d.merged_screenshots?.[0] || c?.shot };
+  return { ...c, ...d, name: d.name || d.fs_name_no_ext, year: md.first_release_date, rating: md.average_rating, genres: md.genres || [], developer: [md, d.igdb_metadata, d.ss_metadata, d.launchbox_metadata, d.moby_metadata].map((b) => b?.developers?.find?.((x) => typeof x === 'string' && x.trim())).find(Boolean) || md.companies?.[0] || '' /* developers first: companies' first can be the publisher (0.9.3 L) */, shot: d.merged_screenshots?.[0] || c?.shot };
 });
 const coverSrc = computed(() => base.value && cover(base.value, true));
 const shots = computed(() => detail.value?.merged_screenshots || (cached.value?.shot ? [cached.value.shot] : []));
