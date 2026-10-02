@@ -1761,7 +1761,7 @@ async function installVitaGame(romId, zrif) {
   pkgRun = { romId, ac: new AbortController() };
   const send = (o) => broadcast('pkg-progress', { romId, ...o });
   try {
-    send({ state: 'running', step: 0, of: 1, opens: item.kind !== 'pkg' });
+    send({ state: 'running', step: 0, of: 1, opens: false });
     const got = await pkgInst.installVita({ cmd, prefs, item, zrif: key, signal: pkgRun.ac.signal, onStep: (s) => send({ state: 'running', ...s }) });
     const g = got[0];
     if (!g) throw new Error('Vita3K didn’t install it. Open Vita3K and install the file there (File → Install) to see why.');
@@ -2531,11 +2531,15 @@ const handlers = {
   // emu: 'rpcs3' or 'vita3k'; emuName for the UI; cmd: the emulator found, or null
   'pkg:check': async ({ romId }) => {
     const m = manifest[romId];
-    const rec = installs[romId] || null;
+    let rec = installs[romId] || null;
     const running = pkgRun?.romId === romId;
     const lic = rec?.emu === 'rpcs3' ? installedLicences(rec) : [];
     if (!m?.path || m.installedIn) return { pkgs: 0, installed: rec, emu: rec?.emu || null, emuName: rec?.emu === 'vita3k' ? 'Vita3K' : 'RPCS3', running, licenceMissing: lic };
     const r = pkgInst.packagesIn(m.path);
+    // installed in the emulator before Cartridge (or by hand): adopt it, so it's managed without a
+    // reinstall (0.9.15). created: false, so Cartridge never deletes it from the emulator's storage.
+    const adopt = (emu, serial, dir) => { if (!rec && serial && dir) { rec = installs[romId] = { emu, serial, dir, created: false, adopted: true, at: Date.now(), files: [] }; saveInstalls(); afterInstall(romId); } };
+    if (r.pkgs.length && !rec) { const id = r.titleIds?.[0]; const hit = id && rpcs3Hdds().map((h) => path.join(h, 'game', id)).find((d) => patchesMod.sfoAt(path.join(d, 'PARAM.SFO')).TITLE_ID === id); adopt('rpcs3', id, hit); }
     if (r.pkgs.length) {
       const cmd = steamMgr.rpcs3Command();
       const plan = pkgInst.licencePlan(r, rpcs3Hdds());
@@ -2543,9 +2547,10 @@ const handlers = {
         needsLicence: rec ? [] : plan.filter((l) => l.from === 'missing').map((l) => ({ contentId: l.contentId, titleId: l.titleId })), licenceMissing: lic };
     }
     const v = await pkgInst.vitaContent(m.path).catch(() => null);
+    if (v && !rec && v.titleId) { const hit = emuRoots('vita3k').map((p) => path.join(p, 'ux0/app', v.titleId)).find((d) => fs.existsSync(path.join(d, 'sce_sys', 'param.sfo'))); adopt('vita3k', v.titleId, hit); }
     if (v) {
       const cmd = steamMgr.vita3kCommand();
-      return { emu: 'vita3k', emuName: 'Vita3K', pkgs: 1, kind: v.kind, titleIds: [v.titleId], needsZrif: v.kind === 'pkg' && !v.zrif, opens: v.kind !== 'pkg', installed: rec, cmd: cmd ? cmd.from || path.basename(cmd.exe) : null, running };
+      return { emu: 'vita3k', emuName: 'Vita3K', pkgs: 1, kind: v.kind, titleIds: [v.titleId], needsZrif: v.kind === 'pkg' && !v.zrif, opens: false, installed: rec, cmd: cmd ? cmd.from || path.basename(cmd.exe) : null, running };
     }
     return { pkgs: 0, installed: rec, running };
   },
