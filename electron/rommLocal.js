@@ -85,6 +85,9 @@ async function waitFor(test, ms, every = 2000) {
 // opts: { username, password, library (a folder holding roms/<console>), dataDir, keys, envFile }
 async function setup(opts, onProgress = () => {}, { fetchImpl = fetch } = {}) {
   const step = (n, label) => onProgress({ step: n, of: 7, label });
+  // No Podman (0.9.16 research): a user-level copy can't be fetched without the system. Rootless
+  // Podman needs newuidmap/newgidmap (setuid, from the system's shadow/uidmap package) and the user's
+  // ranges in /etc/subuid and /etc/subgid, all on the read-only part of SteamOS. So: a clear message.
   if (!hasPodman()) throw new Error("Podman isn't installed on this system. Bazzite and Fedora Atomic include it; on other systems install the podman package, then try again.");
   const user = String(opts.username || '').trim().toLowerCase();
   if (user.length < 3) throw new Error('The RomM username needs at least 3 characters.');

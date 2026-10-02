@@ -96,3 +96,15 @@ test('PPSSPP: a new game file gets the header PPSSPP writes', () => {
   C.ppssppSet(dir, 'NPUZ00001', [{ ...p, on: true }], {}, 'Small');
   assert.strictEqual(fs.readFileSync(path.join(dir.cheats, 'NPUZ00001.ini'), 'utf8'), '_S NPUZ-00001\n_G Small\n_C1 One\n_L 0x1 0x1\n');
 });
+
+test('PPSSPP: cheat.db fetched from PPSSPP\'s own list only when there is none', async () => {
+  const home = path.join(TMP, 'p3');
+  put(path.join(home, '.config/ppsspp/PSP/SYSTEM/ppsspp.ini'), '[General]\n');
+  const dir = C.ppssppDirs(home, {})[0];
+  const asked = [];
+  const fetchImpl = async (u) => { asked.push(u); return u.endsWith('cheats.json') ? { ok: true, json: async () => ({ databases: [{ name: 'DB', maintainer: 'x', url: 'https://example.invalid/cheat.db' }] }) } : { ok: true, text: async () => '_S ULUS-10041\n_G Game\n_C0 One\n_L 0x1 0x1\n' }; };
+  assert.deepStrictEqual(await C.ppssppDownloadDb(dir, { fetchImpl }), { updated: true, url: 'https://example.invalid/cheat.db' });
+  assert.strictEqual(C.ppssppList(dir, 'ULUS10041', {})[0].name, 'One');
+  assert.deepStrictEqual(await C.ppssppDownloadDb(dir, { fetchImpl }), { updated: false });
+  assert.strictEqual(asked.length, 2);
+});

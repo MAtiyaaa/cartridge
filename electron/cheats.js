@@ -213,4 +213,24 @@ function ppssppSet(dir, id, changes, mine = {}, title = '') {
   return rec;
 }
 
-module.exports = { dolphinDirs, dolphinSys, dolphinParse, dolphinSysText, dolphinList, dolphinSet, nameLines, gcWiiId, ppssppDirs, cwParse, ppssppList, ppssppSet };
+// cheat.db the way PPSSPP's Cheats → "Download" gets it (UI/CwCheatScreen.cpp): its list at
+// metadata.ppsspp.org/cheats.json ({ databases: [{ name, maintainer, url }] }), first one, saved as
+// PSP/Cheats/cheat.db. Only when there is none: PPSSPP's own download would replace it, this never does.
+const CHEAT_LIST = 'https://metadata.ppsspp.org/cheats.json';
+const CHEAT_FALLBACK = 'https://raw.githubusercontent.com/Saramagrean/CWCheat-Database-Plus-/master/cheat.db'; // the list's usual pick
+async function ppssppDownloadDb(dir, { fetchImpl = fetch } = {}) {
+  const f = path.join(dir.cheats, 'cheat.db');
+  if (exists(f)) return { updated: false };
+  const get = (u, ms) => fetchImpl(u, { headers: { 'User-Agent': 'Cartridge' }, signal: AbortSignal.timeout(ms) });
+  let url = CHEAT_FALLBACK;
+  try { const r = await get(CHEAT_LIST, 10000); if (r.ok) { const j = await r.json(); const db = (j?.databases || []).find((d) => d && typeof d.url === 'string' && /^https:\/\//.test(d.url)); if (db) url = db.url; } } catch {}
+  const r = await get(url, 120000);
+  if (!r.ok) throw new Error(`The cheat list answered ${r.status}`);
+  const text = await r.text();
+  if (!/^_S /m.test(text) || !/^_C\d/m.test(text)) throw new Error('That isn’t a cheat list');
+  fs.mkdirSync(dir.cheats, { recursive: true });
+  fs.writeFileSync(f + '.tmp', text); fs.renameSync(f + '.tmp', f);
+  return { updated: true, url };
+}
+
+module.exports = { ppssppDownloadDb, dolphinDirs, dolphinSys, dolphinParse, dolphinSysText, dolphinList, dolphinSet, nameLines, gcWiiId, ppssppDirs, cwParse, ppssppList, ppssppSet };
