@@ -24,6 +24,7 @@ export const store = reactive({
   modal: null,
   quickMenu: false,
   battery: null, // { level, charging, toFull, toEmpty } from the WebView (App.vue), null on desktops
+  welcoming: false, // the welcome (0.9.15) is on screen
   lastSearch: '',
   logos: {},
   art: {},

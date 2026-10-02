@@ -1,6 +1,6 @@
 <template>
-  <div class="setup" ref="el" data-scroll>
-    <div class="hero">
+  <div class="setup" :class="{ embedded }" ref="el" data-scroll>
+    <div v-if="!embedded" class="hero">
       <Logo :size="76" />
       <h1>Cartridge</h1>
       <p class="muted">Your RomM library, on the couch.</p>
@@ -79,7 +79,8 @@
       </div>
 
       <div class="row end">
-        <button v-if="store.config.configured" class="btn" data-focus @click="cancel">Cancel</button>
+        <button v-if="embedded" class="btn" data-focus @click="emit('back')"><Icon name="mdiArrowLeft" />Back</button>
+        <button v-else-if="store.config.configured" class="btn" data-focus @click="cancel">Cancel</button>
         <button class="btn" data-focus :disabled="busy || !hasUrl" @click="test"><Icon name="mdiLanConnect" />Test connection</button>
         <button class="btn primary" data-focus :disabled="busy || !anyOk" @click="saveServer">Continue<Icon name="mdiArrowRight" /></button>
       </div>
@@ -115,6 +116,9 @@ import { useView } from '../useView.js';
 import Icon from '../components/Icon.vue';
 import TextField from '../components/TextField.vue';
 
+// embedded: inside the welcome (0.9.15), which moves on when this is done
+const props = defineProps({ embedded: Boolean });
+const emit = defineEmits(['done', 'back']);
 const el = ref(null);
 const step = ref(1);
 const initial = { ...store.config.server, localUrl: store.config.configured ? store.config.server.localUrl : null };
@@ -133,7 +137,7 @@ const auths = [{ v: 'password', l: 'Username & password' }, { v: 'pair', l: 'Pai
 const hasUrl = computed(() => !!(srv.localUrl || srv.remoteUrl));
 const anyOk = computed(() => results.value && Object.values(results.value).some((r) => r.ok));
 
-useView({ back: () => (store.config.configured ? cancel() : step.value === 2 ? (step.value = 1) : undefined) });
+useView({ back: () => (props.embedded ? (step.value === 2 ? (step.value = 1) : emit('back')) : store.config.configured ? cancel() : step.value === 2 ? (step.value = 1) : undefined) });
 
 function srvPayload() {
   const s = { ...srv, auth: authMode.value === 'password' ? 'password' : 'token' };
@@ -224,7 +228,7 @@ async function finish() {
   await saveConfig({ romsRoot: romsRoot.value, biosPath: biosPath.value, configured: true });
   if (serverChanged) await call('library:reset');
   call('library:sync').catch((e) => toast(e.message, 'error'));
-  tab('home');
+  if (props.embedded) emit('done'); else tab('home');
 }
 function cancel() { if (!back()) tab('settings'); }
 
@@ -234,6 +238,7 @@ onMounted(async () => { await nextTick(); focusFirst(el.value); });
 
 <style scoped>
 .setup { position: relative; z-index: 1; height: 100%; overflow-y: auto; padding: 40px 20px 60px; display: flex; flex-direction: column; align-items: center; gap: 18px; background: var(--s0); }
+.setup.embedded { height: auto; overflow: visible; padding: 0; background: none; }
 .hero { text-align: center; display: flex; flex-direction: column; align-items: center; gap: 8px; }
 .hero .logo { width: 64px; height: 64px; border-radius: var(--r-md); background: linear-gradient(135deg, var(--primary-l), var(--primary-d)); display: grid; place-items: center; box-shadow: 0 10px 40px rgba(var(--primary-rgb), 0.4); }
 .hero h1 { font-size: var(--t-2xl); font-weight: 800; letter-spacing: -0.02em; }

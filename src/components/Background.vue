@@ -1,9 +1,9 @@
 <template>
   <div class="bg-stage" :class="['bg-' + mode, { xmb: painted }]">
     <template v-if="painted">
-      <div class="xmb-grad" :style="BG_BASE[mode] ? { background: BG_BASE[mode], opacity: 1 } : null" />
+      <div class="xmb-grad" :style="baseOf(mode) ? { background: baseOf(mode), opacity: 1 } : null" />
       <div v-if="DARK_BASE.has(mode)" class="bg-darken" />
-      <canvas v-if="RENDERERS[mode]" ref="cv" class="xmb-waves" />
+      <canvas v-if="rendererOf(mode)" ref="cv" class="xmb-waves" />
       <!-- the interface paints this itself once it's up (see .shell below): one full-screen layer fewer -->
       <div class="xmb-vignette" />
     </template>
@@ -21,24 +21,41 @@
 
 <script setup>
 import { computed, reactive, ref, watch, onBeforeUnmount, nextTick } from 'vue';
-import { store } from '../store.js';
+import { store, allRoms, cover } from '../store.js';
 import { romimg } from '../platform.js';
-import { RENDERERS, DARK_BASE, BG_BASE } from '../bgRenderers.js';
+import { RENDERERS, DARK_BASE, BG_BASE, LEGACY_ART, artPan } from '../bgRenderers.js';
+import { consoleColors } from '../consoleColors.js';
 import { paletteOf, lightEffects } from '../themes.js';
 import { lastInput } from '../nav.js';
 const props = defineProps({ still: Boolean });
 
 const mode = computed(() => {
-  const m = store.config?.ui?.bgStyle || 'solid';
-  return RENDERERS[m] || ['solid', 'art', 'wallpaper'].includes(m) ? m : 'solid';
+  let m = (store.welcoming && 'ribbons') || store.config?.ui?.bgStyle || 'solid'; // the welcome is on Ribbons
+  if (LEGACY_ART[m]) m = 'art:' + LEGACY_ART[m]; // retired in 0.9.15: that console's own art instead
+  return RENDERERS[m] || m.startsWith('art:') || ['solid', 'art', 'wallpaper'].includes(m) ? m : 'solid';
 });
-const painted = computed(() => !!RENDERERS[mode.value] || mode.value === 'solid');
+// art:<console> (0.9.15, A): a pan over that console's covers in your library, in its colour
+const artCache = new Map();
+function rendererOf(m) {
+  if (RENDERERS[m]) return RENDERERS[m];
+  if (!m?.startsWith('art:')) return null;
+  const slug = m.slice(4);
+  if (!artCache.has(slug)) {
+    const urls = allRoms().filter((r) => r.platform_slug === slug || r.platform_fs_slug === slug).map((r) => cover(r)).filter(Boolean);
+    const col = consoleColors({ slug }) || ['#9a9aaa'];
+    const n = parseInt(col[0].replace('#', '').padEnd(6, '0').slice(0, 6), 16);
+    artCache.set(slug, artPan(urls, `${(n >> 16) & 255},${(n >> 8) & 255},${n & 255}`));
+  }
+  return artCache.get(slug);
+}
+const baseOf = (m) => BG_BASE[m] || (m?.startsWith('art:') ? BG_BASE.art : '');
+const painted = computed(() => !!rendererOf(mode.value) || mode.value === 'solid');
 const light = computed(() => lightEffects(store.config?.ui, store.info));
 // `still`: one frame, no animation (the Android second screen)
 const reduce = computed(() => props.still || store.config?.ui?.motion === 'reduce');
 watch(light, (v) => document.body.classList.toggle('light-fx', v), { immediate: true });
 // console backgrounds bring their own colours: a neutral vignette instead of the theme's tint
-watch(mode, (m) => document.body.classList.toggle('bg-console', !!BG_BASE[m]), { immediate: true });
+watch(mode, (m) => document.body.classList.toggle('bg-console', !!baseOf(m)), { immediate: true });
 
 // ---------- animated canvas backgrounds
 // Drawn at full sharpness with the GPU. Without it (software rendering) they draw at a lower
@@ -67,7 +84,7 @@ function setup() {
   // not desynchronized on Android: the WebView then only shows a new frame when something else repaints,
   // so the background stood still unless you tapped around
   ctx = c.getContext('2d', { alpha: true, desynchronized: !ANDROID });
-  frame = RENDERERS[mode.value](ctx, w, h, S, pal, light.value);
+  frame = rendererOf(mode.value)(ctx, w, h, S, pal, light.value);
   return true;
 }
 function loop(t) {
@@ -87,12 +104,14 @@ function loop(t) {
 }
 function start() {
   cancelAnimationFrame(raf); last = 0; key = ''; frame = null;
-  if (!RENDERERS[mode.value]) return;
+  if (!rendererOf(mode.value)) return;
   if (reduce.value) { nextTick(() => { if (setup()) frame(12); }); return; } // one still frame
   raf = requestAnimationFrame(loop);
 }
 const restart = async () => { cancelAnimationFrame(raf); await nextTick(); start(); };
 watch([mode, reduce, light, () => store.config?.ui?.theme, () => store.config?.ui?.customColor, () => store.config?.ui?.surface, () => JSON.stringify(store.config?.ui?.colors || {})], restart, { immediate: true });
+// art backgrounds pick up the library once it's loaded or changes
+watch(() => store.libVersion, () => { artCache.clear(); if (mode.value.startsWith('art:')) restart(); });
 const onResize = () => { if (reduce.value) restart(); };
 window.addEventListener('resize', onResize);
 const vis = () => (document.hidden ? cancelAnimationFrame(raf) : start());
