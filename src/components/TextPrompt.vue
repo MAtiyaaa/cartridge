@@ -17,12 +17,12 @@
 </template>
 
 <script setup>
-import { store, onMounted, onBeforeUnmount, ref, nextTick } from 'vue';
+import { onMounted, onBeforeUnmount, ref, nextTick } from 'vue';
 import { pushLayer } from '../nav.js';
 import { store, closeModal, call } from '../store.js';
 import Icon from './Icon.vue';
+
 // Plain text prompt. Typing comes from a real keyboard or the Steam keyboard (opened for you in Game Mode since 0.9.17).
-// Plain text prompt. Typing comes from a real keyboard or the Steam keyboard (Steam + X).
 const props = defineProps({
   title: { type: String, default: 'Enter text' },
   value: { type: String, default: '' },
