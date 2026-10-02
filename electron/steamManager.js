@@ -629,8 +629,32 @@ module.exports = function createSteamManager(ctx) {
     // a game kept as a folder: the emulator gets the game file inside (RetroArch, xemu and most
     // others can't open a folder). Consoles that take folders keep it.
     const key = keyOf(rom.platform_slug, rom.platform_fs_slug);
-    if (isDir(file) && !DIR_GAMES.has(key)) { const f = playableFile(file, key); if (f) return { ROM: styled(f, t) }; }
+    if (isDir(file) && !DIR_GAMES.has(key)) {
+      const m3u = M3U_EMU.test(`${t.exe} ${t.args} ${t.emu || ''}`) ? multiDisc(file, key) : null;
+      if (m3u) return { ROM: styled(m3u, t) };
+      const f = playableFile(file, key); if (f) return { ROM: styled(f, t) };
+    }
     return { ROM: styled(file, t) };
+  }
+  // Multi-disc games (0.9.17): discs named "(Disc 1)", "Disc 2", "CD3"... with no playlist get one,
+  // <folder>.m3u in the game's folder listing them in order (Cartridge's own file; never replaced),
+  // so Steam starts disc 1 and the emulator can switch discs. Only emulators that read .m3u.
+  const M3U_EMU = /duckstation|pcsx2|dolphin|retroarch|flycast|mednafen|kronos|yaba|\.so\b|-L\s/i;
+  const DISC_EXT = { psx: ['cue', 'chd', 'ccd', 'iso', 'pbp'], ps2: ['chd', 'iso', 'cso', 'zso'], gc: ['rvz', 'iso', 'gcm', 'ciso', 'gcz'], wii: ['rvz', 'wbfs', 'iso'], saturn: ['cue', 'chd', 'ccd'], segacd: ['cue', 'chd'], dreamcast: ['gdi', 'chd', 'cdi'], pcfx: ['cue', 'chd'], tg16: ['cue', 'chd'], '3do': ['cue', 'chd', 'iso'] };
+  const discNo = (n) => { const m = /[\s._(\[-](?:disc|disk|cd)[\s._-]*(\d{1,2})\b/i.exec(n); return m ? Number(m[1]) : 0; };
+  function multiDisc(dir, key) {
+    const own = ls(dir).find((n) => /\.m3u$/i.test(n));
+    if (own) return path.join(dir, own);
+    for (const e of DISC_EXT[key] || []) {
+      const discs = ls(dir).filter((n) => path.extname(n).slice(1).toLowerCase() === e && discNo(n) && !isDir(path.join(dir, n)));
+      const nums = new Set(discs.map(discNo));
+      if (discs.length < 2 || nums.size !== discs.length) continue;
+      discs.sort((a, b) => discNo(a) - discNo(b));
+      const f = path.join(dir, `${path.basename(dir).replace(/[\\/]/g, '_')}.m3u`);
+      try { fs.writeFileSync(f, discs.join('\n') + '\n', { flag: 'wx' }); } catch (err) { if (err.code !== 'EEXIST') return null; }
+      return f;
+    }
+    return null;
   }
   // the file to start in a game folder: a playlist or disc descriptor, then the console's game
   // extensions in order, else the biggest file. Looks two folders deep.
@@ -1593,7 +1617,7 @@ module.exports = function createSteamManager(ctx) {
     gameEmu: (romId) => (cfg().gameEmus || {})[romId] || null,
     addedAt: (romId) => Math.min(...Object.values(reg).filter((r) => r.romId === romId && r.at).map((r) => r.at), Infinity),
     // exposed for tests
-    _learnOne: learnOne, _tokenize: tokenize, _buildLaunch: buildLaunch, _learnAll: learnAll, _readShortcuts: () => { const e = environment(); return e.account ? readShortcuts(e.account) : []; }, _candidates: candidates, appImagesFor, serialOf, flatpakSteamAccess, _hostLaunch: hostLaunch, _launchFor: launchFor, _withFg: withFg, _withShadVersion: withShadVersion, shadVersions, _startOf: startOf, _templateFor: templateFor, _templateForGame: templateForGame,
+    _learnOne: learnOne, _tokenize: tokenize, _buildLaunch: buildLaunch, _learnAll: learnAll, _readShortcuts: () => { const e = environment(); return e.account ? readShortcuts(e.account) : []; }, _candidates: candidates, appImagesFor, serialOf, flatpakSteamAccess, _hostLaunch: hostLaunch, _launchFor: launchFor, _withFg: withFg, _withShadVersion: withShadVersion, shadVersions, _multiDisc: multiDisc, _startOf: startOf, _templateFor: templateFor, _templateForGame: templateForGame,
   };
   return api;
 };

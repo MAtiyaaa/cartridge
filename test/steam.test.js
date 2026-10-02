@@ -172,3 +172,19 @@ test('shadPS4 version per game: the Qt launcher gets -e <version> instead of -d'
   const out = JSON.parse(execFileSync(process.execPath, ['-e', code], { env: { ...process.env, HOME: H, XDG_DATA_HOME: '' }, encoding: 'utf8' }).trim().split('\n').pop());
   assert.deepStrictEqual(out, [['v0.17.0'], `-e "${ver}" -g "{ROM}"`, '-d -g "{ROM}"']);
 });
+
+test('multi-disc games get a playlist in their folder, in disc order', () => {
+  const H = path.join(TMP, 'md');
+  const g = path.join(H, 'roms/psx/Final Fantasy VII');
+  fs.mkdirSync(g, { recursive: true }); fs.mkdirSync(H + '/cfg', { recursive: true });
+  for (const n of ['Final Fantasy VII (Disc 2).cue', 'Final Fantasy VII (Disc 2).bin', 'Final Fantasy VII (Disc 1).cue', 'Final Fantasy VII (Disc 1).bin', 'Final Fantasy VII (Disc 3).cue']) fs.writeFileSync(path.join(g, n), '');
+  const one = path.join(H, 'roms/psx/Single'); fs.mkdirSync(one, { recursive: true }); fs.writeFileSync(path.join(one, 'Single.cue'), '');
+  const code = `
+    const sm = require(${JSON.stringify(path.join(ROOT, 'electron/steamManager.js'))})({ USER_DATA: ${JSON.stringify(H + '/cfg')}, log() {}, PLATFORM_MAP: {}, getConfig: () => ({}), saveConfig() {}, broadcast() {},
+      emulationRoots: () => [], getLibrary: () => null, installed: () => ({}), romById: () => null, isGamescope: () => false, artFor: () => ({}), MARKED: 'm', markedPath: () => null });
+    console.log(JSON.stringify([sm._multiDisc(${JSON.stringify(g)}, 'psx'), sm._multiDisc(${JSON.stringify(one)}, 'psx')]));`;
+  const out = JSON.parse(execFileSync(process.execPath, ['-e', code], { env: { ...process.env, HOME: H }, encoding: 'utf8' }).trim().split('\n').pop());
+  assert.strictEqual(out[0], path.join(g, 'Final Fantasy VII.m3u'));
+  assert.strictEqual(fs.readFileSync(out[0], 'utf8'), 'Final Fantasy VII (Disc 1).cue\nFinal Fantasy VII (Disc 2).cue\nFinal Fantasy VII (Disc 3).cue\n');
+  assert.strictEqual(out[1], null);
+});
