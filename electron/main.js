@@ -1838,7 +1838,7 @@ const patchesMod = require('./patches');
 const cheatsMod = require('./cheats');
 // add-ons Cartridge installed (0.9.17): { key: { dest, files, ... } }; Remove deletes only those files
 const ADDONS_FILE = path.join(USER_DATA, 'addons-installed.json');
-let addonRun = null, addonCache = null;
+let addonRun = null, addonCache = null, emuGetRun = null;
 const addonRecs = () => (addonCache ||= loadJson(ADDONS_FILE, {}));
 const PATCHES_FILE = path.join(USER_DATA, 'patches.json');
 let patchMine = loadJson(PATCHES_FILE, {});
@@ -2985,6 +2985,39 @@ const handlers = {
     log('add-on removed', key);
     return true;
   },
+  // Pick your own emulators (0.9.17): by console, what's here, and a download for what isn't
+  'emuget:list': () => {
+    const G = require('./emuGet'), have = steamMgr.installedEmulators();
+    const isHere = (e, key) => {
+      if (e.id === 'retroarch') return ['snes', 'psx', 'genesis'].some((k) => (steamMgr.candidatesFor(k) || []).some((c) => /^ra:/.test(c.id)));
+      if (have.some((x) => x.id === e.id)) return true;
+      const ck = { retro: 'snes', gc: 'gc' }[key] || key;
+      return (steamMgr.candidatesFor(ck) || []).some((c) => c.id.split('@')[0] === e.id);
+    };
+    return G.CATALOG.map((c) => ({ key: c.key, name: c.name, emus: c.emus.map((e) => ({ id: e.id, label: require('./emulators').EMU[e.id]?.label || (e.id === 'retroarch' ? 'RetroArch' : e.id), how: e.how, from: e.how === 'flatpak' ? 'Flatpak from Flathub' : `AppImage from ${e.repo.split('/')[0]} on GitHub`, installed: isHere(e, c.key) })) }));
+  },
+  'emuget:install': async ({ key, id }) => {
+    if (emuGetRun) throw new Error('Another emulator is downloading. Wait for it to finish.');
+    const G = require('./emuGet');
+    const e = G.CATALOG.find((c) => c.key === key)?.emus.find((x) => x.id === id);
+    if (!e) throw new Error('That emulator isn’t in the list.');
+    emuGetRun = { abort: new AbortController() };
+    const send = (o) => broadcast('emuget-progress', { key, id, ...o });
+    try {
+      let r;
+      if (e.how === 'flatpak') r = await G.getFlatpak(e.fp, (pct) => send({ pct }));
+      else {
+        let got = 0, total = 0, last = 0;
+        r = await G.getAppImage(e, (url, dest, size) => { total = size || 0; return downloadTo(url, dest, emuGetRun, (n) => { got += n; const now = Date.now(); if (now - last > 400) { last = now; send({ pct: total ? Math.min(99, Math.floor((got / total) * 100)) : null }); } }, { plain: true }); });
+      }
+      log('emulator downloaded', id, r.path || r.fp);
+      send({ pct: 100, done: true });
+      steamMgr.scanEmulators().catch(() => {}); // so Steam setup and the lists see it
+      return r;
+    } catch (err) { send({ error: err.message }); throw err; }
+    finally { emuGetRun = null; }
+  },
+  'emuget:cancel': () => { emuGetRun?.abort.abort(); return true; },
   // emulator updates (0.9.16): each installed copy, its version and whether a newer one is out
   'emuup:list': async ({ fresh } = {}) => {
     const U = require('./emuUpdates'), list = steamMgr.installedEmulators();

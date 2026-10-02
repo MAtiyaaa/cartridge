@@ -40,8 +40,8 @@ async function flatpakUpdates(ids) {
 const flatpakUpdate = (id, where) => run('flatpak', ['update', where || '--user', '-y', '--noninteractive', id], 30 * 60e3);
 
 // GitHub: the newest release's AppImage for one emulator (cached by the caller)
-async function latestRelease(id, { fetchImpl = fetch } = {}) {
-  const r = REPOS[id];
+async function latestRelease(id, { fetchImpl = fetch, spec } = {}) {
+  const r = spec?.repo ? spec : REPOS[id];
   if (!r) return null;
   const url = `https://api.github.com/repos/${r.repo}/releases${r.tag ? `/tags/${r.tag}` : r.pre ? '?per_page=5' : '/latest'}`;
   const res = await fetchImpl(url, { headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'Cartridge' } });

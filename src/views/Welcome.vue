@@ -77,12 +77,23 @@
 
         <!-- 6 -->
         <template v-else-if="step === 'emus'">
-          <template v-if="st.emudeck || st.retrodeck">
+          <!-- 0.9.17: pick your own, by console (also in Settings → Emulators → Get Emulators) -->
+          <template v-if="picking">
+            <h1>Pick your emulators</h1>
+            <p class="w-lead">Each console's emulators, from their own releases. A green check means it's already here.</p>
+            <div class="w-box"><EmuGet /></div>
+            <div class="w-act">
+              <button class="btn" data-focus @click="picking = false"><Icon name="mdiArrowLeft" />Back</button>
+              <button class="btn primary" data-focus @click="recheck">Continue<Icon name="mdiArrowRight" /></button>
+            </div>
+          </template>
+          <template v-else-if="st.emudeck || st.retrodeck">
             <h1>Emulators</h1>
             <div class="w-good"><Icon name="mdiCheckCircle" :size="28" /><span>Good news, you already have {{ st.emudeck && st.retrodeck ? 'EmuDeck and RetroDECK' : st.emudeck ? 'EmuDeck' : 'RetroDECK' }}</span></div>
             <p class="w-lead">Cartridge uses the emulators it set up. The system scan in a moment finds every other one too.</p>
             <div class="w-act">
               <button class="btn" data-focus @click="prev"><Icon name="mdiArrowLeft" />Back</button>
+              <button class="btn" data-focus @click="picking = true"><Icon name="mdiDownload" />Get more emulators</button>
               <button class="btn primary" data-focus @click="next()">Continue<Icon name="mdiArrowRight" /></button>
             </div>
           </template>
@@ -106,6 +117,10 @@
               <button class="lrow" data-focus @click="getRetroDeck">
                 <Icon name="mdiPackageDown" :size="26" />
                 <div class="l-mid"><b>RetroDECK</b><span class="l-sub">Installed from Flathub with a progress bar (works in Game Mode), then opened for its own setup.</span></div>
+              </button>
+              <button class="lrow" data-focus @click="picking = true">
+                <Icon name="mdiFormatListChecks" :size="26" />
+                <div class="l-mid"><b>Pick your own</b><span class="l-sub">Choose emulators console by console. Each one downloads from its own releases (AppImage or Flatpak).</span></div>
               </button>
               <button class="lrow" data-focus @click="next()">
                 <Icon name="mdiHandBackRight" :size="26" />
@@ -279,6 +294,7 @@ import Btn from '../components/Btn.vue';
 import TextField from '../components/TextField.vue';
 import Setup from './Setup.vue';
 import EmuSetup from './EmuSetup.vue';
+import EmuGet from '../components/EmuGet.vue';
 import RommLocal from '../components/RommLocal.vue';
 
 const STEPS = ['hello', 'name', 'lang', 'pad', 'steam', 'emus', 'romm', 'scan', 'extras', 'self', 'done'];
@@ -337,7 +353,8 @@ async function getRetroDeck() {
   catch (e) { toast(e.message, 'error', 6000); }
   getting.value = '';
 }
-async function recheck() { await load(); opened.value = ''; next(); }
+const picking = ref(false);
+async function recheck() { await load(); opened.value = ''; picking.value = false; next(); }
 async function saveExtras() {
   busy.value = true;
   try {
@@ -421,6 +438,7 @@ const handlers = { back: () => { if (step.value === 'romm' && romm.value) { romm
 useView(handlers, [{ b: 'A', label: 'Select' }, { b: 'B', label: 'Back' }]);
 // Setup and the scan bring their own buttons; the welcome's come back after them
 watch(step, (v) => { if (!replay && !only && v !== 'done') saveConfig({ ui: { welcomeStep: v } }); });
+watch(picking, async () => { await nextTick(); setTimeout(() => focusFirst(el.value?.querySelector('.w-step') || el.value, '.w-step [data-focus]'), 120); });
 watch([step, romm], async () => {
   if (step.value === 'self' && st.value.inSteam === false) await load();
   if (step.value === 'scan') loadScanExtras();

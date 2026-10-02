@@ -127,6 +127,10 @@
                 </button>
               </div>
             </template>
+            <template v-if="emuPage === 'get'">
+              <p class="muted small" style="margin-top: -6px">Emulators for each console, downloaded from their own releases. A green check means it's already on this device.</p>
+              <EmuGet />
+            </template>
             <template v-if="emuPage === 'patches'">
               <p class="muted small" style="margin-top: -6px">Patches and cheats from each emulator's own lists, for the games on this device. The same as Patches in a game's More menu.</p>
               <p v-if="!patchGames.length" class="muted">No games on this device for the emulators with patches (RPCS3, shadPS4, PCSX2, Dolphin, PPSSPP).</p>
@@ -506,6 +510,7 @@ import StorageManager from '../components/StorageManager.vue';
 import LibraryCheck from '../components/LibraryCheck.vue';
 import RommUpload from '../components/RommUpload.vue';
 import EmuIcon from '../components/EmuIcon.vue';
+import EmuGet from '../components/EmuGet.vue';
 import ServerStatus from '../components/ServerStatus.vue';
 import ControllerTest from '../components/ControllerTest.vue';
 import ReportProblem from '../components/ReportProblem.vue';
@@ -892,7 +897,7 @@ async function loadAll() {
 }
 const mediaSizes = [{ v: 'compact', l: 'Compact' }, { v: 'spacious', l: 'Spacious' }, { v: 'large', l: 'Large' }];
 // Emulators pages (0.9.16)
-const EMU_PAGES = [{ v: 'overview', l: 'Overview' }, { v: 'updates', l: 'Updates' }, { v: 'games', l: 'Game Updates' }, { v: 'patches', l: 'Patches' }, { v: 'tex', l: 'Add-ons' }, { v: 'folders', l: 'Console Folders' }];
+const EMU_PAGES = [{ v: 'overview', l: 'Overview' }, { v: 'updates', l: 'Updates' }, { v: 'games', l: 'Game Updates' }, { v: 'get', l: 'Get Emulators' }, { v: 'patches', l: 'Patches' }, { v: 'tex', l: 'Add-ons' }, { v: 'folders', l: 'Console Folders' }];
 const emuPage = ref('overview');
 // installed games whose emulator has patches (0.9.16), by console then name
 const PATCH_EMU = [[/ps3/i, 'RPCS3', 'rpcs3'], [/ps4/i, 'shadPS4', 'shadps4'], [/\bps2\b/i, 'PCSX2', 'pcsx2'], [/\b(ngc|gamecube|gc|wii)\b/i, 'Dolphin', 'dolphin'], [/\bpsp\b/i, 'PPSSPP', 'ppsspp']];
