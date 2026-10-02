@@ -2545,6 +2545,25 @@ const handlers09 = {
   'steam:gameTemplate': ({ romId }) => steamMgr.gameTemplate(romId, steamMgr.forRom(romId).console),
   'steam:setGameTemplate': ({ romId, template }) => steamMgr.setGameTemplate(romId, template),
   'steam:refreshGame': ({ romId }) => steamMgr.refreshGame(romId),
+  // shadPS4 version per game (0.9.17): the Qt launcher's versions, and this game's pick
+  'steam:shadVersions': ({ romId }) => ({ list: steamMgr.shadVersions(), current: ((config.steam || {}).shadVersions || {})[romId] || null }),
+  'steam:setShadVersion': ({ romId, path: p }) => { const m = ((config.steam ||= {}).shadVersions ||= {}); if (p) m[romId] = p; else delete m[romId]; saveConfig(); return true; },
+  // frame generation (0.9.17): what's installed, the picks, and Cartridge's games in Steam with theirs
+  'steam:frameGen': () => {
+    const fg = require('./frameGen'), conf = (config.steam ||= {}).frameGen || {};
+    const ov = steamMgr.overview();
+    const games = ov.games.filter((g) => g.inSteam && g.ours).map((g) => ({ romId: g.romId, name: g.name, console: g.console, own: (conf.games || {})[g.romId] || null, uses: fg.choiceFor(conf, g.romId, g.console) }));
+    return { found: fg.detect(), conf, games, consoles: ov.consoles.filter((c) => c.inSteam).map((c) => ({ key: c.key, platform: c.platform, inSteam: c.inSteam, own: (conf.consoles || {})[c.key] || null })) };
+  },
+  // { scope: 'default' | 'console' | 'game', id, value: 'lsfg' | 'mako' | 'off' | null (follow the level above) }
+  'steam:setFrameGen': ({ scope, id, value }) => {
+    const conf = ((config.steam ||= {}).frameGen ||= {});
+    const v = ['lsfg', 'mako', 'off'].includes(value) ? value : null;
+    if (scope === 'default') conf.default = v || 'off';
+    else { const m = (conf[scope === 'console' ? 'consoles' : 'games'] ||= {}); if (v) m[id] = v; else delete m[id]; }
+    saveConfig();
+    return conf;
+  },
   // 0.9.3: everything waiting for you, in one list (Settings → Emulators) instead of start-up pop-ups
   'issues:list': async () => {
     const out = [];
