@@ -653,13 +653,13 @@ async function syncLibrary() {
       for (const p of withGames) {
         broadcast('sync', { state: 'running', label: p.display_name, done: i, total: withGames.length });
         const list = [];
-        // Pages of 500 games, without their file lists (0.9.18): a console of extracted games (PS4, PS5, PS3,
+        // Pages of 500 games. On Android without their file lists (0.9.18): a console of extracted games (PS4, PS5, PS3,
         // Switch folders with thousands of files each) made pages of hundreds of MB that RomM took minutes to
         // build and Node then parsed on the thread that also answers the screens, so everything stalled.
         // RomM 4 says per game whether it is one file, one file in a folder, or many; only the one-in-a-folder
         // games need their file's name (filled in below). Older servers send files anyway, or are asked for them.
         // After a timeout, smaller pages from the same place instead of failing the whole sync.
-        let limit = 500, fails = 0, failed = null, withFiles = false;
+        let limit = 500, fails = 0, failed = null, withFiles = !onAndroid; // Android only: desktops keep the full lists
         const nested = [];
         for (let offset = 0; ; ) {
           let page;
@@ -965,8 +965,8 @@ let logoSaveT = null;
 function saveLogoCache() { clearTimeout(logoSaveT); logoSaveT = setTimeout(() => { try { fs.writeFileSync(LOGO_FILE, JSON.stringify(logoCache)); } catch {} }, 500); }
 function saveArt() { try { fs.writeFileSync(ART_FILE, JSON.stringify(artOverrides, null, 1)); } catch {} }
 const logoInflight = new Map();
-// Logos are made two at a time, newest request first (0.9.18): the game you're looking at gets its logo
-// before the ones asked for while scrolling past, instead of waiting behind all of them in order
+// Android makes logos two at a time, newest request first (0.9.18): the game you're looking at gets its logo
+// before the ones asked for while scrolling past. Desktops keep one at a time, in order
 const logoWait = [];
 let logoBusy = 0;
 function logoSlot(fn) {
@@ -976,8 +976,8 @@ function logoSlot(fn) {
   });
 }
 function logoPump() {
-  while (logoBusy < 2 && logoWait.length) {
-    const run = logoWait.pop();
+  while (logoBusy < (onAndroid ? 2 : 1) && logoWait.length) {
+    const run = onAndroid ? logoWait.pop() : logoWait.shift();
     logoBusy++;
     run().finally(() => { logoBusy--; setImmediate(logoPump); });
   }
@@ -2997,7 +2997,7 @@ const handlers = {
     const d = await api(`/api/roms/${Number(romId)}`);
     const files = Array.isArray(d?.files) ? d.files : [];
     d.file_count = files.length;
-    if (files.length > 300) {
+    if (onAndroid && files.length > 300) { // Android only: the desktop page keeps every file
       const pre = (d.full_path || '') + '/';
       const keep = (f) => { const c = String(f.category || '').toLowerCase(), rel = String(f.full_path || '').startsWith(pre) ? f.full_path.slice(pre.length) : f.file_name;
         return (c && c !== 'game') || /(^|\/)(updates?|dlcs?|patch(es)?)\//i.test(rel) || !String(rel).includes('/'); };
