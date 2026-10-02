@@ -6,15 +6,18 @@
   <div v-else class="shell" :style="{ '--card-w': cardW }">
     <header class="statusbar" :class="{ 'has-back': store.history.length }">
       <button v-if="store.history.length" class="backbtn" aria-label="Back" @click="back()"><Icon name="mdiArrowLeft" :size="22" /></button>
-      <div class="brand"><Logo :size="30" /><span class="brand-word">Cartridge</span></div>
-      <nav class="tabs">
-        <Btn b="LT" class="tab-trig" />
-        <button v-for="t in tabs" :key="t.name" class="tab" :class="{ active: activeTab === t.name }" @click="tab(t.name)">
-          <Icon :name="t.icon" :size="18" /><span class="tab-label">{{ t.label }}</span>
+      <div class="brand"><Logo :size="28" /><span class="brand-word">Cartridge</span></div>
+      <!-- 0.9.17 (owner: the bar looked AI-made): words only, one quiet underline that slides to the
+           current tab, LT/RT only while a controller is in use -->
+      <nav class="tabs" ref="tabsEl">
+        <Btn v-if="padMode" b="LT" class="tab-trig" />
+        <button v-for="t in tabs" :key="t.name" class="tab" :class="{ active: activeTab === t.name }" :data-tab="t.name" @click="tab(t.name)">
+          <span class="tab-label">{{ t.label }}</span>
           <span v-if="t.name === 'downloads' && activeDl.length" class="tab-badge">{{ activeDl.length }}</span>
           <span v-if="t.name === 'settings' && store.issues" class="tab-dot" :title="`${store.issues} waiting in Settings → Emulators`" />
         </button>
-        <Btn b="RT" class="tab-trig" />
+        <Btn v-if="padMode" b="RT" class="tab-trig" />
+        <i class="tab-ink" :style="ink" />
       </nav>
       <div class="spacer" />
       <label class="top-search" :class="{ on: store.route.name === 'search' }">
@@ -59,6 +62,7 @@
   <FirstTour v-if="store.modal?.type === 'tour'" />
   <ManualViewer v-if="store.modal?.type === 'manual'" v-bind="store.modal.props" />
   <PatchesSheet v-if="store.modal?.type === 'patches'" v-bind="store.modal.props" />
+  <AddonsSheet v-if="store.modal?.type === 'addons'" :key="'addons' + store.modal.props.romId" v-bind="store.modal.props" />
   <IdleScreen v-if="store.config?.configured" />
 
   <div class="pops">
@@ -81,7 +85,7 @@
 <script setup>
 import { computed, onMounted, onBeforeUnmount, ref, watch, nextTick, defineAsyncComponent } from 'vue';
 import { store, loadConfig, loadLibrary, loadArt, back, tab, go, call, toast, choose, saveConfig, builtinKb, askText, GRADE, activeTabs, TAB_DEFS } from './store.js';
-import { pushLayer, focusFirst } from './nav.js';
+import { pushLayer, focusFirst, input } from './nav.js';
 import { setSoundEnabled, setSoundStyle, sfx } from './sfx.js';
 import { applyTheme, CARD_SIZES } from './themes.js';
 import { setPointerPref, setRumble, setBackground } from './nav.js';
@@ -103,6 +107,7 @@ import FirstTour from './components/FirstTour.vue';
 // the manual reader brings pdf.js: loaded the first time a manual opens, not at start
 const ManualViewer = defineAsyncComponent(() => import('./components/ManualViewer.vue'));
 import PatchesSheet from './components/PatchesSheet.vue';
+import AddonsSheet from './components/AddonsSheet.vue';
 import IdleScreen from './components/IdleScreen.vue';
 import SteamCollections from './components/SteamCollections.vue';
 import SteamPreview from './components/SteamPreview.vue';
@@ -126,8 +131,9 @@ import Genres from './views/Genres.vue';
 import Collections from './views/Collections.vue';
 import EmuSetup from './views/EmuSetup.vue';
 import ShortcutHealth from './views/ShortcutHealth.vue';
+import FrameGen from './views/FrameGen.vue';
 
-const views = { achievements: Achievements, 'ra-game': RaGame, 'trophy-game': TrophyGame, home: Home, library: Gallery, consoles: Consoles, platform: Gallery, collection: Gallery, genre: Gallery, genres: Genres, collections: Collections, game: Game, downloads: Downloads, settings: Settings, search: Search, 'steam-console': SteamConsole, 'steam-missing': SteamMissing, 'emu-setup': EmuSetup, 'steam-health': ShortcutHealth };
+const views = { achievements: Achievements, 'ra-game': RaGame, 'trophy-game': TrophyGame, home: Home, library: Gallery, consoles: Consoles, platform: Gallery, collection: Gallery, genre: Gallery, genres: Genres, collections: Collections, game: Game, downloads: Downloads, settings: Settings, search: Search, 'steam-console': SteamConsole, 'steam-missing': SteamMissing, 'emu-setup': EmuSetup, 'steam-health': ShortcutHealth, 'frame-gen': FrameGen };
 // the tabs you picked in Look & Feel → Top bar, in your order
 const tabs = computed(() => activeTabs().map((name) => ({ name, ...TAB_DEFS[name] })));
 const mainEl = ref(null);
@@ -158,6 +164,16 @@ function toResults() {
 }
 const viewKey = computed(() => store.route.name + JSON.stringify(store.route.params));
 const cardW = computed(() => (CARD_SIZES[store.config.ui.gridSize] || CARD_SIZES.md).w);
+// the sliding underline under the current tab (transform only, so it costs nothing to move)
+const tabsEl = ref(null), ink = ref({ opacity: 0 });
+const padMode = computed(() => input.mode === 'pad');
+function placeInk() {
+  const nav = tabsEl.value, el = nav?.querySelector(`[data-tab="${activeTab.value}"]`);
+  if (!el) { ink.value = { opacity: 0 }; return; }
+  const label = el.querySelector('.tab-label') || el;
+  const x = label.getBoundingClientRect().left - nav.getBoundingClientRect().left, w = label.offsetWidth;
+  ink.value = { width: w + 'px', transform: `translateX(${x}px)`, opacity: 1 };
+}
 const activeTab = computed(() => {
   const n = store.route.name;
   if (tabs.value.find((t) => t.name === n)) return n;
@@ -199,6 +215,8 @@ function viewHandler(action) {
   return h ? h() : false;
 }
 
+watch([() => activeTab.value, () => tabs.value.length, padMode], () => nextTick(placeInk));
+window.addEventListener('resize', () => nextTick(placeInk));
 onMounted(async () => {
   tick(); clockT = setInterval(tick, 10000);
   navigator.getBattery?.().then((b) => {
@@ -322,17 +340,19 @@ watch(viewKey, async () => {
 
 <style scoped>
 .tab-trig { margin: 0 4px; }
-.top-search { display: flex; align-items: center; gap: 8px; flex: 0 1 260px; min-width: 130px; height: 40px; padding: 0 10px 0 14px; border-radius: 999px; background: var(--s2); color: var(--muted); cursor: text; transition: border-color 0.14s, background 0.14s; }
-.top-search.on, .top-search:focus-within { background: var(--sel); border-color: transparent; color: var(--text); }
-.top-search:focus-within { box-shadow: var(--ring); }
+/* search (0.9.17): a quiet field that lights up when used, not a pill that competes with the tabs */
+.top-search { display: flex; align-items: center; gap: 8px; flex: 0 1 240px; min-width: 120px; height: 38px; padding: 0 10px 0 12px; border-radius: var(--r-md); background: rgba(255, 255, 255, 0.06); color: rgba(255, 255, 255, 0.55); cursor: text; transition: background 160ms cubic-bezier(0.23, 1, 0.32, 1), color 160ms; }
+.top-search:hover { background: rgba(255, 255, 255, 0.09); }
+.top-search.on, .top-search:focus-within { background: rgba(255, 255, 255, 0.14); color: var(--text); }
+.top-search:focus-within { box-shadow: 0 0 0 2px var(--focus, #fff); }
 .top-search input { flex: 1; min-width: 0; height: 100%; font: inherit; font-size: var(--t-sm); color: var(--text); background: none; border: 0; outline: none; }
 .top-search input:focus { box-shadow: none !important; }
-.top-search input::placeholder { color: var(--muted); }
+.top-search input::placeholder { color: rgba(255, 255, 255, 0.5); }
 .top-search .clear { background: none; border: 0; color: var(--muted); padding: 4px; display: grid; place-items: center; }
-.backbtn { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; background: var(--s2); margin-right: -6px; }
-.backbtn:active { background: rgba(255, 255, 255, 0.2); }
-.tab-dot { position: absolute; top: 6px; right: 6px; width: 8px; height: 8px; border-radius: 50%; background: #ffd978; }
-.tab-badge { position: absolute; top: 2px; right: 6px; min-width: 16px; height: 16px; border-radius: var(--r-md); background: var(--peach); color: var(--on-primary); font-size: var(--t-xs); font-weight: 700; display: grid; place-items: center; padding: 0 4px; }
+.top-search :deep(.pb) { transform: scale(0.85); opacity: 0.8; }
+.backbtn { width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; background: rgba(255, 255, 255, 0.08); margin-right: -4px; transition: background 160ms; }
+.backbtn:hover { background: rgba(255, 255, 255, 0.14); }
+.backbtn:active { background: rgba(255, 255, 255, 0.2); transform: scale(0.96); }
 .pops { position: fixed; top: 76px; right: 24px; z-index: 80; display: flex; flex-direction: column; gap: 10px; pointer-events: none; }
 .pop { display: flex; gap: 14px; align-items: center; width: 380px; padding: 12px 16px 12px 12px; border-radius: var(--r-lg); background: rgba(18, 20, 32, 0.92); box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.12); }
 .pop-icon { width: 60px; height: 60px; border-radius: var(--r-md); overflow: hidden; flex: none; display: grid; place-items: center; background: rgba(0, 0, 0, 0.35); }

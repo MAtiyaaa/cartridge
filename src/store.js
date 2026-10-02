@@ -90,6 +90,7 @@ export function closeModal(value) {
 export const askText = (props) => openModal('keyboard', props);
 // Built-in on-screen keyboard: always, never (Steam keyboard), or Auto = in Game Mode only
 export function builtinKb() {
+  if (store.welcoming) return true; // the welcome always uses Cartridge's own (0.9.17); Auto after it
   const k = store.config?.ui?.keyboard || 'auto';
   return k === 'builtin' || (k === 'auto' && !!store.info?.gamescope);
 }

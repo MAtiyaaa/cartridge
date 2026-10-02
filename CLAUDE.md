@@ -153,7 +153,7 @@ LT/RT switch top tabs. LB/RB only switch sections inside a page. A select, B bac
 - Cartridge theme accent is white (`bgAccent` keeps the brand colour for animated backgrounds). `applyTheme` sets `--focus` (white, or `colors.highlight`), `--on-focus`/`--on-focus-dim` by luminance, `--sel` (chosen, not focused), `--knob`. Near-white picks stay white (`accentOf`).
 - Selected states use a `--sel` fill, never stripes or outlines; the active top tab has a faint outline. A focused `.btn.primary` also gets the ring.
 - `nav.js` zones: `move()` never leaves the nearest `[data-zone]` (App `<main>`, Settings `.pane`). Settings' B returns to the rail.
-- The 0.9.3 plan is `docs/plan-0.9.3.md`, 0.9.4/0.9.15 is `docs/plan-0.9.4.md`, 0.9.16 is `docs/plan-0.9.16.md`. Work in progress and decisions made in chat are logged in `docs/SESSION-LOG.md` (read its newest entry first).
+- The 0.9.3 plan is `docs/plan-0.9.3.md`, 0.9.4/0.9.15 is `docs/plan-0.9.4.md`, 0.9.16 is `docs/plan-0.9.16.md`, 0.9.17 is `docs/plan-0.9.17.md`. Work in progress and decisions made in chat are logged in `docs/SESSION-LOG.md` (read its newest entry first).
 
 ## 0.9.3 (shipped in parts A to I, Oct 2026; log: docs/SESSION-LOG.md)
 - Emulators: Settings → Emulators (Issues list `issues:list`, Emulator setup, Shortcut health, Console Folders). Forks: `FORKS`/`forkOf`, `REAL_NAMES`/`realName` in emulators.js, `steam.forks[path]` (`markFork`, `setup:fork`), `EMU.forkOf` (PrimeHack); forks never default. RetroDECK candidate (`how: 'retrodeck'`) only without EmuDeck. SRM setups no longer candidates. Learned shortcuts are a second choice in `templateFor`. `takeOver` (console page More). shadPS4 `startOf()` (Start in never next to the AppImage). New emulators each read from their own source (DeSmuME, Mupen64Plus, Snes9x, Mesen, Play!, Kronos, Xenia Edge).
@@ -206,6 +206,24 @@ LT/RT switch top tabs. LB/RB only switch sections inside a page. A select, B bac
 - Game page More tabs: Game, Steam, Emulator, Details and Artwork, Options. `steam:addToCollections`.
 - Settings background picker: `topConsoles` (play time, then installed) first, `SCENE_OF`.
 - Vita: `vitaByName`; PS4 trophy titles remembered (`titles.json`); `developerOf` up to two.
+
+## 0.9.17 (2 Oct 2026; log: docs/SESSION-LOG.md, plan: docs/plan-0.9.17.md)
+- Add-ons: `electron/addonSources.js` (EmuCoreX `textures.json` for PS2, GameBanana apiv11 `gbGame`/`gbMods`/`gbFiles`), `electron/addonInstall.js` (zip via yauzl, 7z/rar via bsdtar/7z, `plan()` kinds ps2/switch/plain, never over a file, `removeFiles`), `addons:available/install/remove/installed`, `addons-installed.json`, `AddonsSheet.vue` (modal `addons`), Settings → Emulators → Add-ons.
+- `electron/frameGen.js` (`~/lsfg`, `~/.lsfg`, `~/.local/bin/mako-run`; `steam.frameGen` default/consoles/games), `withFg` + `launchFor` (wrapper after env vars, one %command%), `sigOf` adds `fg:` only when set; `FrameGen.vue` (route `frame-gen`).
+- shadPS4: `shadVersions()` (`shadPS4QtLauncher/versions.json`), `withShadVersion` (`-e "<path>"` for `-d`), `steam.shadVersions`.
+- Multi-disc: `multiDisc()` writes `<folder>.m3u` (flag wx) for `M3U_EMU` emulators.
+- `electron/discImage.js`: `open(file)` 2048-byte view of ISO/raw bin/cue/CHD v5 (Huffman map, zlib/LZMA/zstd, cd codecs)/CSO/ZSO/GCZ; `lzmaDecode`, `pbpDiscId`. `patches.isoFile`/`ps2IsoInfo` use it. Fixtures in `test/fixtures/disc` (chdman).
+- RomM on this device: `rommLocal.prepare` (podman-launcher into `~/.local/share/cartridge-romm/bin/podman`, `sudo -S usermod --add-subuid/--add-subgid`), `cartridge-romm.service` for Cartridge's own Podman, `romm:localPrepare`.
+- `electron/emuGet.js` (`CATALOG` by console, GitHub AppImage into ~/Applications or Flathub `--user`), `emuget:*`, `EmuGet.vue` (welcome Pick your own, Settings → Emulators → Get Emulators).
+- `bios.place()` (copy into set-up emulators' folders, never over), `switchNandDirs` + `switchFirmware`, `bios:all`, `electron/emuFolders.js` (`setup:gameFolders`, `emu-folders.json`), default BIOS folder when none.
+- `makers.js` Nintendo (HVR88 Monochrome Gaming Logos, `evenodd`).
+- Second list (plan section 10): `electron/webFetch.js` (Electron `net.fetch` for outside services, avoids Cloudflare 403s; guarded for plain Node), `electron/github.js` (`release`, release-page fallback `fromPages`/`parseAssets` when the API answers 403). Sony's list HTTPS first (`rejectUnauthorized:false` for that host only). RPCS3 patches from rpcs3.net's own patch API into `<config>/patches/patch.yml`.
+- Dolphin Gecko: `geckoTxt`/`geckoDownload`/`addGecko` in cheats.js (codes.rc24.xyz, parsed like GeckoCodeConfig.cpp).
+- Emulator updates: `emuup:list` hides forks, `_old`/previous/`.cartridge-*` copies and launcher `versions` folders; `cache.installed[path]` remembers the version. `emuIcons.ICON_URLS`/`webIcon`.
+- Updates: `update:releases`, `update:rollback` (`config.updateHold` pauses autoDownload until `update:check`), `ChangelogCard.vue` (`RELEASE_NOTES.md?raw`). `steam:keyboard` (TextPrompt in gamescope).
+- Welcome: intro overlay, Your controls step (`ui.buttons`), `.w-back`, `.w-hints`, Flatpak offer (`welcome:flatpak`), `EmuGet.vue` flow (`emuget:drives/prepare/queue/state`, ES-DE folders, `emuDir`), Use without RomM (`config.localOnly`, `electron/localLibrary.js`, negative ids). `builtinKb()` true while welcoming; Keyboard `caps`, cursor on LB/RB. `autoZoom` below 1280x800 (to 0.6).
+- Top bar: words-only tabs, `.tab-ink` underline placed by `placeInk()`, LT/RT only in pad mode. `PIcon` trims SVG margins (alpha box, up to 1.8x). Sega/Microsoft in makers.js. Patches/Add-ons pages grouped by console (`patchGroups`, `.con-head`).
+- Fluidity: GameCard covers fade in only when not yet loaded (`seen`), `:active`/`.pressed` squeeze (nav.js `pressFx` on A).
 
 ## Releases (full steps: HANDOFF D8)
 Only when the owner asks. Bump `version` and `build.releaseInfo.releaseName` ("Cartridge X.Y.Z") in `package.json`, and set `versionName` (what Settings → About and update messages show). **0.9.3 is shipped in parts (owner, 1 Oct 2026):** the number goes up as usual (0.9.4, 0.9.5...) but `versionName` and the release title are "0.9.3 B", "0.9.3 C"... until the 0.9.3 plan is done; notes heading `## Cartridge 0.9.3 B · Title`. Then put only this version's notes in `RELEASE_NOTES.md` (heading `## Cartridge X.Y.Z · Title`), add them to the top of `CHANGELOG.md`, grouped as New / Changed / Fixed with bold lead-ins. CI builds, launch-checks and publishes.

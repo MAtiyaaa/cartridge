@@ -6,7 +6,47 @@ The branch for 0.9.3 work is `claude/relaxed-fermat-30pigp`. Pull it before star
 
 ---
 
-## 2 Oct 2026 · 0.9.16 built and released (read this first)
+## 2 Oct 2026 · 0.9.17 second list built (read this first)
+
+The owner added 22 items to 0.9.17 (plan section 10) and wanted them all in this update. All built; see CLAUDE.md 0.9.17 and RELEASE_NOTES.md.
+
+**Decisions and notes:**
+- Top bar: the owner asked for the design skills ("taste" skill isn't in `.claude/skills`; apple-design and emil-design-eng were used). Words-only tabs with a sliding underline, LT/RT only with a controller.
+- Vita3K install error: the owner said "Getting this error" but no text came through. Ask for the message.
+- Sony, GameBanana and metadata.ppsspp are blocked from the container: the 403 fixes (net.fetch, HTTPS for Sony) must be checked on a device.
+
+**Owner must test on a device:** the welcome (animation, controller step, keyboard, Flatpak offer, Download emulators flow, without RomM), Roll back, Steam keyboard in Game Mode, emulator updates (RPCS3 sticking), Gecko codes in Dolphin, RPCS3 patches list, the top bar at 1280x800 and 4K, press feedback with a controller.
+
+---
+
+## 2 Oct 2026 · 0.9.17 built and released (read this first)
+
+Everything in `docs/plan-0.9.17.md`. Remind the owner: check the PS3 games that said "serial not found", and the stray v2.3.1 tag.
+
+**Decisions and notes:**
+- Add-ons button: the owner said add-ons now live in the emulator settings; the game page keeps More → Emulator → Add-ons (same sheet).
+- GameBanana is still blocked from the container: its API is built from public client code (apiv11) and must be checked on a device. The PS2 catalog (EmuCoreX) was read live: 769 packs parse.
+- Podman: SteamOS 3.5+ ships it; what's missing is /etc/subuid ranges (sudo once, password never kept). podman-launcher when there's no Podman at all.
+- Emulator downloads: GitHub AppImages (asset patterns not checked live for eden, ryujinx, shadps4 launcher, flycast); Flatpak for Dolphin, PPSSPP, melonDS, RetroArch. Citron has no GitHub releases, so it isn't offered.
+- Moved to 0.9.18: more console scenes, the small cleanups.
+
+**Owner must test on a device:** Frame Generation with lsfg-vk and MAKO; shadPS4 version per game; multi-disc playlists in DuckStation/PCSX2/Dolphin; PS2 texture pack install; a GameBanana mod; Podman setup on SteamOS (password step) and Bazzite; Get Emulators downloads; BIOS from RomM into emulators; game folders in PCSX2, DuckStation, Dolphin; CHD/CSO/GCZ/PBP games show their serials.
+
+---
+
+## 2 Oct 2026 · 0.9.17 started
+
+Owner's list for 0.9.17 is `docs/plan-0.9.17.md`. Research done before building:
+- ARMSX2's texture catalogs: dl.ps2ktxpak.net (ASTC, phone only) and sashkinbro/EmuCoreX-Textures `textures.json` (PNG/DDS, serials, SHA-256, parts). Cartridge uses EmuCoreX.
+- gamebanana.com is blocked from the container (curl and fetch); its API is built from public client code.
+- SteamOS 3.5+ ships Podman; it needs /etc/subuid ranges (sudo once). podman-launcher for systems without.
+- lsfg-vk: Decky LSFG-VK writes `~/lsfg` (and `~/.lsfg`); MAKO: `~/.local/bin/mako-run %command%`.
+- shadPS4 Qt launcher: `-e <name|path>`, versions in `<XDG_DATA_HOME or ~/.local/share>/shadPS4QtLauncher/versions.json`.
+Owner said shadPS4 now works. Remind the owner to check the PS3 "serial not found" games.
+
+---
+
+## 2 Oct 2026 · 0.9.16 built and released
 
 Everything in `docs/plan-0.9.16.md` sections 1 to 8, as one update "0.9.16 · Your Emulators". Remind the owner about the stray v2.3.1 tag.
 

@@ -148,3 +148,80 @@ test('Add-ons: Switch and Wii U mod folders; PS1, CIA and Switch IDs read from t
   assert.strictEqual(A.switchTitleId(path.join(d, 'u.nsp')), '0100F2C0115B6000');
   assert.strictEqual(A.switchTitleId(path.join(d, 'Game [0100ABCD12340000].xci')), '0100ABCD12340000');
 });
+
+test('RomM on this device: Podman needs the user\'s ID ranges in /etc/subuid and /etc/subgid (0.9.17)', () => {
+  const RL = require('../electron/rommLocal.js');
+  const etc = fs.mkdtempSync(path.join(os.tmpdir(), 'etc-'));
+  const u = os.userInfo().username;
+  assert.strictEqual(RL.hasIds(etc), false);
+  fs.writeFileSync(path.join(etc, 'subuid'), `other:100000:65536\n${u}:100000:65536\n`);
+  assert.strictEqual(RL.hasIds(etc), false); // subgid missing
+  fs.writeFileSync(path.join(etc, 'subgid'), `${os.userInfo().uid}:100000:65536\n`);
+  assert.strictEqual(RL.hasIds(etc), true);
+});
+
+test('Emulator setup: game folders added to PCSX2, DuckStation and Dolphin as they write them (0.9.17)', () => {
+  const F = require('../electron/emuFolders.js');
+  const h = fs.mkdtempSync(path.join(os.tmpdir(), 'ef-'));
+  const put = (p, t) => { fs.mkdirSync(path.dirname(path.join(h, p)), { recursive: true }); fs.writeFileSync(path.join(h, p), t); };
+  put('.config/PCSX2/inis/PCSX2.ini', '[UI]\nTheme = dark\n\n[GameList]\nRecursivePaths = /old\n\n[Folders]\nBios = bios\n');
+  put('.local/share/duckstation/settings.ini', '[Main]\nX = 1\n');
+  put('.config/dolphin-emu/Dolphin.ini', '[General]\nISOPaths = 1\nISOPath0 = /games/old\n[Core]\nCPUThread = True\n');
+  const roms = path.join(h, 'roms'); for (const d of ['ps2', 'psx', 'gc', 'wii']) fs.mkdirSync(path.join(roms, d), { recursive: true });
+  const folders = { ps2: path.join(roms, 'ps2'), psx: path.join(roms, 'psx'), gc: path.join(roms, 'gc'), wii: path.join(roms, 'wii') };
+  const r = F.addGameDirs(folders, { home: h, env: {} });
+  assert.deepStrictEqual(r.map((x) => [x.id, x.added.length]), [['pcsx2', 1], ['duckstation', 1], ['dolphin', 2]]);
+  assert.match(fs.readFileSync(path.join(h, '.config/PCSX2/inis/PCSX2.ini'), 'utf8'), new RegExp(`\\[GameList\\]\\nRecursivePaths = /old\\nRecursivePaths = ${folders.ps2}\\n\\n\\[Folders\\]`));
+  assert.match(fs.readFileSync(path.join(h, '.local/share/duckstation/settings.ini'), 'utf8'), new RegExp(`\\[GameList\\]\\nRecursivePaths = ${folders.psx}\\n`));
+  const dol = fs.readFileSync(path.join(h, '.config/dolphin-emu/Dolphin.ini'), 'utf8');
+  assert.match(dol, /ISOPaths = 3/); assert.match(dol, new RegExp(`ISOPath1 = ${folders.gc}\\nISOPath2 = ${folders.wii}`)); assert.match(dol, /ISOPath0 = \/games\/old/);
+  assert.deepStrictEqual(F.addGameDirs(folders, { home: h, env: {} }).map((x) => x.added.length), [0, 0, 0]); // already there
+  const busy = F.addGameDirs({ ps2: path.join(h, 'x') }, { home: h, env: {}, running: new Set(['pcsx2']) });
+  assert.deepStrictEqual(busy, []); // folder missing: nothing to add
+});
+
+test('Emulator setup: BIOS copied into emulator folders that are set up, never over a file (0.9.17)', () => {
+  const h = fs.mkdtempSync(path.join(os.tmpdir(), 'bp-'));
+  const code = `
+    const B = require(${JSON.stringify(path.join(__dirname, '../electron/bios.js'))});
+    console.log(JSON.stringify(B.place('psx', ${JSON.stringify(path.join(h, 'bios'))}).map((f) => f.replace(${JSON.stringify(h)}, '~'))));`;
+  fs.mkdirSync(path.join(h, 'bios')); fs.writeFileSync(path.join(h, 'bios/scph5501.bin'), 'bios'); fs.writeFileSync(path.join(h, 'bios/other.bin'), 'x');
+  fs.mkdirSync(path.join(h, '.local/share/duckstation'), { recursive: true }); // DuckStation set up, its bios folder not made yet
+  fs.mkdirSync(path.join(h, '.var/app/org.duckstation.DuckStation/data/duckstation/bios'), { recursive: true });
+  fs.writeFileSync(path.join(h, '.var/app/org.duckstation.DuckStation/data/duckstation/bios/scph5501.bin'), 'mine');
+  const out = JSON.parse(require('child_process').execFileSync(process.execPath, ['-e', code], { env: { ...process.env, HOME: h }, encoding: 'utf8' }).trim());
+  assert.deepStrictEqual(out, ['~/.local/share/duckstation/bios/scph5501.bin']);
+  assert.strictEqual(fs.readFileSync(path.join(h, '.var/app/org.duckstation.DuckStation/data/duckstation/bios/scph5501.bin'), 'utf8'), 'mine');
+});
+
+test('GitHub: when the API answers 403, the release pages are read (0.9.17)', async () => {
+  const G = require('../electron/github.js');
+  const seen = [];
+  const fetchImpl = async (u) => {
+    seen.push(u);
+    if (u.startsWith('https://api.github.com')) return { ok: false, status: 403 };
+    if (u.endsWith('/releases/latest')) return { ok: true, status: 200, url: 'https://github.com/RPCS3/rpcs3-binaries-linux/releases/tag/build-abc', text: async () => '' };
+    return { ok: true, status: 200, text: async () => '<a href="/RPCS3/rpcs3-binaries-linux/releases/download/build-abc/rpcs3-v0.0.38-1234_linux64.AppImage">x</a>' };
+  };
+  const r = await G.release('RPCS3/rpcs3-binaries-linux', { fetchImpl });
+  assert.strictEqual(r.tag, 'build-abc');
+  assert.deepStrictEqual(r.assets.map((a) => a.name), ['rpcs3-v0.0.38-1234_linux64.AppImage']);
+  const U = require('../electron/emuUpdates.js');
+  const rel = await U.latestRelease('rpcs3', { fetchImpl });
+  assert.strictEqual(rel.version, '0.0.38');
+});
+
+test('Without RomM: a library from the console folders already on the device (0.9.17)', () => {
+  const L = require('../electron/localLibrary.js');
+  const r = fs.mkdtempSync(path.join(os.tmpdir(), 'loc-'));
+  const put = (p, t = 'x') => { fs.mkdirSync(path.dirname(path.join(r, p)), { recursive: true }); fs.writeFileSync(path.join(r, p), t); };
+  put('ps2/God of War (USA).iso'); put('ps2/notes.txt');
+  put('psx/FF7 (Disc 1).cue'); put('psx/FF7 (Disc 1).bin'); put('psx/FF7 (Disc 2).cue'); put('psx/FF7 (Disc 2).bin'); put('psx/FF7.m3u', 'FF7 (Disc 1).cue\nFF7 (Disc 2).cue\n');
+  fs.mkdirSync(path.join(r, 'ps3/Uncharted 2 [BCUS98123]/PS3_GAME'), { recursive: true });
+  fs.mkdirSync(path.join(r, 'bios')); fs.mkdirSync(path.join(r, 'gamecube'));
+  const lib = L.build(r);
+  const by = Object.fromEntries(lib.platforms.map((p) => [p.slug, lib.roms[p.id].map((x) => x.name)]));
+  assert.deepStrictEqual(by, { ps2: ['God of War'], ps3: ['Uncharted 2'], psx: ['FF7'] });
+  assert.ok(lib.platforms.every((p) => p.id < 0) && Object.values(lib.roms).flat().every((x) => x.id < 0));
+  assert.strictEqual(lib.platforms.find((p) => p.slug === 'psx').display_name, 'PlayStation');
+});

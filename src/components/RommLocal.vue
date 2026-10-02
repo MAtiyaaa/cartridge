@@ -4,10 +4,26 @@
       <h1>Set up RomM on this device</h1>
       <div class="rl-note glass"><Icon name="mdiInformationOutline" :size="22" /><span>Your RomM server is only reachable while this device is on and online.</span></div>
       <p class="muted small">Cartridge runs RomM in the background with Podman, the way RomM's own setup does. It starts with the device and keeps running in Game Mode.</p>
-      <p v-if="info && !info.podman" class="rl-bad"><Icon name="mdiAlertCircle" :size="18" />Podman isn't installed here. Bazzite and Fedora Atomic include it; on other systems install the podman package first.</p>
       <div class="rl-act">
         <button class="btn" data-focus @click="emit('back')"><Icon name="mdiArrowLeft" />Back</button>
-        <button class="btn primary" data-focus :disabled="!info?.podman" @click="phase = 'form'">Continue<Icon name="mdiArrowRight" /></button>
+        <button class="btn primary" data-focus :disabled="!info" @click="phase = needsPrep ? 'prep' : 'form'">Continue<Icon name="mdiArrowRight" /></button>
+      </div>
+    </template>
+
+    <!-- 0.9.17: Podman set up from here (downloaded when missing; user ID ranges with the device password) -->
+    <template v-else-if="phase === 'prep'">
+      <h1>Getting Podman ready</h1>
+      <p class="muted small">RomM runs inside Podman. {{ info.ready?.podman ? 'Podman is on this device.' : 'Cartridge downloads Podman into its own folder (podman-launcher, the copy used on the Steam Deck), nothing on the system changes for it.' }}</p>
+      <template v-if="!info.ready?.ids">
+        <p class="muted small">Podman also needs permission to run containers as you, which is one system setting (your user's ID ranges). Cartridge sets it with your device password, the one Desktop Mode asks for. It's used once and never saved.</p>
+        <TextField v-model="devPass" label="Device password" placeholder="Your password for this device" password icon="mdiLock" />
+        <p class="muted small">Never set one? In Desktop Mode open Konsole, type <span class="mono">passwd</span> and choose one.</p>
+      </template>
+      <p v-if="prepErr" class="rl-bad"><Icon name="mdiAlertCircle" :size="18" />{{ prepErr }}</p>
+      <div v-if="prepBusy" class="muted small"><Icon name="mdiSync" :size="16" class="spin" /> {{ prog.label || 'Working' }}…</div>
+      <div class="rl-act">
+        <button class="btn" data-focus :disabled="prepBusy" @click="phase = 'intro'"><Icon name="mdiArrowLeft" />Back</button>
+        <button class="btn primary" data-focus :disabled="prepBusy || (!info.ready?.ids && !devPass)" @click="prep"><Icon name="mdiCogPlay" />Set up Podman</button>
       </div>
     </template>
 
@@ -107,6 +123,17 @@ async function saveKeys() {
   keyBusy.value = false;
 }
 const info = ref(null);
+const needsPrep = computed(() => !info.value?.ready?.podman || !info.value?.ready?.ids);
+const devPass = ref(''), prepBusy = ref(false), prepErr = ref('');
+async function prep() {
+  prepBusy.value = true; prepErr.value = ''; prog.value = {};
+  try {
+    const r = await call('romm:localPrepare', { password: devPass.value });
+    if (r?.needPassword) prepErr.value = 'Type your device password.';
+    else { info.value = { ...info.value, ready: r.ready, podman: true }; phase.value = 'form'; }
+  } catch (e) { prepErr.value = e.message; }
+  devPass.value = ''; prepBusy.value = false;
+}
 const f = reactive({ username: '', password: '', confirm: '', name: '', library: '' });
 const keys = reactive({ igdbId: '', igdbSecret: '', ssUser: '', ssPass: '' });
 const custom = ref('');
@@ -125,12 +152,12 @@ async function start() {
   try {
     result.value = await call('romm:localSetup', { username: f.username, password: f.password, library: f.library, name: f.name });
     store.config = await call('config:get');
-    if (!store.config.configured) await saveConfig({ configured: true });
+    await saveConfig({ configured: true, localOnly: false });
     call('library:sync').catch(() => {});
     phase.value = 'done';
-  } catch (e) { error.value = e.message; phase.value = 'error'; }
+  } catch (e) { if (/Podman isn’t ready/.test(e.message)) { info.value = await call('romm:localInfo').catch(() => info.value); phase.value = 'prep'; return; } error.value = e.message; phase.value = 'error'; }
 }
-useView({ back: () => { if (phase.value === 'form') phase.value = 'intro'; else if (phase.value !== 'work') emit('back'); } }, [{ b: 'A', label: 'Select' }, { b: 'B', label: 'Back' }]);
+useView({ back: () => { if (phase.value === 'form' || phase.value === 'prep') phase.value = 'intro'; else if (phase.value !== 'work') emit('back'); } }, [{ b: 'A', label: 'Select' }, { b: 'B', label: 'Back' }]);
 watch(phase, async () => { await nextTick(); focusFirst(document.querySelector('.rl'), '.rl-act .btn.primary:not([disabled]), [data-focus]'); });
 onMounted(async () => {
   off = window.cart.on('romm-local', (p) => (prog.value = p));

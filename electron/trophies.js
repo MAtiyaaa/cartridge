@@ -209,7 +209,7 @@ function parseVita3k(root) {
 //   builds in between: <home>/<uid>/trophy/<ID>/ (a folder with the XML inside)
 //   <=0.15:  <user>/game_data/<CUSA…>/TrophyFiles/trophy00/Xml/TROP.XML (unlocks inline)
 // <home> is <user>/home unless the settings (config.json "home_dir") point somewhere else.
-const APP_DIRS = () => [path.join(HOME, 'Documents', 'Apps'), path.join(HOME, 'Applications'), path.join(HOME, 'AppImages'), path.join(HOME, 'Downloads'), path.join(HOME, '.local', 'bin'), path.join(HOME, 'Games'), path.join(HOME, 'Emulators'), ...emulationRoots().map((r) => path.join(r, 'tools'))];
+const APP_DIRS = () => [path.join(HOME, 'Documents', 'Apps'), path.join(HOME, 'Applications'), path.join(HOME, 'AppImages'), path.join(HOME, 'Downloads'), path.join(HOME, '.local', 'bin'), path.join(HOME, 'Games'), path.join(HOME, 'Emulators'), ...emulationRoots().flatMap((r) => [path.join(r, 'tools'), path.join(r, 'emulators')])]; // emulators: Cartridge's own downloads (0.9.17)
 function shadps4Roots() {
   const found = [];
   // The emulator's own user folder only (the Qt launcher's folder just holds emulator versions)

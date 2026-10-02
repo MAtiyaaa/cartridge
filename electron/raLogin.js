@@ -13,6 +13,7 @@
 // Only emulators that have been opened once (their settings exist) are offered; nothing is created
 // for an emulator that isn't set up.
 const fs = require('fs');
+const webFetch = require('./webFetch');
 const path = require('path');
 const os = require('os');
 const crypto = require('crypto');
@@ -160,7 +161,7 @@ function running(procDir = '/proc') {
 // RetroAchievements' own login (what rcheevos sends): the token comes back, the password goes nowhere else
 // RetroAchievements turns away requests with no proper User-Agent (0.9.16: the sign-in failed with
 // Node's default one), so it says who it is, as emulators do.
-async function login(user, password, { fetchImpl = fetch, host = 'https://retroachievements.org', ua = 'Cartridge' } = {}) {
+async function login(user, password, { fetchImpl = webFetch, host = 'https://retroachievements.org', ua = 'Cartridge' } = {}) {
   const body = new URLSearchParams({ r: 'login2', u: user, p: password });
   const r = await fetchImpl(`${host}/dorequest.php`, { method: 'POST', body: body.toString(), headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': ua, Accept: 'application/json' } });
   let j = {}; try { j = await r.json(); } catch {}

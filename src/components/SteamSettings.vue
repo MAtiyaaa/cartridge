@@ -41,6 +41,15 @@
           </button>
         </div>
 
+        <div class="subh"><Icon name="mdiAnimationPlay" :size="20" />Frame Generation</div>
+        <div class="ss-emus">
+          <button class="ss-emu" data-focus data-key="framegen" @click="go('frame-gen')">
+            <div class="ss-e-logo"><Icon name="mdiAnimationPlay" :size="36" /></div>
+            <div class="ss-e-mid"><b>Frame Generation</b><span class="muted small">lsfg-vk or MAKO, for all games, a console or one game</span></div>
+            <Icon name="mdiChevronRight" :size="22" class="muted" />
+          </button>
+        </div>
+
         <div class="subh"><Icon name="mdiTuneVariant" :size="20" />Options</div>
         <Toggle :model-value="sc.preview !== false" label="Show what changes first" desc="See every Target, Start in and Launch options before Steam is touched" @update:model-value="(v) => setC({ preview: v })" />
         <Toggle :model-value="!!sc.autoAdd" label="Add games after they download" desc="Queues each finished download for Steam, using that console's last collections" @update:model-value="(v) => setC({ autoAdd: v })" />

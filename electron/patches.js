@@ -1,4 +1,5 @@
 'use strict';
+const webFetch = require('./webFetch');
 // Emulator patches (0.9.3 D7, owner's option 1). The patches themselves are the emulator's own
 // (RPCS3 downloads its patch.yml); Cartridge lists the ones for a game and turns them on or off in
 // the emulator's own patch settings, so they stay on exactly as if ticked in the emulator. It only
@@ -92,7 +93,7 @@ function rpcs3List(dir, serial, appVer, mine = {}) {
 // &v=<patch engine 1.2>[&sha256=<current file>]; JSON return_code 0 new, 1 up to date, <0 error; version
 // must be 1.2 and sha256 must match the patch text; RPCS3 keeps the old file as patch.yml.old.
 const RPCS3_PATCH_ENGINE = '1.2';
-async function rpcs3DownloadPatches(patchesDir, { fetchImpl = fetch, base = 'https://rpcs3.net' } = {}) {
+async function rpcs3DownloadPatches(patchesDir, { fetchImpl = webFetch, base = 'https://rpcs3.net' } = {}) {
   const file = path.join(patchesDir, 'patch.yml');
   let url = `${base}/compatibility?patch&api=v1&v=${RPCS3_PATCH_ENGINE}`;
   try { url += '&sha256=' + require('crypto').createHash('sha256').update(fs.readFileSync(file)).digest('hex'); } catch {}
@@ -263,9 +264,10 @@ function pcsx2Game(dir, file) {
   return hit && hit.crc ? { serial: hit.serial, crc: hit.crc } : null;
 }
 // One file from a plain ISO9660 image (a PS3 disc's PS3_GAME/PARAM.SFO), or null
+// any image discImage can open: ISO, raw .bin/.cue, CHD, CSO/ZSO, GCZ (0.9.17)
 function isoFile(file, parts, max = 1 << 20) {
-  let fd; try { fd = fs.openSync(file, 'r'); } catch { return null; }
-  const read = (pos, len) => { const b = Buffer.alloc(len); const n = fs.readSync(fd, b, 0, len, pos); return b.subarray(0, n); };
+  const img = require('./discImage').open(file); if (!img) return null;
+  const read = img.read;
   try {
     const pvd = read(16 * 2048, 2048);
     if (pvd[0] !== 1 || pvd.toString('latin1', 1, 6) !== 'CD001') return null;
@@ -278,15 +280,15 @@ function isoFile(file, parts, max = 1 << 20) {
       d = hit;
     }
     return d.size <= max ? read(d.lba * 2048, d.size) : null;
-  } catch { return null; } finally { try { fs.closeSync(fd); } catch {} }
+  } catch { return null; } finally { img.close(); }
 }
 // A PS2 ISO's serial and CRC the way PCSX2 works them out itself (0.9.3 L; CDVD.cpp GetPS2ElfName,
 // Elfheader.cpp GetCRC): SYSTEM.CNF's BOOT2 names the game's program ("cdrom0:\SLUS_213.86;1"),
 // the serial is that name with "." removed and "_" as "-", the CRC is every 32-bit word of the
-// program XORed together. Plain ISO9660 images only (CHD is compressed: PCSX2's game list then).
+// program XORed together. Any image discImage opens (CHD and CSO since 0.9.17).
 function ps2IsoInfo(file) {
-  let fd; try { fd = fs.openSync(file, 'r'); } catch { return null; }
-  const read = (pos, len) => { const b = Buffer.alloc(len); const n = fs.readSync(fd, b, 0, len, pos); return b.subarray(0, n); };
+  const img = require('./discImage').open(file); if (!img) return null; // CHD and CSO too (0.9.17)
+  const read = img.read;
   try {
     const pvd = read(16 * 2048, 2048);
     if (pvd[0] !== 1 || pvd.toString('latin1', 1, 6) !== 'CD001') return null;
@@ -310,7 +312,7 @@ function ps2IsoInfo(file) {
     const name = parts[parts.length - 1];
     const serial = /^[A-Z]{4}[_-]\d{3}\.\d{2}/i.test(name) ? name.replace(/\./g, '').replace(/_/g, '-').toUpperCase() : '';
     return { serial, crc };
-  } catch { return null; } finally { try { fs.closeSync(fd); } catch {} }
+  } catch { return null; } finally { img.close(); }
 }
 const crcHex = (crc) => (crc >>> 0).toString(16).toUpperCase().padStart(8, '0');
 // patches.zip from the PCSX2 that is installed: AppImage (read from inside it), Flatpak, distro package

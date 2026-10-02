@@ -49,4 +49,29 @@ function iconFor(id, emu, { appImages = [], cacheDir, home = os.homedir(), readA
   return null;
 }
 
-module.exports = { iconFor, themeIcon };
+// When the installed copy has no icon to read (RPCS3's AppImage, Xenia's Windows build...): the icon
+// from the emulator's own repository, fetched once and kept (0.9.17; each URL checked)
+const GH = 'https://raw.githubusercontent.com/';
+const ICON_URLS = {
+  rpcs3: GH + 'RPCS3/rpcs3/master/rpcs3/rpcs3.svg', xenia: GH + 'xenia-canary/xenia-canary/canary_experimental/assets/icon/256.png',
+  shadps4: GH + 'shadps4-emu/shadPS4/main/.github/shadps4.png', cemu: GH + 'cemu-project/Cemu/main/dist/linux/info.cemu.Cemu.png',
+  xemu: GH + 'xemu-project/xemu/master/ui/icons/xemu_256x256.png', azahar: GH + 'azahar-emu/azahar/master/dist/azahar.svg',
+  dolphin: GH + 'dolphin-emu/dolphin/master/Data/dolphin-emu.svg', duckstation: GH + 'stenzek/duckstation/master/data/resources/images/duck.png',
+  pcsx2: GH + 'PCSX2/pcsx2/master/bin/resources/icons/AppIconLarge.png', melonds: GH + 'melonDS-emu/melonDS/master/res/icon/melon_256x256.png',
+  flycast: GH + 'flyinghead/flycast/master/shell/linux/flycast.png', mgba: GH + 'mgba-emu/mgba/master/res/mgba-256.png',
+};
+async function webIcon(id, cacheDir, fetchImpl = require('./webFetch')) {
+  const url = ICON_URLS[id]; if (!url || !cacheDir) return null;
+  const f = path.join(cacheDir, `${id}-repo${path.extname(url)}`);
+  if (exists(f)) return f;
+  try {
+    const r = await fetchImpl(url, { signal: AbortSignal.timeout(15000) });
+    if (!r.ok) return null;
+    const b = Buffer.from(await r.arrayBuffer());
+    if (b.length < 64) return null;
+    fs.mkdirSync(cacheDir, { recursive: true }); fs.writeFileSync(f, b);
+    return f;
+  } catch { return null; }
+}
+
+module.exports = { iconFor, themeIcon, webIcon, ICON_URLS };

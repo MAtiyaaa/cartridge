@@ -1,7 +1,7 @@
 <template>
   <button class="card" :class="{ picked: selected }" data-focus :data-key="'rom-' + rom.id" @click="$emit('open', rom)" @focus="onFocus">
     <div class="art">
-      <img v-if="src && !failed" :src="src" loading="lazy" decoding="async" @error="failed = true" />
+      <img v-if="src && !failed" :ref="seen" :src="src" :class="{ wait: !shown }" loading="lazy" decoding="async" @load="shown = true" @error="failed = true" />
       <div v-else class="ph">{{ rom.name }}<small>{{ rom.platform_display_name }}</small></div>
       <div class="shine" />
       <span v-if="fresh && !installed" class="chip new badge-new">NEW</span>
@@ -28,6 +28,9 @@ import ConsoleMark from './ConsoleMark.vue';
 const props = defineProps({ rom: Object, showPlatform: Boolean, extra: String, device: Boolean, hideTitle: Boolean, selected: { type: Boolean, default: null } });
 const emit = defineEmits(['open', 'focused']);
 const failed = ref(false);
+// covers that arrive late fade in instead of popping; ones already loaded show at once (0.9.17, fluidity)
+const shown = ref(true);
+const seen = (el) => { if (el && !el.complete && el.dataset.w !== el.src) { el.dataset.w = el.src; shown.value = false; } };
 const src = computed(() => cover(props.rom));
 const installed = computed(() => !!store.installed[props.rom.id]);
 const fresh = computed(() => isNew(props.rom));
@@ -37,6 +40,8 @@ const del = computed(() => store.deleting[props.rom.id] ?? null);
 function onFocus() { emit('focused', props.rom); }
 </script>
 <style scoped>
+.art img { transition: opacity var(--d-med) var(--ease); }
+.art img.wait { opacity: 0; }
 /* deleting: the cover dims and a ring fills as the files go (0.9.3) */
 .deleting { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--s-2); background: rgba(6, 7, 11, 0.72); color: #fff; font-size: var(--t-xs); font-weight: 600; animation: fade var(--d-med); }
 </style>
