@@ -6,6 +6,12 @@ The branch for 0.9.3 work is `claude/relaxed-fermat-30pigp`. Pull it before star
 
 ---
 
+## 2 Oct 2026 · 0.9.3 L released, M listed (read this first)
+
+0.9.3 L merged (PR #30) as version 0.9.14. The owner listed 0.9.3 M in `docs/plan-0.9.3.md` ("0.9.3 M") and said **don't start building yet** (out of credits). Start M only when the owner says so. Remind the owner about the v2.3.1 tag in the next update.
+
+---
+
 ## 2 Oct 2026 · 0.9.3 L built (read this first)
 
 Version 0.9.14, versionName "0.9.3 L". Everything in the plan's "0.9.3 L" list except 6 (RetroAchievements sign-in for emulators, owner said yes as a button) and F1 backgrounds: both moved to M. Owner's picks in chat: Trophies All option A (one list); RPCS3 database settings yes.
