@@ -592,7 +592,8 @@ async function more() {
     else if (!installedPath.value) play.push({ label: 'Mark as installed', sub: 'For games you extracted yourself', value: 'mark', icon: 'mdiCheckboxMarkedCircleOutline' });
   }
   if (trophySystem.value) play.push({ label: tro.value ? 'Change linked trophies' : 'Link to trophies', sub: 'Pick which emulator trophy set belongs to this game', value: 'trophies', icon: 'mdiLinkVariant' });
-  const pe = /ps3/i.test(`${base.value?.platform_slug} ${base.value?.platform_fs_slug}`) ? 'RPCS3' : /ps4/i.test(`${base.value?.platform_slug} ${base.value?.platform_fs_slug}`) ? 'shadPS4' : null;
+  const slugs = `${base.value?.platform_slug} ${base.value?.platform_fs_slug}`;
+  const pe = /ps3/i.test(slugs) ? 'RPCS3' : /ps4/i.test(slugs) ? 'shadPS4' : /\bps2\b/i.test(slugs) ? 'PCSX2' : null;
   if (installedPath.value && !marked.value && pe) play.push({ label: 'Patches', sub: `From ${pe}’s patch list, saved in ${pe}`, value: 'patches', icon: 'mdiPuzzleOutline' });
   if (installedPath.value) play.push({ label: 'Show file location', value: 'path', icon: 'mdiFolderOutline' });
   const top = [

@@ -468,6 +468,8 @@ module.exports = function createSteamManager(ctx) {
     const i = toks.findIndex((v) => /^-|\{|%/.test(v));
     return { exe: t.exe, args: i < 0 ? toks : toks.slice(0, i), from: t.from };
   }
+  // every AppImage of an emulator that was found (PCSX2's patches.zip is read from inside it)
+  const appImagesFor = (key, re) => [...new Set([...candidates(key).map((c) => c.t.exe), ...APP_DIRS().flatMap((d) => ls(d).map((n) => path.join(d, n)))].filter((f) => /\.appimage$/i.test(f) && re.test(path.basename(f)) && exists(f)))];
   const rpcs3Command = () => emuCommand('ps3', /rpcs3/i);
   const vita3kCommand = () => emuCommand('psvita', /vita3k/i);
   function serialOf(rom, p) {
@@ -1490,7 +1492,7 @@ module.exports = function createSteamManager(ctx) {
     gameEmu: (romId) => (cfg().gameEmus || {})[romId] || null,
     addedAt: (romId) => Math.min(...Object.values(reg).filter((r) => r.romId === romId && r.at).map((r) => r.at), Infinity),
     // exposed for tests
-    _learnOne: learnOne, _tokenize: tokenize, _buildLaunch: buildLaunch, _learnAll: learnAll, _candidates: candidates, _startOf: startOf, _templateFor: templateFor, _templateForGame: templateForGame,
+    _learnOne: learnOne, _tokenize: tokenize, _buildLaunch: buildLaunch, _learnAll: learnAll, _candidates: candidates, appImagesFor, _startOf: startOf, _templateFor: templateFor, _templateForGame: templateForGame,
   };
   return api;
 };

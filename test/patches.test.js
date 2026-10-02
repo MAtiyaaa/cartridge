@@ -156,3 +156,55 @@ test('shadPS4: only isEnabled changes, and only on the patch picked', () => {
   P.shadSet(dir, [{ ...theirs, on: false }], mine);
   assert.strictEqual(P.shadList(dir, 'CUSA00001', '01.02')[0].on, true);
 });
+
+// ---------------------------------------------------------------- PCSX2 (0.9.3 K)
+function gamelistCache(entries) {
+  const parts = [Buffer.from([0x47, 0x4c, 0x43, 0x45]), Buffer.alloc(4)];
+  parts[1].writeUInt32LE(34);
+  const s = (v) => { const b = Buffer.from(v, 'utf8'); const n = Buffer.alloc(4); n.writeUInt32LE(b.length); return Buffer.concat([n, b]); };
+  for (const e of entries) {
+    const tail = Buffer.alloc(2 + 8 + 8 + 4 + 1); tail.writeUInt32LE(e.crc, 18);
+    parts.push(s(e.path), s(e.serial), s('Title'), s('title'), s('Title'), tail);
+  }
+  return Buffer.concat(parts);
+}
+function pcsx2Setup(name, ini) {
+  const H = path.join(TMP, name), root = path.join(H, '.config/PCSX2');
+  for (const d of ['inis', 'cache', 'patches', 'gamesettings']) fs.mkdirSync(path.join(root, d), { recursive: true });
+  fs.writeFileSync(path.join(root, 'inis/PCSX2.ini'), '[Folders]\nCache = cache\nPatches = patches\n');
+  const rom = path.join(H, 'roms/ps2/Game.chd'); fs.mkdirSync(path.dirname(rom), { recursive: true }); fs.writeFileSync(rom, '');
+  fs.writeFileSync(path.join(root, 'cache/gamelist.cache'), gamelistCache([{ path: path.join(H, 'roms/ps2/Other.iso'), serial: 'SLUS-00001', crc: 0x11111111 }, { path: rom, serial: 'SLUS-21386', crc: 0xABCD1234 }]));
+  fs.writeFileSync(path.join(root, 'patches/SLUS-21386_ABCD1234.pnach'), 'gametitle=Game\n\n[Widescreen 16:9]\nauthor=someone\ndescription=Wider\npatch=1,EE,00100000,word,00000000\n\n[60 FPS]\ncomment=Smoother // note\npatch=1,EE,00200000,word,00000000\n');
+  if (ini != null) fs.writeFileSync(path.join(root, 'gamesettings/SLUS-21386_ABCD1234.ini'), ini);
+  const old = process.env.XDG_CONFIG_HOME; delete process.env.XDG_CONFIG_HOME;
+  try { return { dir: P.pcsx2Dirs(H)[0], rom, ini: path.join(root, 'gamesettings/SLUS-21386_ABCD1234.ini') }; } finally { if (old !== undefined) process.env.XDG_CONFIG_HOME = old; }
+}
+
+test('PCSX2: serial and CRC from its game list, patches from the pnach', async () => {
+  const { dir, rom } = pcsx2Setup('p2-list');
+  const game = P.pcsx2Game(dir, rom);
+  assert.deepStrictEqual(game, { serial: 'SLUS-21386', crc: 0xABCD1234 });
+  const l = await P.pcsx2List(dir, game, null, {});
+  assert.deepStrictEqual(l.map((p) => [p.description, p.notes, p.author, p.on]), [['60 FPS', 'Smoother', '', false], ['Widescreen 16:9', 'Wider', 'someone', false]]);
+});
+
+test('PCSX2: only its own Enable lines are added and removed; the rest of the game ini stays', async () => {
+  const USER = '[EmuCore/GS]\nupscale_multiplier = 3\n\n[Patches]\nEnable = Their Patch\n';
+  const { dir, rom, ini } = pcsx2Setup('p2-set', USER);
+  const game = P.pcsx2Game(dir, rom);
+  const [fps] = await P.pcsx2List(dir, game, null, {});
+  let mine = P.pcsx2Set(dir, game, [{ ...fps, on: true }], {});
+  assert.strictEqual(fs.readFileSync(ini, 'utf8'), '[EmuCore/GS]\nupscale_multiplier = 3\n\n[Patches]\nEnable = Their Patch\nEnable = 60 FPS\n');
+  assert.strictEqual((await P.pcsx2List(dir, game, null, mine)).find((p) => p.name === '60 FPS').by, 'cartridge');
+  mine = P.pcsx2Set(dir, game, [{ ...fps, on: false }], mine);
+  assert.strictEqual(fs.readFileSync(ini, 'utf8'), USER);
+  assert.deepStrictEqual(mine, {});
+});
+
+test('PCSX2: a game without settings gets a new file with just the patch', async () => {
+  const { dir, rom, ini } = pcsx2Setup('p2-new');
+  const game = P.pcsx2Game(dir, rom);
+  const l = await P.pcsx2List(dir, game, null, {});
+  P.pcsx2Set(dir, game, [{ ...l[1], on: true }], {});
+  assert.strictEqual(fs.readFileSync(ini, 'utf8'), '[Patches]\nEnable = Widescreen 16:9\n');
+});
