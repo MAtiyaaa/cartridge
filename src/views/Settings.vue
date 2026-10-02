@@ -168,6 +168,7 @@
             <div class="row"><span class="lbl">Box art size</span><div class="seg"><button v-for="(v, k) in CARD_SIZES" :key="k" data-focus :class="{ on: (ui.gridSize || 'md') === k }" @click="saveConfig({ ui: { gridSize: k } })">{{ v.label }}</button></div></div>
             <Toggle :model-value="ui.cardTitles !== false" label="Game names under box art" desc="Turn off for a clean wall of covers" @update:model-value="(v) => saveConfig({ ui: { cardTitles: v } })" />
             <Toggle :model-value="ui.mediaBar !== false" label="Media bar" desc="Show artwork of the highlighted game at the top of Home" @update:model-value="(v) => saveConfig({ ui: { mediaBar: v } })" />
+            <div v-if="ui.mediaBar !== false" class="row"><span class="lbl">Media bar size</span><div class="seg"><button v-for="m in mediaSizes" :key="m.v" data-focus :class="{ on: (ui.mediaSize || 'large') === m.v }" @click="saveConfig({ ui: { mediaSize: m.v } })">{{ m.l }}</button></div></div>
             <Toggle :model-value="ui.logos !== false" label="Game logos" desc="Show the game's logo instead of its name on Home and game pages" @update:model-value="(v) => saveConfig({ ui: { logos: v } })" />
             <button class="lrow adv-tg" data-focus @click="lookAdv = !lookAdv"><Icon name="mdiTuneVariant" :size="22" /><div class="l-mid"><b>Advanced</b></div><Icon :name="lookAdv ? 'mdiChevronUp' : 'mdiChevronDown'" :size="22" /></button>
             <template v-if="lookAdv">
@@ -536,7 +537,7 @@ function moveTab(n, d) {
   [l[i], l[j]] = [l[j], l[i]];
   saveConfig({ ui: { tabs: l } });
 }
-const LOOK_KEYS = ['theme', 'customColor', 'colors', 'idle', 'surface', 'text', 'font', 'bgStyle', 'wallDim', 'cardShape', 'density', 'gridSize', 'cardTitles', 'mediaBar', 'logos', 'motion', 'effects', 'sounds', 'soundPack', 'volume', 'rumble'];
+const LOOK_KEYS = ['theme', 'customColor', 'colors', 'idle', 'surface', 'text', 'font', 'bgStyle', 'wallDim', 'cardShape', 'density', 'gridSize', 'cardTitles', 'mediaBar', 'mediaSize', 'logos', 'motion', 'effects', 'sounds', 'soundPack', 'volume', 'rumble'];
 const presets = computed(() => store.config.lookPresets || []);
 const presetStyle = (p) => { const g = themeOf(p.ui).grad; return { background: `linear-gradient(135deg, ${g[0]}, ${g[2]} 60%, ${g[4]})` }; };
 function lookNow() { const o = {}; for (const k of LOOK_KEYS) if (ui.value[k] !== undefined) o[k] = JSON.parse(JSON.stringify(ui.value[k])); return o; }
@@ -713,6 +714,7 @@ async function loadAll() {
   const list = await call('platforms:supported');
   supported.value = list.map((p) => ({ ...p, display_name: p.display_name || p.name })).sort((a, b) => a.display_name.localeCompare(b.display_name));
 }
+const mediaSizes = [{ v: 'compact', l: 'Compact' }, { v: 'spacious', l: 'Spacious' }, { v: 'large', l: 'Large' }];
 const LOOK_PAGES = [{ v: 'theme', l: 'Theme' }, { v: 'bg', l: 'Background' }, { v: 'cards', l: 'Text and Cards' }, { v: 'motion', l: 'Motion and Sound' }, { v: 'controls', l: 'Controls' }];
 const lookPage = ref('theme'), lookAdv = ref(false);
 function setLookPage(v) { lookPage.value = v; lookAdv.value = false; }

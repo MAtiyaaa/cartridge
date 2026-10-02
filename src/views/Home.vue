@@ -1,5 +1,5 @@
 <template>
-  <div class="home" ref="el">
+  <div class="home" :style="{ '--hero-h': HERO_H[store.config.ui.mediaSize] || HERO_H.large }" ref="el">
     <div v-if="!store.lib" class="center first-sync">
       <Logo :size="72" />
       <h2>{{ syncing ? 'Syncing your library' : 'No library yet' }}</h2>
@@ -196,6 +196,8 @@ const lastPlay = (r) => Math.max(played.value[r.id] || 0, store.play[r.id]?.last
 call('steam:played').then((m) => { played.value = m || {}; }).catch(() => {});
 loadPlay();
 const minsOf = (r) => store.play[r.id]?.min || 0;
+// media bar size (0.9.15, Look & Feel): Large (the default) is about as tall as a game page's header
+const HERO_H = { compact: '46%', spacious: '54%', large: '62%' };
 const DONE = new Set(['finished', 'completed_100', 'retired', 'never_playing']);
 const shelves = computed(() => {
   const roms = allRoms().filter(visible);
@@ -300,7 +302,7 @@ onMounted(async () => { await nextTick(); ensureFocus(el.value); });
 </script>
 
 <style scoped>
-.home { position: absolute; inset: 0; display: grid; grid-template-rows: minmax(300px, 50%) 1fr; animation: viewIn var(--d-med) var(--ease); }
+.home { position: absolute; inset: 0; display: grid; grid-template-rows: minmax(300px, var(--hero-h, 46%)) 1fr; animation: viewIn var(--d-med) var(--ease); }
 .first-sync { grid-row: 1 / -1; align-content: center; }
 .first-sync h2 { font-size: var(--t-xl); color: var(--text); }
 .hero { position: relative; padding: var(--s-5) var(--s-7) var(--s-4); display: flex; align-items: flex-end; min-height: 0; }
