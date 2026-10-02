@@ -2415,6 +2415,16 @@ const handlers = {
     config.ra = { user: p.User, key: key.trim() }; saveConfig(); raMem.clear();
     return { user: p.User };
   },
+  // Emulator sign-in (F14): list first, then the password goes to RetroAchievements once for a token
+  'ra:emuTargets': () => require('./raLogin').targets(os.homedir(), { steamRoots: steamMgr.steamRoots?.() || [] }).map((t) => ({ id: t.id, name: t.name, user: t.user, flatpak: t.flatpak, files: t.files.map((f) => f.replace(os.homedir(), '~')) })),
+  'ra:emuSignin': async ({ user, password, ids }) => {
+    const ra = require('./raLogin');
+    const auth = await ra.login(String(user || '').trim(), String(password || ''));
+    const list = ra.targets(os.homedir(), { steamRoots: steamMgr.steamRoots?.() || [] }).filter((t) => !ids || ids.includes(t.id));
+    const res = ra.apply(list, auth);
+    log('ra: emulators signed in', res.map((r) => `${r.name}:${r.ok ? 'ok' : r.error}`).join(' '));
+    return res;
+  },
   'ra:signout': () => { config.ra = { user: '', key: '' }; saveConfig(); raMem.clear(); return true; },
   'ra:overview': (o) => raOverview(o),
   'ra:game': (o) => raGame(o),

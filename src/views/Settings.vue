@@ -280,6 +280,8 @@
                 <button class="btn" data-focus @click="tab('achievements')"><Icon name="mdiTrophyOutline" />Open Achievements</button>
                 <button class="btn" data-focus @click="raSignOut"><Icon name="mdiLogout" />Sign out</button>
               </div>
+              <div class="row"><button class="btn" data-focus :disabled="raBusy" @click="raEmus"><Icon name="mdiGamepadVariantOutline" />Sign In to Emulators</button></div>
+              <p class="muted small" style="margin-top: -6px">Signs PCSX2, DuckStation, Dolphin, PPSSPP and RetroArch in with your account. Shows what it changes first. Your password goes to RetroAchievements once and is never saved.</p>
               <Toggle :model-value="ui.raOnGames !== false" label="Achievements on game pages" desc="Show progress and badges on games that have RetroAchievements (PS3, PS4, Switch and other unsupported consoles never show them)" @update:model-value="(v) => saveConfig({ ui: { raOnGames: v } })" />
             </template>
 
@@ -458,6 +460,25 @@ async function raSignIn() {
   raBusy.value = true;
   try { const r = await call('ra:signin', { user: raUser.value, key: raKey.value }); store.config = await call('config:get'); raKey.value = ''; toast(`Signed in as ${r.user}`, 'ok', 2600, 'mdiTrophy'); }
   catch (e) { toast(e.message, 'error', 5000); }
+  raBusy.value = false;
+}
+// Emulator sign-in (F14): list what changes, ask the password once, never keep it
+async function raEmus() {
+  const list = await call('ra:emuTargets').catch(() => []);
+  if (!list.length) return toast('No emulators with RetroAchievements set up yet. Open the emulator once, then try again.', 'info', 4200);
+  const user = store.config.ra.user;
+  const lines = list.map((t) => `${t.name}${t.flatpak ? ' (Flatpak)' : ''}${t.user ? `, now signed in as ${t.user}` : ''}: ${t.files.join(', ')}`).join('\n');
+  const ok = await confirm(`Sign in ${list.length} emulator${list.length === 1 ? '' : 's'} as ${user}`, `Cartridge turns achievements on and writes your login token here:\n${lines}\n\nClose these emulators first. Your password is sent to RetroAchievements once and never saved.`, 'Continue');
+  if (!ok) return;
+  const password = await askText({ title: `RetroAchievements password for ${user}`, password: true });
+  if (!password) return;
+  raBusy.value = true;
+  try {
+    const res = await call('ra:emuSignin', { user, password });
+    const bad = res.filter((r) => !r.ok);
+    if (!bad.length) toast(`Signed in: ${res.map((r) => r.name).join(', ')}`, 'ok', 3600, 'mdiTrophy');
+    else toast(`${bad.map((r) => `${r.name}: ${r.error}`).join(' · ')}`, 'error', 6000);
+  } catch (e) { toast(e.message, 'error', 4200); }
   raBusy.value = false;
 }
 async function raSignOut() { await call('ra:signout'); store.config = await call('config:get'); toast('Signed out of RetroAchievements', 'info', 2200); }
