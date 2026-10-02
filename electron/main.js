@@ -2971,7 +2971,7 @@ const handlers = {
     if (/\.(3ds|cci)$/i.test(file)) ids.titleId = A.n3dsTitleId(file);
     if (/\.cia$/i.test(file)) ids.titleId = A.ciaTitleId(file);
     if (slug === 'psx' && /\.(bin|img|iso|cue|chd|pbp)$/i.test(file)) ids.serial = A.psxSerial(file);
-    if (slug === 'switch') { const id = A.switchTitleId(file); if (id) { ids.switchId = id; ids.switchIdLower = id.toLowerCase(); } }
+    if (slug === 'switch') { const k = require('./bios').status('switch', { roots: emuRootsAll() }); const id = A.switchTitleId(file, k?.ok ? [path.dirname(k.where)] : []); if (id) { ids.switchId = id; ids.switchIdLower = id.toLowerCase(); } }
     return A.forGame(slug, ids, A.emulators());
   },
   // custom textures on in the emulator (0.9.16); off only where Cartridge turned them on
@@ -3361,7 +3361,7 @@ const handlers = {
   'romm:localSetup': async ({ username, password, library, name, keys }) => {
     const rl = require('./rommLocal');
     const dataDir = path.join(os.homedir(), '.local/share/cartridge-romm');
-    const r = await rl.setup({ username, password, library, dataDir, keys, envFile: path.join(USER_DATA, 'romm-local.env'), port: config.rommLocal?.port }, (p) => broadcast('romm-local', p));
+    const r = await rl.setup({ username, password, library, dataDir, keys, name, envFile: path.join(USER_DATA, 'romm-local.env'), port: config.rommLocal?.port }, (p) => broadcast('romm-local', p));
     config.rommLocal = { port: r.port, library, dataDir, name: String(name || '').slice(0, 40), at: Date.now(), boot: r.boot };
     config.server = { ...config.server, localUrl: r.base, remoteUrl: config.server.remoteUrl || '', mode: config.server.remoteUrl ? 'auto' : 'local', auth: 'password', username: r.user, password, token: '' };
     if (!config.romsRoot) config.romsRoot = path.join(library, 'roms');
