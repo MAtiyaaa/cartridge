@@ -1,5 +1,7 @@
-// BIOS, firmware and keys some consoles need, and whether they're where the emulators look. Only
-// ever read: Cartridge never copies, moves or changes these files (they belong to the emulators).
+// BIOS, firmware and keys some consoles need, and whether they're where the emulators look. Since
+// 0.9.17 (owner: set emulators up without leaving Cartridge) place() copies files from the BIOS folder
+// into the folders of the emulators that are set up here. It only adds: a file already there is never
+// replaced, and nothing is moved or deleted.
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
@@ -67,4 +69,32 @@ function status(key, { roots = [], steamRoots = [], extra = [] } = {}) {
   return out;
 }
 
-module.exports = { status, raSystemDirs, KEYS: () => Object.keys(table([], [])) };
+// Copy one console's BIOS files from src into every emulator folder that's there (its parent exists,
+// so the emulator is set up), never over a file. Returns the files written.
+function place(key, src, { roots = [], steamRoots = [] } = {}) {
+  const t = table(roots, steamRoots, [])[key === 'megacd' ? 'segacd' : key];
+  if (!t || t.test || !isDir(src)) return [];
+  const names = new Set([...(t.files || []), ...(key === 'switch' ? ['title.keys'] : []), ...(key === 'nds' ? ['bios9.bin', 'firmware.bin'] : [])].map((f) => f.toLowerCase()));
+  const files = ls(src).filter((n) => names.has(n.toLowerCase()) || (t.any && t.any(path.join(src, n), n)));
+  const out = [];
+  for (const d of [...new Set(t.where)]) {
+    if (path.resolve(d) === path.resolve(src) || !(isDir(d) || isDir(path.dirname(d)))) continue;
+    for (const n of files) {
+      const to = path.join(d, n);
+      if (fs.existsSync(to)) continue;
+      try { fs.mkdirSync(d, { recursive: true }); fs.copyFileSync(path.join(src, n), to, fs.constants.COPYFILE_EXCL); out.push(to); } catch {}
+    }
+  }
+  return out;
+}
+// Switch firmware: the data folders of the yuzu family that are set up here (firmware goes in
+// nand/system/Contents/registered, as their Install Firmware puts it)
+function switchNandDirs() {
+  const out = [];
+  for (const n of ['eden', 'citron', 'yuzu', 'sudachi', 'suyu', 'torzu']) {
+    for (const d of [path.join(process.env.XDG_DATA_HOME || path.join(HOME, '.local/share'), n), var_(`org.${n}_emu.${n}`, 'data', n), var_(`dev.${n}_emu.${n}`, 'data', n)]) if (isDir(d)) out.push(path.join(d, 'nand/system/Contents/registered'));
+  }
+  return [...new Set(out)];
+}
+
+module.exports = { status, place, switchNandDirs, raSystemDirs, KEYS: () => Object.keys(table([], [])) };

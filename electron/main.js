@@ -1552,7 +1552,12 @@ async function downloadBios(platformId, slug) {
   const list = await api('/api/firmware', { query: { platform_id: platformId } });
   const base = await resolveBase();
   let dir = config.biosPath;
-  if (!dir) throw new Error('Set a BIOS folder in Settings first.');
+  // 0.9.17: no BIOS folder yet: EmuDeck's (where its emulators look), else one of Cartridge's own
+  if (!dir) {
+    const emu = readEmuDeckSettings();
+    dir = emu.emulationPath && fs.existsSync(path.join(emu.emulationPath, 'bios')) ? path.join(emu.emulationPath, 'bios') : path.join(USER_DATA, 'bios');
+    config.biosPath = dir; saveConfig();
+  }
   await fsp.mkdir(dir, { recursive: true });
   const done = [];
   for (const f of list) {
@@ -1574,7 +1579,37 @@ async function downloadBios(platformId, slug) {
       log('firmware installed', emu, f.file_name);
     }
   }
-  return { count: list.length, files: done, dir, installed, emu };
+  // 0.9.17: copied into each emulator set up here that reads it from its own folder (never over a file)
+  const key = { dc: 'dreamcast', 'sega-cd': 'segacd', megacd: 'segacd', 'pc-engine-cd': 'pcenginecd', 'turbografx-cd': 'pcenginecd', vita: 'psvita' }[slug] || slug;
+  const placed = require('./bios').place(key, dir, { roots: emuRootsAll(), steamRoots: steamMgr.steamRoots?.() || [] });
+  if (key === 'switch') placed.push(...(await switchFirmware(list.filter((f) => /\.zip$/i.test(f.file_name)).map((f) => path.join(dir, f.file_name)))));
+  if (placed.length) log('bios placed', key, placed.length);
+  return { count: list.length, files: done, dir, installed, emu, placed: placed.length };
+}
+// Switch firmware from RomM (a zip of .nca files) into each yuzu-family emulator that has none yet
+async function switchFirmware(zips) {
+  const out = [];
+  for (const nand of require('./bios').switchNandDirs()) {
+    if (fs.existsSync(nand) && fs.readdirSync(nand).some((n) => /\.nca$/i.test(n))) continue;
+    for (const zf of zips) {
+      const z = await openZip(zf).catch(() => null); if (!z) continue;
+      try {
+        const ncas = (await zipEntries(z)).filter((e) => /\.nca$/i.test(e.fileName) && !/\/$/.test(e.fileName));
+        if (!ncas.length) continue;
+        await fsp.mkdir(nand, { recursive: true });
+        for (const e of ncas) {
+          const to = path.join(nand, path.basename(e.fileName));
+          if (fs.existsSync(to)) continue;
+          const rs = await new Promise((ok, bad) => z.openReadStream(e, (err, st) => (err ? bad(err) : ok(st))));
+          await new Promise((ok, bad) => { const ws = fs.createWriteStream(to, { flags: 'wx' }); rs.on('error', bad); ws.on('error', bad); ws.on('finish', ok); rs.pipe(ws); });
+          out.push(to);
+        }
+        log('switch firmware', nand, ncas.length);
+        break;
+      } finally { z.close(); }
+    }
+  }
+  return out;
 }
 
 // A game deleted file by file, so its card can show real progress (0.9.3). Links are removed, never
@@ -3112,6 +3147,27 @@ const handlers = {
   'dl:clear': () => { for (let i = queue.length - 1; i >= 0; i--) if (!['queued', 'downloading'].includes(queue[i].status)) queue.splice(i, 1); emitQueue(); },
   'bios:download': ({ platformId, slug }) => downloadBios(platformId, slug),
   'bios:list': ({ platformId }) => api('/api/firmware', { query: { platform_id: platformId } }),
+  // 0.9.17: every console's BIOS and firmware from RomM in one go, then into the emulators
+  'bios:all': async () => {
+    const out = [];
+    for (const p of library?.platforms || []) {
+      const list = await api('/api/firmware', { query: { platform_id: p.id } }).catch(() => []);
+      if (!list?.length) continue;
+      try { const r = await downloadBios(p.id, p.slug); out.push({ name: p.display_name || p.name, files: r.count, placed: r.placed, installed: r.installed }); }
+      catch (e) { out.push({ name: p.display_name || p.name, error: e.message }); }
+    }
+    return out;
+  },
+  // 0.9.17: your console folders added to the emulators' game lists (PCSX2, DuckStation, Dolphin)
+  'setup:gameFolders': () => {
+    const folders = {};
+    for (const p of library?.platforms || []) { const t = platformPath(p); if (t?.path && fs.existsSync(t.path)) folders[{ ngc: 'gc', gamecube: 'gc' }[p.slug] || p.slug] = t.path; }
+    const r = require('./emuFolders').addGameDirs(folders, { running: require('./raLogin').running() });
+    const rec = loadJson(path.join(USER_DATA, 'emu-folders.json'), {});
+    for (const t of r) if (t.added?.length) (rec[t.file] ||= []).push(...t.added);
+    saveJson(path.join(USER_DATA, 'emu-folders.json'), rec);
+    return r.map((t) => ({ name: t.name, flatpak: t.flatpak, added: t.added || [], skipped: t.skipped || null }));
+  },
   'fs:detect': () => detectRoots(),
   'fs:list': async (arg) => {
     const o = typeof arg === 'object' && arg ? arg : { dir: arg };

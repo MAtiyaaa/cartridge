@@ -159,3 +159,37 @@ test('RomM on this device: Podman needs the user\'s ID ranges in /etc/subuid and
   fs.writeFileSync(path.join(etc, 'subgid'), `${os.userInfo().uid}:100000:65536\n`);
   assert.strictEqual(RL.hasIds(etc), true);
 });
+
+test('Emulator setup: game folders added to PCSX2, DuckStation and Dolphin as they write them (0.9.17)', () => {
+  const F = require('../electron/emuFolders.js');
+  const h = fs.mkdtempSync(path.join(os.tmpdir(), 'ef-'));
+  const put = (p, t) => { fs.mkdirSync(path.dirname(path.join(h, p)), { recursive: true }); fs.writeFileSync(path.join(h, p), t); };
+  put('.config/PCSX2/inis/PCSX2.ini', '[UI]\nTheme = dark\n\n[GameList]\nRecursivePaths = /old\n\n[Folders]\nBios = bios\n');
+  put('.local/share/duckstation/settings.ini', '[Main]\nX = 1\n');
+  put('.config/dolphin-emu/Dolphin.ini', '[General]\nISOPaths = 1\nISOPath0 = /games/old\n[Core]\nCPUThread = True\n');
+  const roms = path.join(h, 'roms'); for (const d of ['ps2', 'psx', 'gc', 'wii']) fs.mkdirSync(path.join(roms, d), { recursive: true });
+  const folders = { ps2: path.join(roms, 'ps2'), psx: path.join(roms, 'psx'), gc: path.join(roms, 'gc'), wii: path.join(roms, 'wii') };
+  const r = F.addGameDirs(folders, { home: h, env: {} });
+  assert.deepStrictEqual(r.map((x) => [x.id, x.added.length]), [['pcsx2', 1], ['duckstation', 1], ['dolphin', 2]]);
+  assert.match(fs.readFileSync(path.join(h, '.config/PCSX2/inis/PCSX2.ini'), 'utf8'), new RegExp(`\\[GameList\\]\\nRecursivePaths = /old\\nRecursivePaths = ${folders.ps2}\\n\\n\\[Folders\\]`));
+  assert.match(fs.readFileSync(path.join(h, '.local/share/duckstation/settings.ini'), 'utf8'), new RegExp(`\\[GameList\\]\\nRecursivePaths = ${folders.psx}\\n`));
+  const dol = fs.readFileSync(path.join(h, '.config/dolphin-emu/Dolphin.ini'), 'utf8');
+  assert.match(dol, /ISOPaths = 3/); assert.match(dol, new RegExp(`ISOPath1 = ${folders.gc}\\nISOPath2 = ${folders.wii}`)); assert.match(dol, /ISOPath0 = \/games\/old/);
+  assert.deepStrictEqual(F.addGameDirs(folders, { home: h, env: {} }).map((x) => x.added.length), [0, 0, 0]); // already there
+  const busy = F.addGameDirs({ ps2: path.join(h, 'x') }, { home: h, env: {}, running: new Set(['pcsx2']) });
+  assert.deepStrictEqual(busy, []); // folder missing: nothing to add
+});
+
+test('Emulator setup: BIOS copied into emulator folders that are set up, never over a file (0.9.17)', () => {
+  const h = fs.mkdtempSync(path.join(os.tmpdir(), 'bp-'));
+  const code = `
+    const B = require(${JSON.stringify(path.join(__dirname, '../electron/bios.js'))});
+    console.log(JSON.stringify(B.place('psx', ${JSON.stringify(path.join(h, 'bios'))}).map((f) => f.replace(${JSON.stringify(h)}, '~'))));`;
+  fs.mkdirSync(path.join(h, 'bios')); fs.writeFileSync(path.join(h, 'bios/scph5501.bin'), 'bios'); fs.writeFileSync(path.join(h, 'bios/other.bin'), 'x');
+  fs.mkdirSync(path.join(h, '.local/share/duckstation'), { recursive: true }); // DuckStation set up, its bios folder not made yet
+  fs.mkdirSync(path.join(h, '.var/app/org.duckstation.DuckStation/data/duckstation/bios'), { recursive: true });
+  fs.writeFileSync(path.join(h, '.var/app/org.duckstation.DuckStation/data/duckstation/bios/scph5501.bin'), 'mine');
+  const out = JSON.parse(require('child_process').execFileSync(process.execPath, ['-e', code], { env: { ...process.env, HOME: h }, encoding: 'utf8' }).trim());
+  assert.deepStrictEqual(out, ['~/.local/share/duckstation/bios/scph5501.bin']);
+  assert.strictEqual(fs.readFileSync(path.join(h, '.var/app/org.duckstation.DuckStation/data/duckstation/bios/scph5501.bin'), 'utf8'), 'mine');
+});
