@@ -317,7 +317,7 @@ setInterval(async () => {
   broadcast('connection', { base: activeBase, route: want === local ? 'local' : 'remote' });
 }, 30e3).unref?.();
 
-async function api(pathname, { query, method = 'GET', body, retry = true, srv, base } = {}) {
+async function api(pathname, { query, method = 'GET', body, retry = true, srv, base, timeout = 30000 } = {}) {
   const b = base || (await resolveBase());
   if (!b) throw new Error('No server configured');
   const url = new URL(b + pathname);
@@ -330,17 +330,21 @@ async function api(pathname, { query, method = 'GET', body, retry = true, srv, b
   if (body) headers['Content-Type'] = 'application/json';
   let r;
   try {
-    r = await fetch(url, { method, headers, body: body ? JSON.stringify(body) : undefined, signal: AbortSignal.timeout(30000) });
+    r = await fetch(url, { method, headers, body: body ? JSON.stringify(body) : undefined, signal: AbortSignal.timeout(timeout) });
   } catch (e) {
-    if (retry && !base && config.server.mode === 'auto') {
-      await resolveBase(true);
-      return api(pathname, { query, method, body, retry: false, srv });
-    }
-    throw new Error(`Cannot reach server (${e.cause?.code || e.message})`);
+    const slow = e.name === 'TimeoutError' || e.name === 'AbortError';
+    // auto mode: the other address may answer. A slow answer from the same address isn't asked twice.
+    if (retry && !base && config.server.mode === 'auto' && ((await resolveBase(true)) !== b || !slow)) return api(pathname, { query, method, body, retry: false, srv, timeout });
+    const err = new Error(slow ? 'The server took too long to answer' : `Cannot reach server (${e.cause?.code || e.message})`);
+    err.timeout = slow;
+    throw err;
   }
   if (r.status === 401 || r.status === 403) throw new Error('Authentication failed. Check your credentials.');
   if (!r.ok) throw new Error(`Server error ${r.status} on ${pathname}`);
-  return r.json();
+  try { return await r.json(); } catch (e) { // the timeout also covers reading a long answer
+    if (e.name !== 'TimeoutError' && e.name !== 'AbortError') throw e;
+    const err = new Error('The server took too long to answer'); err.timeout = true; throw err;
+  }
 }
 
 // ---------------------------------------------------------------- path detection
@@ -583,18 +587,32 @@ async function syncLibrary() {
       for (const p of withGames) {
         broadcast('sync', { state: 'running', label: p.display_name, done: i, total: withGames.length });
         const list = [];
+        // Pages of 500 games with their file lists. A console of extracted games (PS4, PS3, Switch folders
+        // with thousands of files each) makes a page RomM takes minutes to build: wait longer for those, and
+        // after a timeout ask for smaller pages from the same place instead of failing the whole sync.
+        let limit = 500;
         for (let offset = 0; ; ) {
-          const page = await api('/api/roms', {
-            query: {
-              platform_ids: p.id, platform_id: p.id, limit: 500, offset, order_by: 'name', order_dir: 'asc',
-              with_char_index: false, with_filter_values: false, with_rom_id_index: false, with_files: true,
-            },
-          });
+          let page;
+          try {
+            page = await api('/api/roms', {
+              timeout: Number(process.env.CARTRIDGE_SYNC_TIMEOUT) || 120000, // env: tests
+              query: {
+                platform_ids: p.id, platform_id: p.id, limit, offset, order_by: 'name', order_dir: 'asc',
+                with_char_index: false, with_filter_values: false, with_rom_id_index: false, with_files: true,
+              },
+            });
+          } catch (e) {
+            if (!e.timeout || limit <= 10) throw e;
+            limit = Math.max(10, Math.floor(limit / 5));
+            log('sync: smaller pages for', p.display_name, limit);
+            broadcast('sync', { state: 'running', label: `${p.display_name} (big games, going slower)`, done: i, total: withGames.length });
+            continue;
+          }
           const items = Array.isArray(page) ? page : page.items || [];
           list.push(...items.map(slimRom));
           for (const r of items) if (manifest[r.id] && fuseStatus.keepMeta(bridgeMeta, r)) metaNew = true; // full text for the Fuse bridge
           offset += items.length;
-          if (Array.isArray(page) || items.length < 500 || offset >= (page.total ?? 0)) break;
+          if (Array.isArray(page) || !items.length || items.length < limit || offset >= (page.total ?? 0)) break;
         }
         roms[p.id] = list;
         i++;
