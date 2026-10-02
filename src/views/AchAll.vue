@@ -118,15 +118,17 @@ const groups = computed(() => {
   for (const g of shown.value) { if (!m.has(g.console)) m.set(g.console, { console: g.console, items: [], t: 0 }); const x = m.get(g.console); x.items.push(g); x.t = Math.max(x.t, g.t); }
   return [...m.values()].sort((a, b) => (sort.value === 'name' ? a.console.localeCompare(b.console) : b.t - a.t));
 });
-async function pickShow() {
+// Show and Sort as one sheet with two tabs (0.9.3 K, G4 B)
+async function showSort(tab) {
   const cons = [...new Set(items.value.map((g) => g.console))].sort((a, b) => a.localeCompare(b));
-  const v = await choose({ title: 'Show', options: [{ label: 'All consoles', value: 'all', icon: 'mdiViewGridOutline', selected: show.value === 'all' }, ...cons.map((c) => ({ label: c, value: c, icon: 'mdiGamepadVariantOutline', selected: show.value === c }))] });
-  if (v) show.value = v;
+  const v = await choose({ title: 'Show and sort', tab, tabs: [
+    { label: 'Show', options: [{ label: 'All consoles', value: 'all', icon: 'mdiViewGridOutline', selected: show.value === 'all' }, ...cons.map((c) => ({ label: c, value: c, icon: 'mdiGamepadVariantOutline', selected: show.value === c }))].map((o) => ({ ...o, value: 'f:' + o.value })) },
+    { label: 'Sort by', options: SORTS.map((x) => ({ label: x.l, value: 's:' + x.v, icon: x.icon, selected: sort.value === x.v })) },
+  ] });
+  if (v?.startsWith('f:')) show.value = v.slice(2);
+  else if (v?.startsWith('s:')) sort.value = v.slice(2);
 }
-async function pickSort() {
-  const v = await choose({ title: 'Sort by', options: SORTS.map((x) => ({ label: x.l, value: x.v, icon: x.icon, selected: sort.value === x.v })) });
-  if (v) sort.value = v;
-}
+const pickShow = () => showSort(0), pickSort = () => showSort(1);
 async function load(force = false) {
   await Promise.all([
     raOn.value ? call('ra:overview', { force }).then((d) => (ra.value = d)).catch(() => {}) : (ra.value = null),

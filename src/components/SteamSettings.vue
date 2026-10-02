@@ -73,7 +73,7 @@ import PIcon from './PIcon.vue';
 const ov = ref(null);
 const missingCols = ref([]);
 const sc = computed(() => store.config.steam || {});
-const HOW = { learned: 'From your shortcuts', yours: 'Set by you', emudeck: 'EmuDeck', appimage: 'AppImage', flatpak: 'Flatpak', native: 'Installed program', retrodeck: 'RetroDECK' };
+const HOW = { learned: 'From your shortcuts', yours: 'Set by you', emudeck: 'EmuDeck', appimage: 'AppImage', flatpak: 'Flatpak', native: 'Installed program', retrodeck: 'RetroDECK', shadcore: 'shadPS4 core' };
 const nameOpts = [{ v: 'clash', l: 'Only on clashes' }, { v: 'always', l: 'Always' }];
 const inSteam = computed(() => ov.value?.games.filter((g) => g.inSteam).length || 0);
 const notIn = computed(() => (ov.value?.games.length || 0) - inSteam.value);

@@ -131,15 +131,17 @@ const games = computed(() => {
   return l;
 });
 const recent = computed(() => (data.value?.recent || []).filter((t) => show.value === 'all' || t.src === show.value));
-async function pickShow() {
+// Show and Sort as one sheet with two tabs (0.9.3 K, G4 B)
+async function showSort(tab) {
   const srcs = [...new Set((data.value?.games || []).map((g) => g.src))];
-  const v = await choose({ title: 'Show', options: [{ label: 'All consoles', value: 'all', icon: 'mdiViewGridOutline', selected: show.value === 'all' }, ...srcs.map((s) => ({ label: PLAT[s] || s, value: s, icon: 'mdiGamepadVariantOutline', selected: show.value === s }))] });
-  if (v) show.value = v;
+  const v = await choose({ title: 'Show and sort', tab, tabs: [
+    { label: 'Show', options: [{ label: 'All consoles', value: 'all', icon: 'mdiViewGridOutline', selected: show.value === 'all' }, ...srcs.map((s) => ({ label: PLAT[s] || s, value: s, icon: 'mdiGamepadVariantOutline', selected: show.value === s }))].map((o) => ({ ...o, value: 'f:' + o.value })) },
+    { label: 'Sort by', options: SORTS.map((x) => ({ label: x.l, value: 's:' + x.v, icon: x.icon, selected: sort.value === x.v })) },
+  ] });
+  if (v?.startsWith('f:')) show.value = v.slice(2);
+  else if (v?.startsWith('s:')) sort.value = v.slice(2);
 }
-async function pickSort() {
-  const v = await choose({ title: 'Sort by', options: SORTS.map((x) => ({ label: x.l, value: x.v, icon: x.icon, selected: sort.value === x.v })) });
-  if (v) sort.value = v;
-}
+const pickShow = () => showSort(0), pickSort = () => showSort(1);
 async function load() {
   try { data.value = await call('trophies:overview'); if (data.value.sync) store.trophySync = data.value.sync; } catch (e) { toast(e.message, 'error'); }
 }

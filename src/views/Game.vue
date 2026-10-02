@@ -562,7 +562,7 @@ let steamInfo = null;
 async function more() {
   const has = artFor(props.romId);
   const u = cached.value?.user;
-  // grouped (0.9.3): the everyday things first, the rest in two lists. B in a list goes back here.
+  // grouped (0.9.3): the everyday things first, the rest on their own tabs
   const play = [], details = [
     { label: 'Change cover', sub: 'SteamGridDB', value: 'grid', icon: 'mdiImageEditOutline' },
     { label: 'Change logo', sub: 'SteamGridDB', value: 'logo', icon: 'mdiFormatTitle' },
@@ -598,20 +598,11 @@ async function more() {
     { label: 'Play status', sub: statusText.value || 'None', value: 'status', icon: 'mdiProgressCheck' },
     { label: 'Add to a collection', sub: 'Yours in RomM, or a new one', value: 'col', icon: 'mdiBookmarkPlusOutline' },
     { label: 'Timeline', sub: 'Added, downloaded, played, trophies', value: 'timeline', icon: 'mdiTimelineClockOutline' },
-    ...(play.length ? [{ label: 'Steam and emulator', sub: play.map((o) => o.label).slice(0, 2).join(', ') + (play.length > 2 ? '…' : ''), value: 'g:play', icon: 'mdiGamepadVariantOutline' }] : []),
-    { label: 'Details and artwork', sub: 'Cover, logo, background, name, theme', value: 'g:details', icon: 'mdiImageEditOutline' },
     { label: u?.hidden ? 'Unhide game' : 'Hide game', sub: u?.hidden ? 'Show it in lists again' : 'Keep it out of Home, Library and Search', value: 'hide', icon: u?.hidden ? 'mdiEyeOutline' : 'mdiEyeOffOutline' },
   ];
-  let v, at = null;
-  for (;;) {
-    v = await choose({ title: base.value.name, options: top.map((o) => ({ ...o, selected: o.value === at })) });
-    if (!v) return;
-    if (!v.startsWith('g:')) break;
-    at = v;
-    const list = v === 'g:play' ? play : details;
-    v = await choose({ title: v === 'g:play' ? 'Steam and emulator' : 'Details and artwork', message: base.value.name, options: list });
-    if (v) break; // B: back to the first list
-  }
+  // one sheet, its groups as tabs (0.9.3 K, G4 B): LB/RB move between them
+  const v = await choose({ title: base.value.name, tabs: [{ label: 'Game', options: top }, ...(play.length ? [{ label: 'Steam and Emulator', options: play }] : []), { label: 'Details and Artwork', options: details }] });
+  if (!v) return;
   if (v === 'fav') {
     const on = !fav.value;
     try { await call('fav:set', { romId: Number(props.romId), on }); toast(on ? 'Added to favourites' : 'Removed from favourites', 'ok', 2200, 'mdiHeartOutline'); } catch (e) { toast(e.message, 'error', 6000); }
