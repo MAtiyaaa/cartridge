@@ -131,7 +131,7 @@
           <template v-for="row in related" :key="row.id">
             <div class="shelf-title" style="margin-top: 16px"><Icon :name="row.icon" :size="20" />{{ row.title }}<span class="count">{{ row.items.length }}</span></div>
             <div class="shelf rel" data-hscroll>
-              <GameCard v-for="r in row.items" :key="r.id" :rom="r" :show-platform="true" @open="(r) => go('game', { romId: r.id })" />
+              <GameCard v-for="r in row.items" :key="r.id" :rom="r" :show-platform="true" :extra="row.why?.get(r.id) || ''" @open="(r) => go('game', { romId: r.id })" />
             </div>
           </template>
         </div>
@@ -155,6 +155,7 @@
 </template>
 
 <script setup>
+import { similarTo } from '../recs.js';
 import { addGame, removeGame, applyChanges } from '../steam.js';
 import { computed, onMounted, onBeforeUnmount, ref, nextTick, watch } from 'vue';
 import { store, call, img, go, cover, bytes, year, rating, toast, confirm, download, downloadFor, romById, platformById, isNew, setBg, logoOf, resetLogos, artFor, choose, openModal, allRoms, visible, isFavourite, addToCollection, playOf, playtimeText, ago, loadPlay, askText, saveConfig } from '../store.js';
@@ -529,12 +530,10 @@ const related = computed(() => {
     const l = roms.filter((r) => r.series?.includes(series) && r.name !== me.name).sort((a, b) => (a.year || 9e15) - (b.year || 9e15));
     if (l.length) out.push({ id: 'series', title: 'More in this series', icon: 'mdiBookshelf', items: l.slice(0, 30) });
   }
-  const sim = new Set(me.similar || []);
-  if (sim.size) {
-    const seen = new Set(out[0]?.items.map((r) => r.id));
-    const l = roms.filter((r) => r.igdb_id && sim.has(r.igdb_id) && !seen.has(r.id));
-    if (l.length) out.push({ id: 'similar', title: 'Similar games', icon: 'mdiShapeOutline', items: l.slice(0, 30) });
-  }
+  // similar games: IGDB's list when the server has it, else genres, studio and the rest (recs.js)
+  const seen = new Set(out[0]?.items.map((r) => r.id));
+  const sim = similarTo(me, roms.filter((r) => !seen.has(r.id)), { skipSeries: true });
+  if (sim.length) out.push({ id: 'similar', title: 'Similar games', icon: 'mdiShapeOutline', items: sim.map((x) => x.rom), why: new Map(sim.map((x) => [x.rom.id, x.why])) });
   return out;
 });
 

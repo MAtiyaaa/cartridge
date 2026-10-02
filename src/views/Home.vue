@@ -89,6 +89,7 @@
 </template>
 
 <script setup>
+import { recommend } from '../recs.js';
 import { computed, ref, nextTick, onMounted, onBeforeUnmount, watch } from 'vue';
 import { tab, img, cover, collections, autoLists, seriesLists, genres, visible, store, go, allRoms, visiblePlatforms, romsOf, isNew, setBg, backdropOf, bytes, year, ago, rating, resync, downloadFor, download, romById, toast, logoOf, call, GRADE, loadPlay, playtimeText } from '../store.js';
 import { useView } from '../useView.js';
@@ -218,6 +219,9 @@ const shelves = computed(() => {
     for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [pool[i], pool[j]] = [pool[j], pool[i]]; }
     discoverSeed = { v: store.libVersion, items: pool.slice(0, 24) };
   }
+  // games like the ones you play, each with its reason (recs.js; works without IGDB)
+  const recs = recommend(roms, { minsOf, lastPlay });
+  if (recs.length >= 4) { const why = new Map(recs.map((x) => [x.rom.id, x.why])); out.push({ id: 'recs', title: 'Recommended for you', icon: 'mdiThumbUpOutline', count: '', items: recs.map((x) => x.rom), sub: (r) => why.get(r.id) || '' }); }
   if (discoverSeed.items.length) out.push({ id: 'picks', title: 'Picks for you', icon: 'mdiDiceMultipleOutline', count: '', items: discoverSeed.items });
   // smart shelves, each only when it has enough games to be worth a row
   const short = roms.filter((r) => r.hours > 0 && r.hours <= 5 && !DONE.has(r.user?.status)).sort((a, b) => (b.rating || 0) - (a.rating || 0) || a.hours - b.hours);
