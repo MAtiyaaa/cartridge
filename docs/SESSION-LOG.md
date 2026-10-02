@@ -6,6 +6,20 @@ The branch for 0.9.3 work is `claude/relaxed-fermat-30pigp`. Pull it before star
 
 ---
 
+## 2 Oct 2026 · Owner's picks for 0.9.3 K (decided in chat)
+
+The owner asked for everything not yet built that needs no decision, plus the Discuss items, to ship together as **0.9.3 K** (version 0.9.13). Picks:
+- **E2 Trophies:** A, one trophy home (RetroAchievements and Trophies & Gamerscore in one page, latest unlocks from both, games by console, LB/RB filter by source).
+- **F1 Console backgrounds:** moved to **0.9.3 L**, not in K.
+- **F6 Connection pill:** A, quiet icon next to the clock (house LAN, globe Tunnel, white), colour only when offline.
+- **G4 Clutter:** C, both: Look & Feel split into short pages with an Advanced group and no empty rows, and one shared bottom sheet for secondary menus.
+- **H1 Recommendations:** IGDB's similar games when the server has them, but it must work without IGDB: genres, series, developer from whatever metadata RomM has, weighted by play history, with a short reason on each card.
+- **I1 Syncthing:** moved to 1.0, not built.
+- **shadPS4 A10:** add a way to launch the shadPS4 core directly (not the Qt launcher); the owner tests it from K and sends `shad_log.txt`.
+- **v2.3.1 tag:** remind the owner again in the next update.
+
+---
+
 ## 2 Oct 2026 · Morning summary of the night run (read this first)
 
 **Released overnight**, each after npm test, vite build, screenshots and a green branch test build (PRs #22 to #28):

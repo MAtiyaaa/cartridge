@@ -1,5 +1,7 @@
 # 0.9.3 · Options for the Discuss items
 
+**Owner's picks (2 Oct):** E2 A, F1 moved to 0.9.3 L, F6 A, G4 C, H1 C with IGDB optional (works from any metadata), I1 moved to 1.0.
+
 Written during the night run of 2 Oct 2026 so the owner can pick in the morning. Nothing here is built. Each item has two or three options and a recommendation; say a letter (for example "F1: B") or mix them.
 
 ## E2 · Trophies overhaul

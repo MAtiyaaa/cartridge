@@ -85,7 +85,7 @@ Only for games that need installing. ISOs and folders stay as they are.
 7. **When the shadPS4 trophy key isn't set:** an info icon on the PS4 trophies with a short guide: shadPS4 needs your trophy key to read trophies; add it in shadPS4's settings (`keys.json`), then come back. Cartridge never ships or downloads the key. If a game's trophy file can't be read (for example the game is only on another device), the guide also says to open that game once in shadPS4.
 
 ## F. Look
-1. **Console backgrounds** rebuilt from scratch, except Ribbons and XMB. The owner finds the current ones very poor and cheap looking; the new ones must look premium, not a patch on the old ones (**Discuss**: show options first).
+1. **Console backgrounds** (moved to 0.9.3 L, owner 2 Oct) rebuilt from scratch, except Ribbons and XMB. The owner finds the current ones very poor and cheap looking; the new ones must look premium, not a patch on the old ones (**Discuss**: show options first).
 2. **Headers on Home (media bar) and the game page:** bigger than now, and they must blend into the background with no visible edge. Sharp, highest resolution art only, never blurry.
 3. **SteamGridDB images:** always the highest resolution, then the next one down. Add to Steam, Home header and the idle screen.
 4. **Idle screen:** game logo and console logo instead of text; 4K art or the next best.
@@ -110,7 +110,7 @@ Only for games that need installing. ISOs and folders stay as they are.
 2. **RomM updates:** check RomM's version at start, never break on missing or new fields, turn features off cleanly instead of failing. A contract test against RomM's API in `test/`.
 
 ## I. Discuss only
-1. **Syncthing saves, view only:** read Syncthing's local status (last sync, conflicts, devices). Never touch saves.
+1. **Syncthing saves, view only:** moved to 1.0 (owner, 2 Oct). Not built in 0.9.3.
 
 ## J. Carried over
 6. Measure Home's full-width art without the GPU; a cheaper version under reduced effects if it costs too much.
