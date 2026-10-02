@@ -158,7 +158,7 @@
 import { similarTo } from '../recs.js';
 import { addGame, removeGame, applyChanges } from '../steam.js';
 import { computed, onMounted, onBeforeUnmount, ref, nextTick, watch } from 'vue';
-import { store, call, img, go, cover, bytes, year, rating, toast, confirm, download, downloadFor, romById, platformById, isNew, setBg, logoOf, resetLogos, artFor, choose, openModal, allRoms, visible, isFavourite, addToCollection, playOf, playtimeText, ago, loadPlay, askText, saveConfig } from '../store.js';
+import { store, call, img, go, cover, bytes, year, rating, toast, confirm, download, downloadFor, romById, platformById, isNew, setBg, logoOf, resetLogos, artFor, choose, openModal, allRoms, visible, isFavourite, addToCollection, playOf, playtimeText, ago, loadPlay, askText, saveConfig, backdropOf, wantSharp } from '../store.js';
 import { useView } from '../useView.js';
 import { ensureFocus, focusFirst } from '../nav.js';
 import Icon from '../components/Icon.vue';
@@ -373,12 +373,14 @@ async function linkTrophies() {
   await loadTrophies();
   toast(v === '__none' ? 'Trophies unlinked' : 'Trophies linked', 'ok', 2200, 'mdiLink');
 }
-// Header banner: your chosen background, else the first screenshot, else the cover (blurred)
+// Header banner: your chosen background, else SteamGridDB's sharpest (0.9.3 K), else the first
+// screenshot, else the cover (blurred)
 const bannerFail = ref(false);
 const banner = computed(() => {
   if (!base.value) return {};
   const h = artFor(props.romId).hero;
   if (h) return { src: img(h) };
+  if (store.sharp[base.value.id]) return { src: store.sharp[base.value.id] };
   const shot = !bannerFail.value && (detail.value?.merged_screenshots?.[0] || cached.value?.shot);
   if (shot) return { src: img(shot) };
   return { src: cover(base.value, true), blur: true };
@@ -644,12 +646,13 @@ watch([installedPath, () => dl.value?.status], async () => { await nextTick(); e
 onMounted(async () => {
   const hero = artFor(props.romId).hero;
   if (hero) setBg({ src: img(hero) });
-  else if (cached.value) setBg(cached.value.shot ? { src: img(cached.value.shot) } : { src: cover(cached.value, true), blur: true });
+  else if (cached.value) setBg(backdropOf(cached.value));
+  if (!hero && cached.value) wantSharp(cached.value);
   await nextTick();
   focusFirst(el.value);
   try {
     detail.value = await call('api:get', { path: `/api/roms/${props.romId}` });
-    if (!hero && detail.value.merged_screenshots?.[0]) setBg({ src: img(detail.value.merged_screenshots[0]) });
+    if (!hero && !store.sharp[props.romId] && detail.value.merged_screenshots?.[0]) setBg({ src: img(detail.value.merged_screenshots[0]) });
   } catch (e) { if (!cached.value) toast(e.message, 'error'); }
   loadRa();
   loadPkg();
@@ -664,10 +667,10 @@ onMounted(async () => {
 
 <style scoped>
 .game { padding: 0 0 50px; }
-.g-banner { position: relative; margin: 0; height: clamp(240px, 46vh, 560px); overflow: hidden; background: var(--s1); } /* full width: the art leads (0.9) */
+.g-banner { position: relative; margin: 0; height: clamp(260px, 52vh, 680px); overflow: hidden; background: var(--s0); } /* full width: the art leads (0.9) */
 .g-banner-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .g-banner-img.blur { filter: blur(24px) saturate(1.3) brightness(0.8); transform: scale(1.15); }
-.g-banner-shade { position: absolute; inset: 0; background: linear-gradient(90deg, color-mix(in srgb, var(--s0) 80%, transparent) 0%, color-mix(in srgb, var(--s0) 30%, transparent) 45%, transparent 75%), linear-gradient(0deg, var(--s0) 0%, color-mix(in srgb, var(--s0) 45%, transparent) 35%, transparent 65%); }
+.g-banner-shade { position: absolute; inset: 0; background: linear-gradient(180deg, var(--s0) 0%, transparent 12%), linear-gradient(90deg, color-mix(in srgb, var(--s0) 80%, transparent) 0%, color-mix(in srgb, var(--s0) 30%, transparent) 45%, transparent 75%), linear-gradient(0deg, var(--s0) 0%, color-mix(in srgb, var(--s0) 45%, transparent) 35%, transparent 65%); }
 .g-banner-logo { position: absolute; left: var(--s-7); bottom: var(--s-5); right: 360px; display: flex; align-items: flex-end; }
 .g-hero { position: relative; display: flex; align-items: flex-start; justify-content: space-between; gap: 40px; padding: var(--s-4) var(--s-7) var(--s-5); }
 .g-info { display: flex; flex-direction: column; gap: var(--s-4); max-width: 860px; min-width: 0; }

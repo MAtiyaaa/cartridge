@@ -670,6 +670,10 @@ async function handleImage(request) {
     const p = trophySvc.iconPath(tr);
     try { return new Response(await fsp.readFile(p), { headers: { 'Content-Type': 'image/png', 'Cache-Control': 'max-age=86400' } }); } catch { return new Response('nf', { status: 404 }); }
   }
+  const hz = u.searchParams.get('hz');
+  if (hz) {
+    try { return new Response(await fsp.readFile(path.join(HERO_DIR, path.basename(hz))), { headers: { 'Content-Type': 'image/png', 'Cache-Control': 'max-age=31536000' } }); } catch { return new Response('nf', { status: 404 }); }
+  }
   const lf = u.searchParams.get('f');
   if (lf) {
     try { return new Response(await fsp.readFile(path.join(LOGO_DIR, path.basename(lf))), { headers: { 'Content-Type': 'image/png' } }); } catch { return new Response('nf', { status: 404 }); }
@@ -1069,6 +1073,32 @@ async function gameIcon({ key, name, year }) {
   })();
   iconInflight.set(k, job);
   try { return await job; } finally { iconInflight.delete(k); }
+}
+// The sharpest background for headers and the idle screen (0.9.3 K, F2/F3): SteamGridDB's hero at
+// 3840 wide, else 1920 (sgdbImage), saved once per game. RomM's screenshot stays the fallback. A game
+// without one is asked again after a week.
+const HERO_DIR = path.join(USER_DATA, 'heroes');
+const HERO_FILE = path.join(USER_DATA, 'heroes.json');
+let heroCache = {};
+try { heroCache = JSON.parse(fs.readFileSync(HERO_FILE, 'utf8')); } catch {}
+const heroInflight = new Map();
+async function sharpHero({ id, name }) {
+  if (!id || !name) return null;
+  const c = heroCache[id];
+  if (c?.file && fs.existsSync(path.join(HERO_DIR, c.file))) return 'romimg://img/?hz=' + encodeURIComponent(c.file);
+  if (!config.sgdbKey || (c && !c.file && Date.now() - c.t < 7 * 864e5)) return null;
+  if (heroInflight.has(id)) return heroInflight.get(id);
+  const job = (async () => {
+    let png = null;
+    try { png = await sgdbImage(String(name).replace(/[™®©]/g, ''), 'hero'); } catch { return null; } // offline: try again later
+    const file = png ? `${String(id).replace(/[^\w-]/g, '')}.png` : null;
+    if (png) { await fsp.mkdir(HERO_DIR, { recursive: true }); await fsp.writeFile(path.join(HERO_DIR, file), png); }
+    heroCache[id] = { file, t: Date.now() };
+    fsp.writeFile(HERO_FILE, JSON.stringify(heroCache)).catch(() => {});
+    return file ? 'romimg://img/?hz=' + encodeURIComponent(file) : null;
+  })();
+  heroInflight.set(id, job);
+  try { return await job; } finally { heroInflight.delete(id); }
 }
 async function sgdbArt({ name, kind, gameId }) {
   if (!config.sgdbKey) throw new Error('Add a SteamGridDB API key in Settings → Look & feel first.');
@@ -2276,6 +2306,7 @@ const handlers = {
   'logo:fetchAll': () => fetchAllLogos(),
   'logo:stopAll': () => { if (fetchAll) fetchAll.stop = true; return true; },
   'art:all': () => artOverrides,
+  'art:sharpHero': (a) => sharpHero(a || {}),
   'art:search': (q) => sgdbArt(q),
   'art:set': (q) => setArt(q),
   'art:reset': ({ id }) => { delete artOverrides[id]; delete logoCache[id]; saveArt(); saveLogoCache(); return {}; },
@@ -2619,7 +2650,7 @@ const handlers = {
   'app:relaunch': () => relaunch(),
   'app:graphics': () => ({ mode: useGpu ? 'hardware' : 'software', setting: config.graphics, status: app.getGPUFeatureStatus?.() }),
   'app:fullscreen': () => win.setFullScreen(!win.isFullScreen()),
-  'app:clearCache': async () => { await fsp.rm(IMG_CACHE, { recursive: true, force: true }); return true; },
+  'app:clearCache': async () => { await fsp.rm(IMG_CACHE, { recursive: true, force: true }); await fsp.rm(HERO_DIR, { recursive: true, force: true }); heroCache = {}; await fsp.rm(HERO_FILE, { force: true }); return true; },
 };
 
 for (const [ch, fn] of Object.entries(handlers)) {
