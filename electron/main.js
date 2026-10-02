@@ -1695,7 +1695,13 @@ function ps3Serial(romId, where) {
   for (const f of [path.join(where || '', 'PS3_GAME', 'PARAM.SFO'), path.join(where || '', 'PARAM.SFO')]) { const s = patchesMod.sfoAt(f).TITLE_ID; if (s) return s; }
   const r = romIndexMain().get(Number(romId));
   // disc games too (0.9.3 L): a folder with the game folder inside, an ISO (PS3_DISC.SFB), "BLUS-30443" names
-  try { return steamMgr.serialOf(r || {}, where || '') || null; } catch { return null; }
+  try { const s = steamMgr.serialOf(r || {}, where || ''); if (s) return s; } catch {}
+  // 0.9.15: an ISO read properly (PS3_GAME/PARAM.SFO anywhere in the image, any serial prefix),
+  // and a downloaded .pkg not installed yet (its content ID)
+  const files = (() => { try { return fs.statSync(where).isDirectory() ? fs.readdirSync(where).map((n) => path.join(where, n)) : [where]; } catch { return []; } })();
+  for (const f of files.filter((x) => /\.iso$/i.test(x))) { const b = patchesMod.isoFile(f, ['PS3_GAME', 'PARAM.SFO']); const id = b && patchesMod.parseSfo(b).TITLE_ID; if (id) return id; }
+  for (const f of files.filter((x) => /\.pkg$/i.test(x))) { const i = pkgInst.pkgInfo(f); if (i?.titleId && /^[A-Z]{4}\d{5}$/.test(i.titleId)) return i.titleId; }
+  return null;
 }
 function patchState(romId) {
   const r = romIndexMain().get(Number(romId));

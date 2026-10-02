@@ -66,7 +66,6 @@
             <template v-else>
               <button class="btn primary xl" data-focus data-autofocus @click="dlNow"><Icon name="mdiDownload" :size="22" />{{ dl?.status === 'cancelled' ? 'Resume' : 'Download' }} · {{ bytes(base.fs_size_bytes) }}</button>
             </template>
-            <button v-if="detail?.path_manual" class="btn icon-btn" data-focus title="Manual" @click="openModal('manual', { romId: Number(props.romId), name: base.name })"><Icon name="mdiBookOpenPageVariantOutline" :size="22" /><span>Manual</span></button>
             <button class="btn icon-btn" data-focus title="More options" @click="more"><Icon name="mdiDotsHorizontal" :size="22" /><span>More</span></button>
           </div>
           <div v-if="dl && dl.status === 'error'" class="chip red" style="align-self: flex-start">Last attempt failed: {{ dl.error }}</div>

@@ -512,7 +512,7 @@ module.exports = function createSteamManager(ctx) {
     try {
       const fd = fs.openSync(p, 'r'); const b = Buffer.alloc(1024 * 1024);
       fs.readSync(fd, b, 0, b.length, 0); fs.closeSync(fd);
-      const s = b.toString('latin1').match(/(BL|BC|NP)(US|ES|JS|AS|KS|UB|EB|JM|JB|HB)\d{5}/);
+      const s = b.toString('latin1').match(/(BL|BC|NP)(US|ES|JS|AS|KS|UB|EB|JM|JB|HB|UA|EA|JA|HA|KA|UJ|UZ)\d{5}/); // NPUA, NPEB and the rest too (0.9.15)
       if (s) return s[0];
     } catch {}
     return null;

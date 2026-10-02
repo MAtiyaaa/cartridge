@@ -233,6 +233,24 @@ function pcsx2Game(dir, file) {
   const hit = list.find((g) => real(g.path) === want) || list.find((g) => path.basename(g.path) === path.basename(file));
   return hit && hit.crc ? { serial: hit.serial, crc: hit.crc } : null;
 }
+// One file from a plain ISO9660 image (a PS3 disc's PS3_GAME/PARAM.SFO), or null
+function isoFile(file, parts, max = 1 << 20) {
+  let fd; try { fd = fs.openSync(file, 'r'); } catch { return null; }
+  const read = (pos, len) => { const b = Buffer.alloc(len); const n = fs.readSync(fd, b, 0, len, pos); return b.subarray(0, n); };
+  try {
+    const pvd = read(16 * 2048, 2048);
+    if (pvd[0] !== 1 || pvd.toString('latin1', 1, 6) !== 'CD001') return null;
+    const rec = (b, o) => ({ lba: b.readUInt32LE(o + 2), size: b.readUInt32LE(o + 10), dir: !!(b[o + 25] & 2), name: b.toString('latin1', o + 33, o + 33 + b[o + 32]) });
+    let d = rec(pvd, 156);
+    for (const [i, p] of parts.entries()) {
+      const b = read(d.lba * 2048, Math.min(d.size, 1 << 20)); let hit = null;
+      for (let o = 0; o < b.length && !hit;) { const len = b[o]; if (!len) { o = (Math.floor(o / 2048) + 1) * 2048; continue; } const e = rec(b, o); if (e.name.replace(/;\d+$/, '').toUpperCase() === p.toUpperCase()) hit = e; o += len; }
+      if (!hit || (i < parts.length - 1 && !hit.dir)) return null;
+      d = hit;
+    }
+    return d.size <= max ? read(d.lba * 2048, d.size) : null;
+  } catch { return null; } finally { try { fs.closeSync(fd); } catch {} }
+}
 // A PS2 ISO's serial and CRC the way PCSX2 works them out itself (0.9.3 L; CDVD.cpp GetPS2ElfName,
 // Elfheader.cpp GetCRC): SYSTEM.CNF's BOOT2 names the game's program ("cdrom0:\SLUS_213.86;1"),
 // the serial is that name with "." removed and "_" as "-", the CRC is every 32-bit word of the
@@ -386,4 +404,4 @@ function rpcs3ApplyDb(dir, serial, dbText, mine = {}) {
   return { result: 'written', mine: { ...mine, [serial]: { at: Date.now(), file: f } } };
 }
 
-module.exports = { rpcs3DbFromText, rpcs3CustomPath, rpcs3DbCached, rpcs3ApplyDb, parseSfo, sfoAt, rpcs3Dirs, ps3Version, rpcs3List, rpcs3Set, shadDirs, ps4Version, shadList, shadSet, load, dump, pcsx2Dirs, pcsx2GameList, pcsx2Game, ps2IsoInfo, pcsx2ZipSources, pcsx2ZipBuffer, pnachList, pcsx2List, pcsx2Set, crcHex };
+module.exports = { isoFile, rpcs3DbFromText, rpcs3CustomPath, rpcs3DbCached, rpcs3ApplyDb, parseSfo, sfoAt, rpcs3Dirs, ps3Version, rpcs3List, rpcs3Set, shadDirs, ps4Version, shadList, shadSet, load, dump, pcsx2Dirs, pcsx2GameList, pcsx2Game, ps2IsoInfo, pcsx2ZipSources, pcsx2ZipBuffer, pnachList, pcsx2List, pcsx2Set, crcHex };
