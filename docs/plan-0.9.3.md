@@ -133,3 +133,20 @@ Controller feel, Cartridge fully closed and no lag on the ROG Ally, and LT/RT at
 
 ## Reminders for the owner
 - A stray `v2.3.1` tag is in the repo (not a release; it deletes most of the code compared with 0.9.2). The owner said not to delete it yet: ask again when 0.9.3 is being built.
+
+## 0.9.3 L (owner, 2 Oct 2026)
+Carried from K: F1 console backgrounds (rebuilt, except Ribbons and XMB; mockups first).
+1. **Console names in trophies' Latest unlocks** use old names. A console renamed in RomM must show its current name everywhere (take it from the library's platforms, not the trophy source).
+2. **Background picker** in Look & Feel shows a picture of each background in the menu.
+3. **Manual** in the game page's More.
+4. **Continue playing and Recently played** become one row on Home.
+5. **Developer names** on game pages are often wrong: check which RomM field is read (developer vs publisher vs companies) and fix.
+6. **RetroAchievements sign-in for the emulators** (Discuss: see the answer in chat, needs the owner's call).
+7. **Timeline and Search:** the selected box clips. Use the standard focus (full white box, or the Highlights colour, with contrasting text).
+8. **Settings → Emulators → Issues, "N games are missing from Steam":** open a list of the missing games (like Emulator setup and Shortcut health, with an arrow) instead of only "Put them back".
+9. **Back from a sub-screen in Settings** (Emulator setup, Shortcut health...) returns focus to the row you opened it from, not the Emulators entry in the left list.
+10. **Add Cartridge to Steam** (Settings → Steam): at the top until it's added; once added it moves to the bottom and shows "Added to Steam" with a check mark.
+11. **RetroAchievements profile picture** doesn't update after it's changed on RetroAchievements (cache).
+12. **PS3 settings per game from a database** when the download finishes (Discuss: see the answer in chat).
+13. **Title case everywhere it applies,** including the items inside the game page's More sheet.
+14. **RPCS3 patches for disc games:** "Cartridge couldn't read this game's serial" on a PS3 game. Read the serial from a disc folder (PS3_GAME/PARAM.SFO) and from ISO names, so disc games get Patches too.

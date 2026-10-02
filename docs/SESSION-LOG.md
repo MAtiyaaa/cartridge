@@ -6,6 +6,14 @@ The branch for 0.9.3 work is `claude/relaxed-fermat-30pigp`. Pull it before star
 
 ---
 
+## 2 Oct 2026 · Owner's list for 0.9.3 L
+
+The owner added 14 fixes for 0.9.3 L (listed in `docs/plan-0.9.3.md`, section "0.9.3 L"), plus F1 backgrounds carried from K. Two of them were questions, answered in chat:
+- **Sign in to RetroAchievements in every emulator:** technically possible for RetroArch, PCSX2, DuckStation, PPSSPP and Dolphin (each keeps an RA user and login token in its own settings), but Cartridge only has the Web API key, which can't log an emulator in: it would need the user's RA password once, and it means writing emulator settings (a third exception to "never modifies emulator files"). Owner to decide.
+- **PS3 settings from a database at download:** RPCS3 reads per-game settings from `config/custom_configs/config_<SERIAL>.yml`, so writing one is possible. But there is no machine-readable database of recommended settings (the RPCS3 wiki has them as prose per game), and it is again writing emulator files. Owner to decide.
+
+---
+
 ## 2 Oct 2026 · 0.9.3 K built (read this first)
 
 Everything that needed no decision, plus the owner's picks (entry below), in one update: version 0.9.13, `versionName` "0.9.3 K". Details per feature are in `CLAUDE.md` (0.9.3 K section) and `RELEASE_NOTES.md`.
