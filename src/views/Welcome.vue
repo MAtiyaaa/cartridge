@@ -1,5 +1,11 @@
 <template>
-  <div class="welcome" :class="{ 'w-out': leaving }" ref="el">
+  <div class="welcome" :class="{ 'w-out': leaving, 'w-intro-on': intro }" ref="el">
+    <!-- 0.9.17: the opening, once, before the first card (any press skips it) -->
+    <div v-if="intro" class="w-intro" @pointerdown="intro = false">
+      <div class="wi-ring" /><div class="wi-ring r2" />
+      <div class="wi-mark"><Logo :size="132" /><i class="wi-glint" /></div>
+      <div class="wi-name"><span v-for="(c, i) in 'Cartridge'" :key="i" :style="{ animationDelay: 0.75 + i * 0.045 + 's' }">{{ c }}</span></div>
+    </div>
     <div class="w-top">
       <!-- 0.9.17: going back is always visible: an arrow to tap, and B on a controller (hint below) -->
       <button v-if="at > 0 && !only" class="w-back" data-focus aria-label="Back" @click="handlers.back()"><Icon name="mdiArrowLeft" :size="22" /></button>
@@ -45,14 +51,22 @@
 
         <!-- 4 -->
         <template v-else-if="step === 'pad'">
-          <h1>Controller check</h1>
-          <p class="w-lead">Press <Btn b="A" /> on your controller.</p>
-          <div class="w-pad" :class="{ ok: padOk }"><Icon :name="padOk ? 'mdiCheckCircle' : 'mdiGamepadVariantOutline'" :size="72" /><b>{{ padOk ? 'Your controller works' : 'Waiting for A…' }}</b></div>
+          <!-- 0.9.17: what's actually in use (the controller Linux sees, or keyboard, touch, mouse), and its button labels -->
+          <h1>Your controls</h1>
+          <div class="w-pad" :class="{ ok: padOk }">
+            <Icon :name="padOk ? 'mdiCheckCircle' : using === 'pad' ? USING_ICON[padKind] || USING_ICON.pad : USING_ICON[using]" :size="72" />
+            <b>{{ padOk ? 'Your controller works' : usingText }}</b>
+            <span v-if="using === 'pad' && !padOk" class="muted small">Press <Btn b="A" /> to check it.</span>
+            <span v-else-if="!padOk" class="muted small">Everything works with {{ using === 'touch' ? 'touch' : using === 'keys' ? 'a keyboard' : 'a mouse' }} too. A controller is picked up as soon as you use one.</span>
+          </div>
+          <div class="w-box stack" style="align-items: center">
+            <span class="muted small">Button labels</span>
+            <div class="seg"><button v-for="o in LABELS" :key="o.v" data-focus :class="{ on: (store.config.ui.buttons || 'auto') === o.v }" @click="saveConfig({ ui: { buttons: o.v } })">{{ o.l }}</button></div>
+          </div>
           <div class="w-act">
             <button class="btn" data-focus @click="prev"><Icon name="mdiArrowLeft" />Back</button>
-            <button class="btn primary" data-focus @click="padPress">{{ padOk ? 'Continue' : 'Press A' }}<Icon name="mdiArrowRight" /></button>
+            <button class="btn primary" data-focus @click="padPress">{{ padOk || using !== 'pad' ? 'Continue' : 'Press A' }}<Icon name="mdiArrowRight" /></button>
           </div>
-          <p class="muted small">Using touch, a mouse or a keyboard? Tap Press A to go on. Everything works with all of them.</p>
         </template>
 
         <!-- 5 -->
@@ -279,7 +293,7 @@
       </section>
     </Transition>
     </div>
-    <div v-if="input.mode === 'pad'" class="w-hints"><span><Btn b="A" />Select</span><span v-if="at > 0 && !only"><Btn b="B" />Back</span></div>
+    <div v-if="input.mode === 'pad' && !intro" class="w-hints"><span><Btn b="A" />Select</span><span v-if="at > 0 && !only"><Btn b="B" />Back</span></div>
   </div>
 </template>
 
@@ -299,6 +313,7 @@ import Setup from './Setup.vue';
 import EmuSetup from './EmuSetup.vue';
 import EmuGet from '../components/EmuGet.vue';
 import RommLocal from '../components/RommLocal.vue';
+import { padInfo, detectPad, padKind } from '../pad.js';
 
 const STEPS = ['hello', 'name', 'lang', 'pad', 'steam', 'emus', 'romm', 'scan', 'extras', 'self', 'done'];
 const ROMM_GUIDE = 'https://docs.romm.app/latest/getting-started/quick-start/'; // RomM's setup guide (owner: not the docs home)
@@ -332,6 +347,21 @@ async function saveName() {
   await saveConfig(patch);
   next();
 }
+// what's in use right now: the controller Linux reports (pad.js reads /proc/bus/input/devices), or
+// the keyboard, touch or mouse, from the last thing pressed (0.9.17)
+const using = ref(input.mode === 'pad' ? 'pad' : 'mouse');
+const USING_ICON = { pad: 'mdiController', xbox: 'mdiMicrosoftXboxController', playstation: 'mdiSonyPlaystation', nintendo: 'mdiNintendoSwitch', steam: 'mdiSteam', keys: 'mdiKeyboardOutline', touch: 'mdiGestureTap', mouse: 'mdiMouse' };
+const LABELS = [{ v: 'auto', l: 'Auto' }, { v: 'xbox', l: 'Xbox' }, { v: 'playstation', l: 'PlayStation' }, { v: 'nintendo', l: 'Nintendo' }, { v: 'steam', l: 'Steam' }];
+const usingText = computed(() => {
+  if (using.value === 'keys') return 'Using a keyboard';
+  if (using.value === 'touch') return 'Using touch';
+  if (using.value === 'mouse') return 'Using a mouse';
+  const n = padInfo.value?.name;
+  return n ? `${n} found` : input.padName ? 'Controller found' : 'Waiting for a controller…';
+});
+watch(() => input.mode, (m) => { if (m === 'pad') using.value = 'pad'; });
+const onKeyUse = (e) => { if (e.isTrusted && !/^(Gamepad|Unidentified)/.test(e.key)) using.value = 'keys'; };
+const onPointerUse = (e) => { using.value = e.pointerType === 'touch' ? 'touch' : 'mouse'; };
 // A from a controller counts; touch, mouse and keyboard just go on
 let padT = null;
 function padPress() {
@@ -357,6 +387,7 @@ async function getRetroDeck() {
   getting.value = '';
 }
 const picking = ref(false);
+const intro = ref(false);
 async function recheck() { await load(); opened.value = ''; picking.value = false; next(); }
 async function saveExtras() {
   busy.value = true;
@@ -458,11 +489,19 @@ onMounted(async () => {
   // picks up where it was left (closed halfway, or off to Desktop Mode for EmuDeck), 0.9.16
   else if (!replay && STEPS.includes(store.config.ui.welcomeStep)) at.value = STEPS.indexOf(store.config.ui.welcomeStep);
   store.welcoming ||= true;
+  if (step.value === 'hello' && !only && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    intro.value = true;
+    const skip = () => { intro.value = false; };
+    setTimeout(skip, 2600);
+    window.addEventListener('keydown', skip, { once: true, capture: true });
+  }
   off = window.cart.on('welcome-progress', (p) => { if (p.percent != null) progress.value = p.percent; });
+  window.addEventListener('keydown', onKeyUse, true); window.addEventListener('pointerdown', onPointerUse, true);
+  detectPad();
   await load();
   await nextTick(); focusFirst(el.value, '.w-act .btn.primary');
 });
-onBeforeUnmount(() => { off?.(); clearTimeout(padT); });
+onBeforeUnmount(() => { off?.(); clearTimeout(padT); window.removeEventListener('keydown', onKeyUse, true); window.removeEventListener('pointerdown', onPointerUse, true); });
 </script>
 
 <style scoped>
@@ -522,4 +561,20 @@ onBeforeUnmount(() => { off?.(); clearTimeout(padT); });
 .w-back:focus, .w-back:hover { background: var(--focus); color: var(--on-focus); outline: none; }
 .w-hints { position: absolute; left: 0; right: 0; bottom: 14px; display: flex; justify-content: center; gap: 22px; color: var(--muted); font-size: var(--t-sm); pointer-events: none; }
 .w-hints span { display: inline-flex; align-items: center; gap: 8px; }
+/* the opening (0.9.17): the mark comes into focus inside two rings of light, a glint crosses it, the
+   name follows letter by letter, then everything lifts away to the first card */
+.w-intro { position: absolute; inset: 0; z-index: 5; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px; background: radial-gradient(60% 60% at 50% 45%, rgba(18, 18, 22, 0.55), rgba(5, 5, 7, 0.96)); animation: wiOut 0.5s cubic-bezier(0.4, 0, 0.2, 1) 2.1s forwards; }
+.wi-mark { position: relative; animation: wiMark 1.1s cubic-bezier(0.16, 1, 0.3, 1) both; overflow: hidden; border-radius: 28px; }
+.wi-glint { position: absolute; inset: -20%; background: linear-gradient(105deg, transparent 38%, rgba(255, 255, 255, 0.55) 50%, transparent 62%); transform: translateX(-120%); animation: wiGlint 0.9s ease-in-out 0.7s forwards; mix-blend-mode: overlay; }
+.wi-ring { position: absolute; top: 45%; left: 50%; width: 180px; height: 180px; margin: -90px 0 0 -90px; border-radius: 50%; border: 1.5px solid rgba(239, 75, 35, 0.55); box-shadow: 0 0 60px rgba(239, 75, 35, 0.35); opacity: 0; animation: wiRing 1.6s cubic-bezier(0.16, 1, 0.3, 1) 0.15s forwards; }
+.wi-ring.r2 { border-color: rgba(255, 255, 255, 0.25); box-shadow: none; animation-delay: 0.35s; }
+.wi-name { display: flex; font-family: var(--display); font-size: calc(var(--t-2xl) * 1.2); font-weight: 800; letter-spacing: -0.02em; }
+.wi-name span { opacity: 0; transform: translateY(14px); filter: blur(6px); animation: wiChar 0.55s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+.welcome.w-intro-on .w-top, .welcome.w-intro-on .w-stage { opacity: 0; }
+.welcome:not(.w-intro-on) .w-top, .welcome:not(.w-intro-on) .w-stage { transition: opacity 0.5s ease; }
+@keyframes wiMark { 0% { opacity: 0; transform: scale(0.62); filter: blur(14px); } 100% { opacity: 1; transform: none; filter: none; } }
+@keyframes wiGlint { to { transform: translateX(120%); } }
+@keyframes wiRing { 0% { opacity: 0; transform: scale(0.6); } 30% { opacity: 0.9; } 100% { opacity: 0; transform: scale(2.4); } }
+@keyframes wiChar { to { opacity: 1; transform: none; filter: none; } }
+@keyframes wiOut { to { opacity: 0; transform: scale(1.04); visibility: hidden; } }
 </style>
