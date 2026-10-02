@@ -35,6 +35,7 @@ export const store = reactive({
   play: {}, // romId -> { min, last, src }: play time from Steam and RetroArch (0.8)
   issues: 0, // things waiting in Settings → Emulators → Issues (0.9.3)
   homeLists: {}, // a Home row opened with Show all (0.9.3)
+  settingsSpot: null, // the Settings row a sub-screen was opened from (0.9.3 L)
   sharp: {}, // rom id -> sharp SteamGridDB background url (0.9.3 K)
   deleting: {}, // romId -> percent deleted, while a game is being deleted (0.9.3)
 });
@@ -51,6 +52,9 @@ export function playtimeText(min) {
 
 // ---------------- routing
 export function go(name, params = {}) {
+  // leaving Settings for one of its screens: remember the row (Settings puts focus back on it, 0.9.3 L)
+  const el = document.activeElement;
+  if (store.route.name === 'settings' && el?.closest?.('.pane')) store.settingsSpot = { sec: store.settingsSection, text: (el.textContent || '').trim().slice(0, 60) };
   store.history.push({ ...store.route, focusKey: document.activeElement?.dataset?.key || null });
   store.route = { name, params };
 }

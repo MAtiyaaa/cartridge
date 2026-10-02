@@ -734,6 +734,18 @@ async function applyArt() {
 async function clearCache() { await call('app:clearCache'); toast('Image cache cleared', 'ok', 2000); }
 
 onMounted(async () => { space.value = await call('fs:space', store.config.romsRoot); });
+// Back from a screen opened here (Emulator setup, Shortcut health...) lands on the row you opened it
+// from (store.go remembers it), not the section in the left list (0.9.3 L). The row is found again by
+// its text, as lists above it (Issues) load later and move it.
+onMounted(() => {
+  const spot = store.settingsSpot;
+  if (!spot || spot.sec !== sec.value) return;
+  store.settingsSpot = null;
+  for (const t of [0, 200, 600]) setTimeout(() => {
+    const hit = [...(paneEl.value?.querySelectorAll('[data-focus]') || [])].find((x) => (x.textContent || '').trim().slice(0, 60) === spot.text);
+    if (hit && document.activeElement !== hit) { hit.focus({ preventScroll: true }); hit.scrollIntoView({ block: 'nearest' }); }
+  }, t);
+});
 </script>
 
 <style scoped>
