@@ -36,3 +36,27 @@ Moved to 0.9.18 (owner): more animated console scenes; the small cleanups (dupli
 
 ## 9. Nintendo logo
 - A real Nintendo wordmark at the size of the other makers' logos, from a high-quality vector source.
+
+## 10. Owner's second list (2 Oct 2026, all in 0.9.17)
+1. **Controller detection in the welcome:** Nintendo, Xbox or PlayStation layout, or keyboard or touch, from what is actually used.
+2. **Built-in keyboard during the welcome**, sleek and matching the page; back to the user's setting (Auto) after. **Keyboard:** a Caps key, and LB/RB move the cursor between letters.
+3. **Welcome back:** show that B goes back; touch users get a back arrow.
+4. **Opening animation** for the welcome, sleek.
+5. **Scaling to the window size** (Desktop Mode windows clip).
+6. **Top bar redesign** (owner: still looks AI-made; use the design skills).
+7. **Fluidity** across the app.
+8. **403s:** GitHub ("try again later"), RetroAchievements, Sony's PS3 update list, RPCS3's patch download. Requests go through Chromium's network stack (as a browser), GitHub falls back to its release pages when its API limit is hit, Sony's list over HTTPS like the PS3 tools.
+9. **RetroDECK without Flatpak:** say RetroDECK needs Flatpak, offer to install Flatpak, then install everything in the background.
+10. **Download emulators flow:** where emulators live (pick a drive) → an ES-DE style folder there (Emulation/roms/<console>, bios, emulators) → a sleek page of every console's emulators and forks from GitHub, installing in the background with progress bars, Download all, Continue or Later. Also in Settings → Emulators.
+11. **Contrast:** the line under EmuDeck in the welcome blends into the focused row.
+12. **RomM optional:** Cartridge starts without RomM, using games already on the device (a local library from the console folders), with a clear warning about what's missing (trophies sync, covers, collections...). Skipping RomM in the welcome opens the app with those games instead of an empty one.
+13. **Settings → Updates:** roll back to an earlier version, and a card with this version's changes.
+14. **Steam's keyboard opens by itself** in Game Mode when typing.
+15. **Consoles:** Sega's and Microsoft's wordmarks instead of the S and the four squares.
+16. **RPCS3 patches still none:** RPCS3's patch download (rpcs3.net, same as Manage → Game Patches) through the browser network stack; check the patches folder RPCS3 reads.
+17. **Vita3K install error** (owner to send the message).
+18. **Game Updates (PS3):** can't select anything; make it clearly PS3 games.
+19. **Patches and Texture/Add-ons pages split by console**, nicely, with icons (Eden, yuzu missing; RPCS3's for PS3).
+20. **Emulator updates:** update everything from Cartridge (no "updates through its own app" where Cartridge can), hide "shadPS4 previous", the launcher's versions folder, forks and *_old AppImages, a new update animation, the page usable while one updates, icons for RPCS3 and Xenia; updates must stick (RPCS3).
+21. **More GameCube/Wii codes:** Dolphin's own code download (Gecko codes from codes.rc24.xyz, as Dolphin's Download Codes).
+22. **Console icons:** Nintendo consoles look small (Switch with Joy-Cons, GameCube, SNES): use their base icons at the same size as PlayStation's.
