@@ -6,7 +6,22 @@ The branch for 0.9.3 work is `claude/relaxed-fermat-30pigp`. Pull it before star
 
 ---
 
-## 2 Oct 2026 · 0.9.15 released, 0.9.16 listed (read this first)
+## 2 Oct 2026 · 0.9.16 built and released (read this first)
+
+Everything in `docs/plan-0.9.16.md` sections 1 to 8, as one update "0.9.16 · Your Emulators". Remind the owner about the stray v2.3.1 tag.
+
+**Decisions and notes:**
+- Game page header holds only Ready to play and More (owner, list 2 item 11), so the planned Add-ons button (section 2) was not added: Patches and Texture packs live in More → Emulator, and Settings → Emulators has Patches and Texture Packs pages.
+- Add-ons downloads (section 1): GameBanana and libretro's buildbot are still blocked from the cloud container, so no texture pack or mod downloads. What was built uses each emulator's own source: RPCS3's patch API, PPSSPP's cheat list (metadata.ppsspp.org/cheats.json, fallback the CWCheat Database Plus it lists), Dolphin's shipped GameSettings. Texture pack downloads need the owner to paste GameBanana responses.
+- Podman (section 4): a user-level copy isn't possible without the system (newuidmap/newgidmap setuid and /etc/subuid). The clear message stays. RomM has no server name setting: the name is Cartridge's label (Settings → RomM, welcome).
+- Backgrounds (section 5): the picker lists your five most played consoles first; only PS2, GameCube, Wii, Xbox 360 and Switch have scenes, the rest use their games' art.
+- Nintendo has no maker logo (Simple Icons has only an "N"); it stays text.
+
+**Owner must test on a device:** download speed (worker threads); controller movement everywhere; PS3/Vita firmware from RomM; PS3 game updates (Sony's list is plain HTTP); emulator updates (AppImage asset names per emulator are from their release pages, not checked live); textures on; Dolphin and PPSSPP cheats in game; RetroAchievements sign-in; Switch/Cemu mod folders; RVZ/WBFS IDs.
+
+---
+
+## 2 Oct 2026 · 0.9.15 released, 0.9.16 listed
 
 0.9.15 merged (PR #31). The owner moved everything left over from 0.9.15 into 0.9.16, with the Add-ons downloads: `docs/plan-0.9.16.md`. Not started; build when the owner says so. Remind the owner about the v2.3.1 tag.
 

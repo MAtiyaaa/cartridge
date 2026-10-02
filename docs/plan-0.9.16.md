@@ -1,5 +1,7 @@
 # Cartridge 0.9.16 plan
 
+Status: built and released as 0.9.16 (2 Oct 2026). What was done differently is in docs/SESSION-LOG.md.
+
 Owner, 2 Oct 2026: everything left over from 0.9.15 goes into 0.9.16, together with the Add-ons downloads that were already moved here. Owner said start building (2 Oct 2026, with section 7 added from their device test).
 
 ## 1. Add-ons downloads (moved from 0.9.15, plan-0.9.4 section 2)
