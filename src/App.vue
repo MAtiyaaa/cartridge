@@ -29,7 +29,8 @@
           <svg width="22" height="22" viewBox="0 0 36 36" class="ring"><circle cx="18" cy="18" r="15" fill="none" stroke="rgba(255,255,255,.12)" stroke-width="4" /><circle cx="18" cy="18" r="15" fill="none" stroke="url(#rg)" stroke-width="4" stroke-linecap="round" :stroke-dasharray="`${dlPct * 0.943} 100`" transform="rotate(-90 18 18)" /><defs><linearGradient id="rg"><stop offset="0" style="stop-color: var(--primary-l)" /><stop offset="1" style="stop-color: var(--peach)" /></linearGradient></defs></svg>
           {{ dlPct }}%
         </div>
-        <div class="item net" :class="store.connection.route === 'local' ? 'ok' : store.connection.base ? 'remote' : 'bad'" :title="store.connection.base">{{ store.connection.route === 'local' ? 'LAN' : store.connection.base ? 'Tunnel' : 'Offline' }}</div>
+        <div v-if="store.connection.base" class="item net" :title="store.connection.route === 'local' ? 'Home network (LAN)' : 'Internet (Tunnel)'" :aria-label="store.connection.route === 'local' ? 'LAN' : 'Tunnel'"><Icon :name="store.connection.route === 'local' ? 'mdiHomeOutline' : 'mdiEarth'" :size="20" /></div>
+        <div v-else class="item net bad"><Icon name="mdiCloudOffOutline" :size="18" />Offline</div>
         <div v-if="battery" class="item"><Icon :name="batteryIcon" :size="18" />{{ battery.level }}%</div>
         <div class="clock">{{ clock }}</div>
       </div>
@@ -82,7 +83,7 @@ import { store, loadConfig, loadLibrary, loadArt, back, tab, go, call, toast, ch
 import { pushLayer, focusFirst } from './nav.js';
 import { setSoundEnabled, setSoundStyle, sfx } from './sfx.js';
 import { applyTheme, CARD_SIZES } from './themes.js';
-import { setPointerPref } from './nav.js';
+import { setPointerPref, setRumble } from './nav.js';
 import { detectPad } from './pad.js';
 import Icon from './components/Icon.vue';
 import Btn from './components/Btn.vue';
@@ -206,6 +207,7 @@ onMounted(async () => {
   await loadConfig();
   setSoundEnabled(store.config.ui.sounds !== false);
   setSoundStyle(store.config.ui.soundPack, store.config.ui.volume);
+  setRumble(store.config.ui.rumble);
   applyTheme(store.config.ui);
   detectPad();
   setPointerPref(store.config.ui.pointer);
@@ -254,7 +256,7 @@ async function setupNotice() {
 }
 onBeforeUnmount(() => clearInterval(clockT));
 
-watch(() => store.config?.ui && JSON.stringify(store.config.ui), () => { applyTheme(store.config.ui); setSoundStyle(store.config.ui.soundPack, store.config.ui.volume); });
+watch(() => store.config?.ui && JSON.stringify(store.config.ui), () => { applyTheme(store.config.ui); setSoundStyle(store.config.ui.soundPack, store.config.ui.volume); setRumble(store.config.ui.rumble); });
 
 // sync result toasts
 watch(() => store.sync, (s) => {

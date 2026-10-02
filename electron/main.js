@@ -448,7 +448,7 @@ let playSyncAt = 0; // last play-session sync with RomM (0: do it on the next re
 
 // Transparent game logo from RomM (ScreenScraper "logo" media, or an ES-DE gamelist marquee)
 // what Cartridge keeps of a RomM game (electron/romm.js, tested against several RomM versions)
-const { slimRom, userOf } = require('./romm');
+const { slimRom, userOf, rommTooOld, ROMM_MIN } = require('./romm');
 
 function publicLibrary() {
   if (!library) return null;
@@ -2211,9 +2211,13 @@ const handlers09 = {
   'steam:setGameEmu': ({ romId, id }) => steamMgr.setGameEmu(romId, id),
   'steam:refreshGame': ({ romId }) => steamMgr.refreshGame(romId),
   // 0.9.3: everything waiting for you, in one list (Settings → Emulators) instead of start-up pop-ups
-  'issues:list': () => {
+  'issues:list': async () => {
     const out = [];
     const add = (kind, text, sub, fix) => out.push({ kind, text, sub: sub || '', fix });
+    try {
+      const v = config.configured ? (await probe(await resolveBase(), config.server, 4000))?.version : null;
+      if (v && rommTooOld(v)) add('romm', `RomM ${v} is older than Cartridge supports (${ROMM_MIN.join('.')} or newer)`, 'Games still sync, but collections, play status and uploads may not work. Update RomM on your server.', 'romm');
+    } catch {}
     try {
       const miss = steamMgr.verifyCollections() || [];
       if (miss.length) add('collections', `${miss.length} game${miss.length === 1 ? ' is' : 's are'} missing from ${[...new Set(miss.map((m) => m.collection))].join(', ')}`, 'Steam Cloud may have replaced your Steam collections', 'collections');

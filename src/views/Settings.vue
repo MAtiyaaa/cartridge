@@ -70,7 +70,7 @@
               <button v-for="(i, n) in issues" :key="n" class="lrow" data-focus @click="fixIssue(i)">
                 <Icon :name="ISSUE_ICON[i.kind] || 'mdiAlertCircleOutline'" :size="24" style="color: #ffd978" />
                 <div class="l-mid"><b>{{ i.text }}</b><span v-if="i.sub" class="l-sub">{{ i.sub }}</span></div>
-                <span class="l-end"><Btn b="A" />{{ { collections: 'Put them back', health: 'Shortcut health', setup: 'Emulator setup' }[i.fix] }}</span>
+                <span class="l-end"><Btn b="A" />{{ { collections: 'Put them back', health: 'Shortcut health', setup: 'Emulator setup', romm: 'RomM settings' }[i.fix] }}</span>
               </button>
             </div>
             <div class="stack">
@@ -196,6 +196,8 @@
               <div class="row"><span class="lbl">Sound style</span><div class="seg"><button v-for="p in SOUND_PACKS" :key="p.v" data-focus :class="{ on: (ui.soundPack || 'soft') === p.v }" @click="setPack(p.v)">{{ p.l }}</button></div></div>
               <div class="row"><span class="lbl">Volume</span><div class="seg"><button v-for="v in volumes" :key="v.v" data-focus :class="{ on: (ui.volume || 'medium') === v.v }" @click="setVolume(v.v)">{{ v.l }}</button></div></div>
             </template>
+            <div class="row"><span class="lbl">Rumble</span><div class="seg"><button v-for="v in rumbles" :key="v.v" data-focus :class="{ on: (ui.rumble || 'none') === v.v }" @click="setRumbleLevel(v.v)">{{ v.l }}</button></div></div>
+            <p class="muted small" style="margin-top: -6px">A light buzz on the controller when you move and select. In Game Mode, Steam's own controller rumble must be on.</p>
 
             <div class="subh"><Icon name="mdiGamepadVariantOutline" :size="20" />Controls &amp; Display</div>
             <div class="row"><span class="lbl">Touch &amp; mouse</span><div class="seg"><button v-for="p in pointers" :key="p.v" data-focus :class="{ on: (ui.pointer || 'auto') === p.v }" @click="setPointer(p.v)">{{ p.l }}</button></div></div>
@@ -346,7 +348,7 @@
 import { computed, onMounted, ref, watch } from 'vue';
 import { store, call, go, tab, saveConfig, pickFolder, choose, confirm, toast, openModal, bytes, ago, resync, scanServer, allRoms, resetLogos, askText, activeTabs, TAB_DEFS } from '../store.js';
 import { useView } from '../useView.js';
-import { input, focusFirst, setPointerPref } from '../nav.js';
+import { input, focusFirst, setPointerPref, setRumble, rumble } from '../nav.js';
 import { THEMES, SURFACES, TEXTS, FONTS, CARD_SHAPES, CARD_SIZES, DENSITIES, themeFrom, themeOf } from '../themes.js';
 import { BACKGROUNDS } from '../bgRenderers.js';
 import { setSoundEnabled, setSoundStyle, previewSound, SOUND_PACKS } from '../sfx.js';
@@ -491,7 +493,7 @@ function moveTab(n, d) {
   [l[i], l[j]] = [l[j], l[i]];
   saveConfig({ ui: { tabs: l } });
 }
-const LOOK_KEYS = ['theme', 'customColor', 'colors', 'idle', 'surface', 'text', 'font', 'bgStyle', 'wallDim', 'cardShape', 'density', 'gridSize', 'cardTitles', 'mediaBar', 'logos', 'motion', 'effects', 'sounds', 'soundPack', 'volume'];
+const LOOK_KEYS = ['theme', 'customColor', 'colors', 'idle', 'surface', 'text', 'font', 'bgStyle', 'wallDim', 'cardShape', 'density', 'gridSize', 'cardTitles', 'mediaBar', 'logos', 'motion', 'effects', 'sounds', 'soundPack', 'volume', 'rumble'];
 const presets = computed(() => store.config.lookPresets || []);
 const presetStyle = (p) => { const g = themeOf(p.ui).grad; return { background: `linear-gradient(135deg, ${g[0]}, ${g[2]} 60%, ${g[4]})` }; };
 function lookNow() { const o = {}; for (const k of LOOK_KEYS) if (ui.value[k] !== undefined) o[k] = JSON.parse(JSON.stringify(ui.value[k])); return o; }
@@ -524,7 +526,7 @@ async function presetMenu(p, i) {
 }
 async function resetLook() {
   if (!(await confirm('Reset Look & Feel?', 'Colour, background, fonts, cards, motion and sounds go back to the defaults.', 'Reset'))) return;
-  await saveConfig({ ui: { colors: { highlight: '', buttons: '', bars: '', background: '' }, theme: 'cartridge', customColor: '', surface: 'solid', text: 'normal', font: 'cartridge', cardShape: 'rounded', density: 'normal', cardTitles: true, gridSize: 'md', bgStyle: 'solid', motion: 'normal', effects: 'auto', soundPack: 'soft', volume: 'medium' } });
+  await saveConfig({ ui: { colors: { highlight: '', buttons: '', bars: '', background: '' }, theme: 'cartridge', customColor: '', surface: 'solid', text: 'normal', font: 'cartridge', cardShape: 'rounded', density: 'normal', cardTitles: true, gridSize: 'md', bgStyle: 'solid', motion: 'normal', effects: 'auto', soundPack: 'soft', volume: 'medium', rumble: 'none' } });
 }
 const gfx = [{ v: 'auto', l: 'Auto (GPU)' }, { v: 'software', l: 'Compatible' }];
 const pointers = [{ v: 'auto', l: 'Auto' }, { v: 'touch', l: 'Touch' }, { v: 'mouse', l: 'Mouse' }];
@@ -586,11 +588,12 @@ useView({ back: () => { if (!document.activeElement?.closest('.rail')) { focusFi
   [{ b: 'A', label: 'Select' }, { b: 'B', label: 'Back' }, { b: 'LT+RT', label: 'Tabs' }]);
 // Settings → Emulators → Issues
 const issues = ref(null);
-const ISSUE_ICON = { collections: 'mdiFolderSyncOutline', moved: 'mdiLinkVariantOff', game: 'mdiFileHidden', core: 'mdiPuzzleRemoveOutline', setup: 'mdiRadar', bios: 'mdiChip' };
+const ISSUE_ICON = { collections: 'mdiFolderSyncOutline', moved: 'mdiLinkVariantOff', game: 'mdiFileHidden', core: 'mdiPuzzleRemoveOutline', setup: 'mdiRadar', bios: 'mdiChip', romm: 'mdiServerOutline' };
 async function loadIssues() { issues.value = await call('issues:list').catch(() => []); store.issues = issues.value.length; }
 async function fixIssue(i) {
   if (i.fix === 'health') return go('steam-health');
   if (i.fix === 'setup') return go('emu-setup');
+  if (i.fix === 'romm') { sec.value = 'romm'; return; }
   if (!(await confirm('Put them back?', 'Steam closes for a moment while its collections are written.', 'Put them back'))) return;
   try { await call('steam:fixCollections'); toast('Putting them back in their collections', 'ok', 3000, 'mdiSteam'); loadIssues(); } catch (e) { toast(e.message, 'error'); }
 }
@@ -657,6 +660,8 @@ async function loadAll() {
   const list = await call('platforms:supported');
   supported.value = list.map((p) => ({ ...p, display_name: p.display_name || p.name })).sort((a, b) => a.display_name.localeCompare(b.display_name));
 }
+const rumbles = [{ v: 'none', l: 'None' }, { v: 'low', l: 'Low' }, { v: 'medium', l: 'Medium' }, { v: 'high', l: 'High' }];
+async function setRumbleLevel(v) { await saveConfig({ ui: { rumble: v } }); setRumble(v); rumble(true); }
 async function setSounds(v) { await saveConfig({ ui: { sounds: v } }); setSoundEnabled(v); }
 async function addToSteam() {
   try {

@@ -45,4 +45,15 @@ function slimRom(r) {
   };
 }
 
-module.exports = { slimRom, userOf, logoPath, hltbHours };
+// RomM's version from /api/heartbeat (0.9.3 K, plan H2). Cartridge reads RomM 3 and 4; an older
+// server still syncs, but collections, play status and uploads may be missing, so the Issues list
+// says so once instead of features failing one by one. Dev builds and odd strings count as fine.
+const ROMM_MIN = [3, 0];
+function rommTooOld(v) {
+  const m = /^v?(\d+)\.(\d+)/.exec(str(v).trim());
+  if (!m) return false;
+  const [a, b] = [+m[1], +m[2]];
+  return a < ROMM_MIN[0] || (a === ROMM_MIN[0] && b < ROMM_MIN[1]);
+}
+
+module.exports = { slimRom, userOf, logoPath, hltbHours, rommTooOld, ROMM_MIN };
