@@ -316,10 +316,10 @@ async function openTextures() {
   try { list = await call('addons:forGame', { romId: Number(props.romId) }); } catch (e) { return toast(e.message, 'error'); }
   if (!list.length) return toast('None of this console’s emulators with texture packs are set up here. Open the emulator once, then try again.', 'info', 5000);
   const short = (p) => String(p || '').replace(store.info?.home || '\0', '~');
-  const e = list.length === 1 ? list[0] : await choose({ sheet: true, title: 'Texture Packs', options: list.map((x) => ({ label: x.name + (x.flatpak ? ' (Flatpak)' : ''), sub: x.on ? 'Custom textures are on' : 'Custom textures are off', value: x, icon: 'mdiTextureBox', raw: true })) });
+  const e = list.length === 1 ? list[0] : await choose({ sheet: true, title: 'Texture Packs', options: list.map((x) => ({ label: x.name + (x.flatpak ? ' (Flatpak)' : ''), sub: x.mods ? 'Mods and packs' : x.on ? 'Custom textures are on' : 'Custom textures are off', value: x, icon: 'mdiTextureBox', raw: true })) });
   if (!e) return;
-  const msg = `${e.folder ? `Put this game’s pack in:\n${short(e.folder)}` : `Cartridge couldn’t read this game’s ID from its file, so put the pack in the folder ${e.name} names after it, inside:\n${short(e.root)}`}\n\n${e.on ? `Custom textures are on in ${e.name}.` : `Custom textures are off in ${e.name}.`}`;
-  const v = await choose({ sheet: true, title: `${e.name} Texture Packs`, message: msg, options: [
+  const msg = `${e.folder ? `Put this game’s pack in:\n${short(e.folder)}` : `Cartridge couldn’t read this game’s ID from its file, so put the pack in the folder ${e.name} names after it, inside:\n${short(e.root)}`}\n\n${e.mods ? e.how : e.on ? `Custom textures are on in ${e.name}.` : `Custom textures are off in ${e.name}.`}`;
+  const v = await choose({ sheet: true, title: `${e.name} ${e.mods ? 'Mods' : 'Texture Packs'}`, message: msg, options: [
     { label: 'Copy the folder path', value: 'copy', icon: 'mdiContentCopy' },
     ...(e.folder && !e.has ? [{ label: 'Create this game’s folder', sub: 'An empty folder, ready for the pack', value: 'make', icon: 'mdiFolderPlusOutline' }] : []),
     ...(!e.on ? [{ label: `Turn custom textures on in ${e.name}`, sub: 'Close the emulator first', value: 'on', icon: 'mdiTextureBox' }] : []),
@@ -617,7 +617,7 @@ async function more() {
     if (up?.todo?.length) play.push({ label: `Install game update ${up.todo[up.todo.length - 1].version}`, sub: `${up.todo.length} update${up.todo.length === 1 ? '' : 's'} from Sony · ${bytes(up.size)} · now ${up.have || 'unknown'}`, value: 'ps3up', icon: 'mdiPackageUp' });
   }
   if (installedPath.value && !marked.value && pe) play.push({ label: pe === 'PPSSPP' ? 'Cheats' : pe === 'Dolphin' ? 'Patches and cheats' : 'Patches', sub: `From ${pe}’s ${pe === 'PPSSPP' ? 'cheat' : 'patch'} list, saved in ${pe}`, value: 'patches', icon: 'mdiPuzzleOutline' });
-  if (installedPath.value && !marked.value && /\b(ps2|psx|ngc|gamecube|wii|psp|3ds|n3ds)\b/i.test(slugs)) play.push({ label: 'Texture packs', sub: 'Where this game’s packs go, and whether they’re on', value: 'textures', icon: 'mdiTextureBox' });
+  if (installedPath.value && !marked.value && /\b(ps2|psx|ngc|gamecube|wii|psp|3ds|n3ds|switch|wiiu)\b/i.test(slugs)) play.push({ label: /\b(switch|wiiu)\b/i.test(slugs) ? 'Mods and graphic packs' : 'Texture packs', sub: 'Where this game’s packs go, and whether they’re on', value: 'textures', icon: 'mdiTextureBox' });
   if (installedPath.value) play.push({ label: 'Show file location', value: 'path', icon: 'mdiFolderOutline' });
   const top = [
     { label: fav.value ? 'Remove from favourites' : 'Add to favourites', sub: 'Saved in RomM', value: 'fav', icon: fav.value ? 'mdiHeartOff' : 'mdiHeartOutline' },

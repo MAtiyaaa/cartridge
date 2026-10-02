@@ -111,3 +111,40 @@ test('Emulator updates: versions compared, the right AppImage picked, swapped in
   await assert.rejects(EU.replaceAppImage(f, { ...p, size: 99 }, async (url, dest) => fs.writeFileSync(dest, 'x')), /incomplete/);
   assert.strictEqual(fs.readFileSync(f, 'utf8'), 'new!'); // untouched after a bad download
 });
+
+test('Add-ons: Switch and Wii U mod folders; PS1, CIA and Switch IDs read from the files (0.9.16)', () => {
+  const h = fs.mkdtempSync(path.join(os.tmpdir(), 'mods-'));
+  const put = (p, t) => { fs.mkdirSync(path.dirname(path.join(h, p)), { recursive: true }); fs.writeFileSync(path.join(h, p), t); };
+  put('.config/eden/qt-config.ini', '[Data%20Storage]\nload_directory\\default=true\n');
+  put('.config/Ryujinx/Config.json', '{}');
+  put('.local/share/Cemu/graphicPacks/x/rules.txt', '');
+  const l = A.emulators(h, {});
+  const g = A.forGame('switch', { switchId: '0100F2C0115B6000', switchIdLower: '0100f2c0115b6000' }, l);
+  assert.deepStrictEqual(g.map((e) => [e.id, e.folder]), [['eden', path.join(h, '.local/share/eden/load/0100F2C0115B6000')], ['ryujinx', path.join(h, '.config/Ryujinx/mods/contents/0100f2c0115b6000')]]);
+  assert.strictEqual(A.forGame('wiiu', {}, l)[0].folder, path.join(h, '.local/share/Cemu/graphicPacks'));
+
+  // PS1: raw 2352-byte sectors, SYSTEM.CNF in the root folder
+  const d = fs.mkdtempSync(path.join(os.tmpdir(), 'ps1-'));
+  const bin = Buffer.alloc(2352 * 24);
+  const sector = (n, data) => { const o = n * 2352; bin[o] = 0; bin.fill(0xff, o + 1, o + 11); bin[o + 15] = 2; data.copy(bin, o + 24); };
+  for (let i = 0; i < 24; i++) sector(i, Buffer.alloc(0));
+  const pvd = Buffer.alloc(2048); pvd[0] = 1; pvd.write('CD001', 1, 'latin1'); pvd.writeUInt32LE(20, 156 + 2); pvd.writeUInt32LE(2048, 156 + 10);
+  const dir = Buffer.alloc(2048); const name = 'SYSTEM.CNF;1'; dir[0] = 33 + name.length; dir.writeUInt32LE(21, 2); dir.writeUInt32LE(60, 10); dir[32] = name.length; dir.write(name, 33, 'latin1');
+  sector(16, pvd); sector(20, dir); sector(21, Buffer.from('BOOT = cdrom:\\SLUS_005.94;1\r\nTCB = 4\r\n', 'latin1'));
+  fs.writeFileSync(path.join(d, 'g.bin'), bin); fs.writeFileSync(path.join(d, 'g.cue'), 'FILE "g.bin" BINARY\n  TRACK 01 MODE2/2352\n');
+  assert.strictEqual(A.psxSerial(path.join(d, 'g.cue')), 'SLUS-00594');
+
+  // CIA: header 0x2020, certs 0xA00, ticket 0x350, TMD signed RSA-2048
+  const cia = Buffer.alloc(0x4000); cia.writeUInt32LE(0x2020, 0); cia.writeUInt32LE(0xa00, 8); cia.writeUInt32LE(0x350, 0xc);
+  const al = (x) => Math.ceil(x / 64) * 64, tmd = al(al(al(0x2020) + 0xa00) + 0x350);
+  cia.writeUInt32BE(0x10004, tmd); cia.writeBigUInt64BE(0x0004000000055D00n, tmd + 4 + 0x13c + 0x4c);
+  fs.writeFileSync(path.join(d, 'g.cia'), cia);
+  assert.strictEqual(A.ciaTitleId(path.join(d, 'g.cia')), '0004000000055D00');
+
+  // NSP: the ticket's name; an update folds to its game
+  const names = Buffer.from('0100f2c0115b6800000000000000000a.tik\0abc.nca\0', 'latin1');
+  const nsp = Buffer.alloc(16 + 2 * 24 + names.length); nsp.write('PFS0', 0, 'latin1'); nsp.writeUInt32LE(2, 4); nsp.writeUInt32LE(names.length, 8); names.copy(nsp, 16 + 48);
+  fs.writeFileSync(path.join(d, 'u.nsp'), nsp);
+  assert.strictEqual(A.switchTitleId(path.join(d, 'u.nsp')), '0100F2C0115B6000');
+  assert.strictEqual(A.switchTitleId(path.join(d, 'Game [0100ABCD12340000].xci')), '0100ABCD12340000');
+});

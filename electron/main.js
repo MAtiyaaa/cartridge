@@ -2856,6 +2856,9 @@ const handlers = {
     if (/\.(iso|gcm|rvz|wia|wbfs|ciso)$/i.test(file) && ['ngc', 'gamecube', 'wii'].includes(slug)) ids.gameId = A.gcWiiId(file);
     if (/\.iso$/i.test(file) && slug === 'psp') { const b = patchesMod.isoFile(file, ['PSP_GAME', 'PARAM.SFO']); ids.gameId = b ? patchesMod.parseSfo(b).DISC_ID : null; }
     if (/\.(3ds|cci)$/i.test(file)) ids.titleId = A.n3dsTitleId(file);
+    if (/\.cia$/i.test(file)) ids.titleId = A.ciaTitleId(file);
+    if (slug === 'psx' && /\.(bin|img|iso|cue)$/i.test(file)) ids.serial = A.psxSerial(file);
+    if (slug === 'switch') { const id = A.switchTitleId(file); if (id) { ids.switchId = id; ids.switchIdLower = id.toLowerCase(); } }
     return A.forGame(slug, ids, A.emulators());
   },
   // custom textures on in the emulator (0.9.16); off only where Cartridge turned them on

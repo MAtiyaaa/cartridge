@@ -60,6 +60,23 @@ function emulators(home = os.homedir(), env = process.env) {
     const ini = path.join(c, 'qt-config.ini'); if (!exists(ini)) continue;
     add({ id: c.includes('citra') ? 'citra' : 'azahar', name: c.includes('citra') ? 'Citra' : 'Azahar', for: ['3ds', 'n3ds'], root: d, settings: ini, textures: path.join(d, 'load', 'textures'), per: '{titleId}', on: truthy(iniGet(read(ini), 'Utility', 'custom_textures'), false), how: 'In Azahar\'s graphics settings, turn on Use Custom Textures.' });
   }
+  // Switch (0.9.16): yuzu and its forks load mods from load/<TITLE ID> ([Data%20Storage] load_directory
+  // in qt-config.ini, default "load" in the data folder); Ryujinx from mods/contents/<title id>
+  for (const [id, name, dirName, fp] of [['eden', 'Eden', 'eden', 'dev.eden_emu.eden'], ['citron', 'Citron', 'citron', 'org.citron_emu.citron'], ['yuzu', 'Yuzu', 'yuzu', 'org.yuzu_emu.yuzu'], ['yuzu', 'Sudachi', 'sudachi', 'org.sudachi_emu.sudachi'], ['yuzu', 'suyu', 'suyu', null]]) {
+    for (const [c, d] of [[path.join(cfg, dirName), path.join(data, dirName)], ...(fp ? [[v(fp, 'config', dirName), v(fp, 'data', dirName)]] : [])]) {
+      const ini = path.join(c, 'qt-config.ini'); if (!exists(ini)) continue;
+      add({ id, name, for: ['switch'], root: d, settings: ini, textures: under(d, iniGet(read(ini), 'Data%20Storage', 'load_directory'), 'load'), per: '{switchId}', on: true, mods: true, how: `${name} loads every mod in the game's folder; turn single ones off in its game properties (Add-Ons).` });
+    }
+  }
+  for (const c of [path.join(cfg, 'Ryujinx'), v('io.github.ryubing.Ryujinx', 'config/Ryujinx'), v('org.ryujinx.Ryujinx', 'config/Ryujinx')]) {
+    if (!exists(path.join(c, 'Config.json'))) continue;
+    add({ id: 'ryujinx', name: 'Ryujinx', for: ['switch'], root: c, settings: path.join(c, 'Config.json'), textures: path.join(c, 'mods', 'contents'), per: '{switchIdLower}', on: true, mods: true, how: 'Ryujinx loads every mod in the game\'s folder; turn single ones off in Manage Mods.' });
+  }
+  // Wii U: Cemu's graphic packs (all in one folder; each pack names its games in rules.txt)
+  for (const [c, d] of [[path.join(cfg, 'Cemu'), path.join(data, 'Cemu')], [v('info.cemu.Cemu', 'config/Cemu'), v('info.cemu.Cemu', 'data/Cemu')]]) {
+    if (!exists(path.join(c, 'settings.xml')) && !exists(path.join(d, 'graphicPacks'))) continue;
+    add({ id: 'cemu', name: 'Cemu', for: ['wiiu'], root: d, settings: path.join(c, 'settings.xml'), textures: path.join(d, 'graphicPacks'), per: '', on: true, mods: true, how: 'In Cemu: Options → Graphic packs, then tick the pack.' });
+  }
   for (const e of out) e.flatpak = e.root.includes('/.var/app/');
   return out;
 }
@@ -78,6 +95,67 @@ function n3dsTitleId(file) {
     return n.readBigUInt64LE(0x118).toString(16).toUpperCase().padStart(16, '0');
   } catch { return null; }
 }
+// PS1 serial as DuckStation names it (SLUS-00594), from SYSTEM.CNF's BOOT line: plain 2048-byte
+// images and raw 2352-byte .bin (a .cue reads its first .bin). CHD and PBP are compressed: no ID.
+function psxSerial(file) {
+  if (/\.cue$/i.test(file)) { const m = /FILE\s+"([^"]+)"/i.exec(read(file)); if (!m) return null; file = path.join(path.dirname(file), m[1]); }
+  let fd;
+  try {
+    fd = fs.openSync(file, 'r');
+    const raw = (n, pos) => { const b = Buffer.alloc(n); fs.readSync(fd, b, 0, n, pos); return b; };
+    const head = raw(16, 0);
+    const sync = head[0] === 0 && head.subarray(1, 11).every((x) => x === 0xff) && head[11] === 0;
+    const size = sync ? 2352 : 2048, off = sync ? (head[15] === 1 ? 16 : 24) : 0;
+    const sec = (lba, len = 2048) => { const parts = []; for (let i = 0; i * 2048 < len; i++) parts.push(raw(2048, (lba + i) * size + off)); return Buffer.concat(parts).subarray(0, len); };
+    const pvd = sec(16);
+    if (pvd.toString('latin1', 1, 6) !== 'CD001') return null;
+    const dir = sec(pvd.readUInt32LE(156 + 2), Math.min(pvd.readUInt32LE(156 + 10), 64 << 10));
+    for (let i = 0; i < dir.length;) {
+      const len = dir[i]; if (!len) { i = (Math.floor(i / 2048) + 1) * 2048; continue; }
+      const name = dir.toString('latin1', i + 33, i + 33 + dir[i + 32]).replace(/;1$/, '');
+      if (name.toUpperCase() === 'SYSTEM.CNF') {
+        const m = /BOOT\s*=\s*cdrom:\\?([A-Z]{4})[_-](\d{3})\.(\d{2})/i.exec(sec(dir.readUInt32LE(i + 2), Math.min(dir.readUInt32LE(i + 10), 2048)).toString('latin1'));
+        return m ? `${m[1].toUpperCase()}-${m[2]}${m[3]}` : null;
+      }
+      i += len;
+    }
+    return null;
+  } catch { return null; } finally { if (fd != null) try { fs.closeSync(fd); } catch {} }
+}
+// 3DS .cia: the title ID in its TMD (after the header, certificates and ticket, each 64-byte aligned)
+function ciaTitleId(file) {
+  let fd;
+  try {
+    fd = fs.openSync(file, 'r');
+    const h = Buffer.alloc(0x20); fs.readSync(fd, h, 0, 0x20, 0);
+    const al = (x) => Math.ceil(x / 64) * 64;
+    const tmd = al(al(al(h.readUInt32LE(0)) + h.readUInt32LE(8)) + h.readUInt32LE(0xc));
+    const t = Buffer.alloc(4); fs.readSync(fd, t, 0, 4, tmd);
+    const sig = { 0x10000: 0x23c, 0x10001: 0x13c, 0x10002: 0x7c, 0x10003: 0x23c, 0x10004: 0x13c, 0x10005: 0x7c }[t.readUInt32BE(0)];
+    if (!sig) return null;
+    const id = Buffer.alloc(8); fs.readSync(fd, id, 0, 8, tmd + 4 + sig + 0x4c);
+    return id.readBigUInt64BE(0).toString(16).toUpperCase().padStart(16, '0');
+  } catch { return null; } finally { if (fd != null) try { fs.closeSync(fd); } catch {} }
+}
+// Switch title ID: the ticket's name in an .nsp (rights ID = title ID + key generation), else one
+// in the file name; an update's ID (…800) folds to its game's (…000), where mods go
+function switchTitleId(file) {
+  let id = null, fd;
+  try {
+    fd = fs.openSync(file, 'r');
+    const h = Buffer.alloc(16); fs.readSync(fd, h, 0, 16, 0);
+    if (h.toString('latin1', 0, 4) === 'PFS0') {
+      const n = h.readUInt32LE(4), strLen = h.readUInt32LE(8);
+      if (n < 4096 && strLen < 1 << 20) {
+        const names = Buffer.alloc(strLen); fs.readSync(fd, names, 0, strLen, 16 + n * 24);
+        id = (names.toString('latin1').match(/\b(01[0-9a-f]{14})[0-9a-f]{16}\.tik\b/i) || [])[1] || null;
+      }
+    }
+  } catch {} finally { if (fd != null) try { fs.closeSync(fd); } catch {} }
+  id = (id || (path.basename(file).match(/\b(01[0-9A-F]{14})\b/i) || [])[1] || '').toUpperCase();
+  if (!id) return null;
+  return /800$/.test(id) ? id.slice(0, 13) + '000' : id;
+}
 const fill = (per, ids) => per.replace(/\{(\w+)\}/g, (_, k) => ids[k] || '');
 
 // One game: the folder in each emulator that can run it, with whether textures are on
@@ -85,7 +163,7 @@ function forGame(platformSlug, ids, list) {
   return list.filter((e) => e.for.includes(platformSlug)).map((e) => {
     const need = (e.per.match(/\{(\w+)\}/) || [])[1];
     const known = !need || !!ids[need];
-    return { id: e.id, name: e.name, flatpak: e.flatpak, on: e.on, how: e.how, emuRoot: e.root, root: e.textures, folder: known ? path.join(e.textures, fill(e.per, ids)) : null, has: known && exists(path.join(e.textures, fill(e.per, ids))) };
+    return { id: e.id, name: e.name, flatpak: e.flatpak, on: e.on, mods: !!e.mods, how: e.how, emuRoot: e.root, root: e.textures, folder: known ? path.join(e.textures, fill(e.per, ids)) : null, has: known && exists(path.join(e.textures, fill(e.per, ids))) };
   });
 }
 
@@ -115,4 +193,4 @@ function setTextures(e, on) {
   return true;
 }
 
-module.exports = { emulators, forGame, gcWiiId, n3dsTitleId, iniGet, setTextures, TEX_KEY };
+module.exports = { emulators, forGame, gcWiiId, n3dsTitleId, psxSerial, ciaTitleId, switchTitleId, iniGet, setTextures, TEX_KEY };

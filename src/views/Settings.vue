@@ -127,17 +127,28 @@
                 </button>
               </div>
             </template>
+            <template v-if="emuPage === 'patches'">
+              <p class="muted small" style="margin-top: -6px">Patches and cheats from each emulator's own lists, for the games on this device. The same as Patches in a game's More menu.</p>
+              <p v-if="!patchGames.length" class="muted">No games on this device for the emulators with patches (RPCS3, shadPS4, PCSX2, Dolphin, PPSSPP).</p>
+              <div v-else class="stack">
+                <button v-for="g in patchGames" :key="g.r.id" class="lrow" data-focus @click="openPatchesFor(g)">
+                  <EmuIcon :id="g.id" :size="24" fallback="mdiPuzzleOutline" />
+                  <div class="l-mid"><b>{{ g.r.name }}</b><span class="l-sub">{{ consoleName({ romId: g.r.id, slug: g.r.platform_slug }) }} · {{ g.emu }}</span></div>
+                  <span class="l-end">{{ g.emu === 'PPSSPP' ? 'Cheats' : 'Patches' }}</span>
+                </button>
+              </div>
+            </template>
             <template v-if="emuPage === 'tex'">
                             <p class="muted small" style="margin-top: -6px">Where each emulator looks for texture packs, read from its own settings. A game's folder is in its More menu. Turn custom textures on here, or in the emulator.</p>
               <div class="stack">
                 <button v-for="e in texEmus" :key="e.root" class="lrow" data-focus @click="flipTextures(e)">
                   <EmuIcon :id="e.id" :size="24" fallback="mdiTextureBox" />
                   <div class="l-mid"><b>{{ e.name }}{{ e.flatpak ? ' (Flatpak)' : '' }}</b><span class="l-sub mono">{{ e.textures.replace(store.info.home, '~') }}</span></div>
-                  <span class="status" :class="e.on ? 'ok' : 'warn'"><Icon v-if="e.on" name="mdiCheck" :size="14" />{{ e.on ? 'Textures on' : 'Textures off' }}</span>
-                  <span class="l-end">{{ !e.on ? 'Turn on' : e.mine ? 'Turn off' : '' }}</span>
+                  <span v-if="e.mods" class="status">Mods</span><span v-else class="status" :class="e.on ? 'ok' : 'warn'"><Icon v-if="e.on" name="mdiCheck" :size="14" />{{ e.on ? 'Textures on' : 'Textures off' }}</span>
+                  <span class="l-end">{{ e.mods ? '' : !e.on ? 'Turn on' : e.mine ? 'Turn off' : '' }}</span>
                 </button>
               </div>
-            <p v-if="!texEmus.length" class="muted">None of the emulators that take texture packs (PCSX2, DuckStation, Dolphin, PPSSPP, Azahar) are set up here yet.</p>
+            <p v-if="!texEmus.length" class="muted">None of the emulators that take texture packs or mods (PCSX2, DuckStation, Dolphin, PPSSPP, Azahar, Cemu, Eden, Citron, Yuzu, Ryujinx) are set up here yet.</p>
             </template>
             <template v-else-if="emuPage === 'folders'">
             <div class="row" style="justify-content: space-between">
@@ -732,6 +743,7 @@ async function loadIssues() { issues.value = await call('issues:list').catch(() 
 const texEmus = ref([]);
 // custom textures on in the emulator itself (0.9.16); off again only where Cartridge turned them on
 async function flipTextures(e) {
+  if (e.mods) return toast(e.how, 'info', 5000);
   if (e.on && !e.mine) return toast(`Custom textures were turned on in ${e.name}. Turn them off there if you want to.`, 'info', 4500);
   try { await call('addons:setTextures', { root: e.root, on: !e.on }); toast(e.on ? `Custom textures off in ${e.name}` : `Custom textures on in ${e.name}`, 'ok', 3000, 'mdiTextureBox'); texEmus.value = await call('addons:emulators'); }
   catch (err) { toast(err.message, 'error', 5000); }
@@ -818,8 +830,19 @@ async function loadAll() {
 }
 const mediaSizes = [{ v: 'compact', l: 'Compact' }, { v: 'spacious', l: 'Spacious' }, { v: 'large', l: 'Large' }];
 // Emulators pages (0.9.16)
-const EMU_PAGES = [{ v: 'overview', l: 'Overview' }, { v: 'updates', l: 'Updates' }, { v: 'games', l: 'Game Updates' }, { v: 'tex', l: 'Texture Packs' }, { v: 'folders', l: 'Console Folders' }];
+const EMU_PAGES = [{ v: 'overview', l: 'Overview' }, { v: 'updates', l: 'Updates' }, { v: 'games', l: 'Game Updates' }, { v: 'patches', l: 'Patches' }, { v: 'tex', l: 'Texture Packs' }, { v: 'folders', l: 'Console Folders' }];
 const emuPage = ref('overview');
+// installed games whose emulator has patches (0.9.16), by console then name
+const PATCH_EMU = [[/ps3/i, 'RPCS3', 'rpcs3'], [/ps4/i, 'shadPS4', 'shadps4'], [/\bps2\b/i, 'PCSX2', 'pcsx2'], [/\b(ngc|gamecube|gc|wii)\b/i, 'Dolphin', 'dolphin'], [/\bpsp\b/i, 'PPSSPP', 'ppsspp']];
+const patchGames = computed(() => allRoms().filter((r) => store.installed[r.id]).map((r) => { const m = PATCH_EMU.find(([re]) => re.test(`${r.platform_slug} ${r.platform_fs_slug}`)); return m && { r, emu: m[1], id: m[2] }; }).filter(Boolean)
+  .sort((a, b) => a.emu.localeCompare(b.emu) || String(a.r.platform_slug).localeCompare(String(b.r.platform_slug)) || a.r.name.localeCompare(b.r.name)));
+async function openPatchesFor(g) {
+  let info;
+  try { info = await call('patches:list', { romId: g.r.id }); } catch (e) { return toast(e.message, 'error'); }
+  const changes = await openModal('patches', { name: g.r.name, ...info });
+  if (!changes?.length) return;
+  try { const r = await call('patches:apply', { romId: g.r.id, changes }); toast(r.count ? `Saved in ${info.emuName}. They apply next time the game starts.` : 'Nothing changed', 'ok', 3500, 'mdiPuzzleOutline'); } catch (e) { toast(e.message, 'error', 7000); }
+}
 function setEmuPage(v) { emuPage.value = v; if (v === 'updates' && emuUps.value === null) loadEmuUpdates(); if (v === 'games' && ps3Ups.value === null) loadPs3Updates(); }
 function stepEmu(d) {
   const i = EMU_PAGES.findIndex((p) => p.v === emuPage.value), n = EMU_PAGES[(i + d + EMU_PAGES.length) % EMU_PAGES.length].v;

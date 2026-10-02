@@ -282,7 +282,7 @@ import EmuSetup from './EmuSetup.vue';
 import RommLocal from '../components/RommLocal.vue';
 
 const STEPS = ['hello', 'name', 'lang', 'pad', 'steam', 'emus', 'romm', 'scan', 'extras', 'self', 'done'];
-const ROMM_GUIDE = 'https://docs.romm.app';
+const ROMM_GUIDE = 'https://docs.romm.app/latest/getting-started/quick-start/'; // RomM's setup guide (owner: not the docs home)
 const el = ref(null);
 const at = ref(0), dir = ref(1);
 const step = computed(() => STEPS[at.value]);
