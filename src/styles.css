@@ -179,6 +179,9 @@ body.surface-glass .glass { background: var(--glass-bg); border: 1px solid var(-
 .card:focus { box-shadow: none !important; }
 .card:focus .art, .card:focus-visible .art { transform: translateY(-4px) scale(1.06); box-shadow: var(--ring), var(--shadow-card); }
 .card:focus .art .shine { display: none; }
+/* a press answers at once: a slight squeeze while held, springing back on release (0.9.17, fluidity) */
+.btn:active, .menu-item:active, .lrow:active, .seg button:active, .btn.pressed, .menu-item.pressed, .lrow.pressed { transform: scale(0.97); transition: transform 90ms ease-out, background var(--d-fast), color var(--d-fast); }
+.card:active .art, .card.pressed .art { transform: scale(0.97); transition-duration: 90ms; }
 .card:focus .title { color: #fff; }
 .card:hover .art { transform: translateY(-3px); }
 .shine { position: absolute; inset: 0; opacity: 0; pointer-events: none; background: linear-gradient(115deg, transparent 30%, rgba(255, 255, 255, 0.28) 48%, transparent 62%); background-size: 250% 100%; background-position: 120% 0; }

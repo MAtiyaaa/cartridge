@@ -14,6 +14,12 @@ export const scrollMode = () => (performance.now() - lastRepeat < 250 ? 'auto' :
 // A short, snappy scroll (about 120 ms, easing out) instead of the browser's slow smooth scroll.
 // Presses in quick succession add up; while a direction is held it jumps instantly.
 const anims = new WeakMap();
+// A pressed with a controller shows the same squeeze a held mouse or finger gets (:active), 0.9.17
+function pressFx(el) {
+  if (!el?.classList) return;
+  el.classList.add('pressed');
+  setTimeout(() => el.classList.remove('pressed'), 110);
+}
 export function glideBy(sc, dx = 0, dy = 0) {
   if (!sc || (!dx && !dy)) return;
   const a = anims.get(sc);
@@ -197,7 +203,7 @@ export function dispatch(action) {
   if (['up', 'down', 'left', 'right'].includes(action)) return move(action);
   if (action === 'accept') {
     const el = document.activeElement;
-    if (layer && inScope(el, layer.el)) el.click();
+    if (layer && inScope(el, layer.el)) { pressFx(el); el.click(); }
     else focusFirst();
   }
 }
