@@ -70,7 +70,7 @@
               <button v-for="(i, n) in issues" :key="n" class="lrow" data-focus @click="fixIssue(i)">
                 <Icon :name="ISSUE_ICON[i.kind] || 'mdiAlertCircleOutline'" :size="24" style="color: #ffd978" />
                 <div class="l-mid"><b>{{ i.text }}</b><span v-if="i.sub" class="l-sub">{{ i.sub }}</span></div>
-                <span class="l-end"><Btn b="A" />{{ { collections: 'Put them back', health: 'Shortcut health', setup: 'Emulator setup', romm: 'RomM settings', fpsteam: 'Allow' }[i.fix] }}</span>
+                <span class="l-end"><Btn b="A" />{{ { collections: 'See them', health: 'Shortcut health', setup: 'Emulator setup', romm: 'RomM settings', fpsteam: 'Allow' }[i.fix] }}</span>
               </button>
             </div>
             <div class="stack">
@@ -640,7 +640,12 @@ async function fixIssue(i) {
     try { await call('setup:steamFlatpakAllow'); toast('Allowed. Restart Steam to use it.', 'ok', 3500, 'mdiCheck'); loadIssues(); } catch (e) { toast(e.message, 'error', 6000); }
     return;
   }
-  if (!(await confirm('Put them back?', 'Steam closes for a moment while its collections are written.', 'Put them back'))) return;
+  // which games first, then put them back (0.9.3 L): the list, with the action on top
+  const v = await choose({ sheet: true, title: i.text, message: 'Steam closes for a moment while its collections are written.', options: [
+    { label: 'Put them back', value: 'fix', icon: 'mdiFolderSyncOutline' },
+    ...(i.items || []).map((g) => ({ label: g.name, sub: g.collection, value: null, icon: 'mdiGamepadVariantOutline', raw: true })),
+  ] });
+  if (v !== 'fix') return;
   try { await call('steam:fixCollections'); toast('Putting them back in their collections', 'ok', 3000, 'mdiSteam'); loadIssues(); } catch (e) { toast(e.message, 'error'); }
 }
 watch(sec, (v) => { store.settingsSection = v; if (v === 'emu') loadIssues(); }, { immediate: true });
