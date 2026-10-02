@@ -15,6 +15,7 @@ module.exports = function createTrophyService(ctx) {
   const LINKS_FILE = path.join(USER_DATA, 'trophy-links.json');
   const REMOTE_FILE = path.join(USER_DATA, 'trophy-remote.json');
   T.setIconCacheDir(path.join(USER_DATA, 'trophyicons'));
+  T.setTrpCacheDir(path.join(USER_DATA, 'trophylists')); // shadPS4 lists Cartridge decrypted itself (E6)
 
   const links = loadJson(LINKS_FILE, {}); // "src:set" -> romId (0 = the user unlinked it)
   const remote = new Map(Object.entries(loadJson(REMOTE_FILE, {}))); // "src:set" -> { romId, noteId, data }
