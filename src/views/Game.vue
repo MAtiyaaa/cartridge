@@ -155,7 +155,7 @@
 
 <script setup>
 import { similarTo } from '../recs.js';
-import { addGame, removeGame, applyChanges } from '../steam.js';
+import { addGame, removeGame, applyChanges, pickEmulator } from '../steam.js';
 import { computed, onMounted, onBeforeUnmount, ref, nextTick, watch } from 'vue';
 import { store, call, img, go, cover, bytes, year, rating, toast, confirm, download, downloadFor, romById, platformById, isNew, setBg, logoOf, resetLogos, artFor, choose, openModal, allRoms, visible, isFavourite, addToCollection, playOf, playtimeText, ago, loadPlay, askText, saveConfig, backdropOf, wantSharp } from '../store.js';
 import { useView } from '../useView.js';
@@ -544,10 +544,7 @@ async function pickGameEmu() {
   const ge = await call('steam:gameEmu', { romId });
   const list = await call('steam:gameEmuOptions', { key: ge.key });
   if (!list.length) return toast('No other emulator for this console was found. Run Emulator setup in Settings → Emulators.', 'info', 5000);
-  const v = await choose({ title: 'Emulator for this game', message: base.value.name, options: [
-    { label: 'Same as its console', value: '__console', selected: !ge.current, icon: 'mdiArrowULeftTop' },
-    ...list.map((c) => ({ label: c.label, sub: c.sub, value: c.id, selected: ge.current === c.id, icon: 'mdiGamepadVariantOutline' })),
-  ] });
+  const v = await pickEmulator({ title: 'Emulator for this game', message: base.value.name, list, current: ge.current, first: [{ label: 'Same as its console', value: '__console', selected: !ge.current, icon: 'mdiArrowULeftTop' }] });
   if (!v) return;
   await call('steam:setGameEmu', { romId, id: v === '__console' ? null : v });
   const st = await call('steam:forRom', { romId }).catch(() => null);

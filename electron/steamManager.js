@@ -652,6 +652,8 @@ module.exports = function createSteamManager(ctx) {
   }
   // A game can use another emulator than its console (picked on the game page): cfg().gameEmus[romId]
   function templateForGame(romId, key) {
+    const own = (cfg().gameTemplates || {})[romId];
+    if (own && own.exe) return { ...own, how: 'yours', perGame: true };
     const pick = (cfg().gameEmus || {})[romId];
     if (pick) { const c = candidates(key).find((x) => x.id === pick); if (c) return { ...c.t, emu: c.id, perGame: true }; }
     return templateFor(key);
@@ -775,7 +777,7 @@ module.exports = function createSteamManager(ctx) {
       const ours = sc && reg[sc.appid];
       const queued = queue.add.some((a) => a.romId === g.rom.id) ? 'add' : sc && queue.remove.includes(sc.appid) ? 'remove' : null;
       // a game that can't be added yet (Vita: not installed in Vita3K) says why
-      const t = sc || !g.file ? null : (cfg().gameEmus || {})[g.rom.id] ? templateForGame(g.rom.id, g.key) : (tFor[g.key] !== undefined ? tFor[g.key] : (tFor[g.key] = templateFor(g.key)));
+      const t = sc || !g.file ? null : ((cfg().gameEmus || {})[g.rom.id] || (cfg().gameTemplates || {})[g.rom.id]) ? templateForGame(g.rom.id, g.key) : (tFor[g.key] !== undefined ? tFor[g.key] : (tFor[g.key] = templateFor(g.key)));
       const blocked = t && (t.kind === 'vitaid' || isRpcs3(t)) ? gameRef(g.rom, g.file, t).missing || null : null;
       // ours with arguments in Target but "%command%" in Launch options (Steam's own default): won't start
       const badLo = !!(ours && !ours.inPlace && sc.exeRaw && tokenize(sc.exeRaw).length > 1 && ours.mode !== 'script'); // arguments in Target (0.7.11 to 0.8.1): Update moves them back
@@ -789,10 +791,10 @@ module.exports = function createSteamManager(ctx) {
         // exactly what goes in Steam (see plan): arguments in Target unless something wraps the command
         ...launchFor(t, [...(t.pre || []), ...(t.command ? ['%command%'] : []), t.args].join(' '), t.args) } : null, mode: (cfg().modes || {})[k] || 'direct',
         // installed emulators to pick from, and which one new shortcuts use
-        emus: az([...(learned[k] ? [{ id: 'learned', label: 'From your Steam shortcuts', sub: learned[k].from }] : []), ...candidates(k).map((c) => ({ id: c.id, label: c.label, sub: c.t.from }))]),
+        emus: az([...(learned[k] ? [{ id: 'learned', label: 'From your Steam shortcuts', sub: learned[k].from }] : []), ...candidates(k).map((c) => ({ id: c.id, label: c.label, sub: c.t.from, fork: !!c.fork }))]),
         emu: t?.how === 'yours' ? 'yours' : t?.emu || null,
         own: ps.filter((g) => g.inSteam && !g.ours && g.appid && g.file).length, // added some other way: Take over offers them (C7)
-        outdated: t ? ps.filter((g) => g.inSteam && g.ours && (g.badLo || reg[g.appid]?.sig !== sigOf((cfg().gameEmus || {})[g.romId] ? templateForGame(g.romId, k) : t, (cfg().modes || {})[k]))).length : 0 };
+        outdated: t ? ps.filter((g) => g.inSteam && g.ours && (g.badLo || reg[g.appid]?.sig !== sigOf(((cfg().gameEmus || {})[g.romId] || (cfg().gameTemplates || {})[g.romId]) ? templateForGame(g.romId, k) : t, (cfg().modes || {})[k]))).length : 0 };
     }).sort((a, b) => a.platform.localeCompare(b.platform));
     return {
       steam: env.installed ? (env.account ? { account: env.account.name, accounts: env.accounts.map((a) => a.name), running: env.running, flatpak: env.account.flatpak } : { error: 'Steam is installed but no account has signed in yet. Open Steam once, then come back.' }) : { error: 'Steam was not found on this device.' },
@@ -1523,7 +1525,10 @@ module.exports = function createSteamManager(ctx) {
     liveEnable: () => { const env = environment(); if (!env.account) throw new Error('Steam was not found.'); fs.writeFileSync(path.join(env.account.root, live.FLAG), ''); return true; },
     onDownloaded, onDeleted, lastStatus, writeScript, startupReport, forRom, fixCollections, played, playtime, steamRoots, refreshArt,
     scanEmulators, rpcs3Command, vita3kCommand, setupOverview, confirm, markFork, useFile, health, healthFix, movedEmulators, setupReport, syncConsoleCollections, preflight: (key) => preflight(key, templateFor(key)),
-    candidatesFor: (key) => az(candidates(key).map((c) => ({ id: c.id, label: c.label, sub: shortPath(c.t.how === 'flatpak' ? c.t.from : c.t.exe) }))),
+    candidatesFor: (key) => az(candidates(key).map((c) => ({ id: c.id, label: c.label, sub: shortPath(c.t.how === 'flatpak' ? c.t.from : c.t.exe), fork: !!c.fork }))),
+    // one game's own Target, Start in and Launch options (console page, 0.9.15); null goes back
+    setGameTemplate: (romId, t) => { const c = cfg(); c.gameTemplates ||= {}; if (t) c.gameTemplates[romId] = parseTemplate(t); else delete c.gameTemplates[romId]; ctx.saveConfig(); return true; },
+    gameTemplate: (romId, key) => { const t = templateForGame(romId, key); return t ? { exe: t.exe, start: startOf(t), lo: [...(t.pre || []), ...(t.command ? ['%command%'] : []), t.args].join(' '), how: t.how, own: !!(cfg().gameTemplates || {})[romId] } : null; },
     setGameEmu: (romId, id) => { const c = cfg(); c.gameEmus ||= {}; if (id) c.gameEmus[romId] = id; else delete c.gameEmus[romId]; ctx.saveConfig(); return true; },
     gameEmu: (romId) => (cfg().gameEmus || {})[romId] || null,
     addedAt: (romId) => Math.min(...Object.values(reg).filter((r) => r.romId === romId && r.at).map((r) => r.at), Infinity),

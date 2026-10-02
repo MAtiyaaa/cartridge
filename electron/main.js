@@ -2333,6 +2333,8 @@ const handlers09 = {
   'steam:gameEmu': ({ romId }) => ({ current: steamMgr.gameEmu(romId), key: steamMgr.forRom(romId).console }),
   'steam:gameEmuOptions': ({ key }) => steamMgr.candidatesFor(key),
   'steam:setGameEmu': ({ romId, id }) => steamMgr.setGameEmu(romId, id),
+  'steam:gameTemplate': ({ romId }) => steamMgr.gameTemplate(romId, steamMgr.forRom(romId).console),
+  'steam:setGameTemplate': ({ romId, template }) => steamMgr.setGameTemplate(romId, template),
   'steam:refreshGame': ({ romId }) => steamMgr.refreshGame(romId),
   // 0.9.3: everything waiting for you, in one list (Settings → Emulators) instead of start-up pop-ups
   'issues:list': async () => {

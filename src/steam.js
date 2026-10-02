@@ -13,6 +13,19 @@ export function steamProgressLabel(p) {
 window.cart.on('steam-auto', (e) => {
   toast(e.action === 'add' ? `${e.name || 'Game'} is waiting to be added to Steam. Apply from Settings → Steam.` : 'Removed game is waiting to come off Steam. Apply from Settings → Steam.', 'info', 4500, 'mdiSteam');
 });
+// An emulator list with the forks behind one "Forks" entry that opens their own page (0.9.15):
+// returns the picked id, or null. first: entries above the list (for example "Same as its console").
+export async function pickEmulator({ title, message, list, current, first = [] }) {
+  const icon = (e) => (e.id === 'learned' ? 'mdiSteam' : String(e.id).startsWith('ra:') ? 'mdiAlphaRBoxOutline' : 'mdiGamepadVariantOutline');
+  const main = list.filter((e) => !e.fork), forks = list.filter((e) => e.fork);
+  for (;;) {
+    const v = await choose({ sheet: true, title, message, options: [...first, ...main.map((e) => ({ label: e.label, sub: e.sub, value: e.id, icon: icon(e), selected: e.id === current, raw: true })),
+      ...(forks.length ? [{ label: `Forks (${forks.length})`, sub: forks.map((f) => f.label.split(' · ')[0]).join(', '), value: '__forks', icon: 'mdiSourceFork', selected: forks.some((f) => f.id === current) }] : [])] });
+    if (v !== '__forks') return v || null;
+    const f = await choose({ sheet: true, title: 'Forks', message: title, options: forks.map((e) => ({ label: e.label, sub: e.sub, value: e.id, icon: 'mdiSourceFork', selected: e.id === current, raw: true })) });
+    if (f) return f; // B: back to the first list
+  }
+}
 export const scfg = () => store.config?.steam || {};
 
 // Which Steam collections? Remembers the last choice per console.
