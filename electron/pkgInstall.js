@@ -220,6 +220,9 @@ async function vitaContent(p) {
   const pkg = files.map((f) => (/\.pkg$/i.test(f) ? pkgInfo(f) : null)).find((x) => x && x.platform === 2 && VITA_ID.test(x.contentId.slice(7, 16)));
   if (pkg) return { kind: 'pkg', file: pkg.file, titleId: pkg.contentId.slice(7, 16), zrif: findZrif(files) };
   for (const f of files.filter((x) => /\.(vpk|zip)$/i.test(x))) { const id = await zipTitleId(f); if (id) return { kind: 'vpk', file: f, titleId: id, zrif: null }; }
+  // 0.9.19: a dump already unpacked (a folder with sce_sys/param.sfo), as Vita3K's install_contents takes it
+  const sfo = files.find((f) => /(^|\/)sce_sys\/param\.sfo$/i.test(f.split(path.sep).join('/')));
+  if (sfo) { const id = vitaSfoId(path.dirname(path.dirname(sfo))); if (id) return { kind: 'dir', file: path.dirname(path.dirname(sfo)), titleId: id, zrif: null }; }
   return null;
 }
 const appsIn = (prefs) => new Map(prefs.flatMap((p) => ls(path.join(p, 'ux0/app')).map((n) => [path.join(p, 'ux0/app', n), n])));
@@ -232,36 +235,153 @@ function vitaLicenced(pref, id, dir) {
   return ls(path.join(pref, 'ux0/license', id)).some((n) => /\.rif$/i.test(n)) || ls(path.join(pref, 'ux0/license/app', id)).some((n) => /\.rif$/i.test(n));
 }
 const NO_QT = /Qt platform plugin/i;
+
+// ---- Installing a Vita archive the way Vita3K does (0.9.19, owner: in the background like RPCS3,
+// never opening Vita3K). Read from Vita3K's interface.cpp (install_archive, get_archive_contents_path,
+// install_archive_content, set_content_path) and io.cpp (copy_path):
+// - each "content" is the folder holding sce_sys/param.sfo; a Vitamin dump (sce_module/steroid.suprx)
+//   is refused;
+// - category gd (game) -> ux0/app/<TITLE_ID>; ac (DLC) -> ux0/addcont/<TITLE_ID>/<CONTENT_ID from char 20>;
+//   gp (update) -> ux0/patch/<TITLE_ID>, then merged into ux0/app/<TITLE_ID> (the app must be there first);
+// - a retail title (PCS...) with sce_sys/package/ is NoNpDrm: its files are PFS-encrypted and only Vita3K
+//   can decrypt them (psvpfsparser with its keys), so those still go through Vita3K, hidden (below).
+// Everything else (homebrew, already decrypted dumps) is unpacked here, no Vita3K process at all.
+function vitaArchive(file) {
+  return new Promise((resolve, reject) => {
+    let yauzl; try { yauzl = require('yauzl'); } catch (e) { return reject(e); }
+    yauzl.open(file, { lazyEntries: true, autoClose: false }, (err, zip) => {
+      if (err) return reject(err);
+      const entries = [];
+      zip.on('entry', (e) => { entries.push(e); zip.readEntry(); });
+      zip.on('end', () => resolve({ zip, entries }));
+      zip.on('error', reject);
+      zip.readEntry();
+    });
+  });
+}
+const readEntry = (zip, e) => new Promise((ok, bad) => zip.openReadStream(e, (er, st) => { if (er) return bad(er); const parts = []; st.on('data', (d) => parts.push(d)); st.on('end', () => ok(Buffer.concat(parts))); st.on('error', bad); }));
+// what an archive holds: [{ base, sfo: { TITLE_ID, CATEGORY, CONTENT_ID, TITLE }, encrypted }]
+async function vitaArchiveContents(file) {
+  const { zip, entries } = await vitaArchive(file);
+  try {
+    const names = entries.map((e) => e.fileName.replace(/\\/g, '/'));
+    if (names.some((n) => n.includes('sce_module/steroid.suprx'))) throw new Error('This is a Vitamin dump, which Vita3K doesn’t support. Use a NoNpDrm dump or a .pkg with its zRIF.');
+    const out = [];
+    for (const e of entries) {
+      const n = e.fileName.replace(/\\/g, '/');
+      const m = /^(.*?)sce_sys\/param\.sfo$/i.exec(n);
+      if (!m || out.some((c) => c.base === m[1]) || e.uncompressedSize > 1 << 20) continue;
+      const buf = await readEntry(zip, e), sfo = require('./patches').parseSfo(buf);
+      if (!sfo.TITLE_ID) sfo.TITLE_ID = (buf.toString('latin1').match(/PCS[A-Z]\d{5}/) || [])[0]; // a damaged param.sfo: what Vita3K would see is unsure, so it gets the file
+      const enc = names.some((x) => x.startsWith(m[1] + 'sce_sys/package/'));
+      out.push({ base: m[1], sfo, encrypted: (enc && /^PCS/.test(sfo.TITLE_ID || '')) || !sfo.CATEGORY });
+    }
+    return out;
+  } finally { try { zip.close(); } catch {} }
+}
+function vitaDest(pref, sfo) {
+  const id = sfo.TITLE_ID, cat = String(sfo.CATEGORY || 'gd');
+  if (cat === 'ac') return { dir: path.join(pref, 'ux0/addcont', id, String(sfo.CONTENT_ID || '').slice(20)), cat };
+  if (cat.includes('gp')) return { dir: path.join(pref, 'ux0/patch', id), cat };
+  return { dir: path.join(pref, 'ux0/app', id), cat };
+}
+// copies every file under a folder into another (Vita3K copy_directory_contents), overwriting
+function mergeInto(src, dst) {
+  for (const n of ls(src)) {
+    const a = path.join(src, n), b = path.join(dst, n);
+    if (isDir(a)) { fs.mkdirSync(b, { recursive: true }); mergeInto(a, b); } else { fs.mkdirSync(dst, { recursive: true }); fs.copyFileSync(a, b); }
+  }
+}
+// unpacks the unencrypted contents of a .vpk/.zip into Vita3K's storage; returns the title IDs installed
+async function vitaUnpack(file, pref, contents, { onFile = () => {}, signal } = {}) {
+  const { zip, entries } = await vitaArchive(file);
+  const done = [];
+  try {
+    for (const c of contents) {
+      const { dir, cat } = vitaDest(pref, c.sfo);
+      if (cat.includes('gp') && !ls(path.join(pref, 'ux0/app', c.sfo.TITLE_ID)).length) throw new Error('This is an update: install the game first.');
+      const tmp = dir + '.cartridge-new';
+      fs.rmSync(tmp, { recursive: true, force: true });
+      const mine = entries.filter((e) => e.fileName.replace(/\\/g, '/').startsWith(c.base) && !/\/$/.test(e.fileName));
+      let n = 0;
+      for (const e of mine) {
+        if (signal?.aborted) throw new Error('Stopped.');
+        const rel = e.fileName.replace(/\\/g, '/').slice(c.base.length);
+        const out = path.join(tmp, rel);
+        if (!path.resolve(out).startsWith(path.resolve(tmp) + path.sep)) continue; // never outside the game's folder
+        fs.mkdirSync(path.dirname(out), { recursive: true });
+        await new Promise((ok, bad) => zip.openReadStream(e, (er, st) => { if (er) return bad(er); const ws = fs.createWriteStream(out); st.on('error', bad); ws.on('error', bad); ws.on('finish', ok); st.pipe(ws); }));
+        onFile(++n, mine.length);
+      }
+      // as Vita3K: an install replaces what was there (create_directories, else remove_all)
+      fs.rmSync(dir, { recursive: true, force: true });
+      fs.mkdirSync(path.dirname(dir), { recursive: true });
+      fs.renameSync(tmp, dir);
+      if (cat.includes('gp')) { mergeInto(dir, path.join(pref, 'ux0/app', c.sfo.TITLE_ID)); fs.rmSync(dir, { recursive: true, force: true }); } // copy_path
+      done.push(c.sfo.TITLE_ID);
+    }
+  } finally { try { zip.close(); } catch {} }
+  return done;
+}
+
+// Qt display plugins tried in turn (0.9.18/0.9.19): offscreen and minimal show nothing; builds without
+// them get the normal display, where Vita3K installs before it builds its window and is stopped the
+// moment its log says so (vita3k/main.cpp logs "installed successfully" before MainWindow).
+const QT_TRIES = ['offscreen', 'minimal', null];
+
 // Runs Vita3K for one game; returns [{ serial, dir, created }] for what is in ux0/app afterwards
 async function installVita({ cmd, prefs, item, zrif, onStep = () => {}, signal }) {
   const before = appsIn(prefs);
+  // 0.9.19: unencrypted archives never start Vita3K
+  if (item.kind === 'vpk') {
+    const contents = await vitaArchiveContents(item.file);
+    if (!contents.length) throw new Error('No Vita game in this file (no sce_sys/param.sfo).');
+    if (!contents.some((c) => c.encrypted)) {
+      onStep({ step: 1, of: 1, file: path.basename(item.file), opens: false });
+      await vitaUnpack(item.file, prefs[0], contents, { signal, onFile: (n, of) => onStep({ step: 1, of: 1, file: path.basename(item.file), opens: false, pct: Math.floor((n / of) * 100) }) });
+      const dir = path.join(prefs[0], 'ux0/app', item.titleId);
+      if (!isDir(dir)) return [];
+      return [{ serial: item.titleId, dir, created: ![...before.values()].includes(item.titleId), licenced: vitaLicenced(prefs[0], item.titleId, dir) }];
+    }
+  }
+  if (item.kind === 'dir' && !fs.existsSync(path.join(item.file, 'sce_sys/package'))) {
+    const sfo = require('./patches').sfoAt(path.join(item.file, 'sce_sys/param.sfo'));
+    const { dir, cat } = vitaDest(prefs[0], sfo);
+    onStep({ step: 1, of: 1, file: path.basename(item.file), opens: false });
+    if (cat.includes('gp')) mergeInto(item.file, path.join(prefs[0], 'ux0/app', sfo.TITLE_ID));
+    else { fs.rmSync(dir, { recursive: true, force: true }); mergeInto(item.file, dir); }
+    const app = path.join(prefs[0], 'ux0/app', item.titleId);
+    return isDir(app) ? [{ serial: item.titleId, dir: app, created: ![...before.values()].includes(item.titleId), licenced: vitaLicenced(prefs[0], item.titleId, app) }] : [];
+  }
   const env = { ...process.env };
   for (const k of ['LD_PRELOAD', 'LD_LIBRARY_PATH', 'APPDIR', 'APPIMAGE', 'ARGV0', 'OWD']) delete env[k];
   const args = item.kind === 'pkg' ? ['--pkg', item.file, '--zrif', zrif || item.zrif] : [item.file];
-  // A .vpk/.zip: Vita3K installs it before it builds its window, then boots the game (vita3k/main.cpp).
-  // Run with Qt's offscreen display so nothing shows, and stop it as soon as its log says the install
-  // is done (0.9.15: no window, like RPCS3's headless install). A .pkg with its zRIF quits by itself.
-  if (item.kind !== 'pkg') env.QT_QPA_PLATFORM = 'offscreen';
   onStep({ step: 1, of: 1, file: path.basename(item.file), opens: false });
   let said = '';
   const run = () => new Promise((resolve, reject) => {
     said = '';
     const p = spawn(cmd.exe, [...cmd.args, ...args], { env, stdio: ['ignore', 'pipe', 'pipe'] });
-    const kill = () => { try { p.kill(); } catch {} };
+    const kill = () => { try { p.kill('SIGKILL'); } catch {} };
     const timer = setTimeout(kill, 3 * 60 * 60e3);
+    let quiet = null;
     signal?.addEventListener('abort', kill, { once: true });
     const watch = (d) => {
       said = (said + d.toString()).slice(-8000);
-      if (item.kind !== 'pkg' && /installed successfully|will auto-boot|not a supported content|Vitamin dump|installation failed|already installed/i.test(said)) setTimeout(kill, 800);
+      if (item.kind === 'pkg') return; // --pkg quits by itself without a window
+      // all contents done (it boots the game next), or something it won't install: stop it now
+      if (/will auto-boot|not a supported content|Vitamin dump|Failed to refresh apps list/i.test(said)) return kill();
+      // a DLC-only archive has no auto-boot line: stop once it has been quiet after the last install
+      if (/installed successfully/i.test(said)) { clearTimeout(quiet); quiet = setTimeout(kill, 1200); }
     };
     p.stdout.on('data', watch); p.stderr.on('data', watch);
     p.on('error', (e) => { clearTimeout(timer); reject(new Error(`Vita3K didn't start: ${e.message}`)); });
-    p.on('exit', () => { clearTimeout(timer); resolve(); });
+    p.on('exit', () => { clearTimeout(timer); clearTimeout(quiet); resolve(); });
   });
-  await run();
-  // 0.9.18 (owner's error): Vita3K builds without Qt's offscreen plugin refuse to start at all ("no Qt
-  // platform plugin could be initialized"). Run again on the normal display; it's stopped once installed.
-  if (NO_QT.test(said) && env.QT_QPA_PLATFORM) { delete env.QT_QPA_PLATFORM; await run(); }
+  for (const qpa of QT_TRIES) {
+    if (qpa) env.QT_QPA_PLATFORM = qpa; else delete env.QT_QPA_PLATFORM;
+    await run();
+    if (!NO_QT.test(said)) break;
+  }
   const dir = [...appsIn(prefs)].find(([d, n]) => n === item.titleId && vitaSfoId(d) === item.titleId)?.[0];
   if (!dir) { const why = (said.match(/.*(?:error|failed|critical|not a supported|Vitamin)[^\n]*/gi) || []).pop(); if (why) throw new Error(`Vita3K: ${why.replace(/^\[[^\]]*\]\s*/g, '').trim().slice(0, 200)}`); return []; }
   const pref = prefs.find((p) => dir.startsWith(path.join(p, 'ux0/app') + path.sep)) || prefs[0];
@@ -311,9 +431,13 @@ async function installFirmware({ emu, cmd, file, signal }) {
     p.on('error', (e) => { clearTimeout(timer); reject(new Error(`${emu === 'rpcs3' ? 'RPCS3' : 'Vita3K'} didn't start: ${e.message}`)); });
     p.on('exit', (c) => { clearTimeout(timer); resolve(c); });
   });
-  let code = await run();
-  if (NO_QT.test(tail) && env.QT_QPA_PLATFORM) { delete env.QT_QPA_PLATFORM; code = await run(); } // as installVita
+  let code;
+  for (const qpa of emu === 'vita3k' ? QT_TRIES : [undefined]) { // as installVita: no window either way (--firmware quits)
+    if (qpa) env.QT_QPA_PLATFORM = qpa; else if (qpa === null) delete env.QT_QPA_PLATFORM;
+    code = await run();
+    if (!NO_QT.test(tail)) break;
+  }
   if (code && code !== 0) throw new Error(`${emu === 'rpcs3' ? 'RPCS3' : 'Vita3K'} couldn't install the firmware: ${(tail.trim().split('\n').pop() || 'exit ' + code).slice(0, 200)}`);
   return true;
 }
-module.exports = { installFirmware, pkgInfo, packagesIn, licencePlan, stageLicences, exdataHas, npdOf, rpcs3Hdds, sfoSerial, install, vitaPrefs, vitaContent, findZrif, installVita, safeToRemove };
+module.exports = { installFirmware, pkgInfo, packagesIn, licencePlan, stageLicences, exdataHas, npdOf, rpcs3Hdds, sfoSerial, install, vitaPrefs, vitaContent, findZrif, installVita, vitaArchiveContents, vitaUnpack, safeToRemove };

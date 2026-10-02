@@ -12,9 +12,48 @@ const yaml = require('js-yaml');
 
 const exists = (p) => { try { fs.accessSync(p); return true; } catch { return false; } };
 // Everything as text (FAILSAFE): RPCS3's app version keys like 01.00 must not turn into numbers
-const load = (t) => yaml.load(t, { schema: yaml.FAILSAFE_SCHEMA }) || {};
+// json: true lets a key appear twice (the later wins), as yaml-cpp, which RPCS3 uses, reads it (0.9.19:
+// a duplicate key in RPCS3's patch list made js-yaml throw, so no patches showed at all)
+const load = (t) => yaml.load(t, { schema: yaml.FAILSAFE_SCHEMA, json: true }) || {};
 const dump = (o) => yaml.dump(o, { schema: yaml.FAILSAFE_SCHEMA, lineWidth: -1, noRefs: true });
 const readYaml = (f) => { try { const o = load(fs.readFileSync(f, 'utf8')); return o && typeof o === 'object' ? o : {}; } catch { return {}; } };
+// A patch file read for listing only: js-yaml first, else a forgiving reader of the parts Cartridge needs
+// (hash > description > Games > title > serial > versions, Author, Notes, Group), so one line RPCS3's own
+// yaml-cpp accepts but js-yaml doesn't never hides the whole list
+function readPatchFile(f) {
+  let text; try { text = fs.readFileSync(f, 'utf8'); } catch { return {}; }
+  try { const o = load(text); if (o && typeof o === 'object') return o; } catch {}
+  return loosePatchYaml(text);
+}
+function loosePatchYaml(text) {
+  const unq = (v) => { v = String(v).trim(); const m = /^"((?:[^"\\]|\\.)*)"$|^'((?:[^']|'')*)'$/.exec(v); return m ? (m[1] !== undefined ? m[1].replace(/\\"/g, '"') : m[2].replace(/''/g, "'")) : v; };
+  const flow = (v) => v.replace(/^\[|\]$/g, '').split(',').map((x) => unq(x)).filter((x) => x !== '');
+  const KEY = /^("(?:[^"\\]|\\.)*"|'(?:[^']|'')*'|[^:]+?)\s*:(?:\s+(.*))?$/;
+  const root = {}, st = [{ indent: -1, node: root }];
+  let block = null; // indent of a | or > block scalar being skipped
+  for (const raw of text.split(/\r?\n/)) {
+    if (!raw.trim() || /^\s*#/.test(raw)) continue;
+    const indent = raw.length - raw.trimStart().length, line = raw.trim();
+    if (block !== null) { if (indent > block) continue; block = null; }
+    const item = line === '-' || line.startsWith('- ');
+    // a "- item" at the same indent as its key's list stays in that list
+    while (st.length > 1 && indent <= st[st.length - 1].indent && !(item && Array.isArray(st[st.length - 1].node) && indent === st[st.length - 1].indent)) st.pop();
+    const top = st[st.length - 1];
+    if (item) {
+      if (!Array.isArray(top.node) && top.parent && !Object.keys(top.node).length) { top.parent[top.key] = []; top.node = top.parent[top.key]; top.indent = indent; }
+      if (Array.isArray(top.node)) top.node.push(unq(line.slice(1).trim()));
+      continue;
+    }
+    const m = KEY.exec(line);
+    if (!m || Array.isArray(top.node)) continue;
+    const key = unq(m[1]); let val = (m[2] || '').replace(/\s+#.*$/, '').trim();
+    if (/^&\S+$/.test(val)) val = ''; // an anchor on a map: the map follows
+    if (/^[|>][-+]?$/.test(val)) { top.node[key] = ''; block = indent; continue; }
+    if (!val) { const child = {}; top.node[key] = child; st.push({ indent, node: child, key, parent: top.node }); continue; }
+    top.node[key] = val.startsWith('[') ? flow(val) : unq(val);
+  }
+  return root;
+}
 
 // PARAM.SFO (PS3, PS4, Vita): header "\0PSF", key table and data table offsets, then entries
 // { key offset u16, format u16, length u32, max u32, data offset u32 }. Returns { KEY: value }.
@@ -60,7 +99,7 @@ function rpcs3List(dir, serial, appVer, mine = {}) {
   const cfg = readYaml(dir.config);
   const out = [], seen = new Set();
   for (const f of files) {
-    const doc = readYaml(f);
+    const doc = readPatchFile(f);
     for (const [hash, descs] of Object.entries(doc)) {
       if (hash === 'Version' || hash === 'Anchors' || !descs || typeof descs !== 'object') continue;
       for (const [description, p] of Object.entries(descs)) {
@@ -104,7 +143,8 @@ async function rpcs3DownloadPatches(patchesDir, { fetchImpl = webFetch, base = '
   if (j.return_code !== 0) throw new Error(`rpcs3.net: no patches (code ${j.return_code})`);
   if (j.version !== RPCS3_PATCH_ENGINE || typeof j.patch !== 'string' || !j.patch) throw new Error('rpcs3.net sent a patch list for another RPCS3 version');
   if (String(j.sha256 || '').toLowerCase() !== require('crypto').createHash('sha256').update(j.patch).digest('hex')) throw new Error('The downloaded patch list failed its checksum');
-  load(j.patch); // throws if it isn't valid YAML
+  // RPCS3 validates with its own loader (yaml-cpp); here the forgiving reader must find a Version 1.2 file
+  { const o = (() => { try { return load(j.patch); } catch { return loosePatchYaml(j.patch); } })(); if (o.Version !== RPCS3_PATCH_ENGINE) throw new Error('The downloaded patch list isn’t one RPCS3 1.2 reads'); }
   fs.mkdirSync(patchesDir, { recursive: true });
   if (exists(file)) fs.renameSync(file, file + '.old');
   fs.writeFileSync(file, j.patch);
@@ -435,4 +475,4 @@ function rpcs3ApplyDb(dir, serial, dbText, mine = {}) {
   return { result: 'written', mine: { ...mine, [serial]: { at: Date.now(), file: f } } };
 }
 
-module.exports = { rpcs3DownloadPatches, isoFile, rpcs3DbFromText, rpcs3CustomPath, rpcs3DbCached, rpcs3ApplyDb, parseSfo, sfoAt, rpcs3Dirs, ps3Version, rpcs3List, rpcs3Set, shadDirs, ps4Version, shadList, shadSet, load, dump, pcsx2Dirs, pcsx2GameList, pcsx2Game, ps2IsoInfo, pcsx2ZipSources, pcsx2ZipBuffer, pnachList, pcsx2List, pcsx2Set, crcHex };
+module.exports = { loosePatchYaml, readPatchFile, rpcs3DownloadPatches, isoFile, rpcs3DbFromText, rpcs3CustomPath, rpcs3DbCached, rpcs3ApplyDb, parseSfo, sfoAt, rpcs3Dirs, ps3Version, rpcs3List, rpcs3Set, shadDirs, ps4Version, shadList, shadSet, load, dump, pcsx2Dirs, pcsx2GameList, pcsx2Game, ps2IsoInfo, pcsx2ZipSources, pcsx2ZipBuffer, pnachList, pcsx2List, pcsx2Set, crcHex };
