@@ -11,7 +11,7 @@
     </div>
     <div>
       <div v-if="!logo || logoFail" class="nm">{{ p.display_name }}</div>
-      <div v-if="meta || maker" class="fam"><svg v-if="maker" class="maker" :class="{ symbol: maker.symbol }" :viewBox="maker.vb" :aria-label="maker.name" role="img"><path :d="maker.d" /></svg><span v-if="maker && meta">·</span><span v-if="meta">{{ meta }}</span></div>
+      <div v-if="meta || maker" class="fam"><svg v-if="maker" class="maker" :class="{ symbol: maker.symbol }" :viewBox="maker.vb" :aria-label="maker.name" role="img"><path :d="maker.d" :fill-rule="maker.evenodd ? 'evenodd' : null" /></svg><span v-if="maker && meta">·</span><span v-if="meta">{{ meta }}</span></div>
       <div class="ct">{{ p.rom_count }} {{ p.rom_count === 1 ? 'game' : 'games' }}<template v-if="onDevice"> · <span class="ondev">{{ onDevice }} on device</span></template></div>
     </div>
   </button>
