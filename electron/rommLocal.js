@@ -201,4 +201,4 @@ function lanUrls(port) {
   return Object.values(os.networkInterfaces()).flat().filter((i) => i && i.family === 'IPv4' && !i.internal).map((i) => `http://${i.address}:${port}`);
 }
 
-module.exports = { keysOf, setup, status, update, lanUrls, hasPodman, hasIds, readiness, prepare, podmanBin, OWN_PODMAN, dbArgs, rommArgs, envText, readEnv, freePort, POD };
+module.exports = { sudo, keysOf, setup, status, update, lanUrls, hasPodman, hasIds, readiness, prepare, podmanBin, OWN_PODMAN, dbArgs, rommArgs, envText, readEnv, freePort, POD };

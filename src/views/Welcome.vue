@@ -117,9 +117,19 @@
             <h1>Get your emulators</h1>
             <p class="w-lead">Cartridge starts games with the emulators on this device. If you don't have any yet, one of these sets them up for you.</p>
             <div v-if="getting" class="w-box glass w-prog">
-              <b>{{ getting === 'emudeck' ? 'Downloading EmuDeck' : 'Installing RetroDECK' }}</b>
+              <b>{{ getting === 'emudeck' ? 'Downloading EmuDeck' : getting === 'flatpak' ? 'Installing Flatpak' : 'Installing RetroDECK' }}</b>
               <div class="bar live"><i :style="{ width: (progress ?? 0) + '%' }" /></div>
               <span class="muted small">{{ progress != null ? progress + '%' : 'Starting…' }}</span>
+            </div>
+            <!-- 0.9.17: no Flatpak on this system: say so, and offer to install it, then RetroDECK, in the background -->
+            <div v-else-if="needFlatpak" class="w-box glass w-prog" style="text-align: left">
+              <b>RetroDECK needs Flatpak</b>
+              <span class="muted small">RetroDECK only comes as a Flatpak, and Flatpak isn't installed on this system. Cartridge can install Flatpak with your system's own installer, then RetroDECK, while you wait. It needs your device password once; it isn't saved.</span>
+              <TextField v-model="devPass" label="Device password" placeholder="Your password for this device" password icon="mdiLock" />
+              <div class="row" style="gap: 10px; justify-content: flex-end">
+                <button class="btn" data-focus @click="needFlatpak = false">Not now</button>
+                <button class="btn primary" data-focus :disabled="!devPass" @click="flatpakThenRetroDeck"><Icon name="mdiPackageDown" />Install Flatpak and RetroDECK</button>
+              </div>
             </div>
             <div v-else-if="opened" class="w-box glass w-prog">
               <b>{{ opened === 'emudeck' ? 'EmuDeck is open' : 'RetroDECK is open' }}</b>
@@ -380,11 +390,18 @@ async function getEmuDeck() {
   catch (e) { toast(e.message, 'error', 6000); }
   getting.value = '';
 }
+const needFlatpak = ref(false), devPass = ref('');
 async function getRetroDeck() {
   getting.value = 'retrodeck'; progress.value = null;
   try { await call('welcome:retrodeck'); opened.value = 'retrodeck'; }
-  catch (e) { toast(e.message, 'error', 6000); }
+  catch (e) { if (/Flatpak isn't installed/i.test(e.message)) needFlatpak.value = true; else toast(e.message, 'error', 6000); }
   getting.value = '';
+}
+async function flatpakThenRetroDeck() {
+  getting.value = 'flatpak'; progress.value = null;
+  try { await call('welcome:flatpak', { password: devPass.value }); needFlatpak.value = false; devPass.value = ''; toast('Flatpak is installed. Now RetroDECK…', 'ok', 3000, 'mdiPackageDown'); }
+  catch (e) { devPass.value = ''; getting.value = ''; return toast(e.message, 'error', 7000); }
+  await getRetroDeck();
 }
 const picking = ref(false);
 const intro = ref(false);

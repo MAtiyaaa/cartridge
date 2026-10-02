@@ -83,4 +83,26 @@ function getRetroDeck(onProgress = () => {}, { run = true } = {}) {
   });
 }
 
-module.exports = { getEmuDeck, getRetroDeck, pickAsset };
+// Flatpak itself, when a system has none (0.9.17, owner: offer it instead of stopping). Image-based
+// systems (SteamOS, Bazzite, Fedora Atomic) always ship it; this is for ordinary distros, through their
+// own package manager with the device password (sudo, used once), then Flathub added.
+function flatpakCommand(osRelease) {
+  const id = ` ${(/^ID=("?)([^"\n]*)\1$/m.exec(osRelease) || [])[2] || ''} ${(/^ID_LIKE=("?)([^"\n]*)\1$/m.exec(osRelease) || [])[2] || ''} `;
+  if (/ (arch|manjaro|endeavouros|cachyos) /.test(id)) return 'pacman -S --needed --noconfirm flatpak';
+  if (/ (debian|ubuntu|linuxmint|pop) /.test(id)) return 'apt-get update && apt-get install -y flatpak';
+  if (/ (fedora|rhel|centos|nobara) /.test(id)) return 'dnf install -y flatpak';
+  if (/ (opensuse|suse|opensuse-tumbleweed) /.test(id)) return 'zypper --non-interactive install flatpak';
+  if (/ (void) /.test(id)) return 'xbps-install -Sy flatpak';
+  return null;
+}
+async function getFlatpak(password) {
+  if (has('flatpak')) return true;
+  const os_ = (() => { try { return fs.readFileSync('/etc/os-release', 'utf8'); } catch { return ''; } })();
+  const cmd = flatpakCommand(os_);
+  if (!cmd) throw new Error("Cartridge doesn't know this system's package manager. Install Flatpak with it (flatpak.org/setup), then try again.");
+  await require('./rommLocal').sudo(password, `${cmd} && flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo`);
+  if (!has('flatpak')) throw new Error("Flatpak didn't install. Try installing it yourself (flatpak.org/setup).");
+  return true;
+}
+
+module.exports = { getEmuDeck, getRetroDeck, pickAsset, getFlatpak, flatpakCommand, hasFlatpak: () => has('flatpak') };

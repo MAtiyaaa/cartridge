@@ -3289,6 +3289,7 @@ const handlers = {
     };
   },
   'welcome:emudeck': () => require('./welcome').getEmuDeck((p) => broadcast('welcome-progress', { what: 'emudeck', ...p })).then((r) => { log('welcome: EmuDeck app downloaded', r.version); return r; }),
+  'welcome:flatpak': ({ password } = {}) => require('./welcome').getFlatpak(password).then((r) => { log('welcome: Flatpak installed'); return r; }),
   'welcome:retrodeck': () => require('./welcome').getRetroDeck((p) => broadcast('welcome-progress', { what: 'retrodeck', ...p })).then((r) => { log('welcome: RetroDECK installed'); return r; }),
   'steam:queueAdd': (items) => steamMgr.queueAdd(items),
   'steam:queueRemove': (ids) => steamMgr.queueRemove(ids),
