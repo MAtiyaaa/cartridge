@@ -5,6 +5,8 @@
 - **Vita3K through EmuDeck.** EmuDeck's Vita3K script adds "-Fr" itself, so games added to Steam got it twice and didn't boot, and installs never reached Vita3K. Shortcuts now pass just the game's ID (press Update on the Vita console page), and installs use Vita3K itself. Cartridge also finds Vita3K's storage in its portable folder and under XDG_DATA_HOME.
 - **Controller in the background.** In Game Mode, with Steam's menu in front, the controller no longer moves around in Cartridge.
 - **PS3 patches for disc games:** the serial is read from the disc folder, the ISO or a name like "BLUS-30443".
+- **PS2 patches without PCSX2's game list:** for ISO files Cartridge reads the game's serial and CRC itself, the way PCSX2 does. Compressed games (CHD) still need PCSX2 to have listed them once.
+- **Patches sheet:** no stray dot before the explanation; PS2 games show their CRC.
 - **Developer names** come from RomM's developers list, not the first company (often the publisher).
 - **Console names** in trophies and RetroAchievements follow the names on your RomM server.
 - **A changed RetroAchievements picture** now shows (asked again every few hours, and on Refresh).

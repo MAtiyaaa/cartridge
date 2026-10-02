@@ -184,6 +184,7 @@ LT/RT switch top tabs. LB/RB only switch sections inside a page. A select, B bac
 - `consoleName()` in store.js (RomM's current platform names), `developerOf()` in romm.js, `titleCase()` for Menu labels (`o.raw` opts out), `store.settingsSpot` (store.go remembers the Settings row), `steam:status.added` (`cartridgeInSteam`), `bgPreview()` in bgRenderers.js, Menu `img`.
 - Trophies All: one list (`.aa-row`), owner's pick A. Home: one Continue playing row.
 - Health: learned shortcuts with a gone game get Remove from Steam (only when their ROMs folder exists).
+- PS2 ISO serial/CRC: `ps2IsoInfo` in patches.js (SYSTEM.CNF BOOT2, XOR of the ELF's words) when PCSX2's game list doesn't have the game; CHD still needs the list.
 
 ## Releases (full steps: HANDOFF D8)
 Only when the owner asks. Bump `version` and `build.releaseInfo.releaseName` ("Cartridge X.Y.Z") in `package.json`, and set `versionName` (what Settings → About and update messages show). **0.9.3 is shipped in parts (owner, 1 Oct 2026):** the number goes up as usual (0.9.4, 0.9.5...) but `versionName` and the release title are "0.9.3 B", "0.9.3 C"... until the 0.9.3 plan is done; notes heading `## Cartridge 0.9.3 B · Title`. Then put only this version's notes in `RELEASE_NOTES.md` (heading `## Cartridge X.Y.Z · Title`), add them to the top of `CHANGELOG.md`, grouped as New / Changed / Fixed with bold lead-ins. CI builds, launch-checks and publishes.

@@ -1730,9 +1730,10 @@ function ps2PatchState(romId) {
   if (!dir) return { emu: 'pcsx2', why: 'PCSX2’s settings weren’t found on this device. Open PCSX2 once, then come back.' };
   let file = where;
   try { if (fs.statSync(where).isDirectory()) file = fs.readdirSync(where).map((n) => path.join(where, n)).filter((f) => /\.(iso|chd|cso|zso|gz|bin|cue|elf)$/i.test(f)).sort((a, b) => fs.statSync(b).size - fs.statSync(a).size)[0] || where; } catch {}
-  const game = patchesMod.pcsx2Game(dir, file);
-  if (!game) return { emu: 'pcsx2', why: 'PCSX2 hasn’t listed this game yet. Add your PS2 folder in PCSX2 (Settings → Game List), let it scan, then come back.' };
-  return { emu: 'pcsx2', serial: game.serial || patchesMod.crcHex(game.crc), version: patchesMod.crcHex(game.crc), dir, game };
+  // PCSX2's game list first; else Cartridge reads the ISO itself (0.9.3 L)
+  const game = patchesMod.pcsx2Game(dir, file) || (/\.iso$/i.test(file) ? patchesMod.ps2IsoInfo(file) : null);
+  if (!game || !game.crc) return { emu: 'pcsx2', why: /\.iso$/i.test(file) ? 'Cartridge couldn’t read this disc image.' : 'This game is compressed (CHD and similar), so its details come from PCSX2: add your PS2 folder in PCSX2 (Settings → Game List) once, let it scan, then come back.' };
+  return { emu: 'pcsx2', serial: game.serial || '', version: patchesMod.crcHex(game.crc), dir, game };
 }
 const EMU_PATCH = {
   rpcs3: { name: 'RPCS3', list: (st, mine) => patchesMod.rpcs3List(st.dir, st.serial, st.version, mine), set: (st, todo, mine) => patchesMod.rpcs3Set(st.dir, todo, mine) },

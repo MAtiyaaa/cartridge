@@ -222,3 +222,22 @@ test('RPCS3 database: writes the game\'s settings once, never over its own', () 
   assert.strictEqual(P.rpcs3ApplyDb(dir, 'BLUS30443', DB, a.mine).result, 'exists');
   assert.strictEqual(P.rpcs3ApplyDb(dir, 'BCUS98137', DB, {}).result, 'none');
 });
+
+// PS2 ISO read like PCSX2 does (0.9.3 L): no game list needed
+function ps2Iso(file, elf) {
+  const S = 2048, img = Buffer.alloc(S * 24);
+  const rec = (name, lba, size, dir) => { const n = Buffer.from(name, 'latin1'); const len = 33 + n.length + ((33 + n.length) % 2); const b = Buffer.alloc(len); b[0] = len; b.writeUInt32LE(lba, 2); b.writeUInt32LE(size, 10); b[25] = dir ? 2 : 0; b[32] = n.length; n.copy(b, 33); return b; };
+  const pvd = img.subarray(16 * S); pvd[0] = 1; pvd.write('CD001', 1, 'latin1');
+  rec('\0', 20, S, true).copy(pvd, 156);
+  const cnf = Buffer.from('BOOT2 = cdrom0:\\SLUS_213.86;1\r\nVER = 1.00\r\nVMODE = NTSC\r\n', 'latin1');
+  Buffer.concat([rec('\0', 20, S, true), rec('\x01', 20, S, true), rec('SYSTEM.CNF;1', 21, cnf.length), rec('SLUS_213.86;1', 22, elf.length)]).copy(img, 20 * S);
+  cnf.copy(img, 21 * S); elf.copy(img, 22 * S);
+  fs.writeFileSync(file, img);
+}
+test('PCSX2: a PS2 ISO gives its serial and CRC without PCSX2\'s game list', () => {
+  const elf = Buffer.alloc(16); elf.writeUInt32LE(0x7f454c46, 0); elf.writeUInt32LE(0x11111111, 4); elf.writeUInt32LE(0x0000ffff, 8); elf.writeUInt32LE(0x12340000, 12);
+  const f = path.join(TMP, 'game.iso'); ps2Iso(f, elf);
+  const crc = (0x7f454c46 ^ 0x11111111 ^ 0x0000ffff ^ 0x12340000) >>> 0;
+  assert.deepStrictEqual(P.ps2IsoInfo(f), { serial: 'SLUS-21386', crc });
+  assert.strictEqual(P.ps2IsoInfo(path.join(TMP, 'nope.iso')), null);
+});
