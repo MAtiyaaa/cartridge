@@ -9,6 +9,7 @@
 //   _idRow, _sFile, _nFilesize, _sDownloadUrl, _sMd5Checksum). gamebanana.com was blocked where this
 //   was written, so the shapes are read defensively and anything unexpected says so.
 const fs = require('fs');
+const webFetch = require('./webFetch');
 
 const PS2_CATALOG = 'https://raw.githubusercontent.com/sashkinbro/EmuCoreX-Textures/main/textures.json';
 const GB = 'https://gamebanana.com/apiv11';
@@ -28,7 +29,7 @@ function parsePs2Catalog(j) {
   }
   return out;
 }
-async function ps2Catalog({ cacheFile, fetchImpl = fetch, maxAge = 24 * 3600e3 } = {}) {
+async function ps2Catalog({ cacheFile, fetchImpl = webFetch, maxAge = 24 * 3600e3 } = {}) {
   let cached = null;
   try { cached = JSON.parse(fs.readFileSync(cacheFile, 'utf8')); } catch {}
   if (cached && Date.now() - cached.at < maxAge) return parsePs2Catalog(cached.data);
@@ -51,7 +52,7 @@ async function gbGet(path, fetchImpl) {
   return r.json();
 }
 // the GameBanana game for a title: an exact name match only (no guessing between games)
-async function gbGame(title, { fetchImpl = fetch } = {}) {
+async function gbGame(title, { fetchImpl = webFetch } = {}) {
   const j = await gbGet(`/Util/Search/Results?_sModelName=Game&_sOrder=best_match&_nPage=1&_sSearchString=${encodeURIComponent(title)}`, fetchImpl);
   const recs = Array.isArray(j?._aRecords) ? j._aRecords : [];
   const want = key(title);
@@ -65,7 +66,7 @@ function parseGbMods(j) {
     return { source: 'gb', id: m._idRow, name: m._sName || `Mod ${m._idRow}`, authors: m._aSubmitter?._sName ? [m._aSubmitter._sName] : [], category: m._aRootCategory?._sName || '', likes: m._nLikeCount || 0, url: m._sProfileUrl || `https://gamebanana.com/mods/${m._idRow}`, preview: img?._sBaseUrl && (img._sFile220 || img._sFile) ? `${img._sBaseUrl}/${img._sFile220 || img._sFile}` : '' };
   });
 }
-async function gbMods(gameId, { fetchImpl = fetch, page = 1 } = {}) {
+async function gbMods(gameId, { fetchImpl = webFetch, page = 1 } = {}) {
   return parseGbMods(await gbGet(`/Game/${Number(gameId)}/Subfeed?_nPage=${page}&_sSort=default&_csvModelInclusions=Mod`, fetchImpl));
 }
 const ARCHIVE = /\.(zip|7z|rar)$/i;
@@ -74,7 +75,7 @@ function parseGbFiles(j) {
   return files.filter((f) => f && f._idRow && /^https:\/\//.test(f._sDownloadUrl || '') && ARCHIVE.test(f._sFile || '') && !f._bContainsExe)
     .map((f) => ({ id: f._idRow, name: f._sFile, size: f._nFilesize || 0, url: f._sDownloadUrl, md5: /^[0-9a-f]{32}$/i.test(f._sMd5Checksum || '') ? f._sMd5Checksum.toLowerCase() : '', description: f._sDescription || '' }));
 }
-async function gbFiles(modId, { fetchImpl = fetch } = {}) {
+async function gbFiles(modId, { fetchImpl = webFetch } = {}) {
   return parseGbFiles(await gbGet(`/Mod/${Number(modId)}?_csvProperties=_aFiles,_sName,_aSubmitter`, fetchImpl));
 }
 

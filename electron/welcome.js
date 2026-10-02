@@ -4,11 +4,11 @@
 // chmod +x, run it), or installs RetroDECK from Flathub for this user. EmuDeck or RetroDECK then
 // install the emulators; Cartridge never installs one itself.
 const fs = require('fs');
+const webFetch = require('./webFetch');
 const path = require('path');
 const os = require('os');
 const { spawn, execFileSync } = require('child_process');
 
-const EMUDECK_API = 'https://api.github.com/repos/EmuDeck/emudeck-electron/releases/latest';
 const RETRODECK = 'net.retrodeck.retrodeck';
 
 // a child that isn't ours: none of Cartridge's AppImage or Steam runtime variables
@@ -31,10 +31,10 @@ function pickAsset(release, arch = process.arch) {
   return all.find((a) => /arm64/i.test(a.name) === arm) || null;
 }
 
-async function getEmuDeck(onProgress = () => {}, { fetchImpl = fetch, home = os.homedir(), run = true } = {}) {
-  const r = await fetchImpl(EMUDECK_API, { headers: { Accept: 'application/vnd.github+json' } });
-  if (!r.ok) throw new Error(`GitHub answered ${r.status}. Try again later, or get EmuDeck from emudeck.com.`);
-  const asset = pickAsset(await r.json());
+async function getEmuDeck(onProgress = () => {}, { fetchImpl = webFetch, home = os.homedir(), run = true } = {}) {
+  // the API, or EmuDeck's release pages when GitHub's API limit answers 403 (0.9.17)
+  let rel; try { rel = await require('./github').release('EmuDeck/emudeck-electron', { fetchImpl }); } catch (e) { throw new Error(`${e.message} Or get EmuDeck from emudeck.com.`); }
+  const asset = pickAsset({ assets: (rel?.assets || []).map((a) => ({ name: a.name, browser_download_url: a.url, size: a.size })) });
   if (!asset) throw new Error("EmuDeck's latest release has no AppImage for this device.");
   const dir = path.join(home, 'Applications');
   fs.mkdirSync(dir, { recursive: true });

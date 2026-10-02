@@ -1,4 +1,5 @@
 'use strict';
+const webFetch = require('./webFetch');
 // Emulator patches (0.9.3 D7, owner's option 1). The patches themselves are the emulator's own
 // (RPCS3 downloads its patch.yml); Cartridge lists the ones for a game and turns them on or off in
 // the emulator's own patch settings, so they stay on exactly as if ticked in the emulator. It only
@@ -92,7 +93,7 @@ function rpcs3List(dir, serial, appVer, mine = {}) {
 // &v=<patch engine 1.2>[&sha256=<current file>]; JSON return_code 0 new, 1 up to date, <0 error; version
 // must be 1.2 and sha256 must match the patch text; RPCS3 keeps the old file as patch.yml.old.
 const RPCS3_PATCH_ENGINE = '1.2';
-async function rpcs3DownloadPatches(patchesDir, { fetchImpl = fetch, base = 'https://rpcs3.net' } = {}) {
+async function rpcs3DownloadPatches(patchesDir, { fetchImpl = webFetch, base = 'https://rpcs3.net' } = {}) {
   const file = path.join(patchesDir, 'patch.yml');
   let url = `${base}/compatibility?patch&api=v1&v=${RPCS3_PATCH_ENGINE}`;
   try { url += '&sha256=' + require('crypto').createHash('sha256').update(fs.readFileSync(file)).digest('hex'); } catch {}

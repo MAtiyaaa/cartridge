@@ -6,6 +6,7 @@
 //   path (so Steam shortcuts keep working); the old copy stays until the new one is in place
 // EmuDeck's script launchers update through EmuDeck; RetroArch cores through RetroArch.
 const fs = require('fs');
+const webFetch = require('./webFetch');
 const path = require('path');
 const { execFile } = require('child_process');
 
@@ -40,18 +41,14 @@ async function flatpakUpdates(ids) {
 const flatpakUpdate = (id, where) => run('flatpak', ['update', where || '--user', '-y', '--noninteractive', id], 30 * 60e3);
 
 // GitHub: the newest release's AppImage for one emulator (cached by the caller)
-async function latestRelease(id, { fetchImpl = fetch, spec } = {}) {
+async function latestRelease(id, { fetchImpl, spec } = {}) {
   const r = spec?.repo ? spec : REPOS[id];
   if (!r) return null;
-  const url = `https://api.github.com/repos/${r.repo}/releases${r.tag ? `/tags/${r.tag}` : r.pre ? '?per_page=5' : '/latest'}`;
-  const res = await fetchImpl(url, { headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'Cartridge' } });
-  if (res.status === 403 || res.status === 429) throw new Error('GitHub is limiting requests right now. Try again in an hour.');
-  if (!res.ok) throw new Error(`GitHub answered ${res.status}`);
-  let rel = await res.json();
-  if (Array.isArray(rel)) rel = rel.find((x) => !x.draft) || null;
+  // the API first, the release pages when GitHub's API limit answers 403 (0.9.17, github.js)
+  const rel = await require('./github').release(r.repo, { tag: r.tag, pre: r.pre, fetchImpl });
   const asset = (rel?.assets || []).find((a) => r.asset.test(a.name) && !/arm|aarch64/i.test(a.name));
   if (!asset) return null;
-  return { version: verOf(rel.tag_name) || verOf(asset.name), tag: rel.tag_name, name: asset.name, url: asset.browser_download_url, size: asset.size, date: asset.updated_at };
+  return { version: verOf(rel.tag) || verOf(asset.name), tag: rel.tag, name: asset.name, url: asset.url, size: asset.size, date: asset.date || rel.date };
 }
 // is the release newer than this AppImage? by version when both have one, else by date
 function isNewer(rel, have) {

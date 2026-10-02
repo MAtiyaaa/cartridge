@@ -10,6 +10,7 @@
 //   (PPSSPP's own "Import from cheat.db" copies the same block). Needs ppsspp.ini [General] EnableCheats.
 // mine records what Cartridge turned on, the only things it turns off (the cheats switch too).
 const fs = require('fs');
+const webFetch = require('./webFetch');
 const path = require('path');
 const os = require('os');
 const { iniSet } = require('./raLogin');
@@ -219,7 +220,7 @@ function ppssppSet(dir, id, changes, mine = {}, title = '') {
 // PSP/Cheats/cheat.db. Only when there is none: PPSSPP's own download would replace it, this never does.
 const CHEAT_LIST = 'https://metadata.ppsspp.org/cheats.json';
 const CHEAT_FALLBACK = 'https://raw.githubusercontent.com/Saramagrean/CWCheat-Database-Plus-/master/cheat.db'; // the list's usual pick
-async function ppssppDownloadDb(dir, { fetchImpl = fetch } = {}) {
+async function ppssppDownloadDb(dir, { fetchImpl = webFetch } = {}) {
   const f = path.join(dir.cheats, 'cheat.db');
   if (exists(f)) return { updated: false };
   const get = (u, ms) => fetchImpl(u, { headers: { 'User-Agent': 'Cartridge' }, signal: AbortSignal.timeout(ms) });

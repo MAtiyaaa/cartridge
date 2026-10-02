@@ -193,3 +193,20 @@ test('Emulator setup: BIOS copied into emulator folders that are set up, never o
   assert.deepStrictEqual(out, ['~/.local/share/duckstation/bios/scph5501.bin']);
   assert.strictEqual(fs.readFileSync(path.join(h, '.var/app/org.duckstation.DuckStation/data/duckstation/bios/scph5501.bin'), 'utf8'), 'mine');
 });
+
+test('GitHub: when the API answers 403, the release pages are read (0.9.17)', async () => {
+  const G = require('../electron/github.js');
+  const seen = [];
+  const fetchImpl = async (u) => {
+    seen.push(u);
+    if (u.startsWith('https://api.github.com')) return { ok: false, status: 403 };
+    if (u.endsWith('/releases/latest')) return { ok: true, status: 200, url: 'https://github.com/RPCS3/rpcs3-binaries-linux/releases/tag/build-abc', text: async () => '' };
+    return { ok: true, status: 200, text: async () => '<a href="/RPCS3/rpcs3-binaries-linux/releases/download/build-abc/rpcs3-v0.0.38-1234_linux64.AppImage">x</a>' };
+  };
+  const r = await G.release('RPCS3/rpcs3-binaries-linux', { fetchImpl });
+  assert.strictEqual(r.tag, 'build-abc');
+  assert.deepStrictEqual(r.assets.map((a) => a.name), ['rpcs3-v0.0.38-1234_linux64.AppImage']);
+  const U = require('../electron/emuUpdates.js');
+  const rel = await U.latestRelease('rpcs3', { fetchImpl });
+  assert.strictEqual(rel.version, '0.0.38');
+});

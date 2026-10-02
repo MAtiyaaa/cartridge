@@ -46,7 +46,7 @@ function hasIds(etc = '/etc') {
 }
 // what's missing before RomM can run: { podman: 'system' | 'cartridge' | null, ids }
 function readiness() { const b = podmanBin(); return { podman: b ? (b === OWN_PODMAN ? 'cartridge' : 'system') : null, ids: hasIds() }; }
-async function getLauncher(fetchImpl = fetch) {
+async function getLauncher(fetchImpl = require('./webFetch')) {
   const r = await fetchImpl(LAUNCHER_URL, { headers: { 'User-Agent': 'Cartridge' }, signal: AbortSignal.timeout(10 * 60e3) });
   if (!r.ok) throw new Error(`Podman couldn't be downloaded (GitHub answered ${r.status}).`);
   const buf = Buffer.from(await r.arrayBuffer());
@@ -65,7 +65,7 @@ function sudo(password, script) {
     c.stdin.end(String(password || '') + '\n');
   });
 }
-async function prepare({ password, fetchImpl = fetch } = {}, onProgress = () => {}) {
+async function prepare({ password, fetchImpl } = {}, onProgress = () => {}) {
   if (!podmanBin()) { onProgress({ label: 'Downloading Podman' }); await getLauncher(fetchImpl); }
   if (!hasIds()) {
     const u = userName();

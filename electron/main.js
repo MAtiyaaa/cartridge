@@ -776,7 +776,7 @@ const logoInflight = new Map();
 let logoChain = Promise.resolve();
 const SGDB_BASE = () => process.env.CARTRIDGE_SGDB_BASE || 'https://www.steamgriddb.com/api/v2';
 async function sgdb(pathname) {
-  const r = await fetch(SGDB_BASE() + pathname, { headers: { Authorization: 'Bearer ' + config.sgdbKey }, signal: AbortSignal.timeout(12000) });
+  const r = await webFetch(SGDB_BASE() + pathname, { headers: { Authorization: 'Bearer ' + config.sgdbKey }, signal: AbortSignal.timeout(12000) });
   if (r.status === 401 || r.status === 403) throw Object.assign(new Error('SteamGridDB rejected the API key'), { auth: true });
   if (!r.ok) return null;
   const j = await r.json().catch(() => null);
@@ -904,7 +904,7 @@ const raMem = new Map();
 async function raApi(name, params = {}, auth = config.ra) {
   if (!auth?.user || !auth?.key) throw new Error('Sign in to RetroAchievements first');
   const q = new URLSearchParams({ y: auth.key, u: auth.user, ...params });
-  const r = await fetch(`${RA_BASE()}/API/API_${name}.php?${q}`, { headers: { 'User-Agent': `Cartridge/${app.getVersion()}` }, signal: AbortSignal.timeout(15000) });
+  const r = await webFetch(`${RA_BASE()}/API/API_${name}.php?${q}`, { headers: { 'User-Agent': `Cartridge/${app.getVersion()}` }, signal: AbortSignal.timeout(15000) });
   if (r.status === 401 || r.status === 403) throw Object.assign(new Error('RetroAchievements rejected the username or web API key'), { auth: true });
   if (r.status === 429) throw new Error('RetroAchievements is rate limiting, try again in a minute');
   if (!r.ok) throw new Error('RetroAchievements error ' + r.status);
@@ -1043,7 +1043,7 @@ async function sysLogo({ slug, fs_slug }) {
   const job = (async () => {
     for (const n of names) {
       try {
-        const r = await fetch(SYSLOGO_BASE + n + '.svg', { signal: AbortSignal.timeout(10000) });
+        const r = await webFetch(SYSLOGO_BASE + n + '.svg', { signal: AbortSignal.timeout(10000) });
         if (!r.ok) continue;
         const svg = await r.text();
         if (!/<svg[\s>]/i.test(svg)) continue;
@@ -1778,7 +1778,10 @@ async function ps3InstallUpdates(romId) {
     for (const [i, pk] of info.todo.entries()) {
       const dest = path.join(dir, path.basename(new URL(pk.url).pathname) || `update-${pk.version}.pkg`);
       send({ state: 'downloading', step: i + 1, of: info.todo.length, version: pk.version, pct: total ? Math.round((got / total) * 100) : 0 });
-      await downloadTo(pk.url, dest, { abort: ps3upRun.ac }, (n) => { got += n; send({ state: 'downloading', step: i + 1, of: info.todo.length, version: pk.version, pct: total ? Math.round((got / total) * 100) : 0 }); }, { plain: true });
+      const onB = (n) => { got += n; send({ state: 'downloading', step: i + 1, of: info.todo.length, version: pk.version, pct: total ? Math.round((got / total) * 100) : 0 }); };
+      // Sony's package servers answer plain HTTP with 403 for some: the same file over HTTPS then (0.9.17)
+      try { await downloadTo(pk.url, dest, { abort: ps3upRun.ac }, onB, { plain: true }); }
+      catch (e) { if (e.status !== 403 && !/HTTP 403/.test(e.message)) throw e; await downloadTo(pk.url.replace(/^http:/, 'https:'), dest, { abort: ps3upRun.ac }, onB, { plain: true }); }
       if (pk.size && fs.statSync(dest).size !== pk.size) throw new Error(`Update ${pk.version} didn’t download completely. Try again.`);
       files.push(dest);
     }
@@ -1840,7 +1843,7 @@ async function rpcs3DbText(dir) {
   const own = patchesMod.rpcs3DbCached(dir);
   if (own) return own;
   try { const st = fs.statSync(RPCS3_DB_FILE); if (Date.now() - st.mtimeMs < 7 * 864e5) return fs.readFileSync(RPCS3_DB_FILE, 'utf8'); } catch {}
-  const r = await fetch('https://api.rpcs3.net/config/?api=v1', { signal: AbortSignal.timeout(20000) });
+  const r = await webFetch('https://api.rpcs3.net/config/?api=v1', { signal: AbortSignal.timeout(20000) });
   if (!r.ok) throw new Error(`RPCS3 database: HTTP ${r.status}`);
   const t = await r.text();
   await fsp.writeFile(RPCS3_DB_FILE, t).catch(() => {});
@@ -1871,6 +1874,7 @@ function afterInstall(romId) {
 // patches.json: the ones Cartridge turned on (only those can it turn off), per emulator.
 const patchesMod = require('./patches');
 const cheatsMod = require('./cheats');
+const webFetch = require('./webFetch'); // outside services through Chromium's network stack (0.9.17: 403s)
 // add-ons Cartridge installed (0.9.17): { key: { dest, files, ... } }; Remove deletes only those files
 const ADDONS_FILE = path.join(USER_DATA, 'addons-installed.json');
 let addonRun = null, addonCache = null, emuGetRun = null;
@@ -1970,7 +1974,7 @@ async function freshRpcs3Patches(romId) {
   let age = Infinity; try { age = Date.now() - fs.statSync(path.join(dir.patches, 'patch.yml')).mtimeMs; } catch {}
   if (age < 7 * 864e5) return;
   try { const res = await patchesMod.rpcs3DownloadPatches(dir.patches); log('rpcs3 patches', res.updated ? 'downloaded' : 'up to date', dir.patches); if (!res.updated) fs.utimesSync(path.join(dir.patches, 'patch.yml'), new Date(), new Date()); }
-  catch (e) { log('rpcs3 patches download failed:', e.message); }
+  catch (e) { log('rpcs3 patches download failed:', e.message); return `RPCS3’s patch list couldn’t be downloaded (${e.message}).`; }
 }
 // PS4 games (a folder with sce_sys/param.sfo) and shadPS4's patch repositories
 function ps4PatchState(romId, r) {
@@ -2690,7 +2694,7 @@ const handlers = {
   'art:set': (q) => setArt(q),
   'art:reset': ({ id }) => { delete artOverrides[id]; delete logoCache[id]; saveArt(); saveLogoCache(); return {}; },
   'logo:test': async ({ key }) => {
-    const r = await fetch(SGDB_BASE() + '/search/autocomplete/zelda', { headers: { Authorization: 'Bearer ' + key }, signal: AbortSignal.timeout(12000) });
+    const r = await webFetch(SGDB_BASE() + '/search/autocomplete/zelda', { headers: { Authorization: 'Bearer ' + key }, signal: AbortSignal.timeout(12000) });
     return { ok: r.ok, status: r.status };
   },
   'config:set': (patch) => {
@@ -3096,12 +3100,12 @@ const handlers = {
   'ps3up:install': ({ romId }) => ps3InstallUpdates(Number(romId)),
   'ps3up:cancel': () => { ps3upRun?.ac.abort(); return true; },
   'patches:list': async ({ romId }) => {
-    await freshRpcs3Patches(romId);
+    const dlErr = await freshRpcs3Patches(romId);
     const st = patchState(romId), E = EMU_PATCH[st.emu];
-    if (!st.dir || !E) return { emu: st.emu, emuName: E?.name || '', serial: st.serial, why: st.why, list: [] };
+    if (!st.dir || !E) return { emu: st.emu, emuName: E?.name || '', serial: st.serial, why: [st.why, dlErr].filter(Boolean).join(' '), list: [] };
     if (st.emu === 'ppsspp') { try { const r = await cheatsMod.ppssppDownloadDb(st.dir); if (r.updated) log('ppsspp cheat.db downloaded', r.url); } catch (e) { log('ppsspp cheat.db download failed:', e.message); } }
     const list = await E.list(st, patchMine[st.emu] || {});
-    const why = st.emu === 'ppsspp' && !fs.existsSync(path.join(st.dir.cheats, 'cheat.db')) ? 'PPSSPP has no cheats for this game here. They come from cheat.db: put it in PSP/Cheats in PPSSPP’s folder (or add codes in PPSSPP’s Cheats), then come back.' : '';
+    const why = dlErr && !list.length ? dlErr : st.emu === 'ppsspp' && !fs.existsSync(path.join(st.dir.cheats, 'cheat.db')) ? 'PPSSPP has no cheats for this game here. They come from cheat.db: put it in PSP/Cheats in PPSSPP’s folder (or add codes in PPSSPP’s Cheats), then come back.' : '';
     return { emu: st.emu, emuName: E.name, serial: st.serial, version: st.version, why, list };
   },
   // changes: [{ key, on }]. Patches turned on in RPCS3 itself are never turned off here.
