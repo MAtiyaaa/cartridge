@@ -266,7 +266,20 @@ onMounted(async () => {
   });
 });
 // connected for the first time (the RomM step just finished): emulators next
-watch(() => store.config?.configured, (v, was) => { if (v && !was && !store.config.setupDone && !store.welcoming) go('emu-setup', { first: true }); });
+watch(() => store.config?.configured, (v, was) => {
+  if (!v || was) return;
+  if (IS_ANDROID) {
+    // Android (0.9.19): this also fires when the config first loads at start, which sent everyone without
+    // setupDone to the desktop's emulator setup (start-up already handles that, behind Steam & PC game apps).
+    // Only a real sign-in counts here: the start-up checks ran before it, so the top bar said Not connected
+    // and the tabs had no games until a restart.
+    if (was !== false) return;
+    call('server:status').then((c) => (store.connection = c)).catch(() => {});
+    if (!store.lib?.platforms?.length) loadLibrary().catch(() => {});
+    if (!store.config.android?.steamApps) return;
+  }
+  if (!store.config.setupDone && !store.welcoming) go('emu-setup', { first: true });
+});
 // People who set up before 0.9 skipped Emulator setup: tell them about it once
 async function setupNotice() {
   // 0.9.15: people who were set up before get the new welcome offered once (it includes the system scan)
