@@ -362,7 +362,7 @@ async function getBios() {
   try {
     const r = await call('bios:download', { platformId: platform.value.id, slug: platform.value.slug });
     const n = r.files.filter((f) => !f.skipped).length;
-    toast(`BIOS · ${n} downloaded, ${r.files.length - n} already there`, 'ok', 3400, 'mdiChip');
+    toast(r.installed ? `Firmware installed in ${r.emu === 'rpcs3' ? 'RPCS3' : 'Vita3K'}` : `BIOS · ${n} downloaded, ${r.files.length - n} already there`, 'ok', 3400, 'mdiChip');
   } catch (e) { toast(e.message, 'error'); }
 }
 async function downloadAll() {

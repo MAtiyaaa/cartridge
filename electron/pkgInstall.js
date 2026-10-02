@@ -284,4 +284,27 @@ function safeToRemove(rec, roots) {
   return { ok: true, dir };
 }
 
-module.exports = { pkgInfo, packagesIn, licencePlan, stageLicences, exdataHas, npdOf, rpcs3Hdds, sfoSerial, install, vitaPrefs, vitaContent, findZrif, installVita, safeToRemove };
+// Firmware into the emulator (0.9.16; owner: PS3 and Vita firmware from RomM did nothing in a BIOS
+// folder). RPCS3 (rpcs3.cpp): `--headless --installfw <PUP>` installs with no window and quits.
+// Vita3K (main.cpp): `--firmware <PUP>` installs into its fs folder and quits. Vita firmware and its
+// font package are both .PUP files: each is installed the same way.
+async function installFirmware({ emu, cmd, file, signal }) {
+  const env = { ...process.env };
+  for (const k of ['LD_PRELOAD', 'LD_LIBRARY_PATH', 'APPDIR', 'APPIMAGE', 'ARGV0', 'OWD']) delete env[k];
+  if (emu === 'vita3k') env.QT_QPA_PLATFORM = 'offscreen';
+  const args = emu === 'rpcs3' ? [...cmd.args, '--headless', '--installfw', file] : [...cmd.args, '--firmware', file];
+  let tail = '';
+  const code = await new Promise((resolve, reject) => {
+    const p = spawn(cmd.exe, args, { env, stdio: ['ignore', 'pipe', 'pipe'] });
+    const keep = (b) => { tail = (tail + String(b)).slice(-4000); };
+    p.stdout.on('data', keep); p.stderr.on('data', keep);
+    const kill = () => { try { p.kill(); } catch {} };
+    const timer = setTimeout(kill, 20 * 60e3);
+    signal?.addEventListener('abort', kill, { once: true });
+    p.on('error', (e) => { clearTimeout(timer); reject(new Error(`${emu === 'rpcs3' ? 'RPCS3' : 'Vita3K'} didn't start: ${e.message}`)); });
+    p.on('exit', (c) => { clearTimeout(timer); resolve(c); });
+  });
+  if (code && code !== 0) throw new Error(`${emu === 'rpcs3' ? 'RPCS3' : 'Vita3K'} couldn't install the firmware: ${(tail.trim().split('\n').pop() || 'exit ' + code).slice(0, 200)}`);
+  return true;
+}
+module.exports = { installFirmware, pkgInfo, packagesIn, licencePlan, stageLicences, exdataHas, npdOf, rpcs3Hdds, sfoSerial, install, vitaPrefs, vitaContent, findZrif, installVita, safeToRemove };

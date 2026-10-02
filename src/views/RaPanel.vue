@@ -52,7 +52,7 @@
               <div class="ra-u-title">{{ a.title }}</div>
               <div class="ra-u-desc">{{ a.desc }}</div>
               <div class="ra-u-meta"><span class="pts">{{ a.points }} pts</span><span v-if="a.hardcore" class="chip hc">HARDCORE</span><span>{{ ago(a.date) }}</span></div>
-              <div class="ra-u-game">{{ a.game }} · {{ consoleName({ romId: a.romId, fallback: a.console }) }}</div>
+              <div class="ra-u-game">{{ a.game }} · <ConsoleMark :slug="consoleSlug({ romId: a.romId, name: a.console })" :label="consoleName({ romId: a.romId, fallback: a.console })" /></div>
             </div>
           </button>
         </div>
@@ -69,7 +69,7 @@
             <img class="ra-gicon" :src="img(g.icon)" loading="lazy" />
             <div class="ra-g-body">
               <div class="ra-g-title">{{ g.title }}</div>
-              <div class="ra-g-sub">{{ consoleName({ romId: g.romId, fallback: g.console }) }} · {{ ago(g.lastPlayed) }}<template v-if="g.romId"> · <span class="inlib">In your library</span></template></div>
+              <div class="ra-g-sub"><ConsoleMark :slug="consoleSlug({ romId: g.romId, name: g.console })" :label="consoleName({ romId: g.romId, fallback: g.console })" /> · {{ ago(g.lastPlayed) }}<template v-if="g.romId"> · <span class="inlib">In your library</span></template></div>
               <div class="bar ra-bar"><i :style="{ width: pctOf(g) + '%' }" /></div>
               <div class="ra-g-prog"><b>{{ g.earned }}</b> / {{ g.total }} achievements · {{ pctOf(g) }}%<template v-if="g.possible"> · {{ g.score }} / {{ g.possible }} pts</template></div>
             </div>
@@ -83,7 +83,8 @@
 
 <script setup>
 import { computed, onMounted, ref } from 'vue';
-import { store, call, img, go, toast, saveConfig, setBg, choose, consoleName } from '../store.js';
+import { store, call, img, go, toast, saveConfig, setBg, choose, consoleName, consoleSlug } from '../store.js';
+import ConsoleMark from '../components/ConsoleMark.vue';
 import { useView } from '../useView.js';
 import { focusFirst } from '../nav.js';
 import Icon from '../components/Icon.vue';

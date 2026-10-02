@@ -98,19 +98,22 @@ function move(dir) {
   // above can be scrolled behind a toolbar, which otherwise looked nearer (Library: A3).
   const sc = vertical ? cur.closest('[data-scroll]') : null;
   const inList = sc && zone?.contains(sc) && sc !== zone && focusables(sc, true).some(([el, r]) => el !== cur && (dir === 'up' ? r.bottom <= c.top + 4 : r.top >= c.bottom - 4));
-  for (const [el, r] of focusables(scope, true)) {
-    if (el === cur || (zone && !zone.contains(el)) || (inList && !sc.contains(el))) continue;
-    if ((dir === 'left' || dir === 'right') && el.hasAttribute('data-nofirst') && !cur.hasAttribute('data-nofirst')) continue; // the end of a row never jumps up to the search box
-    const x = r.left + r.width / 2, y = r.top + r.height / 2;
-    let primary, secondary;
-    if (dir === 'right') { if (r.left < c.right - 4 && x <= cx + 1) continue; primary = x - cx; secondary = overlapGap(c.top, c.bottom, r.top, r.bottom); }
-    else if (dir === 'left') { if (r.right > c.left + 4 && x >= cx - 1) continue; primary = cx - x; secondary = overlapGap(c.top, c.bottom, r.top, r.bottom); }
-    else if (dir === 'down') { if (r.top < c.bottom - 4 && y <= cy + 1) continue; primary = y - cy; secondary = overlapGap(c.left, c.right, r.left, r.right); }
-    else { if (r.bottom > c.top + 4 && y >= cy - 1) continue; primary = cy - y; secondary = overlapGap(c.left, c.right, r.left, r.right); }
-    if (primary <= 0) continue;
-    let score = primary + secondary * 3 + (secondary > 0 ? 5000 : 0); // prefer aligned targets
-    if (vertical) score += Math.abs(x - wantX) * 0.35; // then the one nearest your column
-    if (score < bestScore) { bestScore = score; best = el; }
+  const cands = focusables(scope, true).filter(([el]) => el !== cur && !(zone && !zone.contains(el)) && !(inList && !sc.contains(el)));
+  if (vertical) best = pickRow(dir, cur, c, cands, wantX);
+  else {
+    // left and right stay in the row you're in (owner, 0.9.16): at its end nothing happens, never a
+    // jump to the row above or below
+    for (const [el, r] of cands) {
+      if (el.hasAttribute('data-nofirst') && !cur.hasAttribute('data-nofirst')) continue; // the end of a row never jumps up to the search box
+      if (overlapGap(c.top, c.bottom, r.top, r.bottom) > 0) continue;
+      const x = r.left + r.width / 2;
+      let primary;
+      if (dir === 'right') { if (r.left < c.right - 4 && x <= cx + 1) continue; primary = x - cx; }
+      else { if (r.right > c.left + 4 && x >= cx - 1) continue; primary = cx - x; }
+      if (primary <= 0) continue;
+      const score = primary + Math.abs((r.top + r.height / 2) - cy) * 0.5;
+      if (score < bestScore) { bestScore = score; best = el; }
+    }
   }
   if (best) {
     sfx.move();
@@ -123,6 +126,35 @@ function move(dir) {
     const sc = cur.closest('[data-scroll]');
     if (sc) glideBy(sc, 0, dir === 'down' ? 200 : -200);
   }
+}
+
+// Up and down (0.9.16, owner): always the very next row, never one further down because it happened
+// to line up better. Landing in a game row (a sideways shelf) goes to its first game; in another
+// row, to its first item (Ready to play, not More); within one grid of cards the column is kept.
+function pickRow(dir, cur, c, cands, wantX) {
+  const below = dir === 'down';
+  const pool = cands.filter(([, r]) => (below ? r.top >= c.bottom - 8 : r.bottom <= c.top + 8));
+  if (!pool.length) return null;
+  const edge = below ? Math.min(...pool.map(([, r]) => r.top)) : Math.max(...pool.map(([, r]) => r.bottom));
+  const ref = pool.find(([, r]) => (below ? r.top : r.bottom) === edge)[1];
+  const tol = Math.max(8, ref.height * 0.5);
+  const band = pool.filter(([, r]) => (below ? r.top < edge + tol : r.bottom > edge - tol));
+  // a sideways game row: its first game, and the row scrolled back to the start
+  const row = band[0][0].closest('[data-hscroll]');
+  if (row && band.every(([el]) => row.contains(el)) && row !== cur.closest('[data-hscroll]')) {
+    const first = focusables(row).find((el) => !el.disabled);
+    if (first) { if (row.scrollLeft > 0) glideBy(row, -row.scrollLeft, 0); return first; }
+  }
+  // the same grid of cards as where you are: straight up or down
+  const grid = cur.parentElement;
+  const inGrid = band.filter(([el]) => el.parentElement === grid);
+  if (inGrid.length && focusables(grid).length > inGrid.length) {
+    let best = null, d = Infinity;
+    for (const [el, r] of inGrid) { const dx = Math.abs(r.left + r.width / 2 - wantX); if (dx < d) { d = dx; best = el; } }
+    return best;
+  }
+  // anything else: the row's first item
+  return band.reduce((m, x) => (x[1].left < m[1].left - 2 ? x : m))[0];
 }
 
 function overlapGap(a1, a2, b1, b2) {
@@ -146,7 +178,8 @@ function scrollIntoViewSmart(el) {
   const s = sc.getBoundingClientRect();
   // nothing focusable above this one: show the top of the page too (a game's banner, a page header)
   const first = [...sc.querySelectorAll('[data-focus]')].find((x) => !x.disabled && x.offsetParent !== null);
-  if (first === el) { glideTo(sc, 0); return; }
+  // the first item, or anything in a page's header row ([data-top]): the whole header shows (0.9.16)
+  if (first === el || el.closest('[data-top]')) { glideTo(sc, 0); return; }
   const vpad = Math.min(120, s.height * 0.2);
   if (r.top < s.top + vpad) glideBy(sc, 0, r.top - s.top - vpad);
   else if (r.bottom > s.bottom - vpad) glideBy(sc, 0, r.bottom - s.bottom + vpad);

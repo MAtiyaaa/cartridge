@@ -153,7 +153,7 @@ LT/RT switch top tabs. LB/RB only switch sections inside a page. A select, B bac
 - Cartridge theme accent is white (`bgAccent` keeps the brand colour for animated backgrounds). `applyTheme` sets `--focus` (white, or `colors.highlight`), `--on-focus`/`--on-focus-dim` by luminance, `--sel` (chosen, not focused), `--knob`. Near-white picks stay white (`accentOf`).
 - Selected states use a `--sel` fill, never stripes or outlines; the active top tab has a faint outline. A focused `.btn.primary` also gets the ring.
 - `nav.js` zones: `move()` never leaves the nearest `[data-zone]` (App `<main>`, Settings `.pane`). Settings' B returns to the rail.
-- The 0.9.3 plan is `docs/plan-0.9.3.md`, 0.9.4 is `docs/plan-0.9.4.md`. Work in progress and decisions made in chat are logged in `docs/SESSION-LOG.md` (read its newest entry first).
+- The 0.9.3 plan is `docs/plan-0.9.3.md`, 0.9.4/0.9.15 is `docs/plan-0.9.4.md`, 0.9.16 is `docs/plan-0.9.16.md`. Work in progress and decisions made in chat are logged in `docs/SESSION-LOG.md` (read its newest entry first).
 
 ## 0.9.3 (shipped in parts A to I, Oct 2026; log: docs/SESSION-LOG.md)
 - Emulators: Settings → Emulators (Issues list `issues:list`, Emulator setup, Shortcut health, Console Folders). Forks: `FORKS`/`forkOf`, `REAL_NAMES`/`realName` in emulators.js, `steam.forks[path]` (`markFork`, `setup:fork`), `EMU.forkOf` (PrimeHack); forks never default. RetroDECK candidate (`how: 'retrodeck'`) only without EmuDeck. SRM setups no longer candidates. Learned shortcuts are a second choice in `templateFor`. `takeOver` (console page More). shadPS4 `startOf()` (Start in never next to the AppImage). New emulators each read from their own source (DeSmuME, Mupen64Plus, Snes9x, Mesen, Play!, Kronos, Xenia Edge).
@@ -195,6 +195,17 @@ LT/RT switch top tabs. LB/RB only switch sections inside a page. A select, B bac
 - Backgrounds (owner's pick A + B): scenes `ps2`, `gc`, `wii`, `xbox360`, `switch`; `art:<slug>` = `artPan` over that console's covers; `LEGACY_ART` maps retired styles.
 - Add-ons (checkable part): `electron/addons.js` (`addons:emulators`, `addons:forGame`, `addons:makeFolder`), game More → Texture packs. Downloads are 0.9.16.
 - Per-game templates `steam.gameTemplates` (`steam:setGameTemplate`), `pickEmulator` groups forks, `patchHome` sends patches to the copy the game uses.
+
+## 0.9.16 (2 Oct 2026; log: docs/SESSION-LOG.md, plan: docs/plan-0.9.16.md)
+- Downloads: `electron/dlWorker.js` (one worker per download, 1 MB writes, progress every 250 ms, shared speed limit); `downloadTo(..., opts.plain)` never sends RomM auth to other hosts.
+- Settings → Emulators pages (`EMU_PAGES`, LB/RB `stepEmu`): Overview, Updates (`electron/emuUpdates.js`, `emuup:list/run`: Flatpak `remote-ls --updates`/`update`, AppImage from the emulator's GitHub releases `REPOS`, replaced at the same path), Game Updates (`electron/ps3Updates.js`, Sony's `<SERIAL>-ver.xml`, `ps3up:*`, installs in order through RPCS3, cache `ps3-updates.json`), Patches (installed games, same sheet), Texture Packs, Console Folders. `electron/emuIcons.js` + `EmuIcon.vue` (Flatpak export, AppImage .DirIcon, .desktop Icon=).
+- Patches: `electron/cheats.js` Dolphin (Sys + user GameSettings ID3/ID6, `[OnFrame|ActionReplay|Gecko]`, `<Section>_Enabled/_Disabled`, `[Core] EnableCheats`) and PPSSPP (`PSP/Cheats/<ID>.ini` `_C0/_C1`, cheat.db, `[General] EnableCheats`, `ppssppDownloadDb` from metadata.ppsspp.org/cheats.json). `EMU_PATCH` dolphin/ppsspp refuse while the emulator runs. `freshRpcs3Patches` (rpcs3.net patch API, 7 days). `gcWiiId` reads ISO/GCM/RVZ/WIA/WBFS/CISO.
+- Add-ons: `setTextures`/`TEX_KEY` (`addons:setTextures`, `texture-settings.json`), Switch mods (yuzu family `load_directory`, Ryujinx `mods/contents/<id lower>`), Cemu `graphicPacks` (`mods: true`), `psxSerial`, `ciaTitleId`, `switchTitleId`.
+- Firmware: `pkgInstall.installFirmware` (RPCS3 `--installfw`, Vita3K `--firmware`) from `downloadBios`.
+- nav.js `pickRow`: up/down to the next row (hscroll row: first item; same grid: column; else leftmost); left/right only within the row; `[data-top]` scrolls the page to the top.
+- Game page More tabs: Game, Steam, Emulator, Details and Artwork, Options. `steam:addToCollections`.
+- Settings background picker: `topConsoles` (play time, then installed) first, `SCENE_OF`.
+- Vita: `vitaByName`; PS4 trophy titles remembered (`titles.json`); `developerOf` up to two.
 
 ## Releases (full steps: HANDOFF D8)
 Only when the owner asks. Bump `version` and `build.releaseInfo.releaseName` ("Cartridge X.Y.Z") in `package.json`, and set `versionName` (what Settings → About and update messages show). **0.9.3 is shipped in parts (owner, 1 Oct 2026):** the number goes up as usual (0.9.4, 0.9.5...) but `versionName` and the release title are "0.9.3 B", "0.9.3 C"... until the 0.9.3 plan is done; notes heading `## Cartridge 0.9.3 B · Title`. Then put only this version's notes in `RELEASE_NOTES.md` (heading `## Cartridge X.Y.Z · Title`), add them to the top of `CHANGELOG.md`, grouped as New / Changed / Fixed with bold lead-ins. CI builds, launch-checks and publishes.

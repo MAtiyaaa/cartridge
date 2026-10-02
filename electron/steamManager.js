@@ -322,6 +322,14 @@ module.exports = function createSteamManager(ctx) {
     const ok = cfg().confirmed || {};
     return (found?.items || []).filter((x) => (ok[x.path] ? ok[x.path] === id : x.id === id && x.conf >= 2) && exists(x.path));
   }
+  // every emulator copy that could be updated (0.9.16): AppImages the scan is sure of, and Flatpaks
+  function installedEmulators() {
+    const out = [];
+    for (const x of found?.items || []) if (x.kind === 'appimage' && x.id && x.conf >= 2 && exists(x.path) && !/\/\.mount_|cartridge/i.test(x.path)) out.push({ id: x.id, label: labelOf(x.id), kind: 'appimage', path: x.path, version: x.version || '' });
+    const fps = flatpakApps();
+    for (const [id, e] of Object.entries(EMU)) for (const fp of e.fp || []) if (fps.includes(fp)) out.push({ id, label: labelOf(id), kind: 'flatpak', fp });
+    return out;
+  }
   let scanning = null;
   function scanEmulators({ drives = false } = {}) {
     if (scanning) return scanning;
@@ -528,12 +536,22 @@ module.exports = function createSteamManager(ctx) {
     } catch {}
     return null;
   }
-  // Vita3K keeps installed games in <pref>/ux0/app/<title ID>
-  function vitaInstalled(id) {
-    const prefs = [path.join(HOME, '.local/share/Vita3K/Vita3K'), path.join(HOME, '.local/share/Vita3K'), ...ctx.emulationRoots().map((r) => path.join(r, 'storage/Vita3K'))];
-    for (const c of [path.join(HOME, '.config/Vita3K/config.yml'), path.join(HOME, '.local/share/Vita3K/Vita3K/config.yml')]) { try { const m = fs.readFileSync(c, 'utf8').match(/^pref-path:\s*(.+)$/m); if (m) prefs.unshift(m[1].trim().replace(/^['"]|['"]$/g, '')); } catch {} }
-    return prefs.some((p) => isDir(path.join(p, 'ux0/app', id)));
+  // Vita3K keeps installed games in <pref>/ux0/app/<title ID>; the same folders the installer uses
+  const vitaPrefsAll = () => require('./pkgInstall').vitaPrefs(HOME, ctx.emulationRoots());
+  function vitaInstalled(id) { return vitaPrefsAll().some((p) => isDir(path.join(p, 'ux0/app', id))); }
+  // games installed in Vita3K before Cartridge (or with no .pkg on this device): matched by the
+  // title in their param.sfo, so they start by title ID like any other (0.9.16)
+  function vitaByName(rom) {
+    const want = nameKeyOf(rom.name), sfo = require('./patches').sfoAt;
+    if (!want) return null;
+    for (const p of vitaPrefsAll()) for (const id of ls(path.join(p, 'ux0/app'))) {
+      if (!/^PCS[A-Z]\d{5}$/.test(id)) continue;
+      const t = nameKeyOf(sfo(path.join(p, 'ux0/app', id, 'sce_sys', 'param.sfo')).TITLE);
+      if (t && (t === want || t.replace(/ /g, '') === want.replace(/ /g, ''))) return id;
+    }
+    return null;
   }
+  const nameKeyOf = (n) => String(n || '').toLowerCase().replace(/\([^)]*\)|\[[^\]]*\]/g, '').replace(/[™®©]/g, '').replace(/&/g, ' and ').replace(/[^a-z0-9]+/g, ' ').trim();
   function rpcs3Knows(serial) {
     for (const f of [path.join(HOME, '.config/rpcs3/games.yml'), path.join(HOME, '.var/app/net.rpcs3.RPCS3/config/rpcs3/games.yml')]) {
       try { if (new RegExp(`^${serial}\\s*:`, 'm').test(fs.readFileSync(f, 'utf8'))) return true; } catch {}
@@ -595,8 +613,11 @@ module.exports = function createSteamManager(ctx) {
     }
     if (t.kind === 'vitaid') { // installed in Vita3K? then by title ID; otherwise it can't start yet
       const id = vitaTitleId(rom, file);
+      if (id && vitaInstalled(id)) return { SERIAL: id };
+      const named = vitaByName(rom);
+      if (named) return { SERIAL: named };
       const how = 'in Vita3K first (File → Install .pkg or .vpk), then add it to Steam.';
-      return id && vitaInstalled(id) ? { SERIAL: id } : { missing: id ? `Install ${id} ${how}` : `Install this game ${how}` };
+      return { missing: id ? `Install ${id} ${how}` : `Install this game ${how}` };
     }
     if (t.kind === 'eboot') { const e = findEboot(file); return { ROM: styled(e || file, t) }; }
     if (t.kind === 'rpx' && isDir(file)) { // Wii U game folder: code/<name>.rpx
@@ -833,6 +854,16 @@ module.exports = function createSteamManager(ctx) {
     return out;
   }
   // One game: is it in Steam, and would Cartridge know how to add it?
+  // a game already in Steam into collections (game page → More → Steam, 0.9.16). Needs Steam's
+  // instant changes, which edit collections the way Steam's own library does.
+  async function addRomToCollections(romId, names) {
+    const f = forRom(romId), env = environment();
+    if (!f.inSteam || !f.appid) throw new Error('Add the game to Steam first.');
+    if (!env.account || !(await live.available(env.account.root))) throw new Error('Collections can be changed while Steam runs once instant Steam changes are on (Settings → Steam).');
+    await live.addToCollections(f.appid, names);
+    const c = cfg(); c.lastCollections ||= {}; c.lastCollections[f.console] = names; ctx.saveConfig();
+    return true;
+  }
   function forRom(romId) {
     const env = environment();
     const g = installedGames().find((x) => x.rom.id === romId);
@@ -941,11 +972,13 @@ module.exports = function createSteamManager(ctx) {
     const hero = art.hero || rom?.shot || null;
     const fromSgdb = async (kind, fallback) => (await ctx.sgdbImage(rom?.name, kind, sg).catch(() => null)) || (fallback ? ctx.fetchImage(fallback) : null);
     await put(`${e.appid}p.png`, async () => (style ? fromSgdb('grid', cover) : cover ? ctx.fetchImage(cover) : ctx.sgdbImage(rom?.name, 'grid')));
-    await put(`${e.appid}_hero.png`, async () => (style ? fromSgdb('hero', hero) : hero ? ctx.fetchImage(hero) : ctx.sgdbImage(rom?.name, 'hero')));
+    // Cartridge's own art first (0.9.16): yours, then the sharp background Cartridge shows, then RomM's
+    const sharp = !style && !art.hero ? await ctx.sharpHeroPng?.(rom).catch(() => null) : null;
+    await put(`${e.appid}_hero.png`, async () => (style ? fromSgdb('hero', hero) : art.hero ? ctx.fetchImage(art.hero) : sharp || (hero ? ctx.fetchImage(hero) : ctx.sgdbImage(rom?.name, 'hero'))));
     await put(`${e.appid}.png`, async () => { // wide banner: SteamGridDB's, else cut from the background
       const w = await ctx.sgdbImage(rom?.name, 'wide', sg).catch(() => null);
       if (w) return w;
-      const src = hero ? await ctx.fetchImage(hero) : null;
+      const src = sharp || (hero ? await ctx.fetchImage(hero) : null);
       return src ? ctx.cropTo(src, 920, 430) : null;
     });
     await put(`${e.appid}_logo.png`, async () => { const l = await ctx.logoFile(rom); return l ? fs.readFileSync(l) : null; });
@@ -1523,7 +1556,7 @@ module.exports = function createSteamManager(ctx) {
     },
     liveInfo: async () => { const env = environment(); if (!env.account) return { on: false, flag: false }; return { on: await live.available(env.account.root), flag: live.flagOn(env.account.root) }; },
     liveEnable: () => { const env = environment(); if (!env.account) throw new Error('Steam was not found.'); fs.writeFileSync(path.join(env.account.root, live.FLAG), ''); return true; },
-    onDownloaded, onDeleted, lastStatus, writeScript, startupReport, forRom, fixCollections, played, playtime, steamRoots, refreshArt,
+    installedEmulators, addRomToCollections, onDownloaded, onDeleted, lastStatus, writeScript, startupReport, forRom, fixCollections, played, playtime, steamRoots, refreshArt,
     scanEmulators, rpcs3Command, vita3kCommand, setupOverview, confirm, markFork, useFile, health, healthFix, movedEmulators, setupReport, syncConsoleCollections, preflight: (key) => preflight(key, templateFor(key)),
     candidatesFor: (key) => az(candidates(key).map((c) => ({ id: c.id, label: c.label, sub: shortPath(c.t.how === 'flatpak' ? c.t.from : c.t.exe), fork: !!c.fork }))),
     // one game's own Target, Start in and Launch options (console page, 0.9.15); null goes back

@@ -91,97 +91,149 @@ const TAU = Math.PI * 2;
 function once(w, h, draw) { const c = document.createElement('canvas'); c.width = w; c.height = h; draw(c.getContext('2d')); return c; }
 function rrect(g, x, y, w, h, r) { g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); }
 
-// 0.9.15 (owner's pick "A + B for the top five"): five designed scenes (B), calm and slow, each
-// drawn from a few pre-rendered glows; every other console gets its own game art (A, artPan).
-
-// soft round glow, drawn once and stamped
+// 0.9.16 (owner: the console scenes must match XMB Waves and Ribbons). Built the way Ribbons is: many
+// hair-fine lines on smooth curves, added together ('lighter') over a soft glowing body, slow, fading
+// at their ends. No solid shapes. Each in its console's colours, after something from its menu.
 function glow(rgb, size) {
+  size = Math.max(2, Math.round(size));
   return once(size, size, (c) => { const r = c.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2); r.addColorStop(0, `rgba(${rgb},1)`); r.addColorStop(0.4, `rgba(${rgb},0.35)`); r.addColorStop(1, `rgba(${rgb},0)`); c.fillStyle = r; c.fillRect(0, 0, size, size); });
 }
+const stamp = (g, img, x, y, a) => { g.globalAlpha = a; g.drawImage(img, x - img.width / 2, y - img.height / 2); g.globalAlpha = 1; };
 
-// PS2: rings of blue light flowing out of a bright core, like the boot screen's tunnel
+// PS2: the boot screen's blue depth, as a tunnel of fine light rings that waver as they flow outwards
 function ps2(g, w, h, S, pal, light) {
-  const cx = w * 0.64, cy = h * 0.42, n = light ? 16 : 26;
-  const core = glow('120,165,255', Math.round(h * 0.7));
+  const cx = w * 0.64, cy = h * 0.42, N = light ? 22 : 38, SEG = light ? 56 : 110;
+  const core = glow('120,160,255', h * 0.8), haze = glow('40,80,220', w * 1.1);
   return (t) => {
     g.clearRect(0, 0, w, h);
     g.globalCompositeOperation = 'lighter';
-    g.globalAlpha = 0.55; g.drawImage(core, cx - core.width / 2, cy - core.height / 2); g.globalAlpha = 1;
-    for (let i = 0; i < n; i++) {
-      const z = (i / n + t / 14) % 1, s = Math.pow(z, 2.4), rad = s * w * 0.95;
-      g.strokeStyle = `rgba(80,130,255,${(0.04 + s * 0.42) * (1 - s * 0.6)})`; g.lineWidth = (1 + s * 3) * S;
-      g.beginPath(); g.ellipse(cx, cy, Math.max(1, rad), Math.max(1, rad * 0.62), 0, 0, TAU); g.stroke();
+    stamp(g, haze, cx, cy, 0.22); stamp(g, core, cx, cy, 0.42);
+    for (let i = 0; i < N; i++) {
+      const z = (i / N + t * 0.03) % 1, R = Math.pow(z, 2.1) * w * 0.95 + h * 0.02;
+      const a = 0.34 * Math.pow(Math.sin(Math.PI * z), 1.6);
+      if (a < 0.01) continue;
+      g.strokeStyle = `rgba(${Math.round(110 + 90 * z)},${Math.round(150 + 70 * z)},255,${a})`;
+      g.lineWidth = (0.7 + 1.1 * z) * S;
+      g.beginPath();
+      for (let j = 0; j <= SEG; j++) {
+        const an = (j / SEG) * TAU, wob = 1 + 0.03 * Math.sin(an * 3 + t * 0.45 + i * 0.7) + 0.015 * Math.sin(an * 5 - t * 0.6 + i);
+        const x = cx + Math.cos(an) * R * wob, y = cy + Math.sin(an) * R * 0.6 * wob;
+        j ? g.lineTo(x, y) : g.moveTo(x, y);
+      }
+      g.stroke();
     }
     g.globalCompositeOperation = 'source-over';
   };
 }
 
-// GameCube: a lit cube turning slowly in a purple void
+// GameCube: the boot cube, turning slowly, drawn only in fine lines of indigo light (each face hatched)
 function gc(g, w, h, S, pal, light) {
-  const cx = w * 0.66, cy = h * 0.4, U = h * 0.16;
-  const halo = glow('130,95,235', Math.round(h * 0.9));
+  const cx = w * 0.7, cy = h * 0.36, U = h * 0.115, K = light ? 8 : 14;
+  const halo = glow('125,90,240', h * 1.1);
   const V = [-1, 1].flatMap((x) => [-1, 1].flatMap((y) => [-1, 1].map((z) => [x, y, z])));
   const F = [[0, 1, 3, 2], [4, 5, 7, 6], [0, 1, 5, 4], [2, 3, 7, 6], [0, 2, 6, 4], [1, 3, 7, 5]];
   return (t) => {
     g.clearRect(0, 0, w, h);
-    g.globalAlpha = 0.45; g.drawImage(halo, cx - halo.width / 2, cy - halo.height / 2); g.globalAlpha = 1;
-    const a = t / 6, b = t / 9 + 0.5;
+    g.globalCompositeOperation = 'lighter';
+    stamp(g, halo, cx, cy, 0.3);
+    const a = t / 7, b = 0.55 + Math.sin(t / 11) * 0.25;
     const P = V.map(([x, y, z]) => { const X = x * Math.cos(a) - z * Math.sin(a); let Z = x * Math.sin(a) + z * Math.cos(a); const Y = y * Math.cos(b) - Z * Math.sin(b); Z = y * Math.sin(b) + Z * Math.cos(b); const k = 4.8 / (Z + 5.2); return [cx + X * U * k, cy + Y * U * k, Z]; });
-    F.map((f) => ({ f, z: f.reduce((s, i) => s + P[i][2], 0) / 4 })).sort((x, y) => y.z - x.z).forEach(({ f, z }) => {
-      g.fillStyle = `rgba(${Math.round(110 - z * 25)},${Math.round(85 - z * 20)},${Math.round(215 - z * 20)},${0.5 - z * 0.12})`;
-      g.strokeStyle = 'rgba(205,190,255,0.55)'; g.lineWidth = 1.5 * S;
-      g.beginPath(); f.forEach((i, k) => (k ? g.lineTo(P[i][0], P[i][1]) : g.moveTo(P[i][0], P[i][1]))); g.closePath(); g.fill(); g.stroke();
-    });
+    const lerp = (p, q, f) => [p[0] + (q[0] - p[0]) * f, p[1] + (q[1] - p[1]) * f];
+    g.lineWidth = 0.9 * S;
+    for (const f of F) {
+      const z = f.reduce((s, i) => s + P[i][2], 0) / 4, front = z < 0;
+      const base = front ? 0.2 : 0.07;
+      const [p0, p1, p2, p3] = f.map((i) => P[i]);
+      g.strokeStyle = `rgba(150,120,255,${base})`;
+      g.beginPath();
+      for (let k = 1; k < K; k++) { const u = k / K, s0 = lerp(p0, p1, u), s1 = lerp(p3, p2, u); g.moveTo(s0[0], s0[1]); g.lineTo(s1[0], s1[1]); }
+      g.stroke();
+      g.strokeStyle = `rgba(205,190,255,${front ? 0.55 : 0.18})`;
+      g.beginPath(); g.moveTo(p0[0], p0[1]); g.lineTo(p1[0], p1[1]); g.lineTo(p2[0], p2[1]); g.lineTo(p3[0], p3[1]); g.closePath(); g.stroke();
+    }
+    g.globalCompositeOperation = 'source-over';
   };
 }
 
-// Wii: channel tiles gliding sideways over the grey menu, a thin Wii-blue light on each
+// Wii: a sheet of fine pinstripes that breathes like fabric, with a Wii-blue light sweeping across it
 function wii(g, w, h, S, pal, light) {
-  const stripes = once(w, h, (c) => { c.fillStyle = 'rgba(255,255,255,0.04)'; const st = Math.max(2, Math.round(3 * S)); for (let y = 0; y < h; y += st * 2) c.fillRect(0, y, w, st); });
-  const cw = w / 5.2, ch = cw * 0.6, rad = ch * 0.18;
+  const N = light ? 20 : 38, STEP = light ? 32 : 20;
   return (t) => {
     g.clearRect(0, 0, w, h);
-    g.drawImage(stripes, 0, 0);
-    const off = (t * 0.012 * w) % (cw * 1.15);
-    g.lineWidth = 2 * S;
-    for (let r = 0; r < 4; r++) for (let c = -1; c < 7; c++) {
-      const x = c * cw * 1.15 - off + w * 0.04, y = r * ch * 1.25 + h * 0.08;
-      g.fillStyle = 'rgba(255,255,255,0.035)'; g.strokeStyle = 'rgba(140,215,255,0.2)';
-      rrect(g, x, y, cw, ch, rad); g.fill(); g.stroke();
-      const sh = (Math.sin(t / 2 + c + r) + 1) / 2;
-      g.fillStyle = `rgba(140,215,255,${0.06 + sh * 0.1})`; g.fillRect(x + 6 * S, y + ch * 0.76, cw - 12 * S, 2 * S);
+    g.globalCompositeOperation = 'lighter';
+    const xs = (((t * 0.035) % 1.5) - 0.25) * w;
+    const sweep = g.createLinearGradient(0, 0, w, 0);
+    const st = (x, a) => sweep.addColorStop(Math.min(1, Math.max(0, x / w)), a);
+    st(0, 'rgba(225,235,245,0.08)'); st(xs - w * 0.22, 'rgba(225,235,245,0.08)'); st(xs, 'rgba(140,215,255,0.6)'); st(xs + w * 0.22, 'rgba(225,235,245,0.08)'); st(w, 'rgba(225,235,245,0.08)');
+    g.strokeStyle = sweep; g.lineWidth = 1 * S;
+    for (let k = 0; k < N; k++) {
+      const base = h * (0.16 + 0.78 * (k / N));
+      g.beginPath();
+      for (let x = 0; x <= w + STEP; x += STEP) {
+        const u = x / w, y = base + h * 0.022 * Math.sin(u * 2.2 + t * 0.15 + k * 0.13) + h * 0.011 * Math.sin(u * 5.3 - t * 0.21 + k * 0.29);
+        x ? g.lineTo(x, y) : g.moveTo(x, y);
+      }
+      g.stroke();
     }
+    g.globalCompositeOperation = 'source-over';
   };
 }
 
-// Xbox 360: a bright green orb sending slow rings outwards
+// Xbox 360: fine green arcs with fading tails circling a soft glowing orb, at their own speeds
 function xbox360(g, w, h, S, pal, light) {
-  const cx = w * 0.68, cy = h * 0.42, R = h * 0.15;
-  const orb = once(Math.ceil(R * 2), Math.ceil(R * 2), (c) => { const o = c.createRadialGradient(R * 0.85, R * 0.85, 0, R, R, R); o.addColorStop(0, '#e9ffd8'); o.addColorStop(0.35, '#7be04a'); o.addColorStop(1, 'rgba(30,90,20,0)'); c.fillStyle = o; c.beginPath(); c.arc(R, R, R, 0, TAU); c.fill(); });
+  const cx = w * 0.68, cy = h * 0.42, M = light ? 10 : 18, TAIL = light ? 8 : 14;
+  const r = rng(360);
+  const arcs = Array.from({ length: M }, (_, m) => ({ R: h * (0.15 + 0.034 * m + r() * 0.02), v: (0.05 + r() * 0.07) * (m % 2 ? 1 : -1), p: r() * TAU, len: 0.7 + r() * 1.5, wd: 0.8 + r() * 1.6, a: 0.2 + r() * 0.3 }));
+  const orb = glow('150,240,90', h * 0.42), halo = glow('60,160,30', w * 0.9);
   return (t) => {
     g.clearRect(0, 0, w, h);
-    for (let i = 0; i < 7; i++) {
-      const k = (i / 7 + t / 10) % 1;
-      g.strokeStyle = `rgba(120,230,70,${0.35 * (1 - k)})`; g.lineWidth = (2 + 6 * (1 - k)) * S;
-      g.beginPath(); g.arc(cx, cy, Math.max(1, k * w * 0.6), 0, TAU); g.stroke();
+    g.globalCompositeOperation = 'lighter';
+    stamp(g, halo, cx, cy, 0.25); stamp(g, orb, cx, cy, 0.85);
+    for (const c of arcs) {
+      const head = c.p + t * c.v, dir = Math.sign(c.v);
+      g.lineWidth = c.wd * S;
+      for (let s = 0; s < TAIL; s++) {
+        const f0 = s / TAIL, f1 = (s + 1) / TAIL;
+        g.strokeStyle = `rgba(140,235,90,${c.a * Math.pow(f1, 1.7)})`;
+        g.beginPath();
+        const a0 = head - dir * c.len * (1 - f0), a1 = head - dir * c.len * (1 - f1);
+        g.arc(cx, cy, c.R, Math.min(a0, a1), Math.max(a0, a1));
+        g.stroke();
+      }
     }
-    g.drawImage(orb, cx - R, cy - R);
+    g.globalCompositeOperation = 'source-over';
   };
 }
 
-// Switch: Joy-Con red and blue light meeting in the middle, dust drifting through
+// Switch: two silky bands, Joy-Con red from the left and blue from the right, crossing in the middle
 function nswitch(g, w, h, S, pal, light) {
-  const red = glow('230,30,50', Math.round(w * 0.9)), blue = glow('0,160,230', Math.round(w * 0.9));
-  const r = rng(7), dust = Array.from({ length: light ? 24 : 40 }, () => ({ x: r(), y: r(), v: 0.004 + r() * 0.01 }));
+  const N = light ? 12 : 22, STEP = light ? 32 : 20;
+  const red = g.createLinearGradient(0, 0, w, 0), blue = g.createLinearGradient(0, 0, w, 0);
+  red.addColorStop(0, 'rgba(255,70,85,0.55)'); red.addColorStop(0.65, 'rgba(255,70,85,0.18)'); red.addColorStop(1, 'rgba(255,70,85,0.02)');
+  blue.addColorStop(0, 'rgba(30,175,240,0.02)'); blue.addColorStop(0.35, 'rgba(30,175,240,0.18)'); blue.addColorStop(1, 'rgba(30,175,240,0.55)');
+  const body = (c) => { const b = g.createLinearGradient(0, 0, w, 0); b.addColorStop(c === 'r' ? 0 : 1, c === 'r' ? 'rgba(255,70,85,0.12)' : 'rgba(30,175,240,0.12)'); b.addColorStop(0.5, 'rgba(255,255,255,0.02)'); b.addColorStop(c === 'r' ? 1 : 0, 'rgba(0,0,0,0)'); return b; };
+  const bodies = { r: body('r'), b: body('b') };
+  const band = (t, k, ph, dirY) => (u) => h * (0.4 + dirY * 0.12 * Math.sin(u * 2.4 + t * 0.2 + ph) + 0.05 * Math.sin(u * 4.9 - t * 0.28 + ph * 2)) + (k - N / 2) * h * 0.008 * (1 + 0.7 * Math.sin(u * 3 + t * 0.35 + ph));
   return (t) => {
     g.clearRect(0, 0, w, h);
-    const m = w * (0.5 + Math.sin(t / 7) * 0.05);
-    g.globalAlpha = 0.5;
-    g.drawImage(red, m - w * 0.28 - red.width / 2, h * 0.5 - red.height / 2);
-    g.drawImage(blue, m + w * 0.28 - blue.width / 2, h * 0.5 - blue.height / 2);
-    g.globalAlpha = 1;
-    g.fillStyle = 'rgba(255,255,255,0.16)';
-    for (const d of dust) g.fillRect(((d.x + t * d.v) % 1) * w, d.y * h, 2 * S, 2 * S);
+    g.globalCompositeOperation = 'lighter';
+    g.lineWidth = 1.1 * S;
+    for (const [grad, ph, dy, bk] of [[red, 0, 1, 'r'], [blue, 2.2, -1, 'b']]) {
+      // the soft body under the lines, as Ribbons has
+      const top = band(t, 0, ph, dy), bot = band(t, N, ph, dy);
+      g.beginPath();
+      for (let x = 0; x <= w + STEP; x += STEP) { const yy = top(x / w) - h * 0.025; x ? g.lineTo(x, yy) : g.moveTo(x, yy); }
+      for (let x = Math.ceil((w + STEP) / STEP) * STEP; x >= 0; x -= STEP) g.lineTo(x, bot(x / w) + h * 0.025);
+      g.closePath(); g.fillStyle = bodies[bk]; g.fill();
+      g.strokeStyle = grad;
+      for (let k = 0; k <= N; k++) {
+        const y = band(t, k, ph, dy);
+        g.beginPath();
+        for (let x = 0; x <= w + STEP; x += STEP) { const yy = y(x / w); x ? g.lineTo(x, yy) : g.moveTo(x, yy); }
+        g.stroke();
+      }
+    }
+    g.globalCompositeOperation = 'source-over';
   };
 }
 
@@ -220,11 +272,11 @@ export const LEGACY_ART = { wiiu: 'wiiu', ds: 'nds', n3ds: '3ds', xbox: 'xbox' }
 export const BACKGROUNDS = [
   { v: 'waves', l: 'XMB Waves', sub: 'PSP style, in your theme colours', group: 'Theme' },
   { v: 'ribbons', l: 'Ribbons', sub: 'PS3 style, in your theme colours', group: 'Theme' },
-  { v: 'ps2', l: 'PlayStation 2', sub: 'A tunnel of blue light', group: 'Consoles' },
-  { v: 'gc', l: 'GameCube', sub: 'A cube turning in a purple void', group: 'Consoles' },
-  { v: 'wii', l: 'Wii', sub: 'Channels gliding by, Wii blue', group: 'Consoles' },
-  { v: 'xbox360', l: 'Xbox 360', sub: 'The green orb and its rings', group: 'Consoles' },
-  { v: 'switch', l: 'Switch', sub: 'Joy-Con red and blue meeting', group: 'Consoles' },
+  { v: 'ps2', l: 'PlayStation 2', sub: 'Rings of blue light from the boot screen', group: 'Consoles' },
+  { v: 'gc', l: 'GameCube', sub: 'The boot cube, drawn in fine lines of light', group: 'Consoles' },
+  { v: 'wii', l: 'Wii', sub: 'Silky pinstripes and a sweep of Wii blue', group: 'Consoles' },
+  { v: 'xbox360', l: 'Xbox 360', sub: 'Green arcs circling the glowing orb', group: 'Consoles' },
+  { v: 'switch', l: 'Switch', sub: 'Joy-Con red and blue bands crossing', group: 'Consoles' },
   { v: 'solid', l: 'Still', sub: 'A still gradient, no motion', group: 'Other' },
   { v: 'art', l: 'Game artwork', sub: 'The highlighted game', group: 'Other' },
   { v: 'wallpaper', l: 'Wallpaper', sub: 'An image of your own', group: 'Other' },

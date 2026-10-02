@@ -47,6 +47,9 @@ function rpcs3Dirs(home = os.homedir()) {
 function ps3Version(gameDir, hdds, serial) {
   for (const h of hdds) { const s = sfoAt(path.join(h, 'game', serial, 'PARAM.SFO')); if (s.APP_VER) return s.APP_VER; }
   for (const f of [path.join(gameDir || '', 'PS3_GAME', 'PARAM.SFO'), path.join(gameDir || '', 'PARAM.SFO')]) { const s = sfoAt(f); if (s.APP_VER) return s.APP_VER; }
+  // a disc image (or a folder holding one): PS3_GAME/PARAM.SFO inside the ISO (0.9.16)
+  try { if (fs.statSync(gameDir).isDirectory()) { const iso = fs.readdirSync(gameDir).find((n) => /\.iso$/i.test(n)); if (iso) gameDir = path.join(gameDir, iso); } } catch {}
+  if (/\.iso$/i.test(gameDir || '')) { const b = isoFile(gameDir, ['PS3_GAME', 'PARAM.SFO']); const v = b && parseSfo(b).APP_VER; if (v) return v; }
   return null;
 }
 // Patches for one game: [{ key, hash, description, title, serial, version, author, notes, group, on, by }]
@@ -65,20 +68,46 @@ function rpcs3List(dir, serial, appVer, mine = {}) {
         for (const [title, serials] of Object.entries(games)) {
           const vers = serials?.[serial];
           if (!Array.isArray(vers)) continue;
-          // this game's version, else All; with the version unknown, the one version it lists
-          const version = vers.includes(appVer) ? appVer : vers.includes('All') ? 'All' : !appVer && vers.length === 1 ? vers[0] : null;
-          if (!version) continue;
+          // this game's version, else All; with the version unknown, the one version it lists. Patches
+          // made for another version of this game (usually its last update) are listed too, saying so:
+          // RPCS3 applies them once the game runs as that version (0.9.16)
+          let version = vers.includes(appVer) ? appVer : vers.includes('All') ? 'All' : !appVer && vers.length === 1 ? vers[0] : null;
+          let other = null;
+          if (!version) { version = [...vers].sort((x, y) => String(y).localeCompare(String(x), undefined, { numeric: true }))[0]; if (!version) continue; other = vers; }
           const key = [hash, description, title, serial, version].join('\u0001');
           if (seen.has(key)) continue;
           seen.add(key);
           const node = cfg?.[hash]?.[description]?.[title]?.[serial]?.[version];
           const on = node === 'true' || !!(node && typeof node === 'object' && node.Enabled === 'true');
-          out.push({ key, hash, description, title, serial, version, author: p.Author || '', notes: typeof p.Notes === 'string' ? p.Notes : '', group: p.Group || '', on, by: on ? (mine[key] ? 'cartridge' : 'emulator') : null });
+          const note = other ? `For game version ${other.join(', ')}${appVer ? ` (this copy is ${appVer}: install the game's update in RPCS3 for it to apply)` : ''}.` : '';
+          out.push({ key, hash, description, title, serial, version, author: p.Author || '', notes: [note, typeof p.Notes === 'string' ? p.Notes : ''].filter(Boolean).join(' '), group: p.Group || '', on, other: !!other, by: on ? (mine[key] ? 'cartridge' : 'emulator') : null });
         }
       }
     }
   }
-  return out.sort((a, b) => a.description.localeCompare(b.description));
+  const exact = new Set(out.filter((x) => !x.other).map((x) => [x.hash, x.description, x.title].join('\u0001')));
+  return out.filter((x) => !x.other || !exact.has([x.hash, x.description, x.title].join('\u0001'))).sort((a, b) => a.other - b.other || a.description.localeCompare(b.description));
+}
+// RPCS3's own patch download (rpcs3qt/patch_manager_dialog.cpp): GET rpcs3.net/compatibility?patch&api=v1
+// &v=<patch engine 1.2>[&sha256=<current file>]; JSON return_code 0 new, 1 up to date, <0 error; version
+// must be 1.2 and sha256 must match the patch text; RPCS3 keeps the old file as patch.yml.old.
+const RPCS3_PATCH_ENGINE = '1.2';
+async function rpcs3DownloadPatches(patchesDir, { fetchImpl = fetch, base = 'https://rpcs3.net' } = {}) {
+  const file = path.join(patchesDir, 'patch.yml');
+  let url = `${base}/compatibility?patch&api=v1&v=${RPCS3_PATCH_ENGINE}`;
+  try { url += '&sha256=' + require('crypto').createHash('sha256').update(fs.readFileSync(file)).digest('hex'); } catch {}
+  const r = await fetchImpl(url);
+  if (!r.ok) throw new Error(`rpcs3.net answered ${r.status}`);
+  const j = await r.json();
+  if (j.return_code === 1) return { updated: false };
+  if (j.return_code !== 0) throw new Error(`rpcs3.net: no patches (code ${j.return_code})`);
+  if (j.version !== RPCS3_PATCH_ENGINE || typeof j.patch !== 'string' || !j.patch) throw new Error('rpcs3.net sent a patch list for another RPCS3 version');
+  if (String(j.sha256 || '').toLowerCase() !== require('crypto').createHash('sha256').update(j.patch).digest('hex')) throw new Error('The downloaded patch list failed its checksum');
+  load(j.patch); // throws if it isn't valid YAML
+  fs.mkdirSync(patchesDir, { recursive: true });
+  if (exists(file)) fs.renameSync(file, file + '.old');
+  fs.writeFileSync(file, j.patch);
+  return { updated: true };
 }
 // Turn patches on (Enabled: true) or off in patch_config.yml. Off only for ones Cartridge turned on.
 // Everything else in the file is written back as it was. Returns the new { key: true } record.
@@ -404,4 +433,4 @@ function rpcs3ApplyDb(dir, serial, dbText, mine = {}) {
   return { result: 'written', mine: { ...mine, [serial]: { at: Date.now(), file: f } } };
 }
 
-module.exports = { isoFile, rpcs3DbFromText, rpcs3CustomPath, rpcs3DbCached, rpcs3ApplyDb, parseSfo, sfoAt, rpcs3Dirs, ps3Version, rpcs3List, rpcs3Set, shadDirs, ps4Version, shadList, shadSet, load, dump, pcsx2Dirs, pcsx2GameList, pcsx2Game, ps2IsoInfo, pcsx2ZipSources, pcsx2ZipBuffer, pnachList, pcsx2List, pcsx2Set, crcHex };
+module.exports = { rpcs3DownloadPatches, isoFile, rpcs3DbFromText, rpcs3CustomPath, rpcs3DbCached, rpcs3ApplyDb, parseSfo, sfoAt, rpcs3Dirs, ps3Version, rpcs3List, rpcs3Set, shadDirs, ps4Version, shadList, shadSet, load, dump, pcsx2Dirs, pcsx2GameList, pcsx2Game, ps2IsoInfo, pcsx2ZipSources, pcsx2ZipBuffer, pnachList, pcsx2List, pcsx2Set, crcHex };

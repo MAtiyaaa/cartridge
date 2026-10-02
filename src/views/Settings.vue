@@ -75,6 +75,9 @@
 
           <template v-else-if="sec === 'emu'">
             <h1>Emulators</h1>
+            <!-- pages like Look & Feel (0.9.16, owner): LB/RB move between them -->
+            <div class="lookpages"><Btn b="LB" /><div class="seg"><button v-for="p in EMU_PAGES" :key="p.v" data-focus :data-key="'emup-' + p.v" :class="{ on: emuPage === p.v }" @click="setEmuPage(p.v)">{{ p.l }}<span v-if="p.v === 'updates' && emuUpCount" class="count-dot">{{ emuUpCount }}</span><span v-if="p.v === 'games' && ps3UpCount" class="count-dot">{{ ps3UpCount }}</span></button></div><Btn b="RB" /></div>
+            <template v-if="emuPage === 'overview'">
             <!-- what needs you, in one place (0.9.3: replaces the pop-ups at start) -->
             <div class="subh">Issues</div>
             <div v-if="!issues" class="muted small"><Icon name="mdiSync" :size="16" class="spin" /> Checking…</div>
@@ -90,18 +93,64 @@
               <button class="lrow" data-focus @click="go('emu-setup')"><Icon name="mdiRadar" :size="24" /><div class="l-mid"><b>Emulator setup</b><span class="l-sub">Find emulators wherever they are, pick one per console, check BIOS and access</span></div><Icon name="mdiChevronRight" :size="22" /></button>
               <button class="lrow" data-focus @click="go('steam-health')"><Icon name="mdiStethoscope" :size="24" /><div class="l-mid"><b>Shortcut health</b><span class="l-sub">Steam shortcuts that would fail, and fixes for them</span></div><Icon name="mdiChevronRight" :size="22" /></button>
             </div>
-            <template v-if="texEmus.length">
-              <div class="subh">Texture Packs</div>
-              <p class="muted small" style="margin-top: -6px">Where each emulator looks for texture packs, read from its own settings. A game's folder is in its More menu. Cartridge never changes these settings.</p>
-              <div class="stack">
-                <div v-for="e in texEmus" :key="e.root" class="lrow">
-                  <Icon name="mdiTextureBox" :size="24" />
-                  <div class="l-mid"><b>{{ e.name }}{{ e.flatpak ? ' (Flatpak)' : '' }}</b><span class="l-sub mono">{{ e.textures.replace(store.info.home, '~') }}</span><span v-if="!e.on" class="l-sub">{{ e.how }}</span></div>
-                  <span class="status" :class="e.on ? 'ok' : 'warn'"><Icon v-if="e.on" name="mdiCheck" :size="14" />{{ e.on ? 'Textures on' : 'Textures off' }}</span>
-                </div>
+            </template>
+            <template v-else-if="emuPage === 'updates'">
+              <p class="muted small" style="margin-top: -6px">Your emulators and their versions. Updates come from each emulator's own channel: Flathub for Flatpaks, the emulator's own releases for AppImages (the new file goes where the old one was, so Steam shortcuts keep working). EmuDeck's launchers update through EmuDeck.</p>
+              <div class="row"><button class="btn small" data-focus :disabled="emuUpBusy" @click="loadEmuUpdates(true)"><Icon name="mdiRefresh" :size="18" :class="{ spin: emuUpBusy }" />Check now</button></div>
+              <div v-if="emuUps === null" class="muted small"><Icon name="mdiSync" :size="16" class="spin" /> Checking…</div>
+              <p v-else-if="!emuUps.length" class="muted">No emulators to update were found. Run Emulator setup's scan first.</p>
+              <div v-else class="stack">
+                <button v-for="e in emuUps" :key="e.path || e.fp" class="lrow" data-focus :disabled="!e.update || !!emuUpRun" @click="runEmuUpdate(e)">
+                  <EmuIcon :id="e.id" :size="28" />
+                  <div class="l-mid"><b>{{ e.label }} <span class="muted small">{{ e.kind === 'flatpak' ? 'Flatpak' : 'AppImage' }}</span></b><span class="l-sub">{{ e.kind === 'flatpak' ? e.fp : e.path.replace(store.info.home, '~') }}{{ e.version ? ' · ' + e.version : '' }}</span></div>
+                  <span v-if="emuUpRun === (e.path || e.fp)" class="status"><Icon name="mdiSync" :size="14" class="spin" />{{ emuUpPct != null ? emuUpPct + '%' : 'Updating' }}</span>
+                  <span v-else-if="e.update" class="status warn">Update to {{ e.update.version || e.update.tag || 'the newest' }}</span>
+                  <span v-else-if="e.error" class="status">{{ e.error }}</span>
+                  <span v-else-if="e.noSource" class="status">Updates through its own app</span>
+                  <span v-else class="status ok"><Icon name="mdiCheck" :size="14" />Up to date</span>
+                </button>
               </div>
             </template>
-            <div class="subh">Console Folders</div>
+            <template v-else-if="emuPage === 'games'">
+              <p class="muted small" style="margin-top: -6px">PS3 game updates from Sony's own update list (the one ps3.aldostools.org reads), installed into RPCS3 in order. Patches made for a game's last update need it installed.</p>
+              <div class="row"><button class="btn small" data-focus :disabled="ps3UpBusy" @click="loadPs3Updates(true)"><Icon name="mdiRefresh" :size="18" :class="{ spin: ps3UpBusy }" />Check now</button></div>
+              <div v-if="ps3Ups === null" class="muted small"><Icon name="mdiSync" :size="16" class="spin" /> Checking…</div>
+              <p v-else-if="!ps3Ups.length" class="muted">No PS3 games on this device.</p>
+              <div v-else class="stack">
+                <button v-for="g in ps3Ups" :key="g.romId" class="lrow" data-focus :disabled="!g.todo.length || !!ps3UpRun" @click="runPs3Update(g)">
+                  <Icon name="mdiPackageUp" :size="26" />
+                  <div class="l-mid"><b>{{ g.name }}</b><span class="l-sub">{{ g.serial }} · {{ g.have ? 'version ' + g.have : 'version unknown' }}{{ g.latest ? ' · newest ' + g.latest : '' }}</span></div>
+                  <span v-if="ps3UpRun === g.romId" class="status"><Icon name="mdiSync" :size="14" class="spin" />{{ ps3UpText }}</span>
+                  <span v-else-if="g.todo.length" class="status warn">{{ g.todo.length }} update{{ g.todo.length === 1 ? '' : 's' }} · {{ bytes(g.size) }}</span>
+                  <span v-else-if="g.error" class="status">{{ g.error }}</span>
+                  <span v-else class="status ok"><Icon name="mdiCheck" :size="14" />Up to date</span>
+                </button>
+              </div>
+            </template>
+            <template v-if="emuPage === 'patches'">
+              <p class="muted small" style="margin-top: -6px">Patches and cheats from each emulator's own lists, for the games on this device. The same as Patches in a game's More menu.</p>
+              <p v-if="!patchGames.length" class="muted">No games on this device for the emulators with patches (RPCS3, shadPS4, PCSX2, Dolphin, PPSSPP).</p>
+              <div v-else class="stack">
+                <button v-for="g in patchGames" :key="g.r.id" class="lrow" data-focus @click="openPatchesFor(g)">
+                  <EmuIcon :id="g.id" :size="24" fallback="mdiPuzzleOutline" />
+                  <div class="l-mid"><b>{{ g.r.name }}</b><span class="l-sub">{{ consoleName({ romId: g.r.id, slug: g.r.platform_slug }) }} · {{ g.emu }}</span></div>
+                  <span class="l-end">{{ g.emu === 'PPSSPP' ? 'Cheats' : 'Patches' }}</span>
+                </button>
+              </div>
+            </template>
+            <template v-if="emuPage === 'tex'">
+                            <p class="muted small" style="margin-top: -6px">Where each emulator looks for texture packs, read from its own settings. A game's folder is in its More menu. Turn custom textures on here, or in the emulator.</p>
+              <div class="stack">
+                <button v-for="e in texEmus" :key="e.root" class="lrow" data-focus @click="flipTextures(e)">
+                  <EmuIcon :id="e.id" :size="24" fallback="mdiTextureBox" />
+                  <div class="l-mid"><b>{{ e.name }}{{ e.flatpak ? ' (Flatpak)' : '' }}</b><span class="l-sub mono">{{ e.textures.replace(store.info.home, '~') }}</span></div>
+                  <span v-if="e.mods" class="status">Mods</span><span v-else class="status" :class="e.on ? 'ok' : 'warn'"><Icon v-if="e.on" name="mdiCheck" :size="14" />{{ e.on ? 'Textures on' : 'Textures off' }}</span>
+                  <span class="l-end">{{ e.mods ? '' : !e.on ? 'Turn on' : e.mine ? 'Turn off' : '' }}</span>
+                </button>
+              </div>
+            <p v-if="!texEmus.length" class="muted">None of the emulators that take texture packs or mods (PCSX2, DuckStation, Dolphin, PPSSPP, Azahar, Cemu, Eden, Citron, Yuzu, Ryujinx) are set up here yet.</p>
+            </template>
+            <template v-else-if="emuPage === 'folders'">
             <div class="row" style="justify-content: space-between">
               <p class="muted small" style="margin: 0; max-width: 520px">Matched inside your ROMs folder using ES-DE folder names. Pick any system to point it somewhere else.</p>
               <div class="seg">
@@ -117,6 +166,7 @@
                 <span class="chip" :class="p.target?.source === 'custom' ? 'primary' : p.target?.exists ? 'green' : ''">{{ p.target?.source === 'custom' ? 'Custom' : p.target?.exists ? 'Found' : p.target?.path ? 'Will create' : 'Not set' }}</span>
               </button>
             </div>
+            </template>
           </template>
 
           <template v-else-if="sec === 'dl'">
@@ -414,7 +464,7 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { store, call, go, tab, saveConfig, pickFolder, choose, confirm, toast, openModal, bytes, ago, resync, scanServer, allRoms, resetLogos, askText, activeTabs, TAB_DEFS, consoleName } from '../store.js';
 import { useView } from '../useView.js';
 import { input, focusFirst, setPointerPref, setRumble, rumble } from '../nav.js';
@@ -432,6 +482,7 @@ import SteamSettings from '../components/SteamSettings.vue';
 import StorageManager from '../components/StorageManager.vue';
 import LibraryCheck from '../components/LibraryCheck.vue';
 import RommUpload from '../components/RommUpload.vue';
+import EmuIcon from '../components/EmuIcon.vue';
 import ServerStatus from '../components/ServerStatus.vue';
 import ControllerTest from '../components/ControllerTest.vue';
 import ReportProblem from '../components/ReportProblem.vue';
@@ -563,14 +614,32 @@ async function chooseWallpaper() {
 }
 // A (0.9.15): each console with enough covers in your library can be the background
 const artBgs = computed(() => (store.lib?.platforms || []).filter((p) => p.rom_count >= 6).map((p) => ({ v: 'art:' + p.slug, l: consoleName(p), sub: 'Your games, slowly panning', group: 'Art' })).sort((a, b) => a.l.localeCompare(b.l)));
-const allBgs = computed(() => { const i = BACKGROUNDS.findIndex((b) => b.group === 'Other'); return [...BACKGROUNDS.slice(0, i), ...artBgs.value, ...BACKGROUNDS.slice(i)]; });
+// your five most used consoles first (0.9.16): play time, then games on this device; each one its
+// designed scene where there is one, else its own games panning
+const SCENE_OF = { ps2: 'ps2', ngc: 'gc', gamecube: 'gc', wii: 'wii', xbox360: 'xbox360', switch: 'switch' };
+const topConsoles = computed(() => {
+  const score = {};
+  for (const r of allRoms()) {
+    const pl = store.play[r.id], inst = !!store.installed[r.id];
+    if (!pl?.min && !inst) continue;
+    const s = (score[r.platform_slug] ||= { min: 0, inst: 0 });
+    s.min += pl?.min || 0; s.inst += inst ? 1 : 0;
+  }
+  return (store.lib?.platforms || []).filter((p) => score[p.slug]).sort((a, b) => score[b.slug].min - score[a.slug].min || score[b.slug].inst - score[a.slug].inst).slice(0, 5);
+});
+const allBgs = computed(() => {
+  const theme = BACKGROUNDS.filter((b) => b.group === 'Theme'), scenes = BACKGROUNDS.filter((b) => b.group === 'Consoles'), other = BACKGROUNDS.filter((b) => b.group === 'Other');
+  const top = topConsoles.value.map((p) => { const b = scenes.find((x) => x.v === SCENE_OF[p.slug]); return { ...(b || { v: 'art:' + p.slug, l: consoleName(p), sub: 'Your games, slowly panning' }), group: 'Top' }; });
+  const used = new Set(top.map((b) => b.v));
+  return [...theme, ...top, ...scenes.filter((b) => !used.has(b.v)), ...artBgs.value.filter((b) => !used.has(b.v)), ...other];
+});
 const bgNow = computed(() => { const v = ui.value.bgStyle || 'solid'; const m = LEGACY_ART[v] ? 'art:' + LEGACY_ART[v] : v; return allBgs.value.find((b) => b.v === m) || BACKGROUNDS[0]; });
-const BG_ICON = { Theme: 'mdiWaves', Consoles: 'mdiGamepadVariantOutline', Art: 'mdiImageMultipleOutline', Other: 'mdiImageOutline' };
+const BG_ICON = { Theme: 'mdiWaves', Top: 'mdiStarOutline', Consoles: 'mdiGamepadVariantOutline', Art: 'mdiImageMultipleOutline', Other: 'mdiImageOutline' };
 async function pickBg() {
   let last = '';
   const pal = paletteOf(ui.value);
   // a picture of each animated one (0.9.3 L); still, artwork and wallpaper keep their icon
-  const options = allBgs.value.map((b) => { const o = { label: b.l, sub: b.sub, value: b.v, icon: BG_ICON[b.group], img: RENDERERS[b.v] ? bgPreview(b.v, pal) : '', selected: bgNow.value.v === b.v, raw: b.group === 'Art', heading: b.group !== last ? { Theme: 'Your theme colours', Consoles: 'Consoles', Art: 'Your games', Other: 'Other' }[b.group] : '' }; last = b.group; return o; });
+  const options = allBgs.value.map((b) => { const o = { label: b.l, sub: b.sub, value: b.v, icon: BG_ICON[b.group], img: RENDERERS[b.v] ? bgPreview(b.v, pal) : '', selected: bgNow.value.v === b.v, raw: b.group === 'Art' || (b.group === 'Top' && b.v.startsWith('art:')), heading: b.group !== last ? { Theme: 'Your theme colours', Top: 'Your most played consoles', Consoles: topConsoles.value.length ? 'More consoles' : 'Consoles', Art: 'Your games', Other: 'Other' }[b.group] : '' }; last = b.group; return o; });
   const v = await choose({ title: 'Background', options });
   if (v) await setBg(v);
 }
@@ -683,13 +752,20 @@ const syncLine = computed(() => {
 const every = [{ v: 0, l: 'Off' }, { v: 30, l: '30 min' }, { v: 60, l: '1 h' }, { v: 180, l: '3 h' }];
 const folderList = computed(() => (store.libVersion, showAll.value ? supported.value : store.lib?.platforms || []));
 
-useView({ back: () => { if (!document.activeElement?.closest('.rail')) { focusFirst(el.value, `[data-key="sec-${sec.value}"]`); return; } return false; }, lb: () => stepLook(-1), rb: () => stepLook(1) },
+useView({ back: () => { if (!document.activeElement?.closest('.rail')) { focusFirst(el.value, `[data-key="sec-${sec.value}"]`); return; } return false; }, lb: () => (sec.value === 'emu' ? stepEmu(-1) : stepLook(-1)), rb: () => (sec.value === 'emu' ? stepEmu(1) : stepLook(1)) },
   [{ b: 'A', label: 'Select' }, { b: 'B', label: 'Back' }, { b: 'LT+RT', label: 'Tabs' }]);
 // Settings → Emulators → Issues
 const issues = ref(null);
 const ISSUE_ICON = { collections: 'mdiFolderSyncOutline', moved: 'mdiLinkVariantOff', game: 'mdiFileHidden', core: 'mdiPuzzleRemoveOutline', setup: 'mdiRadar', bios: 'mdiChip', romm: 'mdiServerOutline', fpsteam: 'mdiSteam' };
 async function loadIssues() { issues.value = await call('issues:list').catch(() => []); store.issues = issues.value.length; texEmus.value = await call('addons:emulators').catch(() => []); }
 const texEmus = ref([]);
+// custom textures on in the emulator itself (0.9.16); off again only where Cartridge turned them on
+async function flipTextures(e) {
+  if (e.mods) return toast(e.how, 'info', 5000);
+  if (e.on && !e.mine) return toast(`Custom textures were turned on in ${e.name}. Turn them off there if you want to.`, 'info', 4500);
+  try { await call('addons:setTextures', { root: e.root, on: !e.on }); toast(e.on ? `Custom textures off in ${e.name}` : `Custom textures on in ${e.name}`, 'ok', 3000, 'mdiTextureBox'); texEmus.value = await call('addons:emulators'); }
+  catch (err) { toast(err.message, 'error', 5000); }
+}
 async function fixIssue(i) {
   if (i.fix === 'health') return go('steam-health');
   if (i.fix === 'setup') return go('emu-setup');
@@ -771,6 +847,50 @@ async function loadAll() {
   supported.value = list.map((p) => ({ ...p, display_name: p.display_name || p.name })).sort((a, b) => a.display_name.localeCompare(b.display_name));
 }
 const mediaSizes = [{ v: 'compact', l: 'Compact' }, { v: 'spacious', l: 'Spacious' }, { v: 'large', l: 'Large' }];
+// Emulators pages (0.9.16)
+const EMU_PAGES = [{ v: 'overview', l: 'Overview' }, { v: 'updates', l: 'Updates' }, { v: 'games', l: 'Game Updates' }, { v: 'patches', l: 'Patches' }, { v: 'tex', l: 'Texture Packs' }, { v: 'folders', l: 'Console Folders' }];
+const emuPage = ref('overview');
+// installed games whose emulator has patches (0.9.16), by console then name
+const PATCH_EMU = [[/ps3/i, 'RPCS3', 'rpcs3'], [/ps4/i, 'shadPS4', 'shadps4'], [/\bps2\b/i, 'PCSX2', 'pcsx2'], [/\b(ngc|gamecube|gc|wii)\b/i, 'Dolphin', 'dolphin'], [/\bpsp\b/i, 'PPSSPP', 'ppsspp']];
+const patchGames = computed(() => allRoms().filter((r) => store.installed[r.id]).map((r) => { const m = PATCH_EMU.find(([re]) => re.test(`${r.platform_slug} ${r.platform_fs_slug}`)); return m && { r, emu: m[1], id: m[2] }; }).filter(Boolean)
+  .sort((a, b) => a.emu.localeCompare(b.emu) || String(a.r.platform_slug).localeCompare(String(b.r.platform_slug)) || a.r.name.localeCompare(b.r.name)));
+async function openPatchesFor(g) {
+  let info;
+  try { info = await call('patches:list', { romId: g.r.id }); } catch (e) { return toast(e.message, 'error'); }
+  const changes = await openModal('patches', { name: g.r.name, ...info });
+  if (!changes?.length) return;
+  try { const r = await call('patches:apply', { romId: g.r.id, changes }); toast(r.count ? `Saved in ${info.emuName}. They apply next time the game starts.` : 'Nothing changed', 'ok', 3500, 'mdiPuzzleOutline'); } catch (e) { toast(e.message, 'error', 7000); }
+}
+function setEmuPage(v) { emuPage.value = v; if (v === 'updates' && emuUps.value === null) loadEmuUpdates(); if (v === 'games' && ps3Ups.value === null) loadPs3Updates(); }
+function stepEmu(d) {
+  const i = EMU_PAGES.findIndex((p) => p.v === emuPage.value), n = EMU_PAGES[(i + d + EMU_PAGES.length) % EMU_PAGES.length].v;
+  setEmuPage(n); nextTick(() => focusFirst(paneEl.value, `[data-key="emup-${n}"]`));
+}
+const emuUps = ref(null), emuUpBusy = ref(false), emuUpRun = ref(''), emuUpPct = ref(null);
+const emuUpCount = computed(() => (emuUps.value || []).filter((e) => e.update).length);
+async function loadEmuUpdates(fresh = false) { emuUpBusy.value = true; emuUps.value = await call('emuup:list', { fresh }).catch((e) => { toast(e.message, 'error'); return []; }); emuUpBusy.value = false; }
+async function runEmuUpdate(e) {
+  if (!e.update) return;
+  if (!(await confirm(`Update ${e.label}?`, `${e.version || 'This copy'} → ${e.update.version || e.update.tag || 'the newest'}. Close ${e.label} first.`, 'Update'))) return;
+  emuUpRun.value = e.path || e.fp; emuUpPct.value = null;
+  try { await call('emuup:run', { id: e.id, kind: e.kind, fp: e.fp, where: e.where, path: e.path }); toast(`${e.label} is up to date`, 'ok', 3000, 'mdiUpdate'); } catch (err) { toast(err.message, 'error', 6000); }
+  emuUpRun.value = ''; await loadEmuUpdates();
+}
+const ps3Ups = ref(null), ps3UpBusy = ref(false), ps3UpRun = ref(0), ps3UpText = ref('');
+const ps3UpCount = computed(() => (ps3Ups.value || []).filter((g) => g.todo.length).length);
+async function loadPs3Updates(fresh = false) { ps3UpBusy.value = true; ps3Ups.value = await call('ps3up:list', { fresh }).catch((e) => { toast(e.message, 'error'); return []; }); ps3UpBusy.value = false; }
+async function runPs3Update(g) {
+  if (!(await confirm(`Update ${g.name}?`, `${g.todo.map((p) => p.version).join(', ')} (${bytes(g.size)}) from Sony, installed into RPCS3 in order.`, 'Update'))) return;
+  ps3UpRun.value = g.romId; ps3UpText.value = 'Starting';
+  try { const r = await call('ps3up:install', { romId: g.romId }); toast(`${g.name} updated${r.version ? ' to ' + r.version : ''}`, 'ok', 3500, 'mdiPackageUp'); } catch (e) { toast(e.message, 'error', 6000); }
+  ps3UpRun.value = 0; await loadPs3Updates();
+}
+let offEmuUp = null, offPs3Up = null;
+onMounted(() => {
+  offEmuUp = window.cart.on('emu-update', (m) => { emuUpPct.value = m.pct ?? null; });
+  offPs3Up = window.cart.on('ps3-update', (m) => { ps3UpText.value = m.state === 'downloading' ? `Downloading ${m.version} · ${m.pct}%` : m.state === 'installing' ? 'Installing in RPCS3' : m.state === 'done' ? 'Done' : ps3UpText.value; });
+});
+onBeforeUnmount(() => { offEmuUp?.(); offPs3Up?.(); });
 const LOOK_PAGES = [{ v: 'theme', l: 'Theme' }, { v: 'bg', l: 'Background' }, { v: 'cards', l: 'Text and Cards' }, { v: 'motion', l: 'Motion and Sound' }, { v: 'controls', l: 'Controls' }];
 const lookPage = ref('theme'), lookAdv = ref(false);
 function setLookPage(v) { lookPage.value = v; lookAdv.value = false; }
