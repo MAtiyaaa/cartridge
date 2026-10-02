@@ -108,3 +108,21 @@ test('PPSSPP: cheat.db fetched from PPSSPP\'s own list only when there is none',
   assert.deepStrictEqual(await C.ppssppDownloadDb(dir, { fetchImpl }), { updated: false });
   assert.strictEqual(asked.length, 2);
 });
+
+test('Dolphin: downloaded Gecko codes (codes.rc24.xyz, as Dolphin reads them) saved into the user GameSettings when turned on', () => {
+  const txt = 'GALE01\nSuper Smash Bros. Melee\n\nInfinite Jumps [Achilles]\n04000000 00000000\n04000004 00000001\nWorks on all characters\n\nNo Name Codes\n\nDebug Menu\nC2000000 00000002\n';
+  const codes = C.geckoTxt(txt);
+  assert.deepStrictEqual(codes.map((c) => [c.name, c.author, c.lines.length, c.notes]), [['Infinite Jumps', 'Achilles', 2, ['Works on all characters']], ['Debug Menu', '', 1, []]]);
+  const home = path.join(TMP, 'dg');
+  put(path.join(home, '.config/dolphin-emu/Dolphin.ini'), '[Core]\n');
+  const dir = C.dolphinDirs(home, {})[0];
+  const list = C.dolphinList(dir, 'GALE01', '', {}, codes);
+  const p = list.find((x) => x.name === 'Infinite Jumps');
+  assert.ok(p.download);
+  C.dolphinSet(dir, 'GALE01', [{ ...p, on: true }], {});
+  const ini = fs.readFileSync(path.join(dir.user, 'GameSettings/GALE01.ini'), 'utf8');
+  assert.match(ini, /\[Gecko\]\n\$Infinite Jumps \[Achilles\]\n04000000 00000000\n04000004 00000001\n\*Works on all characters/);
+  assert.match(ini, /\[Gecko_Enabled\]\n\$Infinite Jumps/);
+  const again = C.dolphinList(dir, 'GALE01', '', {}, codes).filter((x) => x.name === 'Infinite Jumps');
+  assert.strictEqual(again.length, 1); // listed once, now from the user's file
+});

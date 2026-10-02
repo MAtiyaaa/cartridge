@@ -71,19 +71,49 @@ function dolphinSysText(sysDirs, id, appImages = [], readAppImageFile) {
   }
   return text;
 }
-function dolphinList(dir, id, sysText, mine = {}) {
+// Gecko codes the way Dolphin's "Download Codes" reads them (GeckoCodeConfig.cpp DownloadCodes):
+// codes.rc24.xyz/txt.php?txt=<ID> (a mirror of geckocodes.org); three header lines, then blocks split
+// by blank lines: "Name [creator]", 8+8 hex code lines, then notes (0.9.17)
+function geckoTxt(text) {
+  const lines = String(text || '').split('\n').slice(3);
+  const out = []; let cur = null, state = 0;
+  const end = () => { if (cur && cur.lines.length) out.push(cur); cur = null; state = 0; };
+  for (const raw of lines) {
+    const l = raw.trim();
+    if (!l) { end(); continue; }
+    if (state === 0) { const m = /^([^[]*)(?:\[([^\]]*)\])?/.exec(l); cur = { name: m[1].trim(), author: (m[2] || '').trim(), lines: [], notes: [] }; state = 1; continue; }
+    const [a, d] = l.split(/\s+/);
+    if (state === 1 && a && d && a.length === 8 && d.length === 8 && /^[0-9A-F]+$/i.test(a + d)) cur.lines.push(l);
+    else { cur.notes.push(l); state = 2; }
+  }
+  end();
+  return out.filter((c) => c.name);
+}
+async function geckoDownload(id, { cacheDir, fetchImpl = webFetch, maxAge = 7 * 864e5 } = {}) {
+  const f = cacheDir && path.join(cacheDir, id + '.txt');
+  try { if (f && Date.now() - fs.statSync(f).mtimeMs < maxAge) return geckoTxt(fs.readFileSync(f, 'utf8')); } catch {}
+  try {
+    const r = await fetchImpl(`https://codes.rc24.xyz/txt.php?txt=${encodeURIComponent(id)}`, { headers: { 'User-Agent': 'Cartridge' }, signal: AbortSignal.timeout(20000) });
+    if (!r.ok) throw new Error(String(r.status));
+    const t = await r.text();
+    if (f) { fs.mkdirSync(cacheDir, { recursive: true }); fs.writeFileSync(f, t); }
+    return geckoTxt(t);
+  } catch { try { return geckoTxt(fs.readFileSync(f, 'utf8')); } catch { return []; } }
+}
+function dolphinList(dir, id, sysText, mine = {}, downloaded = []) {
   const g = dolphinParse(sysText);
   const u = dolphinParse(dolphinFiles(id).map((n) => read(path.join(dir.user, 'GameSettings', n))).join('\n'));
   const out = [];
   for (const s of DOLPHIN_SECS) {
     const seen = new Set();
-    for (const c of [...g[s].codes, ...u[s].codes]) {
+    const dl = s === 'Gecko' ? downloaded.map((c) => ({ ...c, notes: c.notes.join(' '), rawNotes: c.notes, download: true })) : [];
+    for (const c of [...g[s].codes, ...u[s].codes, ...dl]) {
       if (seen.has(c.name)) continue;
       seen.add(c.name);
       let on = false;
       for (const x of [g[s], u[s]]) { if (x.enabled.has(c.name)) on = true; if (x.disabled.has(c.name)) on = false; }
       const key = K('dolphin', dir.user, id, s, c.name);
-      out.push({ key, name: c.name, section: s, description: c.name, notes: [s === 'OnFrame' ? 'Patch' : 'Cheat', c.notes].filter(Boolean).join(' · '), author: c.author, version: 'All', on, by: on ? (mine[key] ? 'cartridge' : 'emulator') : null });
+      out.push({ key, name: c.name, section: s, description: c.name, notes: [s === 'OnFrame' ? 'Patch' : c.download ? 'Cheat · from the code database' : 'Cheat', c.notes].filter(Boolean).join(' · '), author: c.author, version: 'All', on, by: on ? (mine[key] ? 'cartridge' : 'emulator') : null, ...(c.download ? { download: true, lines: c.lines, rawNotes: c.rawNotes } : {}) });
     }
   }
   return out.sort((a, b) => (a.section === 'OnFrame' ? 0 : 1) - (b.section === 'OnFrame' ? 0 : 1) || a.description.localeCompare(b.description)); // patches first
@@ -105,6 +135,17 @@ function nameLines(text, section, name, add) {
   }
   return lines.join(nl) + nl;
 }
+function addGecko(text, c) {
+  const nl = text.includes('\r\n') ? '\r\n' : '\n';
+  const lines = text ? text.split(/\r?\n/) : [];
+  if (lines.length && lines[lines.length - 1] === '') lines.pop();
+  let start = lines.findIndex((l) => l.trim() === '[Gecko]');
+  if (start < 0) { if (lines.length) lines.push(''); lines.push('[Gecko]'); start = lines.length - 1; }
+  let end = start + 1; while (end < lines.length && !/^\s*\[/.test(lines[end])) end++;
+  let at = end; while (at > start + 1 && !lines[at - 1].trim()) at--;
+  lines.splice(at, 0, `$${c.name}${c.author ? ` [${c.author}]` : ''}`, ...(c.lines || []), ...(c.rawNotes || []).map((n) => '*' + n));
+  return lines.join(nl) + nl;
+}
 // switches = { cheats: on/off, file, sec, key, on, off }: the emulator's "cheats on" setting
 function cheatSwitch(mine, flag, wanted, sw) {
   const text = read(sw.file);
@@ -120,6 +161,8 @@ function dolphinSet(dir, id, changes, mine = {}) {
     const f = path.join(dir.user, 'GameSettings', id + '.ini');
     let text = read(f);
     for (const c of todo) {
+      // a downloaded code goes into the user's [Gecko] section first, as Dolphin saves downloaded codes
+      if (c.on && c.download && !dolphinParse(text).Gecko.codes.some((x) => x.name === c.name)) text = addGecko(text, c);
       text = nameLines(text, `${c.section}_Enabled`, c.name, c.on);
       if (c.on) { text = nameLines(text, `${c.section}_Disabled`, c.name, false); rec[c.key] = true; } else delete rec[c.key];
     }
@@ -235,4 +278,4 @@ async function ppssppDownloadDb(dir, { fetchImpl = webFetch } = {}) {
   return { updated: true, url };
 }
 
-module.exports = { ppssppDownloadDb, dolphinDirs, dolphinSys, dolphinParse, dolphinSysText, dolphinList, dolphinSet, nameLines, gcWiiId, ppssppDirs, cwParse, ppssppList, ppssppSet };
+module.exports = { ppssppDownloadDb, geckoTxt, geckoDownload, addGecko, dolphinDirs, dolphinSys, dolphinParse, dolphinSysText, dolphinList, dolphinSet, nameLines, gcWiiId, ppssppDirs, cwParse, ppssppList, ppssppSet };
