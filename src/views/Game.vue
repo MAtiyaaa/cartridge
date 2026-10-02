@@ -669,10 +669,14 @@ onMounted(async () => {
 
 <style scoped>
 .game { padding: 0 0 50px; }
-.g-banner { position: relative; margin: 0; height: clamp(260px, 52vh, 680px); overflow: hidden; background: var(--s0); } /* full width: the art leads (0.9) */
+.g-banner { position: relative; margin: 0; height: clamp(260px, 52vh, 680px); overflow: hidden; }
+/* 0.9.15: the art fades out itself (a mask), so it blends into whatever is behind the page (theme,
+   animated background, wallpaper) instead of into a flat colour with a visible band */
+.g-banner-img { -webkit-mask-image: linear-gradient(180deg, transparent 0%, #000 14%, #000 50%, transparent 100%); mask-image: linear-gradient(180deg, transparent 0%, #000 14%, #000 50%, transparent 100%); } /* full width: the art leads (0.9) */
 .g-banner-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .g-banner-img.blur { filter: blur(24px) saturate(1.3) brightness(0.8); transform: scale(1.15); }
-.g-banner-shade { position: absolute; inset: 0; background: linear-gradient(180deg, var(--s0) 0%, transparent 12%), linear-gradient(90deg, color-mix(in srgb, var(--s0) 80%, transparent) 0%, color-mix(in srgb, var(--s0) 30%, transparent) 45%, transparent 75%), linear-gradient(0deg, var(--s0) 0%, color-mix(in srgb, var(--s0) 45%, transparent) 35%, transparent 65%); }
+.g-banner-shade { position: absolute; inset: 0; background: linear-gradient(90deg, rgba(0, 0, 0, 0.55) 0%, rgba(0, 0, 0, 0.2) 45%, transparent 75%); } /* only for the logo's contrast */
+.g-banner-shade { -webkit-mask-image: linear-gradient(180deg, transparent 0%, #000 14%, #000 50%, transparent 100%); mask-image: linear-gradient(180deg, transparent 0%, #000 14%, #000 50%, transparent 100%); }
 .g-banner-logo { position: absolute; left: var(--s-7); bottom: var(--s-5); right: 360px; display: flex; align-items: flex-end; }
 .g-hero { position: relative; display: flex; align-items: flex-start; justify-content: space-between; gap: 40px; padding: var(--s-4) var(--s-7) var(--s-5); }
 .g-info { display: flex; flex-direction: column; gap: var(--s-4); max-width: 860px; min-width: 0; }
