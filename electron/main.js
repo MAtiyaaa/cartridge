@@ -2899,11 +2899,12 @@ const handlers = {
     return true;
   },
   // an emulator's own icon from where it's installed (0.9.16), served by token like trophy icons
-  'emu:icon': ({ id }) => {
+  'emu:icon': async ({ id }) => {
     const { EMU } = require('./emulators');
-    const base = String(id || '').split('@')[0];
-    let apps = []; try { apps = steamMgr.appImagesFor(EMU[base]?.for?.[0] || base, EMU[base]?.app || /^$/); } catch {}
-    const f = require('./emuIcons').iconFor(base, EMU[base], { appImages: apps, cacheDir: path.join(USER_DATA, 'emu-icons'), readAppImageFile: require('./detect').readAppImageFile });
+    const base = String(id || '').split('@')[0].replace(/^ra:.*/, 'retroarch');
+    const I = require('./emuIcons'), cacheDir = path.join(USER_DATA, 'emu-icons');
+    let apps = []; try { apps = steamMgr.appImagesFor(EMU[base]?.for?.[0] || base, EMU[base]?.app || /^$/).filter((f) => !/_old|\.old|previous/i.test(path.basename(f))); } catch {}
+    const f = I.iconFor(base, EMU[base], { appImages: apps, cacheDir, readAppImageFile: require('./detect').readAppImageFile }) || (await I.webIcon(base, cacheDir));
     return f ? require('./trophies').registerIcon(f) : '';
   },
   // Add-ons (0.9.15, checkable part): texture folders and their on/off, read from each emulator
@@ -3059,9 +3060,14 @@ const handlers = {
   'emuget:cancel': () => { emuGetRun?.abort.abort(); return true; },
   // emulator updates (0.9.16): each installed copy, its version and whether a newer one is out
   'emuup:list': async ({ fresh } = {}) => {
-    const U = require('./emuUpdates'), list = steamMgr.installedEmulators();
-    const fp = await U.flatpakUpdates(list.filter((e) => e.kind === 'flatpak').map((e) => e.fp)).catch(() => ({}));
+    const U = require('./emuUpdates'), { FORKS } = require('./emulators');
     const file = path.join(USER_DATA, 'emulator-releases.json'), cache = loadJson(file, {});
+    // 0.9.17: the main copies only: not forks, not old copies (RPCS3's *_old, "previous"), not the
+    // versions shadPS4's launcher keeps for itself; and the version an update put in (the file name keeps the old one)
+    const isFork = (e) => (FORKS[e.id] || []).some(([re]) => re.test(path.basename(e.path || e.fp || '')));
+    const list = steamMgr.installedEmulators().filter((e) => !(e.path && (/_old\b|\.old\b|previous|\.cartridge-(old|new)/i.test(path.basename(e.path)) || /shadPS4QtLauncher\/versions|\/versions\//i.test(e.path))) && !isFork(e) && !(e.id === 'shadps4' && e.path && !/qt.?launcher/i.test(e.path) && U.REPOS.shadps4.only))
+      .map((e) => { const st = e.path && (() => { try { return fs.statSync(e.path); } catch { return null; } })(); const got = (cache.installed || {})[e.path]; return got && st && got.size === st.size ? { ...e, version: got.version } : e; });
+    const fp = await U.flatpakUpdates(list.filter((e) => e.kind === 'flatpak').map((e) => e.fp)).catch(() => ({}));
     const out = [];
     for (const e of list) {
       if (e.kind === 'flatpak') { out.push({ ...e, update: fp[e.fp] ? { version: fp[e.fp].version } : null, where: fp[e.fp]?.where }); continue; }
@@ -3086,6 +3092,9 @@ const handlers = {
     let got = 0;
     await U.replaceAppImage(file, rel, (url, dest) => downloadTo(url, dest, { abort: new AbortController() }, (n) => { got += n; broadcast('emu-update', { path: file, state: 'downloading', pct: rel.size ? Math.round((got / rel.size) * 100) : null }); }, { plain: true }));
     log('emulator updated (appimage)', own.id, own.version, '->', rel.version || rel.tag);
+    const cf = path.join(USER_DATA, 'emulator-releases.json'), cache = loadJson(cf, {});
+    try { (cache.installed ||= {})[file] = { version: rel.version || rel.tag, size: fs.statSync(file).size, at: Date.now() }; saveJson(cf, cache); } catch {}
+    broadcast('emu-update', { path: file, state: 'done' });
     try { steamMgr.scanEmulators?.(); } catch {}
     return { version: rel.version || rel.tag };
   },

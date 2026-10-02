@@ -20,6 +20,12 @@ const REPOS = {
   cemu: { repo: 'cemu-project/Cemu', asset: /x86_64\.AppImage$/i },
   xemu: { repo: 'xemu-project/xemu', asset: /x86_64\.AppImage$/i },
   ppsspp: { repo: 'hrydgard/ppsspp', asset: /x86_64\.AppImage$/i },
+  // 0.9.17: the rest Cartridge can update itself (owner: no "updates through its own app")
+  shadps4: { repo: 'shadps4-emu/shadps4-qtlauncher', asset: /\.AppImage$/i, only: /qt.?launcher/i },
+  eden: { repo: 'eden-emulator/Releases', asset: /\.AppImage$/i },
+  ryujinx: { repo: 'Ryubing/Stable-Releases', asset: /x64.*\.AppImage$/i },
+  flycast: { repo: 'flyinghead/flycast', asset: /x86_64\.AppImage$/i },
+  mgba: { repo: 'mgba-emu/mgba', asset: /x64\.AppImage$|x86_64\.AppImage$/i },
 };
 
 function plainEnv() { const env = { ...process.env }; for (const k of ['LD_PRELOAD', 'LD_LIBRARY_PATH', 'APPDIR', 'APPIMAGE', 'ARGV0', 'OWD']) delete env[k]; return env; }

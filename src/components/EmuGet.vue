@@ -5,7 +5,7 @@
       <template v-for="c in list" :key="c.key">
         <div class="subh">{{ c.name }}</div>
         <div class="stack">
-          <button v-for="e in c.emus" :key="c.key + e.id" class="lrow" data-focus :disabled="!!busy && busy !== c.key + e.id" @click="get(c, e)">
+          <button v-for="e in c.emus" :key="c.key + e.id" class="lrow" data-focus @click="get(c, e)">
             <EmuIcon :id="e.id" :size="26" fallback="mdiGamepadVariantOutline" />
             <div class="l-mid"><b>{{ e.label }}</b><span class="l-sub">{{ e.from }}</span></div>
             <span v-if="busy === c.key + e.id" class="status"><Icon name="mdiSync" :size="14" class="spin" />{{ pct != null ? pct + '%' : 'Starting…' }}</span>

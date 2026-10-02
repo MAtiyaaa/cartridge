@@ -100,30 +100,38 @@
               <div v-if="emuUps === null" class="muted small"><Icon name="mdiSync" :size="16" class="spin" /> Checking…</div>
               <p v-else-if="!emuUps.length" class="muted">No emulators to update were found. Run Emulator setup's scan first.</p>
               <div v-else class="stack">
-                <button v-for="e in emuUps" :key="e.path || e.fp" class="lrow" data-focus :disabled="!e.update || !!emuUpRun" @click="runEmuUpdate(e)">
-                  <EmuIcon :id="e.id" :size="28" />
-                  <div class="l-mid"><b>{{ e.label }} <span class="muted small">{{ e.kind === 'flatpak' ? 'Flatpak' : 'AppImage' }}</span></b><span class="l-sub">{{ e.kind === 'flatpak' ? e.fp : e.path.replace(store.info.home, '~') }}{{ e.version ? ' · ' + e.version : '' }}</span></div>
-                  <span v-if="emuUpRun === (e.path || e.fp)" class="status"><Icon name="mdiSync" :size="14" class="spin" />{{ emuUpPct != null ? emuUpPct + '%' : 'Updating' }}</span>
-                  <span v-else-if="e.update" class="status warn">Update to {{ e.update.version || e.update.tag || 'the newest' }}</span>
-                  <span v-else-if="e.error" class="status">{{ e.error }}</span>
-                  <span v-else-if="e.noSource" class="status">Updates through its own app</span>
+                <!-- 0.9.17: rows always take focus (disabled ones couldn't be reached with a controller); one update
+                     at a time, the rest of the page stays usable; progress as a bar along the row -->
+                <button v-for="e in emuUps" :key="e.path || e.fp" class="lrow up-row" :class="{ busy: emuUpRun === (e.path || e.fp) }" data-focus @click="runEmuUpdate(e)">
+                  <EmuIcon :id="e.id" :size="30" />
+                  <div class="l-mid"><b>{{ e.label }} <span class="muted small">{{ e.kind === 'flatpak' ? 'Flatpak' : 'AppImage' }}</span></b><span class="l-sub">{{ e.version ? 'Version ' + e.version : e.kind === 'flatpak' ? e.fp : e.path.replace(store.info.home, '~') }}</span></div>
+                  <span v-if="emuUpRun === (e.path || e.fp)" class="status"><Icon name="mdiArrowDownCircle" :size="14" />{{ emuUpPct != null ? emuUpPct + '%' : 'Updating' }}</span>
+                  <span v-else-if="e.update" class="status warn"><Icon name="mdiUpdate" :size="14" />{{ e.update.version || e.update.tag || 'New version' }}</span>
+                  <span v-else-if="e.error" class="status">Couldn’t check</span>
+                  <span v-else-if="e.noSource" class="status">Updates in the app</span>
                   <span v-else class="status ok"><Icon name="mdiCheck" :size="14" />Up to date</span>
+                  <i v-if="emuUpRun === (e.path || e.fp)" class="up-bar" :class="{ live: emuUpPct == null }" :style="{ width: (emuUpPct ?? 100) + '%' }" />
                 </button>
               </div>
             </template>
             <template v-else-if="emuPage === 'games'">
-              <p class="muted small" style="margin-top: -6px">PS3 game updates from Sony's own update list (the one ps3.aldostools.org reads), installed into RPCS3 in order. Patches made for a game's last update need it installed.</p>
+              <div class="ps3-head">
+                <PIcon :p="{ slug: 'ps3', fs_slug: 'ps3' }" :size="44" />
+                <div class="l-mid"><b>PlayStation 3 game updates</b><span class="l-sub">From Sony's own update list, installed into RPCS3 in order. Patches made for a game's last update need it.</span></div>
+                <EmuIcon id="rpcs3" :size="30" />
+              </div>
               <div class="row"><button class="btn small" data-focus :disabled="ps3UpBusy" @click="loadPs3Updates(true)"><Icon name="mdiRefresh" :size="18" :class="{ spin: ps3UpBusy }" />Check now</button></div>
               <div v-if="ps3Ups === null" class="muted small"><Icon name="mdiSync" :size="16" class="spin" /> Checking…</div>
               <p v-else-if="!ps3Ups.length" class="muted">No PS3 games on this device.</p>
               <div v-else class="stack">
-                <button v-for="g in ps3Ups" :key="g.romId" class="lrow" data-focus :disabled="!g.todo.length || !!ps3UpRun" @click="runPs3Update(g)">
-                  <Icon name="mdiPackageUp" :size="26" />
+                <button v-for="g in ps3Ups" :key="g.romId" class="lrow up-row" :class="{ busy: ps3UpRun === g.romId }" data-focus @click="runPs3Update(g)">
+                  <img v-if="coverSmall(g.romId)" class="up-cover" :src="coverSmall(g.romId)" loading="lazy" /><Icon v-else name="mdiPackageUp" :size="26" />
                   <div class="l-mid"><b>{{ g.name }}</b><span class="l-sub">{{ g.serial }} · {{ g.have ? 'version ' + g.have : 'version unknown' }}{{ g.latest ? ' · newest ' + g.latest : '' }}</span></div>
                   <span v-if="ps3UpRun === g.romId" class="status"><Icon name="mdiSync" :size="14" class="spin" />{{ ps3UpText }}</span>
                   <span v-else-if="g.todo.length" class="status warn">{{ g.todo.length }} update{{ g.todo.length === 1 ? '' : 's' }} · {{ bytes(g.size) }}</span>
-                  <span v-else-if="g.error" class="status">{{ g.error }}</span>
+                  <span v-else-if="g.error" class="status">Couldn’t check</span>
                   <span v-else class="status ok"><Icon name="mdiCheck" :size="14" />Up to date</span>
+                  <i v-if="ps3UpRun === g.romId" class="up-bar" :class="{ live: ps3UpPct == null }" :style="{ width: (ps3UpPct ?? 100) + '%' }" />
                 </button>
               </div>
             </template>
@@ -492,7 +500,7 @@
 
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { store, call, go, tab, saveConfig, pickFolder, choose, confirm, toast, openModal, bytes, ago, resync, scanServer, allRoms, resetLogos, askText, activeTabs, TAB_DEFS, consoleName } from '../store.js';
+import { store, call, go, tab, saveConfig, pickFolder, choose, confirm, toast, openModal, bytes, ago, resync, scanServer, allRoms, romById, cover, resetLogos, askText, activeTabs, TAB_DEFS, consoleName } from '../store.js';
 import { useView } from '../useView.js';
 import { input, focusFirst, setPointerPref, setRumble, rumble } from '../nav.js';
 import { THEMES, SURFACES, TEXTS, FONTS, CARD_SHAPES, CARD_SIZES, DENSITIES, themeFrom, themeOf, paletteOf } from '../themes.js';
@@ -919,16 +927,20 @@ const emuUps = ref(null), emuUpBusy = ref(false), emuUpRun = ref(''), emuUpPct =
 const emuUpCount = computed(() => (emuUps.value || []).filter((e) => e.update).length);
 async function loadEmuUpdates(fresh = false) { emuUpBusy.value = true; emuUps.value = await call('emuup:list', { fresh }).catch((e) => { toast(e.message, 'error'); return []; }); emuUpBusy.value = false; }
 async function runEmuUpdate(e) {
-  if (!e.update) return;
+  if (emuUpRun.value) return toast(emuUpRun.value === (e.path || e.fp) ? 'Updating now. You can keep using Cartridge.' : 'One update at a time: this one is next once the current one finishes.', 'info', 3000);
+  if (!e.update) return toast(e.error ? `Couldn’t check for updates: ${e.error}` : e.noSource ? `${e.label} updates from inside ${e.label}.` : `${e.label} is up to date.`, 'info', 3500);
   if (!(await confirm(`Update ${e.label}?`, `${e.version || 'This copy'} → ${e.update.version || e.update.tag || 'the newest'}. Close ${e.label} first.`, 'Update'))) return;
   emuUpRun.value = e.path || e.fp; emuUpPct.value = null;
   try { await call('emuup:run', { id: e.id, kind: e.kind, fp: e.fp, where: e.where, path: e.path }); toast(`${e.label} is up to date`, 'ok', 3000, 'mdiUpdate'); } catch (err) { toast(err.message, 'error', 6000); }
   emuUpRun.value = ''; await loadEmuUpdates();
 }
-const ps3Ups = ref(null), ps3UpBusy = ref(false), ps3UpRun = ref(0), ps3UpText = ref('');
+const ps3Ups = ref(null), ps3UpBusy = ref(false), ps3UpRun = ref(0), ps3UpText = ref(''), ps3UpPct = ref(null);
+const coverSmall = (romId) => { const r = romById(romId); return r ? cover(r) : ''; };
 const ps3UpCount = computed(() => (ps3Ups.value || []).filter((g) => g.todo.length).length);
 async function loadPs3Updates(fresh = false) { ps3UpBusy.value = true; ps3Ups.value = await call('ps3up:list', { fresh }).catch((e) => { toast(e.message, 'error'); return []; }); ps3UpBusy.value = false; }
 async function runPs3Update(g) {
+  if (ps3UpRun.value) return toast('One game at a time: wait for the current one to finish.', 'info', 3000);
+  if (!g.todo.length) return toast(g.error ? `Couldn’t check: ${g.error}` : `${g.name} has every update Sony lists.`, 'info', 4000);
   if (!(await confirm(`Update ${g.name}?`, `${g.todo.map((p) => p.version).join(', ')} (${bytes(g.size)}) from Sony, installed into RPCS3 in order.`, 'Update'))) return;
   ps3UpRun.value = g.romId; ps3UpText.value = 'Starting';
   try { const r = await call('ps3up:install', { romId: g.romId }); toast(`${g.name} updated${r.version ? ' to ' + r.version : ''}`, 'ok', 3500, 'mdiPackageUp'); } catch (e) { toast(e.message, 'error', 6000); }
@@ -936,8 +948,8 @@ async function runPs3Update(g) {
 }
 let offEmuUp = null, offPs3Up = null;
 onMounted(() => {
-  offEmuUp = window.cart.on('emu-update', (m) => { emuUpPct.value = m.pct ?? null; });
-  offPs3Up = window.cart.on('ps3-update', (m) => { ps3UpText.value = m.state === 'downloading' ? `Downloading ${m.version} · ${m.pct}%` : m.state === 'installing' ? 'Installing in RPCS3' : m.state === 'done' ? 'Done' : ps3UpText.value; });
+  offEmuUp = window.cart.on('emu-update', (m) => { if (m.state === 'downloading') emuUpPct.value = m.pct ?? null; });
+  offPs3Up = window.cart.on('ps3-update', (m) => { ps3UpPct.value = m.state === 'downloading' ? m.pct : null; ps3UpText.value = m.state === 'downloading' ? `Downloading ${m.version} · ${m.pct}%` : m.state === 'installing' ? 'Installing in RPCS3' : m.state === 'done' ? 'Done' : ps3UpText.value; });
 });
 onBeforeUnmount(() => { offEmuUp?.(); offPs3Up?.(); });
 const LOOK_PAGES = [{ v: 'theme', l: 'Theme' }, { v: 'bg', l: 'Background' }, { v: 'cards', l: 'Text and Cards' }, { v: 'motion', l: 'Motion and Sound' }, { v: 'controls', l: 'Controls' }];
@@ -1103,4 +1115,11 @@ onMounted(() => {
 .chip.missing { background: rgba(255, 255, 255, 0.08); color: var(--muted); }
 .chip.off { background: rgba(255, 90, 90, 0.14); color: #ffaaaa; }
 .logo-prog { flex: 1; display: flex; flex-direction: column; gap: 6px; max-width: 360px; }
+.up-row { position: relative; overflow: hidden; }
+.up-bar { position: absolute; left: 0; bottom: 0; height: 3px; background: currentColor; opacity: 0.85; border-radius: 0 2px 2px 0; transition: width var(--d-2, 240ms) ease; }
+.up-bar.live { animation: upLive 1.2s ease-in-out infinite; transform-origin: left; }
+@keyframes upLive { 0% { transform: scaleX(0.05); opacity: 0.4; } 50% { transform: scaleX(0.6); opacity: 0.9; } 100% { transform: scaleX(1); opacity: 0.2; } }
+.up-cover { width: 30px; height: 40px; object-fit: cover; border-radius: var(--r-sm); flex: none; }
+.ps3-head { display: flex; align-items: center; gap: var(--s-4); padding: var(--s-4); border-radius: var(--r-lg); background: linear-gradient(120deg, rgba(0, 59, 160, 0.35), rgba(0, 0, 0, 0) 70%), var(--s1); margin-bottom: var(--s-3); }
+.ps3-head b { font-size: var(--t-lg); }
 </style>
