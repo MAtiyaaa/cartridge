@@ -337,15 +337,20 @@ async function api(pathname, { query, method = 'GET', body, retry = true, srv, b
     if (retry && !base && config.server.mode === 'auto' && ((await resolveBase(true)) !== b || !slow)) return api(pathname, { query, method, body, retry: false, srv, timeout });
     const err = new Error(slow ? 'The server took too long to answer' : `Cannot reach server (${e.cause?.code || e.message})`);
     err.timeout = slow;
+    err.transient = slow || TRANSIENT.test(`${e.cause?.code || ''} ${e.message}`); // the network, not a refusal: worth another try later
     throw err;
   }
   if (r.status === 401 || r.status === 403) throw new Error('Authentication failed. Check your credentials.');
   if (!r.ok) throw new Error(`Server error ${r.status} on ${pathname}`);
   try { return await r.json(); } catch (e) { // the timeout also covers reading a long answer
-    if (e.name !== 'TimeoutError' && e.name !== 'AbortError') throw e;
-    const err = new Error('The server took too long to answer'); err.timeout = true; throw err;
+    const slow = e.name === 'TimeoutError' || e.name === 'AbortError';
+    if (!slow && !TRANSIENT.test(`${e.cause?.code || ''} ${e.message}`)) throw e;
+    const err = new Error(slow ? 'The server took too long to answer' : `The connection dropped (${e.cause?.code || e.message})`);
+    err.timeout = slow; err.transient = true; throw err;
   }
 }
+// Network failures that pass: a timed-out or dropped connection, a busy server (sync waits and tries again)
+const TRANSIENT = /ETIMEDOUT|ECONNRESET|ECONNABORTED|EPIPE|EAI_AGAIN|ENETUNREACH|EHOSTUNREACH|UND_ERR|terminated|socket|other side closed/i;
 
 // ---------------------------------------------------------------- path detection
 function expandHome(p) {
@@ -582,7 +587,7 @@ async function syncLibrary() {
         size: p.fs_size_bytes || 0, url_logo: p.url_logo || null,
       }));
       const withGames = platforms.filter((p) => p.rom_count > 0);
-      const roms = {};
+      const roms = {}, skipped = [];
       let i = 0, metaNew = false;
       for (const p of withGames) {
         broadcast('sync', { state: 'running', label: p.display_name, done: i, total: withGames.length });
@@ -590,7 +595,7 @@ async function syncLibrary() {
         // Pages of 500 games with their file lists. A console of extracted games (PS4, PS3, Switch folders
         // with thousands of files each) makes a page RomM takes minutes to build: wait longer for those, and
         // after a timeout ask for smaller pages from the same place instead of failing the whole sync.
-        let limit = 500;
+        let limit = 500, fails = 0, failed = null;
         for (let offset = 0; ; ) {
           let page;
           try {
@@ -602,21 +607,30 @@ async function syncLibrary() {
               },
             });
           } catch (e) {
-            if (!e.timeout || limit <= 10) throw e;
-            limit = Math.max(10, Math.floor(limit / 5));
-            log('sync: smaller pages for', p.display_name, limit);
+            // A timeout or a dropped connection (ETIMEDOUT while RomM is still building a page it gave up on):
+            // wait so the server can finish, then ask for a smaller page from the same place. After six tries
+            // this console keeps what it had and the sync goes on with the next one.
+            if (!e.transient) throw e;
+            fails++;
+            log('sync:', p.display_name, e.message, 'try', fails, 'pages of', limit);
+            if (fails > 6) { failed = e; break; }
+            if (limit > 10) limit = Math.max(10, Math.floor(limit / 5));
             broadcast('sync', { state: 'running', label: `${p.display_name} (big games, going slower)`, done: i, total: withGames.length });
+            await new Promise((res) => setTimeout(res, Math.min(30000, (Number(process.env.CARTRIDGE_SYNC_WAIT) || 4000) * fails)));
             continue;
           }
+          fails = 0;
           const items = Array.isArray(page) ? page : page.items || [];
           list.push(...items.map(slimRom));
           for (const r of items) if (manifest[r.id] && fuseStatus.keepMeta(bridgeMeta, r)) metaNew = true; // full text for the Fuse bridge
           offset += items.length;
           if (Array.isArray(page) || !items.length || items.length < limit || offset >= (page.total ?? 0)) break;
         }
-        roms[p.id] = list;
+        if (failed) { roms[p.id] = library?.roms?.[p.id] || list; skipped.push(p.display_name); } // keep the last good list
+        else roms[p.id] = list;
         i++;
       }
+      if (skipped.length) broadcast('toast', { text: `Couldn't refresh ${skipped.join(', ')}: the server took too long. Kept what was there; try Refresh Library again later.`, kind: 'error', icon: 'mdiServerNetworkOff' });
       const prevSeen = library?.firstSeen || {};
       const firstSync = !library;
       const firstSeen = {};
