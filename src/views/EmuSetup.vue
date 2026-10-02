@@ -135,7 +135,8 @@ const bios = ref({});
 // copied into an emulator's own folders.
 async function getBios(c) {
   if (!store.config.biosPath) return toast('Set your BIOS folder in Settings → Storage first.', 'info', 5000);
-  try { const r = await call('bios:download', { platformId: c.pid, slug: c.slug }); toast(`${r.files.filter((f) => !f.skipped).length} BIOS file${r.count === 1 ? '' : 's'} saved in ${r.dir}`, 'ok', 5000, 'mdiChip'); await load(); }
+  toast(/^(ps3|psvita)$/.test(c.slug) ? 'Getting the firmware and installing it. This takes a minute.' : 'Getting the BIOS files…', 'info', 4000, 'mdiChip');
+  try { const r = await call('bios:download', { platformId: c.pid, slug: c.slug }); toast(r.installed ? `Firmware installed in ${r.emu === 'rpcs3' ? 'RPCS3' : 'Vita3K'}` : `${r.files.filter((f) => !f.skipped).length} BIOS file${r.count === 1 ? '' : 's'} saved in ${r.dir}`, 'ok', 5000, 'mdiChip'); await load(); }
   catch (e) { toast(e.message, 'error', 6000); }
 }
 async function scan(drives) {

@@ -140,7 +140,7 @@ function watchGamescopeFocus() {
   const gid = process.env.SteamGameId || process.env.STEAM_GAME_ID || '';
   if (!isGamescope() || !/^\d+$/.test(gid)) return;
   let mine = BigInt(gid); if (mine > 0xffffffffn) mine >>= 32n;
-  let last = null, busy = false, seen = new Set(), first = true, hiddenFor = 0, tick = false;
+  let last = null, busy = false, seen = new Set(), first = true, hiddenFor = 0, tick = false, scanning = false;
   setInterval(() => {
     if (busy) return; busy = true;
     require('child_process').execFile('xprop', ['-root', 'GAMESCOPE_FOCUSED_APP'], { timeout: 1500 }, (err, out) => {
@@ -153,25 +153,29 @@ function watchGamescopeFocus() {
       // Stay unmapped until the game holds focus (769 is Steam's own UI) or 45 s pass, then come back behind it.
       if (hiddenFor && ((away && m[1] !== '769') || Date.now() - hiddenFor > 45000)) { hiddenFor = 0; try { win?.showInactive(); } catch {} }
     });
-    if ((tick = !tick)) return; // the process scan every other round is quick enough
-    const now = steamLaunches(gid, mine);
-    const fresh = [...now].some((p) => !seen.has(p));
-    seen = now;
-    if (fresh && first) { first = false; return; }
-    first = false;
-    if (fresh && win && !win.isDestroyed() && win.isVisible()) { log('steam started another game, stepping aside'); hiddenFor = Date.now(); win.hide(); }
+    if ((tick = !tick) || scanning) return; // the process scan every other round is quick enough
+    scanning = true;
+    steamLaunches(gid, mine).then((now) => {
+      scanning = false;
+      const fresh = [...now].some((p) => !seen.has(p));
+      seen = now;
+      if (fresh && first) { first = false; return; }
+      first = false;
+      if (fresh && win && !win.isDestroyed() && win.isVisible()) { log('steam started another game, stepping aside'); hiddenFor = Date.now(); win.hide(); }
+    }, () => { scanning = false; });
   }, 600);
 }
-// pids of Steam's launch wrappers (reaper SteamLaunch AppId=N) for any app but ours
-function steamLaunches(gid, mine) {
+// pids of Steam's launch wrappers (reaper SteamLaunch AppId=N) for any app but ours. Read without
+// blocking (0.9.16): the main thread also runs Cartridge's own work, which must never wait on this.
+async function steamLaunches(gid, mine) {
   const out = new Set();
-  let ids = []; try { ids = fs.readdirSync('/proc').filter((d) => /^\d+$/.test(d)); } catch { return out; }
-  for (const id of ids) {
-    let c = ''; try { c = fs.readFileSync(`/proc/${id}/cmdline`, 'utf8'); } catch { continue; }
-    if (!c.includes('SteamLaunch')) continue;
+  let ids = []; try { ids = (await fsp.readdir('/proc')).filter((d) => /^\d+$/.test(d)); } catch { return out; }
+  await Promise.all(ids.map(async (id) => {
+    let c = ''; try { c = await fsp.readFile(`/proc/${id}/cmdline`, 'utf8'); } catch { return; }
+    if (!c.includes('SteamLaunch')) return;
     const a = /AppId=(\d+)/.exec(c);
     if (a && a[1] !== gid && a[1] !== String(mine)) out.add(id);
-  }
+  }));
   return out;
 }
 // What this machine is, for the default device name ("Sam's Steam Deck"); DMI product names
@@ -1273,7 +1277,42 @@ async function rateWait(n) {
   if (rateNext - now > 5) await new Promise((r) => setTimeout(r, rateNext - now));
 }
 
+// 0.9.16: each file downloads in a worker thread (dlWorker.js) so nothing else in Cartridge can slow it
+// (owner: 70 MB/s fell to 7). The speed limit is shared between the downloads running at once.
+let dlWorkersOk = true;
 async function downloadTo(url, dest, it, onBytes) {
+  if (!dlWorkersOk) return downloadHere(url, dest, it, onBytes);
+  const part = dest + '.part';
+  await fsp.mkdir(path.dirname(dest), { recursive: true });
+  let start = 0;
+  try { start = (await fsp.stat(part)).size; } catch {}
+  const headers = authHeaders();
+  delete headers.Accept;
+  const lim = (config.downloads.limitMBs || 0) * 1048576;
+  const running = Math.max(1, queue.filter((q) => q.status === 'downloading').length);
+  let w;
+  try { w = new (require('worker_threads').Worker)(path.join(__dirname, 'dlWorker.js'), { workerData: { url, headers, part, start, limit: lim ? Math.floor(lim / running) : 0 } }); }
+  catch (e) { log('download worker could not start, downloading here', e.message); dlWorkersOk = false; return downloadHere(url, dest, it, onBytes); }
+  const r = await new Promise((resolve, reject) => {
+    const onAbort = () => { try { w.postMessage('abort'); } catch {} setTimeout(() => w.terminate(), 500); };
+    it.abort.signal.addEventListener('abort', onAbort, { once: true });
+    let settled = false;
+    const end = (fn, v) => { if (settled) return; settled = true; it.abort.signal.removeEventListener('abort', onAbort); fn(v); };
+    w.on('message', (m) => {
+      if (m.type === 'start') { if (m.resumed) onBytes(start); }
+      else if (m.type === 'bytes') onBytes(m.n);
+      else if (m.type === 'restart') end(resolve, 'restart');
+      else if (m.type === 'done') end(resolve, 'done');
+      else if (m.type === 'error') end(reject, Object.assign(new Error(m.message), m.message === 'aborted' ? { name: 'AbortError' } : {}));
+    });
+    w.on('error', (e) => end(reject, e));
+    w.on('exit', () => end(reject, Object.assign(new Error(it.abort.signal.aborted ? 'aborted' : 'Download stopped'), it.abort.signal.aborted ? { name: 'AbortError' } : {})));
+  });
+  if (r === 'restart') { await fsp.rm(part, { force: true }); return downloadTo(url, dest, it, onBytes); }
+  await fsp.rename(part, dest);
+}
+// the old way, on the main thread: only when a worker can't start
+async function downloadHere(url, dest, it, onBytes) {
   const part = dest + '.part';
   await fsp.mkdir(path.dirname(dest), { recursive: true });
   let start = 0;
@@ -1282,7 +1321,7 @@ async function downloadTo(url, dest, it, onBytes) {
   delete headers.Accept;
   if (start > 0) headers.Range = `bytes=${start}-`;
   const r = await fetch(url, { headers, signal: it.abort.signal });
-  if (r.status === 416) { start = 0; await fsp.rm(part, { force: true }); return downloadTo(url, dest, it, onBytes); }
+  if (r.status === 416) { start = 0; await fsp.rm(part, { force: true }); return downloadHere(url, dest, it, onBytes); }
   if (!r.ok) throw new Error(r.status === 404 ? 'File not found on server' : `HTTP ${r.status}`);
   const resumed = r.status === 206 && start > 0;
   if (resumed) onBytes(start);
@@ -1522,7 +1561,19 @@ async function downloadBios(platformId, slug) {
     await downloadTo(`${base}/api/firmware/${f.id}/content/${encodeURIComponent(f.file_name)}`, dest, fake, () => {});
     done.push({ name: f.file_name });
   }
-  return { count: list.length, files: done, dir };
+  // PS3 and Vita firmware does nothing in a folder: the emulator installs it (0.9.16)
+  const emu = /^ps3$/i.test(slug) ? 'rpcs3' : /^(psvita|vita)$/i.test(slug) ? 'vita3k' : null;
+  let installed = 0;
+  if (emu) {
+    const cmd = emu === 'rpcs3' ? steamMgr.rpcs3Command() : steamMgr.vita3kCommand();
+    if (!cmd) throw new Error(`The firmware is saved in ${dir}, but ${emu === 'rpcs3' ? 'RPCS3' : 'Vita3K'} wasn't found to install it. Set it up in Settings → Emulators.`);
+    for (const f of list.filter((x) => /\.pup$/i.test(x.file_name)).sort((a, b) => /font/i.test(a.file_name) - /font/i.test(b.file_name))) {
+      await pkgInst.installFirmware({ emu, cmd, file: path.join(dir, f.file_name) });
+      installed++;
+      log('firmware installed', emu, f.file_name);
+    }
+  }
+  return { count: list.length, files: done, dir, installed, emu };
 }
 
 // A game deleted file by file, so its card can show real progress (0.9.3). Links are removed, never
@@ -2839,7 +2890,9 @@ const handlers = {
     log('romm local: running on port', r.port, 'boot', r.boot);
     return { ...r, lan: rl.lanUrls(r.port), romsRoot: config.romsRoot };
   },
-  'romm:localUpdate': () => require('./rommLocal').update({ envFile: path.join(USER_DATA, 'romm-local.env'), library: config.rommLocal?.library, dataDir: config.rommLocal?.dataDir }),
+  'romm:localUpdate': ({ keys } = {}) => require('./rommLocal').update({ envFile: path.join(USER_DATA, 'romm-local.env'), library: config.rommLocal?.library, dataDir: config.rommLocal?.dataDir, keys, keysOnly: !!keys }),
+  // which metadata keys are set (never the keys themselves)
+  'romm:localKeys': () => { const k = require('./rommLocal').keysOf(require('./rommLocal').readEnv(path.join(USER_DATA, 'romm-local.env'))); return { igdb: !!(k.igdbId && k.igdbSecret), ss: !!(k.ssUser && k.ssPass) }; },
   // Welcome's scan (0.9.16): games already in Steam that Cartridge didn't add, per console (C7 take over)
   'setup:steamTheirs': () => {
     let o; try { o = steamMgr.overview(); } catch { return { total: 0, consoles: [] }; }

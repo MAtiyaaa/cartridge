@@ -30,13 +30,6 @@
         </button>
         <button class="lrow" data-focus :class="{ sel: custom && f.library === custom }" @click="browse"><Icon name="mdiFolderOpen" :size="24" /><div class="l-mid"><b>Somewhere else…</b><span v-if="custom" class="l-sub mono">{{ short(custom) }}/roms/&lt;console&gt;</span></div><Icon v-if="custom && f.library === custom" name="mdiCheck" :size="20" /></button>
       </div>
-      <button class="toggle-adv" data-focus @click="adv = !adv"><Icon :name="adv ? 'mdiChevronDown' : 'mdiChevronRight'" />Metadata keys (optional, for covers and details)</button>
-      <div v-if="adv" class="grid2">
-        <TextField v-model="keys.igdbId" label="IGDB Client ID" placeholder="Optional" />
-        <TextField v-model="keys.igdbSecret" label="IGDB Client Secret" placeholder="Optional" password />
-        <TextField v-model="keys.ssUser" label="ScreenScraper username" placeholder="Optional" />
-        <TextField v-model="keys.ssPass" label="ScreenScraper password" placeholder="Optional" password />
-      </div>
       <div class="rl-act">
         <button class="btn" data-focus @click="phase = 'intro'"><Icon name="mdiArrowLeft" />Back</button>
         <button class="btn primary" data-focus :disabled="!ready" @click="start"><Icon name="mdiServerPlus" />Set up RomM</button>
@@ -58,7 +51,27 @@
       <p class="muted">Signed in as <b>{{ f.username.trim().toLowerCase() }}</b>. Put games in <span class="mono">{{ short(result.romsRoot) }}/&lt;console&gt;</span> and scan them in RomM.</p>
       <p v-if="result.lan.length" class="muted small">On other devices at home: <span class="mono">{{ result.lan.join('  ·  ') }}</span></p>
       <p v-if="!result.boot" class="muted small">Starting with the device couldn't be turned on. RomM keeps running until you restart.</p>
-      <div class="rl-act"><button class="btn primary" data-focus @click="emit('done')">Continue<Icon name="mdiArrowRight" /></button></div>
+      <div class="rl-act">
+        <button class="btn" data-focus @click="phase = 'keys'"><Icon name="mdiKeyVariant" />Covers and details</button>
+        <button class="btn primary" data-focus @click="emit('done')">Continue<Icon name="mdiArrowRight" /></button>
+      </div>
+    </template>
+
+    <!-- optional, after setup (0.9.16): metadata keys; RomM restarts with them, nothing else changes -->
+    <template v-else-if="phase === 'keys'">
+      <h1>Covers and details</h1>
+      <p class="muted small">Optional. RomM already finds names and covers through Hasheous. Free accounts with these give it more: IGDB (dev.twitch.tv, Register Your Application) for details and screenshots, ScreenScraper (screenscraper.fr) for boxes and logos. Kept with RomM's other settings on this device.</p>
+      <p v-if="keysOn.igdb || keysOn.ss" class="muted small">Already set: {{ [keysOn.igdb && 'IGDB', keysOn.ss && 'ScreenScraper'].filter(Boolean).join(', ') }}. Leave a field empty to keep it.</p>
+      <div class="grid2">
+        <TextField v-model="keys.igdbId" label="IGDB Client ID" placeholder="Optional" />
+        <TextField v-model="keys.igdbSecret" label="IGDB Client Secret" placeholder="Optional" password />
+        <TextField v-model="keys.ssUser" label="ScreenScraper username" placeholder="Optional" />
+        <TextField v-model="keys.ssPass" label="ScreenScraper password" placeholder="Optional" password />
+      </div>
+      <div class="rl-act">
+        <button class="btn" data-focus :disabled="keyBusy" @click="startAt === 'keys' ? emit('back') : (phase = 'done')">{{ startAt === 'keys' ? 'Close' : 'Skip' }}</button>
+        <button class="btn primary" data-focus :disabled="keyBusy || !keysReady" @click="saveKeys"><Icon name="mdiCheck" />{{ keyBusy ? 'Restarting RomM…' : 'Save' }}</button>
+      </div>
     </template>
 
     <template v-else-if="phase === 'error'">
@@ -75,18 +88,28 @@
 <script setup>
 // RomM on this device (0.9.15, plan section 1): asks only what a person would know, then runs.
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
-import { store, call, pickFolder, saveConfig } from '../store.js';
+import { store, call, pickFolder, saveConfig, toast } from '../store.js';
 import { focusFirst } from '../nav.js';
 import { useView } from '../useView.js';
 import Icon from './Icon.vue';
 import TextField from './TextField.vue';
 
+const props = defineProps({ startAt: { type: String, default: 'intro' } });
 const emit = defineEmits(['done', 'back']);
-const phase = ref('intro');
+const phase = ref(props.startAt);
+const keysOn = ref({}), keyBusy = ref(false);
+const keysReady = computed(() => (keys.igdbId && keys.igdbSecret) || (keys.ssUser && keys.ssPass));
+async function saveKeys() {
+  keyBusy.value = true;
+  const only = Object.fromEntries(Object.entries(keys).filter(([, v]) => v.trim()));
+  try { await call('romm:localUpdate', { keys: only }); toast('Saved. RomM is restarting with them.', 'ok', 3500, 'mdiKeyVariant'); keysOn.value = await call('romm:localKeys').catch(() => ({})); if (props.startAt === 'keys') emit('done'); else phase.value = 'done'; }
+  catch (e) { toast(e.message, 'error', 6000); }
+  keyBusy.value = false;
+}
 const info = ref(null);
 const f = reactive({ username: '', password: '', confirm: '', name: '', library: '' });
 const keys = reactive({ igdbId: '', igdbSecret: '', ssUser: '', ssPass: '' });
-const adv = ref(false), custom = ref('');
+const custom = ref('');
 const prog = ref({}), result = ref(null), error = ref('');
 const libs = computed(() => info.value?.libraries || []);
 const ready = computed(() => f.username.trim().length >= 3 && f.password && f.password === f.confirm && f.library);
@@ -100,7 +123,7 @@ let off = null;
 async function start() {
   phase.value = 'work'; prog.value = {};
   try {
-    result.value = await call('romm:localSetup', { username: f.username, password: f.password, library: f.library, name: f.name, keys: { ...keys } });
+    result.value = await call('romm:localSetup', { username: f.username, password: f.password, library: f.library, name: f.name });
     store.config = await call('config:get');
     if (!store.config.configured) await saveConfig({ configured: true });
     call('library:sync').catch(() => {});
@@ -111,6 +134,7 @@ useView({ back: () => { if (phase.value === 'form') phase.value = 'intro'; else 
 watch(phase, async () => { await nextTick(); focusFirst(document.querySelector('.rl'), '.rl-act .btn.primary:not([disabled]), [data-focus]'); });
 onMounted(async () => {
   off = window.cart.on('romm-local', (p) => (prog.value = p));
+  keysOn.value = await call('romm:localKeys').catch(() => ({}));
   info.value = await call('romm:localInfo').catch(() => ({ podman: false, libraries: [] }));
   f.library = info.value.libraries?.[0]?.path || '';
   f.username = (store.config.ui.name || '').toLowerCase().replace(/[^a-z0-9_.-]/g, '');
