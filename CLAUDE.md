@@ -177,5 +177,13 @@ LT/RT switch top tabs. LB/RB only switch sections inside a page. A select, B bac
 - Xenia Windows build: `EMU.xenia.win`, src `windows`, Proton; exec-bit checks skip `.exe`.
 - RomM version: `rommTooOld` in romm.js, Issues `romm`.
 
+## 0.9.3 L (2 Oct 2026; log: docs/SESSION-LOG.md)
+- Game Mode background: `watchGamescopeFocus` in main.js (xprop GAMESCOPE_FOCUSED_APP vs SteamGameId) → event `background` → nav.js `setBackground` stops pad input.
+- Vita3K: EmuDeck's vita3k.sh always adds `-Fr`, so `argsBy.emudeck: '{SERIAL}'`; `vita3kCommand()` never uses the script (EmuDeck's real Vita3K is `~/Applications/Vita3K/Vita3K`); `vitaPrefs` adds XDG_DATA_HOME and `portable/fs`.
+- RPCS3 database settings: `rpcs3ApplyDb` in patches.js (writes `config/custom_configs/config_<SERIAL>.yml` from RPCS3's config_database.dat or api.rpcs3.net/config/?api=v1, only when none), `rpcs3Settings` in main.js after download/install, `rpcs3-configs.json` records them.
+- `consoleName()` in store.js (RomM's current platform names), `developerOf()` in romm.js, `titleCase()` for Menu labels (`o.raw` opts out), `store.settingsSpot` (store.go remembers the Settings row), `steam:status.added` (`cartridgeInSteam`), `bgPreview()` in bgRenderers.js, Menu `img`.
+- Trophies All: one list (`.aa-row`), owner's pick A. Home: one Continue playing row.
+- Health: learned shortcuts with a gone game get Remove from Steam (only when their ROMs folder exists).
+
 ## Releases (full steps: HANDOFF D8)
 Only when the owner asks. Bump `version` and `build.releaseInfo.releaseName` ("Cartridge X.Y.Z") in `package.json`, and set `versionName` (what Settings → About and update messages show). **0.9.3 is shipped in parts (owner, 1 Oct 2026):** the number goes up as usual (0.9.4, 0.9.5...) but `versionName` and the release title are "0.9.3 B", "0.9.3 C"... until the 0.9.3 plan is done; notes heading `## Cartridge 0.9.3 B · Title`. Then put only this version's notes in `RELEASE_NOTES.md` (heading `## Cartridge X.Y.Z · Title`), add them to the top of `CHANGELOG.md`, grouped as New / Changed / Fixed with bold lead-ins. CI builds, launch-checks and publishes.

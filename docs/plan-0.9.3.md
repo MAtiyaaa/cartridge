@@ -135,7 +135,7 @@ Controller feel, Cartridge fully closed and no lag on the ROG Ally, and LT/RT at
 - A stray `v2.3.1` tag is in the repo (not a release; it deletes most of the code compared with 0.9.2). The owner said not to delete it yet: ask again when 0.9.3 is being built.
 
 ## 0.9.3 L (owner, 2 Oct 2026)
-Carried from K: F1 console backgrounds (rebuilt, except Ribbons and XMB; mockups first).
+Shipped in L: everything below except 6 (RetroAchievements sign-in for the emulators: owner said yes, as a button; moved to M, each emulator's login format to be read from its source) and F1 console backgrounds (moved to M, mockups first).
 1. **Console names in trophies' Latest unlocks** use old names. A console renamed in RomM must show its current name everywhere (take it from the library's platforms, not the trophy source).
 2. **Background picker** in Look & Feel shows a picture of each background in the menu.
 3. **Manual** in the game page's More.
@@ -154,6 +154,6 @@ Carried from K: F1 console backgrounds (rebuilt, except Ribbons and XMB; mockups
 16. **Vita3K installs fail** for every Vita game tried: "Vita3K didn't install it. Open Vita3K and install the file there (File → Install) to see why." Check how `installVita` starts Vita3K and how it decides the install worked (the new `ux0/app/<ID>` folder), against Vita3K's source and a real install.
 17. **Vita games added to Steam by Cartridge don't boot:** the launch options are wrong. Re-read Vita3K's argument parser (`-r <title ID>`, `-F`, the path it expects) and compare with EmuDeck's and SRM's Vita3K parsers; add a test of the exact line.
 18. **PS4 games no longer on the device still have Steam shortcuts** (shadPS4-made ones like the owner's photos, and Cartridge's): list them in Shortcut health and Issues with Remove from Steam, and remove Cartridge's own when a game is deleted.
-19. **Trophies All page is too cluttered** (owner, 2 Oct): calmer layout. Show options first.
+19. **Trophies All page is too cluttered** (owner, 2 Oct): owner picked A, one list (summary line, six recent badges, one list of games).
 20. **Controller input reaches Cartridge in the background** in Game Mode (Home pressed, Steam's menu in front, Cartridge still running). Find a signal that Steam's UI is in front (window blur/visibility, gamescope's focused app) and stop reading the pad then.
 21. **shadPS4 Start in (done on the branch, ships in L):** the core option from K is removed. Shortcuts now get the same kind of Start in shadPS4's own shortcuts have: a mount folder that never exists (theirs is the AppImage's temporary mount, gone once the launcher closes). Read from the Qt launcher's create_steam_shortcut.cpp.

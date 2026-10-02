@@ -6,6 +6,21 @@ The branch for 0.9.3 work is `claude/relaxed-fermat-30pigp`. Pull it before star
 
 ---
 
+## 2 Oct 2026 · 0.9.3 L built (read this first)
+
+Version 0.9.14, versionName "0.9.3 L". Everything in the plan's "0.9.3 L" list except 6 (RetroAchievements sign-in for emulators, owner said yes as a button) and F1 backgrounds: both moved to M. Owner's picks in chat: Trophies All option A (one list); RPCS3 database settings yes.
+
+**Findings worth keeping:**
+- shadPS4's own Steam shortcuts (qtlauncher create_steam_shortcut.cpp) write StartDir = the launcher's own folder, which for an AppImage is its temporary mount: gone when Steam starts the game. Cartridge now writes a Start in that never exists (`/tmp/.mount_shadPS4/usr/bin`) for shadPS4 AppImages. Owner to confirm on the Deck.
+- EmuDeck's vita3k.sh always runs `Vita3K -Fr <args>`: that broke both Vita installs and Steam launches.
+- RPCS3's config database is real: api.rpcs3.net/config/?api=v1.
+
+**Owner to test:** PS4 from Steam after Update on the PS4 console page; Vita install and launch (Update on the Vita page); a PS3 download gets a custom config in RPCS3; pad ignored while Steam's menu is in front (needs xprop on the system); the trophies page; Settings → Steam with and without Cartridge added.
+
+**Next (M):** RetroAchievements sign-in for emulators (read RetroArch, PCSX2, DuckStation, PPSSPP, Dolphin login settings from their source, RA login API with the password once), F1 console backgrounds (mockups first). Remind the owner about the v2.3.1 tag.
+
+---
+
 ## 2 Oct 2026 · Owner's list for 0.9.3 L
 
 The owner added 14 fixes for 0.9.3 L (listed in `docs/plan-0.9.3.md`, section "0.9.3 L"), plus F1 backgrounds carried from K. Two of them were questions, answered in chat:
