@@ -47,3 +47,22 @@ Owner, 2 Oct 2026: everything left over from 0.9.15 goes into 0.9.16, together w
 9. **Consoles page:** company logos (Sony, Nintendo, Sega, Microsoft...) instead of the company name text, the same size as the text, from an open source set.
 10. **Developer names:** check where they come from (example: Tokyo Jungle shows "Crispy's!").
 11. **Bug: PS4 trophies of games not on this device** show NPWR codes instead of game names.
+
+## 8. Owner's second list (2 Oct 2026, all in 0.9.16)
+1. **Downloads slower since 0.9.15** (70 MB/s to 7): downloads now run in their own worker thread; Game Mode process scan made non-blocking. (Done, owner to confirm.)
+2. **RetroAchievements sign-in not working.**
+3. **PS3 and Vita firmware from RomM** didn't do anything: now installed into RPCS3 (`--headless --installfw`) and Vita3K (`--firmware`). (Done.)
+4. **Emulator icons** in Settings → Emulators → Texture Packs (and elsewhere) instead of the placeholder box, same size.
+5. **Turn textures on from Cartridge** where the emulator allows it (owner asks; changes the emulator's own setting, recorded and reversible).
+6. **Patches, cheats and textures for more consoles** (PSP, GameCube, Wii and others that support them).
+7. **Achievements All:** console logos instead of console names, at the text's size; RetroAchievements and Trophies tabs the same.
+8. **RPCS3 game updates** from the PS3 update list (owner's link, ps3.aldostools.org/updates.html, which reads Sony's own update XML per serial): offered when the ISO or installed version is older; in a new Emulators tab, "Game updates".
+9. **Emulators tab split from Steam, overhauled** with pages like Look & Feel (Emulators, Game updates, Texture packs, Patches...). **Update emulators from Cartridge**: check installed versions against their releases.
+10. **Controller navigation across the board:** down/up goes to the item directly below (nearest by horizontal position, then the first in that row), never skipping a row; left at the start or right at the end of a row stays in the row; moving between rows goes to the first item of the next row (owner); game page: Ready to play → See all, not a trophy.
+11. **Game page More:** Steam and Emulator split into two tabs (Steam: add/remove, add to collection; Emulator: patches, texture packs, file location). New "Options" tab: Hide, Delete, Re-download. Manual moves to Details and Artwork. Header row: Ready to play and More only.
+12. **Add to Steam collection** from the game page when it isn't in one.
+13. **Steam artwork for games** in the same style as Cartridge's own (icon, grid, hero, logo).
+14. **Patches sheet:** focus box clipped by a dark line; plain white focus box.
+15. **Game page:** going up to the header row shows the whole header (scroll to top), not partway.
+16. **Continue playing:** console as its logo at text size; device ("on Steam Deck") quieter, contrasting on light and dark backgrounds.
+17. **Recommended for you:** drop the "Same series" reason line.
