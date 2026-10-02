@@ -846,6 +846,16 @@ module.exports = function createSteamManager(ctx) {
     return out;
   }
   // One game: is it in Steam, and would Cartridge know how to add it?
+  // a game already in Steam into collections (game page → More → Steam, 0.9.16). Needs Steam's
+  // instant changes, which edit collections the way Steam's own library does.
+  async function addRomToCollections(romId, names) {
+    const f = forRom(romId), env = environment();
+    if (!f.inSteam || !f.appid) throw new Error('Add the game to Steam first.');
+    if (!env.account || !(await live.available(env.account.root))) throw new Error('Collections can be changed while Steam runs once instant Steam changes are on (Settings → Steam).');
+    await live.addToCollections(f.appid, names);
+    const c = cfg(); c.lastCollections ||= {}; c.lastCollections[f.console] = names; ctx.saveConfig();
+    return true;
+  }
   function forRom(romId) {
     const env = environment();
     const g = installedGames().find((x) => x.rom.id === romId);
@@ -1536,7 +1546,7 @@ module.exports = function createSteamManager(ctx) {
     },
     liveInfo: async () => { const env = environment(); if (!env.account) return { on: false, flag: false }; return { on: await live.available(env.account.root), flag: live.flagOn(env.account.root) }; },
     liveEnable: () => { const env = environment(); if (!env.account) throw new Error('Steam was not found.'); fs.writeFileSync(path.join(env.account.root, live.FLAG), ''); return true; },
-    onDownloaded, onDeleted, lastStatus, writeScript, startupReport, forRom, fixCollections, played, playtime, steamRoots, refreshArt,
+    addRomToCollections, onDownloaded, onDeleted, lastStatus, writeScript, startupReport, forRom, fixCollections, played, playtime, steamRoots, refreshArt,
     scanEmulators, rpcs3Command, vita3kCommand, setupOverview, confirm, markFork, useFile, health, healthFix, movedEmulators, setupReport, syncConsoleCollections, preflight: (key) => preflight(key, templateFor(key)),
     candidatesFor: (key) => az(candidates(key).map((c) => ({ id: c.id, label: c.label, sub: shortPath(c.t.how === 'flatpak' ? c.t.from : c.t.exe), fork: !!c.fork }))),
     // one game's own Target, Start in and Launch options (console page, 0.9.15); null goes back

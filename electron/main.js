@@ -2505,8 +2505,10 @@ const handlers = {
   'clip:read': async () => String((await require('electron').clipboard.readText()) || '').trim().slice(0, 4000),
   'logo:get': (r) => logoFor(r),
   'ra:signin': async ({ user, key }) => {
-    const p = await raApi('GetUserProfile', {}, { user: user.trim(), key: key.trim() });
-    if (!p || !p.User) throw new Error('RetroAchievements did not recognise that account');
+    let p;
+    try { p = await raApi('GetUserProfile', {}, { user: user.trim(), key: key.trim() }); }
+    catch (e) { log('ra: sign-in failed:', e.message); throw e; }
+    if (!p || !p.User) { log('ra: sign-in got no profile', JSON.stringify(p).slice(0, 200)); throw new Error('RetroAchievements did not recognise that account. Check the username and the web API key (retroachievements.org → Settings → Authentication).'); }
     config.ra = { user: p.User, key: key.trim() }; saveConfig(); raMem.clear();
     return { user: p.User };
   },
@@ -2514,7 +2516,9 @@ const handlers = {
   'ra:emuTargets': () => require('./raLogin').targets(os.homedir(), { steamRoots: steamMgr.steamRoots?.() || [] }).map((t) => ({ id: t.id, name: t.name, user: t.user, flatpak: t.flatpak, files: t.files.map((f) => f.replace(os.homedir(), '~')) })),
   'ra:emuSignin': async ({ user, password, ids }) => {
     const ra = require('./raLogin');
-    const auth = await ra.login(String(user || '').trim(), String(password || ''));
+    let auth;
+    try { auth = await ra.login(String(user || '').trim(), String(password || ''), { ua: `Cartridge/${app.getVersion()} (Linux)` }); }
+    catch (e) { log('ra: emulator sign-in failed:', e.message); throw e; }
     const list = ra.targets(os.homedir(), { steamRoots: steamMgr.steamRoots?.() || [] }).filter((t) => !ids || ids.includes(t.id));
     const res = ra.apply(list, auth);
     log('ra: emulators signed in', res.map((r) => `${r.name}:${r.ok ? 'ok' : r.error}`).join(' '));
@@ -2929,6 +2933,7 @@ const handlers = {
   'steam:report': () => steamMgr.startupReport(),
   'steam:last': () => steamMgr.lastStatus(),
   'steam:forRom': ({ romId }) => steamMgr.forRom(Number(romId)),
+  'steam:addToCollections': ({ romId, names }) => steamMgr.addRomToCollections(Number(romId), names || []),
   // HowLongToBeat times when RomM has none: name plus release year, cached in hltb.json
   'hltb:lookup': ({ name, year }) => hltbSvc.forGame({ name: String(name || ''), year: Number(year) || null }),
   'steam:played': () => { try { return steamMgr.played(); } catch { return {}; } },

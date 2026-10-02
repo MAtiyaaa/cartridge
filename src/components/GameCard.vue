@@ -12,9 +12,10 @@
       <div v-if="del != null" class="deleting"><Ring :pct="del" /><span>Deleting</span></div>
     </div>
     <div v-if="!hideTitle" class="title">{{ rom.name }}</div>
-    <div v-if="showPlatform" class="sub">{{ rom.platform_display_name }}</div>
+    <div v-if="showPlatform" class="sub"><PlatLogo :slug="rom.platform_slug" :fs-slug="rom.platform_fs_slug" :name="rom.platform_display_name" /></div>
     <!-- its own line, wrapping inside the card's width, never cut short (0.9.3 F7: device names) -->
-    <div v-if="extra" class="sub extra">{{ extra }}</div>
+    <div v-if="extra && device" class="sub extra"><span class="dev-pill"><Icon name="mdiDevices" :size="12" />{{ extra.replace(/^on /, '') }}</span></div>
+    <div v-else-if="extra" class="sub extra">{{ extra }}</div>
   </button>
 </template>
 <script setup>
@@ -22,7 +23,9 @@ import { computed, ref } from 'vue';
 import { store, cover, downloadFor, isNew } from '../store.js';
 import Icon from './Icon.vue';
 import Ring from './Ring.vue';
-const props = defineProps({ rom: Object, showPlatform: Boolean, extra: String, hideTitle: Boolean, selected: { type: Boolean, default: null } });
+import PlatLogo from './PlatLogo.vue';
+// device: extra is where it was played ("on Steam Deck"), shown as a quiet pill (0.9.16)
+const props = defineProps({ rom: Object, showPlatform: Boolean, extra: String, device: Boolean, hideTitle: Boolean, selected: { type: Boolean, default: null } });
 const emit = defineEmits(['open', 'focused']);
 const failed = ref(false);
 const src = computed(() => cover(props.rom));

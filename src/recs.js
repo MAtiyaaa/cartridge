@@ -66,7 +66,7 @@ export function recommend(roms, { minsOf = () => 0, lastPlay = () => 0, limit = 
 }
 // the reason as Home shows it, always naming the game you played
 function becauseOf(kind, seed) {
-  if (kind === 'series') return `Same series as ${seed.name}`;
+  if (kind === 'series') return ''; // owner, 0.9.16: a sequel needs no explaining, the line was noise
   if (kind === 'studio') return `Same studio as ${seed.name}`;
   return `Because you played ${seed.name}`;
 }

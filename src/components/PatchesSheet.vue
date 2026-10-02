@@ -56,7 +56,7 @@ onBeforeUnmount(() => layer?.pop());
 .small { font-size: var(--t-sm); }
 .pt-list { overflow-y: auto; min-height: 0; flex: 1; display: flex; flex-direction: column; gap: var(--s-2); padding: 2px; }
 .pt-row { flex: none; display: flex; align-items: center; gap: var(--s-3); text-align: left; padding: var(--s-3) var(--s-4); border-radius: var(--r-md); background: var(--s1); color: inherit; border: 0; font: inherit; }
-.pt-row:focus { background: var(--focus); color: var(--on-focus); outline: none; }
+.pt-row:focus { background: var(--focus); color: var(--on-focus); outline: none; box-shadow: none; } /* the plain white box, no ring for the list edge to cut (0.9.16) */
 .pt-row.locked { opacity: 0.75; }
 .box { flex: none; width: 26px; height: 26px; border-radius: var(--r-sm); border: 2px solid currentColor; display: grid; place-items: center; opacity: 0.85; }
 .pt-row.on .box { background: currentColor; }
