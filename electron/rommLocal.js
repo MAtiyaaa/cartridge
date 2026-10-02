@@ -1,6 +1,6 @@
 // RomM on this device (0.9.15, plan section 1): RomM's own docker-compose.example.yml (RomM with its
-// built-in Valkey, plus MariaDB) run with rootless Podman as one pod, so nothing touches the
-// read-only system. The user picks their own RomM username and password (RomM's first admin, made
+// built-in Valkey, plus MariaDB) run with rootless Podman as one pod. Podman itself is set up from
+// here when missing (prepare, 0.9.17). The user picks their own RomM username and password (RomM's first admin, made
 // through POST /api/users, which RomM allows with no sign-in while it has no admin). Only the
 // secrets nobody types (database passwords, RomM's auth key) are generated; they stay in
 // romm-local.env (mode 600) so updates can recreate the containers with the same database.
@@ -27,8 +27,57 @@ function run(cmd, args, { timeout = 0 } = {}) {
     if (e) { const m = String(err || e.message).trim().split('\n').filter(Boolean).pop() || e.message; reject(new Error(m.slice(0, 300))); } else resolve(String(out).trim());
   }));
 }
-const podman = (...a) => run('podman', a);
-function hasPodman() { try { execFileSync('sh', ['-c', 'command -v podman'], { stdio: 'ignore', env: plainEnv() }); return true; } catch { return false; } }
+// Podman (0.9.17, owner: set it up inside Cartridge). SteamOS 3.5+, Bazzite and Fedora Atomic ship
+// it; elsewhere Cartridge fetches podman-launcher (89luca89/podman-launcher: podman-static in one file,
+// works from $HOME, the copy distrobox's Steam Deck guide uses) into its own folder. Rootless Podman
+// also needs the user's ID ranges in /etc/subuid and /etc/subgid (SteamOS has none): added once with
+// the device password, the way that guide does (usermod --add-subuid 100000-165535 ...).
+const OWN_PODMAN = path.join(os.homedir(), '.local/share/cartridge-romm/bin/podman');
+const LAUNCHER_URL = 'https://github.com/89luca89/podman-launcher/releases/latest/download/podman-launcher-amd64';
+function systemPodman() { try { return execFileSync('sh', ['-c', 'command -v podman'], { encoding: 'utf8', env: plainEnv() }).trim() || null; } catch { return null; } }
+function podmanBin() { const sys = systemPodman(); if (sys) return sys; try { fs.accessSync(OWN_PODMAN, fs.constants.X_OK); return OWN_PODMAN; } catch { return null; } }
+const podman = (...a) => run(podmanBin() || 'podman', a);
+function hasPodman() { return !!podmanBin(); }
+const userName = () => os.userInfo().username;
+function hasIds(etc = '/etc') {
+  const u = userName(), id = String(os.userInfo().uid);
+  const has = (f) => { try { return fs.readFileSync(path.join(etc, f), 'utf8').split('\n').some((l) => l.startsWith(u + ':') || l.startsWith(id + ':')); } catch { return false; } };
+  return has('subuid') && has('subgid');
+}
+// what's missing before RomM can run: { podman: 'system' | 'cartridge' | null, ids }
+function readiness() { const b = podmanBin(); return { podman: b ? (b === OWN_PODMAN ? 'cartridge' : 'system') : null, ids: hasIds() }; }
+async function getLauncher(fetchImpl = fetch) {
+  const r = await fetchImpl(LAUNCHER_URL, { headers: { 'User-Agent': 'Cartridge' }, signal: AbortSignal.timeout(10 * 60e3) });
+  if (!r.ok) throw new Error(`Podman couldn't be downloaded (GitHub answered ${r.status}).`);
+  const buf = Buffer.from(await r.arrayBuffer());
+  if (buf.length < 10 << 20 || buf.readUInt32BE(0) !== 0x7f454c46) throw new Error("The Podman download isn't a program. Try again.");
+  fs.mkdirSync(path.dirname(OWN_PODMAN), { recursive: true });
+  fs.writeFileSync(OWN_PODMAN + '.tmp', buf, { mode: 0o755 }); fs.renameSync(OWN_PODMAN + '.tmp', OWN_PODMAN);
+}
+// sudo with the password on stdin (-S), asked fresh (-k); the password is never stored
+function sudo(password, script) {
+  return new Promise((resolve, reject) => {
+    const c = require('child_process').execFile('sudo', ['-S', '-k', '-p', '', 'sh', '-c', script], { env: plainEnv(), timeout: 60000 }, (e, out, err) => {
+      if (!e) return resolve();
+      const m = String(err || '');
+      reject(new Error(/incorrect|try again|Sorry/i.test(m) ? 'That password didn’t work.' : /not in the sudoers|not allowed/i.test(m) ? 'This account isn’t allowed to make system changes (sudo).' : 'The change didn’t work: ' + (m.trim().split('\n').pop() || e.message)));
+    });
+    c.stdin.end(String(password || '') + '\n');
+  });
+}
+async function prepare({ password, fetchImpl = fetch } = {}, onProgress = () => {}) {
+  if (!podmanBin()) { onProgress({ label: 'Downloading Podman' }); await getLauncher(fetchImpl); }
+  if (!hasIds()) {
+    const u = userName();
+    if (!/^[a-z_][a-z0-9_.-]*$/i.test(u)) throw new Error('This account name can’t be set up automatically.');
+    if (!password) throw Object.assign(new Error('Your device password is needed once.'), { code: 'password' });
+    onProgress({ label: 'Letting Podman run as you' });
+    await sudo(password, `touch /etc/subuid /etc/subgid && usermod --add-subuid 100000-165535 --add-subgid 100000-165535 ${u}`);
+  }
+  await podman('system', 'migrate').catch(() => {});
+  await podman('info', '--format', '{{.Host.Security.Rootless}}');
+  return readiness();
+}
 
 function freePort(start = 8095) {
   return new Promise((resolve) => {
@@ -85,10 +134,7 @@ async function waitFor(test, ms, every = 2000) {
 // opts: { username, password, library (a folder holding roms/<console>), dataDir, keys, envFile }
 async function setup(opts, onProgress = () => {}, { fetchImpl = fetch } = {}) {
   const step = (n, label) => onProgress({ step: n, of: 7, label });
-  // No Podman (0.9.16 research): a user-level copy can't be fetched without the system. Rootless
-  // Podman needs newuidmap/newgidmap (setuid, from the system's shadow/uidmap package) and the user's
-  // ranges in /etc/subuid and /etc/subgid, all on the read-only part of SteamOS. So: a clear message.
-  if (!hasPodman()) throw new Error("Podman isn't installed on this system. Bazzite and Fedora Atomic include it; on other systems install the podman package, then try again.");
+  if (!hasPodman() || !hasIds()) throw Object.assign(new Error('Podman isn’t ready yet.'), { code: 'prepare' });
   const user = String(opts.username || '').trim().toLowerCase();
   if (user.length < 3) throw new Error('The RomM username needs at least 3 characters.');
   if (!String(opts.password || '').trim()) throw new Error('Choose a RomM password.');
@@ -122,10 +168,18 @@ async function setup(opts, onProgress = () => {}, { fetchImpl = fetch } = {}) {
     if (!/already exists/i.test(String(d))) throw new Error(`RomM didn't create the account: ${d || r.status}`); // a replay: the account is there
   }
   step(7, 'Starting with this device');
-  const boot = await run('systemctl', ['--user', 'enable', 'podman-restart.service']).then(() => true, () => false);
+  const boot = podmanBin() === OWN_PODMAN ? await ownBootUnit() : await run('systemctl', ['--user', 'enable', 'podman-restart.service']).then(() => true, () => false);
   return { port, base, user, boot };
 }
 
+// Cartridge's own Podman has no podman-restart service: the same command as a user unit
+async function ownBootUnit() {
+  const unit = path.join(os.homedir(), '.config/systemd/user/cartridge-romm.service');
+  fs.mkdirSync(path.dirname(unit), { recursive: true });
+  fs.writeFileSync(unit, `[Unit]\nDescription=RomM on this device (Cartridge)\nWants=network-online.target\nAfter=network-online.target\n\n[Service]\nType=oneshot\nRemainAfterExit=true\nExecStart="${OWN_PODMAN}" start --all --filter restart-policy=always\n\n[Install]\nWantedBy=default.target\n`);
+  await run('systemctl', ['--user', 'daemon-reload']).catch(() => {});
+  return run('systemctl', ['--user', 'enable', 'cartridge-romm.service']).then(() => true, () => false);
+}
 async function status() {
   if (!hasPodman()) return { podman: false };
   const out = await podman('pod', 'ps', '--filter', `name=^${POD}$`, '--format', '{{.Status}}').catch(() => '');
@@ -147,4 +201,4 @@ function lanUrls(port) {
   return Object.values(os.networkInterfaces()).flat().filter((i) => i && i.family === 'IPv4' && !i.internal).map((i) => `http://${i.address}:${port}`);
 }
 
-module.exports = { keysOf, setup, status, update, lanUrls, hasPodman, dbArgs, rommArgs, envText, readEnv, freePort, POD };
+module.exports = { keysOf, setup, status, update, lanUrls, hasPodman, hasIds, readiness, prepare, podmanBin, OWN_PODMAN, dbArgs, rommArgs, envText, readEnv, freePort, POD };

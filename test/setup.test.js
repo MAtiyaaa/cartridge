@@ -148,3 +148,14 @@ test('Add-ons: Switch and Wii U mod folders; PS1, CIA and Switch IDs read from t
   assert.strictEqual(A.switchTitleId(path.join(d, 'u.nsp')), '0100F2C0115B6000');
   assert.strictEqual(A.switchTitleId(path.join(d, 'Game [0100ABCD12340000].xci')), '0100ABCD12340000');
 });
+
+test('RomM on this device: Podman needs the user\'s ID ranges in /etc/subuid and /etc/subgid (0.9.17)', () => {
+  const RL = require('../electron/rommLocal.js');
+  const etc = fs.mkdtempSync(path.join(os.tmpdir(), 'etc-'));
+  const u = os.userInfo().username;
+  assert.strictEqual(RL.hasIds(etc), false);
+  fs.writeFileSync(path.join(etc, 'subuid'), `other:100000:65536\n${u}:100000:65536\n`);
+  assert.strictEqual(RL.hasIds(etc), false); // subgid missing
+  fs.writeFileSync(path.join(etc, 'subgid'), `${os.userInfo().uid}:100000:65536\n`);
+  assert.strictEqual(RL.hasIds(etc), true);
+});

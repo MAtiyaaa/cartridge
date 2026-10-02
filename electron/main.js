@@ -3143,7 +3143,12 @@ const handlers = {
     if (fs.existsSync(path.join(h, 'retrodeck', 'roms'))) libs.push({ path: path.join(h, 'retrodeck'), from: 'RetroDECK' });
     libs.push({ path: path.join(h, 'RomM'), from: 'New folder' });
     const st = await rl.status();
-    return { ...st, libraries: libs, port: config.rommLocal?.port || null, lan: config.rommLocal?.port ? rl.lanUrls(config.rommLocal.port) : [] };
+    return { ...st, ready: rl.readiness(), libraries: libs, port: config.rommLocal?.port || null, lan: config.rommLocal?.port ? rl.lanUrls(config.rommLocal.port) : [] };
+  },
+  // Podman made ready from Cartridge (0.9.17); the device password is used once and never kept
+  'romm:localPrepare': async ({ password } = {}) => {
+    try { return { ok: true, ready: await require('./rommLocal').prepare({ password }, (p) => broadcast('romm-local', p)) }; }
+    catch (e) { if (e.code === 'password') return { needPassword: true }; log('podman prepare failed:', e.message); throw e; }
   },
   'romm:localSetup': async ({ username, password, library, name, keys }) => {
     const rl = require('./rommLocal');
