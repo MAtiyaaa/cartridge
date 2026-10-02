@@ -6,6 +6,19 @@ The branch for 0.9.3 work is `claude/relaxed-fermat-30pigp`. Pull it before star
 
 ---
 
+## 2 Oct 2026 · 0.9.17 second list built (read this first)
+
+The owner added 22 items to 0.9.17 (plan section 10) and wanted them all in this update. All built; see CLAUDE.md 0.9.17 and RELEASE_NOTES.md.
+
+**Decisions and notes:**
+- Top bar: the owner asked for the design skills ("taste" skill isn't in `.claude/skills`; apple-design and emil-design-eng were used). Words-only tabs with a sliding underline, LT/RT only with a controller.
+- Vita3K install error: the owner said "Getting this error" but no text came through. Ask for the message.
+- Sony, GameBanana and metadata.ppsspp are blocked from the container: the 403 fixes (net.fetch, HTTPS for Sony) must be checked on a device.
+
+**Owner must test on a device:** the welcome (animation, controller step, keyboard, Flatpak offer, Download emulators flow, without RomM), Roll back, Steam keyboard in Game Mode, emulator updates (RPCS3 sticking), Gecko codes in Dolphin, RPCS3 patches list, the top bar at 1280x800 and 4K, press feedback with a controller.
+
+---
+
 ## 2 Oct 2026 · 0.9.17 built and released (read this first)
 
 Everything in `docs/plan-0.9.17.md`. Remind the owner: check the PS3 games that said "serial not found", and the stray v2.3.1 tag.

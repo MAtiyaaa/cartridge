@@ -1,6 +1,6 @@
 # Cartridge 0.9.17 plan
 
-Status: built and released as 0.9.17 (2 Oct 2026). What was done differently is in docs/SESSION-LOG.md.
+Status: built (sections 1 to 10) and released as 0.9.17 (2 Oct 2026). What was done differently is in docs/SESSION-LOG.md. Open: the Vita3K install error (no error text yet).
 
 Owner, 2 Oct 2026, after 0.9.16 shipped: "package all of these for the next update and start building."
 
