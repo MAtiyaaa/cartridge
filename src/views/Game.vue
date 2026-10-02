@@ -601,6 +601,7 @@ async function more() {
     { label: 'Play status', sub: statusText.value || 'None', value: 'status', icon: 'mdiProgressCheck' },
     { label: 'Add to a collection', sub: 'Yours in RomM, or a new one', value: 'col', icon: 'mdiBookmarkPlusOutline' },
     { label: 'Timeline', sub: 'Added, downloaded, played, trophies', value: 'timeline', icon: 'mdiTimelineClockOutline' },
+    ...(detail.value?.path_manual ? [{ label: 'Manual', sub: 'The game’s manual from RomM', value: 'manual', icon: 'mdiBookOpenPageVariantOutline' }] : []),
     { label: u?.hidden ? 'Unhide game' : 'Hide game', sub: u?.hidden ? 'Show it in lists again' : 'Keep it out of Home, Library and Search', value: 'hide', icon: u?.hidden ? 'mdiEyeOutline' : 'mdiEyeOffOutline' },
   ];
   // one sheet, its groups as tabs (0.9.3 K, G4 B): LB/RB move between them
@@ -613,6 +614,7 @@ async function more() {
   }
   if (v === 'status') { await pickStatus(); return; }
   if (v === 'timeline') { await openTimeline(); return; }
+  if (v === 'manual') { openModal('manual', { romId: Number(props.romId), name: base.value.name }); return; }
   if (v === 'edit') { await editDetails(); return; }
   if (v === 'theme') { await themeFromGame(); return; }
   if (v === 'untheme') { const g = store.config.ui.gameTheme; await saveConfig({ ui: { theme: g.theme || 'cartridge', customColor: g.customColor || '', gameTheme: null } }); toast('Your own theme is back', 'ok', 2200, 'mdiUndoVariant'); return; }

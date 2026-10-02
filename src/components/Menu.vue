@@ -4,7 +4,7 @@
       <h2 v-if="title">{{ title }}</h2>
       <p v-if="message" class="muted" style="margin: 0; line-height: 1.5; white-space: pre-line">{{ message }}</p>
       <!-- the shared sheet (0.9.3 K, G4 B): one bottom sheet for secondary things, its groups as tabs (LB/RB) -->
-      <div v-if="tabs" class="sheet-tabs"><Btn b="LB" /><div class="seg"><button v-for="(t, i) in tabs" :key="t.label" tabindex="-1" :class="{ on: i === cur }" @click="setTab(i)">{{ t.label }}</button></div><Btn b="RB" /></div>
+      <div v-if="tabs" class="sheet-tabs"><Btn b="LB" /><div class="seg"><button v-for="(t, i) in tabs" :key="t.label" tabindex="-1" :class="{ on: i === cur }" @click="setTab(i)">{{ titleCase(t.label) }}</button></div><Btn b="RB" /></div>
       <div class="menu-list" data-scroll ref="listEl" :key="cur">
         <template v-for="(o, i) in list" :key="i">
           <div v-if="o.heading" class="menu-h">{{ o.heading }}</div>
@@ -13,7 +13,7 @@
             data-focus :data-autofocus="(o.selected || (i === 0 && !anySelected)) ? '' : undefined" @click="closeModal(o.value)"
           >
             <Icon v-if="o.icon" :name="o.icon" />
-            <span>{{ o.label }}</span>
+            <span>{{ o.raw ? o.label : titleCase(o.label) }}</span>
             <span v-if="o.sub" class="sub">{{ o.sub }}</span>
             <Icon v-if="o.selected" name="mdiCheck" style="margin-left: 8px; color: var(--primary-l)" />
           </button>
@@ -26,7 +26,7 @@
 <script setup>
 import { computed, onMounted, onBeforeUnmount, ref, nextTick } from 'vue';
 import { pushLayer, focusFirst } from '../nav.js';
-import { closeModal } from '../store.js';
+import { closeModal, titleCase } from '../store.js';
 import { sfx } from '../sfx.js';
 import Icon from './Icon.vue';
 import Btn from './Btn.vue';

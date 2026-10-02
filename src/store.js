@@ -89,6 +89,14 @@ export function builtinKb() {
   return k === 'builtin' || (k === 'auto' && !!store.info?.gamescope);
 }
 export const pickFolder = (props) => openModal('folder', props);
+// Title Case for menu items (0.9.3 L, owner): words that are plain lower-case letters get a capital,
+// except small joining words in the middle. Names, file names, paths and anything with digits or
+// punctuation inside a word are left as they are.
+const SMALL = new Set(['a', 'an', 'the', 'and', 'but', 'or', 'nor', 'for', 'on', 'at', 'to', 'from', 'by', 'of', 'in', 'with', 'as', 'via', 'per', 'vs']);
+export function titleCase(s) {
+  if (typeof s !== 'string') return s;
+  return s.replace(/(^|[\s(“"])([a-z]+)(?=$|[\s,.:;!?)”"…])/g, (m, pre, w, off) => (off > 0 && SMALL.has(w) ? m : pre + w[0].toUpperCase() + w.slice(1)));
+}
 export const choose = (props) => openModal('menu', props);
 export const confirm = (title, message, okLabel = 'Confirm', danger = false) =>
   openModal('menu', { title, message, options: [{ label: okLabel, value: true, danger, icon: danger ? 'mdiAlertOutline' : 'mdiCheck' }, { label: 'Cancel', value: false, icon: 'mdiClose' }] });
