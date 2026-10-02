@@ -171,4 +171,12 @@ async function addToSteam({ exe, artDir, restartSteam }) {
   return { added: results, restarted: wasRunning };
 }
 
-module.exports = { applySteamArt, addToSteam, parseVdf, writeVdf, shortcutId, steamRunning };
+// Is Cartridge in Steam already (any account)? For Settings → Steam (0.9.3 L)
+function cartridgeInSteam() {
+  for (const root of steamRoots()) for (const uid of steamUsers(root)) {
+    try { const d = parseVdf(fs.readFileSync(path.join(root, 'userdata', uid, 'config', 'shortcuts.vdf'))); if (Object.values(d.shortcuts || d.Shortcuts || {}).some(isCartridge)) return true; } catch {}
+  }
+  return false;
+}
+
+module.exports = { cartridgeInSteam, applySteamArt, addToSteam, parseVdf, writeVdf, shortcutId, steamRunning };

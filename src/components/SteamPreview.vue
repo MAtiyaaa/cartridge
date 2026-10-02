@@ -37,7 +37,7 @@ import { closeModal } from '../store.js';
 import Icon from './Icon.vue';
 
 const props = defineProps({ account: String, entries: { type: Array, default: () => [] }, skipped: { type: Array, default: () => [] }, removing: { type: Array, default: () => [] } });
-const HOW = { learned: 'Like your other shortcuts', yours: 'Your setup', emudeck: 'EmuDeck', appimage: 'AppImage', flatpak: 'Flatpak', native: 'Installed program', retrodeck: 'RetroDECK', shadcore: 'shadPS4 core', windows: 'Windows build (Proton)' };
+const HOW = { learned: 'Like your other shortcuts', yours: 'Your setup', emudeck: 'EmuDeck', appimage: 'AppImage', flatpak: 'Flatpak', native: 'Installed program', retrodeck: 'RetroDECK', windows: 'Windows build (Proton)' };
 const label = computed(() => {
   const a = props.entries.length, r = props.removing.length;
   return [a && `Add ${a}`, r && `Remove ${r}`].filter(Boolean).join(', ') + ' and restart Steam';

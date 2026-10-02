@@ -72,7 +72,7 @@ import PIcon from '../components/PIcon.vue';
 const props = defineProps({ ckey: String });
 const el = ref(null);
 const ov = ref(null);
-const HOW = { learned: 'From your shortcuts', yours: 'Set by you', emudeck: 'EmuDeck', appimage: 'AppImage', flatpak: 'Flatpak', native: 'Installed program', retrodeck: 'RetroDECK', shadcore: 'shadPS4 core', windows: 'Windows build (Proton)' };
+const HOW = { learned: 'From your shortcuts', yours: 'Set by you', emudeck: 'EmuDeck', appimage: 'AppImage', flatpak: 'Flatpak', native: 'Installed program', retrodeck: 'RetroDECK', windows: 'Windows build (Proton)' };
 const con = computed(() => ov.value?.consoles.find((c) => c.key === props.ckey) || null);
 const games = computed(() => (ov.value?.games || []).filter((g) => g.console === props.ckey).sort((a, b) => a.name.localeCompare(b.name)));
 const missing = computed(() => games.value.filter((g) => !g.inSteam && g.file && g.queued !== 'add'));

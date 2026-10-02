@@ -233,6 +233,38 @@ function pcsx2Game(dir, file) {
   const hit = list.find((g) => real(g.path) === want) || list.find((g) => path.basename(g.path) === path.basename(file));
   return hit && hit.crc ? { serial: hit.serial, crc: hit.crc } : null;
 }
+// A PS2 ISO's serial and CRC the way PCSX2 works them out itself (0.9.3 L; CDVD.cpp GetPS2ElfName,
+// Elfheader.cpp GetCRC): SYSTEM.CNF's BOOT2 names the game's program ("cdrom0:\SLUS_213.86;1"),
+// the serial is that name with "." removed and "_" as "-", the CRC is every 32-bit word of the
+// program XORed together. Plain ISO9660 images only (CHD is compressed: PCSX2's game list then).
+function ps2IsoInfo(file) {
+  let fd; try { fd = fs.openSync(file, 'r'); } catch { return null; }
+  const read = (pos, len) => { const b = Buffer.alloc(len); const n = fs.readSync(fd, b, 0, len, pos); return b.subarray(0, n); };
+  try {
+    const pvd = read(16 * 2048, 2048);
+    if (pvd[0] !== 1 || pvd.toString('latin1', 1, 6) !== 'CD001') return null;
+    const rec = (b, o) => ({ lba: b.readUInt32LE(o + 2), size: b.readUInt32LE(o + 10), dir: !!(b[o + 25] & 2), name: b.toString('latin1', o + 33, o + 33 + b[o + 32]) });
+    const list = (d) => {
+      const b = read(d.lba * 2048, Math.min(d.size, 1 << 20)); const out = [];
+      for (let o = 0; o < b.length;) { const len = b[o]; if (!len) { o = (Math.floor(o / 2048) + 1) * 2048; continue; } out.push(rec(b, o)); o += len; }
+      return out;
+    };
+    const find = (parts) => { let d = rec(pvd, 156); for (const [i, p] of parts.entries()) { const hit = list(d).find((e) => e.name.replace(/;\d+$/, '').toUpperCase() === p.toUpperCase()); if (!hit || (i < parts.length - 1 && !hit.dir)) return null; d = hit; } return d; };
+    const cnf = find(['SYSTEM.CNF']);
+    if (!cnf || cnf.size > 4096) return null;
+    const m = /BOOT2\s*=\s*cdrom0?:\\?([^\r\n;]+)/i.exec(read(cnf.lba * 2048, cnf.size).toString('latin1'));
+    if (!m) return null;
+    const parts = m[1].split(/[\\/]/).filter(Boolean);
+    const elf = find(parts);
+    if (!elf || elf.size > 64 << 20) return null;
+    const data = read(elf.lba * 2048, elf.size);
+    let crc = 0;
+    for (let i = 0; i + 4 <= data.length; i += 4) crc = (crc ^ data.readUInt32LE(i)) >>> 0;
+    const name = parts[parts.length - 1];
+    const serial = /^[A-Z]{4}[_-]\d{3}\.\d{2}/i.test(name) ? name.replace(/\./g, '').replace(/_/g, '-').toUpperCase() : '';
+    return { serial, crc };
+  } catch { return null; } finally { try { fs.closeSync(fd); } catch {} }
+}
 const crcHex = (crc) => (crc >>> 0).toString(16).toUpperCase().padStart(8, '0');
 // patches.zip from the PCSX2 that is installed: AppImage (read from inside it), Flatpak, distro package
 function pcsx2ZipSources(home = os.homedir(), appImages = []) {
@@ -281,7 +313,7 @@ function pnachList(text) {
   return out;
 }
 async function pcsx2List(dir, game, zipBuf, mine = {}) {
-  const names = [`${game.serial}_${crcHex(game.crc)}.pnach`, `${crcHex(game.crc)}.pnach`];
+  const names = [...(game.serial ? [`${game.serial}_${crcHex(game.crc)}.pnach`] : []), `${crcHex(game.crc)}.pnach`];
   const texts = [];
   for (const n of names) { try { texts.push(fs.readFileSync(path.join(dir.patches, n), 'utf8')); } catch {} }
   if (zipBuf) { const t = await zipEntryText(zipBuf, names); if (t) texts.push(t); }
@@ -327,4 +359,31 @@ function pcsx2Set(dir, game, changes, mine = {}) {
   return rec;
 }
 
-module.exports = { parseSfo, sfoAt, rpcs3Dirs, ps3Version, rpcs3List, rpcs3Set, shadDirs, ps4Version, shadList, shadSet, load, dump, pcsx2Dirs, pcsx2GameList, pcsx2Game, pcsx2ZipSources, pcsx2ZipBuffer, pnachList, pcsx2List, pcsx2Set, crcHex };
+// ---------------------------------------------------------------- RPCS3 settings from its database
+// RPCS3 keeps per-game settings that work, published at api.rpcs3.net/config/?api=v1 as
+// { return_code, games: { <SERIAL>: { config: "<yml>" } } } and cached in GuiConfigs/config_database.dat
+// (rpcs3qt/config_database.cpp). "Create Custom Configuration From Database Settings" lays that over
+// the global settings as config/custom_configs/config_<SERIAL>.yml (Emu/system_utils.cpp). Cartridge
+// writes the same file when a PS3 game arrives (0.9.3 L), only when the game has none yet; mine
+// records the ones it wrote, the only ones it may remove.
+function rpcs3DbFromText(text, serial) {
+  let j; try { j = JSON.parse(text); } catch { return null; }
+  const c = j && j.games && j.games[serial] && j.games[serial].config;
+  return typeof c === 'string' && c.trim() ? c : null;
+}
+function rpcs3CustomPath(dir, serial) { return path.join(dir.root, 'config', 'custom_configs', `config_${serial}.yml`); }
+function rpcs3DbCached(dir) { try { return fs.readFileSync(path.join(dir.root, 'GuiConfigs', 'config_database.dat'), 'utf8'); } catch { return null; } }
+// returns 'written', 'exists' (the game has its own settings already) or 'none' (not in the database)
+function rpcs3ApplyDb(dir, serial, dbText, mine = {}) {
+  if (!/^[A-Z]{4}\d{5}$/.test(serial || '')) return { result: 'none', mine };
+  const f = rpcs3CustomPath(dir, serial);
+  if (exists(f)) return { result: 'exists', mine };
+  const cfg = rpcs3DbFromText(dbText, serial);
+  if (!cfg) return { result: 'none', mine };
+  load(cfg); // must be valid YAML, as RPCS3 checks before using it
+  fs.mkdirSync(path.dirname(f), { recursive: true });
+  fs.writeFileSync(f + '.tmp', cfg.endsWith('\n') ? cfg : cfg + '\n'); fs.renameSync(f + '.tmp', f);
+  return { result: 'written', mine: { ...mine, [serial]: { at: Date.now(), file: f } } };
+}
+
+module.exports = { rpcs3DbFromText, rpcs3CustomPath, rpcs3DbCached, rpcs3ApplyDb, parseSfo, sfoAt, rpcs3Dirs, ps3Version, rpcs3List, rpcs3Set, shadDirs, ps4Version, shadList, shadSet, load, dump, pcsx2Dirs, pcsx2GameList, pcsx2Game, ps2IsoInfo, pcsx2ZipSources, pcsx2ZipBuffer, pnachList, pcsx2List, pcsx2Set, crcHex };

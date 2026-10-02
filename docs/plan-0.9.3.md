@@ -135,7 +135,7 @@ Controller feel, Cartridge fully closed and no lag on the ROG Ally, and LT/RT at
 - A stray `v2.3.1` tag is in the repo (not a release; it deletes most of the code compared with 0.9.2). The owner said not to delete it yet: ask again when 0.9.3 is being built.
 
 ## 0.9.3 L (owner, 2 Oct 2026)
-Carried from K: F1 console backgrounds (rebuilt, except Ribbons and XMB; mockups first).
+Shipped in L: everything below except 6 (RetroAchievements sign-in for the emulators: owner said yes, as a button; moved to M, each emulator's login format to be read from its source) and F1 console backgrounds (moved to M, mockups first).
 1. **Console names in trophies' Latest unlocks** use old names. A console renamed in RomM must show its current name everywhere (take it from the library's platforms, not the trophy source).
 2. **Background picker** in Look & Feel shows a picture of each background in the menu.
 3. **Manual** in the game page's More.
@@ -147,6 +147,13 @@ Carried from K: F1 console backgrounds (rebuilt, except Ribbons and XMB; mockups
 9. **Back from a sub-screen in Settings** (Emulator setup, Shortcut health...) returns focus to the row you opened it from, not the Emulators entry in the left list.
 10. **Add Cartridge to Steam** (Settings → Steam): at the top until it's added; once added it moves to the bottom and shows "Added to Steam" with a check mark.
 11. **RetroAchievements profile picture** doesn't update after it's changed on RetroAchievements (cache).
-12. **PS3 settings per game from a database** when the download finishes (Discuss: see the answer in chat).
+12. **PS3 settings from RPCS3's config database** (owner: yes, 2 Oct). RPCS3 has one: `https://api.rpcs3.net/config/?api=v1` returns `{ return_code, games: { <SERIAL>: { config: "<yml>" } } }`, cached by RPCS3 as `config_database.dat` in its GUI settings folder (rpcs3qt/config_database.cpp); "Create Custom Configuration From Database Settings" puts that over the global settings in `config/custom_configs/config_<SERIAL>.yml`. When a PS3 game finishes downloading (or installing), Cartridge writes that file from the database, only when the game has no custom config yet, and records it (like patches.json) so it's the only one it may remove. Reads RPCS3's cached copy first, else the same URL.
 13. **Title case everywhere it applies,** including the items inside the game page's More sheet.
 14. **RPCS3 patches for disc games:** "Cartridge couldn't read this game's serial" on a PS3 game. Read the serial from a disc folder (PS3_GAME/PARAM.SFO) and from ISO names, so disc games get Patches too.
+15. **"on" before a device name** wherever Cartridge says which device a game was played on or a trophy was earned on ("on Steam Deck").
+16. **Vita3K installs fail** for every Vita game tried: "Vita3K didn't install it. Open Vita3K and install the file there (File → Install) to see why." Check how `installVita` starts Vita3K and how it decides the install worked (the new `ux0/app/<ID>` folder), against Vita3K's source and a real install.
+17. **Vita games added to Steam by Cartridge don't boot:** the launch options are wrong. Re-read Vita3K's argument parser (`-r <title ID>`, `-F`, the path it expects) and compare with EmuDeck's and SRM's Vita3K parsers; add a test of the exact line.
+18. **PS4 games no longer on the device still have Steam shortcuts** (shadPS4-made ones like the owner's photos, and Cartridge's): list them in Shortcut health and Issues with Remove from Steam, and remove Cartridge's own when a game is deleted.
+19. **Trophies All page is too cluttered** (owner, 2 Oct): owner picked A, one list (summary line, six recent badges, one list of games).
+20. **Controller input reaches Cartridge in the background** in Game Mode (Home pressed, Steam's menu in front, Cartridge still running). Find a signal that Steam's UI is in front (window blur/visibility, gamescope's focused app) and stop reading the pad then.
+21. **shadPS4 Start in (done on the branch, ships in L):** the core option from K is removed. Shortcuts now get the same kind of Start in shadPS4's own shortcuts have: a mount folder that never exists (theirs is the AppImage's temporary mount, gone once the launcher closes). Read from the Qt launcher's create_steam_shortcut.cpp.

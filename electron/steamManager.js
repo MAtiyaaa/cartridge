@@ -403,11 +403,6 @@ module.exports = function createSteamManager(ctx) {
       if (e.forkOf) { found.forEach((f, i) => forksOut.push({ id: i ? `${id}@${f.src}` : id, label: `${f.name} · fork of ${EMU[e.forkOf]?.label || e.forkOf}${found.length > 1 ? ' · ' + SRC[f.src] : ''}`, fork: true, t: f.t })); continue; }
       found.forEach((f, i) => out.push({ id: i ? `${id}@${f.src}` : id, label: found.length > 1 ? `${f.name} · ${SRC[f.src]}` : f.name, t: f.t }));
     }
-    // shadPS4's core on its own, without the Qt launcher (0.9.3 K, A10 test for the owner): the build the
-    // launcher has selected, started the way the launcher starts it (main_window.cpp RestartEmulator:
-    // that file, its own folder as working folder) but without SHADPS4_ENABLE_IPC, so it never waits
-    // for the launcher. Arguments from the core's main.cpp (CLI11: -g/--game, -f/--fullscreen).
-    if (key === 'ps4') { const c = shadCore(); if (c) out.push({ id: 'shadps4@core', label: `shadPS4 core ${c.name} · without the launcher`, t: { exe: c.exe, start: path.dirname(c.exe), pre: [], command: true, args: '-g "{ROM}" -f true', kind: 'eboot', how: 'shadcore', from: `shadPS4 Qt launcher's ${c.name}` } }); }
     // RetroDECK, for people who use it instead of EmuDeck (0.9.3, C5): it starts the game with the
     // emulator it has set for that console (RetroDECK's run_game: -s <system> <game>, ES-DE names).
     // Consoles whose games are folders are left out: RetroDECK reads a folder as "Game/Game".
@@ -443,25 +438,6 @@ module.exports = function createSteamManager(ctx) {
     // emulators they point at are found anyway. They still count in the setup report.
     // EmuDeck's own first, then RetroDECK, then the rest; forks last (C4, C5)
     return [...retrodeck, ...(RA_FIRST.has(key) ? [...ras, ...out] : [...out, ...ras]), ...forksOut];
-  }
-  // The shadPS4 core the Qt launcher has selected: qt_ui.ini [version_manager] versionSelected, else
-  // the newest entry of its versions.json that is still there. The launcher's folder is "launcher"
-  // next to it (portable) or shadPS4QtLauncher in the data folder (shadPS4 qtlauncher path_util.cpp).
-  function shadCore() {
-    const data = [process.env.XDG_DATA_HOME, path.join(HOME, '.local/share'), path.join(real(HOME), '.local/share')].filter(Boolean);
-    const dirs = [...data.map((d) => path.join(d, 'shadPS4QtLauncher')), ...APP_DIRS().map((d) => path.join(d, 'launcher'))];
-    for (const d of [...new Set(dirs)]) {
-      let ini = ''; try { ini = fs.readFileSync(path.join(d, 'qt_ui.ini'), 'utf8'); } catch {}
-      const sec = (ini.split(/^\[version_manager\]\s*$/m)[1] || '').split(/^\[/m)[0];
-      let exe = ((sec.match(/^versionSelected=(.*)$/m) || [])[1] || '').trim().replace(/^"(.*)"$/, '$1');
-      let list = []; try { list = JSON.parse(fs.readFileSync(path.join(d, 'versions.json'), 'utf8')); } catch {}
-      if (!Array.isArray(list)) list = [];
-      if (!exe || !exists(exe)) exe = list.filter((v) => v && v.path && exists(v.path)).sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')))[0]?.path || '';
-      if (!exe || !exists(exe)) continue;
-      const v = list.find((x) => x && x.path === exe);
-      return { exe, name: v?.name || path.basename(path.dirname(exe)) };
-    }
-    return null;
   }
   // SRM parsers whose ROM folder (or title) is this console, with SRM's variables turned into ours
   function srmFor(key) {
@@ -502,11 +478,21 @@ module.exports = function createSteamManager(ctx) {
   // every AppImage of an emulator that was found (PCSX2's patches.zip is read from inside it)
   const appImagesFor = (key, re) => [...new Set([...candidates(key).map((c) => c.t.exe), ...APP_DIRS().flatMap((d) => ls(d).map((n) => path.join(d, n)))].filter((f) => /\.appimage$/i.test(f) && re.test(path.basename(f)) && exists(f)))];
   const rpcs3Command = () => emuCommand('ps3', /rpcs3/i);
-  const vita3kCommand = () => emuCommand('psvita', /vita3k/i);
+  // Installing into Vita3K needs Vita3K itself, never EmuDeck's vita3k.sh: that script always runs
+  // "Vita3K -Fr <arguments>", so "--pkg ..." or a .vpk became the game to boot and nothing installed
+  // (0.9.3 L). EmuDeck keeps the real program at <Applications>/Vita3K/Vita3K (an AppImage without
+  // the extension; EmuDeck's emuDeckVita3K.sh).
+  function vita3kCommand() {
+    const direct = candidates('psvita').find((c) => !c.fork && /vita3k/i.test(c.t.exe) && c.t.how !== 'emudeck');
+    if (direct) return { exe: direct.t.exe, args: [], from: direct.t.from };
+    const own = [...new Set([HOME, real(HOME)])]
+      .flatMap((h) => [path.join(h, 'Applications/Vita3K/Vita3K'), path.join(h, 'Applications/Vita3K/Vita3K.AppImage')]).find(exists);
+    return own ? { exe: own, args: [], from: 'EmuDeck Vita3K' } : null;
+  }
   function serialOf(rom, p) {
-    const tag = String(rom.fs_name || '') + ' ' + String(rom.name || '');
-    const m = tag.match(/\b([A-Z]{4}\d{5})\b/);
-    if (m) return m[1];
+    const tag = String(rom.fs_name || '') + ' ' + String(rom.name || '') + ' ' + path.basename(p || '');
+    const m = tag.match(/\b([A-Z]{4})-?(\d{5})\b/); // "BLUS30443" or "BLUS-30443" in a name
+    if (m) return m[1] + m[2];
     // a folder game: PS3_GAME/PARAM.SFO holds the serial
     // (also one folder down: a download folder holding the game folder)
     const sfos = [path.join(p, 'PS3_GAME', 'PARAM.SFO'), path.join(p, 'PARAM.SFO'), path.join(p, 'sce_sys', 'param.sfo')];
@@ -664,20 +650,21 @@ module.exports = function createSteamManager(ctx) {
     if (pick) { const c = candidates(key).find((x) => x.id === pick); if (c) return { ...c.t, emu: c.id, perGame: true }; }
     return templateFor(key);
   }
-  // shadPS4 and its Qt launcher read their settings, keys, chosen version and patches from a folder
-  // named "user" in the folder they start in, else from ~/.local/share/shadPS4 (shadPS4's
-  // common/path_util.cpp; the launcher starts the emulator in its own working folder). shadPS4's own
-  // Steam shortcuts start inside the AppImage's own temporary mount (Start in /tmp/.mount_..., seen on
-  // the owner's device), never next to the AppImage. Cartridge's started next to it and games only
-  // started sometimes (A10). So never start there, unless a "user" folder there is the only shadPS4
-  // data (a portable install).
+  // shadPS4 (owner's finding, A10): its own Steam shortcuts always start; Cartridge's, with the same
+  // Target and Launch options, often showed a black screen and closed. The one difference is Start in.
+  // The Qt launcher writes StartDir = QFileInfo(QCoreApplication::applicationFilePath()).absolutePath()
+  // (qtlauncher create_steam_shortcut.cpp), which for an AppImage is its temporary mount
+  // (/tmp/.mount_XXXX/usr/bin). That folder is gone as soon as the launcher closes, so every launch from
+  // Steam starts with a Start in that doesn't exist, and Steam starts the program without entering it.
+  // Cartridge does exactly the same (0.9.3 L): a mount-style folder that never exists. A portable install
+  // (a "user" folder next to the AppImage is its only shadPS4 data) keeps starting there.
+  const SHAD_START = '/tmp/.mount_shadPS4/usr/bin';
   function startOf(t) {
-    if (!t || !/shadps4/i.test(t.exe || '') || !t.start || t.how === 'shadcore') return t?.start;
+    if (!t || !/shadps4/i.test(t.exe || '') || !t.start || !/\.appimage$/i.test(t.exe)) return t?.start;
     const data = process.env.XDG_DATA_HOME || path.join(HOME, '.local/share');
     const portable = exists(path.join(t.start, 'user'));
     if (portable && !isDir(path.join(data, 'shadPS4')) && !isDir(path.join(HOME, '.local/share/shadPS4'))) return t.start;
-    for (const d of [path.join(data, 'shadPS4QtLauncher'), path.join(data, 'shadPS4'), HOME]) if (isDir(d) && !exists(path.join(d, 'user'))) return d;
-    return t.start;
+    return SHAD_START;
   }
   // what a shortcut was made with, to spot ones made before the console's setup changed
   // v2: arguments written into Target like Steam ROM Manager (0.7.11)
@@ -695,7 +682,7 @@ module.exports = function createSteamManager(ctx) {
   // (gamemoderun, mangohud) in front. Steam's Flatpak needs to be allowed to talk to Flatpak for it
   // (flatpakSteamAccess, offered in Settings → Emulators → Issues).
   const HOST_SPAWN = '/usr/bin/flatpak-spawn';
-  const hostLaunch = (exe, args, start, pre = []) => ({ target: q(HOST_SPAWN), launch: ['--host', start ? `--directory=${q(start)}` : '', ...pre.filter((x) => /^\w+=/.test(x)).map((x) => `--env=${x}`), ...pre.filter((x) => !/^\w+=/.test(x) && x !== '%command%'), q(exe), args].filter(Boolean).join(' ') });
+  const hostLaunch = (exe, args, start, pre = []) => ({ target: q(HOST_SPAWN), launch: ['--host', start && start !== SHAD_START ? `--directory=${q(start)}` : '', ...pre.filter((x) => /^\w+=/.test(x)).map((x) => `--env=${x}`), ...pre.filter((x) => !/^\w+=/.test(x) && x !== '%command%'), q(exe), args].filter(Boolean).join(' ') });
   const launchFor = (t, lo, args) => (FLATPAK_STEAM && !/\.exe$/i.test(t.exe) ? hostLaunch(t.exe, args, startOf(t), t.pre || []) : { target: q(t.exe), launch: (t.pre || []).length ? lo : args });
   function buildLaunch(rom, file, t) {
     const ref = gameRef(rom, file, t);
@@ -1326,8 +1313,10 @@ module.exports = function createSteamManager(ctx) {
         const g = byRom.get(r.romId);
         if (!g) p.issues.push({ kind: 'game', text: 'The game isn’t on this device any more.', fix: { label: 'Remove from Steam' } });
         else if (g.file && !exists(g.file)) p.issues.push({ kind: 'game', text: 'The game’s files are gone.', fix: { label: 'Remove from Steam' } });
-      } else if (l?.template?.sample && l.template.sample.startsWith('/') && !exists(l.template.sample)) {
-        p.issues.push({ kind: 'game', text: `The game file isn't at ${shortPath(l.template.sample)} any more.` });
+      } else if (l?.template?.sample && l.template.sample.startsWith('/') && !exists(l.template.sample) && (!l.template.romRoot || isDir(l.template.romRoot))) {
+        // a shortcut you (or an emulator, like shadPS4) made for a game that's gone: offer to remove it
+        // (0.9.3 L). Never while its drive isn't there (an SD card out): the ROMs folder must exist.
+        p.issues.push({ kind: 'game', text: `The game file isn't at ${shortPath(l.template.sample)} any more.`, fix: { label: 'Remove from Steam' } });
       }
       const core = (sc.lo.match(/-L\s+("?)([^"\s]+)\1/) || [])[2];
       if (core && core.includes('/') && !exists(core)) p.issues.push({ kind: 'core', text: `The RetroArch core ${path.basename(core)} is missing. Install it in RetroArch's Online Updater.` });
@@ -1364,7 +1353,7 @@ module.exports = function createSteamManager(ctx) {
             try { if ((await live.updateShortcut(sc.appid, { exe: exeRaw, start: q(to.start), lo: sc.loRaw })) === 'ok') { if (r) Object.assign(r, { exe: to.exe, emuExe: to.exe, inPlace: Date.now() }); fixed++; continue; } } catch (e) { log('health relink', e.message); }
           }
           if (r) { refreshKeys.add(p.console); r.sig = 'moved'; queued++; } else left.push(p.name);
-        } else if (is.kind === 'game' && is.fix && reg[p.appid]) { queueRemove([p.appid]); queued++; }
+        } else if (is.kind === 'game' && is.fix) { queueRemove([p.appid]); queued++; } // only when you pick it in Shortcut health
         else if (is.kind === 'outdated') { refreshKeys.add(p.console); }
       }
     }
@@ -1531,7 +1520,7 @@ module.exports = function createSteamManager(ctx) {
     gameEmu: (romId) => (cfg().gameEmus || {})[romId] || null,
     addedAt: (romId) => Math.min(...Object.values(reg).filter((r) => r.romId === romId && r.at).map((r) => r.at), Infinity),
     // exposed for tests
-    _learnOne: learnOne, _tokenize: tokenize, _buildLaunch: buildLaunch, _learnAll: learnAll, _readShortcuts: () => { const e = environment(); return e.account ? readShortcuts(e.account) : []; }, _candidates: candidates, appImagesFor, flatpakSteamAccess, _hostLaunch: hostLaunch, _startOf: startOf, _templateFor: templateFor, _templateForGame: templateForGame,
+    _learnOne: learnOne, _tokenize: tokenize, _buildLaunch: buildLaunch, _learnAll: learnAll, _readShortcuts: () => { const e = environment(); return e.account ? readShortcuts(e.account) : []; }, _candidates: candidates, appImagesFor, serialOf, flatpakSteamAccess, _hostLaunch: hostLaunch, _startOf: startOf, _templateFor: templateFor, _templateForGame: templateForGame,
   };
   return api;
 };

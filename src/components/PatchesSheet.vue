@@ -4,7 +4,8 @@
       <div>
         <div class="eyebrow">Patches · {{ emuName }}</div>
         <h2>{{ name }}</h2>
-        <div class="muted small">{{ serial }}{{ version ? ' · version ' + version : '' }} · Patches you turn on here stay on in {{ emuName }}, as if you ticked them there.</div>
+        <div class="muted small">{{ [serial, version ? (emuName === 'PCSX2' ? 'CRC ' : 'version ') + version : ''].filter(Boolean).join(' · ') }}</div>
+        <div class="muted small">Patches you turn on here stay on in {{ emuName }}, as if you ticked them there.</div>
       </div>
       <div v-if="!list.length" class="muted" style="padding: 12px 2px">{{ why || `${emuName} has no patches for this game.` }}</div>
       <div v-else class="pt-list" data-scroll>

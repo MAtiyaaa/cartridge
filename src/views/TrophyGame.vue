@@ -37,7 +37,7 @@
               <span v-if="t.points" class="pts">{{ t.points }} G</span>
               <span v-if="t.unlocked">Unlocked {{ t.time ? new Date(t.time).toLocaleDateString() : '' }}</span>
               <span v-else>Locked</span>
-              <span v-if="t.unlocked && t.device && t.device !== device" class="dev"><Icon name="mdiDevices" :size="13" />{{ t.device }}</span>
+              <span v-if="t.unlocked && t.device && t.device !== device" class="dev"><Icon name="mdiDevices" :size="13" />on {{ t.device }}</span>
             </div>
           </div>
         </div>

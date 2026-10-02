@@ -70,7 +70,7 @@
               <button v-for="(i, n) in issues" :key="n" class="lrow" data-focus @click="fixIssue(i)">
                 <Icon :name="ISSUE_ICON[i.kind] || 'mdiAlertCircleOutline'" :size="24" style="color: #ffd978" />
                 <div class="l-mid"><b>{{ i.text }}</b><span v-if="i.sub" class="l-sub">{{ i.sub }}</span></div>
-                <span class="l-end"><Btn b="A" />{{ { collections: 'Put them back', health: 'Shortcut health', setup: 'Emulator setup', romm: 'RomM settings', fpsteam: 'Allow' }[i.fix] }}</span>
+                <span class="l-end"><Btn b="A" />{{ { collections: 'See them', health: 'Shortcut health', setup: 'Emulator setup', romm: 'RomM settings', fpsteam: 'Allow' }[i.fix] }}</span>
               </button>
             </div>
             <div class="stack">
@@ -326,20 +326,33 @@
 
           <template v-else-if="sec === 'steam'">
             <h1>Steam</h1>
-            <SteamSettings />
-            <div class="subh" style="margin-top: 10px"><Icon name="mdiApplicationOutline" :size="20" />Cartridge</div>
-            <div class="about glass">
+            <!-- not in Steam yet: adding Cartridge comes first; once added it moves to the bottom (0.9.3 L) -->
+            <div v-if="selfAdded === false" class="about glass">
               <img src="../../steam-art/grid.png" class="steam-grid" />
               <div style="display: flex; flex-direction: column; gap: 10px">
                 <div style="font-family: var(--display); font-size: 22px; font-weight: 700">Add Cartridge to Game Mode</div>
                 <div class="muted small">Creates a Steam shortcut for this AppImage with the Cartridge cover, banner, logo and icon, so it sits in your library like any other game. Steam closes and reopens to pick it up, so do this from Desktop Mode.</div>
                 <div class="row wrap">
                   <button class="btn primary" data-focus @click="addToSteam"><Icon name="mdiSteam" />Add to Steam</button>
-                  <button class="btn" data-focus @click="applyArt"><Icon name="mdiImageFrame" />Refresh artwork only</button>
                 </div>
               </div>
             </div>
-            <p class="muted small">Added before 0.2.1? Press Add to Steam once more: Steam now starts Cartridge through a launch script that makes it open reliably, and logs each launch to ~/.config/Cartridge/steam-launch.log. Keep the AppImage where it is; if you move it, add it again.</p>
+            <SteamSettings />
+            <template v-if="selfAdded">
+            <div class="subh" style="margin-top: 10px">Cartridge</div>
+            <div class="about glass">
+              <img src="../../steam-art/grid.png" class="steam-grid" />
+              <div style="display: flex; flex-direction: column; gap: 10px">
+                <div style="font-family: var(--display); font-size: 22px; font-weight: 700">Cartridge is in Steam</div>
+                <span class="status ok" style="align-self: flex-start"><Icon name="mdiCheck" :size="14" />Added to Steam</span>
+                <div class="row wrap">
+                  <button class="btn" data-focus @click="addToSteam"><Icon name="mdiSteam" />Add Again</button>
+                  <button class="btn" data-focus @click="applyArt"><Icon name="mdiImageFrame" />Refresh Artwork Only</button>
+                </div>
+              </div>
+            </div>
+            <p class="muted small">Moved the AppImage? Press Add Again so Steam starts it from where it is now.</p>
+            </template>
           </template>
 
           <template v-else>
@@ -377,8 +390,8 @@ import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import { store, call, go, tab, saveConfig, pickFolder, choose, confirm, toast, openModal, bytes, ago, resync, scanServer, allRoms, resetLogos, askText, activeTabs, TAB_DEFS } from '../store.js';
 import { useView } from '../useView.js';
 import { input, focusFirst, setPointerPref, setRumble, rumble } from '../nav.js';
-import { THEMES, SURFACES, TEXTS, FONTS, CARD_SHAPES, CARD_SIZES, DENSITIES, themeFrom, themeOf } from '../themes.js';
-import { BACKGROUNDS } from '../bgRenderers.js';
+import { THEMES, SURFACES, TEXTS, FONTS, CARD_SHAPES, CARD_SIZES, DENSITIES, themeFrom, themeOf, paletteOf } from '../themes.js';
+import { BACKGROUNDS, RENDERERS, bgPreview } from '../bgRenderers.js';
 import { setSoundEnabled, setSoundStyle, previewSound, SOUND_PACKS } from '../sfx.js';
 import Icon from '../components/Icon.vue';
 import Logo from '../components/Logo.vue';
@@ -499,7 +512,9 @@ const bgNow = computed(() => BACKGROUNDS.find((b) => b.v === (ui.value.bgStyle |
 const BG_ICON = { Theme: 'mdiWaves', Consoles: 'mdiGamepadVariantOutline', Other: 'mdiImageOutline' };
 async function pickBg() {
   let last = '';
-  const options = BACKGROUNDS.map((b) => { const o = { label: b.l, sub: b.sub, value: b.v, icon: BG_ICON[b.group], selected: bgNow.value.v === b.v, heading: b.group !== last ? { Theme: 'Your theme colours', Consoles: 'Consoles', Other: 'Other' }[b.group] : '' }; last = b.group; return o; });
+  const pal = paletteOf(ui.value);
+  // a picture of each animated one (0.9.3 L); still, artwork and wallpaper keep their icon
+  const options = BACKGROUNDS.map((b) => { const o = { label: b.l, sub: b.sub, value: b.v, icon: BG_ICON[b.group], img: RENDERERS[b.v] ? bgPreview(b.v, pal) : '', selected: bgNow.value.v === b.v, heading: b.group !== last ? { Theme: 'Your theme colours', Consoles: 'Consoles', Other: 'Other' }[b.group] : '' }; last = b.group; return o; });
   const v = await choose({ title: 'Background', options });
   if (v) await setBg(v);
 }
@@ -627,7 +642,12 @@ async function fixIssue(i) {
     try { await call('setup:steamFlatpakAllow'); toast('Allowed. Restart Steam to use it.', 'ok', 3500, 'mdiCheck'); loadIssues(); } catch (e) { toast(e.message, 'error', 6000); }
     return;
   }
-  if (!(await confirm('Put them back?', 'Steam closes for a moment while its collections are written.', 'Put them back'))) return;
+  // which games first, then put them back (0.9.3 L): the list, with the action on top
+  const v = await choose({ sheet: true, title: i.text, message: 'Steam closes for a moment while its collections are written.', options: [
+    { label: 'Put them back', value: 'fix', icon: 'mdiFolderSyncOutline' },
+    ...(i.items || []).map((g) => ({ label: g.name, sub: g.collection, value: null, icon: 'mdiGamepadVariantOutline', raw: true })),
+  ] });
+  if (v !== 'fix') return;
   try { await call('steam:fixCollections'); toast('Putting them back in their collections', 'ok', 3000, 'mdiSteam'); loadIssues(); } catch (e) { toast(e.message, 'error'); }
 }
 watch(sec, (v) => { store.settingsSection = v; if (v === 'emu') loadIssues(); }, { immediate: true });
@@ -713,6 +733,7 @@ async function addToSteam() {
     toast(st.running ? 'Closing Steam…' : 'Adding to Steam…', 'info', 3000, 'mdiSteam');
     const r = await call('steam:add', { restartSteam: true });
     toast(`Added to Steam${r.added.length > 1 ? ` for ${r.added.length} accounts` : ''} with artwork${r.restarted ? '. Steam is reopening.' : '. Open Steam to see it.'}`, 'ok', 6000, 'mdiSteam');
+    loadSelf();
   } catch (e) { toast(e.message, 'error', 6000); }
 }
 const updText = computed(() => {
@@ -727,6 +748,10 @@ async function setGraphics(v) {
   await saveConfig({ graphics: v });
   if (await confirm('Restart Cartridge?', 'The rendering change takes effect after a restart.', 'Restart now')) call('app:relaunch');
 }
+// is Cartridge itself in Steam (null until known)
+const selfAdded = ref(null);
+async function loadSelf() { try { selfAdded.value = !!(await call('steam:status')).added; } catch { selfAdded.value = false; } }
+watch(sec, (v) => { if (v === 'steam') loadSelf(); }, { immediate: true });
 async function applyArt() {
   try { const r = await call('steam:applyArt'); toast(`Artwork applied to ${r.length} Steam shortcut${r.length > 1 ? 's' : ''}. Restart Steam to see it.`, 'ok', 5000, 'mdiImageFrame'); }
   catch (e) { toast(e.message, 'error', 5000); }
@@ -734,6 +759,18 @@ async function applyArt() {
 async function clearCache() { await call('app:clearCache'); toast('Image cache cleared', 'ok', 2000); }
 
 onMounted(async () => { space.value = await call('fs:space', store.config.romsRoot); });
+// Back from a screen opened here (Emulator setup, Shortcut health...) lands on the row you opened it
+// from (store.go remembers it), not the section in the left list (0.9.3 L). The row is found again by
+// its text, as lists above it (Issues) load later and move it.
+onMounted(() => {
+  const spot = store.settingsSpot;
+  if (!spot || spot.sec !== sec.value) return;
+  store.settingsSpot = null;
+  for (const t of [0, 200, 600]) setTimeout(() => {
+    const hit = [...(paneEl.value?.querySelectorAll('[data-focus]') || [])].find((x) => (x.textContent || '').trim().slice(0, 60) === spot.text);
+    if (hit && document.activeElement !== hit) { hit.focus({ preventScroll: true }); hit.scrollIntoView({ block: 'nearest' }); }
+  }, t);
+});
 </script>
 
 <style scoped>
