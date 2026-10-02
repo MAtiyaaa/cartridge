@@ -119,3 +119,25 @@ test('Flatpak Steam: a flatpak-spawn shortcut reads back as the emulator, its fo
   const out = JSON.parse(execFileSync(process.execPath, ['-e', code], { env: { ...process.env, HOME: H }, encoding: 'utf8' }).trim().split('\n').pop());
   assert.deepStrictEqual(out, [['/home/u/Apps/Cemu.AppImage', '/home/u/Apps', 'vblank_mode=0 gamemoderun %command% -f -g "/roms/wiiu/Game.rpx"', true]]);
 });
+
+// J13: Shortcut health finds a shortcut whose emulator moved and offers the copy that is there now
+test('Shortcut health: emulator moved, and the fix points at the one installed now', () => {
+  // its own temp folder: a path with "cartridge" in it reads as Cartridge's own shortcut
+  const H = fs.mkdtempSync(path.join(os.tmpdir(), 'cs-health-'));
+  test.after(() => fs.rmSync(H, { recursive: true, force: true }));
+  const cfg = path.join(H, '.local/share/Steam/userdata/123/config');
+  for (const d of [cfg, H + '/cfg', H + '/Applications', H + '/roms/ps2']) fs.mkdirSync(d, { recursive: true });
+  fs.writeFileSync(path.join(H, 'Applications/pcsx2-v2.2.0-linux-appimage-x64-Qt.AppImage'), '');
+  fs.writeFileSync(path.join(H, 'roms/ps2/Game.iso'), '');
+  const { writeVdf } = require('../electron/steamArt.js');
+  fs.writeFileSync(path.join(cfg, 'shortcuts.vdf'), writeVdf({ shortcuts: { 0: { appid: 7, AppName: 'Game', Exe: `"${H}/Old/pcsx2-v1.7.0.AppImage"`, StartDir: `"${H}/Old"`, LaunchOptions: `-batch -fullscreen "${H}/roms/ps2/Game.iso"` } } }));
+  const code = `
+    const sm = require(${JSON.stringify(path.join(ROOT, 'electron/steamManager.js'))})({ USER_DATA: ${JSON.stringify(H + '/cfg')}, log() {}, PLATFORM_MAP: { ps2: ['ps2'] }, getConfig: () => ({}), saveConfig() {}, broadcast() {},
+      emulationRoots: () => [], getLibrary: () => null, installed: () => ({}), romById: () => null, isGamescope: () => false, artFor: () => ({}), MARKED: 'm', markedPath: () => null });
+    const h = sm.health();
+    console.log(JSON.stringify(h.problems.map((p) => [p.name, p.issues.map((i) => [i.kind, i.fix && i.fix.to])])));`;
+  const out = JSON.parse(execFileSync(process.execPath, ['-e', code], { env: { ...process.env, HOME: H, XDG_DATA_HOME: '' }, encoding: 'utf8' }).trim().split('\n').pop());
+  assert.strictEqual(out.length, 1);
+  assert.strictEqual(out[0][1][0][0], 'emulator');
+  assert.match(out[0][1][0][1] || '', /pcsx2-v2\.2\.0/);
+});
