@@ -327,4 +327,31 @@ function pcsx2Set(dir, game, changes, mine = {}) {
   return rec;
 }
 
-module.exports = { parseSfo, sfoAt, rpcs3Dirs, ps3Version, rpcs3List, rpcs3Set, shadDirs, ps4Version, shadList, shadSet, load, dump, pcsx2Dirs, pcsx2GameList, pcsx2Game, pcsx2ZipSources, pcsx2ZipBuffer, pnachList, pcsx2List, pcsx2Set, crcHex };
+// ---------------------------------------------------------------- RPCS3 settings from its database
+// RPCS3 keeps per-game settings that work, published at api.rpcs3.net/config/?api=v1 as
+// { return_code, games: { <SERIAL>: { config: "<yml>" } } } and cached in GuiConfigs/config_database.dat
+// (rpcs3qt/config_database.cpp). "Create Custom Configuration From Database Settings" lays that over
+// the global settings as config/custom_configs/config_<SERIAL>.yml (Emu/system_utils.cpp). Cartridge
+// writes the same file when a PS3 game arrives (0.9.3 L), only when the game has none yet; mine
+// records the ones it wrote, the only ones it may remove.
+function rpcs3DbFromText(text, serial) {
+  let j; try { j = JSON.parse(text); } catch { return null; }
+  const c = j && j.games && j.games[serial] && j.games[serial].config;
+  return typeof c === 'string' && c.trim() ? c : null;
+}
+function rpcs3CustomPath(dir, serial) { return path.join(dir.root, 'config', 'custom_configs', `config_${serial}.yml`); }
+function rpcs3DbCached(dir) { try { return fs.readFileSync(path.join(dir.root, 'GuiConfigs', 'config_database.dat'), 'utf8'); } catch { return null; } }
+// returns 'written', 'exists' (the game has its own settings already) or 'none' (not in the database)
+function rpcs3ApplyDb(dir, serial, dbText, mine = {}) {
+  if (!/^[A-Z]{4}\d{5}$/.test(serial || '')) return { result: 'none', mine };
+  const f = rpcs3CustomPath(dir, serial);
+  if (exists(f)) return { result: 'exists', mine };
+  const cfg = rpcs3DbFromText(dbText, serial);
+  if (!cfg) return { result: 'none', mine };
+  load(cfg); // must be valid YAML, as RPCS3 checks before using it
+  fs.mkdirSync(path.dirname(f), { recursive: true });
+  fs.writeFileSync(f + '.tmp', cfg.endsWith('\n') ? cfg : cfg + '\n'); fs.renameSync(f + '.tmp', f);
+  return { result: 'written', mine: { ...mine, [serial]: { at: Date.now(), file: f } } };
+}
+
+module.exports = { rpcs3DbFromText, rpcs3CustomPath, rpcs3DbCached, rpcs3ApplyDb, parseSfo, sfoAt, rpcs3Dirs, ps3Version, rpcs3List, rpcs3Set, shadDirs, ps4Version, shadList, shadSet, load, dump, pcsx2Dirs, pcsx2GameList, pcsx2Game, pcsx2ZipSources, pcsx2ZipBuffer, pnachList, pcsx2List, pcsx2Set, crcHex };

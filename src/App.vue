@@ -220,6 +220,7 @@ onMounted(async () => {
   call('app:startGame').then(openGame).catch(() => {});
   window.cart.on('open-game', openGame);
   window.cart.on('background', (b) => setBackground(b?.away));
+  window.cart.on('toast', (t) => t?.text && toast(t.text, t.kind || 'info', 4500, t.icon));
   setTimeout(steamReport, 2500);
   // 0.9: a new install goes through emulator Setup once, after connecting to RomM
   if (store.config.configured && !store.config.setupDone) go('emu-setup', { first: true });

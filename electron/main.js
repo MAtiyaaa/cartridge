@@ -1446,6 +1446,7 @@ async function runJob(it) {
     // a re-download (library check): the new copy is in, so the old one kept aside goes
     if (it.backup) { await fsp.rm(it.backup, { recursive: true, force: true }).catch(() => {}); it.backup = null; }
     // a re-download is the same game as before: Steam already has it, so no automatic add
+    if (!it.redo && it.notice !== 'pkg') rpcs3Settings(rom.id);
     if (!it.redo && it.notice !== 'pkg') try { if (steamMgr.onDownloaded(rom.id)) broadcast('steam-auto', { romId: rom.id, name: rom.name, action: 'add' }); } catch (e) { log('steam auto add', e.message); }
   } catch (e) {
     // stopped on purpose: keep a status set since (paused, or queued again by Resume)
@@ -1648,7 +1649,34 @@ async function installPkg(romId, zrif) {
 
 // Once installed, its Steam shortcut can start it: one Cartridge added is updated to start it from
 // the emulator; otherwise it's added when Add automatically is on (it was held back at download)
+// RPCS3's database settings for a PS3 game that just arrived (0.9.3 L, patches.js rpcs3ApplyDb).
+// RPCS3's own cached database first, else the same address it downloads from (kept a week here).
+const RPCS3_DB_FILE = path.join(USER_DATA, 'rpcs3-config-db.json'), RPCS3_CFG_FILE = path.join(USER_DATA, 'rpcs3-configs.json');
+let rpcs3Cfgs = (() => { try { return JSON.parse(fs.readFileSync(RPCS3_CFG_FILE, 'utf8')); } catch { return {}; } })();
+async function rpcs3DbText(dir) {
+  const own = patchesMod.rpcs3DbCached(dir);
+  if (own) return own;
+  try { const st = fs.statSync(RPCS3_DB_FILE); if (Date.now() - st.mtimeMs < 7 * 864e5) return fs.readFileSync(RPCS3_DB_FILE, 'utf8'); } catch {}
+  const r = await fetch('https://api.rpcs3.net/config/?api=v1', { signal: AbortSignal.timeout(20000) });
+  if (!r.ok) throw new Error(`RPCS3 database: HTTP ${r.status}`);
+  const t = await r.text();
+  await fsp.writeFile(RPCS3_DB_FILE, t).catch(() => {});
+  return t;
+}
+async function rpcs3Settings(romId) {
+  const r = romIndexMain().get(Number(romId));
+  if (!/ps3/i.test(`${r?.platform_slug} ${r?.platform_fs_slug}`) || config.steam?.rpcs3Db === false) return null;
+  const dir = patchesMod.rpcs3Dirs()[0];
+  const serial = ps3Serial(romId, installedMap[romId]);
+  if (!dir || !serial) return null;
+  try {
+    const { result, mine } = patchesMod.rpcs3ApplyDb(dir, serial, await rpcs3DbText(dir), rpcs3Cfgs);
+    if (result === 'written') { rpcs3Cfgs = mine; saveJson(RPCS3_CFG_FILE, rpcs3Cfgs); log('rpcs3 database settings', serial); broadcast('toast', { text: `${r.name}: RPCS3's recommended settings are set for this game`, kind: 'ok', icon: 'mdiTuneVariant' }); }
+    return result;
+  } catch (e) { log('rpcs3 database settings', e.message); return null; }
+}
 function afterInstall(romId) {
+  rpcs3Settings(romId);
   try {
     const st = steamMgr.forRom(romId);
     if (st.inSteam && st.ours) steamMgr.refreshGame(romId, { force: true }).then((r) => { if (r?.count && !r.fixed) broadcast('steam-auto', { romId, action: 'add' }); }).catch((e) => log('steam after install', e.message));

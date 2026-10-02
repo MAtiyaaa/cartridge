@@ -208,3 +208,17 @@ test('PCSX2: a game without settings gets a new file with just the patch', async
   P.pcsx2Set(dir, game, [{ ...l[1], on: true }], {});
   assert.strictEqual(fs.readFileSync(ini, 'utf8'), '[Patches]\nEnable = Widescreen 16:9\n');
 });
+
+// ---------------------------------------------------------------- RPCS3 database settings (0.9.3 L)
+test('RPCS3 database: writes the game\'s settings once, never over its own', () => {
+  const root = path.join(TMP, 'rpcs3db');
+  fs.mkdirSync(path.join(root, 'config'), { recursive: true });
+  const dir = { root };
+  const DB = JSON.stringify({ return_code: 0, games: { BLUS30443: { config: 'Core:\n  SPU Block Size: Mega\n' } } });
+  const a = P.rpcs3ApplyDb(dir, 'BLUS30443', DB, {});
+  assert.strictEqual(a.result, 'written');
+  assert.strictEqual(fs.readFileSync(path.join(root, 'config/custom_configs/config_BLUS30443.yml'), 'utf8'), 'Core:\n  SPU Block Size: Mega\n');
+  assert.ok(a.mine.BLUS30443);
+  assert.strictEqual(P.rpcs3ApplyDb(dir, 'BLUS30443', DB, a.mine).result, 'exists');
+  assert.strictEqual(P.rpcs3ApplyDb(dir, 'BCUS98137', DB, {}).result, 'none');
+});
