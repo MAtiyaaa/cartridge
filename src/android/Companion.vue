@@ -227,7 +227,7 @@ watch(() => rom.value?.id, (id) => {
   clearTimeout(detailT);
   if (!id || details.has(id)) return;
   detailT = setTimeout(async () => {
-    try { const d = await call('api:get', { path: `/api/roms/${id}` }); details.set(id, d); if (rom.value?.id === id) detail.value = d; } catch {}
+    try { const d = await call('rom:detail', { romId: id }); details.set(id, d); if (rom.value?.id === id) detail.value = d; } catch {}
   }, 350); // wait until the highlight settles so scrolling the top screen doesn't flood the server
 });
 const info = computed(() => {

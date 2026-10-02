@@ -199,7 +199,7 @@
             <div class="row"><span class="lbl">Box art size</span><div class="seg"><button v-for="(v, k) in CARD_SIZES" :key="k" data-focus :class="{ on: (ui.gridSize || 'md') === k }" @click="saveConfig({ ui: { gridSize: k } })">{{ v.label }}</button></div></div>
             <Toggle :model-value="ui.cardTitles !== false" label="Game names under box art" desc="Turn off for a clean wall of covers" @update:model-value="(v) => saveConfig({ ui: { cardTitles: v } })" />
             <Toggle :model-value="ui.mediaBar !== false" label="Media bar" desc="Show artwork of the highlighted game at the top of Home" @update:model-value="(v) => saveConfig({ ui: { mediaBar: v } })" />
-            <div v-if="ui.mediaBar !== false" class="row"><span class="lbl">Media bar size</span><div class="seg"><button v-for="m in mediaSizes" :key="m.v" data-focus :class="{ on: (ui.mediaSize || 'large') === m.v }" @click="saveConfig({ ui: { mediaSize: m.v } })">{{ m.l }}</button></div></div>
+            <div v-if="ui.mediaBar !== false" class="row"><span class="lbl">Media bar size</span><div class="seg"><button v-for="m in mediaSizes" :key="m.v" data-focus :class="{ on: (ui.mediaSize || MEDIA_DEFAULT) === m.v }" @click="saveConfig({ ui: { mediaSize: m.v } })">{{ m.l }}</button></div></div>
             <Toggle :model-value="ui.logos !== false" label="Game logos" desc="Show the game's logo instead of its name on Home and game pages" @update:model-value="(v) => saveConfig({ ui: { logos: v } })" />
             <button class="lrow adv-tg" data-focus @click="lookAdv = !lookAdv"><Icon name="mdiTuneVariant" :size="22" /><div class="l-mid"><b>Advanced</b></div><Icon :name="lookAdv ? 'mdiChevronUp' : 'mdiChevronDown'" :size="22" /></button>
             <template v-if="lookAdv">
@@ -435,7 +435,7 @@
 
 <script setup>
 import { computed, defineAsyncComponent, nextTick, onMounted, ref, watch } from 'vue';
-import { store, call, go, tab, saveConfig, pickFolder, choose, confirm, toast, openModal, bytes, ago, resync, scanServer, allRoms, resetLogos, askText, activeTabs, TAB_DEFS, consoleName } from '../store.js';
+import { store, call, go, tab, saveConfig, pickFolder, choose, confirm, toast, openModal, bytes, ago, resync, scanServer, allRoms, resetLogos, askText, activeTabs, TAB_DEFS, consoleName, MEDIA_DEFAULT } from '../store.js';
 import { useView } from '../useView.js';
 import { input, focusFirst, setPointerPref, setRumble, rumble } from '../nav.js';
 import { THEMES, SURFACES, TEXTS, FONTS, CARD_SHAPES, CARD_SIZES, DENSITIES, themeFrom, themeOf, paletteOf } from '../themes.js';

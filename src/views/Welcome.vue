@@ -359,7 +359,9 @@ async function leave() {
 }
 async function load() { try { st.value = await call('welcome:state'); } catch {} }
 
-const handlers = { back: () => { if (step.value === 'romm' && romm.value) { romm.value = romm.value === 'other' || romm.value === 'local' ? 'what' : ''; return; } if (at.value > 0) prev(); } };
+// On the controller check any face button counts: some pads (and Android's button layouts) send B for the
+// button marked A, and going back from here looked like the check failed
+const handlers = { back: () => { if (step.value === 'pad' && input.mode === 'pad') return padPress(); if (step.value === 'romm' && romm.value) { romm.value = romm.value === 'other' || romm.value === 'local' ? 'what' : ''; return; } if (at.value > 0) prev(); } };
 useView(handlers, [{ b: 'A', label: 'Select' }, { b: 'B', label: 'Back' }]);
 // Setup and the scan bring their own buttons; the welcome's come back after them
 watch([step, romm], async () => {

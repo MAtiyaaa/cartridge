@@ -606,6 +606,26 @@ function publicLibrary() {
   };
 }
 
+// Games that are one file inside a folder on RomM: installed detection needs that file's name. Kept from
+// the last sync when the game didn't change, else asked for, four at a time.
+async function nestedFiles(list, ids, prev) {
+  if (!ids.length) return;
+  const byId = new Map(list.map((r) => [r.id, r]));
+  const old = new Map((prev || []).map((r) => [r.id, r]));
+  const todo = [];
+  for (const id of ids) {
+    const r = byId.get(id), o = old.get(id);
+    if (!r) continue;
+    if (o?.files?.length === 1 && o.fs_name === r.fs_name) r.files = o.files;
+    else todo.push(r);
+  }
+  for (let k = 0; k < todo.length; k += 4) {
+    await Promise.all(todo.slice(k, k + 4).map(async (r) => {
+      try { const f = ((await api(`/api/roms/${r.id}`)).files || []).filter(Boolean); if (f.length === 1) r.files = [{ file_name: f[0].file_name }]; } catch {}
+    }));
+  }
+}
+
 function computeInstalled() {
   const out = {};
   if (!library) return out;
@@ -633,10 +653,14 @@ async function syncLibrary() {
       for (const p of withGames) {
         broadcast('sync', { state: 'running', label: p.display_name, done: i, total: withGames.length });
         const list = [];
-        // Pages of 500 games with their file lists. A console of extracted games (PS4, PS3, Switch folders
-        // with thousands of files each) makes a page RomM takes minutes to build: wait longer for those, and
-        // after a timeout ask for smaller pages from the same place instead of failing the whole sync.
-        let limit = 500, fails = 0, failed = null;
+        // Pages of 500 games, without their file lists (0.9.18): a console of extracted games (PS4, PS5, PS3,
+        // Switch folders with thousands of files each) made pages of hundreds of MB that RomM took minutes to
+        // build and Node then parsed on the thread that also answers the screens, so everything stalled.
+        // RomM 4 says per game whether it is one file, one file in a folder, or many; only the one-in-a-folder
+        // games need their file's name (filled in below). Older servers send files anyway, or are asked for them.
+        // After a timeout, smaller pages from the same place instead of failing the whole sync.
+        let limit = 500, fails = 0, failed = null, withFiles = false;
+        const nested = [];
         for (let offset = 0; ; ) {
           let page;
           try {
@@ -644,7 +668,7 @@ async function syncLibrary() {
               timeout: Number(process.env.CARTRIDGE_SYNC_TIMEOUT) || 120000, // env: tests
               query: {
                 platform_ids: p.id, platform_id: p.id, limit, offset, order_by: 'name', order_dir: 'asc',
-                with_char_index: false, with_filter_values: false, with_rom_id_index: false, with_files: true,
+                with_char_index: false, with_filter_values: false, with_rom_id_index: false, with_files: withFiles,
               },
             });
           } catch (e) {
@@ -662,13 +686,15 @@ async function syncLibrary() {
           }
           fails = 0;
           const items = Array.isArray(page) ? page : page.items || [];
+          if (!withFiles && items.length && !('has_multiple_files' in items[0]) && !Array.isArray(items[0].files)) { withFiles = true; continue; }
+          for (const r of items) if (r.has_nested_single_file && !r.has_multiple_files && !(r.files || []).length) nested.push(r.id);
           list.push(...items.map(slimRom));
           for (const r of items) if (manifest[r.id] && fuseStatus.keepMeta(bridgeMeta, r)) metaNew = true; // full text for the Fuse bridge
           offset += items.length;
           if (Array.isArray(page) || !items.length || items.length < limit || offset >= (page.total ?? 0)) break;
         }
         if (failed) { roms[p.id] = library?.roms?.[p.id] || list; skipped.push(p.display_name); } // keep the last good list
-        else roms[p.id] = list;
+        else { await nestedFiles(list, nested, library?.roms?.[p.id]); roms[p.id] = list; }
         i++;
       }
       if (skipped.length) broadcast('toast', { text: `Couldn't refresh ${skipped.join(', ')}: the server took too long. Kept what was there; try Refresh Library again later.`, kind: 'error', icon: 'mdiServerNetworkOff' });
@@ -843,7 +869,7 @@ async function handleImage(request) {
   }
   const hz = u.searchParams.get('hz');
   if (hz) {
-    try { return new Response(await fsp.readFile(path.join(HERO_DIR, path.basename(hz))), { headers: { 'Content-Type': 'image/png', 'Cache-Control': 'max-age=31536000' } }); } catch { return new Response('nf', { status: 404 }); }
+    try { const b = await fsp.readFile(path.join(HERO_DIR, path.basename(hz))); return new Response(b, { headers: { 'Content-Type': sniffType(b), 'Cache-Control': 'max-age=31536000' } }); } catch { return new Response('nf', { status: 404 }); }
   }
   const lf = u.searchParams.get('f');
   if (lf) {
@@ -868,6 +894,7 @@ async function handleImage(request) {
     return (await grid()) || new Response('err', { status: 502 });
   }
 }
+const sniffType = (b) => (b[0] === 0xff && b[1] === 0xd8 ? 'image/jpeg' : b[0] === 0x52 && b[8] === 0x57 ? 'image/webp' : 'image/png');
 // A proxy or tunnel can answer a missing image with a 200 page; that must never be kept as the image
 const isImageType = (t) => !/^(text\/|application\/(json|xml|xhtml))/i.test(String(t || ''));
 const imgCacheFile = (target) => path.join(IMG_CACHE, crypto.createHash('sha1').update(target).digest('hex'));
@@ -938,7 +965,23 @@ let logoSaveT = null;
 function saveLogoCache() { clearTimeout(logoSaveT); logoSaveT = setTimeout(() => { try { fs.writeFileSync(LOGO_FILE, JSON.stringify(logoCache)); } catch {} }, 500); }
 function saveArt() { try { fs.writeFileSync(ART_FILE, JSON.stringify(artOverrides, null, 1)); } catch {} }
 const logoInflight = new Map();
-let logoChain = Promise.resolve();
+// Logos are made two at a time, newest request first (0.9.18): the game you're looking at gets its logo
+// before the ones asked for while scrolling past, instead of waiting behind all of them in order
+const logoWait = [];
+let logoBusy = 0;
+function logoSlot(fn) {
+  return new Promise((resolve, reject) => {
+    logoWait.push(async () => { try { resolve(await fn()); } catch (e) { reject(e); } });
+    logoPump();
+  });
+}
+function logoPump() {
+  while (logoBusy < 2 && logoWait.length) {
+    const run = logoWait.pop();
+    logoBusy++;
+    run().finally(() => { logoBusy--; setImmediate(logoPump); });
+  }
+}
 const SGDB_BASE = () => process.env.CARTRIDGE_SGDB_BASE || 'https://www.steamgriddb.com/api/v2';
 async function sgdb(pathname) {
   const r = await fetch(SGDB_BASE() + pathname, { headers: { Authorization: 'Bearer ' + config.sgdbKey }, signal: AbortSignal.timeout(12000) });
@@ -992,7 +1035,10 @@ function prepareLogo(buf, key) {
   let im = nativeImage.createFromBuffer(buf);
   if (im.isEmpty()) return null;
   let { width: W, height: H } = im.getSize();
-  if (W > 900) { im = im.resize({ width: 900, quality: 'best' }); ({ width: W, height: H } = im.getSize()); }
+  // Android does this in plain JS on the thread that answers the screens: smaller is quicker, and its
+  // screens never show a logo wider than this
+  const maxW = onAndroid ? 640 : 900;
+  if (W > maxW) { im = im.resize({ width: maxW, quality: 'best' }); ({ width: W, height: H } = im.getSize()); }
   const px = im.toBitmap(); // BGRA
   let x0 = W, y0 = H, x1 = -1, y1 = -1, lum = 0, sat = 0, wsum = 0;
   for (let y = 0; y < H; y++) {
@@ -1043,7 +1089,7 @@ async function logoFor({ id, name, romm, retry }) {
   if (c && c.v === LOGO_VERSION && c.want === want && (c.file || (!retry && Date.now() - c.t < 3 * 864e5))) return logoPublic(c);
   if (want === 'sgdb' && !config.sgdbKey) return null;
   if (logoInflight.has(id)) return logoInflight.get(id);
-  const job = (logoChain = logoChain.then(async () => {
+  const job = logoSlot(async () => {
     let got = null;
     try {
       if (pick) got = prepareLogo(await fetchImage(pick), `${id}-p`);
@@ -1052,8 +1098,7 @@ async function logoFor({ id, name, romm, retry }) {
     } catch (e) { log('logo', name, e.message); if (e.auth) throw e; }
     logoCache[id] = { v: LOGO_VERSION, want, t: Date.now(), ...(got || {}) }; saveLogoCache();
     return logoPublic(logoCache[id]);
-  }));
-  logoChain = job.catch(() => {});
+  });
   logoInflight.set(id, job);
   try { return await job; } finally { logoInflight.delete(id); }
 }
@@ -1340,7 +1385,7 @@ async function sharpHero({ id, name }) {
   if (heroInflight.has(id)) return heroInflight.get(id);
   const job = (async () => {
     let png = null;
-    try { png = await sgdbImage(String(name).replace(/[™®©]/g, ''), 'hero'); } catch { return null; } // offline: try again later
+    try { png = await sgdbImage(String(name).replace(/[™®©]/g, ''), 'hero', undefined, { raw: onAndroid }); } catch { return null; } // offline: try again later
     const file = png ? `${String(id).replace(/[^\w-]/g, '')}.png` : null;
     if (png) { await fsp.mkdir(HERO_DIR, { recursive: true }); await fsp.writeFile(path.join(HERO_DIR, file), png); }
     heroCache[id] = { file, t: Date.now() };
@@ -2316,7 +2361,7 @@ function asPng(buf) {
   const im = nativeImage.createFromBuffer(buf);
   return im.isEmpty() ? null : im.toPNG();
 }
-async function sgdbImage(name, kind, style) {
+async function sgdbImage(name, kind, style, { raw = false } = {}) {
   if (!config.sgdbKey || !name) return null;
   const g = (await sgdbGames(name))[0];
   if (!g) return null;
@@ -2324,14 +2369,23 @@ async function sgdbImage(name, kind, style) {
   const st = style && (kind !== 'hero' || ['alternate', 'blurred', 'material'].includes(style)) ? `&styles=${style}` : '';
   const ep = kind === 'grid' ? `/grids/game/${g.id}?dimensions=600x900&types=static&nsfw=false&humor=false${st}`
     : kind === 'wide' ? `/grids/game/${g.id}?dimensions=920x430,460x215&types=static&nsfw=false&humor=false${st}`
-    : `/heroes/game/${g.id}?dimensions=3840x1240,1920x620&types=static&nsfw=false&humor=false${st}`;
+    : `/heroes/game/${g.id}?dimensions=${raw ? '1920x620,3840x1240' : '3840x1240,1920x620'}&types=static&nsfw=false&humor=false${st}`;
   let list = (await sgdb(ep)) || [];
   // backgrounds: the full-size ones first (small ones look soft on a TV), then by votes; only when
   // none come in those sizes, any big enough one
   if (kind === 'hero' && !list.length) list = ((await sgdb(`/heroes/game/${g.id}?types=static&nsfw=false&humor=false${st}`)) || []).filter((x) => !x.width || x.width >= 1600);
-  list.sort((a, b) => (kind === 'hero' ? (b.width || 0) - (a.width || 0) : 0) || (b.score || 0) - (a.score || 0));
+  // raw (Android's sharp backgrounds): its screens are 1080p at most, so 1920 wide is plenty and a third the size
+  list.sort((a, b) => (kind === 'hero' ? (raw ? Math.abs((a.width || 0) - 1920) - Math.abs((b.width || 0) - 1920) : (b.width || 0) - (a.width || 0)) : 0) || (b.score || 0) - (a.score || 0));
   // only take images of the right shape (a portrait cover is no use as a wide banner)
   const fits = (w, h) => (kind === 'grid' ? h > w : kind === 'wide' ? w > h * 1.6 : w > h * 1.4);
+  // raw: the file as SteamGridDB sends it, shape checked from its listed size. Decoding and re-encoding a
+  // 4K PNG in Android's plain-JS nativeImage held up the backend (and so both screens) for seconds
+  if (raw) {
+    for (const i of list.filter((x) => x.width && x.height && fits(x.width, x.height)).slice(0, 3)) {
+      try { const buf = await fetchImage(i.url); if (buf.length > 64) return buf; } catch {}
+    }
+    return null;
+  }
   for (const i of list.filter((x) => !x.width || fits(x.width, x.height)).slice(0, 3)) {
     try {
       const { nativeImage } = require('electron');
@@ -2936,6 +2990,21 @@ const handlers = {
   'server:reconnect': async () => ({ base: await resolveBase(true) }),
   'server:status': async () => ({ base: await resolveBase(), route: activeBase === trimUrl(config.server.localUrl) ? 'local' : 'remote' }),
   'api:get': ({ path: p, query }) => api(p, { query }),
+  // A game page's details (0.9.18). An extracted game (PS4, PS5, Switch folders) lists thousands of files,
+  // which the page only counts and groups into base game, updates and DLC: past 300, keep the ones that
+  // matter for that (categorised, in an update or DLC folder, or at the top of the game's folder).
+  'rom:detail': async ({ romId }) => {
+    const d = await api(`/api/roms/${Number(romId)}`);
+    const files = Array.isArray(d?.files) ? d.files : [];
+    d.file_count = files.length;
+    if (files.length > 300) {
+      const pre = (d.full_path || '') + '/';
+      const keep = (f) => { const c = String(f.category || '').toLowerCase(), rel = String(f.full_path || '').startsWith(pre) ? f.full_path.slice(pre.length) : f.file_name;
+        return (c && c !== 'game') || /(^|\/)(updates?|dlcs?|patch(es)?)\//i.test(rel) || !String(rel).includes('/'); };
+      d.files = files.filter(keep).slice(0, 300);
+    }
+    return d;
+  },
   'platforms:list': async () => {
     const list = await api('/api/platforms');
     return list.map((p) => ({ ...p, target: platformPath(p) }));
