@@ -1664,7 +1664,8 @@ function ps3Serial(romId, where) {
   if (installs[romId]?.serial) return installs[romId].serial;
   for (const f of [path.join(where || '', 'PS3_GAME', 'PARAM.SFO'), path.join(where || '', 'PARAM.SFO')]) { const s = patchesMod.sfoAt(f).TITLE_ID; if (s) return s; }
   const r = romIndexMain().get(Number(romId));
-  return (`${r?.fs_name || ''} ${r?.name || ''} ${path.basename(where || '')}`.match(/\b([A-Z]{4}\d{5})\b/) || [])[1] || null;
+  // disc games too (0.9.3 L): a folder with the game folder inside, an ISO (PS3_DISC.SFB), "BLUS-30443" names
+  try { return steamMgr.serialOf(r || {}, where || '') || null; } catch { return null; }
 }
 function patchState(romId) {
   const r = romIndexMain().get(Number(romId));
@@ -1674,7 +1675,7 @@ function patchState(romId) {
   const where = installedMap[romId];
   if (!where) return { emu: 'rpcs3', why: 'Download the game first.' };
   const serial = ps3Serial(romId, where);
-  if (!serial) return { emu: 'rpcs3', why: 'Cartridge couldn’t read this game’s serial (BLUS12345 and so on). Patches for disc images are listed in RPCS3 itself.' };
+  if (!serial) return { emu: 'rpcs3', why: 'Cartridge couldn’t find this game’s serial (BLUS12345 and so on) in its name or its files.' };
   const dir = patchesMod.rpcs3Dirs()[0];
   if (!dir || !fs.existsSync(path.join(dir.patches, 'patch.yml'))) return { emu: 'rpcs3', serial, why: 'RPCS3’s patch list isn’t on this device yet. In RPCS3: Manage → Game Patches → Download latest patches. Then come back.' };
   const version = patchesMod.ps3Version(installs[romId]?.dir || where, rpcs3Hdds(), serial);

@@ -480,9 +480,9 @@ module.exports = function createSteamManager(ctx) {
   const rpcs3Command = () => emuCommand('ps3', /rpcs3/i);
   const vita3kCommand = () => emuCommand('psvita', /vita3k/i);
   function serialOf(rom, p) {
-    const tag = String(rom.fs_name || '') + ' ' + String(rom.name || '');
-    const m = tag.match(/\b([A-Z]{4}\d{5})\b/);
-    if (m) return m[1];
+    const tag = String(rom.fs_name || '') + ' ' + String(rom.name || '') + ' ' + path.basename(p || '');
+    const m = tag.match(/\b([A-Z]{4})-?(\d{5})\b/); // "BLUS30443" or "BLUS-30443" in a name
+    if (m) return m[1] + m[2];
     // a folder game: PS3_GAME/PARAM.SFO holds the serial
     // (also one folder down: a download folder holding the game folder)
     const sfos = [path.join(p, 'PS3_GAME', 'PARAM.SFO'), path.join(p, 'PARAM.SFO'), path.join(p, 'sce_sys', 'param.sfo')];
@@ -1508,7 +1508,7 @@ module.exports = function createSteamManager(ctx) {
     gameEmu: (romId) => (cfg().gameEmus || {})[romId] || null,
     addedAt: (romId) => Math.min(...Object.values(reg).filter((r) => r.romId === romId && r.at).map((r) => r.at), Infinity),
     // exposed for tests
-    _learnOne: learnOne, _tokenize: tokenize, _buildLaunch: buildLaunch, _learnAll: learnAll, _readShortcuts: () => { const e = environment(); return e.account ? readShortcuts(e.account) : []; }, _candidates: candidates, appImagesFor, flatpakSteamAccess, _hostLaunch: hostLaunch, _startOf: startOf, _templateFor: templateFor, _templateForGame: templateForGame,
+    _learnOne: learnOne, _tokenize: tokenize, _buildLaunch: buildLaunch, _learnAll: learnAll, _readShortcuts: () => { const e = environment(); return e.account ? readShortcuts(e.account) : []; }, _candidates: candidates, appImagesFor, serialOf, flatpakSteamAccess, _hostLaunch: hostLaunch, _startOf: startOf, _templateFor: templateFor, _templateForGame: templateForGame,
   };
   return api;
 };
