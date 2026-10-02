@@ -6,7 +6,13 @@ The branch for 0.9.3 work is `claude/relaxed-fermat-30pigp`. Pull it before star
 
 ---
 
-## 2 Oct 2026 · 0.9.15 built (read this first)
+## 2 Oct 2026 · 0.9.15 released, 0.9.16 listed (read this first)
+
+0.9.15 merged (PR #31). The owner moved everything left over from 0.9.15 into 0.9.16, with the Add-ons downloads: `docs/plan-0.9.16.md`. Not started; build when the owner says so. Remind the owner about the v2.3.1 tag.
+
+---
+
+## 2 Oct 2026 · 0.9.15 built
 
 The owner merged 0.9.3 M into the 0.9.4 plan and asked for one update called **0.9.15** (version, versionName and release title all "0.9.15"). Plan: `docs/plan-0.9.4.md`. Built: all of section F, section 0 (welcome), section 1 (RomM on this device), and the checkable part of section 2 (Add-ons).
 
