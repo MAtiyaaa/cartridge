@@ -304,9 +304,10 @@ body.light-fx .coll .art, body.light-fx .coll .mosaic { transition-property: tra
 .lrow .l-mid { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .lrow .l-mid b { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .lrow .l-sub { font-size: var(--t-sm); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.lrow:focus .l-sub, .pad-mode .lrow:focus .l-sub, .lrow:focus .muted { color: var(--on-focus-dim); }
+/* dark text only where the row is white (0.9.17: a mouse or touch focus keeps the dark row, and its text stays light) */
+.lrow:focus-visible .l-sub, .pad-mode .lrow:focus .l-sub, .lrow:focus-visible .muted, .pad-mode .lrow:focus .muted { color: var(--on-focus-dim); }
 .lrow .l-end { flex: none; display: flex; align-items: center; gap: var(--s-2); font-size: var(--t-sm); font-weight: 600; color: var(--muted); }
-.lrow:focus .l-end { color: var(--on-focus); }
+.lrow:focus-visible .l-end, .pad-mode .lrow:focus .l-end { color: var(--on-focus); }
 .status { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 10px; border-radius: var(--r-sm); font-size: var(--t-xs); font-weight: 700; white-space: nowrap; }
 .status.ok { background: rgba(63, 185, 80, 0.16); color: var(--green-l); }
 .status.warn { background: rgba(245, 197, 66, 0.16); color: #ffd978; }

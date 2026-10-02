@@ -2116,6 +2116,8 @@ function broadcast(ch, data) { if (win && !win.isDestroyed()) win.webContents.se
 function autoZoom() {
   if (!win || win.isDestroyed()) return 1;
   const [w, h] = win.getContentSize();
+  // 0.9.17 (owner: clipped in a Desktop Mode window): smaller than the Deck's 1280x800, it zooms out to fit
+  if (w < 1280 || h < 800) return Math.max(0.6, Math.round(Math.min(w / 1280, h / 800) * 20) / 20);
   const z = Math.min(w / 1920, h / 1080);
   return Math.max(1, Math.min(3, Math.round(z * 20) / 20));
 }

@@ -1,6 +1,8 @@
 <template>
   <div class="welcome" :class="{ 'w-out': leaving }" ref="el">
     <div class="w-top">
+      <!-- 0.9.17: going back is always visible: an arrow to tap, and B on a controller (hint below) -->
+      <button v-if="at > 0 && !only" class="w-back" data-focus aria-label="Back" @click="handlers.back()"><Icon name="mdiArrowLeft" :size="22" /></button>
       <Logo :size="34" />
       <div class="w-dots"><template v-if="!only"><i v-for="(s, i) in STEPS" :key="s" :class="{ on: i === at, done: i < at }" /></template></div>
       <button class="btn small" data-focus @click="leave"><Icon name="mdiClose" :size="18" />{{ only ? 'Close' : replay ? 'Leave' : 'Skip setup' }}</button>
@@ -277,6 +279,7 @@
       </section>
     </Transition>
     </div>
+    <div v-if="input.mode === 'pad'" class="w-hints"><span><Btn b="A" />Select</span><span v-if="at > 0 && !only"><Btn b="B" />Back</span></div>
   </div>
 </template>
 
@@ -499,7 +502,7 @@ onBeforeUnmount(() => { off?.(); clearTimeout(padT); });
 .w-scan { text-align: left; align-items: stretch; }
 .w-scan-extra { display: flex; flex-direction: column; gap: var(--s-2); max-width: 1180px !important; text-align: left; }
 .w-scan-extra .l-end { color: var(--muted); font-size: var(--t-sm); white-space: nowrap; }
-.w-scan-extra .lrow:focus .l-end { color: var(--on-focus-dim, inherit); }
+.w-scan-extra .lrow:focus-visible .l-end, .pad-mode .w-scan-extra .lrow:focus .l-end { color: var(--on-focus-dim, inherit); }
 .w-scan-lead { text-align: center; max-width: 1180px !important; }
 .w-emu { position: relative !important; inset: auto !important; height: auto !important; overflow: visible !important; padding: 0 !important; text-align: left; max-width: 1180px !important; animation: none !important; }
 /* the first screen arrives in a short sequence: the mark, the title, then the rest (0.9.16) */
@@ -515,4 +518,8 @@ onBeforeUnmount(() => { off?.(); clearTimeout(padT); });
 .w-next-enter-from, .w-prev-leave-to { opacity: 0; transform: translateX(40px); }
 .w-next-leave-to, .w-prev-enter-from { opacity: 0; transform: translateX(-40px); }
 @media (prefers-reduced-motion: reduce) { .w-next-enter-active, .w-next-leave-active, .w-prev-enter-active, .w-prev-leave-active { transition: opacity 0.15s; transform: none !important; } }
+.w-back { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; background: rgba(255, 255, 255, 0.08); color: inherit; border: 0; flex: none; }
+.w-back:focus, .w-back:hover { background: var(--focus); color: var(--on-focus); outline: none; }
+.w-hints { position: absolute; left: 0; right: 0; bottom: 14px; display: flex; justify-content: center; gap: 22px; color: var(--muted); font-size: var(--t-sm); pointer-events: none; }
+.w-hints span { display: inline-flex; align-items: center; gap: 8px; }
 </style>
