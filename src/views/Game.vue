@@ -280,7 +280,8 @@ const pkgProg = ref(null);
 const pkgBusy = computed(() => pkgProg.value?.state === 'running' || pkg.value?.running);
 const needsInstall = computed(() => pkg.value?.pkgs > 0 && !pkg.value.installed);
 const emuName = computed(() => pkg.value?.emuName || 'RPCS3');
-async function loadPkg() { pkg.value = installedPath.value ? await call('pkg:check', { romId: Number(props.romId) }).catch(() => null) : null; }
+// Android: emulators install packages from their own menus (Settings → Emulators lists what's waiting)
+async function loadPkg() { if (IS_ANDROID) return; pkg.value = installedPath.value ? await call('pkg:check', { romId: Number(props.romId) }).catch(() => null) : null; }
 watch(installedPath, loadPkg);
 const offPkg = window.cart.on('pkg-progress', (p) => { if (p.romId === Number(props.romId)) pkgProg.value = p; });
 onBeforeUnmount(() => { try { offPkg?.(); } catch {} });
@@ -618,7 +619,7 @@ async function more() {
   }
   if (trophySystem.value) play.push({ label: tro.value ? 'Change linked trophies' : 'Link to trophies', sub: 'Pick which emulator trophy set belongs to this game', value: 'trophies', icon: 'mdiLinkVariant' });
   const pe = /ps3/i.test(`${base.value?.platform_slug} ${base.value?.platform_fs_slug}`) ? 'RPCS3' : /ps4/i.test(`${base.value?.platform_slug} ${base.value?.platform_fs_slug}`) ? 'shadPS4' : null;
-  if (installedPath.value && !marked.value && pe) play.push({ label: 'Patches', sub: `From ${pe}’s patch list, saved in ${pe}`, value: 'patches', icon: 'mdiPuzzleOutline' });
+  if (!IS_ANDROID && installedPath.value && !marked.value && pe) play.push({ label: 'Patches', sub: `From ${pe}’s patch list, saved in ${pe}`, value: 'patches', icon: 'mdiPuzzleOutline' });
   if (installedPath.value) play.push({ label: 'Show file location', value: 'path', icon: 'mdiFolderOutline' });
   const top = [
     { label: fav.value ? 'Remove from favourites' : 'Add to favourites', sub: 'Saved in RomM', value: 'fav', icon: fav.value ? 'mdiHeartOff' : 'mdiHeartOutline' },

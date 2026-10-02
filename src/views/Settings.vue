@@ -62,6 +62,9 @@
 
           <template v-else-if="sec === 'emu'">
             <h1>Emulators</h1>
+            <!-- Android: its own Issues (emulators, BIOS, packages to install) and each console's emulator -->
+            <AndroidEmulators v-if="IS_ANDROID" />
+            <template v-else>
             <!-- what needs you, in one place (0.9.3: replaces the pop-ups at start) -->
             <div class="subh">Issues</div>
             <div v-if="!issues" class="muted small"><Icon name="mdiSync" :size="16" class="spin" /> Checking…</div>
@@ -77,6 +80,7 @@
               <button class="lrow" data-focus @click="go('emu-setup')"><Icon name="mdiRadar" :size="24" /><div class="l-mid"><b>Emulator setup</b><span class="l-sub">Find emulators wherever they are, pick one per console, check BIOS and access</span></div><Icon name="mdiChevronRight" :size="22" /></button>
               <button class="lrow" data-focus @click="go('steam-health')"><Icon name="mdiStethoscope" :size="24" /><div class="l-mid"><b>Shortcut health</b><span class="l-sub">Steam shortcuts that would fail, and fixes for them</span></div><Icon name="mdiChevronRight" :size="22" /></button>
             </div>
+            </template>
             <div class="subh">Console Folders</div>
             <div class="row" style="justify-content: space-between">
               <p class="muted small" style="margin: 0; max-width: 520px">Matched inside your ROMs folder using ES-DE folder names. Pick any system to point it somewhere else.</p>
@@ -382,6 +386,7 @@ import { padInfo } from '../pad.js';
 // Android build only: the Android section replaces Steam. In the desktop build this is dropped.
 const IS_ANDROID = import.meta.env.MODE === 'android';
 const AndroidSettings = import.meta.env.MODE === 'android' ? defineAsyncComponent(() => import('../android/AndroidSettings.vue')) : null;
+const AndroidEmulators = import.meta.env.MODE === 'android' ? defineAsyncComponent(() => import('../android/AndroidEmulators.vue')) : null;
 
 const el = ref(null);
 const paneEl = ref(null);

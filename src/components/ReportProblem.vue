@@ -28,13 +28,14 @@ import { ref } from 'vue';
 import { call, toast } from '../store.js';
 import Icon from './Icon.vue';
 
-const ISSUES = 'https://github.com/abdu2304/cartridge/issues/new';
+const ISSUES = 'https://github.com/MAtiyaaa/cartridge/issues/new'; // this fork's builds report here
 const report = ref('');
 const busy = ref(false);
 const qr = ref('');
 async function load() {
   busy.value = true;
-  try { report.value = await call('setup:report'); } catch (e) { toast(e.message, 'error'); }
+  // Android: its own report (device, WebView, emulators per console); the desktop one is about Steam
+  try { report.value = import.meta.env.MODE === 'android' ? await (await import('../android/report.js')).androidReport() : await call('setup:report'); } catch (e) { toast(e.message, 'error'); }
   busy.value = false;
 }
 // GitHub's new issue link, with the report filled in (links stay short enough to open)
@@ -43,7 +44,9 @@ function issueUrl(max = 6000) {
   return `${ISSUES}?title=${encodeURIComponent('Problem: ')}&body=${encodeURIComponent(body)}`;
 }
 async function copy() { try { await call('clip:write', { text: report.value }); toast('Report copied', 'ok', 2200, 'mdiContentCopy'); } catch (e) { toast(e.message, 'error'); } }
-function open() { window.open(issueUrl(), '_blank'); toast('Opening GitHub in your browser', 'info', 2600, 'mdiGithub'); }
+async function open() {
+  if (import.meta.env.MODE === 'android') { const { Native } = await import('../android/native.js'); Native.openUrl({ url: issueUrl() }).catch((e) => toast(e.message, 'error')); return; } // the WebView can't open a browser tab
+  window.open(issueUrl(), '_blank'); toast('Opening GitHub in your browser', 'info', 2600, 'mdiGithub'); }
 async function showQr() {
   const QRCode = (await import('qrcode')).default;
   qr.value = await QRCode.toString(issueUrl(1200), { type: 'svg', margin: 1, errorCorrectionLevel: 'L', color: { dark: '#000000', light: '#ffffff' } });
