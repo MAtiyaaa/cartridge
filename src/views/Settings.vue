@@ -90,6 +90,17 @@
               <button class="lrow" data-focus @click="go('emu-setup')"><Icon name="mdiRadar" :size="24" /><div class="l-mid"><b>Emulator setup</b><span class="l-sub">Find emulators wherever they are, pick one per console, check BIOS and access</span></div><Icon name="mdiChevronRight" :size="22" /></button>
               <button class="lrow" data-focus @click="go('steam-health')"><Icon name="mdiStethoscope" :size="24" /><div class="l-mid"><b>Shortcut health</b><span class="l-sub">Steam shortcuts that would fail, and fixes for them</span></div><Icon name="mdiChevronRight" :size="22" /></button>
             </div>
+            <template v-if="texEmus.length">
+              <div class="subh">Texture Packs</div>
+              <p class="muted small" style="margin-top: -6px">Where each emulator looks for texture packs, read from its own settings. A game's folder is in its More menu. Cartridge never changes these settings.</p>
+              <div class="stack">
+                <div v-for="e in texEmus" :key="e.root" class="lrow">
+                  <Icon name="mdiTextureBox" :size="24" />
+                  <div class="l-mid"><b>{{ e.name }}{{ e.flatpak ? ' (Flatpak)' : '' }}</b><span class="l-sub mono">{{ e.textures.replace(store.info.home, '~') }}</span><span v-if="!e.on" class="l-sub">{{ e.how }}</span></div>
+                  <span class="status" :class="e.on ? 'ok' : 'warn'"><Icon v-if="e.on" name="mdiCheck" :size="14" />{{ e.on ? 'Textures on' : 'Textures off' }}</span>
+                </div>
+              </div>
+            </template>
             <div class="subh">Console Folders</div>
             <div class="row" style="justify-content: space-between">
               <p class="muted small" style="margin: 0; max-width: 520px">Matched inside your ROMs folder using ES-DE folder names. Pick any system to point it somewhere else.</p>
@@ -677,7 +688,8 @@ useView({ back: () => { if (!document.activeElement?.closest('.rail')) { focusFi
 // Settings → Emulators → Issues
 const issues = ref(null);
 const ISSUE_ICON = { collections: 'mdiFolderSyncOutline', moved: 'mdiLinkVariantOff', game: 'mdiFileHidden', core: 'mdiPuzzleRemoveOutline', setup: 'mdiRadar', bios: 'mdiChip', romm: 'mdiServerOutline', fpsteam: 'mdiSteam' };
-async function loadIssues() { issues.value = await call('issues:list').catch(() => []); store.issues = issues.value.length; }
+async function loadIssues() { issues.value = await call('issues:list').catch(() => []); store.issues = issues.value.length; texEmus.value = await call('addons:emulators').catch(() => []); }
+const texEmus = ref([]);
 async function fixIssue(i) {
   if (i.fix === 'health') return go('steam-health');
   if (i.fix === 'setup') return go('emu-setup');

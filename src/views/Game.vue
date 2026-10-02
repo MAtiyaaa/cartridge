@@ -309,6 +309,23 @@ async function installPkg() {
   pkgProg.value = null;
   loadPkg();
 }
+// Texture packs (0.9.15 Add-ons, the checkable part): the folder each emulator reads for this game,
+// read from its own settings, and whether its custom textures are on. Cartridge never turns them on.
+async function openTextures() {
+  let list = [];
+  try { list = await call('addons:forGame', { romId: Number(props.romId) }); } catch (e) { return toast(e.message, 'error'); }
+  if (!list.length) return toast('None of this console’s emulators with texture packs are set up here. Open the emulator once, then try again.', 'info', 5000);
+  const short = (p) => String(p || '').replace(store.info?.home || '\0', '~');
+  const e = list.length === 1 ? list[0] : await choose({ sheet: true, title: 'Texture Packs', options: list.map((x) => ({ label: x.name + (x.flatpak ? ' (Flatpak)' : ''), sub: x.on ? 'Custom textures are on' : 'Custom textures are off', value: x, icon: 'mdiTextureBox', raw: true })) });
+  if (!e) return;
+  const msg = `${e.folder ? `Put this game’s pack in:\n${short(e.folder)}` : `Cartridge couldn’t read this game’s ID from its file, so put the pack in the folder ${e.name} names after it, inside:\n${short(e.root)}`}\n\n${e.on ? `Custom textures are on in ${e.name}.` : `Custom textures are off in ${e.name}. ${e.how}`}`;
+  const v = await choose({ sheet: true, title: `${e.name} Texture Packs`, message: msg, options: [
+    { label: 'Copy the folder path', value: 'copy', icon: 'mdiContentCopy' },
+    ...(e.folder && !e.has ? [{ label: 'Create this game’s folder', sub: 'An empty folder, ready for the pack', value: 'make', icon: 'mdiFolderPlusOutline' }] : []),
+  ] });
+  if (v === 'copy') { try { await call('clip:write', { text: e.folder || e.root }); toast('Folder path copied', 'ok', 2000, 'mdiContentCopy'); } catch (err) { toast(err.message, 'error'); } }
+  if (v === 'make') { try { const f = await call('addons:makeFolder', { romId: Number(props.romId), emu: e.id }); toast(`Created ${short(f)}`, 'ok', 3500, 'mdiFolderPlusOutline'); } catch (err) { toast(err.message, 'error', 5000); } }
+}
 // the emulator's patches for this game; nothing changes until Apply
 async function openPatches() {
   let info;
@@ -591,6 +608,7 @@ async function more() {
   const slugs = `${base.value?.platform_slug} ${base.value?.platform_fs_slug}`;
   const pe = /ps3/i.test(slugs) ? 'RPCS3' : /ps4/i.test(slugs) ? 'shadPS4' : /\bps2\b/i.test(slugs) ? 'PCSX2' : null;
   if (installedPath.value && !marked.value && pe) play.push({ label: 'Patches', sub: `From ${pe}’s patch list, saved in ${pe}`, value: 'patches', icon: 'mdiPuzzleOutline' });
+  if (installedPath.value && !marked.value && /\b(ps2|psx|ngc|gamecube|wii|psp|3ds|n3ds)\b/i.test(slugs)) play.push({ label: 'Texture packs', sub: 'Where this game’s packs go, and whether they’re on', value: 'textures', icon: 'mdiTextureBox' });
   if (installedPath.value) play.push({ label: 'Show file location', value: 'path', icon: 'mdiFolderOutline' });
   const top = [
     { label: fav.value ? 'Remove from favourites' : 'Add to favourites', sub: 'Saved in RomM', value: 'fav', icon: fav.value ? 'mdiHeartOff' : 'mdiHeartOutline' },
@@ -628,6 +646,7 @@ async function more() {
   if (v === 'path') { toast(installedPath.value, 'info', 5000, 'mdiFolder'); return; }
   if (v === 'pkg') { await installPkg(); return; }
   if (v === 'patches') { await openPatches(); return; }
+  if (v === 'textures') { await openTextures(); return; }
   if (v === 'refresh') { try { detail.value = await call('api:get', { path: `/api/roms/${props.romId}` }); resetLogos(props.romId); toast('Details refreshed', 'ok', 2000, 'mdiRefresh'); } catch (e) { toast(e.message, 'error'); } return; }
   if (v === 'reset') { store.art = { ...store.art }; delete store.art[props.romId]; await call('art:reset', { id: props.romId }); resetLogos(props.romId); toast('Artwork reset', 'ok', 2000, 'mdiRestore'); return; }
   if (!store.config.sgdbKey) { toast('Add a SteamGridDB API key in Settings → Look & feel first', 'error', 4500); return; }

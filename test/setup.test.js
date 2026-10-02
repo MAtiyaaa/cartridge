@@ -31,3 +31,35 @@ test('RomM: secrets file round trip', () => {
   fs.writeFileSync(f, RL.envText({ DB_ROOT: 'a', AUTH_KEY: 'b' }));
   assert.deepStrictEqual(RL.readEnv(f), { DB_ROOT: 'a', AUTH_KEY: 'b' });
 });
+
+const A = require('../electron/addons.js');
+test('Add-ons: texture folders and on/off read from each emulator\'s settings', () => {
+  const h = fs.mkdtempSync(path.join(os.tmpdir(), 'ad-'));
+  const put = (p, t) => { fs.mkdirSync(path.dirname(path.join(h, p)), { recursive: true }); fs.writeFileSync(path.join(h, p), t); };
+  put('.config/PCSX2/inis/PCSX2.ini', '[Folders]\nTextures = /mnt/tex\n[EmuCore/GS]\nLoadTextureReplacements = true\n');
+  put('.local/share/duckstation/settings.ini', '[Main]\n');
+  put('.config/dolphin-emu/Dolphin.ini', '[General]\nLoadPath = \n');
+  put('.config/dolphin-emu/GFX.ini', '[Settings]\nHiresTextures = True\n');
+  put('.config/ppsspp/PSP/SYSTEM/ppsspp.ini', '[Graphics]\n');
+  const l = A.emulators(h, {});
+  const by = Object.fromEntries(l.map((e) => [e.id, e]));
+  assert.strictEqual(by.pcsx2.textures, '/mnt/tex');
+  assert.strictEqual(by.pcsx2.on, true);
+  assert.strictEqual(by.duckstation.textures, path.join(h, '.local/share/duckstation/textures'));
+  assert.strictEqual(by.duckstation.on, false);
+  assert.strictEqual(by.dolphin.textures, path.join(h, '.local/share/dolphin-emu/Load/Textures'));
+  assert.strictEqual(by.dolphin.on, true);
+  assert.strictEqual(by.ppsspp.on, true); // PPSSPP's default
+  const g = A.forGame('ps2', { serial: 'SLUS-20062' }, l);
+  assert.strictEqual(g[0].folder, '/mnt/tex/SLUS-20062/replacements');
+  assert.strictEqual(A.forGame('ngc', {}, l)[0].folder, null); // no ID, no guess
+});
+
+test('Add-ons: GameCube ID and 3DS title ID from the file header', () => {
+  const d = fs.mkdtempSync(path.join(os.tmpdir(), 'id-'));
+  const iso = path.join(d, 'g.iso'); const b = Buffer.alloc(64); b.write('GALE01'); fs.writeFileSync(iso, b);
+  assert.strictEqual(A.gcWiiId(iso), 'GALE01');
+  const c = Buffer.alloc(0x600); c.write('NCSD', 0x100); c.writeUInt32LE(2, 0x120); c.write('NCCH', 0x400 + 0x100); c.writeBigUInt64LE(0x0004000000055D00n, 0x400 + 0x118);
+  const f = path.join(d, 'g.3ds'); fs.writeFileSync(f, c);
+  assert.strictEqual(A.n3dsTitleId(f), '0004000000055D00');
+});

@@ -2678,6 +2678,28 @@ const handlers = {
     broadcast('installed-changed', { romId, path: rec.dir });
     return true;
   },
+  // Add-ons (0.9.15, checkable part): texture folders and their on/off, read from each emulator
+  'addons:emulators': () => require('./addons').emulators(),
+  'addons:forGame': ({ romId }) => {
+    const A = require('./addons'), rom = romIndexMain().get(Number(romId));
+    if (!rom) return [];
+    const slug = rom.platform_slug, ids = {};
+    const where = installedMap[rom.id];
+    let file = where && where !== MARKED ? where : '';
+    try { if (file && fs.statSync(file).isDirectory()) file = fs.readdirSync(file).map((n) => path.join(file, n)).filter((f) => fs.statSync(f).isFile()).sort((a, b) => fs.statSync(b).size - fs.statSync(a).size)[0] || ''; } catch { file = ''; }
+    if (slug === 'ps2') ids.serial = ps2PatchState(rom.id).serial || '';
+    if (/\.(iso|gcm)$/i.test(file) && ['ngc', 'gamecube', 'wii'].includes(slug)) ids.gameId = A.gcWiiId(file);
+    if (/\.iso$/i.test(file) && slug === 'psp') { const b = patchesMod.isoFile(file, ['PSP_GAME', 'PARAM.SFO']); ids.gameId = b ? patchesMod.parseSfo(b).DISC_ID : null; }
+    if (/\.(3ds|cci)$/i.test(file)) ids.titleId = A.n3dsTitleId(file);
+    return A.forGame(slug, ids, A.emulators());
+  },
+  // the game's texture folder, made empty so a pack can be dropped in (only inside that emulator's textures folder)
+  'addons:makeFolder': ({ romId, emu }) => {
+    const hit = handlers['addons:forGame']({ romId }).find((x) => x.id === emu);
+    if (!hit?.folder || !path.resolve(hit.folder).startsWith(path.resolve(hit.root) + path.sep)) throw new Error('No folder for this game.');
+    fs.mkdirSync(hit.folder, { recursive: true });
+    return hit.folder;
+  },
   'patches:list': async ({ romId }) => {
     const st = patchState(romId), E = EMU_PATCH[st.emu];
     if (!st.dir || !E) return { emu: st.emu, emuName: E?.name || '', serial: st.serial, why: st.why, list: [] };
