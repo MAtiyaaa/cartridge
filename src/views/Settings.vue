@@ -142,21 +142,25 @@
             <template v-if="emuPage === 'patches'">
               <p class="muted small" style="margin-top: -6px">Patches and cheats from each emulator's own lists, for the games on this device. The same as Patches in a game's More menu.</p>
               <p v-if="!patchGames.length" class="muted">No games on this device for the emulators with patches (RPCS3, shadPS4, PCSX2, Dolphin, PPSSPP).</p>
-              <div v-else class="stack">
-                <button v-for="g in patchGames" :key="g.r.id" class="lrow" data-focus @click="openPatchesFor(g)">
-                  <EmuIcon :id="g.id" :size="24" fallback="mdiPuzzleOutline" />
-                  <div class="l-mid"><b>{{ g.r.name }}</b><span class="l-sub">{{ consoleName({ romId: g.r.id, slug: g.r.platform_slug }) }} · {{ g.emu }}</span></div>
-                  <span class="l-end">{{ g.emu === 'PPSSPP' ? 'Cheats' : 'Patches' }}</span>
-                </button>
-              </div>
+              <!-- 0.9.17: by console, each with its emulator -->
+              <section v-for="grp in patchGroups" :key="grp.slug" class="con-sec">
+                <div class="con-head"><PIcon :p="grp.p" :size="34" /><b>{{ grp.name }}</b><span class="count">{{ grp.games.length }}</span><span class="con-emu"><EmuIcon :id="grp.id" :size="22" fallback="mdiPuzzleOutline" />{{ grp.emu }}</span></div>
+                <div class="stack">
+                  <button v-for="g in grp.games" :key="g.r.id" class="lrow" data-focus @click="openPatchesFor(g)">
+                    <img v-if="coverSmall(g.r.id)" class="up-cover" :src="coverSmall(g.r.id)" loading="lazy" /><EmuIcon v-else :id="g.id" :size="24" fallback="mdiPuzzleOutline" />
+                    <div class="l-mid"><b>{{ g.r.name }}</b></div>
+                    <span class="l-end">{{ g.emu === 'PPSSPP' ? 'Cheats' : g.emu === 'Dolphin' ? 'Patches and cheats' : 'Patches' }}</span>
+                  </button>
+                </div>
+              </section>
             </template>
             <template v-if="emuPage === 'tex'">
               <p class="muted small" style="margin-top: -6px">Texture packs and mods for your games: PS2 packs from the EmuCoreX catalog, other consoles' mods from GameBanana. Pick a game to see what it has. The same as Add-ons in a game's More menu.</p>
               <template v-for="g in addonGames" :key="g.slug">
-                <div class="subh">{{ g.name }}</div>
+                <div class="con-head"><PIcon :p="{ slug: g.slug, fs_slug: g.slug }" :size="34" /><b>{{ g.name }}</b><span class="count">{{ g.roms.length }}</span></div>
                 <div class="stack">
                   <button v-for="r in g.roms" :key="r.id" class="lrow" data-focus @click="openAddons(r)">
-                    <Icon name="mdiPuzzleOutline" :size="24" />
+                    <img v-if="coverSmall(r.id)" class="up-cover" :src="coverSmall(r.id)" loading="lazy" /><Icon v-else name="mdiPuzzleOutline" :size="24" />
                     <div class="l-mid"><b>{{ r.name }}</b><span v-if="addonCount(r.id)" class="l-sub">{{ addonCount(r.id) }} installed</span></div>
                     <span class="l-end">Add-ons</span>
                   </button>
@@ -911,6 +915,15 @@ const emuPage = ref('overview');
 const PATCH_EMU = [[/ps3/i, 'RPCS3', 'rpcs3'], [/ps4/i, 'shadPS4', 'shadps4'], [/\bps2\b/i, 'PCSX2', 'pcsx2'], [/\b(ngc|gamecube|gc|wii)\b/i, 'Dolphin', 'dolphin'], [/\bpsp\b/i, 'PPSSPP', 'ppsspp']];
 const patchGames = computed(() => allRoms().filter((r) => store.installed[r.id]).map((r) => { const m = PATCH_EMU.find(([re]) => re.test(`${r.platform_slug} ${r.platform_fs_slug}`)); return m && { r, emu: m[1], id: m[2] }; }).filter(Boolean)
   .sort((a, b) => a.emu.localeCompare(b.emu) || String(a.r.platform_slug).localeCompare(String(b.r.platform_slug)) || a.r.name.localeCompare(b.r.name)));
+const patchGroups = computed(() => {
+  const by = new Map();
+  for (const g of patchGames.value) {
+    const slug = g.r.platform_slug;
+    if (!by.has(slug)) by.set(slug, { slug, p: { slug, fs_slug: g.r.platform_fs_slug }, name: consoleName({ romId: g.r.id, slug }), emu: g.emu, id: g.id, games: [] });
+    by.get(slug).games.push(g);
+  }
+  return [...by.values()].sort((a, b) => a.name.localeCompare(b.name));
+});
 async function openPatchesFor(g) {
   let info;
   try { info = await call('patches:list', { romId: g.r.id }); } catch (e) { return toast(e.message, 'error'); }
@@ -1122,4 +1135,9 @@ onMounted(() => {
 .up-cover { width: 30px; height: 40px; object-fit: cover; border-radius: var(--r-sm); flex: none; }
 .ps3-head { display: flex; align-items: center; gap: var(--s-4); padding: var(--s-4); border-radius: var(--r-lg); background: linear-gradient(120deg, rgba(0, 59, 160, 0.35), rgba(0, 0, 0, 0) 70%), var(--s1); margin-bottom: var(--s-3); }
 .ps3-head b { font-size: var(--t-lg); }
+.con-sec { margin-bottom: var(--s-4); }
+.con-head { display: flex; align-items: center; gap: var(--s-3); margin: var(--s-4) 0 var(--s-2); }
+.con-head b { font-size: var(--t-lg); font-family: var(--display); }
+.con-head .count { color: var(--muted); font-size: var(--t-sm); }
+.con-emu { margin-left: auto; display: inline-flex; align-items: center; gap: 8px; color: var(--muted); font-size: var(--t-sm); }
 </style>
