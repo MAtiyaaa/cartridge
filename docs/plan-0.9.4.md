@@ -1,6 +1,23 @@
-# Cartridge 0.9.4 plan (after 0.9.3)
+# Cartridge 0.9.15 plan (was 0.9.4, merged with 0.9.3 M)
 
-Ideas agreed with the owner for the update after 0.9.3. Not built yet; details are settled before building.
+Owner, 2 Oct 2026: everything in 0.9.3 M and the fixes below go together with the 0.9.4 plan into one update, released as **0.9.15** (version, versionName and release title all "0.9.15", so GitHub stays in order). The 0.9.3 parts end with L.
+
+## F. Fixes and owner's list (built first)
+1. **shadPS4 (top priority).** Target is the Qt launcher AppImage, Launch options "-d -g <eboot>", Start in as shadPS4's own shortcuts write it. Found: the launcher starts the core in its own working folder (`QDir::currentPath()` in main_window.cpp StartEmulatorExecutable), so Start in decides where the core runs; and Setup's scan found the launcher's core AppImages (versions folder) and preferred them as Target. Fixed: the launcher always wins, cores in the versions folder are never a Target, StartDir written unquoted like shadPS4's.
+2. Patches follow the game's own emulator or fork (game pick, else console pick): that copy's patches folder (shadPS4 forks like GR2, RPCS3 and PCSX2 Flatpak vs AppImage).
+3. Game page headers blend into the page with no edge (game-specific pages), on real art at 1080p and 4K.
+4. Manual shows twice: only in More.
+5. Vita3K installs without opening its window, like RPCS3.
+6. PS3 patches still say the serial can't be found: find why on the owner's games.
+7. Look & Feel "Fetch all logos" becomes "Fetch all metadata" (logos, icons, sharp backgrounds and the rest at once).
+8. Home media bar as big as the game page header, with a Look & Feel setting of three sizes, Compact first.
+9. Moving between rows (up/down) is too snappy: a short smooth animation, like moving along a row.
+10. Emulator choice per console: forks grouped under one "Forks" entry that opens their own page; per game editing on the console page (each game: change emulator, edit Target, Start in and Launch options, remove).
+11. Launching a game from Steam while Cartridge is open brings Cartridge up first: games should open directly.
+12. Vita games installed in Vita3K before Cartridge count as installed: no reinstall needed to manage them.
+13. "on" before device names; Vita3K install and launch (fixed in 0.9.3 L, recheck on the device).
+14. RetroAchievements sign-in for emulators (button in Settings → Achievements, lists what it changes first; RetroArch, PCSX2, DuckStation, PPSSPP, Dolphin from their source; password used once, never stored).
+15. Console backgrounds (except Ribbons and XMB): mockups first.
 
 ## 0. New onboarding (moved from 0.9.3)
 A smooth first run on the Ribbons background, A for next, B for back. It replaces the current first-run steps.

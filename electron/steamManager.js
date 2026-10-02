@@ -382,9 +382,15 @@ module.exports = function createSteamManager(ctx) {
       // forks (GR2, BB Launcher, PrimeHack…) are listed on their own and never picked by default
       // (0.9.3, C3/C4; GR2 was taken for shadPS4 itself: A8)
       const forkName = (p) => forkMarks[p]?.name || forkOf(id, path.basename(p) + ' ' + (scanned(p)?.name || ''));
-      const uniq = all.filter((p) => !forkName(p));
+      // shadPS4's Qt launcher keeps emulator cores in its versions folder: those are the launcher's to
+      // start, never a shortcut's Target (0.9.3 L+: Setup's scan found them and they won over the launcher)
+      const managed = (p) => /shadPS4QtLauncher[\\/]+versions[\\/]|[\\/]launcher[\\/]+versions[\\/]/i.test(p);
+      const uniq = all.filter((p) => !forkName(p) && !managed(p));
       for (const p of all.filter(forkName)) forksOut.push({ id: `${id}@fork:${path.basename(p)}`.slice(0, 120), label: `${forkName(p)} · fork of ${e.label}`, fork: true, t: { exe: p, start: path.dirname(p), pre: e.pre || [], command: true, args: /qtlauncher/i.test(p) && e.qtArgs ? e.qtArgs : argsFor(id, key, 'appimage', ver(p)), kind: e.kind || kindOf(key), how: 'appimage', from: path.basename(p) } });
-      const hit = uniq.filter((p) => !/qtlauncher/i.test(p)).sort((a, b) => mtime(b) - mtime(a))[0] || uniq[0];
+      // shadPS4: the Qt launcher AppImage whenever there is one (owner: Target is the launcher, "-d -g",
+      // like shadPS4's own shortcuts); other emulators: the newest copy that isn't a launcher
+      const newest = (l) => [...l].sort((a, b) => mtime(b) - mtime(a))[0];
+      const hit = e.qtArgs ? newest(uniq.filter((p) => /qtlauncher/i.test(p))) || newest(uniq) : newest(uniq.filter((p) => !/qtlauncher/i.test(p))) || uniq[0];
       // its version (read from inside it by Setup, else the file name) picks arguments that changed over time
       if (hit) mk(hit, path.dirname(hit), 'appimage', path.basename(hit), /qtlauncher/i.test(hit) && e.qtArgs ? e.qtArgs : null, ver(hit), realName(id, path.basename(hit) + ' ' + (scanned(hit)?.name || '')));
       // a Windows build, started through Proton (Steam's compatibility tool): Xenia Canary (K1). EmuDeck
@@ -659,6 +665,8 @@ module.exports = function createSteamManager(ctx) {
   // Cartridge does exactly the same (0.9.3 L): a mount-style folder that never exists. A portable install
   // (a "user" folder next to the AppImage is its only shadPS4 data) keeps starting there.
   const SHAD_START = '/tmp/.mount_shadPS4/usr/bin';
+  // StartDir as written to Steam: quoted, except shadPS4's, which shadPS4 itself writes unquoted
+  const startField = (s) => (s === SHAD_START ? s : q(s));
   function startOf(t) {
     if (!t || !/shadps4/i.test(t.exe || '') || !t.start || !/\.appimage$/i.test(t.exe)) return t?.start;
     const data = process.env.XDG_DATA_HOME || path.join(HOME, '.local/share');
@@ -891,7 +899,7 @@ module.exports = function createSteamManager(ctx) {
   }
   function preview() {
     const p = plan();
-    return { account: p.account.name, entries: p.entries.map((e) => ({ romId: e.romId, name: e.name, target: e.target, start: q(e.start), lo: e.lo, how: e.how, from: e.from, fallback: e.fallback, collections: e.collections, proton: e.proton })), skipped: p.skipped, removing: p.removing };
+    return { account: p.account.name, entries: p.entries.map((e) => ({ romId: e.romId, name: e.name, target: e.target, start: startField(e.start), lo: e.lo, how: e.how, from: e.from, fallback: e.fallback, collections: e.collections, proton: e.proton })), skipped: p.skipped, removing: p.removing };
   }
 
   // ---------------------------------------------------------------- launch script (optional mode)
@@ -991,7 +999,7 @@ module.exports = function createSteamManager(ctx) {
     for (const e of p.entries) for (const c of e.collections || []) (collections[c] ||= []).push(e.appid >>> 0);
     const add = p.entries.map((e) => ({
       proton: e.proton,
-      entry: { appid: e.appid >>> 0, AppName: e.name, Exe: e.target, StartDir: q(e.start), icon: exists(path.join(f.grid, `${e.appid}_icon.png`)) ? path.join(f.grid, `${e.appid}_icon.png`) : '', ShortcutPath: '', LaunchOptions: e.lo, IsHidden: 0, AllowDesktopConfig: 1, AllowOverlay: 1, OpenVR: 0, Devkit: 0, DevkitGameID: '', DevkitOverrideAppID: 0, LastPlayTime: 0, FlatpakAppID: '', tags: {} },
+      entry: { appid: e.appid >>> 0, AppName: e.name, Exe: e.target, StartDir: startField(e.start), icon: exists(path.join(f.grid, `${e.appid}_icon.png`)) ? path.join(f.grid, `${e.appid}_icon.png`) : '', ShortcutPath: '', LaunchOptions: e.lo, IsHidden: 0, AllowDesktopConfig: 1, AllowOverlay: 1, OpenVR: 0, Devkit: 0, DevkitGameID: '', DevkitOverrideAppID: 0, LastPlayTime: 0, FlatpakAppID: '', tags: {} },
     }));
     const removeIds = p.removing.map((r) => r.appid >>> 0);
     for (const id of removeIds) if (reg[id]) for (const n of [`${id}p.png`, `${id}.png`, `${id}_hero.png`, `${id}_logo.png`, `${id}_icon.png`]) { try { fs.rmSync(path.join(f.grid, n), { force: true }); } catch {} }
@@ -1030,7 +1038,7 @@ module.exports = function createSteamManager(ctx) {
     put({ state: 'writing' });
     let added = 0;
     for (const e of p.entries) {
-      const id = await live.addShortcut({ name: e.name, exe: e.target, start: q(e.start), lo: e.lo, art: { dir: f.grid, id: e.appid }, proton: e.proton, collections: e.collections });
+      const id = await live.addShortcut({ name: e.name, exe: e.target, start: startField(e.start), lo: e.lo, art: { dir: f.grid, id: e.appid }, proton: e.proton, collections: e.collections });
       if (id !== (e.appid >>> 0)) {
         reg[id] = reg[e.appid]; delete reg[e.appid];
         // Steam stored its own copy of the artwork: drop ours, named after the old id
@@ -1441,7 +1449,7 @@ module.exports = function createSteamManager(ctx) {
           if (b.missing) continue;
           const { target, launch } = launchFor(tg, b.lo, b.args);
           try {
-            if ((await live.updateShortcut(g.appid, { exe: target, start: q(startOf(tg)), lo: launch })) === 'ok') {
+            if ((await live.updateShortcut(g.appid, { exe: target, start: startField(startOf(tg)), lo: launch })) === 'ok') {
               Object.assign(reg[g.appid], { sig: sigFor(g.romId), exe: tg.exe, emu: tg.emu || null, emuExe: tg.exe, mode, inPlace: Date.now() }); delete reg[g.appid].loFixed; fixed++; // Steam saves its file later
             }
           } catch (e) { log('steam live update', e.message); }
@@ -1469,7 +1477,7 @@ module.exports = function createSteamManager(ctx) {
         if (!b.missing) {
           const { target, launch } = launchFor(t, b.lo, b.args);
           try {
-            if ((await live.updateShortcut(g.appid, { exe: target, start: q(startOf(t)), lo: launch })) === 'ok') { Object.assign(reg[g.appid], { sig, exe: t.exe, emu: t.emu || null, emuExe: t.exe, mode, inPlace: Date.now() }); saveReg(); return { count: 1, fixed: 1 }; }
+            if ((await live.updateShortcut(g.appid, { exe: target, start: startField(startOf(t)), lo: launch })) === 'ok') { Object.assign(reg[g.appid], { sig, exe: t.exe, emu: t.emu || null, emuExe: t.exe, mode, inPlace: Date.now() }); saveReg(); return { count: 1, fixed: 1 }; }
           } catch (e) { log('steam live update', e.message); }
         }
       }
@@ -1497,7 +1505,7 @@ module.exports = function createSteamManager(ctx) {
           if (b.missing) continue;
           const { target, launch } = launchFor(tg, b.lo, b.args);
           try {
-            if ((await live.updateShortcut(g.appid, { exe: target, start: q(startOf(tg)), lo: launch })) === 'ok') {
+            if ((await live.updateShortcut(g.appid, { exe: target, start: startField(startOf(tg)), lo: launch })) === 'ok') {
               reg[g.appid] = { romId: g.romId, name: g.name, console: key, exe: tg.exe, emu: tg.emu || null, emuExe: tg.exe, sig: sigOf(tg, mode), mode, at: Date.now(), account: env.account.id, collections: [], inPlace: Date.now(), takenOver: true };
               fixed++;
             }

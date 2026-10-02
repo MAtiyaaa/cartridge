@@ -158,7 +158,7 @@ Shipped in L: everything below except 6 (RetroAchievements sign-in for the emula
 20. **Controller input reaches Cartridge in the background** in Game Mode (Home pressed, Steam's menu in front, Cartridge still running). Find a signal that Steam's UI is in front (window blur/visibility, gamescope's focused app) and stop reading the pad then.
 21. **shadPS4 Start in (done on the branch, ships in L):** the core option from K is removed. Shortcuts now get the same kind of Start in shadPS4's own shortcuts have: a mount folder that never exists (theirs is the AppImage's temporary mount, gone once the launcher closes). Read from the Qt launcher's create_steam_shortcut.cpp.
 
-## 0.9.3 M (owner, 2 Oct 2026; not started)
+## 0.9.3 M (moved into 0.9.15, see docs/plan-0.9.4.md)
 1. **RetroAchievements sign-in for emulators** (owner: yes, as a button in Settings → Achievements that lists which emulators it changes first). Read each emulator's login format from its source (RetroArch, PCSX2, DuckStation, PPSSPP, Dolphin); RA login with the password once, password never stored.
 2. **F1 console backgrounds** (except Ribbons and XMB): mockups first, owner picks.
 3. **Patches follow the game's own emulator or fork.** Patches go into the emulator that game actually starts with: a game on shadPS4 gets shadPS4's patches folder, a game on a fork (for example Gravity Rush 2 on the GR2 fork) gets that fork's own data folder. Use the game's pick (`steam.gameEmus`), else its console's (`templateFor`), and find that copy's user/patches folder (portable "user" next to it, or its own data folder) instead of always `~/.local/share/shadPS4`. Same for RPCS3 and PCSX2 copies (Flatpak vs AppImage config folders).

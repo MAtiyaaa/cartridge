@@ -282,3 +282,13 @@ test('Vita3K through EmuDeck: title ID only; installs never go through the scrip
   const out = JSON.parse(require('child_process').execFileSync(process.execPath, ['-e', code], { env: { ...process.env, HOME: H }, encoding: 'utf8' }).trim().split('\n').pop());
   assert.strictEqual(out.exe, H + '/Applications/Vita3K/Vita3K');
 });
+
+// 0.9.15: shadPS4's Target is the Qt launcher with "-d -g", never a core from the launcher's versions folder
+test('shadPS4: the Qt launcher AppImage wins over bare core AppImages', () => {
+  const H = setup('shad-launcher', ({ w }) => {
+    w('/Documents/Apps/shadPS4QtLauncher-qt.AppImage');
+    w('/Applications/Shadps4-sdl.AppImage');
+  });
+  const c = candidates(H, ['ps4']);
+  assert.match(c.ps4[0], /^shadPS4 => ~\/Documents\/Apps\/shadPS4QtLauncher-qt\.AppImage -d -g "\{ROM\}"$/, c.ps4.join('\n'));
+});
