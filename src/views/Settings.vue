@@ -41,6 +41,22 @@
             <Toggle :model-value="store.config.sync.onLaunch" label="Resync when Cartridge starts" desc="Picks up games you added to RomM since last time" @update:model-value="(v) => saveConfig({ sync: { onLaunch: v } })" />
             <div class="row"><span class="lbl">Auto resync</span><div class="seg"><button v-for="m in every" :key="m.v" data-focus :class="{ on: store.config.sync.everyMinutes === m.v }" @click="saveConfig({ sync: { everyMinutes: m.v } })">{{ m.l }}</button></div></div>
             <p class="muted small">“Scan server” asks RomM to look through its own folders for files you copied in, then resyncs. It needs username &amp; password sign-in.</p>
+            <!-- RomM on this device runs it in Podman: desktop Linux only -->
+            <template v-if="!IS_ANDROID">
+            <div class="subh" style="margin-top: 14px"><Icon name="mdiServer" :size="20" />RomM on This Device</div>
+            <template v-if="store.config.rommLocal?.port">
+              <div class="card-s glass">
+                <div class="kv"><span>Server</span><span>{{ store.config.rommLocal.name || 'RomM' }} · port {{ store.config.rommLocal.port }}</span></div>
+                <div class="kv"><span>Games folder</span><span class="mono">{{ store.config.rommLocal.library }}</span></div>
+              </div>
+              <div class="row wrap"><button class="btn" data-focus :disabled="rlBusy" @click="rommLocalUpdate"><Icon name="mdiUpdate" />{{ rlBusy ? 'Updating…' : 'Update RomM' }}</button></div>
+              <p class="muted small">Reachable while this device is on and online. Update RomM gets the newest version; your games, database and account stay.</p>
+            </template>
+            <template v-else>
+              <p class="muted small">No server? Cartridge can run RomM here in the background with Podman. It's only reachable while this device is on and online.</p>
+              <div class="row"><button class="btn" data-focus @click="store.welcoming = 'romm-local'"><Icon name="mdiServerPlus" />Set Up RomM on This Device</button></div>
+            </template>
+            </template>
             <div style="margin-top: 14px"><RommUpload /></div>
           </template>
           <template v-else-if="sec === 'storage'">
@@ -80,6 +96,17 @@
               <button class="lrow" data-focus @click="go('emu-setup')"><Icon name="mdiRadar" :size="24" /><div class="l-mid"><b>Emulator setup</b><span class="l-sub">Find emulators wherever they are, pick one per console, check BIOS and access</span></div><Icon name="mdiChevronRight" :size="22" /></button>
               <button class="lrow" data-focus @click="go('steam-health')"><Icon name="mdiStethoscope" :size="24" /><div class="l-mid"><b>Shortcut health</b><span class="l-sub">Steam shortcuts that would fail, and fixes for them</span></div><Icon name="mdiChevronRight" :size="22" /></button>
             </div>
+            <template v-if="texEmus.length">
+              <div class="subh">Texture Packs</div>
+              <p class="muted small" style="margin-top: -6px">Where each emulator looks for texture packs, read from its own settings. A game's folder is in its More menu. Cartridge never changes these settings.</p>
+              <div class="stack">
+                <div v-for="e in texEmus" :key="e.root" class="lrow">
+                  <Icon name="mdiTextureBox" :size="24" />
+                  <div class="l-mid"><b>{{ e.name }}{{ e.flatpak ? ' (Flatpak)' : '' }}</b><span class="l-sub mono">{{ e.textures.replace(store.info.home, '~') }}</span><span v-if="!e.on" class="l-sub">{{ e.how }}</span></div>
+                  <span class="status" :class="e.on ? 'ok' : 'warn'"><Icon v-if="e.on" name="mdiCheck" :size="14" />{{ e.on ? 'Textures on' : 'Textures off' }}</span>
+                </div>
+              </div>
+            </template>
             </template>
             <div class="subh">Console Folders</div>
             <div class="row" style="justify-content: space-between">
@@ -172,6 +199,7 @@
             <div class="row"><span class="lbl">Box art size</span><div class="seg"><button v-for="(v, k) in CARD_SIZES" :key="k" data-focus :class="{ on: (ui.gridSize || 'md') === k }" @click="saveConfig({ ui: { gridSize: k } })">{{ v.label }}</button></div></div>
             <Toggle :model-value="ui.cardTitles !== false" label="Game names under box art" desc="Turn off for a clean wall of covers" @update:model-value="(v) => saveConfig({ ui: { cardTitles: v } })" />
             <Toggle :model-value="ui.mediaBar !== false" label="Media bar" desc="Show artwork of the highlighted game at the top of Home" @update:model-value="(v) => saveConfig({ ui: { mediaBar: v } })" />
+            <div v-if="ui.mediaBar !== false" class="row"><span class="lbl">Media bar size</span><div class="seg"><button v-for="m in mediaSizes" :key="m.v" data-focus :class="{ on: (ui.mediaSize || 'large') === m.v }" @click="saveConfig({ ui: { mediaSize: m.v } })">{{ m.l }}</button></div></div>
             <Toggle :model-value="ui.logos !== false" label="Game logos" desc="Show the game's logo instead of its name on Home and game pages" @update:model-value="(v) => saveConfig({ ui: { logos: v } })" />
             <button class="lrow adv-tg" data-focus @click="lookAdv = !lookAdv"><Icon name="mdiTuneVariant" :size="22" /><div class="l-mid"><b>Advanced</b></div><Icon :name="lookAdv ? 'mdiChevronUp' : 'mdiChevronDown'" :size="22" /></button>
             <template v-if="lookAdv">
@@ -183,10 +211,10 @@
                 <button class="btn" data-focus :disabled="sgdbBusy" @click="saveSgdb"><Icon name="mdiCheck" :size="18" />{{ sgdbBusy ? 'Checking…' : 'Save key' }}</button>
               </div>
               <div class="row" style="gap: 12px; align-items: center">
-                <button v-if="!logoJob" class="btn" data-focus @click="fetchAll"><Icon name="mdiDownloadMultiple" :size="18" />Fetch all logos</button>
+                <button v-if="!logoJob" class="btn" data-focus @click="fetchAll"><Icon name="mdiDownloadMultiple" :size="18" />Fetch All Metadata</button>
                 <button v-else class="btn" data-focus @click="call('logo:stopAll')"><Icon name="mdiStop" :size="18" />Stop</button>
                 <div v-if="logoJob" class="logo-prog"><div class="bar live"><i :style="{ width: (logoJob.total ? (logoJob.done / logoJob.total) * 100 : 0) + '%' }" /></div><span class="muted small">{{ logoJob.done }} / {{ logoJob.total }} games · {{ logoJob.found }} logos</span></div>
-                <span v-else class="muted small">Gets the logo for every game now, instead of as you browse.</span>
+                <span v-else class="muted small">Gets every game's logo, sharpest background, cover and screenshot now, instead of as you browse.</span>
               </div>
               <p class="muted small" style="margin-top: -6px">Logos come from your RomM server when it has them (ScreenScraper "logo" media). For everything else, add a free key from steamgriddb.com → Preferences → API. {{ store.config.sgdbKey ? 'Key saved.' : '' }}</p>
             </template>
@@ -284,6 +312,11 @@
                 <button class="btn" data-focus @click="tab('achievements')"><Icon name="mdiTrophyOutline" />Open Achievements</button>
                 <button class="btn" data-focus @click="raSignOut"><Icon name="mdiLogout" />Sign out</button>
               </div>
+              <!-- writes desktop emulators' own settings files (raLogin.js); Android emulators keep theirs in their own storage -->
+              <template v-if="!IS_ANDROID">
+              <div class="row"><button class="btn" data-focus :disabled="raBusy" @click="raEmus"><Icon name="mdiGamepadVariantOutline" />Sign In to Emulators</button></div>
+              <p class="muted small" style="margin-top: -6px">Signs PCSX2, DuckStation, Dolphin, PPSSPP and RetroArch in with your account. Shows what it changes first. Your password goes to RetroAchievements once and is never saved.</p>
+              </template>
               <Toggle :model-value="ui.raOnGames !== false" label="Achievements on game pages" desc="Show progress and badges on games that have RetroAchievements (PS3, PS4, Switch and other unsupported consoles never show them)" @update:model-value="(v) => saveConfig({ ui: { raOnGames: v } })" />
             </template>
 
@@ -383,6 +416,7 @@
               </div>
               <p class="muted small" style="margin: 0">Shown on your other devices next to games you played here and trophies you unlocked here, for example "Steam Deck" or "Living Room PC".</p>
             </div>
+            <div class="row"><button class="btn" data-focus @click="store.welcoming = true"><Icon name="mdiHandWave" />Run the Welcome Again</button><span class="muted small">Starts from your current settings. Nothing is reset.</span></div>
             <ServerStatus />
             <ControllerTest />
             <ReportProblem />
@@ -401,11 +435,11 @@
 
 <script setup>
 import { computed, defineAsyncComponent, nextTick, onMounted, ref, watch } from 'vue';
-import { store, call, go, tab, saveConfig, pickFolder, choose, confirm, toast, openModal, bytes, ago, resync, scanServer, allRoms, resetLogos, askText, activeTabs, TAB_DEFS } from '../store.js';
+import { store, call, go, tab, saveConfig, pickFolder, choose, confirm, toast, openModal, bytes, ago, resync, scanServer, allRoms, resetLogos, askText, activeTabs, TAB_DEFS, consoleName } from '../store.js';
 import { useView } from '../useView.js';
 import { input, focusFirst, setPointerPref, setRumble, rumble } from '../nav.js';
 import { THEMES, SURFACES, TEXTS, FONTS, CARD_SHAPES, CARD_SIZES, DENSITIES, themeFrom, themeOf, paletteOf } from '../themes.js';
-import { BACKGROUNDS, RENDERERS, bgPreview } from '../bgRenderers.js';
+import { BACKGROUNDS, RENDERERS, LEGACY_ART, bgPreview } from '../bgRenderers.js';
 import { setSoundEnabled, setSoundStyle, previewSound, SOUND_PACKS } from '../sfx.js';
 import PhoneRemote from './PhoneRemote.vue';
 import Icon from '../components/Icon.vue';
@@ -484,6 +518,31 @@ async function raSignIn() {
   catch (e) { toast(e.message, 'error', 5000); }
   raBusy.value = false;
 }
+// Emulator sign-in (F14): list what changes, ask the password once, never keep it
+async function raEmus() {
+  const list = await call('ra:emuTargets').catch(() => []);
+  if (!list.length) return toast('No emulators with RetroAchievements set up yet. Open the emulator once, then try again.', 'info', 4200);
+  const user = store.config.ra.user;
+  const lines = list.map((t) => `${t.name}${t.flatpak ? ' (Flatpak)' : ''}${t.user ? `, now signed in as ${t.user}` : ''}: ${t.files.join(', ')}`).join('\n');
+  const ok = await confirm(`Sign in ${list.length} emulator${list.length === 1 ? '' : 's'} as ${user}`, `Cartridge turns achievements on and writes your login token here:\n${lines}\n\nClose these emulators first. Your password is sent to RetroAchievements once and never saved.`, 'Continue');
+  if (!ok) return;
+  const password = await askText({ title: `RetroAchievements password for ${user}`, password: true });
+  if (!password) return;
+  raBusy.value = true;
+  try {
+    const res = await call('ra:emuSignin', { user, password });
+    const bad = res.filter((r) => !r.ok);
+    if (!bad.length) toast(`Signed in: ${res.map((r) => r.name).join(', ')}`, 'ok', 3600, 'mdiTrophy');
+    else toast(`${bad.map((r) => `${r.name}: ${r.error}`).join(' · ')}`, 'error', 6000);
+  } catch (e) { toast(e.message, 'error', 4200); }
+  raBusy.value = false;
+}
+const rlBusy = ref(false);
+async function rommLocalUpdate() {
+  rlBusy.value = true;
+  try { await call('romm:localUpdate'); toast('RomM is up to date and restarting', 'ok', 4000, 'mdiServer'); } catch (e) { toast(e.message, 'error', 6000); }
+  rlBusy.value = false;
+}
 async function raSignOut() { await call('ra:signout'); store.config = await call('config:get'); toast('Signed out of RetroAchievements', 'info', 2200); }
 async function saveSgdb() {
   const key = sgdbKey.value.trim();
@@ -533,13 +592,16 @@ async function chooseWallpaper() {
   if (!file) return;
   try { store.config = await call('wallpaper:set', { file }); toast('Wallpaper set', 'ok', 2000, 'mdiWallpaper'); } catch (e) { toast(e.message, 'error', 4000); }
 }
-const bgNow = computed(() => BACKGROUNDS.find((b) => b.v === (ui.value.bgStyle || 'solid')) || BACKGROUNDS[0]);
-const BG_ICON = { Theme: 'mdiWaves', Consoles: 'mdiGamepadVariantOutline', Other: 'mdiImageOutline' };
+// A (0.9.15): each console with enough covers in your library can be the background
+const artBgs = computed(() => (store.lib?.platforms || []).filter((p) => p.rom_count >= 6).map((p) => ({ v: 'art:' + p.slug, l: consoleName(p), sub: 'Your games, slowly panning', group: 'Art' })).sort((a, b) => a.l.localeCompare(b.l)));
+const allBgs = computed(() => { const i = BACKGROUNDS.findIndex((b) => b.group === 'Other'); return [...BACKGROUNDS.slice(0, i), ...artBgs.value, ...BACKGROUNDS.slice(i)]; });
+const bgNow = computed(() => { const v = ui.value.bgStyle || 'solid'; const m = LEGACY_ART[v] ? 'art:' + LEGACY_ART[v] : v; return allBgs.value.find((b) => b.v === m) || BACKGROUNDS[0]; });
+const BG_ICON = { Theme: 'mdiWaves', Consoles: 'mdiGamepadVariantOutline', Art: 'mdiImageMultipleOutline', Other: 'mdiImageOutline' };
 async function pickBg() {
   let last = '';
   const pal = paletteOf(ui.value);
   // a picture of each animated one (0.9.3 L); still, artwork and wallpaper keep their icon
-  const options = BACKGROUNDS.map((b) => { const o = { label: b.l, sub: b.sub, value: b.v, icon: BG_ICON[b.group], img: RENDERERS[b.v] ? bgPreview(b.v, pal) : '', selected: bgNow.value.v === b.v, heading: b.group !== last ? { Theme: 'Your theme colours', Consoles: 'Consoles', Other: 'Other' }[b.group] : '' }; last = b.group; return o; });
+  const options = allBgs.value.map((b) => { const o = { label: b.l, sub: b.sub, value: b.v, icon: BG_ICON[b.group], img: RENDERERS[b.v] ? bgPreview(b.v, pal) : '', selected: bgNow.value.v === b.v, raw: b.group === 'Art', heading: b.group !== last ? { Theme: 'Your theme colours', Consoles: 'Consoles', Art: 'Your games', Other: 'Other' }[b.group] : '' }; last = b.group; return o; });
   const v = await choose({ title: 'Background', options });
   if (v) await setBg(v);
 }
@@ -561,7 +623,7 @@ function moveTab(n, d) {
   [l[i], l[j]] = [l[j], l[i]];
   saveConfig({ ui: { tabs: l } });
 }
-const LOOK_KEYS = ['theme', 'customColor', 'colors', 'idle', 'surface', 'text', 'font', 'bgStyle', 'wallDim', 'cardShape', 'density', 'gridSize', 'cardTitles', 'mediaBar', 'logos', 'motion', 'effects', 'sounds', 'soundPack', 'volume', 'rumble'];
+const LOOK_KEYS = ['theme', 'customColor', 'colors', 'idle', 'surface', 'text', 'font', 'bgStyle', 'wallDim', 'cardShape', 'density', 'gridSize', 'cardTitles', 'mediaBar', 'mediaSize', 'logos', 'motion', 'effects', 'sounds', 'soundPack', 'volume', 'rumble'];
 const presets = computed(() => store.config.lookPresets || []);
 const presetStyle = (p) => { const g = themeOf(p.ui).grad; return { background: `linear-gradient(135deg, ${g[0]}, ${g[2]} 60%, ${g[4]})` }; };
 function lookNow() { const o = {}; for (const k of LOOK_KEYS) if (ui.value[k] !== undefined) o[k] = JSON.parse(JSON.stringify(ui.value[k])); return o; }
@@ -657,7 +719,8 @@ useView({ back: () => { if (!document.activeElement?.closest('.rail')) { focusFi
 // Settings → Emulators → Issues
 const issues = ref(null);
 const ISSUE_ICON = { collections: 'mdiFolderSyncOutline', moved: 'mdiLinkVariantOff', game: 'mdiFileHidden', core: 'mdiPuzzleRemoveOutline', setup: 'mdiRadar', bios: 'mdiChip', romm: 'mdiServerOutline', fpsteam: 'mdiSteam' };
-async function loadIssues() { issues.value = await call('issues:list').catch(() => []); store.issues = issues.value.length; }
+async function loadIssues() { issues.value = await call('issues:list').catch(() => []); store.issues = issues.value.length; texEmus.value = await call('addons:emulators').catch(() => []); }
+const texEmus = ref([]);
 async function fixIssue(i) {
   if (i.fix === 'health') return go('steam-health');
   if (i.fix === 'setup') return go('emu-setup');
@@ -675,7 +738,7 @@ async function fixIssue(i) {
   if (v !== 'fix') return;
   try { await call('steam:fixCollections'); toast('Putting them back in their collections', 'ok', 3000, 'mdiSteam'); loadIssues(); } catch (e) { toast(e.message, 'error'); }
 }
-watch(sec, (v) => { store.settingsSection = v; if (v === 'emu') loadIssues(); }, { immediate: true });
+watch(sec, (v) => { store.settingsSection = v; if (v === 'emu' && !IS_ANDROID) loadIssues(); }, { immediate: true }); // Android: AndroidEmulators has its own
 
 
 function enter() { focusFirst(paneEl.value); }
@@ -740,6 +803,7 @@ async function loadAll() {
   const list = await call('platforms:supported');
   supported.value = list.map((p) => ({ ...p, display_name: p.display_name || p.name })).sort((a, b) => a.display_name.localeCompare(b.display_name));
 }
+const mediaSizes = [{ v: 'compact', l: 'Compact' }, { v: 'spacious', l: 'Spacious' }, { v: 'large', l: 'Large' }];
 const LOOK_PAGES = [{ v: 'theme', l: 'Theme' }, { v: 'bg', l: 'Background' }, { v: 'cards', l: 'Text and Cards' }, { v: 'motion', l: 'Motion and Sound' }, { v: 'controls', l: 'Controls' }];
 const lookPage = ref('theme'), lookAdv = ref(false);
 function setLookPage(v) { lookPage.value = v; lookAdv.value = false; }

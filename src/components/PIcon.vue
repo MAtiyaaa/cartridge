@@ -6,7 +6,7 @@
 import { computed, ref, watch } from 'vue';
 import { img } from '../store.js';
 import Icon from './Icon.vue';
-const ALIAS = { 'genesis-slash-megadrive': 'genesis', ps: 'psx', 'turbografx16--1': 'tg16', sfam: 'snes', gc: 'ngc', n3ds: '3ds' };
+const ALIAS = { 'genesis-slash-megadrive': 'genesis', ps: 'psx', 'turbografx16--1': 'tg16', sfam: 'snes', gc: 'ngc', n3ds: '3ds', x360: 'xbox360', 'xbox-360': 'xbox360' };
 const props = defineProps({ p: Object, size: { type: Number, default: 32 } });
 const i = ref(0);
 const cands = computed(() => {

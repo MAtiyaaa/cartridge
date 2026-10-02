@@ -17,7 +17,7 @@
             android:label="@string/title_activity_main"
             android:theme="@style/AppTheme.NoActionBarLaunch"
             android:launchMode="singleTask"
-            android:screenOrientation="sensorLandscape"
+            android:screenOrientation="landscape"
             android:resizeableActivity="true"
             android:exported="true">
 
@@ -56,6 +56,7 @@
             android:name=".CartridgeStatusProvider"
             android:authorities="${applicationId}.status"
             android:exported="true"
+            android:grantUriPermissions="true"
             android:readPermission="${applicationId}.permission.READ_STATUS" />
     </application>
 
@@ -71,6 +72,8 @@
     <!-- Android 11+: lets Cartridge see launchable apps (GameNative, GameHub, Winlator) and the emulators it can
          start games in. Keep the package list in step with src/android/emulators.js (npm test checks it). -->
     <queries>
+        <!-- Fuse: given read access to the status provider on every start (MainActivity.grantFuse) -->
+        <package android:name="io.github.matiyaaa.fuse" />
         <intent>
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.LAUNCHER" />

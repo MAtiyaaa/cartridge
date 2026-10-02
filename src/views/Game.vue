@@ -67,7 +67,6 @@
             <template v-else>
               <button class="btn primary xl" data-focus data-autofocus @click="dlNow"><Icon name="mdiDownload" :size="22" />{{ dl?.status === 'cancelled' ? 'Resume' : 'Download' }} · {{ bytes(base.fs_size_bytes) }}</button>
             </template>
-            <button v-if="detail?.path_manual" class="btn icon-btn" data-focus title="Manual" @click="openModal('manual', { romId: Number(props.romId), name: base.name })"><Icon name="mdiBookOpenPageVariantOutline" :size="22" /><span>Manual</span></button>
             <button class="btn icon-btn" data-focus title="More options" @click="more"><Icon name="mdiDotsHorizontal" :size="22" /><span>More</span></button>
           </div>
           <div v-if="dl && dl.status === 'error'" class="chip red" style="align-self: flex-start">Last attempt failed: {{ dl.error }}</div>
@@ -161,7 +160,7 @@
 
 <script setup>
 import { similarTo } from '../recs.js';
-import { addGame, removeGame, applyChanges } from '../steam.js';
+import { addGame, removeGame, applyChanges, pickEmulator } from '../steam.js';
 import { computed, onMounted, onBeforeUnmount, ref, nextTick, watch, defineAsyncComponent, getCurrentScope, shallowRef } from 'vue';
 import { store, call, img, go, cover, bytes, year, rating, toast, confirm, download, downloadFor, romById, platformById, isNew, setBg, logoOf, resetLogos, artFor, choose, openModal, allRoms, visible, isFavourite, addToCollection, playOf, playtimeText, ago, loadPlay, askText, saveConfig, backdropOf, wantSharp } from '../store.js';
 import { useView } from '../useView.js';
@@ -319,6 +318,23 @@ async function installPkg() {
   } catch (e) { toast(e.message, 'error', 8000); }
   pkgProg.value = null;
   loadPkg();
+}
+// Texture packs (0.9.15 Add-ons, the checkable part): the folder each emulator reads for this game,
+// read from its own settings, and whether its custom textures are on. Cartridge never turns them on.
+async function openTextures() {
+  let list = [];
+  try { list = await call('addons:forGame', { romId: Number(props.romId) }); } catch (e) { return toast(e.message, 'error'); }
+  if (!list.length) return toast('None of this console’s emulators with texture packs are set up here. Open the emulator once, then try again.', 'info', 5000);
+  const short = (p) => String(p || '').replace(store.info?.home || '\0', '~');
+  const e = list.length === 1 ? list[0] : await choose({ sheet: true, title: 'Texture Packs', options: list.map((x) => ({ label: x.name + (x.flatpak ? ' (Flatpak)' : ''), sub: x.on ? 'Custom textures are on' : 'Custom textures are off', value: x, icon: 'mdiTextureBox', raw: true })) });
+  if (!e) return;
+  const msg = `${e.folder ? `Put this game’s pack in:\n${short(e.folder)}` : `Cartridge couldn’t read this game’s ID from its file, so put the pack in the folder ${e.name} names after it, inside:\n${short(e.root)}`}\n\n${e.on ? `Custom textures are on in ${e.name}.` : `Custom textures are off in ${e.name}. ${e.how}`}`;
+  const v = await choose({ sheet: true, title: `${e.name} Texture Packs`, message: msg, options: [
+    { label: 'Copy the folder path', value: 'copy', icon: 'mdiContentCopy' },
+    ...(e.folder && !e.has ? [{ label: 'Create this game’s folder', sub: 'An empty folder, ready for the pack', value: 'make', icon: 'mdiFolderPlusOutline' }] : []),
+  ] });
+  if (v === 'copy') { try { await call('clip:write', { text: e.folder || e.root }); toast('Folder path copied', 'ok', 2000, 'mdiContentCopy'); } catch (err) { toast(err.message, 'error'); } }
+  if (v === 'make') { try { const f = await call('addons:makeFolder', { romId: Number(props.romId), emu: e.id }); toast(`Created ${short(f)}`, 'ok', 3500, 'mdiFolderPlusOutline'); } catch (err) { toast(err.message, 'error', 5000); } }
 }
 // the emulator's patches for this game; nothing changes until Apply
 async function openPatches() {
@@ -558,10 +574,7 @@ async function pickGameEmu() {
   const ge = await call('steam:gameEmu', { romId });
   const list = await call('steam:gameEmuOptions', { key: ge.key });
   if (!list.length) return toast('No other emulator for this console was found. Run Emulator setup in Settings → Emulators.', 'info', 5000);
-  const v = await choose({ title: 'Emulator for this game', message: base.value.name, options: [
-    { label: 'Same as its console', value: '__console', selected: !ge.current, icon: 'mdiArrowULeftTop' },
-    ...list.map((c) => ({ label: c.label, sub: c.sub, value: c.id, selected: ge.current === c.id, icon: 'mdiGamepadVariantOutline' })),
-  ] });
+  const v = await pickEmulator({ title: 'Emulator for this game', message: base.value.name, list, current: ge.current, first: [{ label: 'Same as its console', value: '__console', selected: !ge.current, icon: 'mdiArrowULeftTop' }] });
   if (!v) return;
   await call('steam:setGameEmu', { romId, id: v === '__console' ? null : v });
   const st = await call('steam:forRom', { romId }).catch(() => null);
@@ -622,6 +635,8 @@ async function more() {
   const slugs = `${base.value?.platform_slug} ${base.value?.platform_fs_slug}`;
   const pe = /ps3/i.test(slugs) ? 'RPCS3' : /ps4/i.test(slugs) ? 'shadPS4' : /\bps2\b/i.test(slugs) ? 'PCSX2' : null;
   if (!IS_ANDROID && installedPath.value && !marked.value && pe) play.push({ label: 'Patches', sub: `From ${pe}’s patch list, saved in ${pe}`, value: 'patches', icon: 'mdiPuzzleOutline' });
+  // texture pack folders are read from desktop emulators' settings (addons.js); Android emulators keep theirs in their own storage
+  if (!IS_ANDROID && installedPath.value && !marked.value && /\b(ps2|psx|ngc|gamecube|wii|psp|3ds|n3ds)\b/i.test(slugs)) play.push({ label: 'Texture packs', sub: 'Where this game’s packs go, and whether they’re on', value: 'textures', icon: 'mdiTextureBox' });
   if (installedPath.value) play.push({ label: 'Show file location', value: 'path', icon: 'mdiFolderOutline' });
   const top = [
     { label: fav.value ? 'Remove from favourites' : 'Add to favourites', sub: 'Saved in RomM', value: 'fav', icon: fav.value ? 'mdiHeartOff' : 'mdiHeartOutline' },
@@ -661,6 +676,7 @@ async function more() {
   if (v === 'path') { toast(installedPath.value, 'info', 5000, 'mdiFolder'); return; }
   if (v === 'pkg') { await installPkg(); return; }
   if (v === 'patches') { await openPatches(); return; }
+  if (v === 'textures') { await openTextures(); return; }
   if (v === 'refresh') { try { detail.value = await call('api:get', { path: `/api/roms/${props.romId}` }); resetLogos(props.romId); toast('Details refreshed', 'ok', 2000, 'mdiRefresh'); } catch (e) { toast(e.message, 'error'); } return; }
   if (v === 'reset') { store.art = { ...store.art }; delete store.art[props.romId]; await call('art:reset', { id: props.romId }); resetLogos(props.romId); toast('Artwork reset', 'ok', 2000, 'mdiRestore'); return; }
   if (!store.config.sgdbKey) { toast('Add a SteamGridDB API key in Settings → Look & feel first', 'error', 4500); return; }
@@ -699,10 +715,14 @@ onMounted(async () => {
 
 <style scoped>
 .game { padding: 0 0 50px; }
-.g-banner { position: relative; margin: 0; height: clamp(260px, 52vh, 680px); overflow: hidden; background: var(--s0); } /* full width: the art leads (0.9) */
+.g-banner { position: relative; margin: 0; height: clamp(260px, 52vh, 680px); overflow: hidden; }
+/* 0.9.15: the art fades out itself (a mask), so it blends into whatever is behind the page (theme,
+   animated background, wallpaper) instead of into a flat colour with a visible band */
+.g-banner-img { -webkit-mask-image: linear-gradient(180deg, transparent 0%, #000 14%, #000 50%, transparent 100%); mask-image: linear-gradient(180deg, transparent 0%, #000 14%, #000 50%, transparent 100%); } /* full width: the art leads (0.9) */
 .g-banner-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .g-banner-img.blur { filter: blur(24px) saturate(1.3) brightness(0.8); transform: scale(1.15); }
-.g-banner-shade { position: absolute; inset: 0; background: linear-gradient(90deg, rgba(12, 13, 16, 0.8) 0%, rgba(12, 13, 16, 0.3) 45%, transparent 75%), linear-gradient(0deg, #0c0d10 0%, rgba(12, 13, 16, 0.45) 35%, transparent 65%); background: linear-gradient(180deg, var(--s0) 0%, transparent 12%), linear-gradient(90deg, color-mix(in srgb, var(--s0) 80%, transparent) 0%, color-mix(in srgb, var(--s0) 30%, transparent) 45%, transparent 75%), linear-gradient(0deg, var(--s0) 0%, color-mix(in srgb, var(--s0) 45%, transparent) 35%, transparent 65%); }
+.g-banner-shade { position: absolute; inset: 0; background: linear-gradient(90deg, rgba(0, 0, 0, 0.55) 0%, rgba(0, 0, 0, 0.2) 45%, transparent 75%); } /* only for the logo's contrast */
+.g-banner-shade { -webkit-mask-image: linear-gradient(180deg, transparent 0%, #000 14%, #000 50%, transparent 100%); mask-image: linear-gradient(180deg, transparent 0%, #000 14%, #000 50%, transparent 100%); }
 .g-banner-logo { position: absolute; left: var(--s-7); bottom: var(--s-5); right: 360px; display: flex; align-items: flex-end; }
 .g-hero { position: relative; display: flex; align-items: flex-start; justify-content: space-between; gap: 40px; padding: var(--s-4) var(--s-7) var(--s-5); }
 .g-info { display: flex; flex-direction: column; gap: var(--s-4); max-width: 860px; min-width: 0; }

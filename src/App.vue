@@ -1,6 +1,7 @@
 <template>
   <Background v-if="store.config" />
   <div v-if="!store.config" class="center" style="height: 100%"><div class="spinner" /></div>
+  <Welcome v-else-if="store.welcoming || (!store.config.configured && !store.config.welcomed)" />
   <Setup v-else-if="!store.config.configured || store.route.name === 'setup'" />
   <div v-else class="shell" :style="{ '--card-w': cardW }">
     <header class="statusbar" :class="{ 'has-back': store.history.length }">
@@ -92,6 +93,7 @@ import Icon from './components/Icon.vue';
 import Btn from './components/Btn.vue';
 import Logo from './components/Logo.vue';
 import Background from './components/Background.vue';
+import Welcome from './views/Welcome.vue';
 import QuickMenu from './components/QuickMenu.vue';
 import TextPrompt from './components/TextPrompt.vue';
 import Keyboard from './components/Keyboard.vue';
@@ -238,8 +240,11 @@ onMounted(async () => {
   window.cart.on('background', (b) => setBackground(b?.away));
   window.cart.on('toast', (t) => t?.text && toast(t.text, t.kind || 'info', 4500, t.icon));
   if (steamOn) setTimeout(steamReport, 2500);
-  // 0.9: a new install goes through emulator Setup once, after connecting to RomM
-  if (steamOn && store.config.configured && !store.config.setupDone) go('emu-setup', { first: true });
+  // 0.9: a new install goes through emulator Setup once, after connecting to RomM (the welcome does it since 0.9.15)
+  if (steamOn && store.config.configured && !store.config.setupDone && !store.welcoming) go('emu-setup', { first: true });
+  // a hello with the name from the welcome
+  const nm = (store.config.ui.name || '').trim();
+  if (nm && store.config.configured && !store.welcoming) { const h = new Date().getHours(); setTimeout(() => toast(`Good ${h < 5 || h >= 18 ? 'evening' : h < 12 ? 'morning' : 'afternoon'}, ${nm}`, 'info', 2600, 'mdiHandWave'), 1200); }
   // anything waiting for you (a moved emulator, games out of their collections, missing BIOS) shows as
   // a dot on Settings and a list in Settings → Emulators, not a pop-up (0.9.3). Android without Steam has none.
   if (steamOn) setTimeout(() => { if (store.config.configured) call('issues:list').then((l) => (store.issues = l.length)).catch(() => {}); }, 8000);
@@ -261,9 +266,19 @@ onMounted(async () => {
   });
 });
 // connected for the first time (the RomM step just finished): emulators next
-watch(() => store.config?.configured, (v, was) => { if (v && !was && !store.config.setupDone) go('emu-setup', { first: true }); });
+watch(() => store.config?.configured, (v, was) => { if (v && !was && !store.config.setupDone && !store.welcoming) go('emu-setup', { first: true }); });
 // People who set up before 0.9 skipped Emulator setup: tell them about it once
 async function setupNotice() {
+  // 0.9.15: people who were set up before get the new welcome offered once (it includes the system scan)
+  if (store.config?.configured && !store.config.welcomed && !store.config.ui.welcomeNotice && !store.modal && !store.welcoming) {
+    saveConfig({ ui: { welcomeNotice: Date.now(), setupNotice: store.config.ui.setupNotice || Date.now() } });
+    const w = await choose({ title: 'New: a Fresh Welcome and System Scan', message: 'Take a look? It starts from your current settings: nothing is reset or signed out, and you can leave at any point.\n\nIt\'s always in Settings → About.', options: [
+      { label: 'Take a look', value: 'go', icon: 'mdiHandWave' },
+      { label: 'Not now', value: 'later', icon: 'mdiClockOutline' },
+    ] });
+    if (w === 'go') store.welcoming = true;
+    return;
+  }
   if (store.config?.setupDone !== 'before 0.9' || store.config.ui.setupNotice || store.modal) return;
   saveConfig({ ui: { setupNotice: Date.now() } });
   const v = await choose({ title: 'New: Emulator setup', message: 'Cartridge can now find your emulators wherever they are, even renamed AppImages, and check each console before its games go into Steam: the emulator, its launch options, BIOS and folder access.\n\nIt’s always in Settings → Emulators.', options: [

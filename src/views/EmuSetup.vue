@@ -2,8 +2,8 @@
   <div class="view" data-scroll ref="el">
     <header class="page-head">
       <div style="min-width: 0">
-        <div class="eyebrow">{{ first ? 'Setup' : 'Settings · Emulators' }}</div>
-        <h1>Emulators</h1>
+        <div class="eyebrow">{{ first || welcome ? 'Setup' : 'Settings · Emulators' }}</div>
+        <h1>{{ welcome ? 'Your system' : 'Emulators' }}</h1>
         <div class="lead">
           <template v-if="scanning">Looking through your folders for emulators…</template>
           <template v-else-if="ov?.scanned">Found {{ ov.scanned.count }} emulator{{ ov.scanned.count === 1 ? '' : 's' }} on this device. Games you add to Steam start with the one picked for their console.</template>
@@ -13,7 +13,7 @@
       <div class="row" style="flex: none">
         <button class="btn" data-focus :disabled="scanning" @click="scan()"><Icon name="mdiRadar" :class="{ spin: scanning }" />{{ ov?.scanned ? 'Scan again' : 'Scan' }}</button>
         <button class="btn" data-focus @click="more"><Icon name="mdiDotsHorizontal" />More</button>
-        <button v-if="first" class="btn primary" data-focus :disabled="scanning" @click="finish"><Icon name="mdiCheck" />Done</button>
+        <button v-if="first || welcome" class="btn primary" data-focus :disabled="scanning" @click="finish"><Icon name="mdiCheck" />{{ welcome ? 'Continue' : 'Done' }}</button>
       </div>
     </header>
 
@@ -84,7 +84,8 @@ import PIcon from '../components/PIcon.vue';
 // Setup → Emulators (first launch, and Settings → Steam): what was found for each console, which
 // one Steam shortcuts use, and anything that would stop a game starting. Everything here only reads
 // the emulators; picking one changes Cartridge's own settings.
-const props = defineProps({ first: Boolean });
+const props = defineProps({ first: Boolean, welcome: Boolean });
+const emit = defineEmits(['done', 'back']);
 const el = ref(null);
 const ov = ref(null);
 const scanning = ref(false);
@@ -149,7 +150,7 @@ async function more() {
   const v = await choose({ title: 'Emulators', options: [
     { label: 'Scan other drives too', sub: 'SD cards and other disks, slower', value: 'drives', icon: 'mdiHarddisk' },
     { label: 'Copy setup report', sub: 'For a bug report: personal details taken out', value: 'report', icon: 'mdiClipboardTextOutline' },
-    { label: 'Shortcut health', sub: 'Steam shortcuts that would fail', value: 'health', icon: 'mdiStethoscope' },
+    ...(props.welcome ? [] : [{ label: 'Shortcut health', sub: 'Steam shortcuts that would fail', value: 'health', icon: 'mdiStethoscope' }]),
   ] });
   if (v === 'drives') scan(true);
   if (v === 'report') { const t = await call('setup:report'); await copy(t, 'Setup report copied'); }
@@ -195,16 +196,22 @@ async function forkIt(file, of, name) {
 // one console: pick an emulator, Browse to one, or add one game to try it
 async function open(c) {
   const opts = [
-    ...c.emus.map((e) => ({ label: e.label, sub: e.sub, value: 'emu:' + e.id, selected: c.emu === e.id, icon: 'mdiGamepadVariantOutline' })),
+    ...c.emus.filter((e) => !e.fork).map((e) => ({ label: e.label, sub: e.sub, value: 'emu:' + e.id, selected: c.emu === e.id, icon: 'mdiGamepadVariantOutline' })),
+    ...(c.emus.some((e) => e.fork) ? [{ label: `Forks (${c.emus.filter((e) => e.fork).length})`, sub: c.emus.filter((e) => e.fork).map((e) => e.label.split(' · ')[0]).join(', '), value: 'forks', selected: c.emus.some((e) => e.fork && e.id === c.emu), icon: 'mdiSourceFork' }] : []),
     ...(c.emu === 'yours' ? [{ label: 'Set by you', sub: c.using?.exe, value: 'noop', selected: true, icon: 'mdiPencil' }] : []),
     { label: 'Browse to an emulator…', sub: 'Any file, any folder', value: 'browse', icon: 'mdiFolderSearchOutline' },
     ...(c.emus.some((e) => e.path && !e.fork) ? [{ label: 'One of these is a fork…', sub: 'Show it by its own name, used only when picked', value: 'fork', icon: 'mdiSourceFork' }] : []),
-    { label: 'Test with one game', sub: 'Adds one downloaded game to Steam to try it', value: 'test', icon: 'mdiPlayCircleOutline' },
+    ...(props.welcome ? [] : [{ label: 'Test with one game', sub: 'Adds one downloaded game to Steam to try it', value: 'test', icon: 'mdiPlayCircleOutline' }]),
     ...(c.using ? [{ label: 'Type your own launch options', sub: c.using.lo, value: 'lo', icon: 'mdiConsoleLine' }] : []),
-    { label: 'More options for this console', value: 'console', icon: 'mdiTune' },
+    ...(props.welcome ? [] : [{ label: 'More options for this console', value: 'console', icon: 'mdiTune' }]),
   ];
   const v = await choose({ title: c.platform, message: c.checks.filter((k) => k.level !== 'bad' && k.level !== 'warn').map((k) => k.text).join('\n') || undefined, options: opts });
   if (!v || v === 'noop') return;
+  if (v === 'forks') {
+    const f = await choose({ sheet: true, title: 'Forks', message: c.platform, options: c.emus.filter((e) => e.fork).map((e) => ({ label: e.label, sub: e.sub, value: e.id, selected: c.emu === e.id, icon: 'mdiSourceFork', raw: true })) });
+    if (!f) return open(c); // B: back to the console's list
+    await call('steam:setEmu', { key: c.key, id: f }); await load(); return;
+  }
   if (v.startsWith('emu:')) { await call('steam:setEmu', { key: c.key, id: v.slice(4) }); await load(); return; }
   if (v === 'console') return go('steam-console', { ckey: c.key });
   if (v === 'fork') {
@@ -251,12 +258,14 @@ async function ownLaunch(c) {
   catch (e) { toast(e.message, 'error'); }
 }
 async function finish() {
-  await call('setup:done'); store.config.setupDone = Date.now(); go('home');
+  await call('setup:done'); store.config.setupDone = Date.now();
+  if (props.welcome) return emit('done'); // the welcome goes on and shows the tour at its end
+  go('home');
   // then the few controls worth knowing, once
   if (!store.config.ui.toured) { await openModal('tour'); saveConfig({ ui: { toured: true } }); }
 }
 
-useView({ x: () => scan(), y: () => more(), ...(props.first ? { start: () => finish() } : {}) }, () => [{ b: 'A', label: 'Open' }, { b: 'X', label: 'Scan again' }, { b: 'Y', label: 'More' }, ...(props.first ? [{ b: 'START', label: 'Done' }] : [{ b: 'B', label: 'Back' }])]);
+useView({ x: () => scan(), y: () => more(), ...(props.first || props.welcome ? { start: () => finish() } : {}), ...(props.welcome ? { back: () => emit('back') } : {}) }, () => [{ b: 'A', label: 'Open' }, { b: 'X', label: 'Scan again' }, { b: 'Y', label: 'More' }, ...(props.first || props.welcome ? [{ b: 'START', label: 'Done' }] : [{ b: 'B', label: 'Back' }])]);
 onMounted(async () => {
   await load();
   // first time here (or never scanned): look now
