@@ -195,8 +195,12 @@ export function img(p) {
 export function cover(rom, large = false) {
   const o = store.art?.[rom.id]?.grid;
   if (o) return img(o);
-  const p = (large ? rom.path_cover_large || rom.path_cover_small : rom.path_cover_small || rom.path_cover_large) || rom.url_cover;
-  return img(p);
+  let p = (large ? rom.path_cover_large || rom.path_cover_small : rom.path_cover_small || rom.path_cover_large) || rom.url_cover;
+  if (/^[a-z-]*file:\/\//i.test(p || '')) p = ''; // a gamelist.xml cover RomM never copied: only RomM can read it
+  // with a SteamGridDB key, main.js fills in a cover when RomM has none (or answers without one)
+  const sg = store.config?.sgdbKey && rom.id ? `g=${encodeURIComponent(rom.id)}&n=${encodeURIComponent(rom.name || '')}` : '';
+  if (!p) return sg ? romimg(sg) : '';
+  return romimg('u=' + encodeURIComponent(p) + (sg ? '&' + sg : ''));
 }
 // Sharp backgrounds (0.9.3 K, F2/F3): SteamGridDB's biggest hero for a game, asked for once it has
 // been highlighted for a moment (main.js sharpHero caches it). undefined: not asked yet, null: none.

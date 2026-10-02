@@ -819,22 +819,26 @@ async function handleImage(request) {
     try { return new Response(await fsp.readFile(path.join(LOGO_DIR, path.basename(lf))), { headers: { 'Content-Type': 'image/png' } }); } catch { return new Response('nf', { status: 404 }); }
   }
   const target = u.searchParams.get('u');
-  if (!target) return new Response('bad', { status: 400 });
+  const gid = u.searchParams.get('g'); // a game whose cover can come from SteamGridDB when RomM has none
+  const grid = async () => { const g = gid && await sgdbGrid(gid, u.searchParams.get('n')).catch(() => null); return g ? new Response(g.buf, { headers: { 'Content-Type': g.type } }) : null; };
+  if (!target) return (await grid()) || new Response(gid ? 'nf' : 'bad', { status: gid ? 404 : 400 });
   const file = imgCacheFile(target);
   try {
     const buf = await fsp.readFile(file);
     const type = (await fsp.readFile(file + '.type', 'utf8').catch(() => '')) || 'image/jpeg';
-    return new Response(buf, { headers: { 'Content-Type': type, 'Cache-Control': 'max-age=31536000' } });
+    if (isImageType(type)) return new Response(buf, { headers: { 'Content-Type': type, 'Cache-Control': 'max-age=31536000' } });
   } catch {}
   try {
     const got = await remoteImage(target);
-    if (!got) return new Response('nf', { status: 404 });
+    if (!got) return (await grid()) || new Response('nf', { status: 404 });
     keepImage(file, got).catch(() => {});
     return new Response(got.buf, { headers: { 'Content-Type': got.type } });
   } catch {
-    return new Response('err', { status: 502 });
+    return (await grid()) || new Response('err', { status: 502 });
   }
 }
+// A proxy or tunnel can answer a missing image with a 200 page; that must never be kept as the image
+const isImageType = (t) => !/^(text\/|application\/(json|xml|xhtml))/i.test(String(t || ''));
 const imgCacheFile = (target) => path.join(IMG_CACHE, crypto.createHash('sha1').update(target).digest('hex'));
 // A RomM image (signed in) or a web one: { buf, type }, or null when the server has none. Throws when unreachable.
 async function remoteImage(target) {
@@ -843,10 +847,51 @@ async function remoteImage(target) {
   else { url = (await resolveBase()) + (target.startsWith('/') ? '' : '/') + target; headers = authHeaders(); delete headers.Accept; }
   if (url.startsWith('//')) url = 'https:' + url;
   const r = await fetch(url, { headers, signal: AbortSignal.timeout(20000) });
-  if (!r.ok) return null;
+  if (!r.ok || !isImageType(r.headers.get('content-type'))) return null;
   return { buf: Buffer.from(await r.arrayBuffer()), type: r.headers.get('content-type') || 'image/jpeg' };
 }
 const keepImage = (file, { buf, type }) => fsp.mkdir(IMG_CACHE, { recursive: true }).then(() => Promise.all([fsp.writeFile(file, buf), fsp.writeFile(file + '.type', type)]));
+// Covers RomM doesn't have (unmatched games, a gamelist.xml cover it never copied): SteamGridDB's
+// best portrait grid, saved once per game in grids/ as it came (no re-encode: slow in Android's
+// pure-JS nativeImage). A game without one is asked again after a week.
+const GRID_DIR = path.join(USER_DATA, 'grids');
+const GRID_FILE = path.join(USER_DATA, 'grids.json');
+const gridCache = loadJson(GRID_FILE, {}); // romId -> { file, type, t }
+const gridInflight = new Map();
+// three at a time: a page of games without covers shouldn't fire dozens of SteamGridDB searches at once
+let gridBusy = 0;
+const gridWait = [];
+async function gridSlot(fn) {
+  if (gridBusy >= 3) await new Promise((r) => gridWait.push(r));
+  gridBusy++;
+  try { return await fn(); } finally { gridBusy--; gridWait.shift()?.(); }
+}
+async function sgdbGrid(id, name) {
+  const k = String(id).replace(/[^\w-]/g, '');
+  const c = gridCache[k];
+  if (c?.file) { try { return { buf: await fsp.readFile(path.join(GRID_DIR, c.file)), type: c.type }; } catch {} }
+  if (!k || !name || !config.sgdbKey || (c && !c.file && Date.now() - c.t < 7 * 864e5)) return null;
+  if (gridInflight.has(k)) return gridInflight.get(k);
+  const job = gridSlot(async () => {
+    const g = (await sgdbGames(String(name).replace(/[™®©]/g, '')))[0]; // throws offline: asked again next time
+    const list = g ? ((await sgdb(`/grids/game/${g.id}?dimensions=600x900,342x482,660x930&types=static&nsfw=false&humor=false`)) || []) : [];
+    let got = null;
+    for (const i of list.filter((x) => !x.width || x.height > x.width).sort((a, b) => (b.score || 0) - (a.score || 0)).slice(0, 3)) {
+      try {
+        const r = await fetch(i.url, { signal: AbortSignal.timeout(20000) });
+        const type = r.headers.get('content-type') || 'image/png';
+        if (r.ok && /^image\//i.test(type)) { got = { buf: Buffer.from(await r.arrayBuffer()), type }; break; }
+      } catch {}
+    }
+    const file = got ? k + '.img' : null;
+    if (got) { await fsp.mkdir(GRID_DIR, { recursive: true }); await fsp.writeFile(path.join(GRID_DIR, file), got.buf); }
+    gridCache[k] = { file, type: got?.type, t: Date.now() };
+    fsp.writeFile(GRID_FILE, JSON.stringify(gridCache)).catch(() => {});
+    return got;
+  });
+  gridInflight.set(k, job);
+  try { return await job; } finally { gridInflight.delete(k); }
+}
 
 // ---------------------------------------------------------------- logos + custom artwork
 // Logos come from (in order) a logo the user picked, RomM's own logo, or SteamGridDB (free key).
