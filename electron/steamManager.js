@@ -1303,8 +1303,10 @@ module.exports = function createSteamManager(ctx) {
         const g = byRom.get(r.romId);
         if (!g) p.issues.push({ kind: 'game', text: 'The game isn’t on this device any more.', fix: { label: 'Remove from Steam' } });
         else if (g.file && !exists(g.file)) p.issues.push({ kind: 'game', text: 'The game’s files are gone.', fix: { label: 'Remove from Steam' } });
-      } else if (l?.template?.sample && l.template.sample.startsWith('/') && !exists(l.template.sample)) {
-        p.issues.push({ kind: 'game', text: `The game file isn't at ${shortPath(l.template.sample)} any more.` });
+      } else if (l?.template?.sample && l.template.sample.startsWith('/') && !exists(l.template.sample) && (!l.template.romRoot || isDir(l.template.romRoot))) {
+        // a shortcut you (or an emulator, like shadPS4) made for a game that's gone: offer to remove it
+        // (0.9.3 L). Never while its drive isn't there (an SD card out): the ROMs folder must exist.
+        p.issues.push({ kind: 'game', text: `The game file isn't at ${shortPath(l.template.sample)} any more.`, fix: { label: 'Remove from Steam' } });
       }
       const core = (sc.lo.match(/-L\s+("?)([^"\s]+)\1/) || [])[2];
       if (core && core.includes('/') && !exists(core)) p.issues.push({ kind: 'core', text: `The RetroArch core ${path.basename(core)} is missing. Install it in RetroArch's Online Updater.` });
@@ -1341,7 +1343,7 @@ module.exports = function createSteamManager(ctx) {
             try { if ((await live.updateShortcut(sc.appid, { exe: exeRaw, start: q(to.start), lo: sc.loRaw })) === 'ok') { if (r) Object.assign(r, { exe: to.exe, emuExe: to.exe, inPlace: Date.now() }); fixed++; continue; } } catch (e) { log('health relink', e.message); }
           }
           if (r) { refreshKeys.add(p.console); r.sig = 'moved'; queued++; } else left.push(p.name);
-        } else if (is.kind === 'game' && is.fix && reg[p.appid]) { queueRemove([p.appid]); queued++; }
+        } else if (is.kind === 'game' && is.fix) { queueRemove([p.appid]); queued++; } // only when you pick it in Shortcut health
         else if (is.kind === 'outdated') { refreshKeys.add(p.console); }
       }
     }
