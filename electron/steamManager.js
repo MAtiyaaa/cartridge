@@ -322,6 +322,14 @@ module.exports = function createSteamManager(ctx) {
     const ok = cfg().confirmed || {};
     return (found?.items || []).filter((x) => (ok[x.path] ? ok[x.path] === id : x.id === id && x.conf >= 2) && exists(x.path));
   }
+  // every emulator copy that could be updated (0.9.16): AppImages the scan is sure of, and Flatpaks
+  function installedEmulators() {
+    const out = [];
+    for (const x of found?.items || []) if (x.kind === 'appimage' && x.id && x.conf >= 2 && exists(x.path) && !/\/\.mount_|cartridge/i.test(x.path)) out.push({ id: x.id, label: labelOf(x.id), kind: 'appimage', path: x.path, version: x.version || '' });
+    const fps = flatpakApps();
+    for (const [id, e] of Object.entries(EMU)) for (const fp of e.fp || []) if (fps.includes(fp)) out.push({ id, label: labelOf(id), kind: 'flatpak', fp });
+    return out;
+  }
   let scanning = null;
   function scanEmulators({ drives = false } = {}) {
     if (scanning) return scanning;
@@ -1548,7 +1556,7 @@ module.exports = function createSteamManager(ctx) {
     },
     liveInfo: async () => { const env = environment(); if (!env.account) return { on: false, flag: false }; return { on: await live.available(env.account.root), flag: live.flagOn(env.account.root) }; },
     liveEnable: () => { const env = environment(); if (!env.account) throw new Error('Steam was not found.'); fs.writeFileSync(path.join(env.account.root, live.FLAG), ''); return true; },
-    addRomToCollections, onDownloaded, onDeleted, lastStatus, writeScript, startupReport, forRom, fixCollections, played, playtime, steamRoots, refreshArt,
+    installedEmulators, addRomToCollections, onDownloaded, onDeleted, lastStatus, writeScript, startupReport, forRom, fixCollections, played, playtime, steamRoots, refreshArt,
     scanEmulators, rpcs3Command, vita3kCommand, setupOverview, confirm, markFork, useFile, health, healthFix, movedEmulators, setupReport, syncConsoleCollections, preflight: (key) => preflight(key, templateFor(key)),
     candidatesFor: (key) => az(candidates(key).map((c) => ({ id: c.id, label: c.label, sub: shortPath(c.t.how === 'flatpak' ? c.t.from : c.t.exe), fork: !!c.fork }))),
     // one game's own Target, Start in and Launch options (console page, 0.9.15); null goes back

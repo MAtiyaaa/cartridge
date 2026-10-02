@@ -272,3 +272,16 @@ test('a file inside a folder of an ISO (PS3_GAME/PARAM.SFO)', () => {
   const f = path.join(TMP, 'ps3.iso'); fs.writeFileSync(f, img);
   assert.strictEqual(P.parseSfo(P.isoFile(f, ['PS3_GAME', 'PARAM.SFO'])).TITLE_ID, 'NPUA80523');
 });
+
+test('PS3 updates: Sony\'s list read in version order, only newer ones to install', async () => {
+  const U = require('../electron/ps3Updates.js');
+  const xml = `<?xml version="1.0"?><titlepatch status="alive" titleid="BCUS98123"><tag name="BCUS98123_T5"><package version="01.06" size="200" sha1sum="aa" url="http://b0.ww.np.dl.playstation.net/x/UP9000-BCUS98123_00-A0106-V0100-PE.pkg" ps3_system_ver="03.5000"/><package version="01.01" size="100" sha1sum="bb" url="http://b0.ww.np.dl.playstation.net/x/UP9000-BCUS98123_00-A0101-V0100-PE.pkg" ps3_system_ver="03.4100"><paramsfo><TITLE>Uncharted 2</TITLE></paramsfo></package></tag></titlepatch>`;
+  const l = U.parseList(xml);
+  assert.strictEqual(l.title, 'Uncharted 2');
+  assert.deepStrictEqual(l.packages.map((p) => p.version), ['01.01', '01.06']);
+  assert.deepStrictEqual(U.newer(l.packages, '01.01').map((p) => p.version), ['01.06']);
+  assert.deepStrictEqual(U.newer(l.packages, '01.06'), []);
+  let asked = '';
+  assert.deepStrictEqual((await U.updatesFor('BCUS98123', { get: async (u) => { asked = u; return ''; } })).packages, []);
+  assert.strictEqual(asked, 'http://a0.ww.np.dl.playstation.net/tpl/np/BCUS98123/BCUS98123-ver.xml');
+});

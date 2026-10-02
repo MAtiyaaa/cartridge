@@ -1280,19 +1280,20 @@ async function rateWait(n) {
 // 0.9.16: each file downloads in a worker thread (dlWorker.js) so nothing else in Cartridge can slow it
 // (owner: 70 MB/s fell to 7). The speed limit is shared between the downloads running at once.
 let dlWorkersOk = true;
-async function downloadTo(url, dest, it, onBytes) {
-  if (!dlWorkersOk) return downloadHere(url, dest, it, onBytes);
+// opts.plain: a download that isn't from RomM (PS3 updates from Sony): RomM's sign-in never goes along
+async function downloadTo(url, dest, it, onBytes, opts = {}) {
+  if (!dlWorkersOk) return downloadHere(url, dest, it, onBytes, opts);
   const part = dest + '.part';
   await fsp.mkdir(path.dirname(dest), { recursive: true });
   let start = 0;
   try { start = (await fsp.stat(part)).size; } catch {}
-  const headers = authHeaders();
+  const headers = opts.plain ? {} : authHeaders();
   delete headers.Accept;
   const lim = (config.downloads.limitMBs || 0) * 1048576;
   const running = Math.max(1, queue.filter((q) => q.status === 'downloading').length);
   let w;
   try { w = new (require('worker_threads').Worker)(path.join(__dirname, 'dlWorker.js'), { workerData: { url, headers, part, start, limit: lim ? Math.floor(lim / running) : 0 } }); }
-  catch (e) { log('download worker could not start, downloading here', e.message); dlWorkersOk = false; return downloadHere(url, dest, it, onBytes); }
+  catch (e) { log('download worker could not start, downloading here', e.message); dlWorkersOk = false; return downloadHere(url, dest, it, onBytes, opts); }
   const r = await new Promise((resolve, reject) => {
     const onAbort = () => { try { w.postMessage('abort'); } catch {} setTimeout(() => w.terminate(), 500); };
     it.abort.signal.addEventListener('abort', onAbort, { once: true });
@@ -1308,20 +1309,20 @@ async function downloadTo(url, dest, it, onBytes) {
     w.on('error', (e) => end(reject, e));
     w.on('exit', () => end(reject, Object.assign(new Error(it.abort.signal.aborted ? 'aborted' : 'Download stopped'), it.abort.signal.aborted ? { name: 'AbortError' } : {})));
   });
-  if (r === 'restart') { await fsp.rm(part, { force: true }); return downloadTo(url, dest, it, onBytes); }
+  if (r === 'restart') { await fsp.rm(part, { force: true }); return downloadTo(url, dest, it, onBytes, opts); }
   await fsp.rename(part, dest);
 }
 // the old way, on the main thread: only when a worker can't start
-async function downloadHere(url, dest, it, onBytes) {
+async function downloadHere(url, dest, it, onBytes, opts = {}) {
   const part = dest + '.part';
   await fsp.mkdir(path.dirname(dest), { recursive: true });
   let start = 0;
   try { start = (await fsp.stat(part)).size; } catch {}
-  const headers = authHeaders();
+  const headers = opts.plain ? {} : authHeaders();
   delete headers.Accept;
   if (start > 0) headers.Range = `bytes=${start}-`;
   const r = await fetch(url, { headers, signal: it.abort.signal });
-  if (r.status === 416) { start = 0; await fsp.rm(part, { force: true }); return downloadHere(url, dest, it, onBytes); }
+  if (r.status === 416) { start = 0; await fsp.rm(part, { force: true }); return downloadHere(url, dest, it, onBytes, opts); }
   if (!r.ok) throw new Error(r.status === 404 ? 'File not found on server' : `HTTP ${r.status}`);
   const resumed = r.status === 206 && start > 0;
   if (resumed) onBytes(start);
@@ -1705,6 +1706,55 @@ async function rapsFromRomm(romId, need, dir) {
     try { await downloadTo(c.url, dest, { abort: new AbortController() }, () => {}); if (fs.statSync(dest).size === 16) out[x.contentId] = dest; } catch (e) { log('rap from RomM', e.message); }
   }
   return out;
+}
+// ---------------------------------------------------------------- PS3 game updates (0.9.16)
+const PS3UP_FILE = path.join(USER_DATA, 'ps3-updates.json');
+const ps3upCache = loadJson(PS3UP_FILE, {}); // serial -> { t, title, packages }
+let ps3upRun = null;
+async function ps3UpdateInfo(romId, { fresh = false } = {}) {
+  const where = installedMap[romId];
+  if (!where || where === MARKED) return null;
+  const serial = ps3Serial(romId, where);
+  if (!serial) return null;
+  const have = patchesMod.ps3Version(installs[romId]?.dir || where, rpcs3Hdds(), serial);
+  let c = ps3upCache[serial];
+  if (fresh || !c || Date.now() - c.t > 12 * 3600e3) {
+    try { c = ps3upCache[serial] = { t: Date.now(), ...(await require('./ps3Updates').updatesFor(serial)) }; saveJson(PS3UP_FILE, ps3upCache); }
+    catch (e) { log('ps3 updates', serial, e.message); if (!c) return { romId, serial, have, error: e.message, todo: [] }; }
+  }
+  const todo = require('./ps3Updates').newer(c.packages || [], have);
+  return { romId, serial, have, latest: (c.packages || []).slice(-1)[0]?.version || null, todo, size: todo.reduce((n, p) => n + p.size, 0) };
+}
+async function ps3InstallUpdates(romId) {
+  if (ps3upRun || pkgRun) throw new Error('Another install is running. Wait for it to finish.');
+  const info = await ps3UpdateInfo(romId, { fresh: true });
+  if (!info?.todo?.length) return { count: 0 };
+  const cmd = steamMgr.rpcs3Command();
+  if (!cmd) throw new Error('RPCS3 wasn’t found. Set it up in Settings → Emulators.');
+  const hdds = rpcs3Hdds();
+  if (!hdds.length) throw new Error('RPCS3’s storage wasn’t found. Open RPCS3 once, then try again.');
+  const dir = path.join(os.tmpdir(), `cartridge-ps3up-${process.pid}-${Date.now()}`);
+  ps3upRun = { romId, ac: new AbortController() };
+  const send = (o) => broadcast('ps3-update', { romId, ...o });
+  try {
+    const files = [];
+    const total = info.size;
+    let got = 0;
+    for (const [i, pk] of info.todo.entries()) {
+      const dest = path.join(dir, path.basename(new URL(pk.url).pathname) || `update-${pk.version}.pkg`);
+      send({ state: 'downloading', step: i + 1, of: info.todo.length, version: pk.version, pct: total ? Math.round((got / total) * 100) : 0 });
+      await downloadTo(pk.url, dest, { abort: ps3upRun.ac }, (n) => { got += n; send({ state: 'downloading', step: i + 1, of: info.todo.length, version: pk.version, pct: total ? Math.round((got / total) * 100) : 0 }); }, { plain: true });
+      if (pk.size && fs.statSync(dest).size !== pk.size) throw new Error(`Update ${pk.version} didn’t download completely. Try again.`);
+      files.push(dest);
+    }
+    send({ state: 'installing' });
+    await pkgInst.install({ cmd, hdds, files, titleIds: [info.serial], signal: ps3upRun.ac.signal, onStep: (st) => send({ state: 'installing', ...st }) });
+    const now = patchesMod.ps3Version(installs[romId]?.dir || installedMap[romId], hdds, info.serial);
+    log('ps3 updates installed', info.serial, info.have, '->', now);
+    send({ state: 'done', version: now });
+    return { count: files.length, version: now };
+  } catch (e) { send({ state: 'error', error: e.message }); throw e; }
+  finally { ps3upRun = null; fs.rmSync(dir, { recursive: true, force: true }); }
 }
 async function installPkg(romId, zrif) {
   if (pkgRun) throw new Error('Another game is being installed. Wait for it to finish.');
@@ -2791,6 +2841,48 @@ const handlers = {
     fs.mkdirSync(hit.folder, { recursive: true });
     return hit.folder;
   },
+  // emulator updates (0.9.16): each installed copy, its version and whether a newer one is out
+  'emuup:list': async ({ fresh } = {}) => {
+    const U = require('./emuUpdates'), list = steamMgr.installedEmulators();
+    const fp = await U.flatpakUpdates(list.filter((e) => e.kind === 'flatpak').map((e) => e.fp)).catch(() => ({}));
+    const file = path.join(USER_DATA, 'emulator-releases.json'), cache = loadJson(file, {});
+    const out = [];
+    for (const e of list) {
+      if (e.kind === 'flatpak') { out.push({ ...e, update: fp[e.fp] ? { version: fp[e.fp].version } : null, where: fp[e.fp]?.where }); continue; }
+      let c = cache[e.id];
+      if (U.REPOS[e.id] && (fresh || !c || Date.now() - c.t > 6 * 3600e3)) {
+        try { c = cache[e.id] = { t: Date.now(), rel: await U.latestRelease(e.id) }; } catch (err) { c = { t: c?.t || 0, rel: c?.rel || null, error: err.message }; }
+      }
+      out.push({ ...e, update: c?.rel && U.isNewer(c.rel, e) ? c.rel : null, error: c?.error || null, noSource: !U.REPOS[e.id] });
+    }
+    saveJson(file, cache);
+    return out;
+  },
+  'emuup:run': async ({ id, kind, fp, where, path: file }) => {
+    const U = require('./emuUpdates');
+    if (require('./raLogin').running().has(String(id).split('@')[0])) throw new Error('Close the emulator first.');
+    if (kind === 'flatpak') { await U.flatpakUpdate(fp, where); log('emulator updated (flatpak)', fp); return true; }
+    const own = steamMgr.installedEmulators().find((e) => e.kind === 'appimage' && e.path === file);
+    if (!own) throw new Error('That emulator wasn’t found.');
+    const rel = await U.latestRelease(own.id);
+    if (!rel) throw new Error('No newer AppImage was found for it.');
+    broadcast('emu-update', { path: file, state: 'downloading', pct: 0 });
+    let got = 0;
+    await U.replaceAppImage(file, rel, (url, dest) => downloadTo(url, dest, { abort: new AbortController() }, (n) => { got += n; broadcast('emu-update', { path: file, state: 'downloading', pct: rel.size ? Math.round((got / rel.size) * 100) : null }); }, { plain: true }));
+    log('emulator updated (appimage)', own.id, own.version, '->', rel.version || rel.tag);
+    try { steamMgr.scanEmulators?.(); } catch {}
+    return { version: rel.version || rel.tag };
+  },
+  // PS3 game updates (0.9.16): every installed PS3 game with a newer update, or one game
+  'ps3up:list': async ({ fresh } = {}) => {
+    const ps3 = [...romIndexMain().values()].filter((r) => /^ps3$/i.test(r.platform_slug || r.platform_fs_slug || '') && installedMap[r.id] && installedMap[r.id] !== MARKED);
+    const out = [];
+    for (const r of ps3) { const i = await ps3UpdateInfo(r.id, { fresh }).catch(() => null); if (i) out.push({ ...i, name: r.name }); }
+    return out;
+  },
+  'ps3up:game': ({ romId }) => ps3UpdateInfo(Number(romId)),
+  'ps3up:install': ({ romId }) => ps3InstallUpdates(Number(romId)),
+  'ps3up:cancel': () => { ps3upRun?.ac.abort(); return true; },
   'patches:list': async ({ romId }) => {
     await freshRpcs3Patches(romId);
     const st = patchState(romId), E = EMU_PATCH[st.emu];

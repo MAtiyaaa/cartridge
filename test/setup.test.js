@@ -89,3 +89,25 @@ test('Add-ons: textures on, written the way each emulator writes it', () => {
   assert.match(fs.readFileSync(path.join(h, '.config/azahar-emu/qt-config.ini'), 'utf8'), /^custom_textures\\default=false$/m);
   assert.match(fs.readFileSync(path.join(h, '.config/azahar-emu/qt-config.ini'), 'utf8'), /^custom_textures=true$/m);
 });
+
+const EU = require('../electron/emuUpdates.js');
+test('Emulator updates: versions compared, the right AppImage picked, swapped in place', async () => {
+  assert.ok(EU.cmpVer('v2.3.120', '2.3.99') > 0);
+  assert.strictEqual(EU.cmpVer('0.2.0', 'v0.2'), 0);
+  const fetchImpl = async (url) => ({ ok: true, status: 200, json: async () => (url.includes('/tags/latest') ? { tag_name: 'latest', assets: [{ name: 'DuckStation-x64.AppImage', browser_download_url: 'https://x/d', size: 4, updated_at: '2030-01-01T00:00:00Z' }, { name: 'DuckStation-arm64.AppImage' }] } : [{ draft: true }, { tag_name: 'v2.4.10', assets: [{ name: 'pcsx2-v2.4.10-linux-appimage-x64-Qt.AppImage', browser_download_url: 'https://x/p', size: 4 }] }]) });
+  const d = await EU.latestRelease('duckstation', { fetchImpl });
+  assert.strictEqual(d.name, 'DuckStation-x64.AppImage');
+  assert.ok(EU.isNewer(d, { version: '', path: '/nope' })); // no version: by date
+  const p = await EU.latestRelease('pcsx2', { fetchImpl });
+  assert.strictEqual(p.version, '2.4.10');
+  assert.ok(EU.isNewer(p, { version: '2.3.0' }));
+  assert.ok(!EU.isNewer(p, { version: '2.4.10' }));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'eu-')), f = path.join(dir, 'pcsx2.AppImage');
+  fs.writeFileSync(f, 'old!');
+  await EU.replaceAppImage(f, p, async (url, dest) => fs.writeFileSync(dest, 'new!'));
+  assert.strictEqual(fs.readFileSync(f, 'utf8'), 'new!');
+  assert.ok(!fs.existsSync(f + '.cartridge-old'));
+  assert.ok(fs.statSync(f).mode & 0o100);
+  await assert.rejects(EU.replaceAppImage(f, { ...p, size: 99 }, async (url, dest) => fs.writeFileSync(dest, 'x')), /incomplete/);
+  assert.strictEqual(fs.readFileSync(f, 'utf8'), 'new!'); // untouched after a bad download
+});
