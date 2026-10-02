@@ -6,7 +6,28 @@ The branch for 0.9.3 work is `claude/relaxed-fermat-30pigp`. Pull it before star
 
 ---
 
-## 2 Oct 2026 · 0.9.3 L released, M listed (read this first)
+## 2 Oct 2026 · 0.9.15 built (read this first)
+
+The owner merged 0.9.3 M into the 0.9.4 plan and asked for one update called **0.9.15** (version, versionName and release title all "0.9.15"). Plan: `docs/plan-0.9.4.md`. Built: all of section F, section 0 (welcome), section 1 (RomM on this device), and the checkable part of section 2 (Add-ons).
+
+**Owner's picks in chat:**
+- F15 console backgrounds: **A + B for the top five** (from live mockups). Scenes (B) for PS2, GameCube, Wii, Xbox 360, Switch; every other console uses its own game art (A, `art:<slug>`). Retired styles wiiu, ds, n3ds, xbox map to their console's art (`LEGACY_ART`).
+- Add-ons: **build what can be checked.** GameBanana, libretro's buildbot and the GitHub API are blocked from the cloud container, so no download sources were built. Done: texture folders and on/off per emulator from their settings (`electron/addons.js`), the game's folder (game More → Texture packs), Settings → Emulators → Texture Packs. Pack, cheat and mod downloads are the next update (0.9.16), once sources can be checked.
+
+**Where things are:**
+- `electron/raLogin.js` (Sign In to Emulators): PCSX2 `inis/PCSX2.ini` + `inis/secrets.ini`, DuckStation encrypted token (SHA256 of /etc/machine-id + username, 100 rounds, AES-128-CBC, checked against openssl), Dolphin `RetroAchievements.ini`, PPSSPP `ppsspp.ini` + `ppsspp_retroachievements.dat`, RetroArch `cheevos_token`. RA `dorequest.php r=login2`. Skips running emulators. Tests: `test/raLogin.test.js`.
+- F11: `watchGamescopeFocus` in main.js hides the window when a new `reaper SteamLaunch AppId=` for another app appears, shows it (inactive) when focus moves to it (not 769, Steam's UI) or after 45 s.
+- Welcome: `src/views/Welcome.vue` (`store.welcoming`, `config.welcomed`, `ui.name`, `ui.welcomeNotice`), embeds `Setup.vue` (`embedded`) and `EmuSetup.vue` (`welcome`). `electron/welcome.js`: EmuDeck app as its install.sh does it, RetroDECK via `flatpak install --user`. `welcome:state`, `deviceKind()` (DMI product name).
+- RomM on this device: `electron/rommLocal.js` (Podman pod `cartridge-romm`, MariaDB 11 + rommapp/romm, `label=disable`, port from 8095, `romm-local.env` mode 600, `podman-restart.service`), `src/components/RommLocal.vue`, `config.rommLocal`. First admin through `POST /api/users`.
+- Backgrounds: `bgRenderers.js` (`gc`, `artPan`, `LEGACY_ART`), `Background.vue` (`rendererOf`, `art:<slug>`), Settings picker group "Your games".
+
+**Owner must test on a device:** shadPS4 after Update on the PS4 page; launching a Steam game while Cartridge is open in Game Mode (F11); Sign In to Emulators per emulator (DuckStation especially: Flatpak and AppImage); the welcome in Game Mode and Desktop Mode; EmuDeck download and RetroDECK install; RomM on this device on Bazzite (Podman) and what SteamOS says without Podman; the new backgrounds on the Deck in software mode and on the TV.
+
+**Next:** Add-ons downloads (0.9.16) once sources are checked; remind the owner about the stray v2.3.1 tag.
+
+---
+
+## 2 Oct 2026 · 0.9.3 L released, M listed
 
 0.9.3 L merged (PR #30) as version 0.9.14. The owner listed 0.9.3 M in `docs/plan-0.9.3.md` ("0.9.3 M") and said **don't start building yet** (out of credits). Start M only when the owner says so. Remind the owner about the v2.3.1 tag in the next update.
 

@@ -64,6 +64,8 @@ So people without a RomM server aren't put off. Offered in the onboarding's RomM
 - RomM without containers isn't used: RomM only supports its manual setup for development, and it needs a database server, Valkey and system libraries that a read-only system can't install.
 
 ## 2. Add-ons: texture packs, patches, cheats and mods
+
+**Status (0.9.15):** the checkable part shipped (texture folders and on/off per emulator, the game's folder). Downloads of packs, cheats and mods moved to 0.9.16: their sources (GameBanana, libretro, GitHub API) couldn't be checked from the cloud container (owner: "build what I can check").
 Like ArmSX2's PS2 downloads, for every console that supports them. How ArmSX2 does it: a curated catalogue in its own repository (about 490 PS2 packs, converted to ASTC for phones), each pack tagged with the games it belongs to so it installs itself in the right place, checksum-checked, with packs for your own games listed first; patches and cheats are picked per game and installed together. Cartridge follows the same model, but its catalogue points at the original sources (ArmSX2's ASTC packs are made for phones, not PCs).
 - **Catalogue sources, one per kind** (each confirmed before building; only sources with a stable public listing):
   - Patches: PCSX2's official patches repository (pnach per serial), RPCS3's own patch list, Xenia Canary's game-patches, Cemu's graphic packs repository, Dolphin's built-in game patches.
