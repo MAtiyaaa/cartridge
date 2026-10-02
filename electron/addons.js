@@ -65,13 +65,8 @@ function emulators(home = os.homedir(), env = process.env) {
 }
 
 // Game IDs the emulators name texture folders by
-function gcWiiId(file) {
-  try {
-    const fd = fs.openSync(file, 'r'); const b = Buffer.alloc(6); fs.readSync(fd, b, 0, 6, 0); fs.closeSync(fd);
-    const id = b.toString('latin1');
-    return /^[A-Z0-9]{6}$/.test(id) ? id : null; // plain .iso/.gcm only; RVZ and WBFS keep it elsewhere
-  } catch { return null; }
-}
+// GameCube/Wii: in cheats.js (ISO, GCM, RVZ, WIA, WBFS, CISO)
+const gcWiiId = (file) => require('./cheats').gcWiiId(file);
 // 3DS cartridge dump (NCSD: .3ds/.cci): partition 0's NCCH program ID, as Azahar names the folder
 function n3dsTitleId(file) {
   try {

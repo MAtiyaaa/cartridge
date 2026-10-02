@@ -1835,6 +1835,7 @@ function afterInstall(romId) {
 // The emulator's own patch list for a game, switched on in the emulator's own patch settings.
 // patches.json: the ones Cartridge turned on (only those can it turn off), per emulator.
 const patchesMod = require('./patches');
+const cheatsMod = require('./cheats');
 const PATCHES_FILE = path.join(USER_DATA, 'patches.json');
 let patchMine = loadJson(PATCHES_FILE, {});
 // a PS3 game's serial: from its install record, its PARAM.SFO, else its name
@@ -1869,10 +1870,42 @@ function patchHome(romId, emu) {
     if (fs.existsSync(path.join(dir, 'portable.ini')) || fs.existsSync(path.join(dir, 'portable.txt'))) return { pick: exe, pcsx2Root: dir };
     return { pick: exe, pcsx2Root: /net\.pcsx2\.PCSX2/.test(flat) ? path.join(home, '.var/app/net.pcsx2.PCSX2/config/PCSX2') : null };
   }
+  if (emu === 'dolphin' || emu === 'ppsspp') return { pick: exe, flatpak: /DolphinEmu|ppsspp/i.test(flat) };
   return { pick: exe };
+}
+// the game's own file: the biggest one in its folder
+function mainFile(where) {
+  if (!where || where === MARKED) return '';
+  try { if (fs.statSync(where).isDirectory()) return fs.readdirSync(where).map((n) => path.join(where, n)).filter((f) => fs.statSync(f).isFile()).sort((a, b) => fs.statSync(b).size - fs.statSync(a).size)[0] || ''; } catch { return ''; }
+  return where;
+}
+// GameCube and Wii through Dolphin, PSP through PPSSPP (0.9.16): codes listed in cheats.js
+function dolphinPatchState(romId) {
+  const file = mainFile(installedMap[romId]);
+  if (!file) return { emu: 'dolphin', why: 'Download the game first.' };
+  const id = cheatsMod.gcWiiId(file);
+  if (!id) return { emu: 'dolphin', why: 'Cartridge couldn’t read this game’s ID from its disc image (ISO, GCM, RVZ, WIA, WBFS and CISO can be read).' };
+  const ph = patchHome(romId, 'dolphin'), dirs = cheatsMod.dolphinDirs();
+  const dir = (ph.pick && dirs.find((d) => d.flatpak === !!ph.flatpak)) || dirs[0];
+  if (!dir) return { emu: 'dolphin', serial: id, why: 'Dolphin’s settings weren’t found on this device. Open Dolphin once, then come back.' };
+  return { emu: 'dolphin', serial: id, version: '', dir };
+}
+function ppssppPatchState(romId, r) {
+  const where = installedMap[romId], file = mainFile(where);
+  if (!file) return { emu: 'ppsspp', why: 'Download the game first.' };
+  let id = /\.iso$/i.test(file) ? (() => { const b = patchesMod.isoFile(file, ['PSP_GAME', 'PARAM.SFO']); return b ? patchesMod.parseSfo(b).DISC_ID : null; })() : null;
+  id = id || (`${r?.fs_name || ''} ${r?.name || ''} ${path.basename(file)}`.match(/\b([A-Z]{4})-?(\d{5})\b/) || []).slice(1).join('') || null;
+  if (!id) return { emu: 'ppsspp', why: 'Cartridge couldn’t find this game’s ID (ULUS10041 and so on) in its name or its ISO.' };
+  const ph = patchHome(romId, 'ppsspp'), dirs = cheatsMod.ppssppDirs();
+  const dir = (ph.pick && dirs.find((d) => d.flatpak === !!ph.flatpak)) || dirs[0];
+  if (!dir) return { emu: 'ppsspp', serial: id, why: 'PPSSPP’s settings weren’t found on this device. Open PPSSPP once, then come back.' };
+  return { emu: 'ppsspp', serial: id, version: '', dir, title: r?.name || '' };
 }
 function patchState(romId) {
   const r = romIndexMain().get(Number(romId));
+  const slugs = `${r?.platform_slug} ${r?.platform_fs_slug}`;
+  if (/\b(ngc|gamecube|gc|wii)\b/i.test(slugs)) return dolphinPatchState(romId);
+  if (/\bpsp\b/i.test(slugs)) return ppssppPatchState(romId, r);
   if (/ps4/i.test(`${r?.platform_slug} ${r?.platform_fs_slug}`)) return ps4PatchState(romId, r);
   if (/^ps2$/i.test(r?.platform_slug || '') || /^ps2$/i.test(r?.platform_fs_slug || '')) return ps2PatchState(romId);
   if (!/ps3/i.test(`${r?.platform_slug} ${r?.platform_fs_slug}`)) return { emu: null };
@@ -1927,9 +1960,13 @@ function ps2PatchState(romId) {
   if (!game || !game.crc) return { emu: 'pcsx2', why: /\.iso$/i.test(file) ? 'Cartridge couldn’t read this disc image.' : 'This game is compressed (CHD and similar), so its details come from PCSX2: add your PS2 folder in PCSX2 (Settings → Game List) once, let it scan, then come back.' };
   return { emu: 'pcsx2', serial: game.serial || '', version: patchesMod.crcHex(game.crc), dir, game };
 }
+const notRunning = (id, name) => { if (require('./raLogin').running().has(id)) throw new Error(`Close ${name} first: it saves its settings when it quits, over this change.`); };
 const EMU_PATCH = {
   rpcs3: { name: 'RPCS3', list: (st, mine) => patchesMod.rpcs3List(st.dir, st.serial, st.version, mine), set: (st, todo, mine) => patchesMod.rpcs3Set(st.dir, todo, mine) },
   shadps4: { name: 'shadPS4', list: (st, mine) => patchesMod.shadList(st.dir, st.serial, st.version, mine), set: (st, todo, mine) => patchesMod.shadSet(st.dir, todo, mine) },
+  // Dolphin and PPSSPP save their settings when they quit, so nothing is written while they run
+  dolphin: { name: 'Dolphin', list: (st, mine) => cheatsMod.dolphinList(st.dir, st.serial, cheatsMod.dolphinSysText(cheatsMod.dolphinSys(st.dir.flatpak), st.serial, st.dir.flatpak ? [] : steamMgr.appImagesFor('gc', /dolphin/i), require('./detect').readAppImageFile), mine), set: (st, todo, mine) => { notRunning('dolphin', 'Dolphin'); return cheatsMod.dolphinSet(st.dir, st.serial, todo, mine); } },
+  ppsspp: { name: 'PPSSPP', list: (st, mine) => cheatsMod.ppssppList(st.dir, st.serial, mine), set: (st, todo, mine) => { notRunning('ppsspp', 'PPSSPP'); return cheatsMod.ppssppSet(st.dir, st.serial, todo, mine, st.title); } },
   pcsx2: { name: 'PCSX2', list: (st, mine) => patchesMod.pcsx2List(st.dir, st.game, patchesMod.pcsx2ZipBuffer(patchesMod.pcsx2ZipSources(os.homedir(), steamMgr.appImagesFor('ps2', /pcsx2/i)), require('./detect').readAppImageFile), mine), set: (st, todo, mine) => patchesMod.pcsx2Set(st.dir, st.game, todo, mine) },
 };
 // D2: a Vita game through Vita3K (.pkg with its zRIF installs with no window; a .vpk or .zip
@@ -2816,7 +2853,7 @@ const handlers = {
     let file = where && where !== MARKED ? where : '';
     try { if (file && fs.statSync(file).isDirectory()) file = fs.readdirSync(file).map((n) => path.join(file, n)).filter((f) => fs.statSync(f).isFile()).sort((a, b) => fs.statSync(b).size - fs.statSync(a).size)[0] || ''; } catch { file = ''; }
     if (slug === 'ps2') ids.serial = ps2PatchState(rom.id).serial || '';
-    if (/\.(iso|gcm)$/i.test(file) && ['ngc', 'gamecube', 'wii'].includes(slug)) ids.gameId = A.gcWiiId(file);
+    if (/\.(iso|gcm|rvz|wia|wbfs|ciso)$/i.test(file) && ['ngc', 'gamecube', 'wii'].includes(slug)) ids.gameId = A.gcWiiId(file);
     if (/\.iso$/i.test(file) && slug === 'psp') { const b = patchesMod.isoFile(file, ['PSP_GAME', 'PARAM.SFO']); ids.gameId = b ? patchesMod.parseSfo(b).DISC_ID : null; }
     if (/\.(3ds|cci)$/i.test(file)) ids.titleId = A.n3dsTitleId(file);
     return A.forGame(slug, ids, A.emulators());
@@ -2887,7 +2924,9 @@ const handlers = {
     await freshRpcs3Patches(romId);
     const st = patchState(romId), E = EMU_PATCH[st.emu];
     if (!st.dir || !E) return { emu: st.emu, emuName: E?.name || '', serial: st.serial, why: st.why, list: [] };
-    return { emu: st.emu, emuName: E.name, serial: st.serial, version: st.version, list: await E.list(st, patchMine[st.emu] || {}) };
+    const list = await E.list(st, patchMine[st.emu] || {});
+    const why = st.emu === 'ppsspp' && !fs.existsSync(path.join(st.dir.cheats, 'cheat.db')) ? 'PPSSPP has no cheats for this game here. They come from cheat.db: put it in PSP/Cheats in PPSSPP’s folder (or add codes in PPSSPP’s Cheats), then come back.' : '';
+    return { emu: st.emu, emuName: E.name, serial: st.serial, version: st.version, why, list };
   },
   // changes: [{ key, on }]. Patches turned on in RPCS3 itself are never turned off here.
   'patches:apply': async ({ romId, changes }) => {

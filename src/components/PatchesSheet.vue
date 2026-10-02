@@ -2,10 +2,10 @@
   <div class="scrim" ref="el" @click.self="closeModal(null)">
     <div class="dialog pt">
       <div>
-        <div class="eyebrow">Patches · {{ emuName }}</div>
+        <div class="eyebrow">{{ emuName === 'PPSSPP' ? 'Cheats' : emuName === 'Dolphin' ? 'Patches and cheats' : 'Patches' }} · {{ emuName }}</div>
         <h2>{{ name }}</h2>
         <div class="muted small">{{ [serial, version ? (emuName === 'PCSX2' ? 'CRC ' : 'version ') + version : ''].filter(Boolean).join(' · ') }}</div>
-        <div class="muted small">Patches you turn on here stay on in {{ emuName }}, as if you ticked them there.</div>
+        <div class="muted small">{{ emuName === 'PPSSPP' ? 'Cheats' : 'Patches' }} you turn on here stay on in {{ emuName }}, as if you ticked them there.<template v-if="emuName === 'PPSSPP' || emuName === 'Dolphin'"> Cheats also turn on {{ emuName }}’s Enable cheats setting.</template></div>
       </div>
       <div v-if="!list.length" class="muted" style="padding: 12px 2px">{{ why || `${emuName} has no patches for this game.` }}</div>
       <div v-else class="pt-list" data-scroll>

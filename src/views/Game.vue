@@ -610,13 +610,13 @@ async function more() {
   }
   if (trophySystem.value) play.push({ label: tro.value ? 'Change linked trophies' : 'Link to trophies', sub: 'Pick which emulator trophy set belongs to this game', value: 'trophies', icon: 'mdiLinkVariant' });
   const slugs = `${base.value?.platform_slug} ${base.value?.platform_fs_slug}`;
-  const pe = /ps3/i.test(slugs) ? 'RPCS3' : /ps4/i.test(slugs) ? 'shadPS4' : /\bps2\b/i.test(slugs) ? 'PCSX2' : null;
+  const pe = /ps3/i.test(slugs) ? 'RPCS3' : /ps4/i.test(slugs) ? 'shadPS4' : /\bps2\b/i.test(slugs) ? 'PCSX2' : /\b(ngc|gamecube|gc|wii)\b/i.test(slugs) ? 'Dolphin' : /\bpsp\b/i.test(slugs) ? 'PPSSPP' : null;
   // PS3 game updates from Sony's list (0.9.16); never holds the menu up for long
   if (installedPath.value && !marked.value && /ps3/i.test(slugs)) {
     const up = await Promise.race([call('ps3up:game', { romId: Number(props.romId) }).catch(() => null), new Promise((r) => setTimeout(() => r(null), 1500))]);
     if (up?.todo?.length) play.push({ label: `Install game update ${up.todo[up.todo.length - 1].version}`, sub: `${up.todo.length} update${up.todo.length === 1 ? '' : 's'} from Sony · ${bytes(up.size)} · now ${up.have || 'unknown'}`, value: 'ps3up', icon: 'mdiPackageUp' });
   }
-  if (installedPath.value && !marked.value && pe) play.push({ label: 'Patches', sub: `From ${pe}’s patch list, saved in ${pe}`, value: 'patches', icon: 'mdiPuzzleOutline' });
+  if (installedPath.value && !marked.value && pe) play.push({ label: pe === 'PPSSPP' ? 'Cheats' : pe === 'Dolphin' ? 'Patches and cheats' : 'Patches', sub: `From ${pe}’s ${pe === 'PPSSPP' ? 'cheat' : 'patch'} list, saved in ${pe}`, value: 'patches', icon: 'mdiPuzzleOutline' });
   if (installedPath.value && !marked.value && /\b(ps2|psx|ngc|gamecube|wii|psp|3ds|n3ds)\b/i.test(slugs)) play.push({ label: 'Texture packs', sub: 'Where this game’s packs go, and whether they’re on', value: 'textures', icon: 'mdiTextureBox' });
   if (installedPath.value) play.push({ label: 'Show file location', value: 'path', icon: 'mdiFolderOutline' });
   const top = [
