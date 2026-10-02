@@ -368,6 +368,10 @@
               <button class="btn" :class="{ primary: store.update.state !== 'ready' }" data-focus :disabled="['checking', 'downloading'].includes(store.update.state)" @click="checkUpdates"><Icon name="mdiCloudDownloadOutline" />Check for updates</button>
             </div>
             <p class="muted small">New versions come from the GitHub Releases page. They download in the background and replace this AppImage in place, so your Steam shortcut and settings stay as they are.</p>
+            <ChangelogCard />
+            <div class="subh">Roll back</div>
+            <p class="muted small" style="margin-top: -6px">Go back to an earlier version if this one gives you trouble. Your settings stay. Automatic updates pause until you press Check for updates.</p>
+            <div class="row"><button class="btn" data-focus :disabled="rollBusy" @click="rollBack"><Icon name="mdiHistory" :class="{ spin: rollBusy }" />{{ rollBusy ? 'Working…' : 'Choose an earlier version' }}</button></div>
           </template>
 
           <template v-else-if="sec === 'ra'">
@@ -523,6 +527,7 @@ import LibraryCheck from '../components/LibraryCheck.vue';
 import RommUpload from '../components/RommUpload.vue';
 import EmuIcon from '../components/EmuIcon.vue';
 import EmuGet from '../components/EmuGet.vue';
+import ChangelogCard from '../components/ChangelogCard.vue';
 import ServerStatus from '../components/ServerStatus.vue';
 import ControllerTest from '../components/ControllerTest.vue';
 import ReportProblem from '../components/ReportProblem.vue';
@@ -993,6 +998,20 @@ const updText = computed(() => {
   if (!store.update.supported && store.update.state === 'idle') return 'Updates work in the AppImage build.';
   return { checking: 'Checking GitHub for a new version…', downloading: `Downloading ${u.version} · ${u.percent || 0}%`, ready: `Version ${u.version} is downloaded and ready.`, current: 'You have the latest version.', error: `Could not check for updates: ${u.error || ''}` }[u.state] || 'Checks automatically when Cartridge starts.';
 });
+const rollBusy = ref(false);
+async function rollBack() {
+  rollBusy.value = true;
+  let list = [];
+  try { list = await call('update:releases'); } catch (e) { rollBusy.value = false; return toast(e.message, 'error', 5000); }
+  rollBusy.value = false;
+  const older = list.filter((x) => !x.current).slice(0, 12);
+  if (!older.length) return toast('No earlier versions were found.', 'info', 3000);
+  const tag = await choose({ sheet: true, title: 'Roll back to', options: older.map((x) => ({ label: x.name, sub: x.date ? new Date(x.date).toLocaleDateString() : x.tag, value: x.tag, icon: 'mdiHistory', raw: true })) });
+  if (!tag) return;
+  if (!(await confirm(`Roll back to ${tag.slice(1)}?`, 'Cartridge downloads that version, puts it in place of this one and restarts. Your settings and games stay.', 'Roll back'))) return;
+  rollBusy.value = true;
+  try { await call('update:rollback', { tag }); toast('Restarting…', 'ok', 3000, 'mdiHistory'); } catch (e) { toast(e.message, 'error', 6000); rollBusy.value = false; }
+}
 async function checkUpdates() { try { await call('update:check'); } catch (e) { toast(e.message, 'info', 4000); } }
 async function setPointer(v) { await saveConfig({ ui: { pointer: v } }); setPointerPref(v); }
 async function setGraphics(v) {

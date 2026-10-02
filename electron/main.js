@@ -2055,7 +2055,7 @@ const nameOf = (i) => String(i?.releaseName || '').replace(/^Cartridge\s+/i, '')
 function setupUpdater() {
   if (!app.isPackaged || !process.env.APPIMAGE) return; // only the real AppImage can replace itself
   try { ({ autoUpdater } = require('electron-updater')); } catch { return; }
-  autoUpdater.autoDownload = true;
+  autoUpdater.autoDownload = !config.updateHold; // after a roll back, no automatic update until the user asks (0.9.17)
   autoUpdater.autoInstallOnAppQuit = true;
   const set = (s) => { updateState = s; broadcast('update', { ...s, supported: true }); };
   autoUpdater.on('checking-for-update', () => set({ state: 'checking' }));
@@ -3309,9 +3309,40 @@ const handlers = {
   'steam:setConfig': (patch) => { config.steam = { ...(config.steam || {}), ...patch }; saveConfig(); return config.steam; },
   'steam:setPath': ({ romId, path: p }) => { if (!isDir(p) && !fs.existsSync(p)) throw new Error('That folder does not exist'); marks[romId] = { ...(marks[romId] || { at: Date.now() }), path: p }; saveMarks(); return true; },
   'app:startGame': () => { const g = startGame; startGame = null; return g; },
+  // Steam's on-screen keyboard (0.9.17): steam://open/keyboard, which Steam handles in Game Mode as Steam + X does
+  'steam:keyboard': () => {
+    if (!isGamescope()) return false;
+    const env = { ...process.env }; for (const k of ['LD_PRELOAD', 'LD_LIBRARY_PATH']) delete env[k];
+    try { require('child_process').spawn('xdg-open', ['steam://open/keyboard?Mode=0'], { detached: true, stdio: 'ignore', env }).on('error', () => {}).unref(); return true; } catch { return false; }
+  },
   'update:get': () => ({ ...updateState, current: versionName(), supported: !!autoUpdater }),
-  'update:check': async () => { if (!autoUpdater) throw new Error('Updates work in the AppImage build only'); await autoUpdater.checkForUpdates(); return updateState; },
+  'update:check': async () => { if (!autoUpdater) throw new Error('Updates work in the AppImage build only'); if (config.updateHold) { delete config.updateHold; saveConfig(); autoUpdater.autoDownload = true; } await autoUpdater.checkForUpdates(); return updateState; },
   'update:install': () => { if (updateState.state === 'ready') autoUpdater.quitAndInstall(true, true); },
+  // Roll back (0.9.17): Cartridge's earlier releases on GitHub, and one of them in place of this AppImage
+  'update:releases': async () => {
+    const r = await webFetch('https://api.github.com/repos/abdu2304/cartridge/releases?per_page=20', { headers: { 'User-Agent': 'Cartridge', Accept: 'application/vnd.github+json' }, signal: AbortSignal.timeout(20000) }).catch(() => null);
+    if (r?.ok) return (await r.json()).filter((x) => !x.draft && (x.assets || []).some((a) => a.name === 'Cartridge-x86_64.AppImage')).map((x) => ({ tag: x.tag_name, name: String(x.name || x.tag_name).replace(/^Cartridge\s+/i, ''), date: x.published_at, current: x.tag_name === 'v' + app.getVersion() }));
+    // GitHub's API limit: the releases page instead
+    const p = await webFetch('https://github.com/abdu2304/cartridge/releases', { headers: { 'User-Agent': 'Mozilla/5.0 Cartridge' }, signal: AbortSignal.timeout(20000) });
+    if (!p.ok) throw new Error(`GitHub answered ${p.status}. Try again in a while.`);
+    const tags = [...new Set([...(await p.text()).matchAll(/\/abdu2304\/cartridge\/releases\/tag\/(v[\d.]+)/g)].map((m) => m[1]))];
+    return tags.map((t) => ({ tag: t, name: t.slice(1), date: '', current: t === 'v' + app.getVersion() }));
+  },
+  'update:rollback': async ({ tag }) => {
+    const file = process.env.APPIMAGE;
+    if (!file || !app.isPackaged) throw new Error('Rolling back works in the AppImage only.');
+    if (!/^v\d+(\.\d+){1,3}$/.test(tag || '')) throw new Error('That isn’t a Cartridge release.');
+    const tmp = file + '.cartridge-new';
+    let got = 0;
+    await downloadTo(`https://github.com/abdu2304/cartridge/releases/download/${tag}/Cartridge-x86_64.AppImage`, tmp, { abort: new AbortController() }, (n) => { got += n; broadcast('update', { ...updateState, state: 'rollback', got }); }, { plain: true });
+    if (fs.statSync(tmp).size < 50e6) { fs.rmSync(tmp, { force: true }); throw new Error('The download was incomplete. Try again.'); }
+    fs.chmodSync(tmp, 0o755); fs.renameSync(tmp, file);
+    config.updateHold = tag; saveConfig(); // stays on this version until Check for updates
+    log('rolled back to', tag);
+    // started again with the same arguments (Steam's launcher passes its own)
+    setTimeout(() => { app.relaunch({ execPath: file, args: process.argv.slice(1) }); app.exit(0); }, 600);
+    return true;
+  },
   'app:info': () => ({ version: versionName(), number: app.getVersion(), gamescope: isGamescope(), userData: USER_DATA, gpu: useGpu, home: os.homedir(), hostname: os.hostname() }),
   'app:scale': () => { const [w, h] = win.getContentSize(); return { auto: autoZoom(), current: currentZoom(), w, h, display }; },
   'app:quit': () => app.quit(),
