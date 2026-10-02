@@ -117,7 +117,9 @@ function move(dir) {
   const layer = topLayer();
   const scope = layer?.el || document.body;
   const cur = document.activeElement;
-  if (!inScope(cur, scope)) { if (!recoverFocus(scope)) focusFirst(scope); return; }
+  // the focused button went away (it swapped for another, a list reloaded): back to the same item or the
+  // nearest one; failing that, stay in the part of the screen you were in (Settings' list: A4)
+  if (!inScope(cur, scope)) { if (!recoverFocus(scope)) focusFirst(lastZone && document.contains(lastZone) && scope.contains(lastZone) ? lastZone : scope); return; }
   const c = cur.getBoundingClientRect();
   const cx = c.left + c.width / 2, cy = c.top + c.height / 2;
   const vertical = dir === 'up' || dir === 'down';
@@ -128,7 +130,11 @@ function move(dir) {
   // up never lands on the top bar (LT/RT and Y reach that); Settings' right side is one too, left
   // with B, like other console menus.
   const zone = cur.closest('[data-zone]');
-  const all = focusables(scope, true).filter(([el]) => el !== cur && (!zone || zone.contains(el)));
+  // Up and down stay inside the list you're scrolling while it has more in that direction. The row
+  // above can be scrolled behind a toolbar, which otherwise looked nearer (Library: A3).
+  const sc = vertical ? cur.closest('[data-scroll]') : null;
+  const inList = sc && zone?.contains(sc) && sc !== zone && focusables(sc, true).some(([el, r]) => el !== cur && (dir === 'up' ? r.bottom <= c.top + 4 : r.top >= c.bottom - 4));
+  const all = focusables(scope, true).filter(([el]) => el !== cur && (!zone || zone.contains(el)) && (!inList || sc.contains(el)));
   // Left and right stay on the row you are in. Only when nothing else shares it (a lone button) may they
   // reach for a neighbour on another row, so the end of a shelf doesn't jump to the shelf above or below.
   const sameRow = (r) => Math.min(c.bottom, r.bottom) - Math.max(c.top, r.top) > Math.min(c.height, r.height) * 0.25;
@@ -298,6 +304,9 @@ function trigger(gp, which, v) {
   return !!armed[k] && v > 0.6;
 }
 export const padLive = { pads: [] }; // for Settings → About → Controller test
+// the part of the screen focus was last in (a [data-zone]), for when the focused element goes away
+let lastZone = null;
+document.addEventListener('focusin', (e) => { lastZone = e.target.closest?.('[data-zone]') || null; }, true);
 function poll() {
   const now = performance.now();
   const pads = navigator.getGamepads ? [...navigator.getGamepads()].filter(Boolean) : [];
@@ -327,7 +336,9 @@ function poll() {
   padLive.pads = pads;
   if (document.hasFocus()) for (const key of ACTIONS) press(key, !!merged[key], now);
 }
-setInterval(poll, 8);
+// Every 8 ms while Cartridge is in front; when it isn't (a game is running, or you switched away)
+// only a few times a second, so it costs the system nothing in the background (A14)
+(function loop() { poll(); setTimeout(loop, document.hasFocus() ? 8 : 250); })();
 
 export function ensureFocus(root) {
   if (!root) return;

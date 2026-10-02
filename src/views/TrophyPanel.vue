@@ -15,6 +15,7 @@
       <div class="tp-srcs">
         <div v-for="s in data.sources" :key="s.id" class="tp-src"><b>{{ s.name }}</b><span class="muted">{{ s.platform }}</span><span class="chip" :class="s.state">{{ stateLabel(s) }}</span></div>
       </div>
+      <div v-if="shadNoKey" class="tp-nokey"><Icon name="mdiInformationOutline" :size="20" /><span>PS4 trophies need shadPS4's trophy key.</span><button class="btn small" data-focus @click="keyGuide"><Icon name="mdiHelpCircleOutline" :size="18" />How to set it</button></div>
       <div class="row" style="gap: 12px">
         <button class="btn primary" data-focus :disabled="!!store.trophyScan" @click="scan"><Icon name="mdiRadar" />{{ store.trophyScan ? 'Scanning…' : 'Scan again' }}</button>
         <button class="btn" data-focus @click="openSettings"><Icon name="mdiFolderSearchOutline" />Choose folders</button>
@@ -35,6 +36,7 @@
         <button class="btn small" data-focus @click="refresh"><Icon name="mdiRefresh" :size="18" />Refresh</button>
       </header>
 
+      <div v-if="shadNoKey" class="tp-nokey"><Icon name="mdiInformationOutline" :size="20" /><span>PS4 trophies need shadPS4's trophy key.</span><button class="btn small" data-focus @click="keyGuide"><Icon name="mdiHelpCircleOutline" :size="18" />How to set it</button></div>
       <div class="shelf-title"><Icon name="mdiStarShootingOutline" :size="20" />Latest unlocks</div>
       <div v-if="!recent.length" class="muted" style="margin: 0 0 24px">Nothing unlocked yet.</div>
       <div v-else class="shelf" data-hscroll>
@@ -100,6 +102,11 @@ function logoFor(g) {
 const romOf = (key) => data.value?.games.find((g) => g.key === key)?.romId || null;
 const fmt = (n) => (n || 0).toLocaleString();
 const pct = (g) => (g.total ? Math.round((g.earned / g.total) * 100) : 0);
+// shadPS4 without its trophy key records no trophies (0.9.3 E7): a short guide, nothing more
+const shadNoKey = computed(() => (data.value?.sources || []).some((s) => s.id === 'shadps4' && s.note === 'nokey'));
+async function keyGuide() {
+  await choose({ title: 'shadPS4 trophy key', message: 'shadPS4 needs your trophy key to read and record PS4 trophies.\n\n1. Open shadPS4 (its launcher) on this device.\n2. Add your trophy key in its settings (it is saved in keys.json).\n3. Open a PS4 game once in shadPS4, so it reads that game\'s trophy list.\n\nThen come back: trophies show up here by themselves. Cartridge never ships or downloads the key.', options: [{ label: 'OK', value: 'ok', icon: 'mdiCheck' }] });
+}
 const stateLabel = (s) => ({ found: 'Found', missing: 'Not found', off: 'Off' }[s.state]);
 const syncIcon = computed(() => ({ running: 'mdiSync', ok: 'mdiCloudCheckOutline', error: 'mdiCloudAlertOutline', off: 'mdiCloudOffOutline' }[store.trophySync.state] || 'mdiCloudOutline'));
 const syncText = computed(() => {
@@ -201,4 +208,6 @@ onMounted(async () => { await load(); focusFirst(el.value); });
 .tp-mini span { display: inline-flex; gap: 3px; align-items: center; }
 .tp-plat { flex: none; }
 @media (max-width: 1100px) { .tp-srcs { grid-template-columns: 1fr; } .tp-meta { align-items: flex-start; } }
+.tp-nokey { display: flex; align-items: center; gap: var(--s-3); padding: var(--s-3) var(--s-4); margin: 0 0 var(--s-4); border-radius: var(--r-md); background: rgba(245, 197, 66, 0.12); color: #ffd978; font-size: var(--t-sm); }
+.tp-nokey span { flex: 1; }
 </style>

@@ -2,15 +2,18 @@
   <div class="set-view" ref="el">
     <nav class="rail" data-scroll>
       <div class="eyebrow" style="padding: 0 14px 10px">Settings</div>
-      <button v-for="s in sections" :key="s.id" class="rail-item" :class="{ on: sec === s.id }" data-focus :data-key="'sec-' + s.id" @focus="sec = s.id" @click="pick(s.id)">
+      <button v-for="s in sections" :key="s.id" class="rail-item" :class="{ on: sec === s.id }" data-focus :data-key="'sec-' + s.id" :data-autofocus="sec === s.id ? '' : undefined" @focus="sec = s.id" @click="pick(s.id)">
         <Icon :name="s.icon" :size="20" />{{ s.label }}
       </button>
     </nav>
     <section class="pane" data-scroll data-zone ref="paneEl">
-      <Transition name="fadeup" mode="out-in" @after-enter="afterSection">
+      <!-- the old page goes at once, so a quick press to the right always lands on the new one (A13) -->
+      <Transition name="fadeup">
         <div :key="sec" class="pane-in">
-          <template v-if="sec === 'conn'">
-            <h1>Connection</h1>
+          <!-- one RomM tab (0.9.3 G1): connection, library and sync, upload -->
+          <template v-if="sec === 'romm'">
+            <h1>RomM</h1>
+            <div class="subh"><Icon name="mdiServerNetwork" :size="20" />Connection</div>
             <div class="card-s glass">
               <div class="kv"><span>Local</span><span class="mono">{{ srv.localUrl || '—' }}</span></div>
               <div class="kv"><span>Remote</span><span class="mono">{{ srv.remoteUrl || '—' }}</span></div>
@@ -23,10 +26,8 @@
               <button class="btn" data-focus @click="reconnect"><Icon name="mdiLanConnect" />Reconnect</button>
               <button class="btn danger" data-focus @click="signOut"><Icon name="mdiLogout" />Sign out</button>
             </div>
-          </template>
 
-          <template v-else-if="sec === 'sync'">
-            <h1>Library &amp; Sync</h1>
+            <div class="subh" style="margin-top: 14px"><Icon name="mdiSync" :size="20" />Library &amp; Sync</div>
             <div class="card-s glass">
               <div class="kv"><span>Last sync</span><span>{{ ago(store.lib?.syncedAt) }}</span></div>
               <div class="kv"><span>Library</span><span>{{ total }} games · {{ store.lib?.platforms.filter((p) => p.rom_count).length || 0 }} systems</span></div>
@@ -40,11 +41,7 @@
             <Toggle :model-value="store.config.sync.onLaunch" label="Resync when Cartridge starts" desc="Picks up games you added to RomM since last time" @update:model-value="(v) => saveConfig({ sync: { onLaunch: v } })" />
             <div class="row"><span class="lbl">Auto resync</span><div class="seg"><button v-for="m in every" :key="m.v" data-focus :class="{ on: store.config.sync.everyMinutes === m.v }" @click="saveConfig({ sync: { everyMinutes: m.v } })">{{ m.l }}</button></div></div>
             <p class="muted small">“Scan server” asks RomM to look through its own folders for files you copied in, then resyncs. It needs username &amp; password sign-in.</p>
-          </template>
-
-          <template v-else-if="sec === 'romm'">
-            <h1>RomM</h1>
-            <RommUpload />
+            <div style="margin-top: 14px"><RommUpload /></div>
           </template>
           <template v-else-if="sec === 'storage'">
             <h1>Storage</h1>
@@ -63,8 +60,28 @@
             <LibraryCheck />
           </template>
 
-          <template v-else-if="sec === 'folders'">
-            <h1>Console Folders</h1>
+          <template v-else-if="sec === 'emu'">
+            <h1>Emulators</h1>
+            <!-- Android: its own Issues (emulators, BIOS, packages to install) and each console's emulator -->
+            <AndroidEmulators v-if="IS_ANDROID" />
+            <template v-else>
+            <!-- what needs you, in one place (0.9.3: replaces the pop-ups at start) -->
+            <div class="subh">Issues</div>
+            <div v-if="!issues" class="muted small"><Icon name="mdiSync" :size="16" class="spin" /> Checking…</div>
+            <div v-else-if="!issues.length" class="status ok" style="align-self: flex-start"><Icon name="mdiCheck" :size="14" />Nothing needs your attention</div>
+            <div v-else class="stack">
+              <button v-for="(i, n) in issues" :key="n" class="lrow" data-focus @click="fixIssue(i)">
+                <Icon :name="ISSUE_ICON[i.kind] || 'mdiAlertCircleOutline'" :size="24" style="color: #ffd978" />
+                <div class="l-mid"><b>{{ i.text }}</b><span v-if="i.sub" class="l-sub">{{ i.sub }}</span></div>
+                <span class="l-end"><Btn b="A" />{{ { collections: 'Put them back', health: 'Shortcut health', setup: 'Emulator setup' }[i.fix] }}</span>
+              </button>
+            </div>
+            <div class="stack">
+              <button class="lrow" data-focus @click="go('emu-setup')"><Icon name="mdiRadar" :size="24" /><div class="l-mid"><b>Emulator setup</b><span class="l-sub">Find emulators wherever they are, pick one per console, check BIOS and access</span></div><Icon name="mdiChevronRight" :size="22" /></button>
+              <button class="lrow" data-focus @click="go('steam-health')"><Icon name="mdiStethoscope" :size="24" /><div class="l-mid"><b>Shortcut health</b><span class="l-sub">Steam shortcuts that would fail, and fixes for them</span></div><Icon name="mdiChevronRight" :size="22" /></button>
+            </div>
+            </template>
+            <div class="subh">Console Folders</div>
             <div class="row" style="justify-content: space-between">
               <p class="muted small" style="margin: 0; max-width: 520px">Matched inside your ROMs folder using ES-DE folder names. Pick any system to point it somewhere else.</p>
               <div class="seg">
@@ -160,7 +177,7 @@
             </template>
             <Toggle :model-value="ui.hideEmpty" label="Hide empty systems" @update:model-value="(v) => saveConfig({ ui: { hideEmpty: v } })" />
 
-            <div class="subh"><Icon name="mdiDockTop" :size="20" />Top bar</div>
+            <div class="subh"><Icon name="mdiDockTop" :size="20" />Top Bar</div>
             <p class="muted small" style="margin-top: -6px">Pick which tabs show at the top and their order. LT and RT move through them in this order. Settings always stays.</p>
             <div class="tabs-edit">
               <div v-for="(t, i) in tabRows" :key="t.name" class="tab-row" :class="{ off: !t.on }">
@@ -269,6 +286,17 @@
             <Toggle v-if="tcfg.sync !== false" :model-value="tcfg.syncIcons !== false" label="Sync trophy pictures" desc="Stores small copies of trophy pictures in RomM too (about 150 to 300 KB per game), so every device shows them, not just the one that played" @update:model-value="(v) => setT({ syncIcons: v })" />
             <Toggle :model-value="tcfg.popups !== false" label="Trophy pop-ups" desc="Shows a pop-up when a trophy unlocks while Cartridge is open" @update:model-value="(v) => setT({ popups: v })" />
             <Toggle :model-value="ui.trophyOnGames !== false" label="Trophies on game pages" desc="PS3, PS4, Xbox 360 and PS Vita games show their trophies" @update:model-value="(v) => saveConfig({ ui: { trophyOnGames: v } })" />
+            <template v-if="hiddenGames.length">
+              <div class="subh" style="margin-top: 14px"><Icon name="mdiEyeOffOutline" :size="20" />Hidden Games</div>
+              <p class="muted small" style="margin-top: -8px">Left out of your totals and latest unlocks. Unhide one to count it again.</p>
+              <div class="stack">
+                <button v-for="h in hiddenGames" :key="h.key" class="lrow" data-focus @click="unhideGame(h)">
+                  <Icon name="mdiTrophyOutline" :size="22" />
+                  <div class="l-mid"><b>{{ h.title }}</b><span class="l-sub">{{ h.sub }}</span></div>
+                  <span class="l-end"><Btn b="A" />Unhide</span>
+                </button>
+              </div>
+            </template>
           </template>
 
           <template v-else-if="sec === 'steam'">
@@ -276,7 +304,7 @@
             <p v-if="IS_ANDROID" class="muted small">Steam doesn't run on Android, so these tools work on a Deck or PC. For Windows games on this device, open a game and pick More → Open in a PC game app (GameNative, GameHub or Winlator).</p>
             <SteamSettings />
             <template v-if="!IS_ANDROID">
-            <div class="subh" style="margin-top: 10px"><Icon name="mdiApplicationOutline" :size="20" />Cartridge itself</div>
+            <div class="subh" style="margin-top: 10px"><Icon name="mdiApplicationOutline" :size="20" />Cartridge</div>
             <div class="about glass">
               <img src="../../steam-art/grid.png" class="steam-grid" />
               <div style="display: flex; flex-direction: column; gap: 10px">
@@ -316,6 +344,7 @@
             </div>
             <ServerStatus />
             <ControllerTest />
+            <ReportProblem />
             <div class="card-s glass">
               <div v-if="!IS_ANDROID" class="kv"><span>Game Mode</span><span>{{ store.info.gamescope ? 'Yes (gamescope)' : 'No (desktop)' }}</span></div>
               <div class="kv"><span>Controller</span><span>{{ padInfo?.name || input.padName || 'Press any button' }}</span></div>
@@ -351,21 +380,22 @@ import LibraryCheck from '../components/LibraryCheck.vue';
 import RommUpload from '../components/RommUpload.vue';
 import ServerStatus from '../components/ServerStatus.vue';
 import ControllerTest from '../components/ControllerTest.vue';
+import ReportProblem from '../components/ReportProblem.vue';
 import { padInfo } from '../pad.js';
 
 // Android build only: the Android section replaces Steam. In the desktop build this is dropped.
 const IS_ANDROID = import.meta.env.MODE === 'android';
 const AndroidSettings = import.meta.env.MODE === 'android' ? defineAsyncComponent(() => import('../android/AndroidSettings.vue')) : null;
+const AndroidEmulators = import.meta.env.MODE === 'android' ? defineAsyncComponent(() => import('../android/AndroidEmulators.vue')) : null;
 
 const el = ref(null);
 const paneEl = ref(null);
-const sec = ref(store.settingsSection || 'conn');
+const OLD_SEC = { folders: 'emu', conn: 'romm', sync: 'romm' }; // sections merged in 0.9.3
+const sec = ref(OLD_SEC[store.settingsSection] || store.settingsSection || 'romm');
 const ALL_SECTIONS = [
-  { id: 'conn', label: 'Connection', icon: 'mdiServerNetwork' },
-  { id: 'sync', label: 'Library & Sync', icon: 'mdiSync' },
-  { id: 'romm', label: 'RomM', icon: 'mdiCloudUploadOutline' },
+  { id: 'romm', label: 'RomM', icon: 'mdiServerNetwork' },
   { id: 'storage', label: 'Storage', icon: 'mdiHarddisk' },
-  { id: 'folders', label: 'Console Folders', icon: 'mdiFolderMultipleOutline' },
+  { id: 'emu', label: 'Emulators', icon: 'mdiGamepadVariantOutline' },
   { id: 'dl', label: 'Downloads', icon: 'mdiTrayArrowDown' },
   { id: 'ui', label: 'Look & Feel', icon: 'mdiPaletteOutline' },
   { id: 'ra', label: 'Achievements', icon: 'mdiTrophyOutline' },
@@ -533,7 +563,22 @@ const keyboards = [{ v: 'auto', l: 'Auto' }, { v: 'builtin', l: 'Built-in' }, { 
 const trophySrc = ref([]);
 const tcfg = computed(() => store.config.trophies || {});
 const deviceName = ref(store.config.trophies?.device || '');
-const loadSrc = () => call('trophies:sources').then((r) => (trophySrc.value = r)).catch(() => {});
+const loadSrc = () => { call('trophies:sources').then((r) => (trophySrc.value = r)).catch(() => {}); loadHidden(); };
+// trophy games hidden from the totals (0.9.3 E4): named from the trophies overview
+const hiddenGames = ref([]);
+async function loadHidden() {
+  const keys = store.config.trophies?.hidden || [];
+  if (!keys.length) { hiddenGames.value = []; return; }
+  const ov = await call('trophies:overview').catch(() => null);
+  const byKey = new Map((ov?.games || []).map((g) => [g.key, g]));
+  hiddenGames.value = keys.map((k) => { const g = byKey.get(k); return { key: k, title: g?.title || k, sub: g ? `${g.total ? `${g.earned || 0} of ${g.total} trophies` : ''}` : 'Not on this device right now' }; });
+}
+async function unhideGame(h) {
+  const list = await call('trophies:hide', { key: h.key, hidden: false });
+  store.config.trophies = { ...(store.config.trophies || {}), hidden: list };
+  toast(`${h.title} counts in your totals again`, 'ok', 2600, 'mdiEyeOutline');
+  loadHidden();
+}
 watch(() => store.trophyVer, loadSrc);
 loadSrc();
 async function saveDevice() {
@@ -566,23 +611,20 @@ const folderList = computed(() => (store.libVersion, showAll.value ? supported.v
 
 useView({ back: () => { if (!document.activeElement?.closest('.rail')) { focusFirst(el.value, `[data-key="sec-${sec.value}"]`); return; } return false; } },
   [{ b: 'A', label: 'Select' }, { b: 'B', label: 'Back' }, { b: 'LT+RT', label: 'Tabs' }]);
-watch(sec, (v) => { store.settingsSection = v; });
+// Settings → Emulators → Issues
+const issues = ref(null);
+const ISSUE_ICON = { collections: 'mdiFolderSyncOutline', moved: 'mdiLinkVariantOff', game: 'mdiFileHidden', core: 'mdiPuzzleRemoveOutline', setup: 'mdiRadar', bios: 'mdiChip' };
+async function loadIssues() { issues.value = await call('issues:list').catch(() => []); store.issues = issues.value.length; }
+async function fixIssue(i) {
+  if (i.fix === 'health') return go('steam-health');
+  if (i.fix === 'setup') return go('emu-setup');
+  if (!(await confirm('Put them back?', 'Steam closes for a moment while its collections are written.', 'Put them back'))) return;
+  try { await call('steam:fixCollections'); toast('Putting them back in their collections', 'ok', 3000, 'mdiSteam'); loadIssues(); } catch (e) { toast(e.message, 'error'); }
+}
+watch(sec, (v) => { store.settingsSection = v; if (v === 'emu') loadIssues(); }, { immediate: true });
 
-// Switching sections swaps the pane with a short transition. Moving into the pane during it used to
-// focus the old pane, which then vanished: focus dropped and the next press jumped to the first
-// section. Now the move waits for the new pane, and lost focus returns to where you were.
-let wantPane = false;
-function enter() {
-  if (paneEl.value?.querySelector('.fadeup-leave-active, .fadeup-enter-active')) { wantPane = true; return; }
-  focusFirst(paneEl.value);
-}
-async function afterSection() {
-  await nextTick();
-  const a = document.activeElement;
-  const lost = !a || a === document.body || !a.isConnected;
-  if (wantPane) { wantPane = false; focusFirst(paneEl.value); return; }
-  if (lost && input.mode !== 'touch') focusFirst(el.value, `[data-key="sec-${sec.value}"]`);
-}
+
+function enter() { focusFirst(paneEl.value); }
 // A tap switches the section right away (touch never focuses the rail); a controller also moves into it
 function pick(id) { sec.value = id; if (input.mode !== 'touch') enter(); }
 async function setMode(mode) { await saveConfig({ server: { mode } }); reconnect(); }
@@ -682,7 +724,8 @@ onMounted(async () => { space.value = await call('fs:space', store.config.romsRo
 .rail { display: flex; flex-direction: column; gap: 4px; padding-top: 10px; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding-bottom: 24px; }
 .rail > * { flex: none; }
 .rail-item { display: flex; align-items: center; gap: 14px; padding: 13px 16px; border-radius: var(--r-md); color: var(--muted); font-weight: 500; transition: background 0.15s, color 0.15s; }
-.rail-item.on { color: var(--text); background: var(--sel); }
+/* the page follows the list as you move, so the current section only needs brighter text, no box */
+.rail-item.on { color: var(--text); }
 .rail-item:focus { background: var(--focus); color: var(--on-focus); box-shadow: none; }
 .pane { min-height: 0; min-width: 0; overflow-x: hidden; overflow-y: auto; padding: 6px 12px 60px 24px; }
 .pane-in { display: flex; flex-direction: column; gap: 16px; max-width: 860px; }
@@ -755,9 +798,9 @@ onMounted(async () => { space.value = await call('fs:space', store.config.romsRo
 .fonttile span { font-size: var(--t-xs); color: var(--muted); }
 .fonttile.on { background: var(--sel); }
 .steam-grid { width: 130px; border-radius: var(--r-sm); box-shadow: 0 14px 34px rgba(0, 0, 0, 0.5); flex: none; }
-.fadeup-enter-active, .fadeup-leave-active { transition: opacity 0.15s, transform 0.2s var(--ease); }
+.fadeup-enter-active { transition: opacity 0.15s, transform 0.2s var(--ease); }
 .fadeup-enter-from { opacity: 0; transform: translateX(10px); }
-.fadeup-leave-to { opacity: 0; }
+.fadeup-leave-active { display: none; }
 .tabs-edit { display: flex; flex-direction: column; gap: 6px; }
 .tab-row { display: flex; align-items: center; gap: 10px; padding: 6px 8px 6px 14px; border-radius: var(--r-md); background: var(--s2); }
 .tab-row.off { opacity: 0.6; }

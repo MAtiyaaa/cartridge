@@ -41,20 +41,19 @@
       <button v-if="store.update.state === 'ready'" class="qm-item upd" data-focus data-autofocus @click="call('update:install')"><Icon name="mdiUpdate" /><div><b>Restart to update</b><small>Cartridge {{ store.update.version }} is downloaded</small></div></button>
 
       <div class="qm-tiles">
-        <button class="qm-tile" data-focus :data-autofocus="store.update.state === 'ready' ? undefined : ''" :disabled="busy" @click="run(() => resync())"><Icon name="mdiSync" :class="{ spin: busy }" /><b>Resync</b><small>{{ busy ? 'Working…' : 'From RomM' }}</small></button>
+        <button class="qm-tile" data-focus :data-autofocus="store.update.state === 'ready' ? undefined : ''" :disabled="busy" @click="run(refreshLibrary)"><Icon name="mdiSync" :class="{ spin: busy }" /><b>Refresh</b><small>{{ busy ? 'Working…' : 'Library' }}</small></button>
         <button class="qm-tile" data-focus @click="nav('downloads')"><Icon name="mdiDownload" /><b>Downloads</b><small>{{ activeCount ? `${activeCount} active` : 'Queue' }}</small></button>
         <button class="qm-tile" data-focus @click="shot"><Icon name="mdiCamera" /><b>Screenshot</b><small>To Pictures</small></button>
         <button class="qm-tile" :class="{ on: store.config.ui.sounds }" data-focus @click="toggleSounds"><Icon :name="store.config.ui.sounds ? 'mdiVolumeHigh' : 'mdiVolumeOff'" /><b>Sounds</b><small>{{ store.config.ui.sounds ? 'On' : 'Off' }}</small></button>
-        <button v-if="IS_ANDROID && store.androidDisplays?.secondary" class="qm-tile" :class="{ on: secondOn }" data-focus @click="toggleSecond"><Icon name="mdiMonitorScreenshot" /><b>Second screen</b><small>{{ secondOn ? 'On' : 'Off' }}</small></button>
+        <button v-if="IS_ANDROID && store.androidDisplays?.secondary" class="qm-tile" :class="{ on: secondOn }" data-focus @click="toggleSecond"><Icon name="mdiMonitorScreenshot" /><b>Second Screen</b><small>{{ secondOn ? 'On' : 'Off' }}</small></button>
         <button v-else class="qm-tile" data-focus @click="call('app:fullscreen')"><Icon name="mdiFullscreen" /><b>Fullscreen</b><small>Toggle</small></button>
         <button class="qm-tile" data-focus @click="nav('settings')"><Icon name="mdiCog" /><b>Settings</b><small>Everything</small></button>
       </div>
 
       <div class="qm-list">
-        <button class="qm-item" data-focus :disabled="busy" @click="run(scanServer)"><Icon name="mdiRadar" /><div><b>Scan server for new ROMs</b><small>RomM rescans its folders, then Cartridge resyncs</small></div></button>
-        <button class="qm-item" data-focus @click="rescan"><Icon name="mdiHarddisk" /><div><b>Rescan this device</b><small>Refresh which games are installed</small></div></button>
-        <button class="qm-item" data-focus @click="phone"><Icon name="mdiCellphoneLink" /><div><b>Connect a phone</b><small>A remote and second screen</small></div></button>
-        <button class="qm-item" data-focus @click="checkUpdate"><Icon name="mdiCloudDownloadOutline" /><div><b>Check for updates</b><small>{{ updLabel }}</small></div></button>
+        <button class="qm-item" data-focus @click="rescan"><Icon name="mdiHarddisk" /><div><b>Rescan This Device</b><small>Refresh which games are installed</small></div></button>
+        <button class="qm-item" data-focus @click="phone"><Icon name="mdiCellphoneLink" /><div><b>Connect a Phone</b><small>A remote and second screen</small></div></button>
+        <button class="qm-item" data-focus @click="checkUpdate"><Icon name="mdiCloudDownloadOutline" /><div><b>Check for Updates</b><small>{{ updLabel }}</small></div></button>
         <button class="qm-item danger" data-focus @click="call('app:quit')"><Icon name="mdiPower" /><div><b>Quit Cartridge</b></div></button>
       </div>
     </aside>
@@ -62,7 +61,7 @@
 </template>
 <script setup>
 import { computed, onMounted, onBeforeUnmount, ref } from 'vue';
-import { store, call, resync, scanServer, tab, ago, saveConfig, toast } from '../store.js';
+import { store, call, refreshLibrary, tab, ago, saveConfig, toast } from '../store.js';
 import { pushLayer, focusFirst } from '../nav.js';
 import { setSoundEnabled } from '../sfx.js';
 import Icon from './Icon.vue';

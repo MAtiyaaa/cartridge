@@ -90,11 +90,11 @@ img { -webkit-user-drag: none; }
 .statusbar .spacer { min-width: 0; }
 .sys, .brand, .tabs { flex-shrink: 0; }
 .brand { display: flex; align-items: center; gap: 10px; font-family: var(--display); font-weight: 800; font-stretch: 100%; font-size: var(--t-lg); letter-spacing: -0.01em; }
-/* tabs: plain words, the current one white inside a faint outline */
+/* tabs: plain words; the current one is a full white box (or the Highlights colour), like a
+   selected row in Settings (0.9.3) */
 .tabs { display: flex; align-items: center; gap: 2px; margin-left: 20px; }
 .tab { position: relative; display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 14px; border-radius: var(--r-sm); color: var(--muted); font-weight: 600; font-size: var(--t-md); transition: color var(--d-fast), background var(--d-fast); }
-.tab.active { color: var(--text); }
-.tab.active { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.22); background: rgba(255, 255, 255, 0.04); }
+.tab.active, .tab.active:hover { background: var(--focus); color: var(--on-focus); }
 .tab:hover { color: var(--text); background: var(--s2); }
 .tab:focus-visible, .pad-mode .tab:focus { background: var(--focus); color: var(--on-focus); box-shadow: none; }
 .statusbar .spacer { flex: 1; }
@@ -173,6 +173,7 @@ body.surface-glass .glass { background: var(--glass-bg); border: 1px solid var(-
 .card .ph small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; font-family: var(--body); font-weight: 500; font-size: var(--t-xs); color: var(--muted); }
 .card .title { font-size: var(--t-sm); font-weight: 500; line-height: 1.3; color: var(--text); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; padding: 0 2px; transition: color 0.2s; }
 .card .sub { font-size: var(--t-xs); color: var(--muted); margin-top: -5px; padding: 0 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; min-width: 0; } /* a long console name stays under its own card */
+.card .sub.extra { white-space: normal; overflow-wrap: anywhere; text-overflow: clip; line-height: 1.25; }
 .card:focus { box-shadow: none !important; }
 .card:focus .art, .card:focus-visible .art { transform: translateY(-4px) scale(1.06); box-shadow: var(--ring), var(--shadow-card); }
 .card:focus .art .shine { display: none; }

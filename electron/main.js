@@ -235,6 +235,11 @@ const remoteHub = () => remoteServer || require('electron').__android?.remote ||
 const saveConfig = () => { saveJson(CONFIG_FILE, config); remoteHub()?.configChanged(config); };
 const saveManifest = () => saveJson(MANIFEST_FILE, manifest);
 const saveBridgeMeta = () => { try { saveJson(BRIDGE_META_FILE, bridgeMeta, false); } catch (e) { log('bridge games save failed', e.message); } };
+// Games Cartridge installed into an emulator's own storage (0.9.3 D: PS3 .pkg through RPCS3):
+// romId -> { emu, serial, dir, created, at, files }. Only these can be deleted from there.
+const INSTALLS_FILE = path.join(USER_DATA, 'installs.json');
+let installs = loadJson(INSTALLS_FILE, {});
+const saveInstalls = () => saveJson(INSTALLS_FILE, installs);
 
 // ---------------------------------------------------------------- server / api
 const trimUrl = (u) => (u || '').trim().replace(/\/+$/, '');
@@ -515,42 +520,8 @@ let installedMap = {};
 let playSyncAt = 0; // last play-session sync with RomM (0: do it on the next request)
 
 // Transparent game logo from RomM (ScreenScraper "logo" media, or an ES-DE gamelist marquee)
-function logoPath(r) {
-  const p = r.ss_metadata?.logo_path || r.gamelist_metadata?.marquee_path || null;
-  if (!p) return null;
-  return /^(https?:)?\/\//.test(p) || p.startsWith('/assets/') ? p : '/assets/romm/resources/' + p.replace(/^\//, '');
-}
-function slimRom(r) {
-  const md = r.metadatum || {};
-  return {
-    id: r.id, name: r.name || r.fs_name_no_ext, fs_name: r.fs_name, fs_name_no_ext: r.fs_name_no_ext,
-    platform_id: r.platform_id, platform_slug: r.platform_slug, platform_fs_slug: r.platform_fs_slug,
-    platform_display_name: r.platform_display_name, fs_size_bytes: r.fs_size_bytes,
-    path_cover_small: r.path_cover_small, path_cover_large: r.path_cover_large, url_cover: r.url_cover,
-    shot: (r.merged_screenshots || [])[0] || null,
-    logo: logoPath(r),
-    ra_id: r.ra_id || null,
-    has_notes: !!(r.has_notes || r.all_user_notes?.length || r.rom_user?.note_raw_markdown),
-    summary: (r.summary || '').slice(0, 400),
-    regions: r.regions || [], files: (r.files || []).map((f) => ({ file_name: f.file_name })),
-    year: md.first_release_date || null, genres: (md.genres || []).slice(0, 3),
-    developer: (md.developers?.[0] || md.companies?.[0] || ''), rating: md.average_rating || null,
-    created_at: r.created_at, has_file_on_disk: r.has_file_on_disk !== false,
-    // 0.7: series, modes, popularity and length for the automatic collections and filters
-    igdb_id: r.igdb_id || null, series: [...new Set(md.franchises || [])].slice(0, 3), modes: md.game_modes || [], players: md.player_count || '',
-    votes: r.igdb_metadata?.total_rating_count || 0, hours: hltbHours(r.hltb_metadata?.main_story),
-    similar: (r.igdb_metadata?.similar_games || []).slice(0, 12).map((g) => g.id),
-    user: userOf(r.rom_user),
-  };
-}
-// HowLongToBeat keeps times in seconds
-const hltbHours = (v) => (v > 0 ? Math.round((v > 1000 ? v / 3600 : v) * 10) / 10 : null);
-// the signed-in user's own fields for a game in RomM (play status, backlog, playing now, hidden)
-function userOf(u) {
-  if (!u) return null;
-  const o = { status: u.status || null, backlog: !!u.backlogged, playing: !!u.now_playing, hidden: !!u.hidden, played: u.last_played ? Date.parse(u.last_played) || null : null };
-  return o.status || o.backlog || o.playing || o.hidden || o.played ? o : null;
-}
+// what Cartridge keeps of a RomM game (electron/romm.js, tested against several RomM versions)
+const { slimRom, userOf } = require('./romm');
 
 function publicLibrary() {
   if (!library) return null;
@@ -1565,6 +1536,8 @@ async function runJob(it) {
         finalPath = newFolder;
       }
     }
+    // a PS3 game as .pkg: Downloads offers to install it in RPCS3 (nothing installs until pressed)
+    try { if (pkgInst.packagesIn(finalPath).pkgs.length) { it.notice = 'pkg'; it.installIn = 'RPCS3'; } else if (/psvita/i.test(`${rom.platform_slug} ${rom.platform_fs_slug}`) && (await pkgInst.vitaContent(finalPath))) { it.notice = 'pkg'; it.installIn = 'Vita3K'; } } catch {}
     it.status = 'done';
     it.switched = false; it.retryAt = 0;
     it.received = it.total;
@@ -1577,7 +1550,7 @@ async function runJob(it) {
     // a re-download (library check): the new copy is in, so the old one kept aside goes
     if (it.backup) { await fsp.rm(it.backup, { recursive: true, force: true }).catch(() => {}); it.backup = null; }
     // a re-download is the same game as before: Steam already has it, so no automatic add
-    if (!it.redo) try { if (steamMgr.onDownloaded(rom.id)) broadcast('steam-auto', { romId: rom.id, name: rom.name, action: 'add' }); } catch (e) { log('steam auto add', e.message); }
+    if (!it.redo && it.notice !== 'pkg') try { if (steamMgr.onDownloaded(rom.id)) broadcast('steam-auto', { romId: rom.id, name: rom.name, action: 'add' }); } catch (e) { log('steam auto add', e.message); }
   } catch (e) {
     // stopped on purpose: keep a status set since (paused, or queued again by Resume)
     if (ac.signal.aborted) { if (!['paused', 'queued'].includes(it.status)) it.status = 'cancelled'; }
@@ -1614,6 +1587,29 @@ async function downloadBios(platformId, slug) {
     done.push({ name: f.file_name });
   }
   return { count: list.length, files: done, dir };
+}
+
+// A game deleted file by file, so its card can show real progress (0.9.3). Links are removed, never
+// followed. Big folder games (PS3, PS4, Switch) take a while; a single file is near instant.
+async function removeWithProgress(target, romId) {
+  const files = [];
+  const walk = async (p) => {
+    const st = await fsp.lstat(p).catch(() => null);
+    if (!st) return;
+    if (st.isDirectory()) { for (const n of await fsp.readdir(p).catch(() => [])) await walk(path.join(p, n)); }
+    else files.push([p, st.size]);
+  };
+  await walk(target);
+  const total = files.reduce((s, [, n]) => s + n, 0) || 1;
+  let done = 0, last = 0;
+  broadcast('delete-progress', { romId, pct: 0 });
+  for (const [f, n] of files) {
+    await fsp.rm(f, { force: true });
+    done += n;
+    if (Date.now() - last > 100) { last = Date.now(); broadcast('delete-progress', { romId, pct: Math.round((done / total) * 100) }); }
+  }
+  await fsp.rm(target, { recursive: true, force: true });
+  broadcast('delete-progress', { romId, pct: 100 });
 }
 
 // ---------------------------------------------------------------- storage manager
@@ -1688,7 +1684,169 @@ async function storageOverview() {
 
 // ---------------------------------------------------------------- self-update (GitHub Releases)
 let updateState = { state: 'idle' };
+// ---------------------------------------------------------------- 0.9.3 D: PS3 packages through RPCS3
+const pkgInst = require('./pkgInstall');
+let pkgRun = null; // one install at a time: { romId, ac }
+const emuRootsAll = () => { try { const emu = readEmuDeckSettings(); return require('./trophies').emulationRoots([emu.emulationPath, config.romsRoot && path.dirname(config.romsRoot)].filter(Boolean)); } catch { return []; } };
+const rpcs3Hdds = () => pkgInst.rpcs3Hdds(os.homedir(), emuRootsAll());
+const emuRoots = (emu) => (emu === 'vita3k' ? pkgInst.vitaPrefs(os.homedir(), emuRootsAll()) : rpcs3Hdds());
+// licences an installed RPCS3 game still lacks: [{ contentId }]. From what was recorded at install
+// time, else read from the game's EBOOT.BIN (games installed before this was recorded)
+function installedLicences(rec) {
+  const hdds = rpcs3Hdds();
+  let need = rec.needs;
+  if (!need) { const n = pkgInst.npdOf(rec.dir); need = n?.needsRap ? [n.contentId] : []; }
+  return need.filter((cid) => !pkgInst.exdataHas(hdds, cid)).map((contentId) => ({ contentId }));
+}
+// .rap licences for a game from RomM: among the game's own files, or a RomM entry named after its
+// content ID or title ID. Downloaded into dir; returns { contentId: file }.
+async function rapsFromRomm(romId, need, dir) {
+  const out = {};
+  if (!need.length) return out;
+  const base = await resolveBase();
+  const cands = [];
+  try { for (const f of (await api(`/api/roms/${romId}`)).files || []) if (/\.rap$/i.test(f.file_name)) cands.push({ name: f.file_name, own: true, url: `${base}/api/roms/${f.id}/files/content/${encodeURIComponent(f.file_name)}` }); } catch {}
+  for (const pl of library?.platforms || []) for (const r of library.roms[pl.id] || []) {
+    const n = String(r.fs_name || '').toUpperCase();
+    if (n.endsWith('.RAP') && need.some((x) => n.includes(x.contentId.toUpperCase()) || n.includes(x.titleId || '~'))) cands.push({ name: r.fs_name, url: `${base}/api/roms/${r.id}/content/${encodeURIComponent(r.fs_name)}` });
+  }
+  const own = cands.filter((c) => c.own);
+  for (const x of need) {
+    const c = cands.find((k) => k.name.toUpperCase().includes(x.contentId.toUpperCase())) || cands.find((k) => x.titleId && k.name.toUpperCase().includes(x.titleId)) || (need.length === 1 && own.length === 1 ? own[0] : null);
+    if (!c) continue;
+    const dest = path.join(dir, 'romm', `${x.contentId}.rap`);
+    try { await downloadTo(c.url, dest, { abort: new AbortController() }, () => {}); if (fs.statSync(dest).size === 16) out[x.contentId] = dest; } catch (e) { log('rap from RomM', e.message); }
+  }
+  return out;
+}
+async function installPkg(romId, zrif) {
+  if (pkgRun) throw new Error('Another game is being installed. Wait for it to finish.');
+  const m = manifest[romId];
+  if (!m?.path) throw new Error('Download the game first.');
+  if (!pkgInst.packagesIn(m.path).pkgs.length) return installVitaGame(romId, zrif);
+  const cmd = steamMgr.rpcs3Command();
+  if (!cmd) throw new Error('RPCS3 wasn’t found. Set it up in Settings → Emulators.');
+  const hdds = rpcs3Hdds();
+  if (!hdds.length) throw new Error('RPCS3’s storage wasn’t found. Open RPCS3 once (it creates its folders), then try again.');
+  const p = pkgInst.packagesIn(m.path);
+  if (!p.pkgs.length) throw new Error('There’s no PS3 package in this game’s files.');
+  // licences first, each under the name RPCS3 looks for (from the download, else from RomM); no
+  // install without them: the game couldn't start ("Failed to decrypt content")
+  const tmp = path.join(os.tmpdir(), `cartridge-rap-${process.pid}-${Date.now()}`);
+  let plan = pkgInst.licencePlan(p, hdds);
+  const fromRomm = await rapsFromRomm(romId, plan.filter((l) => l.from === 'missing'), tmp);
+  if (Object.keys(fromRomm).length) plan = pkgInst.licencePlan(p, hdds, fromRomm);
+  const lost = plan.filter((l) => l.from === 'missing');
+  if (lost.length) { fs.rmSync(tmp, { recursive: true, force: true }); throw new Error(`RAP file not found: ${lost[0].contentId}.rap. RPCS3 needs it next to the .pkg to install this game. Add it to the game in RomM, then install again.`); }
+  const files = [...pkgInst.stageLicences(plan, path.join(tmp, 'staged')), ...p.licences.filter((f) => /\.edat$/i.test(f)), ...p.pkgs.map((x) => x.file)];
+  pkgRun = { romId, ac: new AbortController() };
+  const send = (o) => broadcast('pkg-progress', { romId, ...o });
+  try {
+    send({ state: 'running', step: 0, of: files.length });
+    const got = await pkgInst.install({ cmd, hdds, files, titleIds: p.titleIds, signal: pkgRun.ac.signal, onStep: (s) => send({ state: 'running', ...s }) }).finally(() => fs.rmSync(tmp, { recursive: true, force: true }));
+    const main = got.find((g) => g.created) || got.find((g) => g.touched) || got[0];
+    if (!main || !(main.created || main.touched)) throw new Error('RPCS3 didn’t install it. Open RPCS3 and install the .pkg there (File → Install Packages) to see why.');
+    const prev = installs[romId];
+    installs[romId] = { emu: 'rpcs3', serial: main.serial, dir: main.dir, created: !!(main.created || (prev?.created && prev.serial === main.serial)), at: Date.now(), files: files.map((f) => path.basename(f)), needs: plan.map((l) => l.contentId) };
+    saveInstalls();
+    const licenceMissing = installedLicences(installs[romId]);
+    log('rpcs3 install', main.serial, main.created ? 'new' : 'updated', files.length, 'files', licenceMissing.length ? 'licence missing' : '');
+    send({ state: 'done', serial: main.serial });
+    afterInstall(romId);
+    return { ...installs[romId], updates: p.pkgs.filter((x) => x.patch).length, licenceMissing };
+  } catch (e) { send({ state: 'error', error: e.message }); throw e; }
+  finally { pkgRun = null; }
+}
+
+// Once installed, its Steam shortcut can start it: one Cartridge added is updated to start it from
+// the emulator; otherwise it's added when Add automatically is on (it was held back at download)
+function afterInstall(romId) {
+  try {
+    const st = steamMgr.forRom(romId);
+    if (st.inSteam && st.ours) steamMgr.refreshGame(romId, { force: true }).then((r) => { if (r?.count && !r.fixed) broadcast('steam-auto', { romId, action: 'add' }); }).catch((e) => log('steam after install', e.message));
+    else if (!st.inSteam && steamMgr.onDownloaded(romId)) broadcast('steam-auto', { romId, action: 'add' });
+  } catch (e) { log('steam after install', e.message); }
+}
+// ---------------------------------------------------------------- 0.9.3 D7: emulator patches
+// The emulator's own patch list for a game, switched on in the emulator's own patch settings.
+// patches.json: the ones Cartridge turned on (only those can it turn off), per emulator.
+const patchesMod = require('./patches');
+const PATCHES_FILE = path.join(USER_DATA, 'patches.json');
+let patchMine = loadJson(PATCHES_FILE, {});
+// a PS3 game's serial: from its install record, its PARAM.SFO, else its name
+function ps3Serial(romId, where) {
+  if (installs[romId]?.serial) return installs[romId].serial;
+  for (const f of [path.join(where || '', 'PS3_GAME', 'PARAM.SFO'), path.join(where || '', 'PARAM.SFO')]) { const s = patchesMod.sfoAt(f).TITLE_ID; if (s) return s; }
+  const r = romIndexMain().get(Number(romId));
+  return (`${r?.fs_name || ''} ${r?.name || ''} ${path.basename(where || '')}`.match(/\b([A-Z]{4}\d{5})\b/) || [])[1] || null;
+}
+function patchState(romId) {
+  const r = romIndexMain().get(Number(romId));
+  if (/ps4/i.test(`${r?.platform_slug} ${r?.platform_fs_slug}`)) return ps4PatchState(romId, r);
+  if (!/ps3/i.test(`${r?.platform_slug} ${r?.platform_fs_slug}`)) return { emu: null };
+  const where = installedMap[romId];
+  if (!where) return { emu: 'rpcs3', why: 'Download the game first.' };
+  const serial = ps3Serial(romId, where);
+  if (!serial) return { emu: 'rpcs3', why: 'Cartridge couldn’t read this game’s serial (BLUS12345 and so on). Patches for disc images are listed in RPCS3 itself.' };
+  const dir = patchesMod.rpcs3Dirs()[0];
+  if (!dir || !fs.existsSync(path.join(dir.patches, 'patch.yml'))) return { emu: 'rpcs3', serial, why: 'RPCS3’s patch list isn’t on this device yet. In RPCS3: Manage → Game Patches → Download latest patches. Then come back.' };
+  const version = patchesMod.ps3Version(installs[romId]?.dir || where, rpcs3Hdds(), serial);
+  return { emu: 'rpcs3', serial, version, dir };
+}
+// PS4 games (a folder with sce_sys/param.sfo) and shadPS4's patch repositories
+function ps4PatchState(romId, r) {
+  const where = installedMap[romId];
+  if (!where || where === MARKED) return { emu: 'shadps4', why: 'Download the game first.' };
+  const sfo = patchesMod.sfoAt(path.join(where, 'sce_sys', 'param.sfo'));
+  const serial = sfo.TITLE_ID || (`${r?.fs_name || ''} ${r?.name || ''} ${path.basename(where)}`.match(/\b((?:CUSA|PPSA)\d{5})\b/i) || [])[1]?.toUpperCase() || null;
+  if (!serial) return { emu: 'shadps4', why: 'Cartridge couldn’t read this game’s serial (CUSA12345).' };
+  const dir = patchesMod.shadDirs()[0];
+  if (!dir) return { emu: 'shadps4', serial, why: 'shadPS4’s patches aren’t on this device yet. In the shadPS4 launcher: right-click a game → Cheats / Patches → Download Patches. Then come back.' };
+  return { emu: 'shadps4', serial, version: patchesMod.ps4Version(where), dir };
+}
+const EMU_PATCH = {
+  rpcs3: { name: 'RPCS3', list: (st, mine) => patchesMod.rpcs3List(st.dir, st.serial, st.version, mine), set: (st, todo, mine) => patchesMod.rpcs3Set(st.dir, todo, mine) },
+  shadps4: { name: 'shadPS4', list: (st, mine) => patchesMod.shadList(st.dir, st.serial, st.version, mine), set: (st, todo, mine) => patchesMod.shadSet(st.dir, todo, mine) },
+};
+// D2: a Vita game through Vita3K (.pkg with its zRIF installs with no window; a .vpk or .zip
+// opens Vita3K, which starts the game once installed: the install finishes when it closes)
+async function installVitaGame(romId, zrif) {
+  const m = manifest[romId];
+  const item = await pkgInst.vitaContent(m.path);
+  if (!item) throw new Error('There’s no Vita package (.pkg, .vpk or .zip) in this game’s files.');
+  const key = String(zrif || item.zrif || '').trim();
+  if (item.kind === 'pkg' && !/^KO5i[0-9A-Za-z+/=]{40,}$/.test(key)) throw new Error('This .pkg needs its zRIF key (it starts with KO5i).');
+  const cmd = steamMgr.vita3kCommand();
+  if (!cmd) throw new Error('Vita3K wasn’t found. Set it up in Settings → Emulators.');
+  const prefs = emuRoots('vita3k');
+  if (!prefs.length) throw new Error('Vita3K’s storage wasn’t found. Open Vita3K once and finish its setup (firmware included), then try again.');
+  pkgRun = { romId, ac: new AbortController() };
+  const send = (o) => broadcast('pkg-progress', { romId, ...o });
+  try {
+    send({ state: 'running', step: 0, of: 1, opens: item.kind !== 'pkg' });
+    const got = await pkgInst.installVita({ cmd, prefs, item, zrif: key, signal: pkgRun.ac.signal, onStep: (s) => send({ state: 'running', ...s }) });
+    const g = got[0];
+    if (!g) throw new Error('Vita3K didn’t install it. Open Vita3K and install the file there (File → Install) to see why.');
+    const prev = installs[romId];
+    installs[romId] = { emu: 'vita3k', serial: g.serial, dir: g.dir, created: !!(g.created || (prev?.created && prev.serial === g.serial)), at: Date.now(), files: [path.basename(item.file)] };
+    saveInstalls();
+    log('vita3k install', g.serial, g.created ? 'new' : 'again');
+    send({ state: 'done', serial: g.serial });
+    afterInstall(romId);
+    // without a licence Vita3K can't start it: say so instead of "installed"
+    return { ...installs[romId], updates: 0, licenceMissing: g.licenced ? [] : [{ contentId: g.serial, vita: true }] };
+  } catch (e) { send({ state: 'error', error: e.message }); throw e; }
+  finally { pkgRun = null; }
+}
+
 let autoUpdater = null;
+// The name shown for a version: 0.9.3 is finished in parts named "0.9.3 B", "0.9.3 C"... while the
+// number underneath keeps going up (0.9.4, 0.9.5...), as updates only install a higher number.
+// Here from package.json "versionName", a release's from its title ("Cartridge 0.9.3 B").
+let VERSION_NAME = null;
+try { VERSION_NAME = require('../package.json').versionName || null; } catch {}
+const versionName = () => VERSION_NAME || app.getVersion();
+const nameOf = (i) => String(i?.releaseName || '').replace(/^Cartridge\s+/i, '').trim() || i?.version;
 function setupUpdater() {
   if (!app.isPackaged || !process.env.APPIMAGE) return; // only the real AppImage can replace itself
   try { ({ autoUpdater } = require('electron-updater')); } catch { return; }
@@ -1696,10 +1854,10 @@ function setupUpdater() {
   autoUpdater.autoInstallOnAppQuit = true;
   const set = (s) => { updateState = s; broadcast('update', { ...s, supported: true }); };
   autoUpdater.on('checking-for-update', () => set({ state: 'checking' }));
-  autoUpdater.on('update-available', (i) => set({ state: 'downloading', version: i.version, percent: 0 }));
+  autoUpdater.on('update-available', (i) => set({ state: 'downloading', version: nameOf(i), percent: 0 }));
   autoUpdater.on('download-progress', (p) => set({ ...updateState, state: 'downloading', percent: Math.round(p.percent) }));
-  autoUpdater.on('update-not-available', () => set({ state: 'current', version: app.getVersion() }));
-  autoUpdater.on('update-downloaded', (i) => set({ state: 'ready', version: i.version }));
+  autoUpdater.on('update-not-available', () => set({ state: 'current', version: versionName() }));
+  autoUpdater.on('update-downloaded', (i) => set({ state: 'ready', version: nameOf(i) }));
   autoUpdater.on('error', (e) => set({ state: 'error', error: String(e?.message || e).slice(0, 200) }));
   const check = () => autoUpdater.checkForUpdates().catch(() => {});
   setTimeout(check, 8000);
@@ -1840,7 +1998,7 @@ function createWindow() {
     autoHideMenuBar: true,
     title: 'Cartridge',
     icon: path.join(__dirname, '../build/icon.png'),
-    webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, backgroundThrottling: false },
+    webPreferences: { preload: path.join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false },
   });
   win.setMenuBarVisibility(false);
   if (process.env.VITE_DEV) win.loadURL('http://localhost:5173');
@@ -1935,6 +2093,7 @@ const steamMgr = require('./steamManager')({
   gameIconPng: async (rom) => { if (!rom) return null; const u = await gameIcon({ key: 'rom-' + rom.id, name: rom.name, year: rom.year ? new Date(rom.year > 1e11 ? rom.year : rom.year * 1000).getFullYear() : null }).catch(() => null); return u ? asPng(await fetchImage(u)) : null; },
   logoFile: async (rom) => { if (!rom) return null; await logoFor({ id: rom.id, name: rom.name, romm: rom.logo }).catch(() => null); const c = logoCache[rom.id]; return c?.file ? path.join(LOGO_DIR, c.file) : null; },
   emulationRoots: () => { const emu = readEmuDeckSettings(); return require('./trophies').emulationRoots([emu.emulationPath, config.romsRoot && path.dirname(config.romsRoot)].filter(Boolean)); },
+  installRecord: (id) => installs[id] || null,
   isGamescope, version: app.getVersion(), osInfo: (() => { try { return (fs.readFileSync('/etc/os-release', 'utf8').match(/^PRETTY_NAME="?([^"\n]+)/m) || [])[1] || os.release(); } catch { return os.release(); } })(),
 });
 // ---------------------------------------------------------------- 0.8: play time, server status, edits, uploads
@@ -2241,6 +2400,7 @@ async function verifyLibrary() {
       let rom;
       try { rom = await api(`/api/roms/${id}`); } catch { out.skipped++; continue; }
       const where = installedMap[id];
+      if (manifest[id]?.installedIn) { out.skipped++; continue; } // installed into RPCS3: RomM has the .pkg, not this folder
       const files = (rom.files || []).slice();
       const st = await fsp.stat(where).catch(() => null);
       if (!st) { out.damaged.push({ romId: id, name: rom.name, why: 'Its files are gone' }); continue; }
@@ -2267,6 +2427,7 @@ const handlers09 = {
   'setup:overview': () => steamMgr.setupOverview(),
   'setup:scan': async ({ drives } = {}) => { await steamMgr.scanEmulators({ drives: !!drives }); return steamMgr.setupOverview(); },
   'setup:confirm': ({ path: f, id }) => steamMgr.confirm(f, id),
+  'setup:fork': ({ path: f, of, name }) => steamMgr.markFork(f, of, name),
   'setup:use': ({ key, file, as, args }) => steamMgr.useFile(key, file, { as, args }),
   'setup:report': () => steamMgr.setupReport(),
   // give a Flatpak emulator your games folder (asked first in Setup): only its Flatpak permissions change
@@ -2301,6 +2462,28 @@ const handlers09 = {
   'steam:gameEmuOptions': ({ key }) => steamMgr.candidatesFor(key),
   'steam:setGameEmu': ({ romId, id }) => steamMgr.setGameEmu(romId, id),
   'steam:refreshGame': ({ romId }) => steamMgr.refreshGame(romId),
+  // 0.9.3: everything waiting for you, in one list (Settings → Emulators) instead of start-up pop-ups
+  'issues:list': () => {
+    const out = [];
+    const add = (kind, text, sub, fix) => out.push({ kind, text, sub: sub || '', fix });
+    try {
+      const miss = steamMgr.verifyCollections() || [];
+      if (miss.length) add('collections', `${miss.length} game${miss.length === 1 ? ' is' : 's are'} missing from ${[...new Set(miss.map((m) => m.collection))].join(', ')}`, 'Steam Cloud may have replaced your Steam collections', 'collections');
+    } catch {}
+    try {
+      const h = steamMgr.health();
+      const by = (k) => h.problems.filter((p) => p.issues.some((i) => i.kind === k)).length;
+      const n = { emulator: by('emulator'), game: by('game'), core: by('core'), flatpak: by('flatpak') };
+      if (n.emulator) add('moved', `${n.emulator} Steam shortcut${n.emulator === 1 ? ' points' : 's point'} at an emulator that isn't there any more`, 'Usually an update renamed it, or it moved', 'health');
+      if (n.game) add('game', `${n.game} Steam shortcut${n.game === 1 ? ' is' : 's are'} for a game that's gone from this device`, '', 'health');
+      if (n.core + n.flatpak) add('core', `${n.core + n.flatpak} Steam shortcut${n.core + n.flatpak === 1 ? ' needs' : 's need'} a missing RetroArch core or Flatpak`, '', 'health');
+    } catch (e) { log('issues: health', e.message); }
+    try {
+      for (const m of steamMgr.movedEmulators().filter((x) => !x.shortcuts)) add('setup', `Your launch setup points at ${m.exe}, which isn't there any more`, '', 'setup');
+      for (const c of steamMgr.setupOverview().consoles) for (const k of c.checks) if (k.bios && k.level === 'warn') add('bios', `${c.platform}: ${k.text}`, '', 'setup');
+    } catch (e) { log('issues: setup', e.message); }
+    return out;
+  },
 };
 const handlers = {
   ...trophySvc.handlers,
@@ -2373,6 +2556,14 @@ const handlers = {
     return require('./androidPlay').scan(p);
   },
   'android:bios': (spec) => require('./androidPlay').bios(spec || {}),
+  // Quick Menu's one Refresh Library (0.9.3 G3): RomM scans its folders when the sign-in may ask it
+  // to, then Cartridge resyncs; without that right it only resyncs
+  'library:refresh': async () => {
+    let scanned = false;
+    try { await scanServer(); scanned = true; } catch (e) { log('refresh: scan skipped', e.message); }
+    const res = await syncLibrary();
+    return { scanned, ...res };
+  },
   'installed:get': () => installedMap,
   'installed:rescan': () => computeInstalled(),
   'server:test': async (srv) => {
@@ -2450,23 +2641,119 @@ const handlers = {
     return Object.keys(marks);
   },
   'roms:marks': () => Object.keys(marks),
-  'roms:delete': async ({ romId, path: p }) => {
+  'roms:delete': async ({ romId, path: p, alsoEmu }) => {
     let target = p || manifest[romId]?.path;
     // a hand-made mark has no files of its own: only remove the mark, never touch folders
     if (target === MARKED || (marks[romId] && !manifest[romId] && (!target || target === MARKED))) {
       delete marks[romId]; saveMarks(); computeInstalled(); try { steamMgr.onDeleted(romId); } catch {} return true;
     }
     if (!target) throw new Error('Nothing to delete');
-    // never delete a whole console folder or the ROMs root
-    const roots = new Set([config.romsRoot, ...(library?.platforms || []).map((pl) => platformPath(pl).path)].filter(Boolean).map((x) => path.resolve(x)));
-    if (roots.has(path.resolve(target))) throw new Error('Refusing to delete a whole console folder');
-    await fsp.rm(target, { recursive: true, force: true });
+    // a game living in RPCS3's storage (its .pkg already gone), or its download plus the RPCS3
+    // copy when asked: only through every check in pkgInstall.safeToRemove (plan D3)
+    const inEmu = !!manifest[romId]?.installedIn;
+    if (inEmu || alsoEmu) {
+      const rec = installs[romId], emu = rec?.emu === 'vita3k' ? 'Vita3K' : 'RPCS3';
+      const ok = pkgInst.safeToRemove(rec, emuRoots(rec?.emu));
+      if (!ok.ok) throw new Error(`Cartridge won't delete this from ${emu}: ${ok.why} Delete it in ${emu} instead.`);
+      await removeWithProgress(ok.dir, romId);
+      delete installs[romId]; saveInstalls();
+      if (inEmu) target = null;
+    }
+    if (target) {
+      // never delete a whole console folder or the ROMs root
+      const roots = new Set([config.romsRoot, ...(library?.platforms || []).map((pl) => platformPath(pl).path)].filter(Boolean).map((x) => path.resolve(x)));
+      if (roots.has(path.resolve(target))) throw new Error('Refusing to delete a whole console folder');
+      await removeWithProgress(target, romId);
+    }
     delete manifest[romId];
     saveManifest();
     delete installedMap[romId];
     broadcast('installed-changed', { romId, path: null });
     try { if (steamMgr.onDeleted(romId)) broadcast('steam-auto', { romId, action: 'remove' }); } catch (e) { log('steam auto remove', e.message); }
     return true;
+  },
+  // 0.9.3 D: PS3 packages installed through RPCS3
+  // emu: 'rpcs3' or 'vita3k'; emuName for the UI; cmd: the emulator found, or null
+  'pkg:check': async ({ romId }) => {
+    const m = manifest[romId];
+    const rec = installs[romId] || null;
+    const running = pkgRun?.romId === romId;
+    const lic = rec?.emu === 'rpcs3' ? installedLicences(rec) : [];
+    if (!m?.path || m.installedIn) return { pkgs: 0, installed: rec, emu: rec?.emu || null, emuName: rec?.emu === 'vita3k' ? 'Vita3K' : 'RPCS3', running, licenceMissing: lic };
+    const r = pkgInst.packagesIn(m.path);
+    if (r.pkgs.length) {
+      const cmd = steamMgr.rpcs3Command();
+      const plan = pkgInst.licencePlan(r, rpcs3Hdds());
+      return { emu: 'rpcs3', emuName: 'RPCS3', pkgs: r.pkgs.length, updates: r.pkgs.filter((x) => x.patch).length, licences: plan.filter((l) => l.from !== 'missing' && l.from !== 'rpcs3').length, titleIds: r.titleIds, installed: rec, cmd: cmd ? cmd.from || path.basename(cmd.exe) : null, running,
+        needsLicence: rec ? [] : plan.filter((l) => l.from === 'missing').map((l) => ({ contentId: l.contentId, titleId: l.titleId })), licenceMissing: lic };
+    }
+    const v = await pkgInst.vitaContent(m.path).catch(() => null);
+    if (v) {
+      const cmd = steamMgr.vita3kCommand();
+      return { emu: 'vita3k', emuName: 'Vita3K', pkgs: 1, kind: v.kind, titleIds: [v.titleId], needsZrif: v.kind === 'pkg' && !v.zrif, opens: v.kind !== 'pkg', installed: rec, cmd: cmd ? cmd.from || path.basename(cmd.exe) : null, running };
+    }
+    return { pkgs: 0, installed: rec, running };
+  },
+  'pkg:install': ({ romId, zrif }) => installPkg(romId, zrif),
+  // the licence (.rap) for a game already installed in RPCS3 without one: found in its download or
+  // in RomM, handed to RPCS3 under its right name
+  'pkg:addLicence': async ({ romId }) => {
+    const rec = installs[romId];
+    if (rec?.emu !== 'rpcs3') throw new Error('This game isn’t installed in RPCS3 by Cartridge.');
+    const need = installedLicences(rec);
+    if (!need.length) return { ok: true };
+    const cmd = steamMgr.rpcs3Command();
+    if (!cmd) throw new Error('RPCS3 wasn’t found. Set it up in Settings → Emulators.');
+    const tmp = path.join(os.tmpdir(), `cartridge-rap-${process.pid}-${Date.now()}`);
+    try {
+      const m = manifest[romId];
+      const local = m?.path && !m.installedIn ? pkgInst.packagesIn(m.path).licences.filter((f) => /\.rap$/i.test(f)) : [];
+      const named = (cid) => local.find((f) => path.basename(f).toUpperCase() === cid.toUpperCase() + '.RAP') || (need.length === 1 && local.length === 1 ? local[0] : null);
+      const picked = Object.fromEntries(need.map((n) => [n.contentId, named(n.contentId)]).filter(([, f]) => f));
+      Object.assign(picked, await rapsFromRomm(romId, need.filter((n) => !picked[n.contentId]), tmp));
+      const lost = need.filter((n) => !picked[n.contentId]);
+      if (lost.length) throw new Error(`RAP file not found: ${lost[0].contentId}.rap. Add it to this game in RomM, next to its .pkg.`);
+      const files = pkgInst.stageLicences(need.map((n) => ({ contentId: n.contentId, from: 'picked', file: picked[n.contentId] })), path.join(tmp, 'staged'));
+      await pkgInst.install({ cmd, hdds: rpcs3Hdds(), files, titleIds: [] });
+    } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
+    if (installedLicences(rec).length) throw new Error('RPCS3 didn’t take the licence. Check it is the one for this game.');
+    log('rpcs3 licence added', need.map((n) => n.contentId).join(' '));
+    return { ok: true };
+  },
+  'pkg:cancel': () => { pkgRun?.ac.abort(); return true; },
+  // after installing: the downloaded .pkg isn't needed to play. The game then lives in RPCS3.
+  'pkg:dropDownload': async ({ romId }) => {
+    const m = manifest[romId], rec = installs[romId];
+    if (!m?.path || m.installedIn || !rec?.created) throw new Error('Cartridge didn’t install this game in an emulator.');
+    const roots = new Set([config.romsRoot, ...(library?.platforms || []).map((pl) => platformPath(pl).path)].filter(Boolean).map((x) => path.resolve(x)));
+    if (roots.has(path.resolve(m.path))) throw new Error('Refusing to delete a whole console folder');
+    await removeWithProgress(m.path, romId);
+    manifest[romId] = { ...m, path: rec.dir, installedIn: rec.emu, download: m.path };
+    saveManifest();
+    installedMap[romId] = rec.dir;
+    broadcast('installed-changed', { romId, path: rec.dir });
+    return true;
+  },
+  'patches:list': ({ romId }) => {
+    const st = patchState(romId), E = EMU_PATCH[st.emu];
+    if (!st.dir || !E) return { emu: st.emu, emuName: E?.name || '', serial: st.serial, why: st.why, list: [] };
+    return { emu: st.emu, emuName: E.name, serial: st.serial, version: st.version, list: E.list(st, patchMine[st.emu] || {}) };
+  },
+  // changes: [{ key, on }]. Patches turned on in RPCS3 itself are never turned off here.
+  'patches:apply': ({ romId, changes }) => {
+    const st = patchState(romId), E = EMU_PATCH[st.emu];
+    if (!st.dir || !E) throw new Error(st.why || 'No patches for this game.');
+    const list = E.list(st, patchMine[st.emu] || {});
+    const byKey = new Map(list.map((p) => [p.key, p]));
+    const todo = (changes || []).map((c) => {
+      const p = byKey.get(c.key);
+      if (!p || p.on === !!c.on || (p.by === 'emulator' && !c.on)) return null; // unchanged, or not Cartridge's to turn off
+      return { ...p, on: !!c.on };
+    }).filter(Boolean);
+    patchMine[st.emu] = E.set(st, todo, patchMine[st.emu] || {});
+    saveJson(PATCHES_FILE, patchMine);
+    log(st.emu + ' patches', st.serial, todo.map((c) => (c.on ? '+' : '-') + c.description).join(', '));
+    return { count: todo.length };
   },
   'dl:add': (job) => enqueue(job),
   'dl:list': () => queue.map(publicItem),
@@ -2547,6 +2834,7 @@ const handlers = {
   'steam:liveInfo': () => steamMgr.liveInfo(),
   'steam:setEmu': ({ key, id }) => steamMgr.setEmu(key, id),
   'steam:refresh': ({ key }) => steamMgr.refresh(key),
+  'steam:takeOver': ({ key }) => steamMgr.takeOver(key),
   'steam:refreshArt': ({ style }) => steamMgr.refreshArt(style),
   'steam:liveEnable': () => steamMgr.liveEnable(),
   'steam:queueAdd': (items) => steamMgr.queueAdd(items),
@@ -2572,10 +2860,10 @@ const handlers = {
   'app:deeplink': () => { const l = startLink; startLink = null; return l; },
   'fuse:status': () => fuseStatus.current(),
   'fuse:games': () => fuseStatus.currentGames(),
-  'update:get': () => ({ ...updateState, current: app.getVersion(), supported: !!autoUpdater }),
+  'update:get': () => ({ ...updateState, current: versionName(), supported: !!autoUpdater }),
   'update:check': async () => { if (!autoUpdater) throw new Error('Updates work in the AppImage build only'); await autoUpdater.checkForUpdates(); return updateState; },
   'update:install': () => { if (updateState.state === 'ready') autoUpdater.quitAndInstall(true, true); },
-  'app:info': () => ({ version: app.getVersion(), gamescope: isGamescope(), userData: USER_DATA, gpu: useGpu, home: os.homedir(), hostname: os.hostname() }),
+  'app:info': () => ({ version: versionName(), number: app.getVersion(), gamescope: isGamescope(), userData: USER_DATA, gpu: useGpu, home: os.homedir(), hostname: os.hostname() }),
   'app:scale': () => { const [w, h] = win.getContentSize(); return { auto: autoZoom(), current: currentZoom(), w, h, display }; },
   'app:quit': () => app.quit(),
   'app:screenshot': async () => {
@@ -2655,3 +2943,20 @@ app.on('child-process-gone', (_e, d) => {
 });
 app.on('window-all-closed', () => app.quit());
 app.on('will-quit', () => { writeQueue(); fuseStatus.close(); }); // keep the latest progress for the next start; the status file says idle
+// Quit means gone (0.9.3): Steam counts Cartridge as running until every process it started has
+// ended, and one left behind kept SteamOS slow until a restart. Stop the work in flight, then exit
+// within 3 s whatever is still pending. The Steam helper runs outside Cartridge and isn't touched.
+let quitting = false;
+app.on('before-quit', () => {
+  if (quitting) return;
+  quitting = true;
+  log('quit');
+  setTimeout(() => app.exit(0), 3000).unref?.();
+  try { trophySvc.stop(); } catch {}
+  for (const it of queue) try { it.abort?.abort(); } catch {}
+  for (const u of uploads.values()) try { u.abort.abort(); } catch {}
+  try { verifyRun?.ac.abort(); } catch {}
+  if (fetchAll) fetchAll.stop = true;
+});
+// Steam's Exit game (and a shutdown) ask politely first: treat it like Quit
+for (const sig of ['SIGTERM', 'SIGINT', 'SIGHUP']) process.on(sig, () => { log('got', sig); app.quit(); setTimeout(() => app.exit(0), 3000).unref?.(); });

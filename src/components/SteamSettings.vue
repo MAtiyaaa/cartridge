@@ -23,14 +23,9 @@
           <button class="btn" data-focus :disabled="steam.busy || !ov.ours" @click="refreshArt"><Icon name="mdiImageRefreshOutline" />Refresh artwork</button>
           <button class="btn" data-focus @click="restartSteam"><Icon name="mdiRestart" />Restart Steam</button>
         </div>
-        <!-- 0.9: find emulators anywhere, and check the shortcuts already in Steam -->
-        <div class="stack">
-          <button class="lrow" data-focus @click="go('emu-setup')"><Icon name="mdiRadar" :size="24" /><div class="l-mid"><b>Emulator setup</b><span class="l-sub">Find emulators wherever they are, pick one per console, check BIOS and access</span></div><Icon name="mdiChevronRight" :size="22" /></button>
-          <button class="lrow" data-focus @click="go('steam-health')"><Icon name="mdiStethoscope" :size="24" /><div class="l-mid"><b>Shortcut health</b><span class="l-sub">Steam shortcuts that would fail, and fixes for them</span></div><Icon name="mdiChevronRight" :size="22" /></button>
-        </div>
-
+        <!-- Emulator setup and Shortcut health live in Settings → Emulators (0.9.3) -->
         <div class="subh"><Icon name="mdiGamepadVariantOutline" :size="20" />Emulators</div>
-        <p class="muted small" style="margin-top: -8px">Pick a console to see its games in Steam and how they start. Cartridge copies Target, Start in and Launch options from shortcuts you already have (Steam ROM Manager, EmuDeck or your own), minus frame generation wrappers. Consoles with no shortcut yet use the emulator it finds: EmuDeck, then AppImages, then Flatpaks.</p>
+        <p class="muted small" style="margin-top: -8px">Pick a console to see its games in Steam and how they start. Each console uses one emulator found on this device: EmuDeck's first, then RetroDECK (when there is no EmuDeck), then AppImages, Flatpaks and installed programs. The way your own Steam shortcuts start games is offered as another choice for each console.</p>
         <div class="ss-emus">
           <button v-for="c in ov.consoles" :key="c.key" class="ss-emu" data-focus :data-key="'emu-' + c.key" @click="go('steam-console', { ckey: c.key })">
             <div class="ss-e-logo"><PIcon :p="platOf(c)" :size="44" /></div>
@@ -54,7 +49,7 @@
         <div class="row"><span class="lbl">Console in names</span><div class="seg"><button v-for="m in nameOpts" :key="m.v" data-focus :class="{ on: (sc.consoleInName || 'clash') === m.v }" @click="setC({ consoleInName: m.v })">{{ m.l }}</button></div></div>
         <p class="muted small" style="margin-top: -6px">"Only on clashes" adds the console, like "God of War (PS2)", when two games share a name.</p>
 
-        <div class="subh"><Icon name="mdiHistory" :size="20" />Undo &amp; clean up</div>
+        <div class="subh"><Icon name="mdiHistory" :size="20" />Undo &amp; Clean Up</div>
         <div class="row wrap">
           <button class="btn" data-focus :disabled="!ov.backups" @click="undo"><Icon name="mdiUndo" />Undo last change</button>
           <button class="btn" data-focus :disabled="!ov.ours" @click="removeAll"><Icon name="mdiDeleteSweepOutline" />Remove everything Cartridge added</button>
@@ -78,7 +73,7 @@ import PIcon from './PIcon.vue';
 const ov = ref(null);
 const missingCols = ref([]);
 const sc = computed(() => store.config.steam || {});
-const HOW = { learned: 'From your shortcuts', yours: 'Set by you', emudeck: 'EmuDeck', appimage: 'AppImage', flatpak: 'Flatpak', native: 'Installed program' };
+const HOW = { learned: 'From your shortcuts', yours: 'Set by you', emudeck: 'EmuDeck', appimage: 'AppImage', flatpak: 'Flatpak', native: 'Installed program', retrodeck: 'RetroDECK' };
 const nameOpts = [{ v: 'clash', l: 'Only on clashes' }, { v: 'always', l: 'Always' }];
 const inSteam = computed(() => ov.value?.games.filter((g) => g.inSteam).length || 0);
 const notIn = computed(() => (ov.value?.games.length || 0) - inSteam.value);

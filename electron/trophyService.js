@@ -438,5 +438,6 @@ module.exports = function createTrophyService(ctx) {
     },
     'trophies:sync': () => sync(),
   };
-  return { start, handlers, iconPath: T.iconPath, refresh };
+  function stop() { clearInterval(pollT); clearTimeout(syncT); }
+  return { start, stop, handlers, iconPath: T.iconPath, refresh };
 };

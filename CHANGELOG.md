@@ -2,6 +2,26 @@
 
 Every Cartridge release, newest first. Each GitHub release only lists its own changes.
 
+## Cartridge 0.9.12 · The Big Merge
+
+Everything from abdu2304's 0.9.3 (parts A to J), with Android versions of the parts that were desktop only.
+
+### New
+- **From abdu2304's 0.9.3:** Settings → Emulators with an Issues list and a dot on the Settings tab; PS3 games from `.pkg` installed in RPCS3 (with their `.rap` licences), Vita games installed in Vita3K, PS3 and PS4 patches from RPCS3's and shadPS4's own lists; more desktop emulators (DeSmuME, Mupen64Plus, Snes9x, Mesen, Play!, Kronos, Xenia Edge, PrimeHack) and RetroDECK; critic score and age rating badges on game pages; the idle screen shows the game's logo and the console's logo; Report a problem in Settings → About; Home rows of 15 with Show all; a progress ring while a game is deleted.
+- **Settings → Emulators on Android.** Issues lists what stops games on this device from starting: a console with games but no emulator installed (with a button to get one), a BIOS that's missing or can't be checked, and PS3 or Vita packages still to install in the emulator (it opens the emulator and tells you which file; mark it done after). Below that, each console shows which emulator opens its games, and you can pick one. The Settings tab gets the same dot as on desktop.
+- **Report a problem on Android.** The report lists the device, Android and WebView versions, the emulators installed and which one each console uses, with no paths or addresses. Open a GitHub issue opens your browser on this fork's issue page.
+
+### Changed
+- **One RomM tab in Settings** (Connection, Library & Sync and Upload together), and Console Folders moved into Settings → Emulators.
+- **Refresh Library.** The Quick Menu's first tile asks RomM to look for new files, then pulls new and changed games, in one go.
+- **Game page More is shorter:** Steam and emulator options, and details and artwork, are in their own lists. On Android, Emulator for this game and Open in a PC game app are under Steam and emulator.
+- **Sturdier with any RomM version.** Missing or odd fields from older or newer servers no longer stop a library sync.
+- Problem reports from this fork's builds go to this fork's GitHub issues.
+
+### Fixed
+- Settings keeps your section after an action, and a quick right press no longer loses focus. The D-pad stays in the list you are scrolling.
+- Desktop: Cartridge quits fully within 3 seconds, and stops background work while a game runs.
+
 ## Cartridge 0.9.11 · The Bridge Expansion
 
 Fuse and other launchers can now do much more with Cartridge: see every game it downloaded with RomM's details and pictures, follow its downloads game by game, and hand it games to upload to your RomM server. The details for launcher developers are in `docs/FUSE_BRIDGE.md` (bridge protocol 3; apps made for the 0.9.10 bridge keep working).
@@ -143,9 +163,116 @@ Includes everything from abdu2304's 0.9.1 (launch options checked against EmuDec
 
 Included in this fork from 0.9.2.
 
-## Cartridge 0.9.2 · Controls and colour (abdu2304)
+## Cartridge 0.9.3 J · Sturdier with every RomM version (abdu2304)
 
-Included in this fork from 0.9.3.
+### Changed
+- **RomM versions.** Cartridge reads each game from RomM so that a missing, empty or unexpected field (older servers, newer ones, or a broken entry) never stops a library sync. New tests cover a current RomM, an older one without metadata, and odd values.
+- **Emulator for this game** has a test making sure a game's own emulator pick always beats its console's, and falls back to the console's when that emulator is gone.
+
+## Cartridge 0.9.3 I · Scores, ratings and the idle screen (abdu2304)
+
+### New
+- **Score and age rating on game pages.** The game's info box shows the critic score as a coloured badge (IGDB's critic score, else RomM's combined rating from its other metadata sources) and the age rating as its badge (RomM's rating image, else a PEGI or ESRB badge drawn from the text). Each is hidden when RomM has nothing, so it works without IGDB on the server.
+
+### Changed
+- **Idle screen:** the game's logo and the console's logo replace the plain text, over the sharpest art Cartridge has for the game.
+
+## Cartridge 0.9.3 H · One RomM tab, problem reports (abdu2304)
+
+### New
+- **Report a problem** (Settings → About): shows your setup report with personal details taken out, so you can read it first. Copy it, open a GitHub issue with it filled in, or scan a QR code to open the issue page on your phone (handy in Game Mode).
+- **shadPS4 trophy key guide.** When shadPS4 has no trophy key set, the Trophies & Gamerscore tab says so and shows the steps to add it. Cartridge never ships or downloads the key.
+
+### Changed
+- **One RomM tab in Settings.** Connection, Library & Sync and Upload to RomM are together under **RomM**, each with its own heading.
+- **Recently played from other devices:** the device name shows in full on its own line under the game, instead of being cut short.
+
+## Cartridge 0.9.3 G · Tidier menus and achievements (abdu2304)
+
+### Changed
+- **Refresh Library.** The Quick Menu's "Resync library" and "Scan server for new ROMs" are one item now. RomM looks for new files when your sign-in allows it, then Cartridge pulls new and changed games; otherwise it just resyncs.
+- **Title case** for the Quick Menu items and the remaining Settings headings (Top Bar, Undo & Clean Up, Storage Manager, Check Downloaded Games).
+- **Achievements:** the Trophies & Gamerscore tab is plain text, no gradient, and its mark is the same size as the RetroAchievements logo.
+- **Hide** (on a trophy game's More) replaces "Hide from totals". Settings → Achievements has a **Hidden Games** list to bring them back.
+- **RetroAchievements tab:** a console filter and a sort (Latest, Most complete, Least complete, A to Z) for recently played games, the same as Trophies & Gamerscore.
+
+## Cartridge 0.9.3 F · PS4 patches (abdu2304)
+
+### New
+- **Patches for PS4 games.** On a PS4 game's page, More → Steam and emulator → **Patches** now lists shadPS4's patches for that game and its version (including an installed update), plus the ones made for any version. Tick and press **Apply**: Cartridge switches them on in shadPS4's own patch files, exactly as ticking them in shadPS4's launcher does, so they stay on.
+- As with RPCS3, Cartridge only turns off patches it turned on itself, and changes nothing else in those files. If shadPS4 hasn't downloaded its patches yet, Cartridge tells you where to do that.
+
+## Cartridge 0.9.3 E · PS3 patches (abdu2304)
+
+### New
+- **Patches for PS3 games.** On a PS3 game's page, More → Steam and emulator → **Patches** lists the patches RPCS3 has for that game and its version (60 FPS, widescreen and the like), from RPCS3's own patch list. Tick the ones you want and press **Apply**: they're saved in RPCS3's own patch settings, so they stay on exactly as if you'd ticked them in RPCS3. Nothing changes until you press Apply.
+- Cartridge only turns off patches it turned on itself. Patches you turned on in RPCS3 show as "On in RPCS3" and are left alone, and so is everything else in RPCS3's patch settings.
+- If RPCS3 hasn't downloaded its patch list yet, Cartridge tells you where to do that in RPCS3.
+
+## Cartridge 0.9.3 D · Vita games (abdu2304)
+
+### New
+- **Install in Vita3K.** Vita games that come as `.pkg`, `.vpk` or `.zip` get an **Install in Vita3K** button on their game page once downloaded. Nothing installs until you press it.
+  - A `.pkg` installs without opening Vita3K. It needs its zRIF key: Cartridge reads it from a text file that came with the game, or asks you for it.
+  - A `.vpk` or `.zip` opens Vita3K, which starts the game once it's installed. Close Vita3K to finish.
+- Steam shortcuts start these games by title ID, as before, and work as soon as the install is done.
+- After installing, Cartridge offers to delete the downloaded file, which isn't needed to play any more.
+- **Safe delete.** Delete can also remove a game Cartridge installed in Vita3K, after a clear confirmation and the same checks as for RPCS3. Only that game's folder goes; saves, DLC and licences stay.
+
+- **Licences.** A Vita game installed without a licence now says so, instead of looking ready and then not starting.
+
+### Changed
+- **Game page More is shorter.** Favourites, Play status, Add to a collection, Timeline and Hide stay at the top. Steam, emulator and file options are under **Steam and emulator**; artwork, details and theme are under **Details and artwork**. B goes back to the first list.
+
+### Fixed
+- **PS3 games from packages: "Failed to decrypt content".** PSN games need their licence file (`.rap`) next to the `.pkg`, and RPCS3 only finds it under the exact name `<content ID>.rap`. Cartridge now finds the `.rap` itself, in the download or in RomM, and hands it to RPCS3 under that name whatever it's called. Without it, nothing is installed and Cartridge says "RAP file not found". The install screen says this before you start. Games already installed without one get a **Get licence (.rap)** button on their game page, which finds it the same way.
+- **PS3 games from packages and Steam.** Before they're installed, they show on the PS3 console page as needing to be installed in RPCS3 first, instead of getting a shortcut that can't start. Once installed, a shortcut Cartridge already made is updated to start the game from RPCS3. If **Add automatically** is on, a new shortcut is added; otherwise the game shows on the console page ready to add.
+
+## Cartridge 0.9.3 C · PS3 games from packages (abdu2304)
+
+### New
+- **Install in RPCS3.** PS3 games that come as `.pkg` files get an **Install in RPCS3** button on their game page once downloaded (Downloads points to it too). Nothing installs until you press it. RPCS3 installs the game without opening its window, with its licence files (`.rap`, `.edat`), DLC and updates in the right order. Cartridge then checks the game really arrived in RPCS3.
+- **Updates and DLC.** Update packages in the same game install into the same game in RPCS3. "Install again in RPCS3" (More) installs ones added later.
+- **Starts by serial.** Steam shortcuts for these games start them by their serial, like RPCS3's own shortcuts, so they keep working if RPCS3's storage moves.
+- **Free up space.** After installing, Cartridge offers to delete the downloaded package, which isn't needed to play any more.
+- **Safe delete.** Delete can also remove a game Cartridge installed in RPCS3, after a clear confirmation. It only ever removes that one game's folder, after checking it's exactly the game Cartridge installed. Saves, trophies, licences, settings and games you installed yourself are never touched.
+
+## Cartridge 0.9.3 B · More emulators (abdu2304)
+
+### New
+- **More emulators for Steam shortcuts.** Cartridge now finds and starts DeSmuME (DS), Mupen64Plus (N64), Snes9x (SNES), Mesen (NES, SNES, Game Boy, GBA, PC Engine, Master System, Game Gear, WonderSwan), Play! (PS2), Kronos (Saturn) and Xenia Edge (Xbox 360, the native Linux build EmuDeck installs). Each one's launch options were read from its own source code.
+- **PrimeHack** (EmuDeck's Flatpak or an AppImage) is listed as a fork of Dolphin, for GameCube and Wii. Like other forks, it's only used when you pick it.
+
+### Changed
+- **Version names.** 0.9.3 is finished in parts: this is 0.9.3 B, and Settings → About and update messages show that name.
+
+## Cartridge 0.9.3 · Emulators (abdu2304)
+
+### New
+- **Settings → Emulators.** One place for Emulator setup, Shortcut health and Console Folders, with an **Issues** list at the top: games missing from Steam collections, shortcuts that would fail, setups pointing at an emulator that's gone, missing BIOS. Each has its fix. A dot on the Settings tab means something is waiting. The pop-ups at start-up are gone.
+- **Forks.** When Cartridge can't tell what an AppImage is, "Which One?" asks: Not an Emulator, It's a Fork (pick which emulator it comes from and name it) or It's an Emulator. B goes back a step. A copy that was found can also be marked as a fork. Forks show by their own name (for example "BB Launcher · fork of shadPS4") and are only used when you pick them. GR2, BB Launcher, PrimeHack and Slippi are recognised by name.
+- **RetroDECK.** If you use RetroDECK and not EmuDeck, it's offered for each console and starts games with the emulator RetroDECK has set.
+- **Take over your own shortcuts.** On a console's page in Settings → Steam, More can bring games you added to Steam yourself under Cartridge, so every game of that console starts the same way. With Steam's live connection play time and collections stay.
+- **Home rows** show 15 games and a **Show all** card that opens the whole row.
+- **Deleting a game** shows a progress ring on its card and on the Delete button.
+
+### Changed
+- **Which emulator is used.** Each console uses one emulator found on your device: EmuDeck's first, then RetroDECK (without EmuDeck), then AppImages, Flatpaks and installed programs. How your own Steam shortcuts start games is offered as another choice. Steam ROM Manager setups are no longer listed; the emulators they use still are.
+- **Real names.** A Citra or Lime3DS install is no longer called Azahar, and Sudachi, suyu, torzu and Ryubing show by their own names.
+- **Lists A to Z.** Consoles and emulators are sorted alphabetically. In Emulator setup, finished consoles move to the bottom with a check mark.
+- The current top tab is a full white box. Text options Standard, High contrast and Soft are clearly different. The game page buttons stay on one row.
+- With Steam's live connection, adding or removing games no longer asks "Apply now or later".
+- "Cartridge itself" in Settings is now "Cartridge".
+
+### Fixed
+- **shadPS4 games that only started sometimes.** Cartridge started shadPS4 next to its AppImage, where a stray `user` folder gave it different settings. Shortcuts now start where shadPS4 keeps its normal data. Existing PS4 shortcuts show **Update** on their console page.
+- **Lag and Cartridge staying open after quitting.** Cartridge no longer works in the background while a game runs (controller reading slows down, the animated background stops) and quits fully within 3 seconds, from its own Quit and from Steam's Exit game.
+- **Remove from Steam** no longer has to be chosen twice.
+- **Settings** stays on the section you were on after an action or after leaving a sub-screen, and a quick right press no longer loses focus.
+- **Library:** scrolling up no longer stops on the filters bar early.
+- Shortcuts pointing inside an AppImage's temporary folder (`/tmp/.mount_...`) are no longer learned from and show in Shortcut health.
+
+## Cartridge 0.9.2 · Controls and colour (abdu2304)
 
 ### Changed
 - **White by default.** Highlights, Buttons and Progress bars are white in the Cartridge theme. You can still pick your own colours in Settings → Look & Feel.

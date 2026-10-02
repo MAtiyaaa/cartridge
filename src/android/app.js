@@ -99,6 +99,8 @@ export function beforeMount() {
 export async function afterMount() {
   const { store, call, go, tab, confirm, saveConfig } = await import('../store.js');
   const nav = await import('../nav.js');
+  // the dot on Settings (abdu2304's 0.9.3 Issues): Android counts missing emulators, BIOS and packages to install
+  setTimeout(() => { if (store.config?.configured && store.lib) import('./issues.js').then((m) => m.androidIssues()).catch(() => {}); }, 8000);
   const { dispatch } = nav;
   const { watch } = await import('vue');
   // Settings changed on the second screen show up here right away

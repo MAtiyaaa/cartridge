@@ -87,10 +87,10 @@ function setup(name, build) {
   return H;
 }
 // candidates per console, as "label => exe args" with the home shown as ~ (after a scan when asked)
-function candidates(H, keys, { scan = false, confirmed = {} } = {}) {
+function candidates(H, keys, { scan = false, confirmed = {}, forks = {} } = {}) {
   const code = `
     const m = require(${JSON.stringify(path.join(ROOT, 'electron/steamManager.js'))});
-    const cfg = { steam: { confirmed: ${JSON.stringify(confirmed)} } };
+    const cfg = { steam: { confirmed: ${JSON.stringify(confirmed)}, forks: ${JSON.stringify(forks)} } };
     const sm = m({ USER_DATA: ${JSON.stringify(H + '/.config/Cartridge')}, log() {}, PLATFORM_MAP: require(${JSON.stringify(path.join(ROOT, 'electron/platformMap'))}), getConfig: () => cfg, saveConfig() {}, broadcast() {},
       emulationRoots: () => [${JSON.stringify(H + '/Emulation')}].filter((d) => require('fs').existsSync(d)), getLibrary: () => null, installed: () => ({}), romById: () => null, isGamescope: () => false, artFor: () => ({}), MARKED: 'm', markedPath: () => null });
     (async () => {
@@ -174,17 +174,71 @@ test('nothing installed', () => {
   assert.deepStrictEqual([c.snes.length, c.ps2.length, c.switch.length], [0, 0, 0]);
 });
 
-test('Steam ROM Manager setup is used when present', () => {
+test('Steam ROM Manager setups are not offered, the emulator is (0.9.3 C6)', () => {
   const H = setup('srm', ({ w }) => {
-    w('/Apps/duck/DuckStation-x64.AppImage');
+    w('/Applications/DuckStation-x64.AppImage');
     fs.mkdirSync(path.join(TMP, 'home-srm/.config/steam-rom-manager/userData'), { recursive: true });
     fs.writeFileSync(path.join(TMP, 'home-srm/.config/steam-rom-manager/userData/userConfigurations.json'), JSON.stringify([
-      { parserType: 'Glob', configTitle: 'Sony PlayStation - DuckStation', executable: { path: path.join(TMP, 'home-srm/Apps/duck/DuckStation-x64.AppImage') }, executableArgs: '-batch -fullscreen "${filePath}"', romDirectory: '/somewhere/roms/psx' },
+      { parserType: 'Glob', configTitle: 'Sony PlayStation - DuckStation', executable: { path: path.join(TMP, 'home-srm/Applications/DuckStation-x64.AppImage') }, executableArgs: '-batch -fullscreen "${filePath}"', romDirectory: '/somewhere/roms/psx' },
       { parserType: 'Epic', configTitle: 'Epic', executable: { path: '/x' } },
     ]));
   });
   const c = candidates(H, ['psx'], { scan: true });
-  assert.ok(c.psx.some((x) => /Steam ROM Manager/.test(x) && /-batch -fullscreen "\{ROM\}"/.test(x)), c.psx.join('\n'));
+  assert.ok(!c.psx.some((x) => /Steam ROM Manager/.test(x)), c.psx.join('\n'));
+  assert.ok(c.psx.some((x) => /DuckStation-x64\.AppImage/.test(x)), c.psx.join('\n'));
+});
+
+test('forks are listed by their own name, last, and never picked by default (0.9.3 C3/C4)', () => {
+  const H = setup('forks', ({ w }) => {
+    w('/Applications/shadPS4-v0.9.0.AppImage');
+    w('/Applications/shadPS4-GR2-build.AppImage'); // known fork, by name
+    w('/Applications/Dolphin-x86_64.AppImage');
+    w('/Applications/MyDolphinBuild.AppImage'); // marked a fork by you
+  });
+  const c = candidates(H, ['ps4', 'gc'], { forks: { [H + '/Applications/MyDolphinBuild.AppImage']: { of: 'dolphin', name: 'My Build' } } });
+  assert.match(c.ps4[0], /^shadPS4 => .*shadPS4-v0\.9\.0\.AppImage/, c.ps4.join('\n'));
+  assert.match(c.ps4[c.ps4.length - 1], /^shadPS4 GR2 · fork of shadPS4 => .*GR2-build/, c.ps4.join('\n'));
+  assert.match(c.gc[0], /^Dolphin => .*Dolphin-x86_64\.AppImage -b -e/, c.gc.join('\n'));
+  assert.match(c.gc[c.gc.length - 1], /^My Build · fork of Dolphin => .*MyDolphinBuild\.AppImage -b -e/, c.gc.join('\n'));
+});
+
+test('what is installed is shown by its real name (a Citra install is not "Azahar")', () => {
+  const H = setup('realname', ({ w }) => { w('/Applications/citra-qt.AppImage'); w('/Applications/sudachi.AppImage'); });
+  const c = candidates(H, ['n3ds', 'switch']);
+  assert.match(c.n3ds[0], /^Citra => /, c.n3ds.join('\n'));
+  assert.ok(c.switch.some((x) => /^Sudachi => /.test(x)), c.switch.join('\n'));
+});
+
+test('RetroDECK only without EmuDeck, first, and not for consoles whose games are folders (0.9.3 C5)', () => {
+  const H = setup('retrodeck', ({ flatpaks, w }) => { flatpaks.push('net.retrodeck.retrodeck'); w('/Applications/pcsx2-Qt.AppImage'); });
+  const c = candidates(H, ['ps2', 'ps3']);
+  assert.match(c.ps2[0], /^RetroDECK => \/usr\/bin\/flatpak run net\.retrodeck\.retrodeck -s ps2 "\{ROM\}"/, c.ps2.join('\n'));
+  assert.ok(c.ps2.some((x) => /pcsx2-Qt\.AppImage/.test(x)));
+  assert.ok(!c.ps3.some((x) => /RetroDECK/.test(x)));
+  const E = setup('retrodeck-emudeck', ({ flatpaks, w }) => { flatpaks.push('net.retrodeck.retrodeck'); w('/Emulation/tools/launchers/pcsx2-qt.sh'); });
+  assert.ok(!candidates(E, ['ps2']).ps2.some((x) => /RetroDECK/.test(x)));
+});
+
+test('0.9.3 B emulators: the exact launch line of each (read from their own source)', () => {
+  const H = setup('more', ({ w, flatpaks }) => {
+    for (const b of ['desmume', 'mupen64plus', 'snes9x-gtk', 'kronos']) w('/bin/' + b);
+    w('/Applications/Mesen.AppImage');
+    w('/Applications/Play!-abc123-x86_64.AppImage');
+    w('/Applications/xenia_edge_linux.AppImage');
+    flatpaks.push('io.github.shiiion.primehack');
+  });
+  const c = candidates(H, ['nds', 'n64', 'snes', 'nes', 'ps2', 'saturn', 'gc', 'xbox360']);
+  const line = (k, re) => assert.ok(c[k].some((x) => re.test(x)), k + ':\n' + c[k].join('\n'));
+  line('nds', /^DeSmuME => ~\/bin\/desmume "\{ROM\}"$/);
+  line('n64', /^Mupen64Plus => ~\/bin\/mupen64plus --fullscreen "\{ROM\}"$/);
+  line('snes', /^Snes9x => ~\/bin\/snes9x-gtk "\{ROM\}"$/);
+  line('snes', /^Mesen => ~\/Applications\/Mesen\.AppImage --fullscreen "\{ROM\}"$/);
+  line('nes', /^Mesen => .*Mesen\.AppImage --fullscreen "\{ROM\}"$/);
+  line('ps2', /^Play! => ~\/Applications\/Play!-abc123-x86_64\.AppImage --fullscreen --disc "\{ROM\}"$/);
+  line('saturn', /^Kronos => ~\/bin\/kronos -a -f -i "\{ROM\}"$/);
+  line('xbox360', /^Xenia Edge => ~\/Applications\/xenia_edge_linux\.AppImage --fullscreen=true "\{ROM\}"$/);
+  // PrimeHack is a Dolphin fork: listed as one, last, never the default
+  assert.match(c.gc[c.gc.length - 1], /^PrimeHack · fork of Dolphin => \/usr\/bin\/flatpak run io\.github\.shiiion\.primehack -b -e "\{ROM\}"$/, c.gc.join('\n'));
 });
 
 test('arguments by version, and what EmuDeck puts first', () => {
@@ -193,4 +247,20 @@ test('arguments by version, and what EmuDeck puts first', () => {
   assert.strictEqual(E.argsFor('pcsx2', 'ps2', 'appimage', '2.2.0'), '-batch -fullscreen -nogui "{ROM}"');
   assert.strictEqual(E.argsFor('pcsx2', 'ps2', 'appimage'), '-batch -fullscreen -nogui "{ROM}"'); // version unknown: today's flags
   assert.deepStrictEqual(E.EMU.eden.pre, ['vblank_mode=0']);
+});
+
+test('emulator for one game beats the console pick; a pick that is gone falls back', () => {
+  const H = setup('pergame', ({ w, flatpaks }) => {
+    w('/Applications/pcsx2-v2.2.0-linux-appimage-x64-Qt.AppImage');
+    flatpaks.push('net.pcsx2.PCSX2');
+  });
+  const code = (gameEmus) => `
+    const m = require(${JSON.stringify(path.join(ROOT, 'electron/steamManager.js'))});
+    const cfg = { steam: { emus: { ps2: 'pcsx2@flatpak' }, gameEmus: ${JSON.stringify(gameEmus)} } };
+    const sm = m({ USER_DATA: ${JSON.stringify(H + '/.config/Cartridge')}, log() {}, PLATFORM_MAP: require(${JSON.stringify(path.join(ROOT, 'electron/platformMap'))}), getConfig: () => cfg, saveConfig() {}, broadcast() {},
+      emulationRoots: () => [], getLibrary: () => null, installed: () => ({}), romById: () => null, isGamescope: () => false, artFor: () => ({}), MARKED: 'm', markedPath: () => null });
+    console.log(JSON.stringify([sm._templateFor('ps2').emu, sm._templateForGame(5, 'ps2').emu, sm._templateForGame(6, 'ps2').emu]));`;
+  const run = (g) => JSON.parse(execFileSync(process.execPath, ['-e', code(g)], { env: { ...process.env, HOME: H, SHELL: '/bin/false', PATH: `${H}/bin:/usr/bin:/bin` }, encoding: 'utf8' }).trim().split('\n').pop());
+  assert.deepStrictEqual(run({ 5: 'pcsx2' }), ['pcsx2@flatpak', 'pcsx2', 'pcsx2@flatpak']);
+  assert.deepStrictEqual(run({ 5: 'gone-emulator' }), ['pcsx2@flatpak', 'pcsx2@flatpak', 'pcsx2@flatpak']);
 });

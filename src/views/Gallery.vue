@@ -4,7 +4,7 @@
     <template v-else>
       <header class="ph-head">
         <div class="sys-switch">
-          <Btn v-if="mode !== 'all'" b="LB" />
+          <Btn v-if="mode !== 'all' && !collection?.ordered" b="LB" />
           <PIcon v-if="mode === 'platform'" :p="platform" :size="52" />
           <div v-else-if="headArt" class="hicon art"><img :src="headArt" /></div>
           <div v-else-if="mode !== 'all'" class="hicon"><Icon :name="headIcon" :size="30" /></div>
@@ -20,7 +20,7 @@
               </template>
             </div>
           </div>
-          <Btn v-if="mode !== 'all'" b="RB" />
+          <Btn v-if="mode !== 'all' && !collection?.ordered" b="RB" />
         </div>
         <div class="row">
           <template v-if="mode === 'platform'">
@@ -120,7 +120,8 @@ const el = ref(null);
 const gridEl = ref(null);
 const moreEl = ref(null);
 const filter = ref('all');
-const sort = ref(mode.value === 'all' ? 'new' : 'name');
+// a Home row's Show all keeps the row's order ('list')
+const sort = ref(mode.value === 'all' ? 'new' : collectionById(props.collectionId)?.ordered ? 'list' : 'name');
 const q = ref('');
 const bios = ref([]);
 const cur = ref(null);
@@ -148,13 +149,14 @@ async function moreActions() {
   else if (v === 'all') downloadAll();
 }
 const filters = [{ v: 'all', l: 'All', icon: 'mdiViewGridOutline' }, { v: 'installed', l: 'On device', icon: 'mdiCheckCircleOutline' }, { v: 'missing', l: 'Not downloaded', icon: 'mdiCloudOutline' }, { v: 'new', l: 'New', icon: 'mdiNewBox' }];
-const sorts = [{ v: 'name', l: 'A–Z', icon: 'mdiSortAlphabeticalAscending' }, { v: 'new', l: 'Recently added', icon: 'mdiClockOutline' }, { v: 'year', l: 'Release', icon: 'mdiCalendarOutline' }, { v: 'rating', l: 'Rating', icon: 'mdiStarOutline' }, { v: 'size', l: 'Size', icon: 'mdiHarddisk' }];
+const sorts = [...(collectionById(props.collectionId)?.ordered ? [{ v: 'list', l: 'As on Home', icon: 'mdiFormatListNumbered' }] : []), { v: 'name', l: 'A–Z', icon: 'mdiSortAlphabeticalAscending' }, { v: 'new', l: 'Recently added', icon: 'mdiClockOutline' }, { v: 'year', l: 'Release', icon: 'mdiCalendarOutline' }, { v: 'rating', l: 'Rating', icon: 'mdiStarOutline' }, { v: 'size', l: 'Size', icon: 'mdiHarddisk' }];
 
 const platform = computed(() => platformById(props.platformId));
 const collection = computed(() => collectionById(props.collectionId));
 const title = computed(() => (mode.value === 'platform' ? platform.value?.display_name : mode.value === 'collection' ? collection.value?.name || 'Collection' : mode.value === 'genre' ? props.genre : 'All games'));
 const eyebrow = computed(() => {
   if (mode.value === 'all') return 'Library';
+  if (collection.value?.ordered) return 'Home';
   if (mode.value === 'genre') return 'Genre';
   const c = collection.value;
   return c?.series ? 'Series' : c?.auto ? 'Made by Cartridge' : c?.smart ? 'Smart collection' : 'Collection';
@@ -231,7 +233,7 @@ const list = computed(() => {
 const shown = computed(() => list.value.slice(0, limit.value));
 // sections by console, biggest first, keeping the chosen sort inside each (only when there are 2+ consoles)
 const groups = computed(() => {
-  if (!['collection', 'genre'].includes(mode.value)) return null;
+  if (!['collection', 'genre'].includes(mode.value) || sort.value === 'list') return null;
   const by = new Map();
   for (const r of shown.value) {
     const k = r.platform_id;
@@ -269,6 +271,7 @@ function neighbor(dir) {
   } else {
     const cs = allCollections();
     const i = cs.findIndex((c) => c.id === props.collectionId);
+    if (i < 0) return; // a Home row has no neighbours
     const n = cs[(i + dir + cs.length) % cs.length];
     if (n) store.route = { ...store.route, params: { collectionId: n.id } };
   }
@@ -289,7 +292,7 @@ useView(
     back: () => { if (selecting.value) { stopSelect(); return; } return false; },
   },
   () => [{ b: 'A', label: 'Details' }, { b: 'X', label: 'Download' }, { b: 'Y', label: 'Filter' },
-    ...(mode.value === 'all' ? [] : [{ b: 'LB', label: mode.value === 'platform' ? '/ RB  Console' : mode.value === 'genre' ? '/ RB  Genre' : '/ RB  Collection' }]),
+    ...(mode.value === 'all' || collection.value?.ordered ? [] : [{ b: 'LB', label: mode.value === 'platform' ? '/ RB  Console' : mode.value === 'genre' ? '/ RB  Genre' : '/ RB  Collection' }]),
     { b: 'LT+RT', label: 'Tabs' }, ...(mode.value === 'all' ? [] : [{ b: 'B', label: 'Back' }])],
 );
 

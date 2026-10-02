@@ -62,9 +62,11 @@ export const SURFACES = {
   oled: { label: 'OLED black', glassA: 1, bg: '#000000', black: true },
 };
 export const TEXTS = {
+  // three clearly different sets (0.9.3): High contrast lifts the secondary text right up, Soft is
+  // dimmer and slightly warm for dark rooms
   normal: { label: 'Standard', text: '#f4f4f5', muted: '#a4a6ad', dim: '#6c6f77' },
-  bright: { label: 'High contrast', text: '#ffffff', muted: '#d0d2d8', dim: '#8e919a' },
-  soft: { label: 'Soft', text: '#e4e4e7', muted: '#96989f', dim: '#5c5f66' },
+  bright: { label: 'High contrast', text: '#ffffff', muted: '#e6e7eb', dim: '#b9bcc4' },
+  soft: { label: 'Soft', text: '#cfccc6', muted: '#8a8781', dim: '#5a5853' },
 };
 // Bundled open-source fonts (SIL Open Font License), display + body
 export const FONTS = {
