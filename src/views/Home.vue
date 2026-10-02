@@ -1,5 +1,5 @@
 <template>
-  <div class="home" :style="{ '--hero-h': HERO_H[store.config.ui.mediaSize] || HERO_H.large }" ref="el">
+  <div class="home" :style="{ '--hero-h': HERO_H[store.config.ui.mediaSize || MEDIA_DEFAULT] || HERO_H.large }" ref="el">
     <div v-if="!store.lib" class="center first-sync">
       <Logo :size="72" />
       <h2>{{ syncing ? 'Syncing your library' : 'No library yet' }}</h2>
@@ -94,7 +94,7 @@
 <script setup>
 import { recommend } from '../recs.js';
 import { computed, ref, nextTick, onMounted, onBeforeUnmount, watch } from 'vue';
-import { tab, img, cover, collections, autoLists, seriesLists, genres, visible, store, go, allRoms, visiblePlatforms, romsOf, isNew, setBg, backdropOf, wantSharp, bytes, year, ago, rating, resync, downloadFor, download, romById, toast, logoOf, call, GRADE, loadPlay, playtimeText } from '../store.js';
+import { tab, img, cover, collections, autoLists, seriesLists, genres, visible, store, go, allRoms, visiblePlatforms, romsOf, isNew, setBg, backdropOf, wantSharp, bytes, year, ago, rating, resync, downloadFor, download, romById, toast, logoOf, call, GRADE, loadPlay, playtimeText, MEDIA_DEFAULT } from '../store.js';
 import { useView } from '../useView.js';
 import { ensureFocus, glideTo } from '../nav.js';
 import Icon from '../components/Icon.vue';

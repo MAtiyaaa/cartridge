@@ -235,7 +235,7 @@ const facts = computed(() => {
   if (detail.value?.languages?.length) out.push({ k: 'Languages', v: detail.value.languages.join(', ') });
   out.push({ k: 'File', v: r.fs_name });
   out.push({ k: 'Size', v: bytes(r.fs_size_bytes) });
-  if (detail.value?.files?.length > 1) out.push({ k: 'Files', v: `${detail.value.files.length} files` });
+  { const n = detail.value?.file_count ?? detail.value?.files?.length; if (n > 1) out.push({ k: 'Files', v: `${n} files` }); }
   if (detail.value?.crc_hash) out.push({ k: 'CRC32', v: detail.value.crc_hash.toUpperCase() });
   return out;
 });
@@ -472,7 +472,7 @@ async function editDetails() {
     if (v === 'save') {
       try {
         await call('rom:edit', { romId: Number(props.romId), name: draft.name, summary: draft.summary, coverUrl: draft.cover || undefined });
-        detail.value = await call('api:get', { path: `/api/roms/${props.romId}` }).catch(() => detail.value);
+        detail.value = await call('rom:detail', { romId: Number(props.romId) }).catch(() => detail.value);
         toast('Saved to RomM', 'ok', 2400, 'mdiContentSave');
       } catch (e) { toast(e.message, 'error', 7000); }
       return;
@@ -677,7 +677,7 @@ async function more() {
   if (v === 'pkg') { await installPkg(); return; }
   if (v === 'patches') { await openPatches(); return; }
   if (v === 'textures') { await openTextures(); return; }
-  if (v === 'refresh') { try { detail.value = await call('api:get', { path: `/api/roms/${props.romId}` }); resetLogos(props.romId); toast('Details refreshed', 'ok', 2000, 'mdiRefresh'); } catch (e) { toast(e.message, 'error'); } return; }
+  if (v === 'refresh') { try { detail.value = await call('rom:detail', { romId: Number(props.romId) }); resetLogos(props.romId); toast('Details refreshed', 'ok', 2000, 'mdiRefresh'); } catch (e) { toast(e.message, 'error'); } return; }
   if (v === 'reset') { store.art = { ...store.art }; delete store.art[props.romId]; await call('art:reset', { id: props.romId }); resetLogos(props.romId); toast('Artwork reset', 'ok', 2000, 'mdiRestore'); return; }
   if (!store.config.sgdbKey) { toast('Add a SteamGridDB API key in Settings → Look & feel first', 'error', 4500); return; }
   const url = await openModal('art', { kind: v, romName: base.value.name });
@@ -699,7 +699,7 @@ onMounted(async () => {
   await nextTick();
   focusFirst(el.value);
   try {
-    detail.value = await call('api:get', { path: `/api/roms/${props.romId}` });
+    detail.value = await call('rom:detail', { romId: Number(props.romId) });
     if (!hero && !store.sharp[props.romId] && detail.value.merged_screenshots?.[0]) setBg({ src: img(detail.value.merged_screenshots[0]) });
   } catch (e) { if (!cached.value) toast(e.message, 'error'); }
   loadRa();

@@ -452,6 +452,8 @@ export const TAB_DEFS = {
   downloads: { label: 'Downloads', icon: 'mdiTrayArrowDown' },
   settings: { label: 'Settings', icon: 'mdiCogOutline' },
 };
+// Home's media bar size (0.9.15 Look & Feel). Android's screens are short: Large left room for barely one row
+export const MEDIA_DEFAULT = IS_ANDROID ? 'compact' : 'large';
 export const DEFAULT_TABS = ['home', 'library', 'consoles', 'achievements', 'downloads', 'settings'];
 // Settings can't be removed, so the top bar can always be changed back
 export function activeTabs() {
