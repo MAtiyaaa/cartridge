@@ -1,6 +1,6 @@
 <template>
   <div class="sm">
-    <div class="subh"><Icon name="mdiHarddisk" :size="20" />Storage manager</div>
+    <div class="subh"><Icon name="mdiHarddisk" :size="20" />Storage Manager</div>
     <div v-if="!ov" class="muted small"><Icon name="mdiSync" :size="16" class="spin" /> Measuring games…</div>
     <template v-else>
       <div v-if="ov.drives.length > 1" class="seg sm-drives">

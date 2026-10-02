@@ -1,7 +1,7 @@
 {
   "name": "cartridge",
   "productName": "Cartridge",
-  "version": "0.9.11",
+  "version": "0.9.12",
   "description": "Controller-first RomM client for SteamOS, Bazzite and Android",
   "main": "electron/main.js",
   "author": "abdu2304",
@@ -52,7 +52,7 @@
       }
     ],
     "releaseInfo": {
-      "releaseName": "Cartridge 0.9.11 · The Bridge Expansion",
+      "releaseName": "Cartridge 0.9.12 · The Merge Expansion",
       "releaseNotesFile": "RELEASE_NOTES.md"
     }
   },
@@ -67,6 +67,7 @@
     "@fontsource/roboto": "5.3.0",
     "@mdi/js": "7.4.47",
     "electron-updater": "^6.8.9",
+    "js-yaml": "^4.3.2",
     "multicast-dns": "^7.2.5",
     "qrcode": "^1.5.4",
     "socket.io-client": "^4.8.4",

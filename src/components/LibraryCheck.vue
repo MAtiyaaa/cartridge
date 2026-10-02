@@ -1,6 +1,6 @@
 <template>
   <div class="lc">
-    <div class="subh"><Icon name="mdiShieldCheckOutline" :size="20" />Check downloaded games</div>
+    <div class="subh"><Icon name="mdiShieldCheckOutline" :size="20" />Check Downloaded Games</div>
     <p class="muted small" style="margin: -6px 0 0">Compares every game on this device with RomM's record of it (size, and checksum where RomM has one). Nothing is changed unless you choose to re-download.</p>
     <div v-if="prog" class="lc-run glass">
       <div class="lc-top"><b>Checking {{ prog.done + 1 }} of {{ prog.total }}</b><span class="muted">{{ prog.name }}</span><div class="spacer" /><button class="btn small" data-focus @click="call('library:verifyCancel')"><Icon name="mdiClose" :size="18" />Stop</button></div>

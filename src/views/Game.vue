@@ -56,10 +56,13 @@
               <button class="btn" data-focus @click="setMark(false)"><Icon name="mdiCheckboxBlankOffOutline" />Unmark</button>
             </template>
             <template v-else-if="installedPath">
-              <button v-if="ap?.supported" class="btn primary xl" data-focus data-autofocus :disabled="ap.st.launching" @click="ap.launch()"><Icon name="mdiPlay" :size="24" />Play</button>
+              <button v-if="pkgBusy" class="btn xl" data-focus data-autofocus @click="cancelPkg"><Icon name="mdiLoading" class="spin" :size="22" />{{ pkgProg?.opens ? `Close ${emuName} to finish` : `Installing in ${emuName}` }}{{ pkgProg?.of > 1 ? ` · ${pkgProg.step} of ${pkgProg.of}` : '' }}</button>
+              <button v-else-if="needsInstall" class="btn primary xl" data-focus data-autofocus @click="installPkg"><Icon name="mdiPackageDown" :size="22" />Install in {{ emuName }}</button>
+              <button v-else-if="pkg?.licenceMissing?.length" class="btn primary xl" data-focus data-autofocus @click="addLicence"><Icon name="mdiKeyOutline" :size="22" />Get licence (.rap)</button>
+              <button v-else-if="ap?.supported" class="btn primary xl" data-focus data-autofocus :disabled="ap.st.launching" @click="ap.launch()"><Icon name="mdiPlay" :size="24" />Play</button>
               <button v-else class="btn ok xl" data-focus data-autofocus @click="toast(installedPath, 'info', 4000, 'mdiFolder')"><Icon name="mdiCheckCircle" />Ready to play</button>
-              <button class="btn" data-focus @click="redownload"><Icon name="mdiRefresh" />Re-download</button>
-              <button class="btn danger" data-focus @click="remove"><Icon name="mdiDeleteOutline" />Delete</button>
+              <button class="btn icon-btn" data-focus title="Re-download" @click="redownload"><Icon name="mdiRefresh" /><span>Re-download</span></button>
+              <button class="btn danger icon-btn" data-focus title="Delete" :disabled="deleting != null" @click="remove"><Ring v-if="deleting != null" :pct="deleting" :size="22" /><Icon v-else name="mdiDeleteOutline" /><span>{{ deleting != null ? 'Deleting' : 'Delete' }}</span></button>
             </template>
             <template v-else>
               <button class="btn primary xl" data-focus data-autofocus @click="dlNow"><Icon name="mdiDownload" :size="22" />{{ dl?.status === 'cancelled' ? 'Resume' : 'Download' }} · {{ bytes(base.fs_size_bytes) }}</button>
@@ -136,6 +139,12 @@
           </template>
         </div>
         <aside class="facts glass">
+          <!-- critic score and age rating as badges (0.9.3 F8); each hidden when RomM has nothing -->
+          <div v-if="score || age" class="badges">
+            <div v-if="score" class="score" :class="score.tone" :title="score.from"><b>{{ score.v }}</b><span>{{ score.label }}</span></div>
+            <img v-if="age?.img && !ageFail" class="age-img" :src="age.img" :alt="age.text" @error="ageFail = true" />
+            <div v-else-if="age" class="age" :class="age.kind">{{ age.text }}</div>
+          </div>
           <div v-for="f in facts" :key="f.k" class="fact"><span>{{ f.k }}</span><b>{{ f.v }}</b></div>
         </aside>
       </section>
@@ -152,7 +161,7 @@
 
 <script setup>
 import { addGame, removeGame, applyChanges } from '../steam.js';
-import { computed, onMounted, ref, nextTick, watch, defineAsyncComponent, getCurrentScope, shallowRef } from 'vue';
+import { computed, onMounted, onBeforeUnmount, ref, nextTick, watch, defineAsyncComponent, getCurrentScope, shallowRef } from 'vue';
 import { store, call, img, go, cover, bytes, year, rating, toast, confirm, download, downloadFor, romById, platformById, isNew, setBg, logoOf, resetLogos, artFor, choose, openModal, allRoms, visible, isFavourite, addToCollection, playOf, playtimeText, ago, loadPlay, askText, saveConfig } from '../store.js';
 import { useView } from '../useView.js';
 import { IS_ANDROID } from '../platform.js';
@@ -163,6 +172,7 @@ import PIcon from '../components/PIcon.vue';
 import GameLogo from '../components/GameLogo.vue';
 import Grade from '../components/Grade.vue';
 import GameCard from '../components/GameCard.vue';
+import Ring from '../components/Ring.vue';
 
 const props = defineProps({ romId: Number });
 const el = ref(null);
@@ -188,12 +198,31 @@ const shots = computed(() => detail.value?.merged_screenshots || (cached.value?.
 const summary = computed(() => detail.value?.summary || cached.value?.summary || '');
 const target = computed(() => platformById(base.value?.platform_id)?.target);
 const installedPath = computed(() => store.installed[props.romId]);
+const deleting = computed(() => store.deleting[props.romId] ?? null);
 const dl = computed(() => downloadFor(props.romId));
 const pct = computed(() => (dl.value?.total ? Math.floor((dl.value.received / dl.value.total) * 100) : 0));
 const md = computed(() => detail.value?.metadatum || {});
 const yr = computed(() => year(base.value?.year));
 const dev = computed(() => base.value?.developer);
 const genres = computed(() => (base.value?.genres || []).slice(0, 3).join(' · '));
+// Score: IGDB's critic score, else RomM's combined rating (ScreenScraper, MobyGames, LaunchBox), on 100
+const score = computed(() => {
+  const ig = detail.value?.igdb_metadata || {};
+  const pick = [[ig.aggregated_rating, 'Critics', 'IGDB critic score'], [md.value.average_rating, 'Rating', 'RomM rating from its metadata sources']].find(([v]) => Number(v) > 0);
+  if (!pick) return null;
+  let v = Number(pick[0]); if (v <= 10) v *= 10;
+  v = Math.round(v);
+  return { v, label: pick[1], from: pick[2], tone: v >= 75 ? 'good' : v >= 50 ? 'mid' : 'low' };
+});
+// Age rating: RomM's rating image (IGDB), else a badge drawn from the text (PEGI 16, ESRB M)
+const ageFail = ref(false);
+const age = computed(() => {
+  const list = detail.value?.igdb_metadata?.age_ratings || [];
+  const withImg = list.find((a) => a?.rating_cover_url);
+  const text = (withImg?.rating ? `${withImg.category || ''} ${withImg.rating}` : md.value.age_ratings?.[0] || list[0]?.rating || '').toString().trim();
+  if (!text && !withImg) return null;
+  return { img: withImg?.rating_cover_url ? img(withImg.rating_cover_url) : null, text, kind: /pegi/i.test(text) ? 'pegi' : /esrb/i.test(text) ? 'esrb' : '' };
+});
 const facts = computed(() => {
   const r = base.value, m = md.value, out = [];
   if (m.publishers?.length) out.push({ k: 'Publisher', v: m.publishers.slice(0, 2).join(', ') });
@@ -201,7 +230,7 @@ const facts = computed(() => {
   if (m.franchises?.length) out.push({ k: 'Franchise', v: m.franchises[0] });
   if (m.game_modes?.length) out.push({ k: 'Modes', v: m.game_modes.join(', ') });
   if (m.player_count) out.push({ k: 'Players', v: m.player_count });
-  if (m.age_ratings?.length) out.push({ k: 'Rating', v: m.age_ratings.slice(0, 2).join(', ') });
+  if (m.age_ratings?.length && !age.value) out.push({ k: 'Rating', v: m.age_ratings.slice(0, 2).join(', ') });
   if (r.regions?.length) out.push({ k: 'Region', v: r.regions.join(', ') });
   if (detail.value?.languages?.length) out.push({ k: 'Languages', v: detail.value.languages.join(', ') });
   out.push({ k: 'File', v: r.fs_name });
@@ -229,8 +258,81 @@ async function redownload() {
   dlNow();
 }
 async function remove() {
-  if (!(await confirm(`Delete ${base.value.name}?`, `Removes it from this device:\n${installedPath.value}\n\nIt stays on your RomM server.`, 'Delete', true))) return;
-  try { await call('roms:delete', { romId: props.romId, path: installedPath.value }); toast('Deleted from this device', 'ok', 2400, 'mdiDeleteOutline'); } catch (e) { toast(e.message, 'error'); }
+  const rec = pkg.value?.installed;
+  let alsoEmu = false;
+  if (rec?.created && store.installed[props.romId] === rec.dir) {
+    // only the copy in RPCS3 is left (the download was deleted after installing)
+    if (!(await confirm(`Delete ${base.value.name} from ${emuName.value}?`, `Removes the game Cartridge installed in ${emuName.value}:\n${rec.serial} · ${rec.dir}\n\n${rec.emu === 'vita3k' ? 'Saves, DLC and licences stay.' : 'Updates and DLC installed into it go with it. Saves, trophies and licences stay.'} It stays on your RomM server.`, 'Delete', true))) return;
+  } else if (rec?.created) {
+    const v = await choose({ title: `Delete ${base.value.name}?`, message: `The download is on this device, and Cartridge installed the game in ${emuName.value} (${rec.serial}).`, options: [
+      { label: 'Delete the download only', sub: installedPath.value, value: 'dl', icon: 'mdiDeleteOutline' },
+      { label: `Delete the download and the game in ${emuName.value}`, sub: `${rec.dir} · ${rec.emu === 'vita3k' ? 'saves, DLC and licences stay' : 'updates and DLC go with it; saves, trophies and licences stay'}`, value: 'both', icon: 'mdiDeleteForeverOutline', danger: true },
+    ] });
+    if (!v) return;
+    alsoEmu = v === 'both';
+  } else if (!(await confirm(`Delete ${base.value.name}?`, `Removes it from this device:\n${installedPath.value}\n\nIt stays on your RomM server.`, 'Delete', true))) return;
+  try { await call('roms:delete', { romId: props.romId, path: installedPath.value, alsoEmu }); toast('Deleted from this device', 'ok', 2400, 'mdiDeleteOutline'); loadPkg(); } catch (e) { toast(e.message, 'error', 7000); }
+}
+// PS3 games that come as .pkg (0.9.3 D): installed through RPCS3 when you press Install. What's in
+// the download, whether Cartridge installed it, and the install's progress.
+const pkg = ref(null);
+const pkgProg = ref(null);
+const pkgBusy = computed(() => pkgProg.value?.state === 'running' || pkg.value?.running);
+const needsInstall = computed(() => pkg.value?.pkgs > 0 && !pkg.value.installed);
+const emuName = computed(() => pkg.value?.emuName || 'RPCS3');
+async function loadPkg() { pkg.value = installedPath.value ? await call('pkg:check', { romId: Number(props.romId) }).catch(() => null) : null; }
+watch(installedPath, loadPkg);
+const offPkg = window.cart.on('pkg-progress', (p) => { if (p.romId === Number(props.romId)) pkgProg.value = p; });
+onBeforeUnmount(() => { try { offPkg?.(); } catch {} });
+async function installPkg() {
+  const p = pkg.value, emu = emuName.value;
+  if (!p?.cmd) return toast(`${emu} wasn’t found. Set it up in Settings → Emulators.`, 'error', 6000);
+  let zrif;
+  if (p.emu === 'vita3k') {
+    if (p.needsZrif) {
+      toast('This Vita .pkg needs its licence key (zRIF). Put it in a .txt file next to the game to skip this next time.', 'info', 8000, 'mdiKeyOutline');
+      zrif = await askText({ title: 'zRIF key (starts with KO5i)', placeholder: 'KO5ifR1dQd3...' });
+      if (!zrif) return;
+    }
+    const how = p.opens ? 'Vita3K opens and starts the game once it is installed. Close Vita3K to finish.' : 'Vita3K installs it into its own storage, without opening its window.';
+    if (!(await confirm('Install in Vita3K?', `${how}\n\n${p.cmd} · ${p.titleIds[0]}`, 'Install'))) return;
+  } else {
+    // PSN games need their licence (.rap) next to the .pkg: found in the download or in RomM, and
+    // nothing is installed without it
+    const what = [`${p.pkgs} package${p.pkgs === 1 ? '' : 's'}`, p.updates ? `${p.updates} update${p.updates === 1 ? '' : 's'}` : ''].filter(Boolean).join(', ');
+    const lic = p.needsLicence?.length ? `Licence: ${p.needsLicence.map((l) => l.contentId + '.rap').join(', ')} isn't in the download, so Cartridge looks for it in RomM. If it isn't there, nothing is installed.`
+      : p.licences ? `Licence: found (${p.licences} .rap file${p.licences === 1 ? '' : 's'}), installed with it.` : 'Licence: this game doesn\'t need one, or RPCS3 already has it.';
+    if (!(await confirm('Install in RPCS3?', `RPCS3 (${p.cmd}) installs ${what} into its own storage, without opening its window. Big games take a few minutes.\n\nPS3 games from the store need their licence file (.rap) next to the .pkg.\n${lic}`, 'Install'))) return;
+  }
+  pkgProg.value = { state: 'running', step: 0, of: 0, opens: p.opens };
+  try {
+    const r = await call('pkg:install', { romId: Number(props.romId), zrif });
+    if (r.licenceMissing?.[0]?.vita) toast(`${base.value.name} is installed in Vita3K, but it has no licence, so it won't start. Install it from its .pkg with its zRIF key instead.`, 'error', 9000, 'mdiKeyOutline');
+    else if (r.licenceMissing?.length) toast(`${base.value.name} is installed in ${emu}, but RPCS3 didn't take its licence (${r.licenceMissing[0].contentId}.rap), so it won't start yet.`, 'error', 9000, 'mdiKeyOutline');
+    else toast(`${base.value.name} is installed in ${emu} (${r.serial})`, 'ok', 4000, 'mdiCheckCircle');
+    await loadPkg();
+    if (r.created && (await confirm('Delete the downloaded package?', `It isn't needed to play any more: the game is in ${emu} now.\n${installedPath.value}`, 'Delete', true))) {
+      try { await call('pkg:dropDownload', { romId: Number(props.romId) }); toast('Package deleted', 'ok', 2400, 'mdiDeleteOutline'); } catch (e) { toast(e.message, 'error'); }
+    }
+  } catch (e) { toast(e.message, 'error', 8000); }
+  pkgProg.value = null;
+  loadPkg();
+}
+// the emulator's patches for this game; nothing changes until Apply
+async function openPatches() {
+  let info;
+  try { info = await call('patches:list', { romId: Number(props.romId) }); } catch (e) { return toast(e.message, 'error'); }
+  const changes = await openModal('patches', { name: base.value.name, ...info });
+  if (!changes?.length) return;
+  try { const r = await call('patches:apply', { romId: Number(props.romId), changes }); toast(r.count ? `Saved in ${info.emuName}. They apply next time the game starts.` : 'Nothing changed', 'ok', 3500, 'mdiPuzzleOutline'); } catch (e) { toast(e.message, 'error', 7000); }
+}
+// a licence for a game already installed in RPCS3 without one: found in its download or in RomM
+async function addLicence() {
+  try { await call('pkg:addLicence', { romId: Number(props.romId) }); toast('Licence added. The game can start now.', 'ok', 3500, 'mdiKeyOutline'); } catch (e) { toast(e.message, 'error', 9000); }
+  loadPkg();
+}
+async function cancelPkg() {
+  if (await confirm('Stop installing?', `${emuName.value} is closed now. What it was installing may be left half done; install again to finish it.`, 'Stop', true)) call('pkg:cancel');
 }
 // PS4 / PS5: games come as zips you extract yourself, so let the user mark them as installed
 const folderSystem = computed(() => ['ps4', 'ps5'].includes(base.value?.platform_slug) || ['ps4', 'ps5'].includes(base.value?.platform_fs_slug));
@@ -453,7 +555,7 @@ async function pickGameEmu() {
   const romId = Number(props.romId);
   const ge = await call('steam:gameEmu', { romId });
   const list = await call('steam:gameEmuOptions', { key: ge.key });
-  if (!list.length) return toast('No other emulator for this console was found. Run Emulator setup in Settings → Steam.', 'info', 5000);
+  if (!list.length) return toast('No other emulator for this console was found. Run Emulator setup in Settings → Emulators.', 'info', 5000);
   const v = await choose({ title: 'Emulator for this game', message: base.value.name, options: [
     { label: 'Same as its console', value: '__console', selected: !ge.current, icon: 'mdiArrowULeftTop' },
     ...list.map((c) => ({ label: c.label, sub: c.sub, value: c.id, selected: ge.current === c.id, icon: 'mdiGamepadVariantOutline' })),
@@ -483,50 +585,59 @@ const PC_SLUGS = /^(win|windows|win3x|pc|dos)$/i; // PC games (Android: open in 
 async function more() {
   const has = artFor(props.romId);
   const u = cached.value?.user;
-  const opts = [
-    { label: fav.value ? 'Remove from favourites' : 'Add to favourites', sub: 'Saved in RomM', value: 'fav', icon: fav.value ? 'mdiHeartOff' : 'mdiHeartOutline' },
-    { label: 'Play status', sub: statusText.value || 'None', value: 'status', icon: 'mdiProgressCheck' },
-    { label: 'Add to a collection', sub: 'Yours in RomM, or a new one', value: 'col', icon: 'mdiBookmarkPlusOutline' },
-    { label: u?.hidden ? 'Unhide game' : 'Hide game', sub: u?.hidden ? 'Show it in lists again' : 'Keep it out of Home, Library and Search', value: 'hide', icon: u?.hidden ? 'mdiEyeOutline' : 'mdiEyeOffOutline' },
-    { label: 'Change metadata', sub: 'Cover, logo and background from SteamGridDB', value: 'art', icon: 'mdiImageEditOutline' },
+  // grouped (0.9.3): the everyday things first, the rest in two lists. B in a list goes back here.
+  const play = [], details = [
+    { label: 'Change cover', sub: 'SteamGridDB', value: 'grid', icon: 'mdiImageEditOutline' },
+    { label: 'Change logo', sub: 'SteamGridDB', value: 'logo', icon: 'mdiFormatTitle' },
+    { label: 'Change background', sub: 'SteamGridDB', value: 'hero', icon: 'mdiPanoramaVariantOutline' },
+    ...(Object.keys(has).length ? [{ label: 'Reset artwork', sub: 'Back to RomM and automatic logo', value: 'reset', icon: 'mdiRestore' }] : []),
     { label: 'Edit details', sub: 'Name, description and cover, saved to RomM', value: 'edit', icon: 'mdiPencilOutline' },
-    { label: 'Timeline', sub: 'Added, downloaded, played, trophies', value: 'timeline', icon: 'mdiTimelineClockOutline' },
+    { label: 'Refresh details from RomM', value: 'refresh', icon: 'mdiRefresh' },
     ...(coverSrc.value ? [{ label: 'Theme from this game', sub: 'Cartridge takes its colours from the cover', value: 'theme', icon: 'mdiPaletteOutline' }] : []),
     ...(store.config.ui.gameTheme ? [{ label: 'Back to your own theme', sub: store.config.ui.gameTheme.name ? `Now using ${store.config.ui.gameTheme.name}` : '', value: 'untheme', icon: 'mdiUndoVariant' }] : []),
   ];
-  if (folderSystem.value) {
-    if (marked.value) opts.push({ label: 'Unmark as installed', sub: 'Only removes the mark, no files are touched', value: 'unmark', icon: 'mdiCheckboxBlankOffOutline' });
-    else if (!installedPath.value) opts.push({ label: 'Mark as installed', sub: 'For games you extracted yourself', value: 'mark', icon: 'mdiCheckboxMarkedCircleOutline' });
-  }
-  if (trophySystem.value) opts.push({ label: tro.value ? 'Change linked trophies' : 'Link to trophies', sub: 'Pick which emulator trophy set belongs to this game', value: 'trophies', icon: 'mdiLinkVariant' });
   // Android: Steam options only when Settings → Android → Steam & PC game apps is on
   const steamOn = !IS_ANDROID || store.config.android?.steamApps === true;
-  if (ap.value?.supported && ap.value.cands.length) opts.push({ label: 'Emulator for this game', sub: ap.value.cands.length > 1 ? 'Choose which installed emulator opens it' : 'Only one is installed', value: 'emu', icon: 'mdiGamepadVariantOutline' });
-  if (IS_ANDROID && steamOn && PC_SLUGS.test(base.value.platform_slug || '')) opts.push({ label: 'Open in a PC game app', sub: installedPath.value ? 'GameNative, GameHub or Winlator' : 'Downloads it first', value: 'pcapp', icon: 'mdiMicrosoftWindows' });
+  if (ap.value?.supported && ap.value.cands.length) play.push({ label: 'Emulator for this game', sub: ap.value.cands.length > 1 ? 'Choose which installed emulator opens it' : 'Only one is installed', value: 'emu', icon: 'mdiGamepadVariantOutline' });
+  if (IS_ANDROID && steamOn && PC_SLUGS.test(base.value.platform_slug || '')) play.push({ label: 'Open in a PC game app', sub: installedPath.value ? 'GameNative, GameHub or Winlator' : 'Downloads it first', value: 'pcapp', icon: 'mdiMicrosoftWindows' });
   if (installedPath.value && steamOn) {
     const st = await call('steam:forRom', { romId: Number(props.romId) }).catch(() => null);
     if (st?.steam) {
-      if (st.queued === 'add') opts.push({ label: 'Waiting to be added to Steam', sub: 'Apply from Settings → Steam', value: 'steamapply', icon: 'mdiSteam' });
-      else if (st.inSteam) opts.push({ label: 'Remove from Steam', sub: st.ours ? 'Only the shortcut, not the game' : 'Added outside Cartridge', value: 'steamrm', icon: 'mdiSteam' });
-      else opts.push({ label: 'Add to Steam', sub: 'Launches with your emulator setup', value: 'steamadd', icon: 'mdiSteam' });
+      if (st.queued === 'add') play.push({ label: 'Waiting to be added to Steam', sub: 'Apply from Settings → Steam', value: 'steamapply', icon: 'mdiSteam' });
+      else if (st.inSteam) play.push({ label: 'Remove from Steam', sub: st.ours ? 'Only the shortcut, not the game' : 'Added outside Cartridge', value: 'steamrm', icon: 'mdiSteam' });
+      else play.push({ label: 'Add to Steam', sub: 'Launches with your emulator setup', value: 'steamadd', icon: 'mdiSteam' });
       const ge = await call('steam:gameEmu', { romId: Number(props.romId) }).catch(() => null);
-      opts.push({ label: 'Emulator for this game', sub: ge?.current ? 'Its own pick' : 'Same as its console', value: 'gameemu', icon: 'mdiGamepadVariantOutline' });
+      play.push({ label: 'Emulator for this game', sub: ge?.current ? 'Its own pick' : 'Same as its console', value: 'gameemu', icon: 'mdiGamepadVariantOutline' });
       steamInfo = st;
     }
   }
-  opts.push({ label: 'Refresh details from RomM', value: 'refresh', icon: 'mdiRefresh' });
-  if (installedPath.value) opts.push({ label: 'Show file location', value: 'path', icon: 'mdiFolderOutline' });
-  let v = await choose({ title: base.value.name, options: opts });
-  if (!v) return;
-  // artwork choices in their own list, so More stays short
-  if (v === 'art') {
-    v = await choose({ title: 'Change metadata', message: base.value.name, options: [
-      { label: 'Change cover', sub: 'SteamGridDB', value: 'grid', icon: 'mdiImageEditOutline' },
-      { label: 'Change logo', sub: 'SteamGridDB', value: 'logo', icon: 'mdiFormatTitle' },
-      { label: 'Change background', sub: 'SteamGridDB', value: 'hero', icon: 'mdiPanoramaVariantOutline' },
-      ...(Object.keys(has).length ? [{ label: 'Reset artwork', sub: 'Back to RomM and automatic logo', value: 'reset', icon: 'mdiRestore' }] : []),
-    ] });
+  if (pkg.value?.pkgs && pkg.value.installed && !pkgBusy.value) play.push({ label: `Install again in ${emuName.value}`, sub: pkg.value.emu === 'vita3k' ? 'Installs the downloaded file over it' : 'For updates or DLC added to this game', value: 'pkg', icon: 'mdiPackageDown' });
+  if (folderSystem.value) {
+    if (marked.value) play.push({ label: 'Unmark as installed', sub: 'Only removes the mark, no files are touched', value: 'unmark', icon: 'mdiCheckboxBlankOffOutline' });
+    else if (!installedPath.value) play.push({ label: 'Mark as installed', sub: 'For games you extracted yourself', value: 'mark', icon: 'mdiCheckboxMarkedCircleOutline' });
+  }
+  if (trophySystem.value) play.push({ label: tro.value ? 'Change linked trophies' : 'Link to trophies', sub: 'Pick which emulator trophy set belongs to this game', value: 'trophies', icon: 'mdiLinkVariant' });
+  const pe = /ps3/i.test(`${base.value?.platform_slug} ${base.value?.platform_fs_slug}`) ? 'RPCS3' : /ps4/i.test(`${base.value?.platform_slug} ${base.value?.platform_fs_slug}`) ? 'shadPS4' : null;
+  if (installedPath.value && !marked.value && pe) play.push({ label: 'Patches', sub: `From ${pe}’s patch list, saved in ${pe}`, value: 'patches', icon: 'mdiPuzzleOutline' });
+  if (installedPath.value) play.push({ label: 'Show file location', value: 'path', icon: 'mdiFolderOutline' });
+  const top = [
+    { label: fav.value ? 'Remove from favourites' : 'Add to favourites', sub: 'Saved in RomM', value: 'fav', icon: fav.value ? 'mdiHeartOff' : 'mdiHeartOutline' },
+    { label: 'Play status', sub: statusText.value || 'None', value: 'status', icon: 'mdiProgressCheck' },
+    { label: 'Add to a collection', sub: 'Yours in RomM, or a new one', value: 'col', icon: 'mdiBookmarkPlusOutline' },
+    { label: 'Timeline', sub: 'Added, downloaded, played, trophies', value: 'timeline', icon: 'mdiTimelineClockOutline' },
+    ...(play.length ? [{ label: 'Steam and emulator', sub: play.map((o) => o.label).slice(0, 2).join(', ') + (play.length > 2 ? '…' : ''), value: 'g:play', icon: 'mdiGamepadVariantOutline' }] : []),
+    { label: 'Details and artwork', sub: 'Cover, logo, background, name, theme', value: 'g:details', icon: 'mdiImageEditOutline' },
+    { label: u?.hidden ? 'Unhide game' : 'Hide game', sub: u?.hidden ? 'Show it in lists again' : 'Keep it out of Home, Library and Search', value: 'hide', icon: u?.hidden ? 'mdiEyeOutline' : 'mdiEyeOffOutline' },
+  ];
+  let v, at = null;
+  for (;;) {
+    v = await choose({ title: base.value.name, options: top.map((o) => ({ ...o, selected: o.value === at })) });
     if (!v) return;
+    if (!v.startsWith('g:')) break;
+    at = v;
+    const list = v === 'g:play' ? play : details;
+    v = await choose({ title: v === 'g:play' ? 'Steam and emulator' : 'Details and artwork', message: base.value.name, options: list });
+    if (v) break; // B: back to the first list
   }
   if (v === 'emu') { await ap.value?.pickEmulator(); return; }
   if (import.meta.env.MODE === 'android' && v === 'pcapp') { const { openInPcApp } = await import('../android/pcApps.js'); await openInPcApp({ ...base.value, id: Number(props.romId) }, installedPath.value); return; }
@@ -552,6 +663,8 @@ async function more() {
   if (v === 'mark' || v === 'unmark') { await setMark(v === 'mark'); return; }
   if (v === 'trophies') { await linkTrophies(); return; }
   if (v === 'path') { toast(installedPath.value, 'info', 5000, 'mdiFolder'); return; }
+  if (v === 'pkg') { await installPkg(); return; }
+  if (v === 'patches') { await openPatches(); return; }
   if (v === 'refresh') { try { detail.value = await call('api:get', { path: `/api/roms/${props.romId}` }); resetLogos(props.romId); toast('Details refreshed', 'ok', 2000, 'mdiRefresh'); } catch (e) { toast(e.message, 'error'); } return; }
   if (v === 'reset') { store.art = { ...store.art }; delete store.art[props.romId]; await call('art:reset', { id: props.romId }); resetLogos(props.romId); toast('Artwork reset', 'ok', 2000, 'mdiRestore'); return; }
   if (!store.config.sgdbKey) { toast('Add a SteamGridDB API key in Settings → Look & feel first', 'error', 4500); return; }
@@ -577,6 +690,7 @@ onMounted(async () => {
     if (!hero && detail.value.merged_screenshots?.[0]) setBg({ src: img(detail.value.merged_screenshots[0]) });
   } catch (e) { if (!cached.value) toast(e.message, 'error'); }
   loadRa();
+  loadPkg();
   loadTrophies();
   loadHltb();
   const p = platformById(base.value?.platform_id);
@@ -594,10 +708,13 @@ onMounted(async () => {
 .g-banner-shade { position: absolute; inset: 0; background: linear-gradient(90deg, rgba(12, 13, 16, 0.8) 0%, rgba(12, 13, 16, 0.3) 45%, transparent 75%), linear-gradient(0deg, #0c0d10 0%, rgba(12, 13, 16, 0.45) 35%, transparent 65%); background: linear-gradient(90deg, color-mix(in srgb, var(--s0) 80%, transparent) 0%, color-mix(in srgb, var(--s0) 30%, transparent) 45%, transparent 75%), linear-gradient(0deg, var(--s0) 0%, color-mix(in srgb, var(--s0) 45%, transparent) 35%, transparent 65%); }
 .g-banner-logo { position: absolute; left: var(--s-7); bottom: var(--s-5); right: 360px; display: flex; align-items: flex-end; }
 .g-hero { position: relative; display: flex; align-items: flex-start; justify-content: space-between; gap: 40px; padding: var(--s-4) var(--s-7) var(--s-5); }
-.g-info { display: flex; flex-direction: column; gap: var(--s-4); max-width: 760px; min-width: 0; }
+.g-info { display: flex; flex-direction: column; gap: var(--s-4); max-width: 860px; min-width: 0; }
 .g-title { font-family: var(--display); font-stretch: var(--display-stretch); font-size: clamp(var(--t-2xl), 5vw, 72px); font-weight: 800; line-height: 1; letter-spacing: -0.02em; }
 .g-meta { display: flex; align-items: center; gap: var(--s-4); flex-wrap: wrap; font-size: var(--t-md); font-weight: 500; color: var(--text); }
-.g-actions { display: flex; align-items: center; gap: var(--s-3); margin-top: var(--s-2); flex-wrap: wrap; }
+/* one row (0.9.3): the second buttons are a little tighter, and icon-only on narrow windows */
+.g-actions { display: flex; align-items: center; gap: var(--s-3); margin-top: var(--s-2); flex-wrap: nowrap; }
+.g-actions .btn:not(.xl) { padding: 0 var(--s-4); flex-shrink: 0; }
+@media (max-width: 1100px) { .g-actions .icon-btn span { display: none; } }
 .dlbox { width: 380px; padding: 12px 16px; display: flex; flex-direction: column; gap: 8px; }
 .dest { display: flex; align-items: center; gap: 8px; font-size: var(--t-xs); color: var(--muted); max-width: 700px; white-space: nowrap; min-width: 0; }
 .dest .mono { min-width: 0; }
@@ -625,6 +742,15 @@ onMounted(async () => {
 .beat-t i { display: block; height: 3px; border-radius: 3px; background: var(--s3); overflow: hidden; margin-top: 3px; }
 .beat-t em { display: block; height: 100%; border-radius: 3px; background: #4d95ff; }
 .rel { padding: 18px 20px 18px var(--s-7); margin: -8px 0 0 calc(-1 * var(--s-7)); scroll-padding: 0 var(--s-7); }
+.badges { display: flex; align-items: center; gap: var(--s-3); padding-bottom: var(--s-2); }
+.score { width: 52px; height: 52px; border-radius: var(--r-md); display: flex; flex-direction: column; align-items: center; justify-content: center; color: #0c0d10; flex: none; }
+.score b { font-family: var(--display); font-size: var(--t-lg); line-height: 1; }
+.score span { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; opacity: 0.8; }
+.score.good { background: #66cc33; } .score.mid { background: #ffcc33; } .score.low { background: #ff6874; }
+.age-img { height: 52px; width: auto; max-width: 90px; object-fit: contain; border-radius: 4px; }
+.age { min-width: 52px; height: 52px; padding: 0 8px; border-radius: var(--r-md); border: 2px solid currentColor; display: grid; place-items: center; font-family: var(--display); font-weight: 800; font-size: var(--t-sm); text-align: center; line-height: 1.1; box-sizing: border-box; }
+.age.pegi { background: #fff; color: #111; border-color: #111; }
+.age.esrb { background: #111; color: #fff; border-color: #fff; }
 .facts { width: 250px; padding: var(--s-4); display: flex; flex-direction: column; gap: var(--s-3); align-self: start; box-sizing: border-box; }
 .icon-btn span { font-size: var(--t-sm); }
 .fact { display: flex; flex-direction: column; gap: 2px; word-break: break-word; }
