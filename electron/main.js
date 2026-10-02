@@ -2757,7 +2757,7 @@ const handlers = {
     return f ? require('./trophies').registerIcon(f) : '';
   },
   // Add-ons (0.9.15, checkable part): texture folders and their on/off, read from each emulator
-  'addons:emulators': () => require('./addons').emulators(),
+  'addons:emulators': () => { const mine = loadJson(path.join(USER_DATA, 'texture-settings.json'), {}); return require('./addons').emulators().map((e) => ({ ...e, mine: !!mine[e.root] })); },
   'addons:forGame': ({ romId }) => {
     const A = require('./addons'), rom = romIndexMain().get(Number(romId));
     if (!rom) return [];
@@ -2770,6 +2770,19 @@ const handlers = {
     if (/\.iso$/i.test(file) && slug === 'psp') { const b = patchesMod.isoFile(file, ['PSP_GAME', 'PARAM.SFO']); ids.gameId = b ? patchesMod.parseSfo(b).DISC_ID : null; }
     if (/\.(3ds|cci)$/i.test(file)) ids.titleId = A.n3dsTitleId(file);
     return A.forGame(slug, ids, A.emulators());
+  },
+  // custom textures on in the emulator (0.9.16); off only where Cartridge turned them on
+  'addons:setTextures': ({ root, on }) => {
+    const A = require('./addons'), e = A.emulators().find((x) => x.root === root);
+    if (!e) throw new Error('That emulator wasn’t found.');
+    const file = path.join(USER_DATA, 'texture-settings.json'), mine = loadJson(file, {});
+    if (!on && !mine[root]) throw new Error(`Custom textures were turned on in ${e.name} itself: turn them off there.`);
+    if (require('./raLogin').running().has(e.id)) throw new Error(`Close ${e.name} first: it saves its settings when it quits, over this change.`);
+    A.setTextures(e, !!on);
+    if (on) mine[root] = { id: e.id, at: Date.now() }; else delete mine[root];
+    saveJson(file, mine);
+    log('textures', e.id, on ? 'on' : 'off');
+    return { ...e, on: !!on, mine: !!on };
   },
   // the game's texture folder, made empty so a pack can be dropped in (only inside that emulator's textures folder)
   'addons:makeFolder': ({ romId, emu }) => {

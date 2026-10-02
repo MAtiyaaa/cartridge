@@ -145,7 +145,7 @@ function writeOne(t, { user, token, now = Math.floor(Date.now() / 1000), machine
 }
 
 // Emulators running now would write their settings back over ours when they close
-const PROC = { pcsx2: /pcsx2/i, duckstation: /duckstation/i, dolphin: /dolphin-emu/i, ppsspp: /ppsspp/i, retroarch: /retroarch/i };
+const PROC = { pcsx2: /pcsx2/i, duckstation: /duckstation/i, dolphin: /dolphin-emu/i, ppsspp: /ppsspp/i, retroarch: /retroarch/i, azahar: /azahar/i, citra: /citra/i };
 function running(procDir = '/proc') {
   const out = new Set();
   let ids = []; try { ids = fs.readdirSync(procDir).filter((d) => /^\d+$/.test(d)); } catch { return out; }

@@ -318,11 +318,13 @@ async function openTextures() {
   const short = (p) => String(p || '').replace(store.info?.home || '\0', '~');
   const e = list.length === 1 ? list[0] : await choose({ sheet: true, title: 'Texture Packs', options: list.map((x) => ({ label: x.name + (x.flatpak ? ' (Flatpak)' : ''), sub: x.on ? 'Custom textures are on' : 'Custom textures are off', value: x, icon: 'mdiTextureBox', raw: true })) });
   if (!e) return;
-  const msg = `${e.folder ? `Put this game’s pack in:\n${short(e.folder)}` : `Cartridge couldn’t read this game’s ID from its file, so put the pack in the folder ${e.name} names after it, inside:\n${short(e.root)}`}\n\n${e.on ? `Custom textures are on in ${e.name}.` : `Custom textures are off in ${e.name}. ${e.how}`}`;
+  const msg = `${e.folder ? `Put this game’s pack in:\n${short(e.folder)}` : `Cartridge couldn’t read this game’s ID from its file, so put the pack in the folder ${e.name} names after it, inside:\n${short(e.root)}`}\n\n${e.on ? `Custom textures are on in ${e.name}.` : `Custom textures are off in ${e.name}.`}`;
   const v = await choose({ sheet: true, title: `${e.name} Texture Packs`, message: msg, options: [
     { label: 'Copy the folder path', value: 'copy', icon: 'mdiContentCopy' },
     ...(e.folder && !e.has ? [{ label: 'Create this game’s folder', sub: 'An empty folder, ready for the pack', value: 'make', icon: 'mdiFolderPlusOutline' }] : []),
+    ...(!e.on ? [{ label: `Turn custom textures on in ${e.name}`, sub: 'Close the emulator first', value: 'on', icon: 'mdiTextureBox' }] : []),
   ] });
+  if (v === 'on') { try { await call('addons:setTextures', { root: e.emuRoot, on: true }); toast(`Custom textures on in ${e.name}`, 'ok', 3000, 'mdiTextureBox'); } catch (err) { toast(err.message, 'error', 5000); } return; }
   if (v === 'copy') { try { await call('clip:write', { text: e.folder || e.root }); toast('Folder path copied', 'ok', 2000, 'mdiContentCopy'); } catch (err) { toast(err.message, 'error'); } }
   if (v === 'make') { try { const f = await call('addons:makeFolder', { romId: Number(props.romId), emu: e.id }); toast(`Created ${short(f)}`, 'ok', 3500, 'mdiFolderPlusOutline'); } catch (err) { toast(err.message, 'error', 5000); } }
 }

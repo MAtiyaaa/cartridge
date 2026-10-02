@@ -90,8 +90,34 @@ function forGame(platformSlug, ids, list) {
   return list.filter((e) => e.for.includes(platformSlug)).map((e) => {
     const need = (e.per.match(/\{(\w+)\}/) || [])[1];
     const known = !need || !!ids[need];
-    return { id: e.id, name: e.name, flatpak: e.flatpak, on: e.on, how: e.how, root: e.textures, folder: known ? path.join(e.textures, fill(e.per, ids)) : null, has: known && exists(path.join(e.textures, fill(e.per, ids))) };
+    return { id: e.id, name: e.name, flatpak: e.flatpak, on: e.on, how: e.how, emuRoot: e.root, root: e.textures, folder: known ? path.join(e.textures, fill(e.per, ids)) : null, has: known && exists(path.join(e.textures, fill(e.per, ids))) };
   });
 }
 
-module.exports = { emulators, forGame, gcWiiId, n3dsTitleId, iniGet };
+// Turn custom textures on (or back off) in the emulator's own settings (0.9.16, owner asked; the one
+// setting Cartridge changes for texture packs). Only while the emulator is closed: it writes its
+// settings back when it quits. Each key as the emulator itself writes it.
+const TEX_KEY = {
+  pcsx2: { file: (e) => e.settings, sec: 'EmuCore/GS', key: 'LoadTextureReplacements', on: 'true', off: 'false' },
+  duckstation: { file: (e) => e.settings, sec: 'TextureReplacements', key: 'EnableTextureReplacements', on: 'true', off: 'false' },
+  dolphin: { file: (e) => path.join(e.root, 'GFX.ini'), sec: 'Settings', key: 'HiresTextures', on: 'True', off: 'False' },
+  ppsspp: { file: (e) => e.settings, sec: 'Graphics', key: 'ReplaceTextures', on: 'True', off: 'False' },
+  // Qt keeps "<name>\default": while it says true, the value is ignored, so it goes false too
+  azahar: { file: (e) => e.settings, sec: 'Utility', key: 'custom_textures', on: 'true', off: 'false', qt: true },
+  citra: { file: (e) => e.settings, sec: 'Utility', key: 'custom_textures', on: 'true', off: 'false', qt: true },
+};
+function setTextures(e, on) {
+  const k = TEX_KEY[e.id];
+  if (!k) throw new Error(`${e.name} can't be switched from Cartridge.`);
+  const { iniSet } = require('./raLogin');
+  const f = k.file(e);
+  let text = ''; try { text = fs.readFileSync(f, 'utf8'); } catch {}
+  const pairs = { [k.key]: on ? k.on : k.off, ...(k.qt ? { [`${k.key}\\default`]: 'false' } : {}) };
+  const tmp = f + '.cartridge-tmp';
+  let out = iniSet(text, k.sec, pairs);
+  if (k.qt) out = out.replace(new RegExp(`^(${k.key}(?:\\\\default)?) = `, 'gm'), '$1='); // Qt's own key=value, no spaces
+  fs.writeFileSync(tmp, out); fs.renameSync(tmp, f);
+  return true;
+}
+
+module.exports = { emulators, forGame, gcWiiId, n3dsTitleId, iniGet, setTextures, TEX_KEY };

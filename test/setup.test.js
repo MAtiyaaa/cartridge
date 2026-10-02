@@ -75,3 +75,17 @@ test('Emulator icons come from the installed copy: Flatpak export, then a .deskt
   assert.match(EI.iconFor('duckstation', { fp: ['org.duckstation.DuckStation'], bin: ['duckstation-qt'] }, { home: h }), /duckstation\.png$/);
   assert.strictEqual(EI.iconFor('dolphin', { fp: ['x.none'], bin: ['dolphin-emu'] }, { home: h }), null);
 });
+
+test('Add-ons: textures on, written the way each emulator writes it', () => {
+  const h = fs.mkdtempSync(path.join(os.tmpdir(), 'tx-'));
+  const put = (p, t) => { fs.mkdirSync(path.dirname(path.join(h, p)), { recursive: true }); fs.writeFileSync(path.join(h, p), t); };
+  put('.config/PCSX2/inis/PCSX2.ini', '[EmuCore/GS]\nLoadTextureReplacements = false\nupscale_multiplier = 2\n');
+  put('.config/azahar-emu/qt-config.ini', '[Utility]\ncustom_textures\\default=true\ncustom_textures=false\n');
+  const l = A.emulators(h, {});
+  for (const e of l) A.setTextures(e, true);
+  const again = Object.fromEntries(A.emulators(h, {}).map((e) => [e.id, e.on]));
+  assert.deepStrictEqual(again, { pcsx2: true, azahar: true });
+  assert.match(fs.readFileSync(path.join(h, '.config/PCSX2/inis/PCSX2.ini'), 'utf8'), /upscale_multiplier = 2/);
+  assert.match(fs.readFileSync(path.join(h, '.config/azahar-emu/qt-config.ini'), 'utf8'), /^custom_textures\\default=false$/m);
+  assert.match(fs.readFileSync(path.join(h, '.config/azahar-emu/qt-config.ini'), 'utf8'), /^custom_textures=true$/m);
+});

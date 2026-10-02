@@ -92,13 +92,14 @@
             </div>
             <template v-if="texEmus.length">
               <div class="subh">Texture Packs</div>
-              <p class="muted small" style="margin-top: -6px">Where each emulator looks for texture packs, read from its own settings. A game's folder is in its More menu. Cartridge never changes these settings.</p>
+              <p class="muted small" style="margin-top: -6px">Where each emulator looks for texture packs, read from its own settings. A game's folder is in its More menu. Turn custom textures on here, or in the emulator.</p>
               <div class="stack">
-                <div v-for="e in texEmus" :key="e.root" class="lrow">
+                <button v-for="e in texEmus" :key="e.root" class="lrow" data-focus @click="flipTextures(e)">
                   <EmuIcon :id="e.id" :size="24" fallback="mdiTextureBox" />
-                  <div class="l-mid"><b>{{ e.name }}{{ e.flatpak ? ' (Flatpak)' : '' }}</b><span class="l-sub mono">{{ e.textures.replace(store.info.home, '~') }}</span><span v-if="!e.on" class="l-sub">{{ e.how }}</span></div>
+                  <div class="l-mid"><b>{{ e.name }}{{ e.flatpak ? ' (Flatpak)' : '' }}</b><span class="l-sub mono">{{ e.textures.replace(store.info.home, '~') }}</span></div>
                   <span class="status" :class="e.on ? 'ok' : 'warn'"><Icon v-if="e.on" name="mdiCheck" :size="14" />{{ e.on ? 'Textures on' : 'Textures off' }}</span>
-                </div>
+                  <span class="l-end">{{ !e.on ? 'Turn on' : e.mine ? 'Turn off' : '' }}</span>
+                </button>
               </div>
             </template>
             <div class="subh">Console Folders</div>
@@ -691,6 +692,12 @@ const issues = ref(null);
 const ISSUE_ICON = { collections: 'mdiFolderSyncOutline', moved: 'mdiLinkVariantOff', game: 'mdiFileHidden', core: 'mdiPuzzleRemoveOutline', setup: 'mdiRadar', bios: 'mdiChip', romm: 'mdiServerOutline', fpsteam: 'mdiSteam' };
 async function loadIssues() { issues.value = await call('issues:list').catch(() => []); store.issues = issues.value.length; texEmus.value = await call('addons:emulators').catch(() => []); }
 const texEmus = ref([]);
+// custom textures on in the emulator itself (0.9.16); off again only where Cartridge turned them on
+async function flipTextures(e) {
+  if (e.on && !e.mine) return toast(`Custom textures were turned on in ${e.name}. Turn them off there if you want to.`, 'info', 4500);
+  try { await call('addons:setTextures', { root: e.root, on: !e.on }); toast(e.on ? `Custom textures off in ${e.name}` : `Custom textures on in ${e.name}`, 'ok', 3000, 'mdiTextureBox'); texEmus.value = await call('addons:emulators'); }
+  catch (err) { toast(err.message, 'error', 5000); }
+}
 async function fixIssue(i) {
   if (i.fix === 'health') return go('steam-health');
   if (i.fix === 'setup') return go('emu-setup');
