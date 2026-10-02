@@ -12,7 +12,8 @@
             class="menu-item" :class="{ danger: o.danger, selected: o.selected }"
             data-focus :data-autofocus="(o.selected || (i === 0 && !anySelected)) ? '' : undefined" @click="closeModal(o.value)"
           >
-            <Icon v-if="o.icon" :name="o.icon" />
+            <img v-if="o.img" :src="o.img" class="menu-img" alt="" />
+            <Icon v-else-if="o.icon" :name="o.icon" />
             <span>{{ o.raw ? o.label : titleCase(o.label) }}</span>
             <span v-if="o.sub" class="sub">{{ o.sub }}</span>
             <Icon v-if="o.selected" name="mdiCheck" style="margin-left: 8px; color: var(--primary-l)" />
@@ -54,6 +55,7 @@ onBeforeUnmount(() => layer.pop());
 </script>
 
 <style scoped>
+.menu-img { width: 96px; aspect-ratio: 16 / 9; border-radius: var(--r-sm); object-fit: cover; flex: none; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08); }
 .menu-h { flex: none; font-size: var(--t-xs); font-weight: 700; color: var(--muted); padding: 10px 12px 2px; }
 .sheet-scrim { place-items: end center; }
 .dialog.sheet { width: min(960px, calc(100vw - 32px)); max-width: none; min-width: 0; max-height: 72vh; border-radius: var(--r-lg) var(--r-lg) 0 0; animation: sheet-up var(--d-med, 0.24s) var(--ease); }
