@@ -170,7 +170,7 @@ LT/RT switch top tabs. LB/RB only switch sections inside a page. A select, B bac
 - Rumble: `setRumble`/`rumble` in nav.js (`ui.rumble`). Stick: stronger axis only, hysteresis 0.55/0.35 (`stickHeld`).
 - Connection: `.net` icon (house/globe), red text only when offline.
 - Sharp heroes: `sharpHero` in main.js (`art:sharpHero`, `heroes/`, `romimg ?hz=`), `store.sharp`, `wantSharp`; `backdropOf` prefers it. Home header 50%, art runs on under the first row.
-- shadPS4 core candidate `shadps4@core` (`shadCore()`: qt_ui.ini `[version_manager] versionSelected`, else versions.json), `how: 'shadcore'`, Start in its own folder, `-g "{ROM}" -f true`, no SHADPS4_ENABLE_IPC.
+- shadPS4 core candidate removed again in L (owner: still a black screen). shadPS4 AppImage shortcuts get `SHAD_START` (`/tmp/.mount_shadPS4/usr/bin`, never exists) as Start in, like the Qt launcher's own (its StartDir is its temporary mount); portable installs keep their folder.
 - shadPS4 trophy lists: `readTrp`, `shadTrophyKey`, `cachedTrophyDefs` in trophies.js into `trophylists/`. Trophy names: `isCode`/`nameOf` in trophyService (a code never replaces a real name in notes).
 - PCSX2 patches in patches.js: `pcsx2Dirs`, `pcsx2GameList` (gamelist.cache v34), `pcsx2List`, `pcsx2Set` (gamesettings `<SERIAL>_<CRC>.ini` [Patches] `Enable =`), patches.zip via `detect.readAppImageFile`.
 - Flatpak Steam: `FLATPAK_STEAM`, `hostLaunch` (`flatpak-spawn --host --directory= --env=`), `readShortcuts` unwraps it, `flatpakSteamAccess` + Issues `fpsteam` (`setup:steamFlatpakAllow`); steamArt wraps Cartridge's own entry. Not for `.exe` (Proton).

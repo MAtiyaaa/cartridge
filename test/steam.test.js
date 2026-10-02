@@ -1,4 +1,4 @@
-// Steam shortcuts: the folder shadPS4 starts in (0.9.3, A10). shadPS4 and its Qt launcher use a "user"
+// Steam shortcuts: the folder shadPS4 starts in (0.9.3 A10, L): the same as its own shortcuts.
 // folder in the folder they start in, else ~/.local/share/shadPS4. Each case runs in its own process
 // so HOME is read fresh. Run with: npm test
 const test = require('node:test');
@@ -25,13 +25,10 @@ function startFor(name, dirs) {
   return execFileSync(process.execPath, ['-e', code], { env: { ...process.env, HOME: H, XDG_DATA_HOME: '' }, encoding: 'utf8' }).trim().split('\n').pop();
 }
 
-test('never next to the AppImage, as shadPS4\'s own shortcuts (they start inside its temporary mount)', () => {
-  assert.strictEqual(startFor('plain', ['.local/share/shadPS4', '.local/share/shadPS4QtLauncher']), '~/.local/share/shadPS4QtLauncher');
-  assert.strictEqual(startFor('fresh', []), '~');
-});
-test('a stray user folder next to the AppImage is avoided when shadPS4 has its normal data folder', () => {
-  assert.strictEqual(startFor('stray', ['Documents/Apps/user', '.local/share/shadPS4', '.local/share/shadPS4QtLauncher']), '~/.local/share/shadPS4QtLauncher');
-  assert.strictEqual(startFor('stray2', ['Documents/Apps/user', '.local/share/shadPS4']), '~/.local/share/shadPS4');
+test('like shadPS4\'s own shortcuts: a Start in that never exists (theirs is the gone AppImage mount)', () => {
+  assert.strictEqual(startFor('plain', ['.local/share/shadPS4', '.local/share/shadPS4QtLauncher']), '/tmp/.mount_shadPS4/usr/bin');
+  assert.strictEqual(startFor('fresh', []), '/tmp/.mount_shadPS4/usr/bin');
+  assert.strictEqual(startFor('stray', ['Documents/Apps/user', '.local/share/shadPS4']), '/tmp/.mount_shadPS4/usr/bin');
 });
 test('a portable install (its user folder is the only shadPS4 data) keeps starting there', () => {
   assert.strictEqual(startFor('portable', ['Documents/Apps/user']), '~/Documents/Apps');
@@ -68,27 +65,6 @@ test('a PS3 game that came as .pkg can only be added to Steam once installed in 
     console.log(JSON.stringify(r.missing || null));`;
   const out = JSON.parse(execFileSync(process.execPath, ['-e', code], { env: { ...process.env, HOME: H }, encoding: 'utf8' }).trim().split('\n').pop());
   assert.match(out, /Install it in RPCS3 first/);
-});
-
-// 0.9.3 K (A10): shadPS4's core on its own, the build the Qt launcher has selected, in its own folder
-test('shadPS4 core without the launcher: the selected version, started in its own folder', () => {
-  const H = path.join(TMP, 'shadcore');
-  const L = path.join(H, '.local/share/shadPS4QtLauncher');
-  const v1 = path.join(L, 'versions/v.0.12.0'), v2 = path.join(L, 'versions/Pre-release-abc');
-  for (const d of [v1, v2, H + '/cfg']) fs.mkdirSync(d, { recursive: true });
-  fs.writeFileSync(path.join(v1, 'Shadps4-sdl.AppImage'), ''); fs.writeFileSync(path.join(v2, 'Shadps4-sdl.AppImage'), '');
-  fs.writeFileSync(path.join(L, 'versions.json'), JSON.stringify([{ name: 'v.0.12.0', path: path.join(v1, 'Shadps4-sdl.AppImage'), date: '2026-08-01' }, { name: 'Pre-release-abc', path: path.join(v2, 'Shadps4-sdl.AppImage'), date: '2026-09-20' }]));
-  fs.writeFileSync(path.join(L, 'qt_ui.ini'), `[general]\nx=1\n\n[version_manager]\nversionSelected=${path.join(v1, 'Shadps4-sdl.AppImage')}\n`);
-  const code = `
-    const sm = require(${JSON.stringify(path.join(ROOT, 'electron/steamManager.js'))})({ USER_DATA: ${JSON.stringify(H + '/cfg')}, log() {}, PLATFORM_MAP: {}, getConfig: () => ({}), saveConfig() {}, broadcast() {},
-      emulationRoots: () => [], getLibrary: () => null, installed: () => ({}), romById: () => null, isGamescope: () => false, artFor: () => ({}), MARKED: 'm', markedPath: () => null });
-    const c = sm._candidates('ps4').find((x) => x.id === 'shadps4@core');
-    console.log(JSON.stringify(c && [c.t.exe.replace(${JSON.stringify(H)}, '~'), sm._startOf(c.t).replace(${JSON.stringify(H)}, '~'), c.t.args, c.t.kind]));`;
-  const run = () => JSON.parse(execFileSync(process.execPath, ['-e', code], { env: { ...process.env, HOME: H, XDG_DATA_HOME: '' }, encoding: 'utf8' }).trim().split('\n').pop());
-  assert.deepStrictEqual(run(), ['~/.local/share/shadPS4QtLauncher/versions/v.0.12.0/Shadps4-sdl.AppImage', '~/.local/share/shadPS4QtLauncher/versions/v.0.12.0', '-g "{ROM}" -f true', 'eboot']);
-  // the selected one was removed: the newest still there
-  fs.rmSync(v1, { recursive: true });
-  assert.strictEqual(run()[0], '~/.local/share/shadPS4QtLauncher/versions/Pre-release-abc/Shadps4-sdl.AppImage');
 });
 
 // 0.9.3 K (K2): Flatpak Steam starts emulators outside its sandbox through flatpak-spawn --host
