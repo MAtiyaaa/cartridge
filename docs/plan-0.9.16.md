@@ -1,6 +1,6 @@
 # Cartridge 0.9.16 plan
 
-Owner, 2 Oct 2026: everything left over from 0.9.15 goes into 0.9.16, together with the Add-ons downloads that were already moved here. Not started; build when the owner says so.
+Owner, 2 Oct 2026: everything left over from 0.9.15 goes into 0.9.16, together with the Add-ons downloads that were already moved here. Owner said start building (2 Oct 2026, with section 7 added from their device test).
 
 ## 1. Add-ons downloads (moved from 0.9.15, plan-0.9.4 section 2)
 - Texture packs, cheats and mods from public sources (GameBanana, libretro's cheat database, the emulators' own patch lists), each source checked against its real responses before building (they were blocked from the cloud container in 0.9.15; the owner can paste sample responses if they still are).
@@ -34,3 +34,16 @@ Owner, 2 Oct 2026: everything left over from 0.9.15 goes into 0.9.16, together w
 - PS3 patches "serial not found": find the real cause on the owner's games (send a log or a game's folder layout).
 - Game page header blend with real art at 1080p and 4K; owner to say which other "game-specific" screens need it.
 - "on" before device names, Vita3K install and launch.
+
+## 7. From the owner's device test of 0.9.15 (2 Oct 2026)
+1. **Console backgrounds at the quality of XMB Waves and Ribbons.** Owner: Switch, Xbox 360, Wii, GameCube and PS2 still look bad next to Waves and Ribbons. Rebuild them in the same way Waves and Ribbons are made (many fine, silky lines and soft bands, theme of each console), not shapes and glows.
+2. **Welcome in a card:** every step sits in one centred card over the background (the card style used elsewhere), the background stays behind it.
+3. **Bug: the welcome's "Your system" step doesn't scroll.**
+4. **Bug: Vita games installed in Vita3K before Cartridge** still ask to be installed when changing their launch options on the console page.
+5. **Moving between rows (up/down) still feels rough.**
+6. **Home shelf headers:** a bit bigger (not game page size); bug: they shrink and clip as you go down Home.
+7. **Achievements, RA and Trophies tabs:** the latest unlocks as big as on the All tab (rest stays as it is).
+8. **PS3 patches:** Uncharted 2 has patches but Cartridge says RPCS3 has none. Get RPCS3's patch file from where RPCS3 itself downloads it, so it shows.
+9. **Consoles page:** company logos (Sony, Nintendo, Sega, Microsoft...) instead of the company name text, the same size as the text, from an open source set.
+10. **Developer names:** check where they come from (example: Tokyo Jungle shows "Crispy's!").
+11. **Bug: PS4 trophies of games not on this device** show NPWR codes instead of game names.

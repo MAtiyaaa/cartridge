@@ -26,8 +26,9 @@ function userOf(u) {
 function developerOf(r) {
   r = obj(r);
   for (const b of [r.metadatum, r.igdb_metadata, r.ss_metadata, r.launchbox_metadata, r.moby_metadata, r.gamelist_metadata]) {
-    const d = arr(obj(b).developers).find((x) => typeof x === 'string' && x.trim());
-    if (d) return d.trim();
+    // co-developed games list both studios (Tokyo Jungle: Crispy's! and Japan Studio), at most two
+    const d = [...new Set(arr(obj(b).developers).filter((x) => typeof x === 'string' && x.trim()).map((x) => x.trim()))].slice(0, 2);
+    if (d.length) return d.join(', ');
   }
   return str(arr(obj(r.metadatum).companies)[0] || '');
 }

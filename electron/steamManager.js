@@ -528,12 +528,22 @@ module.exports = function createSteamManager(ctx) {
     } catch {}
     return null;
   }
-  // Vita3K keeps installed games in <pref>/ux0/app/<title ID>
-  function vitaInstalled(id) {
-    const prefs = [path.join(HOME, '.local/share/Vita3K/Vita3K'), path.join(HOME, '.local/share/Vita3K'), ...ctx.emulationRoots().map((r) => path.join(r, 'storage/Vita3K'))];
-    for (const c of [path.join(HOME, '.config/Vita3K/config.yml'), path.join(HOME, '.local/share/Vita3K/Vita3K/config.yml')]) { try { const m = fs.readFileSync(c, 'utf8').match(/^pref-path:\s*(.+)$/m); if (m) prefs.unshift(m[1].trim().replace(/^['"]|['"]$/g, '')); } catch {} }
-    return prefs.some((p) => isDir(path.join(p, 'ux0/app', id)));
+  // Vita3K keeps installed games in <pref>/ux0/app/<title ID>; the same folders the installer uses
+  const vitaPrefsAll = () => require('./pkgInstall').vitaPrefs(HOME, ctx.emulationRoots());
+  function vitaInstalled(id) { return vitaPrefsAll().some((p) => isDir(path.join(p, 'ux0/app', id))); }
+  // games installed in Vita3K before Cartridge (or with no .pkg on this device): matched by the
+  // title in their param.sfo, so they start by title ID like any other (0.9.16)
+  function vitaByName(rom) {
+    const want = nameKeyOf(rom.name), sfo = require('./patches').sfoAt;
+    if (!want) return null;
+    for (const p of vitaPrefsAll()) for (const id of ls(path.join(p, 'ux0/app'))) {
+      if (!/^PCS[A-Z]\d{5}$/.test(id)) continue;
+      const t = nameKeyOf(sfo(path.join(p, 'ux0/app', id, 'sce_sys', 'param.sfo')).TITLE);
+      if (t && (t === want || t.replace(/ /g, '') === want.replace(/ /g, ''))) return id;
+    }
+    return null;
   }
+  const nameKeyOf = (n) => String(n || '').toLowerCase().replace(/\([^)]*\)|\[[^\]]*\]/g, '').replace(/[™®©]/g, '').replace(/&/g, ' and ').replace(/[^a-z0-9]+/g, ' ').trim();
   function rpcs3Knows(serial) {
     for (const f of [path.join(HOME, '.config/rpcs3/games.yml'), path.join(HOME, '.var/app/net.rpcs3.RPCS3/config/rpcs3/games.yml')]) {
       try { if (new RegExp(`^${serial}\\s*:`, 'm').test(fs.readFileSync(f, 'utf8'))) return true; } catch {}
@@ -595,8 +605,11 @@ module.exports = function createSteamManager(ctx) {
     }
     if (t.kind === 'vitaid') { // installed in Vita3K? then by title ID; otherwise it can't start yet
       const id = vitaTitleId(rom, file);
+      if (id && vitaInstalled(id)) return { SERIAL: id };
+      const named = vitaByName(rom);
+      if (named) return { SERIAL: named };
       const how = 'in Vita3K first (File → Install .pkg or .vpk), then add it to Steam.';
-      return id && vitaInstalled(id) ? { SERIAL: id } : { missing: id ? `Install ${id} ${how}` : `Install this game ${how}` };
+      return { missing: id ? `Install ${id} ${how}` : `Install this game ${how}` };
     }
     if (t.kind === 'eboot') { const e = findEboot(file); return { ROM: styled(e || file, t) }; }
     if (t.kind === 'rpx' && isDir(file)) { // Wii U game folder: code/<name>.rpx

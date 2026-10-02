@@ -84,7 +84,26 @@ test('lists this game and version only; versions stay text (01.00, not 1)', () =
   const l = P.rpcs3List(d, 'NPUA80523', '01.01');
   assert.deepStrictEqual(l.map((p) => [p.description, p.version, p.on]), [['60 FPS', '01.01', false], ['Disable blur', 'All', false]]);
   assert.strictEqual(l[0].notes, 'Needs a fast CPU');
-  assert.deepStrictEqual(P.rpcs3List(d, 'NPUA80523', '02.00').map((p) => p.description), ['Disable blur']);
+  // 0.9.16: patches for another version of this game are listed after, saying which version
+  const v2 = P.rpcs3List(d, 'NPUA80523', '02.00');
+  assert.deepStrictEqual(v2.map((p) => [p.description, p.other]), [['Disable blur', false], ['60 FPS', true]]);
+  assert.match(v2[1].notes, /For game version .*this copy is 02\.00/);
+});
+
+test('RPCS3\'s patch download: checksum checked, old file kept as patch.yml.old', async () => {
+  const dir = path.join(TMP, 'dl/patches'); fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, 'patch.yml'), 'Version: 1.2\n');
+  const text = PATCH_YML, sha = require('crypto').createHash('sha256').update(text).digest('hex').toUpperCase();
+  let asked = '';
+  const ok = async (url) => { asked = url; return { ok: true, json: async () => ({ return_code: 0, version: '1.2', sha256: sha, patch: text }) }; };
+  assert.deepStrictEqual(await P.rpcs3DownloadPatches(dir, { fetchImpl: ok }), { updated: true });
+  assert.match(asked, /^https:\/\/rpcs3\.net\/compatibility\?patch&api=v1&v=1\.2&sha256=[0-9a-f]{64}$/);
+  assert.strictEqual(fs.readFileSync(path.join(dir, 'patch.yml'), 'utf8'), text);
+  assert.strictEqual(fs.readFileSync(path.join(dir, 'patch.yml.old'), 'utf8'), 'Version: 1.2\n');
+  const bad = async () => ({ ok: true, json: async () => ({ return_code: 0, version: '1.2', sha256: 'x', patch: text }) });
+  await assert.rejects(P.rpcs3DownloadPatches(dir, { fetchImpl: bad }), /checksum/);
+  const same = async () => ({ ok: true, json: async () => ({ return_code: 1 }) });
+  assert.deepStrictEqual(await P.rpcs3DownloadPatches(dir, { fetchImpl: same }), { updated: false });
 });
 
 test('turning on and off writes RPCS3\'s own format and keeps the user\'s entries exactly', () => {

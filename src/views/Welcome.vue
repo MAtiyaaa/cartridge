@@ -6,8 +6,10 @@
       <button class="btn small" data-focus @click="leave"><Icon name="mdiClose" :size="18" />{{ only ? 'Close' : replay ? 'Leave' : 'Skip setup' }}</button>
     </div>
 
+    <!-- every step is one centred card over the background (owner, 0.9.16) -->
+    <div class="w-stage">
     <Transition :name="dir > 0 ? 'w-next' : 'w-prev'" mode="out-in">
-      <section :key="step" class="w-step" :class="'w-' + step" data-scroll>
+      <section :key="step" class="w-step glass" :class="'w-' + step" data-scroll>
         <!-- 1 -->
         <template v-if="step === 'hello'">
           <Logo :size="96" class="w-logo" />
@@ -242,6 +244,7 @@
         </template>
       </section>
     </Transition>
+    </div>
   </div>
 </template>
 
@@ -386,9 +389,13 @@ onBeforeUnmount(() => { off?.(); clearTimeout(padT); });
 .w-dots i { width: 8px; height: 8px; border-radius: 50%; background: rgba(255, 255, 255, 0.22); transition: background var(--d-2, 0.2s), transform var(--d-2, 0.2s); }
 .w-dots i.done { background: rgba(255, 255, 255, 0.55); }
 .w-dots i.on { background: #fff; transform: scale(1.3); }
-.w-step { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; align-items: center; gap: var(--s-4); padding: var(--s-5) 20px 48px; text-align: center; }
-.w-step > * { max-width: 860px; width: 100%; }
-.w-hello, .w-done { justify-content: center; }
+.w-stage { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; padding: 0 var(--s-5) var(--s-6); }
+.w-step { width: min(960px, 100%); max-height: 100%; overflow-y: auto; display: flex; flex-direction: column; align-items: center; gap: var(--s-4); padding: var(--s-6) var(--s-6) var(--s-6); text-align: center; box-shadow: 0 24px 80px rgba(0, 0, 0, 0.45); }
+.w-step > * { max-width: 820px; width: 100%; flex: none; }
+.w-hello, .w-done { padding-block: calc(var(--s-6) * 1.6); }
+.w-step.w-scan { width: min(1240px, 100%); }
+/* rows sit one step lighter than the card, as rows do on the page */
+.w-step :deep(.lrow:not(:focus):not(.sel)) { background: var(--s2); }
 .w-step h1 { font-size: var(--t-2xl); font-weight: 800; letter-spacing: -0.02em; margin: 0; }
 .w-big { font-size: calc(var(--t-2xl) * 1.35) !important; }
 .w-logo { width: auto !important; margin-bottom: var(--s-2); }
@@ -410,8 +417,8 @@ onBeforeUnmount(() => { off?.(); clearTimeout(padT); });
 .lrow .status { margin-left: 8px; vertical-align: middle; }
 .lrow.sel { background: var(--sel); }
 .w-scan { text-align: left; align-items: stretch; }
-.w-scan-lead { text-align: center; max-width: 1100px !important; }
-.w-emu { position: relative !important; inset: auto !important; height: auto !important; overflow: visible !important; padding: 0 !important; text-align: left; max-width: 1100px !important; }
+.w-scan-lead { text-align: center; max-width: 1180px !important; }
+.w-emu { position: relative !important; inset: auto !important; height: auto !important; overflow: visible !important; padding: 0 !important; text-align: left; max-width: 1180px !important; animation: none !important; }
 .w-next-enter-active, .w-next-leave-active, .w-prev-enter-active, .w-prev-leave-active { transition: opacity 0.22s ease, transform 0.22s ease; }
 .w-next-enter-from, .w-prev-leave-to { opacity: 0; transform: translateX(40px); }
 .w-next-leave-to, .w-prev-enter-from { opacity: 0; transform: translateX(-40px); }

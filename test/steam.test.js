@@ -67,6 +67,28 @@ test('a PS3 game that came as .pkg can only be added to Steam once installed in 
   assert.match(out, /Install it in RPCS3 first/);
 });
 
+// 0.9.16: a Vita game installed in Vita3K before Cartridge (no title ID in its name or files) is
+// found by the title in its param.sfo, in any of Vita3K's folders (here EmuDeck's storage)
+test('a Vita game already in Vita3K starts by its title ID, matched by name', () => {
+  const H = path.join(TMP, 'vita');
+  const app = path.join(H, 'Emulation/storage/Vita3K/ux0/app/PCSB00245/sce_sys');
+  fs.mkdirSync(app, { recursive: true }); fs.mkdirSync(H + '/cfg', { recursive: true }); fs.mkdirSync(H + '/roms/psvita/Persona', { recursive: true });
+  // a minimal param.sfo: one TITLE entry
+  const key = Buffer.from('TITLE\0'), val = Buffer.from('Persona 4 Golden\0');
+  const hdr = Buffer.alloc(0x14 + 0x10); hdr.write('\0PSF', 0, 'latin1'); hdr.writeUInt32LE(0x101, 4);
+  hdr.writeUInt32LE(0x14 + 0x10, 8); hdr.writeUInt32LE(0x14 + 0x10 + 8, 12); hdr.writeUInt32LE(1, 16);
+  hdr.writeUInt16LE(0, 0x14); hdr.writeUInt16LE(0x0204, 0x16); hdr.writeUInt32LE(val.length, 0x18); hdr.writeUInt32LE(val.length, 0x1c); hdr.writeUInt32LE(0, 0x20);
+  fs.writeFileSync(path.join(app, 'param.sfo'), Buffer.concat([hdr, key, Buffer.alloc(8 - key.length), val]));
+  const code = `
+    const sm = require(${JSON.stringify(path.join(ROOT, 'electron/steamManager.js'))})({ USER_DATA: ${JSON.stringify(H + '/cfg')}, log() {}, PLATFORM_MAP: {}, getConfig: () => ({}), saveConfig() {}, broadcast() {},
+      emulationRoots: () => [${JSON.stringify(path.join(H, 'Emulation'))}], getLibrary: () => null, installed: () => ({}), romById: () => null, isGamescope: () => false, artFor: () => ({}), MARKED: 'm', markedPath: () => null, installRecord: () => null });
+    const t = { exe: '/x/Vita3K', args: '-F -r {SERIAL}', kind: 'vitaid' };
+    console.log(JSON.stringify([sm._buildLaunch({ id: 9, name: 'Persona 4 Golden', fs_name: 'Persona' }, ${JSON.stringify(H + '/roms/psvita/Persona')}, t).args, sm._buildLaunch({ id: 10, name: 'Gravity Rush', fs_name: 'GR' }, ${JSON.stringify(H + '/roms/psvita/Persona')}, t).missing || null]));`;
+  const out = JSON.parse(execFileSync(process.execPath, ['-e', code], { env: { ...process.env, HOME: H, XDG_DATA_HOME: '' }, encoding: 'utf8' }).trim().split('\n').pop());
+  assert.strictEqual(out[0], '-F -r PCSB00245');
+  assert.match(out[1], /Install this game/);
+});
+
 // 0.9.3 K (K2): Flatpak Steam starts emulators outside its sandbox through flatpak-spawn --host
 test('Flatpak Steam: shortcuts go through flatpak-spawn --host with folder, env and wrappers', () => {
   const H = path.join(TMP, 'fpsteam');

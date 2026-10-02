@@ -348,7 +348,26 @@ function shadGameDirs(u) {
   return games;
 }
 let trpCacheDir = null;
-function setTrpCacheDir(d) { trpCacheDir = d; }
+function setTrpCacheDir(d) { trpCacheDir = d; titleMem = null; }
+// NP comm ID -> game name, remembered for good (0.9.16): a deleted game's trophies keep its name.
+// Learned from each PS4 game's own param.sfo (plain text, no trophy key needed) and from decrypted lists.
+let titleMem = null;
+function titles() {
+  if (!titleMem) { titleMem = {}; try { titleMem = JSON.parse(fs.readFileSync(path.join(trpCacheDir, 'titles.json'), 'utf8')) || {}; } catch {} }
+  return titleMem;
+}
+function rememberTitle(np, title) {
+  if (!trpCacheDir || !/^NPWR\d{5}_\d{2}$/.test(np || '') || !title || /^NPWR\d{5}_\d{2}$/.test(title) || titles()[np] === title) return;
+  titles()[np] = title;
+  try { fs.mkdirSync(trpCacheDir, { recursive: true }); fs.writeFileSync(path.join(trpCacheDir, 'titles.json'), JSON.stringify(titleMem)); } catch {}
+}
+let learnedAt = 0;
+function learnShadTitles(u) {
+  if (!trpCacheDir || Date.now() - learnedAt < 5 * 60e3) return;
+  learnedAt = Date.now();
+  const sfo = require('./patches').sfoAt;
+  for (const g of shadGameDirs(u)) { const np = npOfGame(g); if (np && !titles()[np]) rememberTitle(np, sfo(path.join(g, 'sce_sys', 'param.sfo')).TITLE); }
+}
 const trpTried = new Map(); // np -> time a game for it was last looked for and not found
 // the decrypted list for one NP comm ID, from Cartridge's cache (made the first time it's needed)
 function cachedTrophyDefs(u, np) {
@@ -372,6 +391,7 @@ function cachedTrophyDefs(u, np) {
 const tsMs = (v) => { const n = Number(v); if (!n) return null; return n > 1e14 ? Math.round(n / 1000) : n > 1e11 ? n : n * 1000; };
 function parseShadps4(userDir) {
   const games = new Map();
+  try { learnShadTitles(userDir); } catch {}
   const add = (g) => { const k = g.set; const prev = games.get(k); if (!prev || g.trophies.filter((t) => t.unlocked).length >= prev.trophies.filter((t) => t.unlocked).length) games.set(k, g); };
   const iconsOf = (dir, id) => iconToken(path.join(dir, `TROP${String(id).padStart(3, '0')}.PNG`));
   const defsFor = (np, own) => {
@@ -390,8 +410,10 @@ function parseShadps4(userDir) {
     const { d: defs, icons } = defsFor(conf.npcommid || np, e.dir);
     const byId = new Map((defs?.trophies || []).map((t) => [t.id, t]));
     const tid = e.tid && /^[A-Z]{4}\d{5}$/.test(e.tid) ? e.tid : /^[A-Z]{4}\d{5}$/.test(np) ? np : null;
+    const set = conf.npcommid || np;
+    if (defs?.title || conf.title) rememberTitle(set, defs?.title || conf.title);
     add({
-      src: 'shadps4', set: conf.npcommid || np, title: defs?.title || conf.title || np, titleId: tid,
+      src: 'shadps4', set, title: defs?.title || conf.title || titles()[set] || np, titleId: tid,
       icon: iconToken(path.join(icons, 'ICON0.PNG')),
       trophies: conf.trophies.map((t) => { const d = byId.get(t.id) || t; return { id: t.id, name: d.name || t.name, desc: d.desc || t.desc, grade: t.grade || d.grade, hidden: t.hidden, icon: iconsOf(icons, t.id), unlocked: t.unlockstate === 'true', time: t.unlockstate === 'true' ? tsMs(t.timestamp) : null }; }),
       files: [e.file],

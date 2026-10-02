@@ -43,7 +43,7 @@
       </div>
       <div class="aa-list">
         <button v-for="g in shown" :key="g.key" class="aa-row" data-focus :data-key="'aa-' + g.key" @click="g.open()" @focus="g.bg && setBg({ src: g.bg, blur: true })">
-          <GameIcon :title="g.title" :rom-id="g.romId" :fallback="g.icon" :size="44" />
+          <GameIcon :title="g.code ? '' : g.title" :rom-id="g.romId" :fallback="g.icon" :size="44" />
           <span class="aa-r-title">{{ g.title }}</span>
           <span class="aa-r-con">{{ g.console }}</span>
           <span class="aa-r-n">{{ g.earned }}/{{ g.total }}</span>
@@ -91,7 +91,7 @@ const items = computed(() => {
   for (const g of ra.value?.played || []) out.push({ key: 'ra' + g.gameId, src: 'RetroAchievements', kind: 'ra', title: g.title, console: consoleName({ romId: g.romId, fallback: g.console || 'Other' }), icon: img(g.icon), bg: img(g.boxart || g.icon), romId: g.romId, t: raDate(g.lastPlayed), earned: g.earned, total: g.total, pct: pctOf(g.earned, g.total), extra: g.possible ? `${g.score} / ${g.possible} pts` : '', mastered: g.total && g.earned >= g.total, open: () => go('ra-game', { gameId: g.gameId }) });
   for (const g of tro.value?.games || []) {
     if (g.hidden) continue;
-    out.push({ key: 'tr' + g.key, src: g.kind === 'gamerscore' ? 'Gamerscore' : 'Trophies', kind: 'tro', title: g.title, console: consoleName({ romId: g.romId, src: g.src, fallback: CONSOLE[g.src] || g.short }), icon: g.icon || (g.cover ? img(g.cover) : ''), bg: g.cover ? img(g.cover) : '', romId: g.romId, t: g.last || 0, earned: g.earned, total: g.total, pct: pctOf(g.earned, g.total), extra: g.kind === 'gamerscore' ? `${g.score} / ${g.possible} G` : '', plat: !!g.grades?.P, open: () => go('trophy-game', { tkey: g.key }) });
+    out.push({ key: 'tr' + g.key, src: g.kind === 'gamerscore' ? 'Gamerscore' : 'Trophies', kind: 'tro', title: g.title, code: g.code, console: consoleName({ romId: g.romId, src: g.src, fallback: CONSOLE[g.src] || g.short }), icon: g.icon || (g.cover ? img(g.cover) : ''), bg: g.cover ? img(g.cover) : '', romId: g.romId, t: g.last || 0, earned: g.earned, total: g.total, pct: pctOf(g.earned, g.total), extra: g.kind === 'gamerscore' ? `${g.score} / ${g.possible} G` : '', plat: !!g.grades?.P, open: () => go('trophy-game', { tkey: g.key }) });
   }
   return out;
 });

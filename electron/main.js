@@ -1786,6 +1786,19 @@ function patchState(romId) {
   const version = patchesMod.ps3Version(installs[romId]?.dir || where, rpcs3Hdds(), serial);
   return { emu: 'rpcs3', serial, version, dir };
 }
+// RPCS3's patch list, fetched the way RPCS3's "Download latest patches" does when it's missing or a
+// week old (owner, 0.9.16: show the patches RPCS3 has even if it was never asked to download them)
+async function freshRpcs3Patches(romId) {
+  const r = romIndexMain().get(Number(romId));
+  if (!/ps3/i.test(`${r?.platform_slug} ${r?.platform_fs_slug}`)) return;
+  const ph = patchHome(romId, 'rpcs3'), dirs = patchesMod.rpcs3Dirs();
+  const dir = (ph.rpcs3Home && dirs.find((d) => d.root === ph.rpcs3Home)) || (ph.rpcs3Home === null ? dirs.find((d) => !d.root.includes('/.var/app/')) : null) || dirs[0];
+  if (!dir) return;
+  let age = Infinity; try { age = Date.now() - fs.statSync(path.join(dir.patches, 'patch.yml')).mtimeMs; } catch {}
+  if (age < 7 * 864e5) return;
+  try { const res = await patchesMod.rpcs3DownloadPatches(dir.patches); log('rpcs3 patches', res.updated ? 'downloaded' : 'up to date', dir.patches); if (!res.updated) fs.utimesSync(path.join(dir.patches, 'patch.yml'), new Date(), new Date()); }
+  catch (e) { log('rpcs3 patches download failed:', e.message); }
+}
 // PS4 games (a folder with sce_sys/param.sfo) and shadPS4's patch repositories
 function ps4PatchState(romId, r) {
   const where = installedMap[romId];
@@ -2701,6 +2714,7 @@ const handlers = {
     return hit.folder;
   },
   'patches:list': async ({ romId }) => {
+    await freshRpcs3Patches(romId);
     const st = patchState(romId), E = EMU_PATCH[st.emu];
     if (!st.dir || !E) return { emu: st.emu, emuName: E?.name || '', serial: st.serial, why: st.why, list: [] };
     return { emu: st.emu, emuName: E.name, serial: st.serial, version: st.version, list: await E.list(st, patchMine[st.emu] || {}) };

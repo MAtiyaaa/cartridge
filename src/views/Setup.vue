@@ -1,5 +1,5 @@
 <template>
-  <div class="setup" :class="{ embedded }" ref="el" data-scroll>
+  <div class="setup" :class="{ embedded }" ref="el" :data-scroll="embedded ? null : ''">
     <div v-if="!embedded" class="hero">
       <Logo :size="76" />
       <h1>Cartridge</h1>

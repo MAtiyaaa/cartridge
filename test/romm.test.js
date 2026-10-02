@@ -61,6 +61,7 @@ test('RomM version check: only a real old version counts as too old', () => {
 test('developer: the developers list wins over companies (whose first can be the publisher)', () => {
   const { developerOf } = require('../electron/romm.js');
   assert.strictEqual(developerOf({ metadatum: { companies: ['Sony Interactive', 'Insomniac'], developers: ['Insomniac Games'] } }), 'Insomniac Games');
+  assert.strictEqual(developerOf({ metadatum: { developers: ["Crispy's!", 'Japan Studio', 'Third'] } }), "Crispy's!, Japan Studio"); // 0.9.16: both studios
   assert.strictEqual(developerOf({ metadatum: { companies: ['Sony'] }, igdb_metadata: { developers: ['Ready at Dawn'] } }), 'Ready at Dawn');
   assert.strictEqual(developerOf({ metadatum: { companies: ['Konami'] } }), 'Konami');
   assert.strictEqual(developerOf({}), '');

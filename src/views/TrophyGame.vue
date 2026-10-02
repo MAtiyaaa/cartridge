@@ -4,10 +4,10 @@
     <div v-else-if="error" class="empty">{{ error }}</div>
     <template v-else>
       <header class="tg-head">
-        <GameIcon :title="g.title" :rom-id="g.romId" :fallback="g.icon || (rom ? cover(rom) : '')" :size="150" :grade="g.kind === 'trophy' ? 'P' : null" />
+        <GameIcon :title="g.code ? '' : g.title" :rom-id="g.romId" :fallback="g.icon || (rom ? cover(rom) : '')" :size="150" :grade="g.kind === 'trophy' ? 'P' : null" />
         <div class="tg-info">
           <div class="eyebrow tg-eyebrow"><ConsoleMark :slug="SLUG[g.src]" :label="g.platform" /><template v-if="g.remoteOnly"> · from another device</template></div>
-          <GameLogo :logo="store.config.ui.logos !== false ? gameLogo : null" :name="g.title" cls="tg-title" :area="15000" :max-w="440" :max-h="100" />
+          <GameLogo :logo="store.config.ui.logos !== false && !g.code ? gameLogo : null" :name="g.title" cls="tg-title" :area="15000" :max-w="440" :max-h="100" />
           <div class="bar tg-bar"><i :style="{ width: pct + '%' }" /></div>
           <div class="tg-prog">
             <template v-if="g.kind === 'gamerscore'"><span><b>{{ l.score }}</b> / {{ l.possible }} Gamerscore · {{ l.earned }} of {{ l.total }} achievements</span></template>
@@ -16,7 +16,9 @@
               <span v-for="k in ['P', 'G', 'S', 'B']" :key="k" class="tg-gc"><Grade :g="k" :size="18" />{{ l.grades[k] }} / {{ totals[k] }}</span>
             </template>
           </div>
+          <p v-if="g.code" class="muted small tg-code">Cartridge only knows this game's trophy code ({{ g.code }}): the game was deleted before Cartridge could read its name. Link it to the game in your library to show its name.</p>
           <div class="row" style="gap: 10px; margin-top: 6px">
+            <button v-if="g.code" class="btn primary" data-focus @click="linkGame"><Icon name="mdiLinkVariant" />Link to a game</button>
             <button v-if="g.romId" class="btn primary" data-focus @click="go('game', { romId: g.romId })"><Icon name="mdiGamepadVariantOutline" />Open in library</button>
             <button class="btn icon-btn" data-focus @click="more"><Icon name="mdiDotsHorizontal" :size="22" /><span>More</span></button>
             <div class="seg">
@@ -48,7 +50,7 @@
 
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue';
-import { store, call, go, cover, img, setBg, romById, GRADE, iconKey, iconChanged, choose, openModal, toast, logoOf } from '../store.js';
+import { store, call, go, cover, img, setBg, romById, GRADE, iconKey, iconChanged, choose, openModal, toast, logoOf, allRoms } from '../store.js';
 import { useView } from '../useView.js';
 import { focusFirst } from '../nav.js';
 import Icon from '../components/Icon.vue';
@@ -91,10 +93,20 @@ async function load() {
 }
 watch(() => store.trophyVer, load);
 // More: change or reset the game's icon (SteamGridDB)
+// trophies Cartridge can't name: pick the library game they belong to (its name is used from then on)
+async function linkGame() {
+  const slug = SLUG[g.value.src];
+  const roms = allRoms().filter((r) => r.platform_slug === slug || r.platform_fs_slug === slug).sort((a, b) => a.name.localeCompare(b.name));
+  if (!roms.length) return toast(`No ${g.value.platform} games in your library to link to.`, 'info', 4000);
+  const id = await choose({ sheet: true, title: 'Link to a Game', message: `${l.value.total} trophies${g.value.code ? ` · ${g.value.code}` : ''}`, options: roms.map((r) => ({ label: r.name, value: r.id, selected: r.id === g.value.romId, raw: true })) });
+  if (!id) return;
+  try { await call('trophies:link', { key: g.value.key, romId: id }); toast('Linked', 'ok', 2000, 'mdiLinkVariant'); await load(); } catch (e) { toast(e.message, 'error', 4000); }
+}
 async function more() {
   const key = iconKey(g.value?.romId, g.value?.title);
   const opts = [{ label: 'Change icon', sub: 'SteamGridDB', value: 'icon', icon: 'mdiImageEditOutline' }, { label: 'Reset icon', sub: 'Back to the automatic pick', value: 'reset', icon: 'mdiRestore' }];
   if (g.value?.romId) opts.push({ label: 'Open in library', value: 'lib', icon: 'mdiGamepadVariantOutline' });
+  opts.push({ label: g.value?.romId ? 'Link to another game' : 'Link to a game', sub: 'The game in your library these trophies belong to', value: 'link', icon: 'mdiLinkVariant' });
   const hid = (store.config.trophies?.hidden || []).includes(g.value.key);
   opts.push(hid ? { label: 'Unhide', sub: 'Counts in your trophies, gamerscore and latest unlocks again', value: 'unhide', icon: 'mdiEyeOutline' } : { label: 'Hide', sub: 'Leaves your totals and latest unlocks. Settings → Achievements brings it back', value: 'hide', icon: 'mdiEyeOffOutline' });
   const v = await choose({ title: g.value.title, options: opts });
@@ -105,6 +117,7 @@ async function more() {
     return;
   }
   if (v === 'lib') { go('game', { romId: g.value.romId }); return; }
+  if (v === 'link') { await linkGame(); return; }
   if (v === 'reset') { await call('icon:reset', { key }); iconChanged(key); toast('Icon reset', 'ok', 2000, 'mdiRestore'); return; }
   if (v !== 'icon') return;
   if (!store.config.sgdbKey) { toast('Add a SteamGridDB API key in Settings → Look & Feel first', 'error', 4500); return; }
@@ -127,6 +140,7 @@ onMounted(async () => { await load(); focusFirst(el.value); });
 .tg-icon img.cov { object-fit: cover; }
 .tg-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
 .tg-title { font-size: var(--t-2xl); }
+.tg-code { margin: 4px 0 0; max-width: 640px; }
 .tg-eyebrow { font-size: var(--t-md); letter-spacing: 0; }
 .tg-bar { height: 8px; max-width: 560px; }
 .tg-bar i { background: linear-gradient(90deg, #7fa8ff, #cfe0ff); }

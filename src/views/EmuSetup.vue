@@ -1,5 +1,5 @@
 <template>
-  <div class="view" data-scroll ref="el">
+  <div class="view" :data-scroll="welcome ? null : ''" ref="el"><!-- inside the welcome its card scrolls -->
     <header class="page-head">
       <div style="min-width: 0">
         <div class="eyebrow">{{ first || welcome ? 'Setup' : 'Settings · Emulators' }}</div>
