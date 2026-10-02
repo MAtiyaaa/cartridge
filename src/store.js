@@ -26,7 +26,7 @@ export const store = reactive({
   logoJob: null,
   manualSync: false,
   update: { state: 'idle' },
-  achTab: 'ra', // Achievements tab: 'ra' | 'others'
+  achTab: 'all', // Achievements tab: 'all' | 'ra' | 'others'
   trophyVer: 0, // bumps whenever emulator trophies change
   iconVer: 0, // bumps when a game icon is changed or reset
   trophySync: { state: 'idle' },
