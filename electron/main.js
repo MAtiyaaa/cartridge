@@ -2840,6 +2840,13 @@ const handlers = {
     return { ...r, lan: rl.lanUrls(r.port), romsRoot: config.romsRoot };
   },
   'romm:localUpdate': () => require('./rommLocal').update({ envFile: path.join(USER_DATA, 'romm-local.env'), library: config.rommLocal?.library, dataDir: config.rommLocal?.dataDir }),
+  // Welcome's scan (0.9.16): games already in Steam that Cartridge didn't add, per console (C7 take over)
+  'setup:steamTheirs': () => {
+    let o; try { o = steamMgr.overview(); } catch { return { total: 0, consoles: [] }; }
+    const by = {};
+    for (const g of o.games || []) if (g.inSteam && !g.ours && g.file && g.appid) by[g.console] = (by[g.console] || 0) + 1;
+    return { total: Object.values(by).reduce((a, b) => a + b, 0), consoles: Object.entries(by).map(([key, n]) => ({ key, n })) };
+  },
   // Welcome (0.9.15 onboarding): what's already here, and the "Get your emulators" choices
   'welcome:state': async () => {
     const h = os.homedir(), ex = (p) => fs.existsSync(path.join(h, p));

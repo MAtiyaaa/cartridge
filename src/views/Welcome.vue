@@ -1,5 +1,5 @@
 <template>
-  <div class="welcome" ref="el">
+  <div class="welcome" :class="{ 'w-out': leaving }" ref="el">
     <div class="w-top">
       <Logo :size="34" />
       <div class="w-dots"><template v-if="!only"><i v-for="(s, i) in STEPS" :key="s" :class="{ on: i === at, done: i < at }" /></template></div>
@@ -186,6 +186,23 @@
         <!-- 8 -->
         <template v-else-if="step === 'scan'">
           <p class="w-lead w-scan-lead">Let us scan your system. Everything here can be changed later in Settings → Emulators.</p>
+          <!-- your games and console folders, games already in Steam, anything that needs a look (0.9.16) -->
+          <div class="w-scan-extra">
+            <button v-if="store.config.configured" class="lrow" data-focus @click="consoleFolders">
+              <Icon name="mdiFolderMultipleOutline" :size="24" />
+              <div class="l-mid"><b>Games and console folders</b><span class="l-sub">{{ store.config.romsRoot ? short(store.config.romsRoot) : 'No games folder yet' }}<template v-if="folders.total"> · {{ folders.found }} of {{ folders.total }} console folders found</template></span></div>
+              <span class="l-end">Fix a match</span>
+            </button>
+            <button v-if="theirs.total" class="lrow" data-focus :disabled="busy" @click="takeOverAll">
+              <Icon name="mdiSteam" :size="24" />
+              <div class="l-mid"><b>Already in Steam: {{ theirs.total }} game{{ theirs.total === 1 ? '' : 's' }} you added yourself</b><span class="l-sub">Bring them under Cartridge so they start the same way as the rest (play time, collections and artwork stay), or leave them as they are.</span></div>
+              <span class="l-end">{{ busy ? 'Working…' : 'Bring them under Cartridge' }}</span>
+            </button>
+            <div v-if="issues.length" class="lrow">
+              <Icon name="mdiAlertCircleOutline" :size="24" />
+              <div class="l-mid"><b>{{ issues.length }} thing{{ issues.length === 1 ? '' : 's' }} to look at</b><span class="l-sub">{{ issues.slice(0, 2).map((i) => i.text).join(' · ') }}. All of them are in Settings → Emulators → Issues.</span></div>
+            </div>
+          </div>
           <EmuSetup welcome @done="next()" @back="prev" class="w-emu" />
         </template>
 
@@ -253,7 +270,7 @@
 // A replay starts from the current settings: done steps show a green check, nothing is reset, and
 // leaving halfway keeps everything as it was.
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { store, call, saveConfig, toast, tab, confirm, openModal } from '../store.js';
+import { store, call, saveConfig, toast, tab, confirm, openModal, choose, pickFolder, loadLibrary } from '../store.js';
 import { focusFirst, input } from '../nav.js';
 import { useView } from '../useView.js';
 import Logo from '../components/Logo.vue';
@@ -344,8 +361,12 @@ async function addSelf() {
   } catch (e) { toast(e.message, 'error', 6000); }
   busy.value = false;
 }
+// Done: the card lifts away, then the main page fades in under it (0.9.16)
+const leaving = ref(false);
 async function finish() {
-  await saveConfig({ welcomed: Date.now() });
+  leaving.value = true;
+  await saveConfig({ welcomed: Date.now(), ui: { welcomeStep: '' } });
+  await new Promise((r) => setTimeout(r, 420));
   store.welcoming = false;
   if (store.config.configured) tab('home');
   if (!store.config.ui.toured) { await openModal('tour'); saveConfig({ ui: { toured: true } }); }
@@ -353,17 +374,55 @@ async function finish() {
 async function leave() {
   if (only) return close();
   if (!replay && !(await confirm('Skip the setup?', 'You can run it again any time from Settings → About.', 'Skip'))) return;
-  if (!replay) await saveConfig({ welcomed: 'skipped' });
+  if (!replay) await saveConfig({ welcomed: 'skipped', ui: { welcomeStep: '' } });
   store.welcoming = false;
   if (store.config.configured) tab(replay ? 'settings' : 'home');
 }
 async function load() { try { st.value = await call('welcome:state'); } catch {} }
+// scan step extras
+const theirs = ref({ total: 0, consoles: [] }), issues = ref([]);
+const short = (p) => String(p || '').replace(store.info?.home || '\0', '~');
+const folders = computed(() => { const ps = (store.lib?.platforms || []).filter((p) => p.rom_count); return { total: ps.length, found: ps.filter((p) => p.target?.exists).length }; });
+async function loadScanExtras() {
+  theirs.value = await call('setup:steamTheirs').catch(() => ({ total: 0, consoles: [] }));
+  issues.value = await call('issues:list').catch(() => []);
+}
+async function consoleFolders() {
+  const ps = (store.lib?.platforms || []).filter((p) => p.rom_count).sort((a, b) => (a.target?.exists ? 1 : 0) - (b.target?.exists ? 1 : 0) || String(a.display_name).localeCompare(String(b.display_name)));
+  const v = await choose({ sheet: true, title: 'Console Folders', message: `Matched inside ${short(store.config.romsRoot) || 'your games folder'} by their usual names.`, options: [
+    { label: 'Change the games folder', sub: short(store.config.romsRoot) || 'Not set', value: '__root', icon: 'mdiFolderOpen' },
+    ...ps.map((p) => ({ label: p.display_name, sub: `${p.target?.path ? short(p.target.path) : 'No folder'} · ${p.target?.source === 'custom' ? 'Yours' : p.target?.exists ? 'Found' : 'Will be made'}`, value: p.slug, icon: p.target?.exists ? 'mdiFolderCheckOutline' : 'mdiFolderAlertOutline', raw: true })),
+  ] });
+  if (!v) return;
+  if (v === '__root') {
+    const dir = await pickFolder({ title: 'Your games folder (the one with a folder per console)', start: store.config.romsRoot || store.info?.home });
+    if (dir) await saveConfig({ romsRoot: dir });
+  } else {
+    const p = ps.find((x) => x.slug === v);
+    const dir = await pickFolder({ title: `Folder for ${p.display_name}`, start: p.target?.exists ? p.target.path : store.config.romsRoot || undefined });
+    if (!dir) return consoleFolders();
+    store.config = await call('config:setPath', { slug: p.slug, path: dir });
+  }
+  await loadLibrary(); call('installed:rescan').catch(() => {});
+  return consoleFolders();
+}
+async function takeOverAll() {
+  if (!(await confirm('Bring them under Cartridge?', `${theirs.value.total} game${theirs.value.total === 1 ? '' : 's'} you added to Steam yourself will start the way Cartridge starts the rest, with the emulator picked for their console. Play time, collections and artwork stay.`, 'Bring them under Cartridge'))) return;
+  busy.value = true;
+  let done = 0;
+  for (const c of theirs.value.consoles) { try { done += (await call('steam:takeOver', { key: c.key }))?.count || 0; } catch (e) { toast(e.message, 'error', 4000); } }
+  busy.value = false;
+  toast(done ? `${done} game${done === 1 ? '' : 's'} now start through Cartridge` : 'Nothing changed', done ? 'ok' : 'info', 3500, 'mdiSteam');
+  await loadScanExtras();
+}
 
 const handlers = { back: () => { if (step.value === 'romm' && romm.value) { romm.value = romm.value === 'other' || romm.value === 'local' ? 'what' : ''; return; } if (at.value > 0) prev(); } };
 useView(handlers, [{ b: 'A', label: 'Select' }, { b: 'B', label: 'Back' }]);
 // Setup and the scan bring their own buttons; the welcome's come back after them
+watch(step, (v) => { if (!replay && !only && v !== 'done') saveConfig({ ui: { welcomeStep: v } }); });
 watch([step, romm], async () => {
   if (step.value === 'self' && st.value.inSteam === false) await load();
+  if (step.value === 'scan') loadScanExtras();
   await nextTick(); await nextTick();
   if (!(step.value === 'scan' || (step.value === 'romm' && (romm.value === 'signin' || romm.value === 'local')))) store.viewHandlers = handlers;
   setTimeout(() => focusFirst(el.value?.querySelector('.w-step') || el.value, '.w-act .btn.primary, .w-step [data-focus]'), 280);
@@ -374,6 +433,8 @@ watch([step, romm], async () => {
 });
 onMounted(async () => {
   if (only) { at.value = STEPS.indexOf('romm'); romm.value = 'local'; }
+  // picks up where it was left (closed halfway, or off to Desktop Mode for EmuDeck), 0.9.16
+  else if (!replay && STEPS.includes(store.config.ui.welcomeStep)) at.value = STEPS.indexOf(store.config.ui.welcomeStep);
   store.welcoming ||= true;
   off = window.cart.on('welcome-progress', (p) => { if (p.percent != null) progress.value = p.percent; });
   await load();
@@ -417,8 +478,20 @@ onBeforeUnmount(() => { off?.(); clearTimeout(padT); });
 .lrow .status { margin-left: 8px; vertical-align: middle; }
 .lrow.sel { background: var(--sel); }
 .w-scan { text-align: left; align-items: stretch; }
+.w-scan-extra { display: flex; flex-direction: column; gap: var(--s-2); max-width: 1180px !important; text-align: left; }
+.w-scan-extra .l-end { color: var(--muted); font-size: var(--t-sm); white-space: nowrap; }
+.w-scan-extra .lrow:focus .l-end { color: var(--on-focus-dim, inherit); }
 .w-scan-lead { text-align: center; max-width: 1180px !important; }
 .w-emu { position: relative !important; inset: auto !important; height: auto !important; overflow: visible !important; padding: 0 !important; text-align: left; max-width: 1180px !important; animation: none !important; }
+/* the first screen arrives in a short sequence: the mark, the title, then the rest (0.9.16) */
+.w-hello > * { animation: wIn 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+.w-hello > .w-logo { animation-name: wLogo; animation-duration: 0.9s; }
+.w-hello > :nth-child(2) { animation-delay: 0.18s; }
+.w-hello > :nth-child(3) { animation-delay: 0.32s; }
+.w-hello > :nth-child(4) { animation-delay: 0.46s; }
+@keyframes wIn { from { opacity: 0; transform: translateY(18px); } }
+@keyframes wLogo { 0% { opacity: 0; transform: scale(0.7) rotate(-6deg); } 60% { opacity: 1; transform: scale(1.06) rotate(1deg); } 100% { transform: none; } }
+.welcome.w-out .w-stage, .welcome.w-out .w-top { transition: opacity 0.4s ease, transform 0.4s cubic-bezier(0.4, 0, 0.2, 1); opacity: 0; transform: translateY(-24px) scale(0.97); }
 .w-next-enter-active, .w-next-leave-active, .w-prev-enter-active, .w-prev-leave-active { transition: opacity 0.22s ease, transform 0.22s ease; }
 .w-next-enter-from, .w-prev-leave-to { opacity: 0; transform: translateX(40px); }
 .w-next-leave-to, .w-prev-enter-from { opacity: 0; transform: translateX(-40px); }
