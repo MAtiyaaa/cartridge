@@ -241,3 +241,15 @@ test('PCSX2: a PS2 ISO gives its serial and CRC without PCSX2\'s game list', () 
   assert.deepStrictEqual(P.ps2IsoInfo(f), { serial: 'SLUS-21386', crc });
   assert.strictEqual(P.ps2IsoInfo(path.join(TMP, 'nope.iso')), null);
 });
+
+test('a file inside a folder of an ISO (PS3_GAME/PARAM.SFO)', () => {
+  const S = 2048, img = Buffer.alloc(S * 24);
+  const rec = (name, lba, size, dir) => { const n = Buffer.from(name, 'latin1'); const len = 33 + n.length + ((33 + n.length) % 2); const b = Buffer.alloc(len); b[0] = len; b.writeUInt32LE(lba, 2); b.writeUInt32LE(size, 10); b[25] = dir ? 2 : 0; b[32] = n.length; n.copy(b, 33); return b; };
+  const pvd = img.subarray(16 * S); pvd[0] = 1; pvd.write('CD001', 1, 'latin1'); rec('\0', 20, S, true).copy(pvd, 156);
+  const param = sfo({ TITLE_ID: 'NPUA80523', APP_VER: '01.00' });
+  Buffer.concat([rec('\0', 20, S, true), rec('\x01', 20, S, true), rec('PS3_GAME', 21, S, true)]).copy(img, 20 * S);
+  Buffer.concat([rec('\0', 21, S, true), rec('\x01', 20, S, true), rec('PARAM.SFO;1', 22, param.length)]).copy(img, 21 * S);
+  param.copy(img, 22 * S);
+  const f = path.join(TMP, 'ps3.iso'); fs.writeFileSync(f, img);
+  assert.strictEqual(P.parseSfo(P.isoFile(f, ['PS3_GAME', 'PARAM.SFO'])).TITLE_ID, 'NPUA80523');
+});

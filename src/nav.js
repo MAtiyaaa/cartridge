@@ -20,10 +20,11 @@ export function glideBy(sc, dx = 0, dy = 0) {
   const tx = (a ? a.tx : sc.scrollLeft) + dx, ty = (a ? a.ty : sc.scrollTop) + dy;
   if (a) cancelAnimationFrame(a.raf);
   if (scrollMode() === 'auto' || document.body.classList.contains('motion-reduce')) { anims.delete(sc); sc.scrollLeft = tx; sc.scrollTop = ty; return; }
-  const sx = sc.scrollLeft, sy = sc.scrollTop, t0 = performance.now(), D = 120;
+  // between rows a little longer and softer than along a row (0.9.15, owner: up/down felt rough)
+  const sx = sc.scrollLeft, sy = sc.scrollTop, t0 = performance.now(), D = Math.abs(ty - sy) > Math.abs(tx - sx) ? 210 : 120;
   const st = { tx, ty, raf: 0 };
   const step = (t) => {
-    const k = Math.min(1, (t - t0) / D), e = 1 - Math.pow(1 - k, 3);
+    const k = Math.min(1, (t - t0) / D), e = 1 - Math.pow(1 - k, D > 150 ? 4 : 3); // rows: a longer, softer stop; a quick start, so presses in a row never feel slow
     sc.scrollLeft = sx + (tx - sx) * e; sc.scrollTop = sy + (ty - sy) * e;
     if (k < 1) st.raf = requestAnimationFrame(step); else anims.delete(sc);
   };

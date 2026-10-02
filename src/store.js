@@ -20,6 +20,7 @@ export const store = reactive({
   toasts: [],
   modal: null,
   quickMenu: false,
+  welcoming: false, // the welcome (0.9.15) is on screen
   lastSearch: '',
   logos: {},
   art: {},

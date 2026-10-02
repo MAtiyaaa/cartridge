@@ -186,5 +186,15 @@ LT/RT switch top tabs. LB/RB only switch sections inside a page. A select, B bac
 - Health: learned shortcuts with a gone game get Remove from Steam (only when their ROMs folder exists).
 - PS2 ISO serial/CRC: `ps2IsoInfo` in patches.js (SYSTEM.CNF BOOT2, XOR of the ELF's words) when PCSX2's game list doesn't have the game; CHD still needs the list.
 
+## 0.9.15 (2 Oct 2026; log: docs/SESSION-LOG.md, plan: docs/plan-0.9.4.md)
+- One update for 0.9.3 M + the 0.9.4 plan. versionName and release title are plain "0.9.15" again (the 0.9.3 parts ended with L).
+- Sign In to Emulators: `electron/raLogin.js` (`ra:emuTargets`, `ra:emuSignin`), each emulator's own login format from its source; password used once, never stored.
+- F11 Game Mode: `watchGamescopeFocus` steps aside (`win.hide()`) when Steam starts another app (`steamLaunches`), back with `showInactive`.
+- Welcome: `Welcome.vue` (`store.welcoming`, `config.welcomed`; `'romm-local'` opens only RomM on this device), `electron/welcome.js` (EmuDeck app, RetroDECK Flatpak). `Setup.vue` `embedded`, `EmuSetup.vue` `welcome`. Background forced to Ribbons while welcoming.
+- RomM on this device: `electron/rommLocal.js` + `RommLocal.vue` (`romm:localInfo/localSetup/localUpdate`, `config.rommLocal`, `romm-local.env`).
+- Backgrounds (owner's pick A + B): scenes `ps2`, `gc`, `wii`, `xbox360`, `switch`; `art:<slug>` = `artPan` over that console's covers; `LEGACY_ART` maps retired styles.
+- Add-ons (checkable part): `electron/addons.js` (`addons:emulators`, `addons:forGame`, `addons:makeFolder`), game More → Texture packs. Downloads are 0.9.16.
+- Per-game templates `steam.gameTemplates` (`steam:setGameTemplate`), `pickEmulator` groups forks, `patchHome` sends patches to the copy the game uses.
+
 ## Releases (full steps: HANDOFF D8)
 Only when the owner asks. Bump `version` and `build.releaseInfo.releaseName` ("Cartridge X.Y.Z") in `package.json`, and set `versionName` (what Settings → About and update messages show). **0.9.3 is shipped in parts (owner, 1 Oct 2026):** the number goes up as usual (0.9.4, 0.9.5...) but `versionName` and the release title are "0.9.3 B", "0.9.3 C"... until the 0.9.3 plan is done; notes heading `## Cartridge 0.9.3 B · Title`. Then put only this version's notes in `RELEASE_NOTES.md` (heading `## Cartridge X.Y.Z · Title`), add them to the top of `CHANGELOG.md`, grouped as New / Changed / Fixed with bold lead-ins. CI builds, launch-checks and publishes.

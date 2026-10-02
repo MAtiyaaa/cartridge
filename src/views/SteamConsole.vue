@@ -51,7 +51,7 @@
           <div class="sc-thumb"><img v-if="coverOf(g)" :src="coverOf(g)" loading="lazy" /></div>
           <div class="sc-mid"><b>{{ g.name }}</b><span class="muted">{{ g.inSteam ? (g.ours ? 'Added by Cartridge' : 'Added outside Cartridge') : g.file ? 'Ready to add' : 'Needs its game folder set' }}</span></div>
           <span class="chip" :class="stateOf(g).cls">{{ stateOf(g).l }}</span>
-          <span class="sc-act"><Btn b="A" />{{ stateOf(g).act }}</span>
+          <span class="sc-act"><Btn b="A" />Options</span>
         </button>
       </div>
     </template>
@@ -61,7 +61,7 @@
 <script setup>
 import { computed, onMounted, ref, watch, nextTick } from 'vue';
 import { store, call, choose, confirm, toast, openModal, back, go, romById, cover } from '../store.js';
-import { steam, applyChanges, addGame, removeGame, pickCollections } from '../steam.js';
+import { steam, applyChanges, addGame, removeGame, pickCollections, pickEmulator } from '../steam.js';
 import { useView } from '../useView.js';
 import { ensureFocus } from '../nav.js';
 import Icon from '../components/Icon.vue';
@@ -90,8 +90,44 @@ async function load() {
 watch(() => steam.queue.total, () => { if (!steam.busy) load(); });
 watch(() => steam.busy, (b) => { if (!b) load(); });
 async function apply() { if (await applyChanges()) load(); }
+// A on a game: its own sheet (0.9.15): add or remove, its own emulator, its own Target, Start in and
+// Launch options, the game page
 async function act(g) {
   const rom = romById(g.romId);
+  const st = stateOf(g);
+  const own = await call('steam:gameTemplate', { romId: g.romId }).catch(() => null);
+  const pick = await call('steam:gameEmu', { romId: g.romId }).catch(() => null);
+  const v = await choose({ sheet: true, title: g.name, message: own ? `${own.exe}${own.own ? ' · set for this game' : pick?.current ? ' · its own emulator' : ''}` : '', options: [
+    { label: st.act === 'Open game' ? 'Set its game folder' : st.act === 'Apply' ? 'Apply waiting changes' : st.act === 'Remove' ? 'Remove from Steam' : 'Add to Steam', value: 'main', icon: st.act === 'Remove' ? 'mdiSteamOff' : 'mdiSteam' },
+    { label: 'Emulator for this game', sub: pick?.current ? 'Its own pick' : 'Same as the console', value: 'emu', icon: 'mdiGamepadVariantOutline' },
+    { label: 'Edit Target, Start in and Launch options', sub: own?.own ? 'Set for this game' : 'Only for this game', value: 'edit', icon: 'mdiPencil' },
+    { label: 'Open game page', value: 'page', icon: 'mdiOpenInNew' },
+  ] });
+  if (!v) return;
+  if (v === 'page') return go('game', { romId: g.romId });
+  if (v === 'emu') {
+    const list = await call('steam:gameEmuOptions', { key: props.ckey });
+    const id = await pickEmulator({ title: 'Emulator for this game', message: g.name, list, current: pick?.current, first: [{ label: 'Same as its console', value: '__console', selected: !pick?.current, icon: 'mdiArrowULeftTop' }] });
+    if (!id) return;
+    await call('steam:setGameEmu', { romId: g.romId, id: id === '__console' ? null : id });
+    return afterGameChange(g);
+  }
+  if (v === 'edit') {
+    const t = own || { exe: '', start: '', lo: '' };
+    const r = await openModal('steam-emu', { ckey: props.ckey, label: g.name, how: own?.own ? 'yours' : t.how, exe: t.exe, start: t.start, lo: t.lo });
+    if (!r) return;
+    await call('steam:setGameTemplate', { romId: g.romId, template: r === 'reset' ? null : r });
+    toast(r === 'reset' ? `${g.name} back to its console's setup` : `${g.name} saved`, 'ok', 2500);
+    return afterGameChange(g);
+  }
+  return mainAct(g, rom);
+}
+// a game's own setup changed: its shortcut follows (in place when Steam can be reached)
+async function afterGameChange(g) {
+  if (g.inSteam && g.ours) { const r = await call('steam:refreshGame', { romId: g.romId }).catch(() => null); if (r?.count && !r.fixed) await apply(); }
+  load();
+}
+async function mainAct(g, rom) {
   if (g.queued) return apply();
   if (g.inSteam) {
     if (!g.ours && !(await confirm('Remove from Steam?', 'Cartridge did not add this shortcut. Remove it anyway?', 'Remove', true))) return;
@@ -114,10 +150,7 @@ const emuLabel = computed(() => {
 });
 async function pickEmu() {
   const c = con.value;
-  const v = await choose({
-    title: `Emulator for ${c.platform}`, message: 'Installed on this device. New shortcuts start with this one.',
-    options: c.emus.map((e) => ({ label: e.label, sub: e.sub, value: e.id, icon: e.id === 'learned' ? 'mdiSteam' : e.id.startsWith('ra:') ? 'mdiAlphaRBoxOutline' : 'mdiGamepadVariantOutline', selected: e.id === c.emu })),
-  });
+  const v = await pickEmulator({ title: `Emulator for ${c.platform}`, message: 'Installed on this device. New shortcuts start with this one.', list: c.emus, current: c.emu });
   if (!v || v === c.emu) return;
   await call('steam:setEmu', { key: c.key, id: v });
   toast(`${c.platform} uses ${c.emus.find((e) => e.id === v)?.label}`, 'ok', 2500, 'mdiCheck');
@@ -162,7 +195,7 @@ async function more() {
   load();
 }
 useView({ x: () => { if (missing.value.length && con.value?.template) addAll(); }, y: () => more() },
-  [{ b: 'A', label: 'Add / Remove' }, { b: 'X', label: 'Add all' }, { b: 'Y', label: 'More' }, { b: 'B', label: 'Back' }]);
+  [{ b: 'A', label: 'Options' }, { b: 'X', label: 'Add all' }, { b: 'Y', label: 'More' }, { b: 'B', label: 'Back' }]);
 onMounted(async () => { await load(); await nextTick(); ensureFocus(el.value); });
 </script>
 

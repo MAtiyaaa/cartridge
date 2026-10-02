@@ -1,28 +1,29 @@
-## Cartridge 0.9.3 L · Fixes from the couch
+## Cartridge 0.9.15 · Welcome Home
 
-### Fixed
-- **shadPS4 games start from Steam.** Cartridge's shortcuts now start the way shadPS4's own do: the same Target and Launch options, and a Start in that doesn't exist, just like shadPS4's (theirs points at the launcher's temporary folder, which is gone once it closes). Press Update on the PS4 console page once. The "shadPS4 core without the launcher" choice from K is gone.
-- **Vita3K through EmuDeck.** EmuDeck's Vita3K script adds "-Fr" itself, so games added to Steam got it twice and didn't boot, and installs never reached Vita3K. Shortcuts now pass just the game's ID (press Update on the Vita console page), and installs use Vita3K itself. Cartridge also finds Vita3K's storage in its portable folder and under XDG_DATA_HOME.
-- **Controller in the background.** In Game Mode, with Steam's menu in front, the controller no longer moves around in Cartridge.
-- **PS3 patches for disc games:** the serial is read from the disc folder, the ISO or a name like "BLUS-30443".
-- **PS2 patches without PCSX2's game list:** for ISO files Cartridge reads the game's serial and CRC itself, the way PCSX2 does. Compressed games (CHD) still need PCSX2 to have listed them once.
-- **Patches sheet:** no stray dot before the explanation; PS2 games show their CRC.
-- **Developer names** come from RomM's developers list, not the first company (often the publisher).
-- **Console names** in trophies and RetroAchievements follow the names on your RomM server.
-- **A changed RetroAchievements picture** now shows (asked again every few hours, and on Refresh).
-- **Back from Emulator setup, Shortcut health and other screens in Settings** lands on the row you opened them from.
-- **Timeline** uses the normal focus box; Search results have room for the focused card.
+0.9.15 brings together everything planned for 0.9.3 M and 0.9.4. The 0.9.3 parts ended with L, and the version number now matches GitHub again.
 
 ### New
-- **RPCS3's recommended settings.** When a PS3 game finishes downloading or installing, Cartridge sets RPCS3's settings for it from RPCS3's own database (the same as "Create Custom Configuration From Database Settings"), only when the game has no settings of its own yet.
-- **Background previews** in Look & Feel's background picker.
-- **Manual** in the game page's More.
-- **Shortcut health** offers Remove from Steam for shortcuts of games that are gone from this device, whoever made them (never while their drive is missing).
-- **Missing from Steam collections:** Issues shows which games before putting them back.
+- **A new welcome.** New installs start with a short setup on the Ribbons background: your name, language, a controller check, instant Steam changes, getting emulators (EmuDeck or RetroDECK, or your own), RomM, a scan of your system, optional extras and adding Cartridge to Steam. Existing users are offered it once. It's always in Settings → About → Run the Welcome Again, starts from your current settings and resets nothing.
+- **Get your emulators.** If you have neither EmuDeck nor RetroDECK, the welcome can download EmuDeck's official app and open it (Desktop Mode), or install RetroDECK from Flathub with a progress bar (works in Game Mode). EmuDeck or RetroDECK installs the emulators; Cartridge never does.
+- **RomM on this device.** No server? Cartridge can run RomM here in the background with Podman (RomM's own setup: RomM and its database). You choose your own RomM username and password, which you can use from any browser or device. It starts with the device and keeps running in Game Mode. Offered in the welcome and in Settings → RomM, with Update RomM.
+- **Sign In to Emulators** (Settings → Achievements): signs PCSX2, DuckStation, Dolphin, PPSSPP and RetroArch in to RetroAchievements, each the way it does it itself. It lists what it changes first; your password goes to RetroAchievements once and is never saved.
+- **Console backgrounds, rebuilt.** New animated scenes for PlayStation 2, GameCube, Wii, Xbox 360 and Switch, and any console in your library can use its own game art as a slow, dark background (Look & Feel → Background → Your games). Wii U, DS, 3DS and Xbox now use their games' art.
+- **Texture packs** (the first part of Add-ons): a game's More menu shows where its texture pack goes in each emulator that can run it (PCSX2, DuckStation, Dolphin, PPSSPP, Azahar), read from the emulator's own settings, and whether custom textures are on, with how to turn them on. Settings → Emulators lists each emulator's texture folder. Downloads of packs, cheats and mods come in a later update.
+- **Per-game Steam settings** on a console's page: each game can have its own emulator, Target, Start in and Launch options, or be removed from Steam.
+- **Media bar size** in Look & Feel: Compact, Spacious or Large.
+- **A hello** with your name when Cartridge starts.
+
+### Fixed
+- **shadPS4 (top priority).** Cartridge sometimes picked one of the shadPS4 launcher's own core AppImages (from its versions folder) as the Target, which starts with a black screen. The Target is now always the Qt launcher, with "-d -g" and Start in written exactly as shadPS4's own shortcuts write it. Press Update on the PS4 console page once.
+- **Launching a game from Steam in Game Mode** no longer brings Cartridge up first: it steps aside until the game is on screen, then waits behind it.
+- **Patches follow the emulator the game uses:** a fork (such as a shadPS4 fork), a portable copy, or the Flatpak or AppImage of RPCS3 and PCSX2.
+- **PS3 patches** find the serial in more places: ISO folders, more serial styles in names, and .pkg files.
+- **Vita installs** run in the background like RPCS3's, without opening Vita3K's window.
+- **Games installed in Vita3K or RPCS3 before Cartridge** are recognised, no reinstall needed to manage them.
+- **Manual** is only in More (it showed twice).
+- **Game page headers** fade into the page with no visible edge.
+- **Moving between rows** with up and down glides smoothly instead of jumping.
 
 ### Changed
-- **Trophies All** is one calm list: a summary line, your six latest unlocks as small badges, and your games newest first.
-- **Continue playing** on Home is one row (it replaces Continue playing and Recently played) and says which device: "on Steam Deck".
-- **"on" before device names** wherever trophies or play time came from another device.
-- **Settings → Steam:** Add Cartridge to Steam comes first until it's added; then it moves to the bottom and says Added to Steam.
-- **Title Case** for menu items.
+- **Fetch All Metadata** (was Fetch All Logos): logos, icons, sharp backgrounds, covers and screenshots in one go.
+- **Forks** are grouped under one Forks entry in emulator lists.

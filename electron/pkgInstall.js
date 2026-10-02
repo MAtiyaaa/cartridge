@@ -237,17 +237,27 @@ async function installVita({ cmd, prefs, item, zrif, onStep = () => {}, signal }
   const env = { ...process.env };
   for (const k of ['LD_PRELOAD', 'LD_LIBRARY_PATH', 'APPDIR', 'APPIMAGE', 'ARGV0', 'OWD']) delete env[k];
   const args = item.kind === 'pkg' ? ['--pkg', item.file, '--zrif', zrif || item.zrif] : [item.file];
-  onStep({ step: 1, of: 1, file: path.basename(item.file), opens: item.kind !== 'pkg' });
+  // A .vpk/.zip: Vita3K installs it before it builds its window, then boots the game (vita3k/main.cpp).
+  // Run with Qt's offscreen display so nothing shows, and stop it as soon as its log says the install
+  // is done (0.9.15: no window, like RPCS3's headless install). A .pkg with its zRIF quits by itself.
+  if (item.kind !== 'pkg') env.QT_QPA_PLATFORM = 'offscreen';
+  onStep({ step: 1, of: 1, file: path.basename(item.file), opens: false });
+  let said = '';
   await new Promise((resolve, reject) => {
-    const p = spawn(cmd.exe, [...cmd.args, ...args], { env, stdio: 'ignore' });
+    const p = spawn(cmd.exe, [...cmd.args, ...args], { env, stdio: ['ignore', 'pipe', 'pipe'] });
     const kill = () => { try { p.kill(); } catch {} };
     const timer = setTimeout(kill, 3 * 60 * 60e3);
     signal?.addEventListener('abort', kill, { once: true });
+    const watch = (d) => {
+      said = (said + d.toString()).slice(-8000);
+      if (item.kind !== 'pkg' && /installed successfully|will auto-boot|not a supported content|Vitamin dump|installation failed|already installed/i.test(said)) setTimeout(kill, 800);
+    };
+    p.stdout.on('data', watch); p.stderr.on('data', watch);
     p.on('error', (e) => { clearTimeout(timer); reject(new Error(`Vita3K didn't start: ${e.message}`)); });
     p.on('exit', () => { clearTimeout(timer); resolve(); });
   });
   const dir = [...appsIn(prefs)].find(([d, n]) => n === item.titleId && vitaSfoId(d) === item.titleId)?.[0];
-  if (!dir) return [];
+  if (!dir) { const why = (said.match(/.*(?:error|failed|critical|not a supported|Vitamin)[^\n]*/gi) || []).pop(); if (why) throw new Error(`Vita3K: ${why.replace(/^\[[^\]]*\]\s*/g, '').trim().slice(0, 200)}`); return []; }
   const pref = prefs.find((p) => dir.startsWith(path.join(p, 'ux0/app') + path.sep)) || prefs[0];
   return [{ serial: item.titleId, dir, created: ![...before.values()].includes(item.titleId), licenced: vitaLicenced(pref, item.titleId, dir) }];
 }
