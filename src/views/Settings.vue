@@ -326,20 +326,33 @@
 
           <template v-else-if="sec === 'steam'">
             <h1>Steam</h1>
-            <SteamSettings />
-            <div class="subh" style="margin-top: 10px"><Icon name="mdiApplicationOutline" :size="20" />Cartridge</div>
-            <div class="about glass">
+            <!-- not in Steam yet: adding Cartridge comes first; once added it moves to the bottom (0.9.3 L) -->
+            <div v-if="selfAdded === false" class="about glass">
               <img src="../../steam-art/grid.png" class="steam-grid" />
               <div style="display: flex; flex-direction: column; gap: 10px">
                 <div style="font-family: var(--display); font-size: 22px; font-weight: 700">Add Cartridge to Game Mode</div>
                 <div class="muted small">Creates a Steam shortcut for this AppImage with the Cartridge cover, banner, logo and icon, so it sits in your library like any other game. Steam closes and reopens to pick it up, so do this from Desktop Mode.</div>
                 <div class="row wrap">
                   <button class="btn primary" data-focus @click="addToSteam"><Icon name="mdiSteam" />Add to Steam</button>
-                  <button class="btn" data-focus @click="applyArt"><Icon name="mdiImageFrame" />Refresh artwork only</button>
                 </div>
               </div>
             </div>
-            <p class="muted small">Added before 0.2.1? Press Add to Steam once more: Steam now starts Cartridge through a launch script that makes it open reliably, and logs each launch to ~/.config/Cartridge/steam-launch.log. Keep the AppImage where it is; if you move it, add it again.</p>
+            <SteamSettings />
+            <template v-if="selfAdded">
+            <div class="subh" style="margin-top: 10px">Cartridge</div>
+            <div class="about glass">
+              <img src="../../steam-art/grid.png" class="steam-grid" />
+              <div style="display: flex; flex-direction: column; gap: 10px">
+                <div style="font-family: var(--display); font-size: 22px; font-weight: 700">Cartridge is in Steam</div>
+                <span class="status ok" style="align-self: flex-start"><Icon name="mdiCheck" :size="14" />Added to Steam</span>
+                <div class="row wrap">
+                  <button class="btn" data-focus @click="addToSteam"><Icon name="mdiSteam" />Add Again</button>
+                  <button class="btn" data-focus @click="applyArt"><Icon name="mdiImageFrame" />Refresh Artwork Only</button>
+                </div>
+              </div>
+            </div>
+            <p class="muted small">Moved the AppImage? Press Add Again so Steam starts it from where it is now.</p>
+            </template>
           </template>
 
           <template v-else>
@@ -713,6 +726,7 @@ async function addToSteam() {
     toast(st.running ? 'Closing Steam…' : 'Adding to Steam…', 'info', 3000, 'mdiSteam');
     const r = await call('steam:add', { restartSteam: true });
     toast(`Added to Steam${r.added.length > 1 ? ` for ${r.added.length} accounts` : ''} with artwork${r.restarted ? '. Steam is reopening.' : '. Open Steam to see it.'}`, 'ok', 6000, 'mdiSteam');
+    loadSelf();
   } catch (e) { toast(e.message, 'error', 6000); }
 }
 const updText = computed(() => {
@@ -727,6 +741,10 @@ async function setGraphics(v) {
   await saveConfig({ graphics: v });
   if (await confirm('Restart Cartridge?', 'The rendering change takes effect after a restart.', 'Restart now')) call('app:relaunch');
 }
+// is Cartridge itself in Steam (null until known)
+const selfAdded = ref(null);
+async function loadSelf() { try { selfAdded.value = !!(await call('steam:status')).added; } catch { selfAdded.value = false; } }
+watch(sec, (v) => { if (v === 'steam') loadSelf(); }, { immediate: true });
 async function applyArt() {
   try { const r = await call('steam:applyArt'); toast(`Artwork applied to ${r.length} Steam shortcut${r.length > 1 ? 's' : ''}. Restart Steam to see it.`, 'ok', 5000, 'mdiImageFrame'); }
   catch (e) { toast(e.message, 'error', 5000); }

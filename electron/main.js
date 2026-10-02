@@ -2640,7 +2640,7 @@ const handlers = {
     log('steam add', JSON.stringify(r));
     return r;
   },
-  'steam:status': () => ({ running: require('./steamArt').steamRunning(), gamescope: isGamescope(), appimage: !!process.env.APPIMAGE }),
+  'steam:status': () => ({ running: require('./steamArt').steamRunning(), gamescope: isGamescope(), appimage: !!process.env.APPIMAGE, added: !!process.env.CARTRIDGE_FROM_STEAM || require('./steamArt').cartridgeInSteam() }),
   'steam:applyArt': () => {
     const res = require('./steamArt').applySteamArt(path.join(__dirname, '../steam-art'));
     if (!res.length) throw new Error('Add Cartridge to Steam first (Add a Non-Steam Game), then try again.');
