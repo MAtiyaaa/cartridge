@@ -404,11 +404,11 @@
 
 <script setup>
 import { computed, nextTick, onMounted, ref, watch } from 'vue';
-import { store, call, go, tab, saveConfig, pickFolder, choose, confirm, toast, openModal, bytes, ago, resync, scanServer, allRoms, resetLogos, askText, activeTabs, TAB_DEFS } from '../store.js';
+import { store, call, go, tab, saveConfig, pickFolder, choose, confirm, toast, openModal, bytes, ago, resync, scanServer, allRoms, resetLogos, askText, activeTabs, TAB_DEFS, consoleName } from '../store.js';
 import { useView } from '../useView.js';
 import { input, focusFirst, setPointerPref, setRumble, rumble } from '../nav.js';
 import { THEMES, SURFACES, TEXTS, FONTS, CARD_SHAPES, CARD_SIZES, DENSITIES, themeFrom, themeOf, paletteOf } from '../themes.js';
-import { BACKGROUNDS, RENDERERS, bgPreview } from '../bgRenderers.js';
+import { BACKGROUNDS, RENDERERS, LEGACY_ART, bgPreview } from '../bgRenderers.js';
 import { setSoundEnabled, setSoundStyle, previewSound, SOUND_PACKS } from '../sfx.js';
 import Icon from '../components/Icon.vue';
 import Logo from '../components/Logo.vue';
@@ -550,13 +550,16 @@ async function chooseWallpaper() {
   if (!file) return;
   try { store.config = await call('wallpaper:set', { file }); toast('Wallpaper set', 'ok', 2000, 'mdiWallpaper'); } catch (e) { toast(e.message, 'error', 4000); }
 }
-const bgNow = computed(() => BACKGROUNDS.find((b) => b.v === (ui.value.bgStyle || 'solid')) || BACKGROUNDS[0]);
-const BG_ICON = { Theme: 'mdiWaves', Consoles: 'mdiGamepadVariantOutline', Other: 'mdiImageOutline' };
+// A (0.9.15): each console with enough covers in your library can be the background
+const artBgs = computed(() => (store.lib?.platforms || []).filter((p) => p.rom_count >= 6).map((p) => ({ v: 'art:' + p.slug, l: consoleName(p), sub: 'Your games, slowly panning', group: 'Art' })).sort((a, b) => a.l.localeCompare(b.l)));
+const allBgs = computed(() => { const i = BACKGROUNDS.findIndex((b) => b.group === 'Other'); return [...BACKGROUNDS.slice(0, i), ...artBgs.value, ...BACKGROUNDS.slice(i)]; });
+const bgNow = computed(() => { const v = ui.value.bgStyle || 'solid'; const m = LEGACY_ART[v] ? 'art:' + LEGACY_ART[v] : v; return allBgs.value.find((b) => b.v === m) || BACKGROUNDS[0]; });
+const BG_ICON = { Theme: 'mdiWaves', Consoles: 'mdiGamepadVariantOutline', Art: 'mdiImageMultipleOutline', Other: 'mdiImageOutline' };
 async function pickBg() {
   let last = '';
   const pal = paletteOf(ui.value);
   // a picture of each animated one (0.9.3 L); still, artwork and wallpaper keep their icon
-  const options = BACKGROUNDS.map((b) => { const o = { label: b.l, sub: b.sub, value: b.v, icon: BG_ICON[b.group], img: RENDERERS[b.v] ? bgPreview(b.v, pal) : '', selected: bgNow.value.v === b.v, heading: b.group !== last ? { Theme: 'Your theme colours', Consoles: 'Consoles', Other: 'Other' }[b.group] : '' }; last = b.group; return o; });
+  const options = allBgs.value.map((b) => { const o = { label: b.l, sub: b.sub, value: b.v, icon: BG_ICON[b.group], img: RENDERERS[b.v] ? bgPreview(b.v, pal) : '', selected: bgNow.value.v === b.v, raw: b.group === 'Art', heading: b.group !== last ? { Theme: 'Your theme colours', Consoles: 'Consoles', Art: 'Your games', Other: 'Other' }[b.group] : '' }; last = b.group; return o; });
   const v = await choose({ title: 'Background', options });
   if (v) await setBg(v);
 }
