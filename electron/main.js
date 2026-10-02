@@ -2228,6 +2228,11 @@ const handlers09 = {
     require('child_process').execFileSync('flatpak', ['override', '--user', `--filesystem=${dir}`, id], { timeout: 15000 });
     return true;
   },
+  // Flatpak Steam may start programs outside its sandbox (flatpak-spawn --host): 0.9.3 K, K2
+  'setup:steamFlatpakAllow': () => {
+    require('child_process').execFileSync('flatpak', ['override', '--user', '--talk-name=org.freedesktop.Flatpak', 'com.valvesoftware.Steam'], { timeout: 15000 });
+    return true;
+  },
   'setup:done': () => { config.setupDone = Date.now(); saveConfig(); return true; },
   // a game's manual (PDF) from RomM, kept in manuals/ so it opens offline next time
   'rom:manual': async ({ romId }) => {
@@ -2274,6 +2279,7 @@ const handlers09 = {
       if (n.game) add('game', `${n.game} Steam shortcut${n.game === 1 ? ' is' : 's are'} for a game that's gone from this device`, '', 'health');
       if (n.core + n.flatpak) add('core', `${n.core + n.flatpak} Steam shortcut${n.core + n.flatpak === 1 ? ' needs' : 's need'} a missing RetroArch core or Flatpak`, '', 'health');
     } catch (e) { log('issues: health', e.message); }
+    try { if (steamMgr.flatpakSteamAccess() === 'needed') add('fpsteam', 'Flatpak Steam needs permission to start your emulators', 'Its games run in a sandbox. Allow it to start programs on your system (flatpak override). Restart Steam afterwards.', 'fpsteam'); } catch {}
     try {
       for (const m of steamMgr.movedEmulators().filter((x) => !x.shortcuts)) add('setup', `Your launch setup points at ${m.exe}, which isn't there any more`, '', 'setup');
       for (const c of steamMgr.setupOverview().consoles) for (const k of c.checks) if (k.bios && k.level === 'warn') add('bios', `${c.platform}: ${k.text}`, '', 'setup');

@@ -22,6 +22,7 @@ const exists = (p) => { try { fs.accessSync(p); return true; } catch { return fa
 const isDir = (p) => { try { return fs.statSync(p).isDirectory(); } catch { return false; } };
 const ls = (p) => { try { return fs.readdirSync(p); } catch { return []; } };
 const real = (p) => { try { return fs.realpathSync(p); } catch { return p; } };
+const readText = (p) => { try { return fs.readFileSync(p, 'utf8'); } catch { return null; } };
 const unq = (s) => String(s || '').trim().replace(/^"(.*)"$/, '$1');
 const q = (s) => `"${s}"`;
 // inside a running AppImage's temporary mount: gone once that app closes or the device restarts
@@ -47,6 +48,8 @@ function loginUsers(root) {
   }
   return out;
 }
+// the Steam account in use is Flatpak Steam's (set by environment(); 0.9.3 K, K2)
+let FLATPAK_STEAM = false;
 function environment() {
   const roots = steamRoots();
   if (!roots.length) return { installed: false, reason: 'nosteam' };
@@ -62,6 +65,7 @@ function environment() {
   }
   if (!accounts.length) return { installed: true, reason: 'noaccount', roots };
   accounts.sort((a, b) => (b.mostRecent - a.mostRecent) || (b.ts - a.ts));
+  FLATPAK_STEAM = !!accounts[0].flatpak;
   return { installed: true, accounts, account: accounts[0], running: steamRunning() };
 }
 const files = (acc) => ({
@@ -468,6 +472,13 @@ module.exports = function createSteamManager(ctx) {
     const i = toks.findIndex((v) => /^-|\{|%/.test(v));
     return { exe: t.exe, args: i < 0 ? toks : toks.slice(0, i), from: t.from };
   }
+  // Can Flatpak Steam start programs outside its sandbox? It needs --talk-name=org.freedesktop.Flatpak,
+  // from its own metadata or a user/system override.
+  function flatpakSteamAccess() {
+    if (!environment().account?.flatpak) return null;
+    const files = ['/var/lib/flatpak/app/com.valvesoftware.Steam/current/active/metadata', path.join(HOME, '.local/share/flatpak/app/com.valvesoftware.Steam/current/active/metadata'), '/var/lib/flatpak/overrides/com.valvesoftware.Steam', path.join(HOME, '.local/share/flatpak/overrides/com.valvesoftware.Steam')];
+    return files.some((f) => /^\s*org\.freedesktop\.Flatpak\s*=\s*talk/m.test(readText(f) || '')) ? 'ok' : 'needed';
+  }
   // every AppImage of an emulator that was found (PCSX2's patches.zip is read from inside it)
   const appImagesFor = (key, re) => [...new Set([...candidates(key).map((c) => c.t.exe), ...APP_DIRS().flatMap((d) => ls(d).map((n) => path.join(d, n)))].filter((f) => /\.appimage$/i.test(f) && re.test(path.basename(f)) && exists(f)))];
   const rpcs3Command = () => emuCommand('ps3', /rpcs3/i);
@@ -651,13 +662,21 @@ module.exports = function createSteamManager(ctx) {
   // what a shortcut was made with, to spot ones made before the console's setup changed
   // v2: arguments written into Target like Steam ROM Manager (0.7.11)
   // v3: the emulator in Target, its arguments in Launch options again (0.8.2)
-  // (shadPS4 also by its start folder, so shortcuts made in the wrong one show Update: 0.9.3)
-  const sigOf = (t, mode) => (t ? ['v3', mode || 'direct', t.exe, (t.pre || []).join(' '), t.args, ...(/shadps4/i.test(t.exe || '') ? [startOf(t)] : [])].join('|') : '');
+  // (shadPS4 also by its start folder, so shortcuts made in the wrong one show Update: 0.9.3; on
+  // Flatpak Steam also 'host', so ones made before flatpak-spawn show Update: 0.9.3 K)
+  const sigOf = (t, mode) => (t ? ['v3', mode || 'direct', t.exe, (t.pre || []).join(' '), t.args, ...(/shadps4/i.test(t.exe || '') ? [startOf(t)] : []), ...(FLATPAK_STEAM ? ['host'] : [])].join('|') : '');
   // Target is the emulator alone; Launch options hold its arguments and the game. Steam adds Launch
   // options after Target for shortcuts, so no "%command%" in front (a lone or leading %command% kept
   // games from starting). Only when something must run first (vblank_mode=0, an env var) is it
   // "<that> %command% <arguments>".
-  const launchFor = (t, lo, args) => ({ target: q(t.exe), launch: (t.pre || []).length ? lo : args });
+  // Flatpak Steam (0.9.3 K, K2): shortcuts run inside Steam's sandbox, where the emulators (and
+  // flatpak itself) can't be started. flatpak-spawn --host (inside every Flatpak) starts them on the
+  // system instead: their folder with --directory, environment variables with --env, wrappers
+  // (gamemoderun, mangohud) in front. Steam's Flatpak needs to be allowed to talk to Flatpak for it
+  // (flatpakSteamAccess, offered in Settings → Emulators → Issues).
+  const HOST_SPAWN = '/usr/bin/flatpak-spawn';
+  const hostLaunch = (exe, args, start, pre = []) => ({ target: q(HOST_SPAWN), launch: ['--host', start ? `--directory=${q(start)}` : '', ...pre.filter((x) => /^\w+=/.test(x)).map((x) => `--env=${x}`), ...pre.filter((x) => !/^\w+=/.test(x) && x !== '%command%'), q(exe), args].filter(Boolean).join(' ') });
+  const launchFor = (t, lo, args) => (FLATPAK_STEAM ? hostLaunch(t.exe, args, startOf(t), t.pre || []) : { target: q(t.exe), launch: (t.pre || []).length ? lo : args });
   function buildLaunch(rom, file, t) {
     const ref = gameRef(rom, file, t);
     let args = t.args;
@@ -849,7 +868,7 @@ module.exports = function createSteamManager(ctx) {
       const { lo, args, fallback, missing } = buildLaunch(g.rom, g.file, t);
       if (missing) { skipped.push({ romId: a.romId, name: g.rom.name, why: missing }); continue; }
       let exe = t.exe, start = startOf(t), { target, launch } = launchFor(t, lo, args);
-      if (mode === 'script') { exe = scriptPath(); start = path.dirname(scriptPath()); launch = String(g.rom.id); target = q(exe); }
+      if (mode === 'script') { exe = scriptPath(); start = path.dirname(scriptPath()); launch = String(g.rom.id); target = q(exe); if (FLATPAK_STEAM) ({ target, launch } = hostLaunch(exe, launch, start)); }
       const appid = shortcutId(target, name);
       entries.push({
         romId: g.rom.id, console: g.key, sig: sigOf(t, mode), name, exe, target, start, lo: launch, directLo: lo, directExe: t.exe, directStart: startOf(t), appid, how: t.how, from: t.from, fallback, emu: t.emu || null,
@@ -1492,7 +1511,7 @@ module.exports = function createSteamManager(ctx) {
     gameEmu: (romId) => (cfg().gameEmus || {})[romId] || null,
     addedAt: (romId) => Math.min(...Object.values(reg).filter((r) => r.romId === romId && r.at).map((r) => r.at), Infinity),
     // exposed for tests
-    _learnOne: learnOne, _tokenize: tokenize, _buildLaunch: buildLaunch, _learnAll: learnAll, _candidates: candidates, appImagesFor, _startOf: startOf, _templateFor: templateFor, _templateForGame: templateForGame,
+    _learnOne: learnOne, _tokenize: tokenize, _buildLaunch: buildLaunch, _learnAll: learnAll, _candidates: candidates, appImagesFor, flatpakSteamAccess, _hostLaunch: hostLaunch, _startOf: startOf, _templateFor: templateFor, _templateForGame: templateForGame,
   };
   return api;
 };

@@ -90,3 +90,17 @@ test('shadPS4 core without the launcher: the selected version, started in its ow
   fs.rmSync(v1, { recursive: true });
   assert.strictEqual(run()[0], '~/.local/share/shadPS4QtLauncher/versions/Pre-release-abc/Shadps4-sdl.AppImage');
 });
+
+// 0.9.3 K (K2): Flatpak Steam starts emulators outside its sandbox through flatpak-spawn --host
+test('Flatpak Steam: shortcuts go through flatpak-spawn --host with folder, env and wrappers', () => {
+  const H = path.join(TMP, 'fpsteam');
+  const ud = path.join(H, '.var/app/com.valvesoftware.Steam/data/Steam/userdata/123/config');
+  fs.mkdirSync(ud, { recursive: true }); fs.mkdirSync(H + '/cfg', { recursive: true });
+  const code = `
+    const sm = require(${JSON.stringify(path.join(ROOT, 'electron/steamManager.js'))})({ USER_DATA: ${JSON.stringify(H + '/cfg')}, log() {}, PLATFORM_MAP: {}, getConfig: () => ({}), saveConfig() {}, broadcast() {},
+      emulationRoots: () => [], getLibrary: () => null, installed: () => ({}), romById: () => null, isGamescope: () => false, artFor: () => ({}), MARKED: 'm', markedPath: () => null });
+    console.log(JSON.stringify([sm._hostLaunch('/home/u/Apps/Cemu.AppImage', '-f -g "/roms/wiiu/Game.rpx"', '/home/u/Apps', ['vblank_mode=0', 'gamemoderun', '%command%']), sm.flatpakSteamAccess()]));`;
+  const out = JSON.parse(execFileSync(process.execPath, ['-e', code], { env: { ...process.env, HOME: H }, encoding: 'utf8' }).trim().split('\n').pop());
+  assert.deepStrictEqual(out[0], { target: '"/usr/bin/flatpak-spawn"', launch: '--host --directory="/home/u/Apps" --env=vblank_mode=0 gamemoderun "/home/u/Apps/Cemu.AppImage" -f -g "/roms/wiiu/Game.rpx"' });
+  assert.strictEqual(out[1], 'needed');
+});

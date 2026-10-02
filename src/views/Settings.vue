@@ -70,7 +70,7 @@
               <button v-for="(i, n) in issues" :key="n" class="lrow" data-focus @click="fixIssue(i)">
                 <Icon :name="ISSUE_ICON[i.kind] || 'mdiAlertCircleOutline'" :size="24" style="color: #ffd978" />
                 <div class="l-mid"><b>{{ i.text }}</b><span v-if="i.sub" class="l-sub">{{ i.sub }}</span></div>
-                <span class="l-end"><Btn b="A" />{{ { collections: 'Put them back', health: 'Shortcut health', setup: 'Emulator setup', romm: 'RomM settings' }[i.fix] }}</span>
+                <span class="l-end"><Btn b="A" />{{ { collections: 'Put them back', health: 'Shortcut health', setup: 'Emulator setup', romm: 'RomM settings', fpsteam: 'Allow' }[i.fix] }}</span>
               </button>
             </div>
             <div class="stack">
@@ -616,12 +616,17 @@ useView({ back: () => { if (!document.activeElement?.closest('.rail')) { focusFi
   [{ b: 'A', label: 'Select' }, { b: 'B', label: 'Back' }, { b: 'LT+RT', label: 'Tabs' }]);
 // Settings → Emulators → Issues
 const issues = ref(null);
-const ISSUE_ICON = { collections: 'mdiFolderSyncOutline', moved: 'mdiLinkVariantOff', game: 'mdiFileHidden', core: 'mdiPuzzleRemoveOutline', setup: 'mdiRadar', bios: 'mdiChip', romm: 'mdiServerOutline' };
+const ISSUE_ICON = { collections: 'mdiFolderSyncOutline', moved: 'mdiLinkVariantOff', game: 'mdiFileHidden', core: 'mdiPuzzleRemoveOutline', setup: 'mdiRadar', bios: 'mdiChip', romm: 'mdiServerOutline', fpsteam: 'mdiSteam' };
 async function loadIssues() { issues.value = await call('issues:list').catch(() => []); store.issues = issues.value.length; }
 async function fixIssue(i) {
   if (i.fix === 'health') return go('steam-health');
   if (i.fix === 'setup') return go('emu-setup');
   if (i.fix === 'romm') { sec.value = 'romm'; return; }
+  if (i.fix === 'fpsteam') {
+    if (!(await confirm('Allow Flatpak Steam?', 'Runs: flatpak override --user --talk-name=org.freedesktop.Flatpak com.valvesoftware.Steam\n\nSteam can then start your emulators from its shortcuts. Restart Steam afterwards.', 'Allow'))) return;
+    try { await call('setup:steamFlatpakAllow'); toast('Allowed. Restart Steam to use it.', 'ok', 3500, 'mdiCheck'); loadIssues(); } catch (e) { toast(e.message, 'error', 6000); }
+    return;
+  }
   if (!(await confirm('Put them back?', 'Steam closes for a moment while its collections are written.', 'Put them back'))) return;
   try { await call('steam:fixCollections'); toast('Putting them back in their collections', 'ok', 3000, 'mdiSteam'); loadIssues(); } catch (e) { toast(e.message, 'error'); }
 }
