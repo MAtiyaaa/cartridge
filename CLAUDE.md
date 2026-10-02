@@ -163,5 +163,19 @@ LT/RT switch top tabs. LB/RB only switch sections inside a page. A select, B bac
 - UI: Home rows of 15 + Show all (`store.homeLists`), delete ring (`Ring.vue`, `delete-progress`), game page More grouped (Steam and emulator, Details and artwork), score/age badges, one RomM tab in Settings (`OLD_SEC`), Report a problem (About), Refresh Library (Quick Menu), Hidden Games (Settings → Achievements), RA tab filter and sort. RomM game fields read in `electron/romm.js` (tested).
 - Owner's open items: shadPS4 PS4 games start only after opening shadPS4 once (black screen 30 s, not IPC); options for Discuss items in `docs/options-0.9.3.md`.
 
+## 0.9.3 K (owner's picks, 2 Oct 2026; log: docs/SESSION-LOG.md)
+- Achievements: `AchAll.vue` is the default tab (`store.achTab = 'all'`), RA + trophies merged, grouped by console; LB/RB: all, ra, others.
+- `src/recs.js`: `similarTo` (game page) and `recommend` (Home "Recommended for you"); IGDB `similar` only a bonus; each result has a `why`. Tests in `test/recs.test.js`.
+- Look & Feel pages (`LOOK_PAGES`, `lookPage`, `lookAdv`, LB/RB `stepLook`). `Menu.vue` takes `tabs` (bottom sheet, LB/RB) or `sheet: true`; used by the game page More, Show and sort, console More.
+- Rumble: `setRumble`/`rumble` in nav.js (`ui.rumble`). Stick: stronger axis only, hysteresis 0.55/0.35 (`stickHeld`).
+- Connection: `.net` icon (house/globe), red text only when offline.
+- Sharp heroes: `sharpHero` in main.js (`art:sharpHero`, `heroes/`, `romimg ?hz=`), `store.sharp`, `wantSharp`; `backdropOf` prefers it. Home header 50%, art runs on under the first row.
+- shadPS4 core candidate `shadps4@core` (`shadCore()`: qt_ui.ini `[version_manager] versionSelected`, else versions.json), `how: 'shadcore'`, Start in its own folder, `-g "{ROM}" -f true`, no SHADPS4_ENABLE_IPC.
+- shadPS4 trophy lists: `readTrp`, `shadTrophyKey`, `cachedTrophyDefs` in trophies.js into `trophylists/`. Trophy names: `isCode`/`nameOf` in trophyService (a code never replaces a real name in notes).
+- PCSX2 patches in patches.js: `pcsx2Dirs`, `pcsx2GameList` (gamelist.cache v34), `pcsx2List`, `pcsx2Set` (gamesettings `<SERIAL>_<CRC>.ini` [Patches] `Enable =`), patches.zip via `detect.readAppImageFile`.
+- Flatpak Steam: `FLATPAK_STEAM`, `hostLaunch` (`flatpak-spawn --host --directory= --env=`), `readShortcuts` unwraps it, `flatpakSteamAccess` + Issues `fpsteam` (`setup:steamFlatpakAllow`); steamArt wraps Cartridge's own entry. Not for `.exe` (Proton).
+- Xenia Windows build: `EMU.xenia.win`, src `windows`, Proton; exec-bit checks skip `.exe`.
+- RomM version: `rommTooOld` in romm.js, Issues `romm`.
+
 ## Releases (full steps: HANDOFF D8)
 Only when the owner asks. Bump `version` and `build.releaseInfo.releaseName` ("Cartridge X.Y.Z") in `package.json`, and set `versionName` (what Settings → About and update messages show). **0.9.3 is shipped in parts (owner, 1 Oct 2026):** the number goes up as usual (0.9.4, 0.9.5...) but `versionName` and the release title are "0.9.3 B", "0.9.3 C"... until the 0.9.3 plan is done; notes heading `## Cartridge 0.9.3 B · Title`. Then put only this version's notes in `RELEASE_NOTES.md` (heading `## Cartridge X.Y.Z · Title`), add them to the top of `CHANGELOG.md`, grouped as New / Changed / Fixed with bold lead-ins. CI builds, launch-checks and publishes.

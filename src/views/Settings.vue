@@ -70,7 +70,7 @@
               <button v-for="(i, n) in issues" :key="n" class="lrow" data-focus @click="fixIssue(i)">
                 <Icon :name="ISSUE_ICON[i.kind] || 'mdiAlertCircleOutline'" :size="24" style="color: #ffd978" />
                 <div class="l-mid"><b>{{ i.text }}</b><span v-if="i.sub" class="l-sub">{{ i.sub }}</span></div>
-                <span class="l-end"><Btn b="A" />{{ { collections: 'Put them back', health: 'Shortcut health', setup: 'Emulator setup' }[i.fix] }}</span>
+                <span class="l-end"><Btn b="A" />{{ { collections: 'Put them back', health: 'Shortcut health', setup: 'Emulator setup', romm: 'RomM settings', fpsteam: 'Allow' }[i.fix] }}</span>
               </button>
             </div>
             <div class="stack">
@@ -105,7 +105,10 @@
 
           <template v-else-if="sec === 'ui'">
             <h1>Look &amp; Feel</h1>
+            <!-- five short pages (0.9.3 K, G4): LB/RB move between them; rarely used options under Advanced -->
+            <div class="lookpages"><Btn b="LB" /><div class="seg"><button v-for="p in LOOK_PAGES" :key="p.v" data-focus :data-key="'look-' + p.v" :class="{ on: lookPage === p.v }" @click="setLookPage(p.v)">{{ p.l }}</button></div><Btn b="RB" /></div>
 
+            <template v-if="lookPage === 'theme'">
             <div class="subh"><Icon name="mdiBookmarkOutline" :size="20" />Presets</div>
             <div class="presets">
               <button v-for="(p, i) in presets" :key="i" class="preset" data-focus @click="presetMenu(p, i)">
@@ -116,11 +119,14 @@
             </div>
             <p class="muted small" style="margin-top: -6px">Saves colour, background, fonts, cards, motion and sounds together, up to 5 looks. Interface size and controller settings stay as they are.</p>
 
+
             <div class="subh"><Icon name="mdiPaletteOutline" :size="20" />Colour</div>
             <div class="swatches">
               <button v-for="(t, k) in THEMES" :key="k" class="swatch" data-focus :class="{ on: (ui.theme || 'cartridge') === k }" :style="{ background: `linear-gradient(135deg, ${t.grad[0]}, ${t.grad[2]} 60%, ${t.grad[4]})` }" :title="t.label" @click="saveConfig({ ui: { theme: k, gameTheme: null } })"><i :style="{ background: t.accent[0] }" /><span>{{ t.label }}</span></button>
               <button class="swatch custom" data-focus :class="{ on: ui.theme === 'custom' }" :style="ui.customColor ? { background: `linear-gradient(135deg, ${customT.grad[0]}, ${customT.grad[2]} 60%, ${customT.grad[4]})` } : {}" @click="pickColor"><Icon name="mdiEyedropperVariant" :size="18" /><span>Custom</span></button>
             </div>
+            <button class="lrow adv-tg" data-focus @click="lookAdv = !lookAdv"><Icon name="mdiTuneVariant" :size="22" /><div class="l-mid"><b>Advanced</b></div><Icon :name="lookAdv ? 'mdiChevronUp' : 'mdiChevronDown'" :size="22" /></button>
+            <template v-if="lookAdv">
             <div class="finetune">
               <button v-for="f in fineTune" :key="f.k" class="ft" data-focus @click="pickPart(f)">
                 <span class="ft-sw" :style="{ background: (ui.colors || {})[f.k] || f.def() }"><Icon v-if="!(ui.colors || {})[f.k]" name="mdiPaletteOutline" :size="14" /></span>
@@ -131,6 +137,10 @@
             <div class="row"><span class="lbl">Panels</span><div class="seg"><button v-for="(v, k) in SURFACES" :key="k" data-focus :class="{ on: (ui.surface || 'solid') === k }" @click="saveConfig({ ui: { surface: k } })">{{ v.label }}</button></div></div>
             <div class="row"><span class="lbl">Text</span><div class="seg"><button v-for="(v, k) in TEXTS" :key="k" data-focus :class="{ on: (ui.text || 'normal') === k }" @click="saveConfig({ ui: { text: k } })">{{ v.label }}</button></div></div>
 
+            </template>
+            <div class="row"><button class="btn" data-focus @click="resetLook"><Icon name="mdiRestore" />Reset Look &amp; Feel</button></div>
+            </template>
+            <template v-else-if="lookPage === 'bg'">
             <div class="subh"><Icon name="mdiWallpaper" :size="20" />Background</div>
             <!-- one row: what's on now, and a menu with every background (theme ones, consoles, other) -->
             <button class="bgnow glass" data-focus @click="pickBg">
@@ -144,6 +154,8 @@
               <button v-if="ui.wallpaper" class="btn" data-focus @click="clearWallpaper"><Icon name="mdiClose" :size="18" />Remove</button>
             </div>
 
+            </template>
+            <template v-else-if="lookPage === 'cards'">
             <div class="subh"><Icon name="mdiFormatFont" :size="20" />Text &amp; Size</div>
             <div class="fonts">
               <button v-for="(f, k) in FONTS" :key="k" class="fonttile" data-focus :class="{ on: (ui.font || 'cartridge') === k }" :style="{ fontFamily: f.display }" @click="saveConfig({ ui: { font: k } })"><b>Aa</b><span>{{ f.label }}</span></button>
@@ -151,13 +163,16 @@
             <div class="row"><span class="lbl">Interface size</span><div class="seg"><button v-for="z in scales" :key="z.v" data-focus :class="{ on: String(ui.scale || 'auto') === z.v }" @click="setScale(z.v)">{{ z.l }}</button></div></div>
             <p class="muted small" style="margin-top: -6px">{{ scaleNote }}</p>
 
+
             <div class="subh"><Icon name="mdiViewGridOutline" :size="20" />Games &amp; Cards</div>
             <div class="row"><span class="lbl">Box art size</span><div class="seg"><button v-for="(v, k) in CARD_SIZES" :key="k" data-focus :class="{ on: (ui.gridSize || 'md') === k }" @click="saveConfig({ ui: { gridSize: k } })">{{ v.label }}</button></div></div>
-            <div class="row"><span class="lbl">Card corners</span><div class="seg"><button v-for="(v, k) in CARD_SHAPES" :key="k" data-focus :class="{ on: (ui.cardShape || 'rounded') === k }" @click="saveConfig({ ui: { cardShape: k } })">{{ v.label }}</button></div></div>
-            <div class="row"><span class="lbl">Spacing</span><div class="seg"><button v-for="(v, k) in DENSITIES" :key="k" data-focus :class="{ on: (ui.density || 'normal') === k }" @click="saveConfig({ ui: { density: k } })">{{ v.label }}</button></div></div>
             <Toggle :model-value="ui.cardTitles !== false" label="Game names under box art" desc="Turn off for a clean wall of covers" @update:model-value="(v) => saveConfig({ ui: { cardTitles: v } })" />
             <Toggle :model-value="ui.mediaBar !== false" label="Media bar" desc="Show artwork of the highlighted game at the top of Home" @update:model-value="(v) => saveConfig({ ui: { mediaBar: v } })" />
             <Toggle :model-value="ui.logos !== false" label="Game logos" desc="Show the game's logo instead of its name on Home and game pages" @update:model-value="(v) => saveConfig({ ui: { logos: v } })" />
+            <button class="lrow adv-tg" data-focus @click="lookAdv = !lookAdv"><Icon name="mdiTuneVariant" :size="22" /><div class="l-mid"><b>Advanced</b></div><Icon :name="lookAdv ? 'mdiChevronUp' : 'mdiChevronDown'" :size="22" /></button>
+            <template v-if="lookAdv">
+            <div class="row"><span class="lbl">Card corners</span><div class="seg"><button v-for="(v, k) in CARD_SHAPES" :key="k" data-focus :class="{ on: (ui.cardShape || 'rounded') === k }" @click="saveConfig({ ui: { cardShape: k } })">{{ v.label }}</button></div></div>
+            <div class="row"><span class="lbl">Spacing</span><div class="seg"><button v-for="(v, k) in DENSITIES" :key="k" data-focus :class="{ on: (ui.density || 'normal') === k }" @click="saveConfig({ ui: { density: k } })">{{ v.label }}</button></div></div>
             <template v-if="ui.logos !== false">
               <div class="row" style="align-items: flex-end; gap: 12px">
                 <TextField v-model="sgdbKey" label="SteamGridDB API key" placeholder="Paste your key" password icon="mdiKeyVariant" style="flex: 1" />
@@ -173,6 +188,36 @@
             </template>
             <Toggle :model-value="ui.hideEmpty" label="Hide empty systems" @update:model-value="(v) => saveConfig({ ui: { hideEmpty: v } })" />
 
+            </template>
+            </template>
+            <template v-else-if="lookPage === 'motion'">
+            <div class="subh"><Icon name="mdiAnimationPlayOutline" :size="20" />Motion &amp; Sound</div>
+            <div class="row"><span class="lbl">Idle screen</span><div class="seg"><button v-for="m in idles" :key="m.v" data-focus :class="{ on: (ui.idle ?? '5') === m.v }" @click="saveConfig({ ui: { idle: m.v } })">{{ m.l }}</button></div></div>
+            <p class="muted small" style="margin-top: -6px">After this long without input, your games' artwork drifts by with the clock. Any button wakes it.</p>
+            <div class="row"><span class="lbl">Animations</span><div class="seg"><button v-for="m in motions" :key="m.v" data-focus :class="{ on: (ui.motion || 'normal') === m.v }" @click="saveConfig({ ui: { motion: m.v } })">{{ m.l }}</button></div></div>
+            <Toggle :model-value="ui.sounds !== false" label="UI sounds" desc="Soft clicks when you move and select" @update:model-value="setSounds" />
+            <template v-if="ui.sounds !== false">
+              <div class="row"><span class="lbl">Sound style</span><div class="seg"><button v-for="p in SOUND_PACKS" :key="p.v" data-focus :class="{ on: (ui.soundPack || 'soft') === p.v }" @click="setPack(p.v)">{{ p.l }}</button></div></div>
+              <div class="row"><span class="lbl">Volume</span><div class="seg"><button v-for="v in volumes" :key="v.v" data-focus :class="{ on: (ui.volume || 'medium') === v.v }" @click="setVolume(v.v)">{{ v.l }}</button></div></div>
+            </template>
+            <div class="row"><span class="lbl">Rumble</span><div class="seg"><button v-for="v in rumbles" :key="v.v" data-focus :class="{ on: (ui.rumble || 'none') === v.v }" @click="setRumbleLevel(v.v)">{{ v.l }}</button></div></div>
+            <p class="muted small" style="margin-top: -6px">A light buzz on the controller when you move and select. In Game Mode, Steam's own controller rumble must be on.</p>
+
+            <button class="lrow adv-tg" data-focus @click="lookAdv = !lookAdv"><Icon name="mdiTuneVariant" :size="22" /><div class="l-mid"><b>Advanced</b></div><Icon :name="lookAdv ? 'mdiChevronUp' : 'mdiChevronDown'" :size="22" /></button>
+            <template v-if="lookAdv">
+            <div class="row"><span class="lbl">Effects</span><div class="seg"><button v-for="m in effectsOpts" :key="m.v" data-focus :class="{ on: (ui.effects || 'auto') === m.v }" @click="saveConfig({ ui: { effects: m.v } })">{{ m.l }}</button></div></div>
+            <p class="muted small" style="margin-top: -6px">Reduced turns off movement, including the animated background, which then shows a still frame. Light effects draw backgrounds at a lower resolution and frame rate and skip blur. Auto uses light effects when the GPU is off (software rendering), so it stays smooth everywhere. {{ store.info.gpu === false ? 'The GPU is off right now, so Auto is using light effects.' : '' }}</p>
+            </template>
+            </template>
+            <template v-else-if="lookPage === 'controls'">
+            <div class="subh"><Icon name="mdiGamepadVariantOutline" :size="20" />Controls &amp; Display</div>
+            <div class="row"><span class="lbl">Touch &amp; mouse</span><div class="seg"><button v-for="p in pointers" :key="p.v" data-focus :class="{ on: (ui.pointer || 'auto') === p.v }" @click="setPointer(p.v)">{{ p.l }}</button></div></div>
+            <p class="muted small" style="margin-top: -6px">Auto hides the cursor when you tap the screen and shows it when a mouse moves. Touch never shows a cursor.</p>
+            <div class="row"><span class="lbl">Button icons</span><div class="seg"><button v-for="k in buttonOpts" :key="k.v" data-focus :class="{ on: (ui.buttons || 'auto') === k.v }" @click="saveConfig({ ui: { buttons: k.v } })">{{ k.l }}</button></div></div>
+            <p class="muted small" style="margin-top: -6px">Auto draws the buttons of the controller you're holding{{ padInfo?.name ? ` (right now: ${padInfo.name})` : '' }}, even when Steam presents it as an Xbox pad. <span class="btn-demo"><Btn b="A" /><Btn b="B" /><Btn b="X" /><Btn b="Y" /><Btn b="LB" /><Btn b="RT" /><Btn b="START" /><Btn b="SELECT" /></span></p>
+            <div class="row"><span class="lbl">On-screen keyboard</span><div class="seg"><button v-for="k in keyboards" :key="k.v" data-focus :class="{ on: (ui.keyboard || 'auto') === k.v }" @click="saveConfig({ ui: { keyboard: k.v } })">{{ k.l }}</button></div></div>
+            <p class="muted small" style="margin-top: -6px">Auto uses the built-in keyboard in Game Mode and your real keyboard on the desktop. Steam leaves typing to the Steam keyboard (Steam + X).</p>
+
             <div class="subh"><Icon name="mdiDockTop" :size="20" />Top Bar</div>
             <p class="muted small" style="margin-top: -6px">Pick which tabs show at the top and their order. LT and RT move through them in this order. Settings always stays.</p>
             <div class="tabs-edit">
@@ -185,28 +230,13 @@
             </div>
             <button class="btn small" data-focus style="align-self: flex-start" @click="saveConfig({ ui: { tabs: null } })"><Icon name="mdiRestore" :size="18" />Default tabs</button>
 
-            <div class="subh"><Icon name="mdiAnimationPlayOutline" :size="20" />Motion &amp; Sound</div>
-            <div class="row"><span class="lbl">Idle screen</span><div class="seg"><button v-for="m in idles" :key="m.v" data-focus :class="{ on: (ui.idle ?? '5') === m.v }" @click="saveConfig({ ui: { idle: m.v } })">{{ m.l }}</button></div></div>
-            <p class="muted small" style="margin-top: -6px">After this long without input, your games' artwork drifts by with the clock. Any button wakes it.</p>
-            <div class="row"><span class="lbl">Animations</span><div class="seg"><button v-for="m in motions" :key="m.v" data-focus :class="{ on: (ui.motion || 'normal') === m.v }" @click="saveConfig({ ui: { motion: m.v } })">{{ m.l }}</button></div></div>
-            <div class="row"><span class="lbl">Effects</span><div class="seg"><button v-for="m in effectsOpts" :key="m.v" data-focus :class="{ on: (ui.effects || 'auto') === m.v }" @click="saveConfig({ ui: { effects: m.v } })">{{ m.l }}</button></div></div>
-            <p class="muted small" style="margin-top: -6px">Reduced turns off movement, including the animated background, which then shows a still frame. Light effects draw backgrounds at a lower resolution and frame rate and skip blur. Auto uses light effects when the GPU is off (software rendering), so it stays smooth everywhere. {{ store.info.gpu === false ? 'The GPU is off right now, so Auto is using light effects.' : '' }}</p>
-            <Toggle :model-value="ui.sounds !== false" label="UI sounds" desc="Soft clicks when you move and select" @update:model-value="setSounds" />
-            <template v-if="ui.sounds !== false">
-              <div class="row"><span class="lbl">Sound style</span><div class="seg"><button v-for="p in SOUND_PACKS" :key="p.v" data-focus :class="{ on: (ui.soundPack || 'soft') === p.v }" @click="setPack(p.v)">{{ p.l }}</button></div></div>
-              <div class="row"><span class="lbl">Volume</span><div class="seg"><button v-for="v in volumes" :key="v.v" data-focus :class="{ on: (ui.volume || 'medium') === v.v }" @click="setVolume(v.v)">{{ v.l }}</button></div></div>
-            </template>
-
-            <div class="subh"><Icon name="mdiGamepadVariantOutline" :size="20" />Controls &amp; Display</div>
-            <div class="row"><span class="lbl">Touch &amp; mouse</span><div class="seg"><button v-for="p in pointers" :key="p.v" data-focus :class="{ on: (ui.pointer || 'auto') === p.v }" @click="setPointer(p.v)">{{ p.l }}</button></div></div>
-            <p class="muted small" style="margin-top: -6px">Auto hides the cursor when you tap the screen and shows it when a mouse moves. Touch never shows a cursor.</p>
-            <div class="row"><span class="lbl">Button icons</span><div class="seg"><button v-for="k in buttonOpts" :key="k.v" data-focus :class="{ on: (ui.buttons || 'auto') === k.v }" @click="saveConfig({ ui: { buttons: k.v } })">{{ k.l }}</button></div></div>
-            <p class="muted small" style="margin-top: -6px">Auto draws the buttons of the controller you're holding{{ padInfo?.name ? ` (right now: ${padInfo.name})` : '' }}, even when Steam presents it as an Xbox pad. <span class="btn-demo"><Btn b="A" /><Btn b="B" /><Btn b="X" /><Btn b="Y" /><Btn b="LB" /><Btn b="RT" /><Btn b="START" /><Btn b="SELECT" /></span></p>
-            <div class="row"><span class="lbl">On-screen keyboard</span><div class="seg"><button v-for="k in keyboards" :key="k.v" data-focus :class="{ on: (ui.keyboard || 'auto') === k.v }" @click="saveConfig({ ui: { keyboard: k.v } })">{{ k.l }}</button></div></div>
-            <p class="muted small" style="margin-top: -6px">Auto uses the built-in keyboard in Game Mode and your real keyboard on the desktop. Steam leaves typing to the Steam keyboard (Steam + X).</p>
+            <button class="lrow adv-tg" data-focus @click="lookAdv = !lookAdv"><Icon name="mdiTuneVariant" :size="22" /><div class="l-mid"><b>Advanced</b></div><Icon :name="lookAdv ? 'mdiChevronUp' : 'mdiChevronDown'" :size="22" /></button>
+            <template v-if="lookAdv">
             <div class="row"><span class="lbl">Rendering</span><div class="seg"><button v-for="g in gfx" :key="g.v" data-focus :class="{ on: (store.config.graphics || 'auto') === g.v }" @click="setGraphics(g.v)">{{ g.l }}</button></div></div>
             <p class="muted small" style="margin-top: -6px">Auto uses the GPU from the app menu and on big screens like TVs. On handheld-size screens launched from Steam or Game Mode it uses software rendering, which is proven there. If the GPU ever fails, Cartridge switches to Compatible by itself. Compatible never uses the GPU.</p>
-            <div class="row"><button class="btn" data-focus @click="call('app:fullscreen')"><Icon name="mdiFullscreen" />Toggle fullscreen</button><button class="btn" data-focus @click="clearCache"><Icon name="mdiImageRemove" />Clear image cache</button><button class="btn" data-focus @click="resetLook"><Icon name="mdiRestore" />Reset Look &amp; Feel</button></div>
+            <div class="row"><button class="btn" data-focus @click="call('app:fullscreen')"><Icon name="mdiFullscreen" />Toggle fullscreen</button><button class="btn" data-focus @click="clearCache"><Icon name="mdiImageRemove" />Clear image cache</button></div>
+            </template>
+            </template>
           </template>
 
           <template v-else-if="sec === 'updates'">
@@ -343,10 +373,10 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import { store, call, go, tab, saveConfig, pickFolder, choose, confirm, toast, openModal, bytes, ago, resync, scanServer, allRoms, resetLogos, askText, activeTabs, TAB_DEFS } from '../store.js';
 import { useView } from '../useView.js';
-import { input, focusFirst, setPointerPref } from '../nav.js';
+import { input, focusFirst, setPointerPref, setRumble, rumble } from '../nav.js';
 import { THEMES, SURFACES, TEXTS, FONTS, CARD_SHAPES, CARD_SIZES, DENSITIES, themeFrom, themeOf } from '../themes.js';
 import { BACKGROUNDS } from '../bgRenderers.js';
 import { setSoundEnabled, setSoundStyle, previewSound, SOUND_PACKS } from '../sfx.js';
@@ -491,7 +521,7 @@ function moveTab(n, d) {
   [l[i], l[j]] = [l[j], l[i]];
   saveConfig({ ui: { tabs: l } });
 }
-const LOOK_KEYS = ['theme', 'customColor', 'colors', 'idle', 'surface', 'text', 'font', 'bgStyle', 'wallDim', 'cardShape', 'density', 'gridSize', 'cardTitles', 'mediaBar', 'logos', 'motion', 'effects', 'sounds', 'soundPack', 'volume'];
+const LOOK_KEYS = ['theme', 'customColor', 'colors', 'idle', 'surface', 'text', 'font', 'bgStyle', 'wallDim', 'cardShape', 'density', 'gridSize', 'cardTitles', 'mediaBar', 'logos', 'motion', 'effects', 'sounds', 'soundPack', 'volume', 'rumble'];
 const presets = computed(() => store.config.lookPresets || []);
 const presetStyle = (p) => { const g = themeOf(p.ui).grad; return { background: `linear-gradient(135deg, ${g[0]}, ${g[2]} 60%, ${g[4]})` }; };
 function lookNow() { const o = {}; for (const k of LOOK_KEYS) if (ui.value[k] !== undefined) o[k] = JSON.parse(JSON.stringify(ui.value[k])); return o; }
@@ -524,7 +554,7 @@ async function presetMenu(p, i) {
 }
 async function resetLook() {
   if (!(await confirm('Reset Look & Feel?', 'Colour, background, fonts, cards, motion and sounds go back to the defaults.', 'Reset'))) return;
-  await saveConfig({ ui: { colors: { highlight: '', buttons: '', bars: '', background: '' }, theme: 'cartridge', customColor: '', surface: 'solid', text: 'normal', font: 'cartridge', cardShape: 'rounded', density: 'normal', cardTitles: true, gridSize: 'md', bgStyle: 'solid', motion: 'normal', effects: 'auto', soundPack: 'soft', volume: 'medium' } });
+  await saveConfig({ ui: { colors: { highlight: '', buttons: '', bars: '', background: '' }, theme: 'cartridge', customColor: '', surface: 'solid', text: 'normal', font: 'cartridge', cardShape: 'rounded', density: 'normal', cardTitles: true, gridSize: 'md', bgStyle: 'solid', motion: 'normal', effects: 'auto', soundPack: 'soft', volume: 'medium', rumble: 'none' } });
 }
 const gfx = [{ v: 'auto', l: 'Auto (GPU)' }, { v: 'software', l: 'Compatible' }];
 const pointers = [{ v: 'auto', l: 'Auto' }, { v: 'touch', l: 'Touch' }, { v: 'mouse', l: 'Mouse' }];
@@ -582,15 +612,21 @@ const syncLine = computed(() => {
 const every = [{ v: 0, l: 'Off' }, { v: 30, l: '30 min' }, { v: 60, l: '1 h' }, { v: 180, l: '3 h' }];
 const folderList = computed(() => (store.libVersion, showAll.value ? supported.value : store.lib?.platforms || []));
 
-useView({ back: () => { if (!document.activeElement?.closest('.rail')) { focusFirst(el.value, `[data-key="sec-${sec.value}"]`); return; } return false; } },
+useView({ back: () => { if (!document.activeElement?.closest('.rail')) { focusFirst(el.value, `[data-key="sec-${sec.value}"]`); return; } return false; }, lb: () => stepLook(-1), rb: () => stepLook(1) },
   [{ b: 'A', label: 'Select' }, { b: 'B', label: 'Back' }, { b: 'LT+RT', label: 'Tabs' }]);
 // Settings → Emulators → Issues
 const issues = ref(null);
-const ISSUE_ICON = { collections: 'mdiFolderSyncOutline', moved: 'mdiLinkVariantOff', game: 'mdiFileHidden', core: 'mdiPuzzleRemoveOutline', setup: 'mdiRadar', bios: 'mdiChip' };
+const ISSUE_ICON = { collections: 'mdiFolderSyncOutline', moved: 'mdiLinkVariantOff', game: 'mdiFileHidden', core: 'mdiPuzzleRemoveOutline', setup: 'mdiRadar', bios: 'mdiChip', romm: 'mdiServerOutline', fpsteam: 'mdiSteam' };
 async function loadIssues() { issues.value = await call('issues:list').catch(() => []); store.issues = issues.value.length; }
 async function fixIssue(i) {
   if (i.fix === 'health') return go('steam-health');
   if (i.fix === 'setup') return go('emu-setup');
+  if (i.fix === 'romm') { sec.value = 'romm'; return; }
+  if (i.fix === 'fpsteam') {
+    if (!(await confirm('Allow Flatpak Steam?', 'Runs: flatpak override --user --talk-name=org.freedesktop.Flatpak com.valvesoftware.Steam\n\nSteam can then start your emulators from its shortcuts. Restart Steam afterwards.', 'Allow'))) return;
+    try { await call('setup:steamFlatpakAllow'); toast('Allowed. Restart Steam to use it.', 'ok', 3500, 'mdiCheck'); loadIssues(); } catch (e) { toast(e.message, 'error', 6000); }
+    return;
+  }
   if (!(await confirm('Put them back?', 'Steam closes for a moment while its collections are written.', 'Put them back'))) return;
   try { await call('steam:fixCollections'); toast('Putting them back in their collections', 'ok', 3000, 'mdiSteam'); loadIssues(); } catch (e) { toast(e.message, 'error'); }
 }
@@ -657,6 +693,16 @@ async function loadAll() {
   const list = await call('platforms:supported');
   supported.value = list.map((p) => ({ ...p, display_name: p.display_name || p.name })).sort((a, b) => a.display_name.localeCompare(b.display_name));
 }
+const LOOK_PAGES = [{ v: 'theme', l: 'Theme' }, { v: 'bg', l: 'Background' }, { v: 'cards', l: 'Text and Cards' }, { v: 'motion', l: 'Motion and Sound' }, { v: 'controls', l: 'Controls' }];
+const lookPage = ref('theme'), lookAdv = ref(false);
+function setLookPage(v) { lookPage.value = v; lookAdv.value = false; }
+function stepLook(d) {
+  if (sec.value !== 'ui') return false;
+  const i = LOOK_PAGES.findIndex((p) => p.v === lookPage.value), n = LOOK_PAGES[(i + d + LOOK_PAGES.length) % LOOK_PAGES.length].v;
+  setLookPage(n); nextTick(() => focusFirst(paneEl.value, `[data-key="look-${n}"]`));
+}
+const rumbles = [{ v: 'none', l: 'None' }, { v: 'low', l: 'Low' }, { v: 'medium', l: 'Medium' }, { v: 'high', l: 'High' }];
+async function setRumbleLevel(v) { await saveConfig({ ui: { rumble: v } }); setRumble(v); rumble(true); }
 async function setSounds(v) { await saveConfig({ ui: { sounds: v } }); setSoundEnabled(v); }
 async function addToSteam() {
   try {
@@ -777,6 +823,9 @@ onMounted(async () => { space.value = await call('fs:space', store.config.romsRo
 .tab-lbl { flex: 1; min-width: 0; }
 .tab-tg { min-width: 92px; justify-content: center; }
 .subh { display: flex; align-items: center; gap: 10px; font-family: var(--display); font-size: var(--t-lg); font-weight: 700; margin-top: 4px; }
+.lookpages { display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; }
+.lookpages .seg { flex-wrap: wrap; }
+.adv-tg { margin-top: var(--s-2); }
 .ra-mk { height: 20px; }
 .srcs { display: flex; flex-direction: column; gap: 10px; }
 .src { padding: 12px 16px; display: flex; flex-direction: column; gap: 8px; }

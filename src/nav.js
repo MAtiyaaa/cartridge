@@ -113,6 +113,7 @@ function move(dir) {
   }
   if (best) {
     sfx.move();
+    rumble();
     best.focus({ preventScroll: true });
     colFrom = vertical ? best : null;
     scrollIntoViewSmart(best);
@@ -155,7 +156,7 @@ export function dispatch(action) {
   const layer = topLayer();
   setMode('pad');
   const h = layer?.handlers?.[action];
-  if (action === 'accept') sfx.accept();
+  if (action === 'accept') { sfx.accept(); rumble(true); }
   else if (action === 'back') sfx.back();
   else if (['lb', 'rb'].includes(action)) sfx.tab();
   if (h && h(document.activeElement) !== false) return;
@@ -233,6 +234,18 @@ function trigger(gp, which, v) {
   return !!armed[k] && v > 0.6;
 }
 export const padLive = { pads: [] }; // for Settings → About → Controller test
+const stickHeld = {}; // pad index -> direction -> held (stick hysteresis)
+// Rumble when moving (0.9.3 B3, Look & Feel): a tiny pulse on the pad you last used. Steam Input
+// passes it through in Game Mode only when the pad has motors and Steam's own rumble is on.
+const RUMBLE = { low: 0.12, medium: 0.25, high: 0.45 };
+let rumbleLevel = 'none', lastPad = -1;
+export function setRumble(v) { rumbleLevel = RUMBLE[v] ? v : 'none'; }
+export function rumble(strong = false) {
+  const m = RUMBLE[rumbleLevel];
+  if (!m || lastPad < 0) return;
+  const gp = navigator.getGamepads?.()[lastPad];
+  try { gp?.vibrationActuator?.playEffect('dual-rumble', { duration: strong ? 32 : 18, weakMagnitude: m, strongMagnitude: strong ? m * 0.6 : 0 })?.catch?.(() => {}); } catch {}
+}
 // the part of the screen focus was last in (a [data-zone]), for when the focused element goes away
 let lastZone = null;
 document.addEventListener('focusin', (e) => { lastZone = e.target.closest?.('[data-zone]') || null; }, true);
@@ -242,6 +255,7 @@ function poll() {
   const merged = {};
   for (const gp of pads) {
     input.padName = gp.id;
+    if (gp.buttons.some((b) => b.pressed) || gp.axes.slice(0, 2).some((a) => Math.abs(a) > 0.55)) lastPad = gp.index;
     gp.buttons.forEach((b, i) => {
       const a = BTN[i];
       if (!a || a === 'lt' || a === 'rt') return;
@@ -256,11 +270,16 @@ function poll() {
       if (trigger(gp, 'lta', (gp.axes[2] + 1) / 2)) merged.lt = true;
       if (trigger(gp, 'rta', (gp.axes[5] + 1) / 2)) merged.rt = true;
     }
-    const [ax, ay] = gp.axes;
-    if (ax < -0.55) merged.left = true;
-    if (ax > 0.55) merged.right = true;
-    if (ay < -0.55) merged.up = true;
-    if (ay > 0.55) merged.down = true;
+    // Left stick (0.9.3 K, B1): only the stronger axis counts, so a slightly diagonal push never moves
+    // two ways at once, and a direction lets go only below 0.35 after passing 0.55, so a stick
+    // resting near the edge doesn't flicker into double moves.
+    const [ax = 0, ay = 0] = gp.axes;
+    const held = stickHeld[gp.index] || (stickHeld[gp.index] = {});
+    const horiz = Math.abs(ax) >= Math.abs(ay);
+    for (const [dir, v, on] of [['left', -ax, horiz], ['right', ax, horiz], ['up', -ay, !horiz], ['down', ay, !horiz]]) {
+      held[dir] = on && (v > 0.55 || (held[dir] && v > 0.35));
+      if (held[dir]) merged[dir] = true;
+    }
   }
   padLive.pads = pads;
   if (document.hasFocus()) for (const key of ACTIONS) press(key, !!merged[key], now);

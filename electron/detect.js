@@ -496,4 +496,17 @@ function identifyInWorker(cands, prevList, onProgress, log) {
   });
 }
 
-module.exports = { identifyAll, identifyInWorker, missingFuse2, flatpakCanSee, appImageType, isElf, readAppImage, parseDesktop, parseAppStream, identify, identifyProgram, walk, menuEntries, srmConfigs, extraBinDirs, execName, FAMILY, KNOWN };
+// one file from inside an AppImage (PCSX2's patches.zip lives in its usr/bin/resources), or null
+function readAppImageFile(file, inner, max = 64 << 20) {
+  let fd;
+  try {
+    fd = fs.openSync(file, 'r');
+    let base = elfInfo(fd).end;
+    if (readAt(fd, base, 4).toString('latin1') !== 'hsqs') { const i = readAt(fd, base, 1 << 20).indexOf('hsqs'); if (i < 0) return null; base += i; } // a little padding
+    const fsys = squashfs(fd, base);
+    const node = fsys && fsys.lookup(inner);
+    return node && node.type === 'file' ? fsys.readFile(node, max) : null;
+  } catch { return null; } finally { if (fd !== undefined) try { fs.closeSync(fd); } catch {} }
+}
+
+module.exports = { readAppImageFile, identifyAll, identifyInWorker, missingFuse2, flatpakCanSee, appImageType, isElf, readAppImage, parseDesktop, parseAppStream, identify, identifyProgram, walk, menuEntries, srmConfigs, extraBinDirs, execName, FAMILY, KNOWN };

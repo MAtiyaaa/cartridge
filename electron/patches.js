@@ -175,4 +175,156 @@ function shadSet(userDir, changes, mine = {}) {
   return rec;
 }
 
-module.exports = { parseSfo, sfoAt, rpcs3Dirs, ps3Version, rpcs3List, rpcs3Set, shadDirs, ps4Version, shadList, shadSet, load, dump };
+// ---------------------------------------------------------------- PCSX2 (PS2)
+// From PCSX2's source (pcsx2/Patch.cpp, GameList.cpp, VMManager.cpp, Pcsx2Config.cpp):
+// - a game's patches are <SERIAL>_<CRC>.pnach (or <CRC>.pnach) in its own patches.zip (resources
+//   folder of the install, inside the AppImage too) and in the user's patches folder;
+// - [Name] starts a patch, author= and description= (else comment=) describe it;
+// - which are on: the game's own settings file gamesettings/<SERIAL>_<CRC>.ini, section [Patches],
+//   one "Enable = <Name>" line each;
+// - serial and CRC come from PCSX2's game list cache (cache/gamelist.cache, version 34: per game
+//   path, serial, title, title_sort, title_en as u32-length strings, type u8, region u8, size u64,
+//   modified u64, crc u32, rating u8, little-endian). So the game must be in PCSX2's game list.
+// Data folder: $XDG_CONFIG_HOME/PCSX2, ~/.config/PCSX2, the Flatpak's; folders from inis/PCSX2.ini.
+function pcsx2Dirs(home = os.homedir()) {
+  const roots = [process.env.XDG_CONFIG_HOME && path.join(process.env.XDG_CONFIG_HOME, 'PCSX2'), path.join(home, '.config/PCSX2'), path.join(home, '.var/app/net.pcsx2.PCSX2/config/PCSX2')].filter(Boolean);
+  const out = [];
+  for (const root of [...new Set(roots)]) {
+    if (!exists(path.join(root, 'inis'))) continue;
+    let ini = ''; try { ini = fs.readFileSync(path.join(root, 'inis', 'PCSX2.ini'), 'utf8'); } catch {}
+    const folders = iniSection(ini, 'Folders');
+    const at = (k, def) => { const v = (folders.find((x) => x[0] === k) || [])[1] || def; return path.isAbsolute(v) ? v : path.join(root, v); };
+    out.push({ root, cache: at('Cache', 'cache'), patches: at('Patches', 'patches'), gamesettings: at('GameSettings', 'gamesettings'), flatpak: root.includes('/.var/app/') });
+  }
+  return out;
+}
+// [Section] key = value pairs, in order, repeated keys kept
+function iniSection(text, name) {
+  const out = []; let inside = false;
+  for (const raw of String(text || '').split(/\r?\n/)) {
+    const line = raw.trim();
+    if (/^\[.*\]$/.test(line)) { inside = line.slice(1, -1).trim() === name; continue; }
+    if (!inside || !line || /^[;#]/.test(line)) continue;
+    const i = line.indexOf('=');
+    if (i > 0) out.push([line.slice(0, i).trim(), line.slice(i + 1).trim()]);
+  }
+  return out;
+}
+function pcsx2GameList(cacheDir) {
+  const out = [];
+  let b; try { b = fs.readFileSync(path.join(cacheDir, 'gamelist.cache')); } catch { return out; }
+  if (b.length < 8 || b.readUInt32LE(0) !== 0x45434c47 || b.readUInt32LE(4) !== 34) return out;
+  let p = 8;
+  const str = () => { const n = b.readUInt32LE(p); p += 4; if (n > 1 << 20 || p + n > b.length) throw new Error('bad'); const v = b.toString('utf8', p, p + n); p += n; return v; };
+  try {
+    while (p < b.length) {
+      const file = str(), serial = str(); str(); str(); str();
+      p += 2 + 8 + 8; const crc = b.readUInt32LE(p); p += 4 + 1;
+      out.push({ path: file, serial, crc });
+    }
+  } catch {}
+  return out;
+}
+// serial and CRC for a game file Cartridge knows, by its real path (or, failing that, its name)
+function pcsx2Game(dir, file) {
+  const list = pcsx2GameList(dir.cache);
+  const real = (f) => { try { return fs.realpathSync(f); } catch { return f; } };
+  const want = real(file);
+  const hit = list.find((g) => real(g.path) === want) || list.find((g) => path.basename(g.path) === path.basename(file));
+  return hit && hit.crc ? { serial: hit.serial, crc: hit.crc } : null;
+}
+const crcHex = (crc) => (crc >>> 0).toString(16).toUpperCase().padStart(8, '0');
+// patches.zip from the PCSX2 that is installed: AppImage (read from inside it), Flatpak, distro package
+function pcsx2ZipSources(home = os.homedir(), appImages = []) {
+  const files = [];
+  for (const base of ['/var/lib/flatpak', path.join(home, '.local/share/flatpak')]) for (const sub of ['files/bin/resources', 'files/share/PCSX2/resources']) files.push(path.join(base, 'app/net.pcsx2.PCSX2/current/active', sub, 'patches.zip'));
+  files.push('/usr/share/PCSX2/resources/patches.zip', '/usr/share/pcsx2/resources/patches.zip', '/usr/lib/pcsx2/resources/patches.zip', '/usr/bin/resources/patches.zip', '/opt/pcsx2/resources/patches.zip');
+  return { files: files.filter(exists), appImages };
+}
+function pcsx2ZipBuffer(src, readAppImageFile) {
+  for (const f of src.files) { try { return fs.readFileSync(f); } catch {} }
+  for (const a of src.appImages) { const b = readAppImageFile && readAppImageFile(a, 'usr/bin/resources/patches.zip'); if (b) return b; }
+  return null;
+}
+function zipEntryText(buf, names) {
+  const yauzl = require('yauzl');
+  return new Promise((resolve) => {
+    yauzl.fromBuffer(buf, { lazyEntries: true }, (err, zip) => {
+      if (err) return resolve(null);
+      let done = false;
+      zip.on('entry', (e) => {
+        if (!names.includes(e.fileName)) return zip.readEntry();
+        zip.openReadStream(e, (er, st) => {
+          if (er) return resolve(null);
+          const parts = []; st.on('data', (c) => parts.push(c)); st.on('end', () => { done = true; zip.close(); resolve(Buffer.concat(parts).toString('utf8')); });
+        });
+      });
+      zip.on('end', () => { if (!done) resolve(null); });
+      zip.readEntry();
+    });
+  });
+}
+// the patches in a .pnach text: [Name] blocks with their author and description
+function pnachList(text) {
+  const out = []; let cur = null;
+  for (const raw of String(text || '').split(/\r?\n/)) {
+    const line = raw.replace(/\/\/.*$/, '').trim();
+    if (!line) continue;
+    if (line.length > 2 && line[0] === '[' && line.endsWith(']')) { cur = { name: line.slice(1, -1), author: '', description: '' }; if (!out.some((x) => x.name === cur.name)) out.push(cur); continue; }
+    const i = line.indexOf('=');
+    if (!cur || i < 0) continue;
+    const k = line.slice(0, i).trim(), v = line.slice(i + 1).trim();
+    if (k === 'author') cur.author = v;
+    else if (k === 'description') cur.description = v;
+    else if (k === 'comment' && !cur.description) cur.description = v;
+  }
+  return out;
+}
+async function pcsx2List(dir, game, zipBuf, mine = {}) {
+  const names = [`${game.serial}_${crcHex(game.crc)}.pnach`, `${crcHex(game.crc)}.pnach`];
+  const texts = [];
+  for (const n of names) { try { texts.push(fs.readFileSync(path.join(dir.patches, n), 'utf8')); } catch {} }
+  if (zipBuf) { const t = await zipEntryText(zipBuf, names); if (t) texts.push(t); }
+  const enabled = new Set(iniSection(readIni(dir, game), 'Patches').filter(([k]) => k === 'Enable').map(([, v]) => v));
+  const seen = new Set(), out = [];
+  for (const p of texts.flatMap(pnachList)) {
+    if (seen.has(p.name)) continue; // the first one loaded wins, as in PCSX2
+    seen.add(p.name);
+    const key = ['pcsx2', game.serial, crcHex(game.crc), p.name].join('\u0001');
+    const on = enabled.has(p.name);
+    out.push({ key, name: p.name, description: p.name, notes: p.description, author: p.author, version: 'All', on, by: on ? (mine[key] ? 'cartridge' : 'emulator') : null });
+  }
+  return out.sort((a, b) => a.description.localeCompare(b.description));
+}
+const gameIni = (dir, game) => path.join(dir.gamesettings, `${game.serial ? game.serial.replace(/[\\/:*?"<>|]/g, '_') + '_' : ''}${crcHex(game.crc)}.ini`);
+function readIni(dir, game) { try { return fs.readFileSync(gameIni(dir, game), 'utf8'); } catch { return ''; } }
+// adds or removes only "Enable = <name>" lines for the patches picked; the rest of the file stays as it is
+function pcsx2Set(dir, game, changes, mine = {}) {
+  const rec = { ...mine };
+  const todo = changes.filter((c) => c.on || rec[c.key]);
+  if (!todo.length) return rec;
+  const f = gameIni(dir, game);
+  let text = readIni(dir, game);
+  const nl = text.includes('\r\n') ? '\r\n' : '\n';
+  let lines = text ? text.split(/\r?\n/) : [];
+  if (lines.length && lines[lines.length - 1] === '') lines.pop();
+  let start = lines.findIndex((l) => l.trim() === '[Patches]');
+  for (const c of todo) {
+    const isLine = (l) => { const m = /^\s*Enable\s*=\s*(.*?)\s*$/.exec(l); return m && m[1] === c.name; };
+    if (c.on) {
+      if (start < 0) { if (lines.length) lines.push(''); lines.push('[Patches]'); start = lines.length - 1; }
+      let end = start + 1; while (end < lines.length && !/^\s*\[/.test(lines[end])) end++;
+      if (!lines.slice(start + 1, end).some(isLine)) { let at = end; while (at > start + 1 && !lines[at - 1].trim()) at--; lines.splice(at, 0, `Enable = ${c.name}`); }
+      rec[c.key] = true;
+    } else {
+      if (start >= 0) { let end = start + 1; while (end < lines.length && !/^\s*\[/.test(lines[end])) end++; for (let i = end - 1; i > start; i--) if (isLine(lines[i])) lines.splice(i, 1); }
+      delete rec[c.key];
+    }
+  }
+  fs.mkdirSync(path.dirname(f), { recursive: true });
+  if (exists(f) && !exists(f + '.cartridge-backup')) fs.copyFileSync(f, f + '.cartridge-backup');
+  fs.writeFileSync(f + '.tmp', lines.join(nl) + nl); fs.renameSync(f + '.tmp', f);
+  return rec;
+}
+
+module.exports = { parseSfo, sfoAt, rpcs3Dirs, ps3Version, rpcs3List, rpcs3Set, shadDirs, ps4Version, shadList, shadSet, load, dump, pcsx2Dirs, pcsx2GameList, pcsx2Game, pcsx2ZipSources, pcsx2ZipBuffer, pnachList, pcsx2List, pcsx2Set, crcHex };

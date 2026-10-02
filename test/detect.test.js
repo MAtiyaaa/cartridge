@@ -225,6 +225,7 @@ test('0.9.3 B emulators: the exact launch line of each (read from their own sour
     w('/Applications/Mesen.AppImage');
     w('/Applications/Play!-abc123-x86_64.AppImage');
     w('/Applications/xenia_edge_linux.AppImage');
+    w('/Applications/xenia_canary/xenia_canary.exe');
     flatpaks.push('io.github.shiiion.primehack');
   });
   const c = candidates(H, ['nds', 'n64', 'snes', 'nes', 'ps2', 'saturn', 'gc', 'xbox360']);
@@ -237,6 +238,8 @@ test('0.9.3 B emulators: the exact launch line of each (read from their own sour
   line('ps2', /^Play! => ~\/Applications\/Play!-abc123-x86_64\.AppImage --fullscreen --disc "\{ROM\}"$/);
   line('saturn', /^Kronos => ~\/bin\/kronos -a -f -i "\{ROM\}"$/);
   line('xbox360', /^Xenia Edge => ~\/Applications\/xenia_edge_linux\.AppImage --fullscreen=true "\{ROM\}"$/);
+  // 0.9.3 K (K1): Xenia Canary's Windows build, through Proton
+  line('xbox360', /^Xenia \(Windows\) => ~\/Applications\/xenia_canary\/xenia_canary\.exe --fullscreen=true "Z:\{ROM\}"$/);
   // PrimeHack is a Dolphin fork: listed as one, last, never the default
   assert.match(c.gc[c.gc.length - 1], /^PrimeHack · fork of Dolphin => \/usr\/bin\/flatpak run io\.github\.shiiion\.primehack -b -e "\{ROM\}"$/, c.gc.join('\n'));
 });

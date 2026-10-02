@@ -26,7 +26,7 @@ export const store = reactive({
   logoJob: null,
   manualSync: false,
   update: { state: 'idle' },
-  achTab: 'ra', // Achievements tab: 'ra' | 'others'
+  achTab: 'all', // Achievements tab: 'all' | 'ra' | 'others'
   trophyVer: 0, // bumps whenever emulator trophies change
   iconVer: 0, // bumps when a game icon is changed or reset
   trophySync: { state: 'idle' },
@@ -35,6 +35,7 @@ export const store = reactive({
   play: {}, // romId -> { min, last, src }: play time from Steam and RetroArch (0.8)
   issues: 0, // things waiting in Settings → Emulators → Issues (0.9.3)
   homeLists: {}, // a Home row opened with Show all (0.9.3)
+  sharp: {}, // rom id -> sharp SteamGridDB background url (0.9.3 K)
   deleting: {}, // romId -> percent deleted, while a game is being deleted (0.9.3)
 });
 
@@ -159,10 +160,24 @@ export function cover(rom, large = false) {
   const p = (large ? rom.path_cover_large || rom.path_cover_small : rom.path_cover_small || rom.path_cover_large) || rom.url_cover;
   return img(p);
 }
+// Sharp backgrounds (0.9.3 K, F2/F3): SteamGridDB's biggest hero for a game, asked for once it has
+// been highlighted for a moment (main.js sharpHero caches it). undefined: not asked yet, null: none.
+const sharpWait = new Set();
+let sharpT = 0;
+export function wantSharp(rom) {
+  if (!rom || !store.config?.sgdbKey || rom.id in store.sharp || sharpWait.has(rom.id)) return;
+  clearTimeout(sharpT);
+  sharpT = setTimeout(async () => {
+    sharpWait.add(rom.id);
+    try { store.sharp[rom.id] = await call('art:sharpHero', { id: rom.id, name: rom.name }); } catch { /* offline: ask again later */ }
+    sharpWait.delete(rom.id);
+  }, 350);
+}
 export function backdropOf(rom) {
   if (!rom) return '';
   const h = store.art?.[rom.id]?.hero;
   if (h) return { src: img(h), blur: false };
+  if (store.sharp[rom.id]) return { src: store.sharp[rom.id], blur: false };
   if (rom.shot) return { src: img(rom.shot), blur: false };
   const c = cover(rom, true);
   return c ? { src: c, blur: true } : '';

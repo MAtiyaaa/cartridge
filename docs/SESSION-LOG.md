@@ -6,6 +6,75 @@ The branch for 0.9.3 work is `claude/relaxed-fermat-30pigp`. Pull it before star
 
 ---
 
+## 2 Oct 2026 · Owner's list for 0.9.3 L
+
+The owner added 14 fixes for 0.9.3 L (listed in `docs/plan-0.9.3.md`, section "0.9.3 L"), plus F1 backgrounds carried from K. Two of them were questions, answered in chat:
+- **Sign in to RetroAchievements in every emulator:** technically possible for RetroArch, PCSX2, DuckStation, PPSSPP and Dolphin (each keeps an RA user and login token in its own settings), but Cartridge only has the Web API key, which can't log an emulator in: it would need the user's RA password once, and it means writing emulator settings (a third exception to "never modifies emulator files"). Owner to decide.
+- **PS3 settings from a database at download:** RPCS3 reads per-game settings from `config/custom_configs/config_<SERIAL>.yml`, so writing one is possible. But there is no machine-readable database of recommended settings (the RPCS3 wiki has them as prose per game), and it is again writing emulator files. Owner to decide.
+
+---
+
+## 2 Oct 2026 · 0.9.3 K built (read this first)
+
+Everything that needed no decision, plus the owner's picks (entry below), in one update: version 0.9.13, `versionName` "0.9.3 K". Details per feature are in `CLAUDE.md` (0.9.3 K section) and `RELEASE_NOTES.md`.
+
+**Built:** E2 one trophy home; H1 recommendations with reasons (IGDB optional); B3 rumble; F6 quiet connection icon; G4 A (Look & Feel pages + Advanced) and G4 B (one bottom sheet with tabs); shadPS4 core launch choice (A10 test); E6 shadPS4 trophy lists decrypted into Cartridge's cache; E1 names for code-only trophy games; D7 PCSX2 patches; F2 bigger, edgeless headers; F3 sharpest SteamGridDB heroes (headers, idle); H2 RomM version check in Issues; K1 Xenia Windows build through Proton; K2 Flatpak Steam through flatpak-spawn --host; B1 stick hysteresis and dominant axis; J13 tests (Shortcut health, Flatpak Steam, recs, TRP, PCSX2); J14 HANDOFF.md updated.
+
+**Checked here:** `npm test` (all pass), `vite build`, screenshots at 1280x800 and 1920x1080 of Achievements All, the sheets, Look & Feel pages, Home.
+
+**Not done, with reasons:**
+- F5 company logos: needs artwork; drawing Sony, Nintendo or Sega logos would copy their trademarks. Needs the owner's call on a source.
+- BigPEmu (K1): closed source, so its launch line can't be read from source (the rule for new emulators).
+- E1's built-in list of trophy codes to names: no reliable public source to copy; names come from RomM notes and the library instead.
+- J6 performance: can't be measured meaningfully in the cloud container (no real art, no device GPU). J11 screen review: only the screens above were reviewed.
+- G4 A "hide empty rows everywhere in Settings": not audited row by row.
+
+**Owner to test on a device:**
+- PS4: pick "shadPS4 core · without the launcher" on the PS4 console page, Update the shortcut, start a game from Steam; then send shadPS4's log: `~/.local/share/shadPS4/log/shadps4.log` (current builds; the old name was shad_log.txt).
+- PS4 trophies show names for games played before the key was set.
+- PCSX2: Patches on a PS2 game that PCSX2 has in its game list; check PCSX2 shows it on.
+- Rumble in Game Mode (Steam's controller rumble must be on). Stick feel.
+- Flatpak Steam (if anyone has it): the Issues entry, then a game starts.
+- Sharp headers need a SteamGridDB key.
+- Reminder for the owner: the stray `v2.3.1` tag (asked to be reminded in this update).
+
+---
+
+## 2 Oct 2026 · Owner's picks for 0.9.3 K (decided in chat)
+
+The owner asked for everything not yet built that needs no decision, plus the Discuss items, to ship together as **0.9.3 K** (version 0.9.13). Picks:
+- **E2 Trophies:** A, one trophy home (RetroAchievements and Trophies & Gamerscore in one page, latest unlocks from both, games by console, LB/RB filter by source).
+- **F1 Console backgrounds:** moved to **0.9.3 L**, not in K.
+- **F6 Connection pill:** A, quiet icon next to the clock (house LAN, globe Tunnel, white), colour only when offline.
+- **G4 Clutter:** C, both: Look & Feel split into short pages with an Advanced group and no empty rows, and one shared bottom sheet for secondary menus.
+- **H1 Recommendations:** IGDB's similar games when the server has them, but it must work without IGDB: genres, series, developer from whatever metadata RomM has, weighted by play history, with a short reason on each card.
+- **I1 Syncthing:** moved to 1.0, not built.
+- **shadPS4 A10:** add a way to launch the shadPS4 core directly (not the Qt launcher); the owner tests it from K and sends `shad_log.txt`.
+- **v2.3.1 tag:** remind the owner again in the next update.
+
+---
+
+## 2 Oct 2026 · Morning summary of the night run
+
+**Released overnight**, each after npm test, vite build, screenshots and a green branch test build (PRs #22 to #28):
+- **0.9.3 D** Vita games through Vita3K; PS3 `.rap` licences found in the download or RomM, no install without; package games wait for the install before Steam; shorter grouped More menu.
+- **0.9.3 E** PS3 patches (RPCS3's own list, saved in RPCS3's patch settings).
+- **0.9.3 F** PS4 patches (shadPS4's own patch files).
+- **0.9.3 G** Refresh Library, title case, plain Trophies tab, Hide and Hidden Games, RetroAchievements filter and sort.
+- **0.9.3 H** One RomM tab in Settings, Report a problem, full device names, shadPS4 trophy key guide.
+- **0.9.3 I** Score and age rating badges, logos on the idle screen.
+- **0.9.3 J** RomM data read defensively (contract test), per-game emulator test, CLAUDE.md 0.9.3 summary.
+
+**Needs the owner**
+- Pick options for the Discuss items: `docs/options-0.9.3.md` (E2, F1, F6, G4, H1, I1).
+- shadPS4 first-launch: the direct core test or the `shad_log.txt` tail (see the evening entry).
+- Device tests: Install in RPCS3 with a `.rap` from RomM, Get licence on Tokyo Jungle, Vita installs, Patches on a PS3 and a PS4 game, Report a problem QR, Refresh Library.
+- The stray release branches `claude/relaxed-fermat-30pigp-release-g` and `-release-i` can be deleted (each holds an exact tested commit that was merged).
+
+**Not done** (reasons in the entries below): PCSX2 patches, E1, E6, F2, F3, F5, K1, K2, J6, J11, HANDOFF.md rewrite, H2's start-up RomM version check.
+
+---
+
 ## 2 Oct 2026 (night run) · 0.9.3 J (plan H2, J13, CLAUDE.md)
 
 - **H2** `electron/romm.js`: `slimRom`, `userOf`, `logoPath`, `hltbHours` moved out of main.js and hardened (`arr`/`str`/`obj` guards). `test/romm.test.js`: a RomM 4 game, an old server's bare game, null and odd values. Not done from H2: a RomM version check at start that turns features off cleanly.

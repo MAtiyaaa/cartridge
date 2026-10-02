@@ -27,7 +27,10 @@ const EMU = {
   // xemu only loads a game given as -dvd_path; EmuDeck's launcher is xemu-emu.sh
   xemu: { label: 'xemu', scripts: ['xemu-emu.sh', 'xemu.sh'], app: /xemu/i, fp: ['app.xemu.xemu'], bin: ['xemu'], args: '-full-screen -dvd_path "{ROM}"', for: ['xbox'] },
   // Xenia runs under Proton inside EmuDeck's launcher, so the game needs a Windows path (Z: is /)
-  xenia: { label: 'Xenia', scripts: ['xenia.sh'], args: '"Z:{ROM}"', for: ['xbox360'] },
+  // win: Xenia Canary's Windows build (xenia_canary.exe) started through Proton, as EmuDeck does
+  // (0.9.3 K, K1): the game is the positional target as a Windows path (Z: is /), fullscreen is a
+  // cvar (xenia app/emulator_window.cc)
+  xenia: { label: 'Xenia', scripts: ['xenia.sh'], win: /^xenia_canary\.exe$/i, args: '"Z:{ROM}"', argsBy: { windows: '--fullscreen=true "Z:{ROM}"' }, for: ['xbox360'] },
   // Vita games run once installed in Vita3K (from their .pkg/.vpk), started by title ID like EmuDeck does
   vita3k: { label: 'Vita3K', scripts: ['vita3k.sh'], app: /vita3k/i, fp: [], bin: ['Vita3K', 'vita3k'], args: '-F -r {SERIAL}', kind: 'vitaid', for: ['psvita'] },
   mgba: { label: 'mGBA', scripts: ['mgba.sh'], app: /mgba/i, fp: ['io.mgba.mGBA'], bin: ['mgba-qt', 'mgba'], args: '-f "{ROM}"', for: ['gb', 'gbc', 'gba'] },

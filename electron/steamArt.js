@@ -129,10 +129,14 @@ async function addToSteam({ exe, artDir, restartSteam }) {
     if (!(await waitForSteamExit(30000))) throw new Error('Steam did not close. Close it and try again.');
   }
   const name = 'Cartridge';
-  const quotedExe = `"${exe}"`;
-  const appid = shortcutId(quotedExe, name);
   const results = [];
   for (const root of roots) {
+    // Flatpak Steam runs shortcuts in its sandbox: Cartridge starts on the system through
+    // flatpak-spawn --host instead (0.9.3 K, K2; Steam needs the Flatpak permission, see Issues)
+    const fp = root.includes('com.valvesoftware.Steam');
+    const quotedExe = fp ? '"/usr/bin/flatpak-spawn"' : `"${exe}"`;
+    const launchOptions = fp ? `--host --directory="${path.dirname(exe)}" "${exe}"` : '';
+    const appid = shortcutId(quotedExe, name);
     for (const uid of steamUsers(root)) {
       const cfg = path.join(root, 'userdata', uid, 'config');
       const vdf = path.join(cfg, 'shortcuts.vdf');
@@ -145,7 +149,7 @@ async function addToSteam({ exe, artDir, restartSteam }) {
       const icon = installArt(path.join(cfg, 'grid'), appid, artDir);
       let entry = Object.values(list).find(isCartridge);
       const fields = {
-        appid, AppName: name, Exe: quotedExe, StartDir: `"${path.dirname(exe)}"`, icon, ShortcutPath: '', LaunchOptions: '',
+        appid, AppName: name, Exe: quotedExe, StartDir: `"${path.dirname(exe)}"`, icon, ShortcutPath: '', LaunchOptions: launchOptions,
         IsHidden: 0, AllowDesktopConfig: 1, AllowOverlay: 1, OpenVR: 0, Devkit: 0, DevkitGameID: '', DevkitOverrideAppID: 0,
         LastPlayTime: 0, FlatpakAppID: '', tags: {},
       };

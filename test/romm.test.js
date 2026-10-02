@@ -3,7 +3,7 @@
 // never an error that stops a sync.
 const test = require('node:test');
 const assert = require('node:assert');
-const { slimRom, userOf } = require('../electron/romm.js');
+const { slimRom, userOf, rommTooOld } = require('../electron/romm.js');
 
 // a RomM 4 game, the shape Cartridge was written against
 const ROMM4 = {
@@ -50,4 +50,10 @@ test('null and odd values never throw (a newer or broken server)', () => {
   assert.strictEqual(g.logo, null);
   assert.doesNotThrow(() => slimRom(null));
   assert.strictEqual(userOf({}), null);
+});
+
+test('RomM version check: only a real old version counts as too old', () => {
+  assert.strictEqual(rommTooOld('2.3.1'), true);
+  assert.strictEqual(rommTooOld('v2.0.0'), true);
+  for (const v of ['3.0.0', '3.10.2', '4.3.0', 'development', 'unknown', '', null, 4]) assert.strictEqual(rommTooOld(v), false, String(v));
 });

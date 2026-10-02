@@ -122,17 +122,19 @@ const consoleFilter = ref(null);
 const PAGE = 120;
 const limit = ref(PAGE);
 // Show and Sort menus, and More (Surprise me, Select, Get all)
-async function pickShow() {
-  const v = await choose({ title: 'Show', options: filters.map((f) => ({ label: f.l, value: f.v, icon: f.icon, selected: filter.value === f.v })) });
-  if (v) filter.value = v;
+// Show and Sort are one sheet with two tabs (0.9.3 K, G4 B); each button opens it on its own tab
+async function showSort(tab) {
+  const v = await choose({ title: title.value, tab, tabs: [
+    { label: 'Show', options: filters.map((f) => ({ label: f.l, value: 'f:' + f.v, icon: f.icon, selected: filter.value === f.v })) },
+    { label: 'Sort by', options: sorts.map((x) => ({ label: x.l, value: 's:' + x.v, icon: x.icon, selected: sort.value === x.v })) },
+  ] });
+  if (v?.startsWith('f:')) filter.value = v.slice(2);
+  else if (v?.startsWith('s:')) sort.value = v.slice(2);
 }
-async function pickSort() {
-  const v = await choose({ title: 'Sort by', options: sorts.map((x) => ({ label: x.l, value: x.v, icon: x.icon, selected: sort.value === x.v })) });
-  if (v) sort.value = v;
-}
+const pickShow = () => showSort(0), pickSort = () => showSort(1);
 async function moreActions() {
   const canGetAll = missingCount.value && filter.value !== 'installed' && mode.value !== 'all';
-  const v = await choose({ title: title.value, options: [
+  const v = await choose({ title: title.value, sheet: true, options: [
     { label: 'Surprise me', sub: 'Open a random game from this list', value: 'surprise', icon: 'mdiDiceMultipleOutline' },
     { label: 'Select games', sub: 'Download, collect or add many to Steam', value: 'select', icon: 'mdiCheckboxMultipleMarkedOutline' },
     ...(canGetAll ? [{ label: `Get all ${missingCount.value}`, sub: 'Download every game here not on this device', value: 'all', icon: 'mdiDownloadMultiple' }] : []),
