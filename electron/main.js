@@ -140,7 +140,7 @@ function watchGamescopeFocus() {
   const gid = process.env.SteamGameId || process.env.STEAM_GAME_ID || '';
   if (!isGamescope() || !/^\d+$/.test(gid)) return;
   let mine = BigInt(gid); if (mine > 0xffffffffn) mine >>= 32n;
-  let last = null, busy = false;
+  let last = null, busy = false, seen = new Set(), first = true, hiddenFor = 0, tick = false;
   setInterval(() => {
     if (busy) return; busy = true;
     require('child_process').execFile('xprop', ['-root', 'GAMESCOPE_FOCUSED_APP'], { timeout: 1500 }, (err, out) => {
@@ -149,8 +149,30 @@ function watchGamescopeFocus() {
       if (err || !m) return;
       const away = BigInt(m[1]) !== mine && m[1] !== '0';
       if (away !== last) { last = away; broadcast('background', { away }); }
+      // F11: a game Steam just started has no window yet, so gamescope shows the one it has (ours).
+      // Stay unmapped until the game holds focus (769 is Steam's own UI) or 45 s pass, then come back behind it.
+      if (hiddenFor && ((away && m[1] !== '769') || Date.now() - hiddenFor > 45000)) { hiddenFor = 0; try { win?.showInactive(); } catch {} }
     });
+    if ((tick = !tick)) return; // the process scan every other round is quick enough
+    const now = steamLaunches(gid, mine);
+    const fresh = [...now].some((p) => !seen.has(p));
+    seen = now;
+    if (fresh && first) { first = false; return; }
+    first = false;
+    if (fresh && win && !win.isDestroyed() && win.isVisible()) { log('steam started another game, stepping aside'); hiddenFor = Date.now(); win.hide(); }
   }, 600);
+}
+// pids of Steam's launch wrappers (reaper SteamLaunch AppId=N) for any app but ours
+function steamLaunches(gid, mine) {
+  const out = new Set();
+  let ids = []; try { ids = fs.readdirSync('/proc').filter((d) => /^\d+$/.test(d)); } catch { return out; }
+  for (const id of ids) {
+    let c = ''; try { c = fs.readFileSync(`/proc/${id}/cmdline`, 'utf8'); } catch { continue; }
+    if (!c.includes('SteamLaunch')) continue;
+    const a = /AppId=(\d+)/.exec(c);
+    if (a && a[1] !== gid && a[1] !== String(mine)) out.add(id);
+  }
+  return out;
 }
 function isGamescope() {
   const e = process.env;
