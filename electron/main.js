@@ -952,7 +952,9 @@ async function raOverview({ force } = {}) {
     const idx = raRomIndex();
     return {
       user: profile.User || config.ra.user,
-      avatar: raMedia(profile.UserPic),
+      // the picture keeps its address when it changes, and images are cached by address: ask again every
+      // few hours, and at once on Refresh (0.9.3 L)
+      avatar: profile.UserPic ? `${raMedia(profile.UserPic)}${raMedia(profile.UserPic).includes('?') ? '&' : '?'}v=${force ? Date.now() : Math.floor(Date.now() / 216e5)}` : '',
       points: profile.TotalPoints || 0,
       softPoints: profile.TotalSoftcorePoints || 0,
       truePoints: profile.TotalTruePoints || 0,
