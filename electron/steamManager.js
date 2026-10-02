@@ -89,7 +89,20 @@ function readShortcuts(acc) {
       const extra = toks.slice(1).map((t) => t.raw).join(' ');
       lo = /%command%/.test(lo) ? lo.replace('%command%', `%command% ${extra}`) : `%command% ${extra}${lo ? ' ' + lo : ''}`;
     }
-    return { appid: (e.appid ?? 0) >>> 0, name: e.AppName || e.appname || '', exe, exeRaw, start: unq(e.StartDir || ''), lo, loRaw: e.LaunchOptions || '', last: e.LastPlayTime || 0 };
+    // Flatpak Steam shortcuts made by Cartridge (0.9.3 K): flatpak-spawn --host [--directory= --env=]
+    // [wrappers] "exe" args. Read as the program on the system, so health and learning see it.
+    let start = unq(e.StartDir || ''), host = false;
+    if (/(^|\/)flatpak-spawn$/.test(exe)) {
+      const lt = tokenize(lo);
+      if (lt[0]?.val === '--host') {
+        let i = 1;
+        const pre = [];
+        for (; i < lt.length && /^--/.test(lt[i].val); i++) { const m = /^--(directory|env)=(.*)$/.exec(lt[i].val); if (m?.[1] === 'directory') start = m[2]; else if (m) pre.push(m[2]); }
+        while (i < lt.length - 1 && !/^\//.test(lt[i].val)) pre.push(lt[i++].raw);
+        if (lt[i]) { exe = lt[i].val; lo = [...pre, ...(pre.length ? ['%command%'] : []), ...lt.slice(i + 1).map((t) => t.raw)].join(' '); host = true; }
+      }
+    }
+    return { appid: (e.appid ?? 0) >>> 0, name: e.AppName || e.appname || '', exe, exeRaw, start, lo, loRaw: e.LaunchOptions || '', last: e.LastPlayTime || 0, host };
   });
 }
 // Steam's text VDF (localconfig.vdf): { key: value | { ... } }
@@ -1511,7 +1524,7 @@ module.exports = function createSteamManager(ctx) {
     gameEmu: (romId) => (cfg().gameEmus || {})[romId] || null,
     addedAt: (romId) => Math.min(...Object.values(reg).filter((r) => r.romId === romId && r.at).map((r) => r.at), Infinity),
     // exposed for tests
-    _learnOne: learnOne, _tokenize: tokenize, _buildLaunch: buildLaunch, _learnAll: learnAll, _candidates: candidates, appImagesFor, flatpakSteamAccess, _hostLaunch: hostLaunch, _startOf: startOf, _templateFor: templateFor, _templateForGame: templateForGame,
+    _learnOne: learnOne, _tokenize: tokenize, _buildLaunch: buildLaunch, _learnAll: learnAll, _readShortcuts: () => { const e = environment(); return e.account ? readShortcuts(e.account) : []; }, _candidates: candidates, appImagesFor, flatpakSteamAccess, _hostLaunch: hostLaunch, _startOf: startOf, _templateFor: templateFor, _templateForGame: templateForGame,
   };
   return api;
 };

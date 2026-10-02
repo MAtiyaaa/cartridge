@@ -104,3 +104,18 @@ test('Flatpak Steam: shortcuts go through flatpak-spawn --host with folder, env 
   assert.deepStrictEqual(out[0], { target: '"/usr/bin/flatpak-spawn"', launch: '--host --directory="/home/u/Apps" --env=vblank_mode=0 gamemoderun "/home/u/Apps/Cemu.AppImage" -f -g "/roms/wiiu/Game.rpx"' });
   assert.strictEqual(out[1], 'needed');
 });
+
+test('Flatpak Steam: a flatpak-spawn shortcut reads back as the emulator, its folder and options', () => {
+  const H = path.join(TMP, 'fpread');
+  const cfg = path.join(H, '.var/app/com.valvesoftware.Steam/data/Steam/userdata/123/config');
+  fs.mkdirSync(cfg, { recursive: true }); fs.mkdirSync(H + '/cfg', { recursive: true });
+  const { writeVdf } = require('../electron/steamArt.js');
+  fs.writeFileSync(path.join(cfg, 'shortcuts.vdf'), writeVdf({ shortcuts: { 0: { appid: 1, AppName: 'Game', Exe: '"/usr/bin/flatpak-spawn"', StartDir: '"/home/u"', LaunchOptions: '--host --directory="/home/u/Apps" --env=vblank_mode=0 gamemoderun "/home/u/Apps/Cemu.AppImage" -f -g "/roms/wiiu/Game.rpx"' } } }));
+  const code = `
+    const sm = require(${JSON.stringify(path.join(ROOT, 'electron/steamManager.js'))})({ USER_DATA: ${JSON.stringify(H + '/cfg')}, log() {}, PLATFORM_MAP: {}, getConfig: () => ({}), saveConfig() {}, broadcast() {},
+      emulationRoots: () => [], getLibrary: () => null, installed: () => ({}), romById: () => null, isGamescope: () => false, artFor: () => ({}), MARKED: 'm', markedPath: () => null });
+    const sc = sm._readShortcuts();
+    console.log(JSON.stringify(sc.map((x) => [x.exe, x.start, x.lo, x.host])));`;
+  const out = JSON.parse(execFileSync(process.execPath, ['-e', code], { env: { ...process.env, HOME: H }, encoding: 'utf8' }).trim().split('\n').pop());
+  assert.deepStrictEqual(out, [['/home/u/Apps/Cemu.AppImage', '/home/u/Apps', 'vblank_mode=0 gamemoderun %command% -f -g "/roms/wiiu/Game.rpx"', true]]);
+});
