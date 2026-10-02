@@ -22,10 +22,10 @@
           </button>
         </template>
 
-        <div class="ad-h">{{ d.source === 'ps2' ? 'PS2 texture packs' : 'From GameBanana' }}</div>
+        <div class="ad-h">{{ d.source === 'ps2' ? (d.gbGame ? 'PS2 texture packs and GameBanana' : 'PS2 texture packs') : 'From GameBanana' }}</div>
         <div v-if="d.error" class="muted small">{{ d.error }}</div>
         <div v-else-if="!d.packs.length" class="muted small">{{ d.source === 'ps2' ? 'No texture packs for this game in the catalog yet.' : d.source ? 'No mods for this game on GameBanana.' : 'No emulator for this console is set up here.' }}</div>
-        <template v-for="p in d.packs" :key="p.id">
+        <template v-for="p in d.packs" :key="p.source + p.id">
           <button class="ad-row" data-focus :disabled="!!run" @click="act(p)">
             <img v-if="p.preview" class="ad-img" :src="p.preview" loading="lazy" />
             <Icon v-else name="mdiPuzzleOutline" :size="22" />
@@ -43,7 +43,7 @@
           </template>
         </template>
         <p v-if="d.source === 'ps2' && d.packs.length" class="muted small">Packs from the EmuCoreX texture catalog, each credited to its creator. Checked against the catalog’s checksum before anything is installed.</p>
-        <p v-if="d.source === 'gb'" class="muted small">Mods made by GameBanana’s community. Check a mod’s page for which version of the game it needs.</p>
+        <p v-if="d.source === 'gb' || d.packs.some((p) => p.source === 'gb')" class="muted small">Mods made by GameBanana’s community. Check a mod’s page for which version of the game it needs.</p>
       </div>
 
       <div class="row" style="justify-content: flex-end; flex-wrap: wrap">
