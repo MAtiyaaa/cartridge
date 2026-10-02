@@ -2,6 +2,7 @@
   <div class="view ach" data-scroll ref="el">
     <div class="ach-switch">
       <Btn b="LB" />
+      <button class="ach-tab" :class="{ on: store.achTab === 'all' }" data-focus data-key="ach-all" @click="set('all')">All</button>
       <button class="ach-tab" :class="{ on: store.achTab === 'ra' }" data-focus data-key="ach-ra" @click="set('ra')">
         <img class="ra-mark" :src="raLogo" alt="" />RetroAchievements
       </button>
@@ -10,7 +11,8 @@
       </button>
       <Btn b="RB" />
     </div>
-    <RaPanel v-if="store.achTab === 'ra'" key="ra" />
+    <AchAll v-if="store.achTab === 'all'" key="all" />
+    <RaPanel v-else-if="store.achTab === 'ra'" key="ra" />
     <TrophyPanel v-else key="others" />
   </div>
 </template>
@@ -19,10 +21,12 @@ import { ref } from 'vue';
 import { store } from '../store.js';
 import Btn from '../components/Btn.vue';
 import Grade from '../components/Grade.vue';
+import AchAll from './AchAll.vue';
 import RaPanel from './RaPanel.vue';
 import TrophyPanel from './TrophyPanel.vue';
 import raLogo from '../assets/ra-logo.png';
-// Two kinds of achievements: RetroAchievements (online) and trophies kept by emulators (Others)
+// One trophy home (0.9.3 K): All (both together), or RetroAchievements (online) or trophies kept by
+// emulators (Others) on their own; LB/RB move between them
 const el = ref(null);
 function set(t) { store.achTab = t; }
 </script>

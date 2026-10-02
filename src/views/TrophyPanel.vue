@@ -45,7 +45,7 @@
           <div class="tp-u-body">
             <div class="tp-u-title"><Grade :g="t.grade" :size="16" />{{ t.name }}</div>
             <div class="tp-u-desc">{{ t.desc }}</div>
-            <div class="tp-u-meta"><span v-if="t.points" class="pts">{{ t.points }} G</span><span>{{ when(t.time) }}</span><span v-if="t.device && t.device !== data.device" class="dev"><Icon name="mdiDevices" :size="13" />{{ t.device }}</span></div>
+            <div class="tp-u-meta"><span v-if="t.points" class="pts">{{ t.points }} G</span><span>{{ when(t.time) }}</span><span v-if="t.device && t.device !== data.device" class="dev"><Icon name="mdiDevices" :size="13" />on {{ t.device }}</span></div>
             <div class="tp-u-game">{{ t.game }} · <ConsoleMark :slug="SLUG[t.src]" :label="t.short" /></div>
           </div>
         </button>
@@ -64,7 +64,7 @@
           <GameIcon :title="g.title" :rom-id="g.romId" :fallback="g.icon || (g.cover ? img(g.cover) : '')" :size="76" :grade="g.kind === 'trophy' ? 'G' : null" :class="{ 'tp-hid': g.hidden }" />
           <div class="tp-g-body">
             <GameLogo class="tp-g-logo" :logo="store.config.ui.logos !== false ? logoFor(g) : null" :name="g.title" cls="tp-g-title" :area="4200" :max-w="200" :max-h="38" />
-            <div class="tp-g-sub"><span class="plat"><ConsoleMark :slug="SLUG[g.src]" :label="g.short" /></span><template v-if="g.last">{{ when(g.last) }}</template><template v-if="g.romId"> · <span class="inlib">In your library</span></template><template v-if="g.remoteOnly"> · <span class="dev">from {{ g.devices[0] || 'another device' }}</span></template></div>
+            <div class="tp-g-sub"><span class="plat"><ConsoleMark :slug="SLUG[g.src]" :label="g.short" /></span><template v-if="g.last">{{ when(g.last) }}</template><template v-if="g.romId"> · <span class="inlib">In your library</span></template><template v-if="g.remoteOnly"> · <span class="dev">on {{ g.devices[0] || 'another device' }}</span></template></div>
             <div class="bar tp-bar"><i :style="{ width: pct(g) + '%' }" /></div>
             <div class="tp-g-prog">
               <template v-if="g.kind === 'gamerscore'"><b>{{ g.score }}</b> / {{ g.possible }} G · {{ g.earned }} of {{ g.total }}</template>
@@ -131,15 +131,17 @@ const games = computed(() => {
   return l;
 });
 const recent = computed(() => (data.value?.recent || []).filter((t) => show.value === 'all' || t.src === show.value));
-async function pickShow() {
+// Show and Sort as one sheet with two tabs (0.9.3 K, G4 B)
+async function showSort(tab) {
   const srcs = [...new Set((data.value?.games || []).map((g) => g.src))];
-  const v = await choose({ title: 'Show', options: [{ label: 'All consoles', value: 'all', icon: 'mdiViewGridOutline', selected: show.value === 'all' }, ...srcs.map((s) => ({ label: PLAT[s] || s, value: s, icon: 'mdiGamepadVariantOutline', selected: show.value === s }))] });
-  if (v) show.value = v;
+  const v = await choose({ title: 'Show and sort', tab, tabs: [
+    { label: 'Show', options: [{ label: 'All consoles', value: 'all', icon: 'mdiViewGridOutline', selected: show.value === 'all' }, ...srcs.map((s) => ({ label: PLAT[s] || s, value: s, icon: 'mdiGamepadVariantOutline', selected: show.value === s }))].map((o) => ({ ...o, value: 'f:' + o.value })) },
+    { label: 'Sort by', options: SORTS.map((x) => ({ label: x.l, value: 's:' + x.v, icon: x.icon, selected: sort.value === x.v })) },
+  ] });
+  if (v?.startsWith('f:')) show.value = v.slice(2);
+  else if (v?.startsWith('s:')) sort.value = v.slice(2);
 }
-async function pickSort() {
-  const v = await choose({ title: 'Sort by', options: SORTS.map((x) => ({ label: x.l, value: x.v, icon: x.icon, selected: sort.value === x.v })) });
-  if (v) sort.value = v;
-}
+const pickShow = () => showSort(0), pickSort = () => showSort(1);
 async function load() {
   try { data.value = await call('trophies:overview'); if (data.value.sync) store.trophySync = data.value.sync; } catch (e) { toast(e.message, 'error'); }
 }

@@ -20,6 +20,17 @@ function userOf(u) {
   const o = { status: u.status || null, backlog: !!u.backlogged, playing: !!u.now_playing, hidden: !!u.hidden, played: u.last_played ? Date.parse(u.last_played) || null : null };
   return o.status || o.backlog || o.playing || o.hidden || o.played ? o : null;
 }
+// The developer (0.9.3 L): RomM keeps developers and publishers apart (metadatum and each source's
+// block); older servers only have one "companies" list, whose first entry can be the publisher, so
+// that is the last resort
+function developerOf(r) {
+  r = obj(r);
+  for (const b of [r.metadatum, r.igdb_metadata, r.ss_metadata, r.launchbox_metadata, r.moby_metadata, r.gamelist_metadata]) {
+    const d = arr(obj(b).developers).find((x) => typeof x === 'string' && x.trim());
+    if (d) return d.trim();
+  }
+  return str(arr(obj(r.metadatum).companies)[0] || '');
+}
 function slimRom(r) {
   r = obj(r);
   const md = obj(r.metadatum), ig = obj(r.igdb_metadata), hl = obj(r.hltb_metadata);
@@ -35,7 +46,7 @@ function slimRom(r) {
     summary: str(r.summary).slice(0, 400),
     regions: arr(r.regions).map(str), files: arr(r.files).filter(Boolean).map((f) => ({ file_name: f.file_name })),
     year: md.first_release_date || null, genres: arr(md.genres).slice(0, 3),
-    developer: (arr(md.developers)[0] || arr(md.companies)[0] || ''), rating: md.average_rating || null,
+    developer: developerOf(r), rating: md.average_rating || null,
     created_at: r.created_at, has_file_on_disk: r.has_file_on_disk !== false,
     // 0.7: series, modes, popularity and length for the automatic collections and filters
     igdb_id: r.igdb_id || null, series: [...new Set(arr(md.franchises))].slice(0, 3), modes: arr(md.game_modes), players: md.player_count || '',
@@ -45,4 +56,15 @@ function slimRom(r) {
   };
 }
 
-module.exports = { slimRom, userOf, logoPath, hltbHours };
+// RomM's version from /api/heartbeat (0.9.3 K, plan H2). Cartridge reads RomM 3 and 4; an older
+// server still syncs, but collections, play status and uploads may be missing, so the Issues list
+// says so once instead of features failing one by one. Dev builds and odd strings count as fine.
+const ROMM_MIN = [3, 0];
+function rommTooOld(v) {
+  const m = /^v?(\d+)\.(\d+)/.exec(str(v).trim());
+  if (!m) return false;
+  const [a, b] = [+m[1], +m[2]];
+  return a < ROMM_MIN[0] || (a === ROMM_MIN[0] && b < ROMM_MIN[1]);
+}
+
+module.exports = { developerOf, slimRom, userOf, logoPath, hltbHours, rommTooOld, ROMM_MIN };

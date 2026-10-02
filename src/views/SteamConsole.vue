@@ -72,7 +72,7 @@ import PIcon from '../components/PIcon.vue';
 const props = defineProps({ ckey: String });
 const el = ref(null);
 const ov = ref(null);
-const HOW = { learned: 'From your shortcuts', yours: 'Set by you', emudeck: 'EmuDeck', appimage: 'AppImage', flatpak: 'Flatpak', native: 'Installed program', retrodeck: 'RetroDECK' };
+const HOW = { learned: 'From your shortcuts', yours: 'Set by you', emudeck: 'EmuDeck', appimage: 'AppImage', flatpak: 'Flatpak', native: 'Installed program', retrodeck: 'RetroDECK', windows: 'Windows build (Proton)' };
 const con = computed(() => ov.value?.consoles.find((c) => c.key === props.ckey) || null);
 const games = computed(() => (ov.value?.games || []).filter((g) => g.console === props.ckey).sort((a, b) => a.name.localeCompare(b.name)));
 const missing = computed(() => games.value.filter((g) => !g.inSteam && g.file && g.queued !== 'add'));
@@ -142,7 +142,7 @@ async function takeOver(c) {
 async function more() {
   const c = con.value;
   const v = await choose({
-    title: c.platform, message: c.template ? `${HOW[c.template.how]}${c.template.from ? ' · ' + c.template.from : ''}` : 'No emulator set',
+    sheet: true, title: c.platform, message: c.template ? `${HOW[c.template.how]}${c.template.from ? ' · ' + c.template.from : ''}` : 'No emulator set',
     options: [
       { label: 'Edit Target, Start in and Launch options', value: 'edit', icon: 'mdiPencil' },
       { label: 'Test', sub: 'Checks the Target exists and can run', value: 'test', icon: 'mdiPlayCircleOutline' },

@@ -105,13 +105,10 @@ img { -webkit-user-drag: none; }
 .dot.ok { background: var(--green); box-shadow: 0 0 10px var(--green); }
 .dot.remote { background: var(--primary-l); box-shadow: 0 0 10px var(--primary); }
 .dot.bad { background: var(--red); }
-/* LAN / Tunnel / Offline in the top bar: a light coloured word on a dark see-through pill, readable on
-   any background colour */
-.net { padding: 5px 12px; border-radius: 999px; background: rgba(8, 9, 16, 0.38); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08); font-weight: 700; font-size: var(--t-xs); letter-spacing: 0.06em; }
-/* the pill itself carries the colour: a dark, nearly solid tint (the same on any background) with an edge */
-.net.ok { color: #c9f9d6; background: rgba(20, 84, 48, 0.92); box-shadow: inset 0 0 0 1px rgba(127, 227, 166, 0.55); }
-.net.remote { color: #e6dbff; background: rgba(70, 44, 132, 0.92); box-shadow: inset 0 0 0 1px rgba(190, 165, 255, 0.55); }
-.net.bad { color: #ffd0d0; background: rgba(112, 30, 36, 0.92); box-shadow: inset 0 0 0 1px rgba(255, 140, 140, 0.55); }
+/* LAN / Tunnel / Offline in the top bar (0.9.3 K, owner's pick F6 A): a quiet white icon, house for
+   LAN, globe for Tunnel; colour only when something is wrong (offline) */
+.net { color: var(--text); }
+.net.bad { color: #ffb4b4; font-weight: 700; font-size: var(--t-xs); letter-spacing: 0.06em; }
 .spin { animation: spin 1.1s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 

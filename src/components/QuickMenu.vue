@@ -8,7 +8,7 @@
           <span>{{ date }}</span>
         </div>
         <div class="qm-pills">
-          <span class="net" :class="netClass">{{ netLabel }}</span>
+          <span class="qm-bpill" :class="{ off: netClass === 'bad' }"><Icon :name="netIcon" :size="16" />{{ netLabel }}</span>
           <span v-if="bat" class="qm-bpill"><Icon :name="batIcon" :size="16" />{{ bat.level }}%</span>
         </div>
       </header>
@@ -96,6 +96,8 @@ async function toggleSounds() { const v = !store.config.ui.sounds; await saveCon
 const now = ref(new Date());
 const time = computed(() => now.value.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
 const date = computed(() => now.value.toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'long' }));
+// the top bar's connection icon (abdu2304's 0.9.3 K: house for LAN, globe for Tunnel, colour only offline)
+const netIcon = computed(() => (store.connection.route === 'local' ? 'mdiHomeOutline' : store.connection.base ? 'mdiEarth' : 'mdiCloudOffOutline'));
 const netClass = computed(() => (store.connection.route === 'local' ? 'ok' : store.connection.base ? 'remote' : 'bad'));
 const netLabel = computed(() => (store.connection.route === 'local' ? 'LAN' : store.connection.base ? 'Tunnel' : 'Offline'));
 const host = computed(() => { try { return new URL(store.connection.base).host; } catch { return ''; } });
@@ -162,6 +164,7 @@ onBeforeUnmount(() => { layer.pop(); clearInterval(timer); });
 .qm-time b { font-family: var(--display); font-stretch: var(--display-stretch); font-size: 40px; font-weight: 800; line-height: 1; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
 .qm-time span { color: var(--muted); font-size: var(--t-sm); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .qm-pills { display: flex; align-items: center; gap: 8px; flex: none; padding-bottom: 3px; }
+.qm-bpill.off { color: #ffb4b4; }
 .qm-bpill { display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px 4px 8px; border-radius: 999px; background: var(--s2); font-size: var(--t-xs); font-weight: 700; font-variant-numeric: tabular-nums; }
 
 /* status card */

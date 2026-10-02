@@ -2,6 +2,27 @@
 
 Every Cartridge release, newest first. Each GitHub release only lists its own changes.
 
+## Cartridge 0.9.13 · Couch and Trophies
+
+Everything from abdu2304's 0.9.3 K and L, with the Android side of it.
+
+### New
+- **From abdu2304's 0.9.3 K and L:** one trophy home (Achievements opens on All: RetroAchievements and emulator trophies together); Recommended for you on Home and better Similar games, each saying why; Rumble in Look & Feel; Manual in the game page's More; background previews in the background picker; RPCS3's recommended settings set for a new PS3 game; PCSX2 patches; Flatpak Steam and Xenia's Windows build on desktop.
+- **Rumble on Android.** Android can't buzz a controller from the app, so the Rumble setting uses the handheld's own vibration motor, a little longer for Medium and High.
+- **The controller rests while a game is in front on Android.** When an emulator or another app is in front, Cartridge stops reading the controller, the same fix abdu2304 made for Steam's menu in Game Mode.
+
+### Changed
+- **Look & Feel** is five short pages (LB/RB between them), with rare options under Advanced.
+- **One sheet for secondary things:** the game page's More, Show and sort, and a console's More open from the bottom with their groups as tabs (LB/RB). On Android, Emulator for this game and Open in a PC game app are in its Steam and Emulator tab.
+- **Headers** on Home and the game page are bigger and fade into the page with no edge; with a SteamGridDB key they use its sharpest background.
+- **Connection** in the top bar is a small icon (house for LAN, globe for Tunnel), coloured only when offline. The Quick Menu's status pills use the same icons.
+- **Continue playing** is one row on Home and says which device ("on Steam Deck").
+- **Trophies All** is one calm list. Menu items use Title Case.
+
+### Fixed
+- Steadier stick (it only moves the way you push it most). Developer names come from RomM's developers list. Console names follow your RomM server. A changed RetroAchievements picture shows. Back from a Settings screen lands on the row you opened it from.
+- Desktop: shadPS4 and Vita3K (EmuDeck) shortcuts start again (press Update on their console page); PS3 and PS2 patches for disc and ISO games.
+
 ## Cartridge 0.9.12 · The Big Merge
 
 Everything from abdu2304's 0.9.3 (parts A to J), with Android versions of the parts that were desktop only.
@@ -162,6 +183,56 @@ Includes everything from abdu2304's 0.9.1 (launch options checked against EmuDec
 ## Cartridge 0.9.1 · Fixes (abdu2304)
 
 Included in this fork from 0.9.2.
+
+## Cartridge 0.9.3 L · Fixes from the couch (abdu2304)
+
+### Fixed
+- **shadPS4 games start from Steam.** Cartridge's shortcuts now start the way shadPS4's own do: the same Target and Launch options, and a Start in that doesn't exist, just like shadPS4's (theirs points at the launcher's temporary folder, which is gone once it closes). Press Update on the PS4 console page once. The "shadPS4 core without the launcher" choice from K is gone.
+- **Vita3K through EmuDeck.** EmuDeck's Vita3K script adds "-Fr" itself, so games added to Steam got it twice and didn't boot, and installs never reached Vita3K. Shortcuts now pass just the game's ID (press Update on the Vita console page), and installs use Vita3K itself. Cartridge also finds Vita3K's storage in its portable folder and under XDG_DATA_HOME.
+- **Controller in the background.** In Game Mode, with Steam's menu in front, the controller no longer moves around in Cartridge.
+- **PS3 patches for disc games:** the serial is read from the disc folder, the ISO or a name like "BLUS-30443".
+- **PS2 patches without PCSX2's game list:** for ISO files Cartridge reads the game's serial and CRC itself, the way PCSX2 does. Compressed games (CHD) still need PCSX2 to have listed them once.
+- **Patches sheet:** no stray dot before the explanation; PS2 games show their CRC.
+- **Developer names** come from RomM's developers list, not the first company (often the publisher).
+- **Console names** in trophies and RetroAchievements follow the names on your RomM server.
+- **A changed RetroAchievements picture** now shows (asked again every few hours, and on Refresh).
+- **Back from Emulator setup, Shortcut health and other screens in Settings** lands on the row you opened them from.
+- **Timeline** uses the normal focus box; Search results have room for the focused card.
+
+### New
+- **RPCS3's recommended settings.** When a PS3 game finishes downloading or installing, Cartridge sets RPCS3's settings for it from RPCS3's own database (the same as "Create Custom Configuration From Database Settings"), only when the game has no settings of its own yet.
+- **Background previews** in Look & Feel's background picker.
+- **Manual** in the game page's More.
+- **Shortcut health** offers Remove from Steam for shortcuts of games that are gone from this device, whoever made them (never while their drive is missing).
+- **Missing from Steam collections:** Issues shows which games before putting them back.
+
+### Changed
+- **Trophies All** is one calm list: a summary line, your six latest unlocks as small badges, and your games newest first.
+- **Continue playing** on Home is one row (it replaces Continue playing and Recently played) and says which device: "on Steam Deck".
+- **"on" before device names** wherever trophies or play time came from another device.
+- **Settings → Steam:** Add Cartridge to Steam comes first until it's added; then it moves to the bottom and says Added to Steam.
+- **Title Case** for menu items.
+
+## Cartridge 0.9.3 K · One place for trophies, and a calmer look (abdu2304)
+
+### New
+- **One trophy home.** Achievements opens on All: RetroAchievements and emulator trophies together, the latest unlocks from both in one row, and your games grouped by console with the same card for each. LB/RB still reach RetroAchievements and Trophies & Gamerscore on their own.
+- **Recommended for you** on Home, and better **Similar games** on the game page. They use IGDB's similar games when your RomM server has them, but also work without IGDB: series, studio and genres from whatever metadata RomM has, weighted by what you play. Every card says why it's there.
+- **Rumble** (Look & Feel → Motion and Sound): None, Low, Medium or High, a light buzz when you move and select.
+- **PCSX2 patches.** PS2 games get Patches in the game page's More, from PCSX2's own patch list, saved in PCSX2's settings for that game. As with RPCS3 and shadPS4, Cartridge only turns off patches it turned on. PCSX2 must have the game in its game list.
+- **shadPS4 core without the launcher.** PS4's emulator choice now offers "shadPS4 core · without the launcher": the version the Qt launcher has selected, started the way the launcher starts it. It is there to test the black screen some PS4 games show on their first start.
+- **PS4 trophy names without opening the game first.** With the trophy key set in shadPS4, Cartridge reads each installed game's trophy list itself (into its own folder, never shadPS4's).
+- **Flatpak Steam.** Games added to Flatpak Steam, and Cartridge's own entry, now start your emulators outside Steam's sandbox. Settings → Emulators → Issues offers the one permission Steam needs for it.
+- **Xenia's Windows build** (xenia_canary.exe) is found and started through Proton.
+
+### Changed
+- **Look & Feel** is five short pages (Theme, Background, Text and Cards, Motion and Sound, Controls), LB/RB to move between them, with rarely used options under Advanced.
+- **One sheet for secondary things.** The game page's More, Show and sort in the Library and on Achievements, and a console's More open as one sheet from the bottom, its groups as tabs (LB/RB).
+- **Headers** on Home and the game page are bigger and fade into the page with no edge. With a SteamGridDB key they use its sharpest background (4K first), also on the idle screen.
+- **Connection** in the top bar is a small icon next to the clock (house for LAN, globe for Tunnel), with colour only when offline.
+- **Trophy games known only by a code** (shadPS4 NPWR…, some Xenia games) take their name from your other devices or your library.
+- **Controller:** the stick only moves the way you push it most, and no longer double-moves when resting near the edge.
+- **RomM version check:** a server older than RomM 3 shows in Settings → Emulators → Issues instead of features failing one by one.
 
 ## Cartridge 0.9.3 J · Sturdier with every RomM version (abdu2304)
 

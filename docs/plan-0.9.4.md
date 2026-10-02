@@ -83,3 +83,4 @@ Like ArmSX2's PS2 downloads, for every console that supports them. How ArmSX2 do
 
 ## Later (1.0)
 - Full translations (the language step is ready in 0.9.3's onboarding).
+- **Syncthing saves, view only** (moved from 0.9.3 I1, owner 2 Oct): read Syncthing's local status (running, last sync per folder, devices online, conflicts) from its local API; later a per-game "Synced" or "Conflict" badge. Never touches saves.

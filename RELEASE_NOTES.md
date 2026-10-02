@@ -1,19 +1,20 @@
-## Cartridge 0.9.12 · The Big Merge
+## Cartridge 0.9.13 · Couch and Trophies
 
-Everything from abdu2304's 0.9.3 (parts A to J), with Android versions of the parts that were desktop only.
+Everything from abdu2304's 0.9.3 K and L, with the Android side of it.
 
 ### New
-- **From abdu2304's 0.9.3:** Settings → Emulators with an Issues list and a dot on the Settings tab; PS3 games from `.pkg` installed in RPCS3 (with their `.rap` licences), Vita games installed in Vita3K, PS3 and PS4 patches from RPCS3's and shadPS4's own lists; more desktop emulators (DeSmuME, Mupen64Plus, Snes9x, Mesen, Play!, Kronos, Xenia Edge, PrimeHack) and RetroDECK; critic score and age rating badges on game pages; the idle screen shows the game's logo and the console's logo; Report a problem in Settings → About; Home rows of 15 with Show all; a progress ring while a game is deleted.
-- **Settings → Emulators on Android.** Issues lists what stops games on this device from starting: a console with games but no emulator installed (with a button to get one), a BIOS that's missing or can't be checked, and PS3 or Vita packages still to install in the emulator (it opens the emulator and tells you which file; mark it done after). Below that, each console shows which emulator opens its games, and you can pick one. The Settings tab gets the same dot as on desktop.
-- **Report a problem on Android.** The report lists the device, Android and WebView versions, the emulators installed and which one each console uses, with no paths or addresses. Open a GitHub issue opens your browser on this fork's issue page.
+- **From abdu2304's 0.9.3 K and L:** one trophy home (Achievements opens on All: RetroAchievements and emulator trophies together); Recommended for you on Home and better Similar games, each saying why; Rumble in Look & Feel; Manual in the game page's More; background previews in the background picker; RPCS3's recommended settings set for a new PS3 game; PCSX2 patches; Flatpak Steam and Xenia's Windows build on desktop.
+- **Rumble on Android.** Android can't buzz a controller from the app, so the Rumble setting uses the handheld's own vibration motor, a little longer for Medium and High.
+- **The controller rests while a game is in front on Android.** When an emulator or another app is in front, Cartridge stops reading the controller, the same fix abdu2304 made for Steam's menu in Game Mode.
 
 ### Changed
-- **One RomM tab in Settings** (Connection, Library & Sync and Upload together), and Console Folders moved into Settings → Emulators.
-- **Refresh Library.** The Quick Menu's first tile asks RomM to look for new files, then pulls new and changed games, in one go.
-- **Game page More is shorter:** Steam and emulator options, and details and artwork, are in their own lists. On Android, Emulator for this game and Open in a PC game app are under Steam and emulator.
-- **Sturdier with any RomM version.** Missing or odd fields from older or newer servers no longer stop a library sync.
-- Problem reports from this fork's builds go to this fork's GitHub issues.
+- **Look & Feel** is five short pages (LB/RB between them), with rare options under Advanced.
+- **One sheet for secondary things:** the game page's More, Show and sort, and a console's More open from the bottom with their groups as tabs (LB/RB). On Android, Emulator for this game and Open in a PC game app are in its Steam and Emulator tab.
+- **Headers** on Home and the game page are bigger and fade into the page with no edge; with a SteamGridDB key they use its sharpest background.
+- **Connection** in the top bar is a small icon (house for LAN, globe for Tunnel), coloured only when offline. The Quick Menu's status pills use the same icons.
+- **Continue playing** is one row on Home and says which device ("on Steam Deck").
+- **Trophies All** is one calm list. Menu items use Title Case.
 
 ### Fixed
-- Settings keeps your section after an action, and a quick right press no longer loses focus. The D-pad stays in the list you are scrolling.
-- Desktop: Cartridge quits fully within 3 seconds, and stops background work while a game runs.
+- Steadier stick (it only moves the way you push it most). Developer names come from RomM's developers list. Console names follow your RomM server. A changed RetroAchievements picture shows. Back from a Settings screen lands on the row you opened it from.
+- Desktop: shadPS4 and Vita3K (EmuDeck) shortcuts start again (press Update on their console page); PS3 and PS2 patches for disc and ISO games.

@@ -112,6 +112,8 @@ export async function afterMount() {
   Native.setImmersive({ on: opt('immersive') }).catch(() => {});
   Native.addListener('pad', (e) => pad(nav, e));
   App.addListener('backButton', () => dispatch('back'));
+  // An emulator in front (or the home screen): stop reading the pad, as Game Mode does when Steam's menu is up
+  App.addListener('appStateChange', ({ isActive }) => nav.setBackground(!isActive));
   App.addListener('resume', () => { call('android:resume').catch(() => {}); });
   // Fuse bridge: cartridge:// links, Back to Fuse, status for other apps (before any dialog below waits)
   (await import('./fuse.js')).startFuse();

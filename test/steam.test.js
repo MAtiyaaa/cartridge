@@ -1,4 +1,4 @@
-// Steam shortcuts: the folder shadPS4 starts in (0.9.3, A10). shadPS4 and its Qt launcher use a "user"
+// Steam shortcuts: the folder shadPS4 starts in (0.9.3 A10, L): the same as its own shortcuts.
 // folder in the folder they start in, else ~/.local/share/shadPS4. Each case runs in its own process
 // so HOME is read fresh. Run with: npm test
 const test = require('node:test');
@@ -25,13 +25,10 @@ function startFor(name, dirs) {
   return execFileSync(process.execPath, ['-e', code], { env: { ...process.env, HOME: H, XDG_DATA_HOME: '' }, encoding: 'utf8' }).trim().split('\n').pop();
 }
 
-test('never next to the AppImage, as shadPS4\'s own shortcuts (they start inside its temporary mount)', () => {
-  assert.strictEqual(startFor('plain', ['.local/share/shadPS4', '.local/share/shadPS4QtLauncher']), '~/.local/share/shadPS4QtLauncher');
-  assert.strictEqual(startFor('fresh', []), '~');
-});
-test('a stray user folder next to the AppImage is avoided when shadPS4 has its normal data folder', () => {
-  assert.strictEqual(startFor('stray', ['Documents/Apps/user', '.local/share/shadPS4', '.local/share/shadPS4QtLauncher']), '~/.local/share/shadPS4QtLauncher');
-  assert.strictEqual(startFor('stray2', ['Documents/Apps/user', '.local/share/shadPS4']), '~/.local/share/shadPS4');
+test('like shadPS4\'s own shortcuts: a Start in that never exists (theirs is the gone AppImage mount)', () => {
+  assert.strictEqual(startFor('plain', ['.local/share/shadPS4', '.local/share/shadPS4QtLauncher']), '/tmp/.mount_shadPS4/usr/bin');
+  assert.strictEqual(startFor('fresh', []), '/tmp/.mount_shadPS4/usr/bin');
+  assert.strictEqual(startFor('stray', ['Documents/Apps/user', '.local/share/shadPS4']), '/tmp/.mount_shadPS4/usr/bin');
 });
 test('a portable install (its user folder is the only shadPS4 data) keeps starting there', () => {
   assert.strictEqual(startFor('portable', ['Documents/Apps/user']), '~/Documents/Apps');
@@ -68,4 +65,55 @@ test('a PS3 game that came as .pkg can only be added to Steam once installed in 
     console.log(JSON.stringify(r.missing || null));`;
   const out = JSON.parse(execFileSync(process.execPath, ['-e', code], { env: { ...process.env, HOME: H }, encoding: 'utf8' }).trim().split('\n').pop());
   assert.match(out, /Install it in RPCS3 first/);
+});
+
+// 0.9.3 K (K2): Flatpak Steam starts emulators outside its sandbox through flatpak-spawn --host
+test('Flatpak Steam: shortcuts go through flatpak-spawn --host with folder, env and wrappers', () => {
+  const H = path.join(TMP, 'fpsteam');
+  const ud = path.join(H, '.var/app/com.valvesoftware.Steam/data/Steam/userdata/123/config');
+  fs.mkdirSync(ud, { recursive: true }); fs.mkdirSync(H + '/cfg', { recursive: true });
+  const code = `
+    const sm = require(${JSON.stringify(path.join(ROOT, 'electron/steamManager.js'))})({ USER_DATA: ${JSON.stringify(H + '/cfg')}, log() {}, PLATFORM_MAP: {}, getConfig: () => ({}), saveConfig() {}, broadcast() {},
+      emulationRoots: () => [], getLibrary: () => null, installed: () => ({}), romById: () => null, isGamescope: () => false, artFor: () => ({}), MARKED: 'm', markedPath: () => null });
+    console.log(JSON.stringify([sm._hostLaunch('/home/u/Apps/Cemu.AppImage', '-f -g "/roms/wiiu/Game.rpx"', '/home/u/Apps', ['vblank_mode=0', 'gamemoderun', '%command%']), sm.flatpakSteamAccess()]));`;
+  const out = JSON.parse(execFileSync(process.execPath, ['-e', code], { env: { ...process.env, HOME: H }, encoding: 'utf8' }).trim().split('\n').pop());
+  assert.deepStrictEqual(out[0], { target: '"/usr/bin/flatpak-spawn"', launch: '--host --directory="/home/u/Apps" --env=vblank_mode=0 gamemoderun "/home/u/Apps/Cemu.AppImage" -f -g "/roms/wiiu/Game.rpx"' });
+  assert.strictEqual(out[1], 'needed');
+});
+
+test('Flatpak Steam: a flatpak-spawn shortcut reads back as the emulator, its folder and options', () => {
+  const H = path.join(TMP, 'fpread');
+  const cfg = path.join(H, '.var/app/com.valvesoftware.Steam/data/Steam/userdata/123/config');
+  fs.mkdirSync(cfg, { recursive: true }); fs.mkdirSync(H + '/cfg', { recursive: true });
+  const { writeVdf } = require('../electron/steamArt.js');
+  fs.writeFileSync(path.join(cfg, 'shortcuts.vdf'), writeVdf({ shortcuts: { 0: { appid: 1, AppName: 'Game', Exe: '"/usr/bin/flatpak-spawn"', StartDir: '"/home/u"', LaunchOptions: '--host --directory="/home/u/Apps" --env=vblank_mode=0 gamemoderun "/home/u/Apps/Cemu.AppImage" -f -g "/roms/wiiu/Game.rpx"' } } }));
+  const code = `
+    const sm = require(${JSON.stringify(path.join(ROOT, 'electron/steamManager.js'))})({ USER_DATA: ${JSON.stringify(H + '/cfg')}, log() {}, PLATFORM_MAP: {}, getConfig: () => ({}), saveConfig() {}, broadcast() {},
+      emulationRoots: () => [], getLibrary: () => null, installed: () => ({}), romById: () => null, isGamescope: () => false, artFor: () => ({}), MARKED: 'm', markedPath: () => null });
+    const sc = sm._readShortcuts();
+    console.log(JSON.stringify(sc.map((x) => [x.exe, x.start, x.lo, x.host])));`;
+  const out = JSON.parse(execFileSync(process.execPath, ['-e', code], { env: { ...process.env, HOME: H }, encoding: 'utf8' }).trim().split('\n').pop());
+  assert.deepStrictEqual(out, [['/home/u/Apps/Cemu.AppImage', '/home/u/Apps', 'vblank_mode=0 gamemoderun %command% -f -g "/roms/wiiu/Game.rpx"', true]]);
+});
+
+// J13: Shortcut health finds a shortcut whose emulator moved and offers the copy that is there now
+test('Shortcut health: emulator moved, and the fix points at the one installed now', () => {
+  // its own temp folder: a path with "cartridge" in it reads as Cartridge's own shortcut
+  const H = fs.mkdtempSync(path.join(os.tmpdir(), 'cs-health-'));
+  test.after(() => fs.rmSync(H, { recursive: true, force: true }));
+  const cfg = path.join(H, '.local/share/Steam/userdata/123/config');
+  for (const d of [cfg, H + '/cfg', H + '/Applications', H + '/roms/ps2']) fs.mkdirSync(d, { recursive: true });
+  fs.writeFileSync(path.join(H, 'Applications/pcsx2-v2.2.0-linux-appimage-x64-Qt.AppImage'), '');
+  fs.writeFileSync(path.join(H, 'roms/ps2/Game.iso'), '');
+  const { writeVdf } = require('../electron/steamArt.js');
+  fs.writeFileSync(path.join(cfg, 'shortcuts.vdf'), writeVdf({ shortcuts: { 0: { appid: 7, AppName: 'Game', Exe: `"${H}/Old/pcsx2-v1.7.0.AppImage"`, StartDir: `"${H}/Old"`, LaunchOptions: `-batch -fullscreen "${H}/roms/ps2/Game.iso"` } } }));
+  const code = `
+    const sm = require(${JSON.stringify(path.join(ROOT, 'electron/steamManager.js'))})({ USER_DATA: ${JSON.stringify(H + '/cfg')}, log() {}, PLATFORM_MAP: { ps2: ['ps2'] }, getConfig: () => ({}), saveConfig() {}, broadcast() {},
+      emulationRoots: () => [], getLibrary: () => null, installed: () => ({}), romById: () => null, isGamescope: () => false, artFor: () => ({}), MARKED: 'm', markedPath: () => null });
+    const h = sm.health();
+    console.log(JSON.stringify(h.problems.map((p) => [p.name, p.issues.map((i) => [i.kind, i.fix && i.fix.to])])));`;
+  const out = JSON.parse(execFileSync(process.execPath, ['-e', code], { env: { ...process.env, HOME: H, XDG_DATA_HOME: '' }, encoding: 'utf8' }).trim().split('\n').pop());
+  assert.strictEqual(out.length, 1);
+  assert.strictEqual(out[0][1][0][0], 'emulator');
+  assert.match(out[0][1][0][1] || '', /pcsx2-v2\.2\.0/);
 });

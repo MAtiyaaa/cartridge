@@ -134,7 +134,7 @@
           <template v-for="row in related" :key="row.id">
             <div class="shelf-title" style="margin-top: 16px"><Icon :name="row.icon" :size="20" />{{ row.title }}<span class="count">{{ row.items.length }}</span></div>
             <div class="shelf rel" data-hscroll>
-              <GameCard v-for="r in row.items" :key="r.id" :rom="r" :show-platform="true" @open="(r) => go('game', { romId: r.id })" />
+              <GameCard v-for="r in row.items" :key="r.id" :rom="r" :show-platform="true" :extra="row.why?.get(r.id) || ''" @open="(r) => go('game', { romId: r.id })" />
             </div>
           </template>
         </div>
@@ -160,9 +160,10 @@
 </template>
 
 <script setup>
+import { similarTo } from '../recs.js';
 import { addGame, removeGame, applyChanges } from '../steam.js';
 import { computed, onMounted, onBeforeUnmount, ref, nextTick, watch, defineAsyncComponent, getCurrentScope, shallowRef } from 'vue';
-import { store, call, img, go, cover, bytes, year, rating, toast, confirm, download, downloadFor, romById, platformById, isNew, setBg, logoOf, resetLogos, artFor, choose, openModal, allRoms, visible, isFavourite, addToCollection, playOf, playtimeText, ago, loadPlay, askText, saveConfig } from '../store.js';
+import { store, call, img, go, cover, bytes, year, rating, toast, confirm, download, downloadFor, romById, platformById, isNew, setBg, logoOf, resetLogos, artFor, choose, openModal, allRoms, visible, isFavourite, addToCollection, playOf, playtimeText, ago, loadPlay, askText, saveConfig, backdropOf, wantSharp } from '../store.js';
 import { useView } from '../useView.js';
 import { IS_ANDROID } from '../platform.js';
 import { ensureFocus, focusFirst } from '../nav.js';
@@ -191,7 +192,7 @@ const base = computed(() => {
   if (!c && !d) return null;
   if (!d) return c;
   const md = d.metadatum || {};
-  return { ...c, ...d, name: d.name || d.fs_name_no_ext, year: md.first_release_date, rating: md.average_rating, genres: md.genres || [], developer: md.developers?.[0] || md.companies?.[0] || '', shot: d.merged_screenshots?.[0] || c?.shot };
+  return { ...c, ...d, name: d.name || d.fs_name_no_ext, year: md.first_release_date, rating: md.average_rating, genres: md.genres || [], developer: [md, d.igdb_metadata, d.ss_metadata, d.launchbox_metadata, d.moby_metadata].map((b) => b?.developers?.find?.((x) => typeof x === 'string' && x.trim())).find(Boolean) || md.companies?.[0] || '' /* developers first: companies' first can be the publisher (0.9.3 L) */, shot: d.merged_screenshots?.[0] || c?.shot };
 });
 const coverSrc = computed(() => base.value && cover(base.value, true));
 const shots = computed(() => detail.value?.merged_screenshots || (cached.value?.shot ? [cached.value.shot] : []));
@@ -382,7 +383,8 @@ async function linkTrophies() {
   await loadTrophies();
   toast(v === '__none' ? 'Trophies unlinked' : 'Trophies linked', 'ok', 2200, 'mdiLink');
 }
-// Header banner: your chosen background, else the first screenshot, else the cover (blurred)
+// Header banner: your chosen background, else SteamGridDB's sharpest (0.9.3 K), else the first
+// screenshot, else the cover (blurred)
 const bannerFail = ref(false);
 // A small screenshot (a PSP one is 480 wide) stretched across the page looks blocky: android.css softens it
 const bannerLow = ref(false);
@@ -391,6 +393,7 @@ const banner = computed(() => {
   if (!base.value) return {};
   const h = artFor(props.romId).hero;
   if (h) return { src: img(h) };
+  if (store.sharp[base.value.id]) return { src: store.sharp[base.value.id] };
   const shot = !bannerFail.value && (detail.value?.merged_screenshots?.[0] || cached.value?.shot);
   if (shot) return { src: img(shot) };
   return { src: cover(base.value, true), blur: true };
@@ -542,12 +545,10 @@ const related = computed(() => {
     const l = roms.filter((r) => r.series?.includes(series) && r.name !== me.name).sort((a, b) => (a.year || 9e15) - (b.year || 9e15));
     if (l.length) out.push({ id: 'series', title: 'More in this series', icon: 'mdiBookshelf', items: l.slice(0, 30) });
   }
-  const sim = new Set(me.similar || []);
-  if (sim.size) {
-    const seen = new Set(out[0]?.items.map((r) => r.id));
-    const l = roms.filter((r) => r.igdb_id && sim.has(r.igdb_id) && !seen.has(r.id));
-    if (l.length) out.push({ id: 'similar', title: 'Similar games', icon: 'mdiShapeOutline', items: l.slice(0, 30) });
-  }
+  // similar games: IGDB's list when the server has it, else genres, studio and the rest (recs.js)
+  const seen = new Set(out[0]?.items.map((r) => r.id));
+  const sim = similarTo(me, roms.filter((r) => !seen.has(r.id)), { skipSeries: true });
+  if (sim.length) out.push({ id: 'similar', title: 'Similar games', icon: 'mdiShapeOutline', items: sim.map((x) => x.rom), why: new Map(sim.map((x) => [x.rom.id, x.why])) });
   return out;
 });
 
@@ -586,7 +587,7 @@ const PC_SLUGS = /^(win|windows|win3x|pc|dos)$/i; // PC games (Android: open in 
 async function more() {
   const has = artFor(props.romId);
   const u = cached.value?.user;
-  // grouped (0.9.3): the everyday things first, the rest in two lists. B in a list goes back here.
+  // grouped (0.9.3): the everyday things first, the rest on their own tabs
   const play = [], details = [
     { label: 'Change cover', sub: 'SteamGridDB', value: 'grid', icon: 'mdiImageEditOutline' },
     { label: 'Change logo', sub: 'SteamGridDB', value: 'logo', icon: 'mdiFormatTitle' },
@@ -618,7 +619,8 @@ async function more() {
     else if (!installedPath.value) play.push({ label: 'Mark as installed', sub: 'For games you extracted yourself', value: 'mark', icon: 'mdiCheckboxMarkedCircleOutline' });
   }
   if (trophySystem.value) play.push({ label: tro.value ? 'Change linked trophies' : 'Link to trophies', sub: 'Pick which emulator trophy set belongs to this game', value: 'trophies', icon: 'mdiLinkVariant' });
-  const pe = /ps3/i.test(`${base.value?.platform_slug} ${base.value?.platform_fs_slug}`) ? 'RPCS3' : /ps4/i.test(`${base.value?.platform_slug} ${base.value?.platform_fs_slug}`) ? 'shadPS4' : null;
+  const slugs = `${base.value?.platform_slug} ${base.value?.platform_fs_slug}`;
+  const pe = /ps3/i.test(slugs) ? 'RPCS3' : /ps4/i.test(slugs) ? 'shadPS4' : /\bps2\b/i.test(slugs) ? 'PCSX2' : null;
   if (!IS_ANDROID && installedPath.value && !marked.value && pe) play.push({ label: 'Patches', sub: `From ${pe}’s patch list, saved in ${pe}`, value: 'patches', icon: 'mdiPuzzleOutline' });
   if (installedPath.value) play.push({ label: 'Show file location', value: 'path', icon: 'mdiFolderOutline' });
   const top = [
@@ -626,20 +628,12 @@ async function more() {
     { label: 'Play status', sub: statusText.value || 'None', value: 'status', icon: 'mdiProgressCheck' },
     { label: 'Add to a collection', sub: 'Yours in RomM, or a new one', value: 'col', icon: 'mdiBookmarkPlusOutline' },
     { label: 'Timeline', sub: 'Added, downloaded, played, trophies', value: 'timeline', icon: 'mdiTimelineClockOutline' },
-    ...(play.length ? [{ label: 'Steam and emulator', sub: play.map((o) => o.label).slice(0, 2).join(', ') + (play.length > 2 ? '…' : ''), value: 'g:play', icon: 'mdiGamepadVariantOutline' }] : []),
-    { label: 'Details and artwork', sub: 'Cover, logo, background, name, theme', value: 'g:details', icon: 'mdiImageEditOutline' },
+    ...(detail.value?.path_manual ? [{ label: 'Manual', sub: 'The game’s manual from RomM', value: 'manual', icon: 'mdiBookOpenPageVariantOutline' }] : []),
     { label: u?.hidden ? 'Unhide game' : 'Hide game', sub: u?.hidden ? 'Show it in lists again' : 'Keep it out of Home, Library and Search', value: 'hide', icon: u?.hidden ? 'mdiEyeOutline' : 'mdiEyeOffOutline' },
   ];
-  let v, at = null;
-  for (;;) {
-    v = await choose({ title: base.value.name, options: top.map((o) => ({ ...o, selected: o.value === at })) });
-    if (!v) return;
-    if (!v.startsWith('g:')) break;
-    at = v;
-    const list = v === 'g:play' ? play : details;
-    v = await choose({ title: v === 'g:play' ? 'Steam and emulator' : 'Details and artwork', message: base.value.name, options: list });
-    if (v) break; // B: back to the first list
-  }
+  // one sheet, its groups as tabs (0.9.3 K, G4 B): LB/RB move between them
+  const v = await choose({ title: base.value.name, tabs: [{ label: 'Game', options: top }, ...(play.length ? [{ label: 'Steam and Emulator', options: play }] : []), { label: 'Details and Artwork', options: details }] });
+  if (!v) return;
   if (v === 'emu') { await ap.value?.pickEmulator(); return; }
   if (import.meta.env.MODE === 'android' && v === 'pcapp') { const { openInPcApp } = await import('../android/pcApps.js'); await openInPcApp({ ...base.value, id: Number(props.romId) }, installedPath.value); return; }
   if (v === 'fav') {
@@ -649,6 +643,7 @@ async function more() {
   }
   if (v === 'status') { await pickStatus(); return; }
   if (v === 'timeline') { await openTimeline(); return; }
+  if (v === 'manual') { openModal('manual', { romId: Number(props.romId), name: base.value.name }); return; }
   if (v === 'edit') { await editDetails(); return; }
   if (v === 'theme') { await themeFromGame(); return; }
   if (v === 'untheme') { const g = store.config.ui.gameTheme; await saveConfig({ ui: { theme: g.theme || 'cartridge', customColor: g.customColor || '', gameTheme: null } }); toast('Your own theme is back', 'ok', 2200, 'mdiUndoVariant'); return; }
@@ -683,12 +678,13 @@ watch([installedPath, () => dl.value?.status], async () => { await nextTick(); e
 onMounted(async () => {
   const hero = artFor(props.romId).hero;
   if (hero) setBg({ src: img(hero) });
-  else if (cached.value) setBg(cached.value.shot ? { src: img(cached.value.shot) } : { src: cover(cached.value, true), blur: true });
+  else if (cached.value) setBg(backdropOf(cached.value));
+  if (!hero && cached.value) wantSharp(cached.value);
   await nextTick();
   focusFirst(el.value);
   try {
     detail.value = await call('api:get', { path: `/api/roms/${props.romId}` });
-    if (!hero && detail.value.merged_screenshots?.[0]) setBg({ src: img(detail.value.merged_screenshots[0]) });
+    if (!hero && !store.sharp[props.romId] && detail.value.merged_screenshots?.[0]) setBg({ src: img(detail.value.merged_screenshots[0]) });
   } catch (e) { if (!cached.value) toast(e.message, 'error'); }
   loadRa();
   loadPkg();
@@ -703,10 +699,10 @@ onMounted(async () => {
 
 <style scoped>
 .game { padding: 0 0 50px; }
-.g-banner { position: relative; margin: 0; height: clamp(240px, 46vh, 560px); overflow: hidden; background: var(--s1); } /* full width: the art leads (0.9) */
+.g-banner { position: relative; margin: 0; height: clamp(260px, 52vh, 680px); overflow: hidden; background: var(--s0); } /* full width: the art leads (0.9) */
 .g-banner-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .g-banner-img.blur { filter: blur(24px) saturate(1.3) brightness(0.8); transform: scale(1.15); }
-.g-banner-shade { position: absolute; inset: 0; background: linear-gradient(90deg, rgba(12, 13, 16, 0.8) 0%, rgba(12, 13, 16, 0.3) 45%, transparent 75%), linear-gradient(0deg, #0c0d10 0%, rgba(12, 13, 16, 0.45) 35%, transparent 65%); background: linear-gradient(90deg, color-mix(in srgb, var(--s0) 80%, transparent) 0%, color-mix(in srgb, var(--s0) 30%, transparent) 45%, transparent 75%), linear-gradient(0deg, var(--s0) 0%, color-mix(in srgb, var(--s0) 45%, transparent) 35%, transparent 65%); }
+.g-banner-shade { position: absolute; inset: 0; background: linear-gradient(90deg, rgba(12, 13, 16, 0.8) 0%, rgba(12, 13, 16, 0.3) 45%, transparent 75%), linear-gradient(0deg, #0c0d10 0%, rgba(12, 13, 16, 0.45) 35%, transparent 65%); background: linear-gradient(180deg, var(--s0) 0%, transparent 12%), linear-gradient(90deg, color-mix(in srgb, var(--s0) 80%, transparent) 0%, color-mix(in srgb, var(--s0) 30%, transparent) 45%, transparent 75%), linear-gradient(0deg, var(--s0) 0%, color-mix(in srgb, var(--s0) 45%, transparent) 35%, transparent 65%); }
 .g-banner-logo { position: absolute; left: var(--s-7); bottom: var(--s-5); right: 360px; display: flex; align-items: flex-end; }
 .g-hero { position: relative; display: flex; align-items: flex-start; justify-content: space-between; gap: 40px; padding: var(--s-4) var(--s-7) var(--s-5); }
 .g-info { display: flex; flex-direction: column; gap: var(--s-4); max-width: 860px; min-width: 0; }

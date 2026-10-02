@@ -52,7 +52,7 @@
               <div class="ra-u-title">{{ a.title }}</div>
               <div class="ra-u-desc">{{ a.desc }}</div>
               <div class="ra-u-meta"><span class="pts">{{ a.points }} pts</span><span v-if="a.hardcore" class="chip hc">HARDCORE</span><span>{{ ago(a.date) }}</span></div>
-              <div class="ra-u-game">{{ a.game }} · {{ a.console }}</div>
+              <div class="ra-u-game">{{ a.game }} · {{ consoleName({ romId: a.romId, fallback: a.console }) }}</div>
             </div>
           </button>
         </div>
@@ -69,7 +69,7 @@
             <img class="ra-gicon" :src="img(g.icon)" loading="lazy" />
             <div class="ra-g-body">
               <div class="ra-g-title">{{ g.title }}</div>
-              <div class="ra-g-sub">{{ g.console }} · {{ ago(g.lastPlayed) }}<template v-if="g.romId"> · <span class="inlib">In your library</span></template></div>
+              <div class="ra-g-sub">{{ consoleName({ romId: g.romId, fallback: g.console }) }} · {{ ago(g.lastPlayed) }}<template v-if="g.romId"> · <span class="inlib">In your library</span></template></div>
               <div class="bar ra-bar"><i :style="{ width: pctOf(g) + '%' }" /></div>
               <div class="ra-g-prog"><b>{{ g.earned }}</b> / {{ g.total }} achievements · {{ pctOf(g) }}%<template v-if="g.possible"> · {{ g.score }} / {{ g.possible }} pts</template></div>
             </div>
@@ -83,7 +83,7 @@
 
 <script setup>
 import { computed, onMounted, ref } from 'vue';
-import { store, call, img, go, toast, saveConfig, setBg, choose } from '../store.js';
+import { store, call, img, go, toast, saveConfig, setBg, choose, consoleName } from '../store.js';
 import { useView } from '../useView.js';
 import { focusFirst } from '../nav.js';
 import Icon from '../components/Icon.vue';
@@ -107,15 +107,17 @@ const played = computed(() => {
   if (sort.value === 'name') return [...l].sort((a, b) => a.title.localeCompare(b.title));
   return l; // RetroAchievements sends them latest first
 });
-async function pickShow() {
+// Show and Sort as one sheet with two tabs (0.9.3 K, G4 B)
+async function showSort(tab) {
   const cons = [...new Set((data.value?.played || []).map((g) => g.console).filter(Boolean))].sort((a, b) => a.localeCompare(b));
-  const v = await choose({ title: 'Show', options: [{ label: 'All consoles', value: 'all', icon: 'mdiViewGridOutline', selected: show.value === 'all' }, ...cons.map((c) => ({ label: c, value: c, icon: 'mdiGamepadVariantOutline', selected: show.value === c }))] });
-  if (v) show.value = v;
+  const v = await choose({ title: 'Show and sort', tab, tabs: [
+    { label: 'Show', options: [{ label: 'All consoles', value: 'all', icon: 'mdiViewGridOutline', selected: show.value === 'all' }, ...cons.map((c) => ({ label: c, value: c, icon: 'mdiGamepadVariantOutline', selected: show.value === c }))].map((o) => ({ ...o, value: 'f:' + o.value })) },
+    { label: 'Sort by', options: SORTS.map((x) => ({ label: x.l, value: 's:' + x.v, icon: x.icon, selected: sort.value === x.v })) },
+  ] });
+  if (v?.startsWith('f:')) show.value = v.slice(2);
+  else if (v?.startsWith('s:')) sort.value = v.slice(2);
 }
-async function pickSort() {
-  const v = await choose({ title: 'Sort by', options: SORTS.map((x) => ({ label: x.l, value: x.v, icon: x.icon, selected: sort.value === x.v })) });
-  if (v) sort.value = v;
-}
+const pickShow = () => showSort(0), pickSort = () => showSort(1);
 const pctOf = (g) => (g.total ? Math.round((g.earned / g.total) * 100) : 0);
 function ago(d) {
   if (!d) return '';
@@ -156,7 +158,7 @@ function openGame(gameId) { go('ra-game', { gameId }); }
 function focusGame(g) { if (g.boxart || g.icon) setBg({ src: img(g.boxart || g.icon), blur: true }); }
 function focusUnlock(a) { if (a.gameIcon) setBg({ src: img(a.gameIcon), blur: true }); }
 
-useView({ x: () => load(true), lb: () => (store.achTab = 'ra'), rb: () => (store.achTab = 'others') }, [{ b: 'A', label: 'Open' }, { b: 'X', label: 'Refresh' }, { b: 'RB', label: 'Trophies & Gamerscore' }]);
+useView({ x: () => load(true), lb: () => (store.achTab = 'all'), rb: () => (store.achTab = 'others') }, [{ b: 'A', label: 'Open' }, { b: 'X', label: 'Refresh' }, { b: 'LB', label: 'All' }, { b: 'RB', label: 'Trophies & Gamerscore' }]);
 onMounted(async () => { await load(); focusFirst(el.value); });
 </script>
 

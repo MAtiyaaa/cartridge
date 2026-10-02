@@ -176,7 +176,10 @@ function vitaPrefs(home = os.homedir(), emulationRoots = []) {
   for (const c of [path.join(home, '.config/Vita3K/config.yml'), path.join(home, '.local/share/Vita3K/Vita3K/config.yml')]) {
     try { const m = fs.readFileSync(c, 'utf8').match(/^pref-path:\s*(.+)$/m); const v = m && m[1].trim().replace(/^['"]|['"]$/g, ''); if (v) out.push(v); } catch {}
   }
-  out.push(path.join(home, '.local/share/Vita3K/Vita3K'), path.join(home, '.local/share/Vita3K'), ...emulationRoots.map((r) => path.join(r, 'storage/Vita3K')));
+  // Vita3K's own defaults (app_init.cpp init_paths): $XDG_DATA_HOME/Vita3K/Vita3K, or a "portable"
+  // folder next to its AppImage (portable/fs; EmuDeck's copy lives in ~/Applications/Vita3K)
+  if (process.env.XDG_DATA_HOME) out.push(path.join(process.env.XDG_DATA_HOME, 'Vita3K/Vita3K'));
+  out.push(path.join(home, '.local/share/Vita3K/Vita3K'), path.join(home, '.local/share/Vita3K'), path.join(home, 'Applications/Vita3K/portable/fs'), ...emulationRoots.map((r) => path.join(r, 'storage/Vita3K')));
   const seen = new Set();
   return out.filter((p) => isDir(path.join(p, 'ux0')) && !seen.has(real(p)) && seen.add(real(p)));
 }

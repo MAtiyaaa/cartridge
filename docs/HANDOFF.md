@@ -8,6 +8,8 @@ The repo is public. For that reason this file leaves out private details on purp
 
 Wherever something is not certain, it says **unsure**.
 
+**Update for 0.9 (Oct 2026).** Parts A to F describe 0.6.0 and are kept as history. What changed since, version by version, is in `CLAUDE.md` (one short section per version, 0.6.1 to 0.9.3) and in `CHANGELOG.md`. Work in progress and decisions made in chat are in `docs/SESSION-LOG.md` (newest first), the plans in `docs/plan-0.9.3.md` and `docs/plan-0.9.4.md`, the design system in `docs/design.md`. D9, D10, E4 and E5 below are brought up to date for 0.9; the rest is not rewritten.
+
 ## Quick orientation
 
 - **What it is:** a controller-first RomM client, shipped as one AppImage, for SteamOS, Bazzite and any Linux desktop. It is added to Steam and used in Game Mode.
@@ -1116,34 +1118,11 @@ Kept general on purpose, because the repo is public.
 
 ## D9. Current state
 
-- 0.6.0 is released and verified as described.
-- Right after the release, the owner asked for this handoff.
-- He is moving development to Claude Code working directly in the repo.
-- Nothing is in progress. Nothing is uncommitted.
-- The owner has not yet reported how 0.6.0 behaves on his devices.
-- The first real test of the Steam manager on his machines is pending.
+(Updated for 0.9, Oct 2026.) 0.9.3 ships in parts: the version number keeps rising (0.9.4, 0.9.5...) while `versionName` and the release title say "0.9.3 B", "0.9.3 C"... until the 0.9.3 plan is done. The latest state, what the owner must test on a device and what's left are always in the newest entry of `docs/SESSION-LOG.md`.
 
 ## D10. What's next
 
-- The owner has not named anything after 0.6. The roadmap he gave (0.4 achievements, 0.5 customisation, 0.6 Steam) is complete.
-- **Likely next work, in priority order:**
-  1. Any problems from his first real use of the Steam manager (0.6.x fixes). The least tested areas are in F6.
-  2. The helper backup overwrite (F7), registry-before-helper (F4), B2 (shortcut key gap), B1 (Y on Search with the built-in keyboard).
-  3. Move the Steam manager's heavy calls off the main thread, and add apply progress (artwork fetching).
-  4. The small cleanups: Achievements.vue duplicate CSS, `.padbtn`, the out-of-date graphics comment, the migration lines.
-  5. A `test/` folder with the mock server and Steam fixtures.
-- **Ideas mentioned but never built:**
-  - checking downloads against RomM's checksums
-  - a storage manager (free-space warnings, delete to make room); partly exists as space display
-  - layout presets
-  - QR pairing
-- **Explicitly NOT wanted:**
-  - handling saves
-  - downloading or launching emulators
-  - modifying emulator files
-  - UI overhauls he didn't ask for
-  - made-up demo content
-  - private info in the repo
+See the newest entry of `docs/SESSION-LOG.md`, then `docs/plan-0.9.3.md` (what's left in 0.9.3) and `docs/plan-0.9.4.md` (onboarding, add-ons, and the 1.0 list: translations, Syncthing status). Still explicitly not wanted: handling saves, downloading or launching emulators, modifying emulator files (the agreed exceptions are in `CLAUDE.md`: deleting a game Cartridge installed into RPCS3 or Vita3K storage, and turning on or off only the patches Cartridge turned on), UI overhauls nobody asked for, made-up demo content, private info in the repo.
 
 ## D11. Testing checklist (after any change)
 
@@ -1329,6 +1308,15 @@ These are why Cartridge fixes `/tmp/.mount_` Start In paths and leaves frame gen
 | `steam-launch.sh`, `steam-launch.log` | The Steam launch script and its log |
 | `steam-games.json`, `steam-games-removed.json`, `steam-queue.json`, `steam-jobs/`, `steam-backups/`, `steam-apply.log`, `play.sh` | Steam manager (0.6) |
 | `running.json` | Single-instance heartbeat (0.6) |
+| `steam-live-removed.json` | Shortcuts removed live through Steam's CEF port, until Steam saves its file (0.7.6) |
+| `emulators-found.json` | Emulator scan results from Setup (0.9) |
+| `hltb.json` | HowLongToBeat cache (0.7.5) |
+| `play-sync.json` | Play time already sent to RomM play sessions (0.8.2) |
+| `manuals/` | Game manuals (PDF) kept for offline reading (0.9) |
+| `installs.json` | Games Cartridge installed into RPCS3 or Vita3K (serial, folder, time): the only ones it may delete there (0.9.3 C, D) |
+| `patches.json` | Emulator patches Cartridge turned on (RPCS3, shadPS4, PCSX2): the only ones it may turn off (0.9.3 E, F, K) |
+| `heroes.json`, `heroes/` | Sharpest SteamGridDB background per game, for headers and the idle screen (0.9.3 K) |
+| `trophylists/` | shadPS4 trophy lists Cartridge decrypted itself with the user's key (0.9.3 K) |
 
 Screenshots go to `~/Pictures/Cartridge`.
 
@@ -1343,6 +1331,8 @@ Screenshots go to `~/Pictures/Cartridge`.
 | `CARTRIDGE_SAFE_GPU=1` | Force software |
 | `CARTRIDGE_SGDB_BASE`, `CARTRIDGE_RA_BASE`, `CARTRIDGE_RA_MEDIA` | API overrides for mocks |
 | `CARTRIDGE_NO_SYSTEMD_RUN=1` | Spawn the Steam helper directly (tests) |
+| `CARTRIDGE_CEF_PORT` | Steam's CEF debugging port for live changes (tests; default 8080) |
+| `CARTRIDGE_HLTB_BASE` | HowLongToBeat API override (tests) |
 | `APPIMAGE` | Set by the AppImage runtime |
 | `VITE_DEV` | Load `http://localhost:5173` |
 | `XDG_CONFIG_HOME`, `XDG_DATA_HOME` | Used by trophy discovery for emulator config and data folders |
