@@ -6,7 +6,19 @@ The branch for 0.9.3 work is `claude/relaxed-fermat-30pigp`. Pull it before star
 
 ---
 
-## 2 Oct 2026 · 0.9.16 built and released (read this first)
+## 2 Oct 2026 · 0.9.17 started (read this first)
+
+Owner's list for 0.9.17 is `docs/plan-0.9.17.md`. Research done before building:
+- ARMSX2's texture catalogs: dl.ps2ktxpak.net (ASTC, phone only) and sashkinbro/EmuCoreX-Textures `textures.json` (PNG/DDS, serials, SHA-256, parts). Cartridge uses EmuCoreX.
+- gamebanana.com is blocked from the container (curl and fetch); its API is built from public client code.
+- SteamOS 3.5+ ships Podman; it needs /etc/subuid ranges (sudo once). podman-launcher for systems without.
+- lsfg-vk: Decky LSFG-VK writes `~/lsfg` (and `~/.lsfg`); MAKO: `~/.local/bin/mako-run %command%`.
+- shadPS4 Qt launcher: `-e <name|path>`, versions in `<XDG_DATA_HOME or ~/.local/share>/shadPS4QtLauncher/versions.json`.
+Owner said shadPS4 now works. Remind the owner to check the PS3 "serial not found" games.
+
+---
+
+## 2 Oct 2026 · 0.9.16 built and released
 
 Everything in `docs/plan-0.9.16.md` sections 1 to 8, as one update "0.9.16 · Your Emulators". Remind the owner about the stray v2.3.1 tag.
 
