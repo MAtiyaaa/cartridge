@@ -387,11 +387,18 @@ module.exports = function createSteamManager(ctx) {
       const hit = uniq.filter((p) => !/qtlauncher/i.test(p)).sort((a, b) => mtime(b) - mtime(a))[0] || uniq[0];
       // its version (read from inside it by Setup, else the file name) picks arguments that changed over time
       if (hit) mk(hit, path.dirname(hit), 'appimage', path.basename(hit), /qtlauncher/i.test(hit) && e.qtArgs ? e.qtArgs : null, ver(hit), realName(id, path.basename(hit) + ' ' + (scanned(hit)?.name || '')));
+      // a Windows build, started through Proton (Steam's compatibility tool): Xenia Canary (K1). EmuDeck
+      // keeps it in roms/xbox360; its xenia.sh already runs it, so then it isn't listed twice.
+      if (e.win && !new RegExp(e.win.source.replace(/^\^|\$$/g, ''), 'i').test(wrap.text)) {
+        const dirs = [...APP_DIRS(), ...ctx.emulationRoots().flatMap((r) => (e.for || []).map((k) => path.join(r, 'roms', k)))];
+        const exe = dirs.flatMap((d) => [d, ...ls(d).map((n) => path.join(d, n)).filter(isDir)]).flatMap((d) => ls(d).filter((n) => e.win.test(n)).map((n) => path.join(d, n)))[0];
+        if (exe) mk(exe, path.dirname(exe), 'windows', path.basename(exe), null, null, `${e.label} (Windows)`);
+      }
       const fp = (e.fp || []).find((x) => flatpakApps().includes(x));
       if (fp && !wrap.flatpak) mk('/usr/bin/flatpak', '/usr/bin', 'flatpak', fp, `run ${fp} ${argsFor(id, key, 'flatpak')}`, null, realName(id, fp));
       const bin = findBin(e.bin) || foundFor(id).find((x) => x.kind === 'program' || x.kind === 'unpacked' || x.kind === 'script')?.path;
       if (bin && !/flatpak\/exports/.test(bin)) mk(bin, path.dirname(bin), 'native', bin, null, null, realName(id, bin));
-      const SRC = { emudeck: 'EmuDeck', appimage: 'AppImage', flatpak: 'Flatpak', native: 'Installed' };
+      const SRC = { emudeck: 'EmuDeck', appimage: 'AppImage', flatpak: 'Flatpak', native: 'Installed', windows: 'Windows build' };
       // an emulator that is itself a fork (PrimeHack) is listed with the forks, never the default
       if (e.forkOf) { found.forEach((f, i) => forksOut.push({ id: i ? `${id}@${f.src}` : id, label: `${f.name} · fork of ${EMU[e.forkOf]?.label || e.forkOf}${found.length > 1 ? ' · ' + SRC[f.src] : ''}`, fork: true, t: f.t })); continue; }
       found.forEach((f, i) => out.push({ id: i ? `${id}@${f.src}` : id, label: found.length > 1 ? `${f.name} · ${SRC[f.src]}` : f.name, t: f.t }));
@@ -689,7 +696,7 @@ module.exports = function createSteamManager(ctx) {
   // (flatpakSteamAccess, offered in Settings → Emulators → Issues).
   const HOST_SPAWN = '/usr/bin/flatpak-spawn';
   const hostLaunch = (exe, args, start, pre = []) => ({ target: q(HOST_SPAWN), launch: ['--host', start ? `--directory=${q(start)}` : '', ...pre.filter((x) => /^\w+=/.test(x)).map((x) => `--env=${x}`), ...pre.filter((x) => !/^\w+=/.test(x) && x !== '%command%'), q(exe), args].filter(Boolean).join(' ') });
-  const launchFor = (t, lo, args) => (FLATPAK_STEAM ? hostLaunch(t.exe, args, startOf(t), t.pre || []) : { target: q(t.exe), launch: (t.pre || []).length ? lo : args });
+  const launchFor = (t, lo, args) => (FLATPAK_STEAM && !/\.exe$/i.test(t.exe) ? hostLaunch(t.exe, args, startOf(t), t.pre || []) : { target: q(t.exe), launch: (t.pre || []).length ? lo : args });
   function buildLaunch(rom, file, t) {
     const ref = gameRef(rom, file, t);
     let args = t.args;
@@ -1159,7 +1166,7 @@ module.exports = function createSteamManager(ctx) {
     if (!t || !t.exe) return { ok: false, error: 'No emulator set for this console' };
     if (t.exe === '/usr/bin/flatpak') { const id = (t.args.match(/run\s+(\S+)/) || [])[1]; return flatpakApps().includes(id) ? { ok: true, note: `Flatpak ${id} is installed` } : { ok: false, error: `Flatpak ${id} is not installed` }; }
     if (!exists(t.exe)) return { ok: false, error: `Target not found: ${t.exe}` };
-    try { fs.accessSync(t.exe, fs.constants.X_OK); } catch { return { ok: false, error: `Target is not executable: ${t.exe}` }; }
+    if (!/\.exe$/i.test(t.exe)) try { fs.accessSync(t.exe, fs.constants.X_OK); } catch { return { ok: false, error: `Target is not executable: ${t.exe}` }; }
     const bios = ctx.biosCheck?.(key);
     return { ok: true, note: bios || 'Target found' };
   }
@@ -1205,7 +1212,7 @@ module.exports = function createSteamManager(ctx) {
       if (dir && exists(dir)) { const a = detect.flatpakCanSee(fpId, dir); if (a.known && !a.ok) add('bad', 'This Flatpak emulator has no access to your games folder, so games won’t open.', { fix: a.fix, copy: a.fix, allow: { id: fpId, dir: real(dir) } }); }
     } else if (!exists(t.exe)) add('bad', `The emulator isn't at ${t.exe.replace(HOME, '~')} any more.`, { relink: true });
     else {
-      try { fs.accessSync(t.exe, fs.constants.X_OK); } catch { add('bad', `${path.basename(t.exe)} isn't allowed to run. Right-click it, Properties, and allow running it as a program (or run: chmod +x on it).`, { copy: `chmod +x "${t.exe}"` }); }
+      if (!/\.exe$/i.test(t.exe)) try { fs.accessSync(t.exe, fs.constants.X_OK); } catch { add('bad', `${path.basename(t.exe)} isn't allowed to run. Right-click it, Properties, and allow running it as a program (or run: chmod +x on it).`, { copy: `chmod +x "${t.exe}"` }); }
       if (detect.appImageType(t.exe) && detect.missingFuse2(t.exe)) add('warn', 'This AppImage may need FUSE 2 (libfuse2), which isn’t installed. If it won’t start, install libfuse2, or tell Steam to unpack it by adding APPIMAGE_EXTRACT_AND_RUN=1 before %command%.');
     }
     const core = (String(t.args).match(/-L\s+("?)([^"\s]+)\1/) || [])[2];
