@@ -2472,6 +2472,27 @@ async function uploadFile({ path: f, platformId }) {
   })().then(() => put({ pct: 100, state: 'done' }), (e) => put({ state: st.abort.signal.aborted ? 'cancelled' : 'error', error: st.abort.signal.aborted ? null : e.message }));
   return { path: f, state: 'uploading' };
 }
+// One game from RomM into the library (a game just uploaded), without a full sync: in its console's list by name,
+// counted as new. A console the library doesn't know yet needs the full sync.
+const fuseAdded = new Set();
+async function addToLibrary(romId) {
+  if (!library) return;
+  const slim = slimRom(await api(`/api/roms/${Number(romId)}`));
+  const p = library.platforms.find((x) => x.id === slim.platform_id);
+  if (!p) { syncLibrary().catch(() => {}); return; }
+  const list = (library.roms[p.id] ||= []);
+  const i = list.findIndex((x) => x.id === slim.id);
+  if (i >= 0) list[i] = { ...list[i], ...slim };
+  else {
+    const at = list.findIndex((x) => String(x.name).localeCompare(slim.name) > 0);
+    list.splice(at < 0 ? list.length : at, 0, slim);
+    p.rom_count = (p.rom_count || 0) + 1;
+    (library.firstSeen ||= {})[slim.id] = Date.now();
+    library.lastNew = [slim.id, ...(library.lastNew || []).filter((x) => x !== slim.id)].slice(0, 50);
+  }
+  saveLib();
+  computeInstalled();
+}
 // Games Fuse hands over to upload (electron/fuseUpload.js, docs/FUSE_BRIDGE.md): checked and shown first, sent
 // only after the user confirms here, one at a time; kept in fuse-uploads.json for the Fuse status
 const FUSE_UPLOADS_FILE = path.join(USER_DATA, 'fuse-uploads.json');
@@ -2481,7 +2502,11 @@ fuseUploads = fuseUpload.createUploads({
   heartbeat: () => api('/api/heartbeat'),
   scan: (platforms) => scanServer({ platforms, quiet: true }),
   denied: DENIED_WRITE,
-  onChange: (list) => { broadcast('fuse-uploads', list); updatePowerBlock(); },
+  onChange: (list) => {
+    broadcast('fuse-uploads', list); updatePowerBlock();
+    // a finished upload that RomM has added: into the library now, not at the next sync (it only showed after a restart)
+    for (const j of list) if (j.state === 'done' && j.romId && !fuseAdded.has(j.id)) { fuseAdded.add(j.id); addToLibrary(j.romId).catch((e) => log('fuse upload: add to library', e.message)); }
+  },
   save: (list) => saveJson(FUSE_UPLOADS_FILE, list),
 });
 fuseUploads.restore(loadJson(FUSE_UPLOADS_FILE, []));
@@ -2614,6 +2639,9 @@ const handlers09 = {
       const v = config.configured ? (await probe(await resolveBase(), config.server, 4000))?.version : null;
       if (v && rommTooOld(v)) add('romm', `RomM ${v} is older than Cartridge supports (${ROMM_MIN.join('.')} or newer)`, 'Games still sync, but collections, play status and uploads may not work. Update RomM on your server.', 'romm');
     } catch {}
+    // Android has no Steam, and these checks walk shared storage (slow there): it blocked every other call while
+    // Settings → Emulators was open. Android's own issues come from src/android/issues.js.
+    if (onAndroid) return out;
     try {
       const miss = steamMgr.verifyCollections() || [];
       if (miss.length) { add('collections', `${miss.length} game${miss.length === 1 ? ' is' : 's are'} missing from ${[...new Set(miss.map((m) => m.collection))].join(', ')}`, 'Steam Cloud may have replaced your Steam collections', 'collections'); out[out.length - 1].items = miss.map((m) => ({ name: m.name, collection: m.collection })); }

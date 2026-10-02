@@ -1,5 +1,7 @@
 package io.github.abdu2304.cartridge;
 
+import android.content.Intent;
+import android.net.Uri;
 import android.os.Bundle;
 import android.view.Display;
 import android.view.InputDevice;
@@ -34,6 +36,21 @@ public class MainActivity extends BridgeActivity {
         s.setMediaPlaybackRequiresUserGesture(false);
         applyImmersive();
         highRefresh();
+        grantFuse();
+    }
+
+    /**
+     * Fuse reads the status provider with READ_STATUS, which Android only grants when Cartridge was installed
+     * before Fuse: after reinstalling Cartridge, Fuse lost it and showed "can't be opened on a page" until Fuse
+     * was reinstalled too. A URI grant to Fuse on every start makes the install order not matter.
+     */
+    private void grantFuse() {
+        String fuse = "io.github.matiyaaa.fuse";
+        try {
+            getPackageManager().getPackageInfo(fuse, 0); // not installed: nothing to grant
+            Uri status = Uri.parse("content://" + getPackageName() + ".status/");
+            grantUriPermission(fuse, status, Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_PREFIX_URI_PERMISSION);
+        } catch (Exception ignored) {}
     }
 
     /** Ask for the display's fastest mode at its current size (120 Hz on the Thor). WebViews otherwise often settle at 60. */

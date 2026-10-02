@@ -1,4 +1,6 @@
-## Cartridge 0.9.16 · Snappy Again
+## Cartridge 0.9.17 · Fuse and Settings Fixes
 
 ### Fixed
-- **Taps and presses take effect right away again after a big sync.** Cartridge kept the name of every file inside every game. For extracted games (PS4, PS5, Switch folders with thousands of files each) that made the library tens of megabytes, and the app went through all of it every time anything changed, so on Android a tap could take a minute to do anything. The screen no longer gets the file lists at all (game pages ask RomM for a game's files when you open it), and Cartridge keeps at most 40 file names per game. A library of 230 PS4 games went from 28 MB to under 0.1 MB. Libraries already on your device are trimmed when Cartridge starts.
+- **Fuse sees Cartridge again.** Fuse reads Cartridge's status with a permission Android only gives it when Cartridge was installed first. After Cartridge was reinstalled, Fuse lost it and said "This Cartridge opens, but it can't be opened on a page or show its downloads here" with "Status unknown". Cartridge now gives Fuse read access itself every time it starts, so the order you install them in no longer matters.
+- **Games uploaded from Fuse show up straight away.** Once RomM has added an uploaded game, it goes into your library at once instead of after the next sync (which, for most people, meant after restarting Cartridge).
+- **Settings no longer freezes on Android.** Opening Settings → Emulators ran the desktop's Steam and emulator checks, which search through shared storage and kept Cartridge busy, so taps in Settings did nothing for a long time. On Android only Android's own checks run now.

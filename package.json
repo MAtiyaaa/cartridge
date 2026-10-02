@@ -1,7 +1,7 @@
 {
   "name": "cartridge",
   "productName": "Cartridge",
-  "version": "0.9.16",
+  "version": "0.9.17",
   "description": "Controller-first RomM client for SteamOS, Bazzite and Android",
   "main": "electron/main.js",
   "author": "abdu2304",
@@ -52,7 +52,7 @@
       }
     ],
     "releaseInfo": {
-      "releaseName": "Cartridge 0.9.16 · Snappy Again",
+      "releaseName": "Cartridge 0.9.17 · Fuse and Settings Fixes",
       "releaseNotesFile": "RELEASE_NOTES.md"
     }
   },

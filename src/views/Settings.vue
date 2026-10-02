@@ -675,7 +675,7 @@ async function fixIssue(i) {
   if (v !== 'fix') return;
   try { await call('steam:fixCollections'); toast('Putting them back in their collections', 'ok', 3000, 'mdiSteam'); loadIssues(); } catch (e) { toast(e.message, 'error'); }
 }
-watch(sec, (v) => { store.settingsSection = v; if (v === 'emu') loadIssues(); }, { immediate: true });
+watch(sec, (v) => { store.settingsSection = v; if (v === 'emu' && !IS_ANDROID) loadIssues(); }, { immediate: true }); // Android: AndroidEmulators has its own
 
 
 function enter() { focusFirst(paneEl.value); }
