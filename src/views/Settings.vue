@@ -167,7 +167,8 @@
                 <div class="stack">
                   <button v-for="r in g.roms" :key="r.id" class="lrow" data-focus @click="openAddons(r)">
                     <img v-if="coverSmall(r.id)" class="up-cover" :src="coverSmall(r.id)" loading="lazy" /><Icon v-else name="mdiPuzzleOutline" :size="24" />
-                    <div class="l-mid"><b>{{ r.name }}</b><span v-if="addonCount(r.id)" class="l-sub">{{ addonCount(r.id) }} installed</span></div>
+                    <div class="l-mid"><b>{{ r.name }}</b><span v-if="presentText(r.id)" class="l-sub">{{ presentText(r.id) }}</span><span v-else-if="addonCount(r.id)" class="l-sub">{{ addonCount(r.id) }} installed</span></div>
+                    <span v-if="addonsHere[r.id]" class="status ok"><Icon name="mdiCheck" :size="14" />{{ addonsHere[r.id].some((x) => !x.mods) ? 'Texture pack' : 'Mods' }}</span>
                     <span class="l-end">Add-ons</span>
                   </button>
                 </div>
@@ -824,7 +825,18 @@ const addonGames = computed(() => {
 });
 const addonsMine = ref([]);
 const addonCount = (romId) => addonsMine.value.filter((a) => a.romId === romId).length;
-async function loadAddons() { addonsMine.value = await call('addons:installed').catch(() => []); }
+async function loadAddons() {
+  addonsMine.value = await call('addons:installed').catch(() => []);
+  addonsHere.value = await call('addons:present', { romIds: addonGames.value.flatMap((g) => g.roms.map((r) => r.id)) }).catch(() => ({}));
+}
+// what is already in each game's folder (0.9.19): a texture pack or mods, put in by Cartridge or not
+const addonsHere = ref({});
+const BY_TEXT = { cartridge: 'installed by Cartridge', other: 'added outside Cartridge', both: 'some installed by Cartridge' };
+function presentText(id) {
+  const f = addonsHere.value[id];
+  if (!f) return '';
+  return f.map((x) => `${x.mods ? 'Mods' : 'Texture pack'} in ${x.name}, ${BY_TEXT[x.by]}${!x.mods && !x.on ? ' (textures are off there)' : ''}`).join(' · ');
+}
 async function openAddons(r) { await openModal('addons', { romId: r.id, name: r.name }); loadAddons(); }
 async function removeAddon(a) {
   if (!(await confirm('Remove this add-on?', `${a.name} (${a.game})\n\nOnly the ${a.count} files Cartridge put in ${a.emuName}’s folder are deleted.`, 'Remove', true))) return;

@@ -9,34 +9,37 @@ const os = require('os');
 const { spawn, execFileSync } = require('child_process');
 const { REPOS, latestRelease } = require('./emuUpdates');
 
-// console -> emulators: EMU ids (emulators.js), with where they come from
-const GH = (id, extra = {}) => ({ id, how: 'appimage', ...REPOS[id], ...extra });
+// console -> emulators: EMU ids (emulators.js), with where they come from. 0.9.19: checked against
+// EmuDeck's install scripts (the same releases): Flycast, RMG, ares, MAME, Supermodel, ScummVM, Xemu
+// come from Flathub as EmuDeck installs them; an AppImage that can't be found falls back to the
+// emulator's Flatpak (fp) when it has one. name: the AppImage's file name, kept for good (updates
+// replace it in place), the names EmuDeck and ES-DE look for.
+const GH = (id, name, extra = {}) => ({ id, how: 'appimage', name, ...REPOS[id], ...extra });
 const FP = (id, fp) => ({ id, how: 'flatpak', fp });
 const MORE = {
-  shadps4: { repo: 'shadps4-emu/shadps4-qtlauncher', asset: /\.AppImage$/i },
-  eden: { repo: 'eden-emulator/Releases', asset: /\.AppImage$/i },
-  ryujinx: { repo: 'Ryubing/Stable-Releases', asset: /x64.*\.AppImage$/i },
-  flycast: { repo: 'flyinghead/flycast', asset: /x86_64\.AppImage$/i },
-  mgba: { repo: 'mgba-emu/mgba', asset: /x64\.AppImage$|x86_64\.AppImage$/i },
   rmg: { repo: 'Rosalie241/RMG', asset: /x86_64\.AppImage$|\.AppImage$/i },
 };
 const CATALOG = [
-  { key: 'psx', name: 'PlayStation', emus: [GH('duckstation'), FP('retroarch', 'org.libretro.RetroArch')] },
-  { key: 'ps2', name: 'PlayStation 2', emus: [GH('pcsx2')] },
-  { key: 'ps3', name: 'PlayStation 3', emus: [GH('rpcs3')] },
-  { key: 'ps4', name: 'PlayStation 4', emus: [GH('shadps4', MORE.shadps4)] },
+  { key: 'psx', name: 'PlayStation', emus: [GH('duckstation', 'DuckStation.AppImage'), FP('retroarch', 'org.libretro.RetroArch')] },
+  { key: 'ps2', name: 'PlayStation 2', emus: [GH('pcsx2', 'pcsx2-Qt.AppImage', { fp: 'net.pcsx2.PCSX2' })] },
+  { key: 'ps3', name: 'PlayStation 3', emus: [GH('rpcs3', 'rpcs3.AppImage', { fp: 'net.rpcs3.RPCS3' })] },
+  { key: 'ps4', name: 'PlayStation 4', emus: [GH('shadps4', 'Shadps4-qt.AppImage')] },
   { key: 'psp', name: 'PSP', emus: [FP('ppsspp', 'org.ppsspp.PPSSPP')] },
-  { key: 'psvita', name: 'PS Vita', emus: [GH('vita3k')] },
+  { key: 'psvita', name: 'PS Vita', emus: [GH('vita3k', 'Vita3K.AppImage')] },
   { key: 'gc', name: 'GameCube and Wii', emus: [FP('dolphin', 'org.DolphinEmu.dolphin-emu'), FP('primehack', 'io.github.shiiion.primehack')] },
-  { key: 'wiiu', name: 'Wii U', emus: [GH('cemu')] },
-  { key: 'switch', name: 'Switch', emus: [GH('eden', MORE.eden), GH('ryujinx', MORE.ryujinx)] },
-  { key: 'n3ds', name: 'Nintendo 3DS', emus: [GH('azahar')] },
+  { key: 'wiiu', name: 'Wii U', emus: [GH('cemu', 'Cemu.AppImage', { fp: 'info.cemu.Cemu' })] },
+  { key: 'switch', name: 'Switch', emus: [GH('eden', 'Eden.AppImage', { fp: 'dev.eden_emu.eden' }), GH('ryujinx', 'Ryujinx.AppImage', { fp: 'io.github.ryubing.Ryujinx' })] },
+  { key: 'n3ds', name: 'Nintendo 3DS', emus: [GH('azahar', 'azahar.AppImage', { fp: 'org.azahar_emu.Azahar' })] },
   { key: 'nds', name: 'Nintendo DS', emus: [FP('melonds', 'net.kuribo64.melonDS')] },
-  { key: 'gba', name: 'Game Boy Advance', emus: [GH('mgba', MORE.mgba)] },
-  { key: 'n64', name: 'Nintendo 64', emus: [GH('rmg', MORE.rmg)] },
-  { key: 'xbox', name: 'Xbox', emus: [GH('xemu')] },
-  { key: 'dreamcast', name: 'Dreamcast', emus: [GH('flycast', MORE.flycast)] },
-  { key: 'retro', name: 'Retro consoles (NES to N64, Mega Drive, Saturn and more)', emus: [FP('retroarch', 'org.libretro.RetroArch')] },
+  { key: 'gba', name: 'Game Boy Advance', emus: [GH('mgba', 'mGBA.AppImage', { fp: 'io.mgba.mGBA' })] },
+  { key: 'n64', name: 'Nintendo 64', emus: [FP('rmg', 'com.github.Rosalie241.RMG'), FP('ares', 'dev.ares.ares')] },
+  { key: 'xbox', name: 'Xbox', emus: [FP('xemu', 'app.xemu.xemu')] },
+  { key: 'xbox360', name: 'Xbox 360', emus: [GH('xeniaedge', 'xenia_edge.AppImage')] },
+  { key: 'dreamcast', name: 'Dreamcast', emus: [FP('flycast', 'org.flycast.Flycast')] },
+  { key: 'saturn', name: 'Saturn', emus: [FP('ares', 'dev.ares.ares'), FP('retroarch', 'org.libretro.RetroArch')] },
+  { key: 'arcade', name: 'Arcade', emus: [FP('mame', 'org.mamedev.MAME'), FP('supermodel', 'com.supermodel3.Supermodel')] },
+  { key: 'scummvm', name: 'ScummVM', emus: [FP('scummvm', 'org.scummvm.ScummVM')] },
+  { key: 'retro', name: 'Retro consoles (NES to N64, Mega Drive, PC Engine and more)', emus: [FP('retroarch', 'org.libretro.RetroArch'), FP('ares', 'dev.ares.ares')] },
 ];
 let appsDir = null; // set from config: <drive>/Emulation/emulators when the user picked a drive (0.9.17)
 // ES-DE's console folder names, for the Emulation folder Cartridge makes on the drive the user picks
@@ -48,20 +51,27 @@ const hasFlatpak = () => { try { execFileSync('sh', ['-c', 'command -v flatpak']
 
 // the newest AppImage of one emulator (GitHub API, as Updates reads it)
 async function release(e, opts) {
-  const r = await latestRelease(e.id, { ...opts, spec: { repo: e.repo, asset: e.asset, tag: e.tag, pre: e.pre } });
+  const r = await latestRelease(e.id, { ...opts, spec: { repo: e.repo, asset: e.asset, tag: e.tag, pre: e.pre, forge: e.forge, first: e.first, zipped: e.zipped } });
   if (!r) throw new Error(`No Linux AppImage in ${e.repo}'s newest release.`);
   return r;
 }
-// AppImage into ~/Applications under its release name (never over a file that's there)
+// AppImage into the emulators folder (~/Applications unless a drive was picked) under its lasting name
+// (0.9.19: never the release's versioned name, which an update would leave out of date); never over a
+// file that's there
 async function getAppImage(e, download, opts = {}) {
   const rel = await release(e, opts);
-  const name = rel.name.replace(/[\\/]/g, '_');
+  const name = String(e.name || rel.name).replace(/[\\/]/g, '_');
   const dest = path.join(APPS(), /\.AppImage$/i.test(name) ? name : name + '.AppImage');
   if (fs.existsSync(dest)) return { path: dest, version: rel.version, already: true };
   fs.mkdirSync(APPS(), { recursive: true });
   const tmp = dest + '.cartridge-new';
-  await download(rel.url, tmp, rel.size);
-  if (rel.size && fs.statSync(tmp).size !== rel.size) { fs.rmSync(tmp, { force: true }); throw new Error('The download was incomplete. Try again.'); }
+  if (rel.zipped) {
+    const z = dest + '.cartridge-zip';
+    try { await download(rel.url, z, rel.size); await require('./emuUpdates').appImageFromZip(z, tmp, rel.zipped); } finally { fs.rmSync(z, { force: true }); }
+  } else {
+    await download(rel.url, tmp, rel.size);
+    if (rel.size && fs.statSync(tmp).size !== rel.size) { fs.rmSync(tmp, { force: true }); throw new Error('The download was incomplete. Try again.'); }
+  }
   fs.chmodSync(tmp, 0o755); fs.renameSync(tmp, dest);
   return { path: dest, version: rel.version };
 }
@@ -79,4 +89,4 @@ function getFlatpak(fp, onProgress = () => {}) {
   });
 }
 
-module.exports = { CATALOG, MORE, APPS, setAppsDir, ESDE, getAppImage, getFlatpak, release };
+module.exports = { CATALOG, MORE, APPS, setAppsDir, ESDE, getAppImage, getFlatpak, release, hasFlatpak };

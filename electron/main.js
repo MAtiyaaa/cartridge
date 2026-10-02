@@ -3067,6 +3067,27 @@ const handlers = {
     finally { addonRun = null; for (const f of [...files, base + '.zip']) fs.rmSync(f, { force: true }); fs.rmSync(base + '.zip.unpacked', { recursive: true, force: true }); }
   },
   'addons:cancel': () => { addonRun?.abort.abort(); return true; },
+  // 0.9.19 (owner: a green check when a game already has a texture pack, and whether Cartridge put it
+  // there): for each game asked about, the emulators whose folder for it holds files, and whether
+  // those files are all ones Cartridge installed
+  'addons:present': async ({ romIds = [] } = {}) => {
+    const recs = Object.values(addonRecs()), out = {};
+    const count = (d, cap = 200) => { let n = 0; const walk = (x, depth) => { for (const e of (() => { try { return fs.readdirSync(x, { withFileTypes: true }); } catch { return []; } })()) { if (n >= cap) return; if (e.isDirectory()) { if (depth < 6) walk(path.join(x, e.name), depth + 1); } else n++; } }; walk(d, 0); return n; };
+    for (const id of romIds.slice(0, 400)) {
+      let emus = []; try { emus = handlers['addons:forGame']({ romId: id }); } catch {}
+      const found = [];
+      for (const e of emus) {
+        if (!e.folder || path.resolve(e.folder) === path.resolve(e.root) || !e.has) continue; // Cemu's shared graphicPacks folder isn't one game's
+        const files = e.has ? count(e.folder) : 0;
+        if (!files) continue;
+        const mine = recs.filter((r) => r.romId === Number(id) && r.emuRoot === e.emuRoot).reduce((n, r) => n + r.files.length, 0);
+        found.push({ emu: e.id, name: e.name, files, by: mine >= files ? 'cartridge' : mine ? 'both' : 'other', on: e.on, mods: e.mods });
+      }
+      if (found.length) out[id] = found;
+      await new Promise((r) => setImmediate(r)); // a long list never holds up the window
+    }
+    return out;
+  },
   'addons:installed': () => Object.entries(addonRecs()).map(([key, r]) => ({ key, ...r, files: undefined, count: r.files.length })),
   'addons:remove': async ({ key }) => {
     const recs = addonRecs(), r = recs[key];
@@ -3086,7 +3107,7 @@ const handlers = {
       const ck = { retro: 'snes', gc: 'gc' }[key] || key;
       return (steamMgr.candidatesFor(ck) || []).some((c) => c.id.split('@')[0] === e.id);
     };
-    return G.CATALOG.map((c) => ({ key: c.key, name: c.name, emus: c.emus.map((e) => ({ id: e.id, label: require('./emulators').EMU[e.id]?.label || (e.id === 'retroarch' ? 'RetroArch' : e.id), how: e.how, from: e.how === 'flatpak' ? 'Flatpak from Flathub' : `AppImage from ${e.repo.split('/')[0]} on GitHub`, installed: isHere(e, c.key) })) }));
+    return G.CATALOG.map((c) => ({ key: c.key, name: c.name, emus: c.emus.map((e) => ({ id: e.id, label: require('./emulators').EMU[e.id]?.label || { retroarch: 'RetroArch', supermodel: 'Supermodel' }[e.id] || e.id, how: e.how, from: e.how === 'flatpak' ? 'Flatpak from Flathub' : `AppImage from ${e.repo.split('/')[0]}${e.fp ? ', else its Flatpak' : ''}`, installed: isHere(e, c.key) })) }));
   },
   // where emulators live (0.9.17): this device and every mounted drive, with free space
   'emuget:drives': async () => {
@@ -3127,7 +3148,13 @@ const handlers = {
       if (e.how === 'flatpak') r = await G.getFlatpak(e.fp, (pct) => send({ pct }));
       else {
         let got = 0, total = 0, last = 0;
-        r = await G.getAppImage(e, (url, dest, size) => { total = size || 0; return downloadTo(url, dest, emuGetRun, (n) => { got += n; const now = Date.now(); if (now - last > 400) { last = now; send({ pct: total ? Math.min(99, Math.floor((got / total) * 100)) : null }); } }, { plain: true }); });
+        try { r = await G.getAppImage(e, (url, dest, size) => { got = 0; total = size || 0; return downloadTo(url, dest, emuGetRun, (n) => { got += n; const now = Date.now(); if (now - last > 400) { last = now; send({ pct: total ? Math.min(99, Math.floor((got / total) * 100)) : null }); } }, { plain: true }); }); }
+        catch (err) {
+          // 0.9.19: no AppImage to be had (its server refused, or the release has none): its Flatpak instead
+          if (!e.fp || emuGetRun.abort.signal.aborted || !G.hasFlatpak()) throw err;
+          log('emulator AppImage failed, trying Flatpak', id, err.message);
+          r = await G.getFlatpak(e.fp, (pct) => send({ pct }));
+        }
       }
       log('emulator downloaded', id, r.path || r.fp);
       send({ pct: 100, done: true });
