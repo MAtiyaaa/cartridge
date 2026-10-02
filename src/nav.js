@@ -282,11 +282,15 @@ function poll() {
     }
   }
   padLive.pads = pads;
-  if (document.hasFocus()) for (const key of ACTIONS) press(key, !!merged[key], now);
+  if (document.hasFocus() && !inBackground) for (const key of ACTIONS) press(key, !!merged[key], now);
+  else for (const key of ACTIONS) if (state[key]) state[key].down = !!merged[key]; // a press held while away doesn't fire on return
 }
 // Every 8 ms while Cartridge is in front; when it isn't (a game is running, or you switched away)
 // only a few times a second, so it costs the system nothing in the background (A14)
-(function loop() { poll(); setTimeout(loop, document.hasFocus() ? 8 : 250); })();
+(function loop() { poll(); setTimeout(loop, document.hasFocus() && !inBackground ? 8 : 250); })();
+// Game Mode: Steam's menu is in front while Cartridge keeps its window focus (main.js watchGamescopeFocus)
+let inBackground = false;
+export function setBackground(v) { inBackground = !!v; }
 
 export function ensureFocus(root) {
   if (!root) return;

@@ -83,7 +83,7 @@ import { store, loadConfig, loadLibrary, loadArt, back, tab, go, call, toast, ch
 import { pushLayer, focusFirst } from './nav.js';
 import { setSoundEnabled, setSoundStyle, sfx } from './sfx.js';
 import { applyTheme, CARD_SIZES } from './themes.js';
-import { setPointerPref, setRumble } from './nav.js';
+import { setPointerPref, setRumble, setBackground } from './nav.js';
 import { detectPad } from './pad.js';
 import Icon from './components/Icon.vue';
 import Btn from './components/Btn.vue';
@@ -219,6 +219,7 @@ onMounted(async () => {
   const openGame = (id) => { if (id && store.lib) { store.quickMenu = false; go('game', { romId: Number(id) }); } };
   call('app:startGame').then(openGame).catch(() => {});
   window.cart.on('open-game', openGame);
+  window.cart.on('background', (b) => setBackground(b?.away));
   setTimeout(steamReport, 2500);
   // 0.9: a new install goes through emulator Setup once, after connecting to RomM
   if (store.config.configured && !store.config.setupDone) go('emu-setup', { first: true });

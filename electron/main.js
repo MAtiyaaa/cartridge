@@ -131,6 +131,27 @@ if (!process.env.CARTRIDGE_SMOKE && !process.env.CARTRIDGE_MULTI) {
     app.on('will-quit', () => { try { fs.rmSync(BEAT_FILE, { force: true }); } catch {} });
   }
 }
+// In Game Mode the window keeps its focus while Steam's menu (Home) is in front, and the controller is
+// read straight from the device, so presses still reached Cartridge (0.9.3 L). gamescope says which
+// app is in front in the root window's GAMESCOPE_FOCUSED_APP; Steam gives a shortcut it starts its id
+// in SteamGameId (the app id in the top 32 bits). When another app is in front, the UI stops reading
+// the pad (event 'background'). Without xprop or those ids nothing changes.
+function watchGamescopeFocus() {
+  const gid = process.env.SteamGameId || process.env.STEAM_GAME_ID || '';
+  if (!isGamescope() || !/^\d+$/.test(gid)) return;
+  let mine = BigInt(gid); if (mine > 0xffffffffn) mine >>= 32n;
+  let last = null, busy = false;
+  setInterval(() => {
+    if (busy) return; busy = true;
+    require('child_process').execFile('xprop', ['-root', 'GAMESCOPE_FOCUSED_APP'], { timeout: 1500 }, (err, out) => {
+      busy = false;
+      const m = /=\s*(\d+)/.exec(String(out || ''));
+      if (err || !m) return;
+      const away = BigInt(m[1]) !== mine && m[1] !== '0';
+      if (away !== last) { last = away; broadcast('background', { away }); }
+    });
+  }, 600);
+}
 function isGamescope() {
   const e = process.env;
   const de = ((e.XDG_CURRENT_DESKTOP || '') + ' ' + (e.XDG_SESSION_DESKTOP || '') + ' ' + (e.DESKTOP_SESSION || '')).toLowerCase();
@@ -2694,6 +2715,7 @@ app.whenReady().then(() => {
     if (config.configured && every && library && Date.now() - library.syncedAt > every) syncLibrary().catch(() => {});
   }, 60e3);
   win.on('focus', () => { if (library) computeInstalled(); });
+  watchGamescopeFocus();
   setupUpdater();
   // Safety net if the display could not be read up front: a big window drawn in software is
   // unusably slow, so restart once with the GPU. A user or crash-chosen "software" is respected.
