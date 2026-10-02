@@ -17,6 +17,8 @@ const MORE = {
   eden: { repo: 'eden-emulator/Releases', asset: /\.AppImage$/i },
   ryujinx: { repo: 'Ryubing/Stable-Releases', asset: /x64.*\.AppImage$/i },
   flycast: { repo: 'flyinghead/flycast', asset: /x86_64\.AppImage$/i },
+  mgba: { repo: 'mgba-emu/mgba', asset: /x64\.AppImage$|x86_64\.AppImage$/i },
+  rmg: { repo: 'Rosalie241/RMG', asset: /x86_64\.AppImage$|\.AppImage$/i },
 };
 const CATALOG = [
   { key: 'psx', name: 'PlayStation', emus: [GH('duckstation'), FP('retroarch', 'org.libretro.RetroArch')] },
@@ -25,16 +27,22 @@ const CATALOG = [
   { key: 'ps4', name: 'PlayStation 4', emus: [GH('shadps4', MORE.shadps4)] },
   { key: 'psp', name: 'PSP', emus: [FP('ppsspp', 'org.ppsspp.PPSSPP')] },
   { key: 'psvita', name: 'PS Vita', emus: [GH('vita3k')] },
-  { key: 'gc', name: 'GameCube and Wii', emus: [FP('dolphin', 'org.DolphinEmu.dolphin-emu')] },
+  { key: 'gc', name: 'GameCube and Wii', emus: [FP('dolphin', 'org.DolphinEmu.dolphin-emu'), FP('primehack', 'io.github.shiiion.primehack')] },
   { key: 'wiiu', name: 'Wii U', emus: [GH('cemu')] },
   { key: 'switch', name: 'Switch', emus: [GH('eden', MORE.eden), GH('ryujinx', MORE.ryujinx)] },
   { key: 'n3ds', name: 'Nintendo 3DS', emus: [GH('azahar')] },
   { key: 'nds', name: 'Nintendo DS', emus: [FP('melonds', 'net.kuribo64.melonDS')] },
+  { key: 'gba', name: 'Game Boy Advance', emus: [GH('mgba', MORE.mgba)] },
+  { key: 'n64', name: 'Nintendo 64', emus: [GH('rmg', MORE.rmg)] },
   { key: 'xbox', name: 'Xbox', emus: [GH('xemu')] },
   { key: 'dreamcast', name: 'Dreamcast', emus: [GH('flycast', MORE.flycast)] },
   { key: 'retro', name: 'Retro consoles (NES to N64, Mega Drive, Saturn and more)', emus: [FP('retroarch', 'org.libretro.RetroArch')] },
 ];
-const APPS = () => path.join(os.homedir(), 'Applications');
+let appsDir = null; // set from config: <drive>/Emulation/emulators when the user picked a drive (0.9.17)
+// ES-DE's console folder names, for the Emulation folder Cartridge makes on the drive the user picks
+const ESDE = ['3do', 'arcade', 'atari2600', 'dreamcast', 'gamecube', 'gb', 'gba', 'gbc', 'genesis', 'mastersystem', 'megacd', 'n3ds', 'n64', 'nds', 'neogeo', 'nes', 'pcengine', 'ps2', 'ps3', 'ps4', 'psp', 'psvita', 'psx', 'saturn', 'segacd', 'snes', 'switch', 'wii', 'wiiu', 'xbox', 'xbox360'];
+const APPS = () => appsDir || path.join(os.homedir(), 'Applications');
+const setAppsDir = (d) => { appsDir = d || null; };
 function plainEnv() { const env = { ...process.env }; for (const k of ['LD_PRELOAD', 'LD_LIBRARY_PATH', 'APPDIR', 'APPIMAGE', 'ARGV0', 'OWD']) delete env[k]; return env; }
 const hasFlatpak = () => { try { execFileSync('sh', ['-c', 'command -v flatpak'], { stdio: 'ignore', env: plainEnv() }); return true; } catch { return false; } };
 
@@ -71,4 +79,4 @@ function getFlatpak(fp, onProgress = () => {}) {
   });
 }
 
-module.exports = { CATALOG, MORE, APPS, getAppImage, getFlatpak, release };
+module.exports = { CATALOG, MORE, APPS, setAppsDir, ESDE, getAppImage, getFlatpak, release };

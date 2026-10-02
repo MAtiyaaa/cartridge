@@ -1878,6 +1878,20 @@ const webFetch = require('./webFetch'); // outside services through Chromium's n
 // add-ons Cartridge installed (0.9.17): { key: { dest, files, ... } }; Remove deletes only those files
 const ADDONS_FILE = path.join(USER_DATA, 'addons-installed.json');
 let addonRun = null, addonCache = null, emuGetRun = null;
+const emuGetQ = [];
+async function pumpEmuGet() {
+  if (emuGetRun || !emuGetQ.some((q) => q.state === 'wait')) return;
+  const q = emuGetQ.find((x) => x.state === 'wait');
+  q.state = 'run'; broadcast('emuget-state', emuGetQ);
+  const off = (m) => { if (m.key === q.key && m.id === q.id && m.pct != null) { q.pct = m.pct; broadcast('emuget-state', emuGetQ); } };
+  emuGetListeners.add(off);
+  try { await handlers['emuget:install']({ key: q.key, id: q.id }); q.state = 'done'; }
+  catch (e) { q.state = 'error'; q.error = e.message; }
+  emuGetListeners.delete(off);
+  broadcast('emuget-state', emuGetQ);
+  pumpEmuGet();
+}
+const emuGetListeners = new Set();
 const addonRecs = () => (addonCache ||= loadJson(ADDONS_FILE, {}));
 const PATCHES_FILE = path.join(USER_DATA, 'patches.json');
 let patchMine = loadJson(PATCHES_FILE, {});
@@ -3038,13 +3052,40 @@ const handlers = {
     };
     return G.CATALOG.map((c) => ({ key: c.key, name: c.name, emus: c.emus.map((e) => ({ id: e.id, label: require('./emulators').EMU[e.id]?.label || (e.id === 'retroarch' ? 'RetroArch' : e.id), how: e.how, from: e.how === 'flatpak' ? 'Flatpak from Flathub' : `AppImage from ${e.repo.split('/')[0]} on GitHub`, installed: isHere(e, c.key) })) }));
   },
+  // where emulators live (0.9.17): this device and every mounted drive, with free space
+  'emuget:drives': async () => {
+    const u = os.userInfo().username, out = [{ path: os.homedir(), label: 'This device', internal: true }];
+    for (const b of [`/run/media/${u}`, '/run/media', '/media', `/media/${u}`, '/mnt']) for (const n of (() => { try { return fs.readdirSync(b); } catch { return []; } })()) {
+      const d = path.join(b, n);
+      if (!isDir(d) || n === u || out.some((x) => x.path === d)) continue;
+      try { fs.accessSync(d, fs.constants.W_OK); } catch { continue; }
+      out.push({ path: d, label: n, internal: false });
+    }
+    for (const d of out) { try { const st = await fsp.statfs(d.path); d.free = st.bavail * st.bsize; d.total = st.blocks * st.bsize; } catch {} d.emulation = isDir(path.join(d.path, 'Emulation')); }
+    return out;
+  },
+  // an ES-DE style Emulation folder there: roms/<console>, bios, emulators (Cartridge's AppImages)
+  'emuget:prepare': ({ base }) => {
+    if (!base || !isDir(base)) throw new Error('That drive isn’t there.');
+    const root = path.join(base, 'Emulation'), G = require('./emuGet');
+    for (const d of [...G.ESDE.map((c) => path.join(root, 'roms', c)), path.join(root, 'bios'), path.join(root, 'emulators')]) fs.mkdirSync(d, { recursive: true });
+    config.romsRoot = path.join(root, 'roms'); config.biosPath ||= path.join(root, 'bios'); config.emuDir = path.join(root, 'emulators');
+    saveConfig(); G.setAppsDir(config.emuDir);
+    if (library) { broadcast('library', publicLibrary()); computeInstalled(); }
+    log('emulation folder made', root);
+    return { root, romsRoot: config.romsRoot, biosPath: config.biosPath, emuDir: config.emuDir };
+  },
+  // background queue: Download all, or one at a time, while the page stays usable
+  'emuget:queue': ({ items } = {}) => { for (const it of items || []) if (!emuGetQ.some((q) => q.key === it.key && q.id === it.id && /wait|run/.test(q.state))) emuGetQ.push({ key: it.key, id: it.id, state: 'wait', pct: null }); pumpEmuGet(); return emuGetQ; },
+  'emuget:state': () => emuGetQ,
   'emuget:install': async ({ key, id }) => {
     if (emuGetRun) throw new Error('Another emulator is downloading. Wait for it to finish.');
     const G = require('./emuGet');
+    G.setAppsDir(config.emuDir);
     const e = G.CATALOG.find((c) => c.key === key)?.emus.find((x) => x.id === id);
     if (!e) throw new Error('That emulator isn’t in the list.');
     emuGetRun = { abort: new AbortController() };
-    const send = (o) => broadcast('emuget-progress', { key, id, ...o });
+    const send = (o) => { broadcast('emuget-progress', { key, id, ...o }); for (const f of emuGetListeners) f({ key, id, ...o }); };
     try {
       let r;
       if (e.how === 'flatpak') r = await G.getFlatpak(e.fp, (pct) => send({ pct }));

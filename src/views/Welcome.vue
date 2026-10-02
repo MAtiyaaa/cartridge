@@ -95,11 +95,11 @@
         <template v-else-if="step === 'emus'">
           <!-- 0.9.17: pick your own, by console (also in Settings → Emulators → Get Emulators) -->
           <template v-if="picking">
-            <h1>Pick your emulators</h1>
-            <p class="w-lead">Each console's emulators, from their own releases. A green check means it's already here.</p>
-            <div class="w-box"><EmuGet /></div>
+            <h1>Download emulators</h1>
+            <div class="w-box"><EmuGet flow /></div>
             <div class="w-act">
               <button class="btn" data-focus @click="picking = false"><Icon name="mdiArrowLeft" />Back</button>
+              <button class="btn" data-focus @click="recheck">Later</button>
               <button class="btn primary" data-focus @click="recheck">Continue<Icon name="mdiArrowRight" /></button>
             </div>
           </template>
@@ -109,7 +109,7 @@
             <p class="w-lead">Cartridge uses the emulators it set up. The system scan in a moment finds every other one too.</p>
             <div class="w-act">
               <button class="btn" data-focus @click="prev"><Icon name="mdiArrowLeft" />Back</button>
-              <button class="btn" data-focus @click="picking = true"><Icon name="mdiDownload" />Get more emulators</button>
+              <button class="btn" data-focus @click="picking = true"><Icon name="mdiDownload" />Download more emulators</button>
               <button class="btn primary" data-focus @click="next()">Continue<Icon name="mdiArrowRight" /></button>
             </div>
           </template>
@@ -146,7 +146,7 @@
               </button>
               <button class="lrow" data-focus @click="picking = true">
                 <Icon name="mdiFormatListChecks" :size="26" />
-                <div class="l-mid"><b>Pick your own</b><span class="l-sub">Choose emulators console by console. Each one downloads from its own releases (AppImage or Flatpak).</span></div>
+                <div class="l-mid"><b>Download emulators</b><span class="l-sub">Pick a drive, then the emulators you want, console by console. Each comes from its own releases and installs in the background.</span></div>
               </button>
               <button class="lrow" data-focus @click="next()">
                 <Icon name="mdiHandBackRight" :size="26" />
@@ -528,11 +528,12 @@ onBeforeUnmount(() => { off?.(); clearTimeout(padT); window.removeEventListener(
 .w-dots i { width: 8px; height: 8px; border-radius: 50%; background: rgba(255, 255, 255, 0.22); transition: background var(--d-2, 0.2s), transform var(--d-2, 0.2s); }
 .w-dots i.done { background: rgba(255, 255, 255, 0.55); }
 .w-dots i.on { background: #fff; transform: scale(1.3); }
-.w-stage { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; padding: 0 var(--s-5) var(--s-6); }
+.w-stage { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; padding: 0 var(--s-5) calc(var(--s-6) + 28px); } /* room for the A/B hints */
 .w-step { width: min(960px, 100%); max-height: 100%; overflow-y: auto; display: flex; flex-direction: column; align-items: center; gap: var(--s-4); padding: var(--s-6) var(--s-6) var(--s-6); text-align: center; box-shadow: 0 24px 80px rgba(0, 0, 0, 0.45); }
 .w-step > * { max-width: 820px; width: 100%; flex: none; }
 .w-hello, .w-done { padding-block: calc(var(--s-6) * 1.6); }
-.w-step.w-scan { width: min(1240px, 100%); }
+.w-step.w-scan, .w-step.w-emus { width: min(1240px, 100%); }
+.w-step.w-emus > * { max-width: 1180px; }
 /* rows sit one step lighter than the card, as rows do on the page */
 .w-step :deep(.lrow:not(:focus):not(.sel)) { background: var(--s2); }
 .w-step h1 { font-size: var(--t-2xl); font-weight: 800; letter-spacing: -0.02em; margin: 0; }
