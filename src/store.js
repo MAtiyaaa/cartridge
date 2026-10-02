@@ -341,7 +341,8 @@ export function when(ms) {
 rd.on('library', (lib) => setLib(lib));
 let playT = 0;
 rd.on('installed', (m) => { store.installed = m; clearTimeout(playT); playT = setTimeout(loadPlay, 800); }); // RetroArch times match installed files
-rd.on('sync', (s) => { store.sync = s; });
+// Android: a first sync that ends before its library event arrives still fills the tabs
+rd.on('sync', (s) => { store.sync = s; if (IS_ANDROID && s?.state === 'done' && !store.lib?.platforms?.length) loadLibrary().catch(() => {}); });
 // the ring stays a moment at 100% so the end is seen, then the card updates
 rd.on('delete-progress', ({ romId, pct }) => {
   store.deleting = { ...store.deleting, [romId]: pct };
