@@ -11,7 +11,7 @@
     </div>
     <div>
       <div v-if="!logo || logoFail" class="nm">{{ p.display_name }}</div>
-      <div v-if="meta" class="fam">{{ meta }}</div>
+      <div v-if="meta || maker" class="fam"><svg v-if="maker" class="maker" :class="{ symbol: maker.symbol }" :viewBox="maker.vb" :aria-label="maker.name" role="img"><path :d="maker.d" /></svg><span v-if="maker && meta">·</span><span v-if="meta">{{ meta }}</span></div>
       <div class="ct">{{ p.rom_count }} {{ p.rom_count === 1 ? 'game' : 'games' }}<template v-if="onDevice"> · <span class="ondev">{{ onDevice }} on device</span></template></div>
     </div>
   </button>
@@ -21,9 +21,12 @@ import { computed, ref, watch } from 'vue';
 import { store, romsOf, call } from '../store.js';
 import { consoleColors } from '../consoleColors.js';
 import PIcon from './PIcon.vue';
+import { MAKERS, makerOf } from '../makers.js';
 const props = defineProps({ p: Object });
 defineEmits(['open', 'focused']);
-const meta = computed(() => [props.p.family_name, props.p.generation ? `Gen ${props.p.generation}` : '', props.p.category].filter(Boolean).slice(0, 2).join(' · '));
+// the maker as its logo, at the height of the text (0.9.16); the family name stays text when there's none
+const maker = computed(() => MAKERS[makerOf(props.p)] || null);
+const meta = computed(() => [maker.value ? '' : props.p.family_name, props.p.generation ? `Gen ${props.p.generation}` : '', props.p.category].filter(Boolean).slice(0, maker.value ? 1 : 2).join(' · '));
 const onDevice = computed(() => romsOf(props.p.id).filter((r) => store.installed[r.id]).length);
 
 // Console logo (white wordmark), cached by the main process; falls back to the name

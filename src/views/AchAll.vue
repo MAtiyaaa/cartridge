@@ -27,13 +27,21 @@
         <button class="btn small" data-focus @click="refresh"><Icon name="mdiRefresh" :size="18" />Refresh</button>
       </header>
 
-      <div v-if="unlocks.length" class="aa-latest">
-        <span class="aa-lab">Latest</span>
-        <button v-for="u in unlocks.slice(0, 6)" :key="u.key" class="aa-badge" data-focus :title="`${u.title} · ${u.game}`" @click="u.open()" @focus="focusedKey = u.key; u.bg && setBg({ src: u.bg, blur: true })">
-          <img v-if="u.badge" :src="u.badge" loading="lazy" alt="" /><Grade v-else :g="u.grade" :size="30" />
-        </button>
-        <span v-if="focusedUnlock" class="aa-ltxt">{{ focusedUnlock.title }} · {{ focusedUnlock.game }} · {{ when(focusedUnlock.t) }}</span>
-      </div>
+      <!-- latest unlocks as the RA and Trophies tabs show them (owner, 0.9.16: the badges were too small) -->
+      <template v-if="unlocks.length">
+        <div class="shelf-title">Latest unlocks</div>
+        <div class="shelf aa-latest" data-hscroll>
+          <button v-for="u in unlocks.slice(0, 15)" :key="u.key" class="aa-unlock glass" data-focus @click="u.open()" @focus="u.bg && setBg({ src: u.bg, blur: true })">
+            <span class="aa-uicon"><img v-if="u.badge" :src="u.badge" loading="lazy" alt="" /><Grade v-else :g="u.grade" :size="36" /></span>
+            <span class="aa-ubody">
+              <span class="aa-utitle"><Grade v-if="u.grade" :g="u.grade" :size="16" />{{ u.title }}</span>
+              <span class="aa-udesc">{{ u.desc }}</span>
+              <span class="aa-umeta"><span v-if="u.pts" class="pts">{{ u.pts }}</span><span>{{ when(u.t) }}</span></span>
+              <span class="aa-ugame">{{ u.game }} · {{ u.console }}</span>
+            </span>
+          </button>
+        </div>
+      </template>
 
       <div class="aa-gh">
         <div class="shelf-title" style="margin: 0">Games<span class="count">{{ shown.length }}</span></div>
@@ -75,8 +83,6 @@ const raOn = computed(() => !!store.config.ra?.user && !!store.config.ra?.key);
 const fmt = (n) => (n || 0).toLocaleString();
 const raDate = (d) => { const t = new Date(String(d || '').replace(' ', 'T') + (/[zZ]|[+-]\d\d:?\d\d$/.test(d || '') ? '' : 'Z')).getTime(); return isNaN(t) ? 0 : t; };
 const CONSOLE = { rpcs3: 'PlayStation 3', shadps4: 'PlayStation 4', xenia: 'Xbox 360', vita3k: 'PlayStation Vita' };
-const focusedKey = ref('');
-const focusedUnlock = computed(() => unlocks.value.find((u) => u.key === focusedKey.value) || unlocks.value[0] || null);
 const romOfTro = (key) => tro.value?.games?.find((g) => g.key === key)?.romId || null;
 const pctOf = (e, t) => (t ? Math.round((e / t) * 100) : 0);
 
@@ -136,12 +142,17 @@ onMounted(async () => { await load(); focusFirst(el.value); });
 .aa-sum { display: flex; align-items: center; gap: var(--s-4); flex-wrap: wrap; font-size: var(--t-md); font-weight: 600; }
 .aa-s { display: inline-flex; align-items: center; gap: 6px; }
 .aa-head .spacer, .aa-gh .spacer { flex: 1; }
-.aa-latest { display: flex; align-items: center; gap: var(--s-2); margin: 0 0 var(--s-5); flex-wrap: wrap; }
-.aa-lab { font-size: var(--t-sm); color: var(--muted); font-weight: 700; margin-right: var(--s-2); }
-.aa-badge { width: 52px; height: 52px; border-radius: var(--r-md); display: grid; place-items: center; background: var(--s2); flex: none; padding: 0; }
-.aa-badge img { width: 100%; height: 100%; object-fit: cover; border-radius: var(--r-md); }
-.aa-badge:focus { box-shadow: var(--ring); }
-.aa-ltxt { font-size: var(--t-sm); color: var(--muted); margin-left: var(--s-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1; }
+.aa-latest { margin-bottom: var(--s-4); }
+.aa-unlock { flex: none; width: 360px; display: flex; gap: 14px; padding: 14px; border-radius: var(--r-md); text-align: left; transition: transform 0.14s ease-out; }
+.aa-unlock:focus { transform: scale(1.03); }
+.aa-uicon { width: 64px; height: 64px; border-radius: var(--r-md); flex: none; display: grid; place-items: center; background: rgba(0, 0, 0, 0.25); box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4); overflow: hidden; }
+.aa-uicon img { width: 100%; height: 100%; object-fit: cover; }
+.aa-ubody { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.aa-utitle { font-family: var(--display); font-weight: 600; font-size: var(--t-md); display: flex; gap: 6px; align-items: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.aa-udesc { font-size: var(--t-xs); color: #c3c9d4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.aa-umeta { display: flex; gap: 10px; align-items: center; font-size: var(--t-xs); color: var(--muted); }
+.aa-umeta .pts { color: #9be38a; font-weight: 600; }
+.aa-ugame { font-size: var(--t-xs); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .aa-gh { display: flex; align-items: center; gap: var(--s-2); margin: 0 0 var(--s-3); flex-wrap: wrap; }
 .aa-list { display: flex; flex-direction: column; gap: 4px; padding-bottom: 30px; max-width: 1200px; }
 .aa-row { display: grid; grid-template-columns: 44px minmax(0, 1fr) 120px 64px minmax(80px, 180px) 48px 24px; align-items: center; gap: var(--s-3); padding: 8px 12px; border-radius: var(--r-md); text-align: left; }

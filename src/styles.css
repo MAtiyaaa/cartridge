@@ -201,6 +201,10 @@ body.surface-glass .glass { background: var(--glass-bg); border: 1px solid var(-
 .systile .ico img { width: 100%; height: 100%; object-fit: contain; }
 .systile .nm { font-family: var(--display); font-weight: 700; font-stretch: var(--display-stretch); font-size: var(--t-lg); line-height: 1.1; max-width: 180px; }
 .systile .fam { font-size: var(--t-xs); color: rgba(255, 255, 255, 0.75); font-weight: 600; margin-bottom: 4px; }
+.systile .fam { display: flex; align-items: center; gap: 0.4em; }
+/* the maker's logo at the height of the text: wordmarks at cap height, symbols a touch taller (0.9.16) */
+.systile .maker { height: 0.9em; width: auto; fill: currentColor; flex: none; }
+.systile .maker.symbol { height: 1.1em; }
 .systile .ct { display: inline-flex; gap: 6px; padding: 4px 8px; border-radius: var(--r-sm); background: rgba(0, 0, 0, 0.35); color: #fff; font-size: var(--t-xs); font-weight: 600; }
 .systile:focus { transform: translateY(-4px) scale(1.03); box-shadow: var(--ring), 0 20px 40px -22px rgba(0, 0, 0, 0.9); }
 .systile:focus .glyph { opacity: 0.8; transform: scale(1.05) rotate(-4deg); }
