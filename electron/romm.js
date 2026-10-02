@@ -31,6 +31,10 @@ function developerOf(r) {
   }
   return str(arr(obj(r.metadatum).companies)[0] || '');
 }
+// File names kept per game: enough for single files and multi-disc sets lying in a console folder. An
+// extracted game (PS4, PS5, Switch folders) has thousands, which made the library tens of MB and the
+// Android UI stall for a minute on every change; those games are found by folder name anyway.
+const FILES_KEPT = 40;
 function slimRom(r) {
   r = obj(r);
   const md = obj(r.metadatum), ig = obj(r.igdb_metadata), hl = obj(r.hltb_metadata);
@@ -44,7 +48,7 @@ function slimRom(r) {
     ra_id: r.ra_id || null,
     has_notes: !!(r.has_notes || arr(r.all_user_notes).length || obj(r.rom_user).note_raw_markdown),
     summary: str(r.summary).slice(0, 400),
-    regions: arr(r.regions).map(str), files: arr(r.files).filter(Boolean).map((f) => ({ file_name: f.file_name })),
+    regions: arr(r.regions).map(str), files: arr(r.files).filter(Boolean).slice(0, FILES_KEPT).map((f) => ({ file_name: f.file_name })),
     year: md.first_release_date || null, genres: arr(md.genres).slice(0, 3),
     developer: developerOf(r), rating: md.average_rating || null,
     created_at: r.created_at, has_file_on_disk: r.has_file_on_disk !== false,

@@ -545,6 +545,8 @@ const MARKED = '(marked as installed)';
 // The whole library is mirrored locally (Argosy-style): instant startup, offline browsing,
 // and a "Resync" that pulls whatever changed on the server.
 let library = loadJson(LIBRARY_FILE, null); // { platforms, roms: {pid: [...]}, firstSeen: {id: ts}, syncedAt, base }
+// libraries saved before 0.9.16 carry every file of extracted games: trim them as slimRom does now
+if (library?.roms) for (const list of Object.values(library.roms)) for (const r of list) if (r.files?.length > 40) r.files = r.files.slice(0, 40);
 let syncing = null;
 let installedMap = {};
 let playSyncAt = 0; // last play-session sync with RomM (0: do it on the next request)
@@ -553,11 +555,19 @@ let playSyncAt = 0; // last play-session sync with RomM (0: do it on the next re
 // what Cartridge keeps of a RomM game (electron/romm.js, tested against several RomM versions)
 const { slimRom, userOf, rommTooOld, ROMM_MIN } = require('./romm');
 
+// The UI never reads a game's file list (game pages ask RomM for the full game), so it isn't sent: less
+// to send, parse and walk on the device. Built once per synced library.
+const uiRomsCache = new WeakMap();
+function uiRoms(roms) {
+  let out = uiRomsCache.get(roms);
+  if (!out) { out = Object.fromEntries(Object.entries(roms).map(([pid, list]) => [pid, list.map(({ files, ...r }) => r)])); uiRomsCache.set(roms, out); }
+  return out;
+}
 function publicLibrary() {
   if (!library) return null;
   return {
     platforms: library.platforms.map((p) => ({ ...p, target: platformPath(p) })),
-    roms: library.roms,
+    roms: uiRoms(library.roms),
     firstSeen: library.firstSeen,
     syncedAt: library.syncedAt,
     lastNew: library.lastNew || [],
@@ -693,7 +703,7 @@ async function apiForm(pathname, { method = 'POST', query, fields = {} } = {}) {
   if (!r.ok) throw new Error(`RomM error ${r.status} on ${pathname}`);
   return r.status === 204 ? null : r.json().catch(() => null);
 }
-function saveLib() { saveJson(LIBRARY_FILE, library, false); broadcast('library', publicLibrary()); }
+function saveLib() { saveJson(LIBRARY_FILE, library, false); uiRomsCache.delete(library.roms); broadcast('library', publicLibrary()); } // games may have changed in place (play status)
 function colById(rid) { return library?.collections?.find((c) => c.rid === rid && !c.smart) || null; }
 async function setColRoms(c, ids) {
   const out = await apiForm(`/api/collections/${c.rid}`, { method: 'PUT', fields: { rom_ids: JSON.stringify([...new Set(ids)]), name: c.name } });
