@@ -139,6 +139,7 @@ function gcWiiId(file) {
     const at = (pos, n = 6) => { const b = Buffer.alloc(n); fs.readSync(fd, b, 0, n, pos); return b; };
     const head = at(0, 12), magic = head.toString('latin1', 0, 4);
     let pos = 0;
+    if (head.readUInt32LE(0) === 0xb10bc001) { const img = require('./discImage').open(file); try { const id = img && img.read(0, 6).toString('latin1'); return /^[A-Z0-9]{6}$/.test(id || '') ? id : null; } finally { img?.close(); } } // GCZ
     if (magic === 'RVZ\x01' || magic === 'WIA\x01') pos = 0x58;
     else if (magic === 'WBFS') pos = 1 << head[8];
     else if (magic === 'CISO') pos = 0x8000;

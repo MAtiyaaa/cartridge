@@ -96,31 +96,12 @@ function n3dsTitleId(file) {
   } catch { return null; }
 }
 // PS1 serial as DuckStation names it (SLUS-00594), from SYSTEM.CNF's BOOT line: plain 2048-byte
-// images and raw 2352-byte .bin (a .cue reads its first .bin). CHD and PBP are compressed: no ID.
+// images, raw 2352-byte .bin (a .cue reads its first .bin), CHD (discImage) and PBP (its PARAM.SFO).
 function psxSerial(file) {
-  if (/\.cue$/i.test(file)) { const m = /FILE\s+"([^"]+)"/i.exec(read(file)); if (!m) return null; file = path.join(path.dirname(file), m[1]); }
-  let fd;
-  try {
-    fd = fs.openSync(file, 'r');
-    const raw = (n, pos) => { const b = Buffer.alloc(n); fs.readSync(fd, b, 0, n, pos); return b; };
-    const head = raw(16, 0);
-    const sync = head[0] === 0 && head.subarray(1, 11).every((x) => x === 0xff) && head[11] === 0;
-    const size = sync ? 2352 : 2048, off = sync ? (head[15] === 1 ? 16 : 24) : 0;
-    const sec = (lba, len = 2048) => { const parts = []; for (let i = 0; i * 2048 < len; i++) parts.push(raw(2048, (lba + i) * size + off)); return Buffer.concat(parts).subarray(0, len); };
-    const pvd = sec(16);
-    if (pvd.toString('latin1', 1, 6) !== 'CD001') return null;
-    const dir = sec(pvd.readUInt32LE(156 + 2), Math.min(pvd.readUInt32LE(156 + 10), 64 << 10));
-    for (let i = 0; i < dir.length;) {
-      const len = dir[i]; if (!len) { i = (Math.floor(i / 2048) + 1) * 2048; continue; }
-      const name = dir.toString('latin1', i + 33, i + 33 + dir[i + 32]).replace(/;1$/, '');
-      if (name.toUpperCase() === 'SYSTEM.CNF') {
-        const m = /BOOT\s*=\s*cdrom:\\?([A-Z]{4})[_-](\d{3})\.(\d{2})/i.exec(sec(dir.readUInt32LE(i + 2), Math.min(dir.readUInt32LE(i + 10), 2048)).toString('latin1'));
-        return m ? `${m[1].toUpperCase()}-${m[2]}${m[3]}` : null;
-      }
-      i += len;
-    }
-    return null;
-  } catch { return null; } finally { if (fd != null) try { fs.closeSync(fd); } catch {} }
+  if (/\.pbp$/i.test(file)) { const id = require('./discImage').pbpDiscId(file); return id ? id.replace(/^([A-Z]{4})-?(\d{5})$/, '$1-$2') : null; }
+  const cnf = require('./patches').isoFile(file, ['SYSTEM.CNF'], 4096); // .bin/.cue, CHD and ISO (discImage)
+  const m = cnf && /BOOT\s*=\s*cdrom:\\?([A-Z]{4})[_-](\d{3})\.(\d{2})/i.exec(cnf.toString('latin1'));
+  return m ? `${m[1].toUpperCase()}-${m[2]}${m[3]}` : null;
 }
 // 3DS .cia: the title ID in its TMD (after the header, certificates and ticket, each 64-byte aligned)
 function ciaTitleId(file) {

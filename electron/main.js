@@ -1848,7 +1848,7 @@ function ps3Serial(romId, where) {
   // 0.9.15: an ISO read properly (PS3_GAME/PARAM.SFO anywhere in the image, any serial prefix),
   // and a downloaded .pkg not installed yet (its content ID)
   const files = (() => { try { return fs.statSync(where).isDirectory() ? fs.readdirSync(where).map((n) => path.join(where, n)) : [where]; } catch { return []; } })();
-  for (const f of files.filter((x) => /\.iso$/i.test(x))) { const b = patchesMod.isoFile(f, ['PS3_GAME', 'PARAM.SFO']); const id = b && patchesMod.parseSfo(b).TITLE_ID; if (id) return id; }
+  for (const f of files.filter((x) => /\.(iso|chd)$/i.test(x))) { const b = patchesMod.isoFile(f, ['PS3_GAME', 'PARAM.SFO']); const id = b && patchesMod.parseSfo(b).TITLE_ID; if (id) return id; }
   for (const f of files.filter((x) => /\.pkg$/i.test(x))) { const i = pkgInst.pkgInfo(f); if (i?.titleId && /^[A-Z]{4}\d{5}$/.test(i.titleId)) return i.titleId; }
   return null;
 }
@@ -1893,7 +1893,7 @@ function dolphinPatchState(romId) {
 function ppssppPatchState(romId, r) {
   const where = installedMap[romId], file = mainFile(where);
   if (!file) return { emu: 'ppsspp', why: 'Download the game first.' };
-  let id = /\.iso$/i.test(file) ? (() => { const b = patchesMod.isoFile(file, ['PSP_GAME', 'PARAM.SFO']); return b ? patchesMod.parseSfo(b).DISC_ID : null; })() : null;
+  let id = /\.(iso|cso|zso|chd)$/i.test(file) ? (() => { const b = patchesMod.isoFile(file, ['PSP_GAME', 'PARAM.SFO']); return b ? patchesMod.parseSfo(b).DISC_ID : null; })() : /\.pbp$/i.test(file) ? require('./discImage').pbpDiscId(file) : null;
   id = id || (`${r?.fs_name || ''} ${r?.name || ''} ${path.basename(file)}`.match(/\b([A-Z]{4})-?(\d{5})\b/) || []).slice(1).join('') || null;
   if (!id) return { emu: 'ppsspp', why: 'Cartridge couldn’t find this game’s ID (ULUS10041 and so on) in its name or its ISO.' };
   const ph = patchHome(romId, 'ppsspp'), dirs = cheatsMod.ppssppDirs();
@@ -1955,9 +1955,10 @@ function ps2PatchState(romId) {
   if (!dir) return { emu: 'pcsx2', why: 'PCSX2’s settings weren’t found on this device. Open PCSX2 once, then come back.' };
   let file = where;
   try { if (fs.statSync(where).isDirectory()) file = fs.readdirSync(where).map((n) => path.join(where, n)).filter((f) => /\.(iso|chd|cso|zso|gz|bin|cue|elf)$/i.test(f)).sort((a, b) => fs.statSync(b).size - fs.statSync(a).size)[0] || where; } catch {}
-  // PCSX2's game list first; else Cartridge reads the ISO itself (0.9.3 L)
-  const game = patchesMod.pcsx2Game(dir, file) || (/\.iso$/i.test(file) ? patchesMod.ps2IsoInfo(file) : null);
-  if (!game || !game.crc) return { emu: 'pcsx2', why: /\.iso$/i.test(file) ? 'Cartridge couldn’t read this disc image.' : 'This game is compressed (CHD and similar), so its details come from PCSX2: add your PS2 folder in PCSX2 (Settings → Game List) once, let it scan, then come back.' };
+  // PCSX2's game list first; else Cartridge reads the disc itself (ISO since 0.9.3 L, CHD/CSO/ZSO since 0.9.17)
+  const readable = /\.(iso|chd|cso|zso)$/i.test(file);
+  const game = patchesMod.pcsx2Game(dir, file) || (readable ? patchesMod.ps2IsoInfo(file) : null);
+  if (!game || !game.crc) return { emu: 'pcsx2', why: readable ? 'Cartridge couldn’t read this disc image.' : 'Cartridge can’t read this kind of file, so its details come from PCSX2: add your PS2 folder in PCSX2 (Settings → Game List) once, let it scan, then come back.' };
   return { emu: 'pcsx2', serial: game.serial || '', version: patchesMod.crcHex(game.crc), dir, game };
 }
 const notRunning = (id, name) => { if (require('./raLogin').running().has(id)) throw new Error(`Close ${name} first: it saves its settings when it quits, over this change.`); };
@@ -2872,11 +2873,12 @@ const handlers = {
     let file = where && where !== MARKED ? where : '';
     try { if (file && fs.statSync(file).isDirectory()) file = fs.readdirSync(file).map((n) => path.join(file, n)).filter((f) => fs.statSync(f).isFile()).sort((a, b) => fs.statSync(b).size - fs.statSync(a).size)[0] || ''; } catch { file = ''; }
     if (slug === 'ps2') ids.serial = ps2PatchState(rom.id).serial || '';
-    if (/\.(iso|gcm|rvz|wia|wbfs|ciso)$/i.test(file) && ['ngc', 'gamecube', 'wii'].includes(slug)) ids.gameId = A.gcWiiId(file);
-    if (/\.iso$/i.test(file) && slug === 'psp') { const b = patchesMod.isoFile(file, ['PSP_GAME', 'PARAM.SFO']); ids.gameId = b ? patchesMod.parseSfo(b).DISC_ID : null; }
+    if (/\.(iso|gcm|rvz|wia|wbfs|ciso|gcz)$/i.test(file) && ['ngc', 'gamecube', 'wii'].includes(slug)) ids.gameId = A.gcWiiId(file);
+    if (/\.(iso|cso|zso|chd)$/i.test(file) && slug === 'psp') { const b = patchesMod.isoFile(file, ['PSP_GAME', 'PARAM.SFO']); ids.gameId = b ? patchesMod.parseSfo(b).DISC_ID : null; }
+    if (/\.pbp$/i.test(file) && slug === 'psp') ids.gameId = require('./discImage').pbpDiscId(file);
     if (/\.(3ds|cci)$/i.test(file)) ids.titleId = A.n3dsTitleId(file);
     if (/\.cia$/i.test(file)) ids.titleId = A.ciaTitleId(file);
-    if (slug === 'psx' && /\.(bin|img|iso|cue)$/i.test(file)) ids.serial = A.psxSerial(file);
+    if (slug === 'psx' && /\.(bin|img|iso|cue|chd|pbp)$/i.test(file)) ids.serial = A.psxSerial(file);
     if (slug === 'switch') { const id = A.switchTitleId(file); if (id) { ids.switchId = id; ids.switchIdLower = id.toLowerCase(); } }
     return A.forGame(slug, ids, A.emulators());
   },
