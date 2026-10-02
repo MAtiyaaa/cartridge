@@ -139,7 +139,30 @@
               </div>
             </template>
             <template v-if="emuPage === 'tex'">
-                            <p class="muted small" style="margin-top: -6px">Where each emulator looks for texture packs, read from its own settings. A game's folder is in its More menu. Turn custom textures on here, or in the emulator.</p>
+              <p class="muted small" style="margin-top: -6px">Texture packs and mods for your games: PS2 packs from the EmuCoreX catalog, other consoles' mods from GameBanana. Pick a game to see what it has. The same as Add-ons in a game's More menu.</p>
+              <template v-for="g in addonGames" :key="g.slug">
+                <div class="subh">{{ g.name }}</div>
+                <div class="stack">
+                  <button v-for="r in g.roms" :key="r.id" class="lrow" data-focus @click="openAddons(r)">
+                    <Icon name="mdiPuzzleOutline" :size="24" />
+                    <div class="l-mid"><b>{{ r.name }}</b><span v-if="addonCount(r.id)" class="l-sub">{{ addonCount(r.id) }} installed</span></div>
+                    <span class="l-end">Add-ons</span>
+                  </button>
+                </div>
+              </template>
+              <p v-if="!addonGames.length" class="muted">No games on this device for consoles with add-ons yet.</p>
+              <template v-if="addonsMine.length">
+                <div class="subh">Installed by Cartridge</div>
+                <div class="stack">
+                  <button v-for="a in addonsMine" :key="a.key" class="lrow" data-focus @click="removeAddon(a)">
+                    <EmuIcon :id="a.emu" :size="24" fallback="mdiPuzzleOutline" />
+                    <div class="l-mid"><b>{{ a.name }}</b><span class="l-sub">{{ a.game }} · {{ a.emuName }} · {{ bytes(a.bytes) }}</span></div>
+                    <span class="l-end">Remove</span>
+                  </button>
+                </div>
+              </template>
+              <div class="subh">Emulator folders</div>
+              <p class="muted small" style="margin-top: -6px">Where each emulator looks for texture packs and mods, read from its own settings. Turn custom textures on here, or in the emulator.</p>
               <div class="stack">
                 <button v-for="e in texEmus" :key="e.root" class="lrow" data-focus @click="flipTextures(e)">
                   <EmuIcon :id="e.id" :size="24" fallback="mdiTextureBox" />
@@ -759,6 +782,27 @@ const issues = ref(null);
 const ISSUE_ICON = { collections: 'mdiFolderSyncOutline', moved: 'mdiLinkVariantOff', game: 'mdiFileHidden', core: 'mdiPuzzleRemoveOutline', setup: 'mdiRadar', bios: 'mdiChip', romm: 'mdiServerOutline', fpsteam: 'mdiSteam' };
 async function loadIssues() { issues.value = await call('issues:list').catch(() => []); store.issues = issues.value.length; texEmus.value = await call('addons:emulators').catch(() => []); }
 const texEmus = ref([]);
+// Add-ons page (0.9.17): installed games of consoles with add-ons, by console, and what Cartridge installed
+const ADDON_SLUGS = /^(ps2|psx|ngc|gamecube|wii|psp|3ds|n3ds|switch|wiiu)$/i;
+const addonGames = computed(() => {
+  const by = new Map();
+  for (const r of allRoms()) {
+    if (!store.installed[r.id] || !ADDON_SLUGS.test(r.platform_slug || '')) continue;
+    if (!by.has(r.platform_slug)) by.set(r.platform_slug, { slug: r.platform_slug, name: consoleName({ romId: r.id, slug: r.platform_slug }), roms: [] });
+    by.get(r.platform_slug).roms.push(r);
+  }
+  for (const g of by.values()) g.roms.sort((a, b) => a.name.localeCompare(b.name));
+  return [...by.values()].sort((a, b) => a.name.localeCompare(b.name));
+});
+const addonsMine = ref([]);
+const addonCount = (romId) => addonsMine.value.filter((a) => a.romId === romId).length;
+async function loadAddons() { addonsMine.value = await call('addons:installed').catch(() => []); }
+async function openAddons(r) { await openModal('addons', { romId: r.id, name: r.name }); loadAddons(); }
+async function removeAddon(a) {
+  if (!(await confirm('Remove this add-on?', `${a.name} (${a.game})\n\nOnly the ${a.count} files Cartridge put in ${a.emuName}’s folder are deleted.`, 'Remove', true))) return;
+  try { await call('addons:remove', { key: a.key }); toast('Add-on removed', 'ok', 2500); } catch (e) { toast(e.message, 'error', 5000); }
+  loadAddons();
+}
 // custom textures on in the emulator itself (0.9.16); off again only where Cartridge turned them on
 async function flipTextures(e) {
   if (e.mods) return toast(e.how, 'info', 5000);
@@ -848,7 +892,7 @@ async function loadAll() {
 }
 const mediaSizes = [{ v: 'compact', l: 'Compact' }, { v: 'spacious', l: 'Spacious' }, { v: 'large', l: 'Large' }];
 // Emulators pages (0.9.16)
-const EMU_PAGES = [{ v: 'overview', l: 'Overview' }, { v: 'updates', l: 'Updates' }, { v: 'games', l: 'Game Updates' }, { v: 'patches', l: 'Patches' }, { v: 'tex', l: 'Texture Packs' }, { v: 'folders', l: 'Console Folders' }];
+const EMU_PAGES = [{ v: 'overview', l: 'Overview' }, { v: 'updates', l: 'Updates' }, { v: 'games', l: 'Game Updates' }, { v: 'patches', l: 'Patches' }, { v: 'tex', l: 'Add-ons' }, { v: 'folders', l: 'Console Folders' }];
 const emuPage = ref('overview');
 // installed games whose emulator has patches (0.9.16), by console then name
 const PATCH_EMU = [[/ps3/i, 'RPCS3', 'rpcs3'], [/ps4/i, 'shadPS4', 'shadps4'], [/\bps2\b/i, 'PCSX2', 'pcsx2'], [/\b(ngc|gamecube|gc|wii)\b/i, 'Dolphin', 'dolphin'], [/\bpsp\b/i, 'PPSSPP', 'ppsspp']];
@@ -861,7 +905,7 @@ async function openPatchesFor(g) {
   if (!changes?.length) return;
   try { const r = await call('patches:apply', { romId: g.r.id, changes }); toast(r.count ? `Saved in ${info.emuName}. They apply next time the game starts.` : 'Nothing changed', 'ok', 3500, 'mdiPuzzleOutline'); } catch (e) { toast(e.message, 'error', 7000); }
 }
-function setEmuPage(v) { emuPage.value = v; if (v === 'updates' && emuUps.value === null) loadEmuUpdates(); if (v === 'games' && ps3Ups.value === null) loadPs3Updates(); }
+function setEmuPage(v) { emuPage.value = v; if (v === 'tex') loadAddons(); if (v === 'updates' && emuUps.value === null) loadEmuUpdates(); if (v === 'games' && ps3Ups.value === null) loadPs3Updates(); }
 function stepEmu(d) {
   const i = EMU_PAGES.findIndex((p) => p.v === emuPage.value), n = EMU_PAGES[(i + d + EMU_PAGES.length) % EMU_PAGES.length].v;
   setEmuPage(n); nextTick(() => focusFirst(paneEl.value, `[data-key="emup-${n}"]`));

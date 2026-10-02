@@ -1836,6 +1836,10 @@ function afterInstall(romId) {
 // patches.json: the ones Cartridge turned on (only those can it turn off), per emulator.
 const patchesMod = require('./patches');
 const cheatsMod = require('./cheats');
+// add-ons Cartridge installed (0.9.17): { key: { dest, files, ... } }; Remove deletes only those files
+const ADDONS_FILE = path.join(USER_DATA, 'addons-installed.json');
+let addonRun = null, addonCache = null;
+const addonRecs = () => (addonCache ||= loadJson(ADDONS_FILE, {}));
 const PATCHES_FILE = path.join(USER_DATA, 'patches.json');
 let patchMine = loadJson(PATCHES_FILE, {});
 // a PS3 game's serial: from its install record, its PARAM.SFO, else its name
@@ -2901,6 +2905,85 @@ const handlers = {
     if (!hit?.folder || !path.resolve(hit.folder).startsWith(path.resolve(hit.root) + path.sep)) throw new Error('No folder for this game.');
     fs.mkdirSync(hit.folder, { recursive: true });
     return hit.folder;
+  },
+  // Add-on downloads (0.9.17): what can be installed for a game, from where, and what Cartridge put in
+  'addons:available': async ({ romId }) => {
+    const rom = romIndexMain().get(Number(romId));
+    if (!rom) return { emus: [], packs: [], installed: [] };
+    const emus = handlers['addons:forGame']({ romId });
+    const installed = Object.entries(addonRecs()).filter(([, r]) => r.romId === rom.id).map(([key, r]) => ({ key, ...r, files: undefined, count: r.files.length }));
+    const out = { emus, installed, packs: [], source: null, error: '' };
+    const S = require('./addonSources');
+    try {
+      if (rom.platform_slug === 'ps2') {
+        out.source = 'ps2';
+        const serial = emus.some((e) => e.id === 'pcsx2') ? ps2PatchState(rom.id).serial : '';
+        if (!emus.some((e) => e.id === 'pcsx2')) out.error = 'PCSX2’s settings weren’t found on this device. Open PCSX2 once, then come back.';
+        else if (!serial) out.error = 'Cartridge couldn’t read this game’s serial, which the packs are matched by.';
+        else out.packs = S.ps2For(await S.ps2Catalog({ cacheFile: path.join(USER_DATA, 'addons-ps2-catalog.json') }), serial).map((p) => ({ ...p, serial }));
+      } else if (emus.length) {
+        out.source = 'gb';
+        const g = await S.gbGame(rom.name);
+        if (!g) out.error = `GameBanana has no game called “${rom.name}”.`;
+        else { out.gbGame = g; out.packs = await S.gbMods(g.id); }
+      }
+    } catch (e) { out.error = e.message; }
+    return out;
+  },
+  'addons:gbFiles': ({ modId }) => require('./addonSources').gbFiles(modId),
+  // { romId, emuRoot (the emulator copy), pack (from addons:available), file (GameBanana only) }
+  'addons:install': async ({ romId, emuRoot, pack, file }) => {
+    if (addonRun) throw new Error('Another add-on is being installed. Wait for it to finish.');
+    const rom = romIndexMain().get(Number(romId));
+    const e = handlers['addons:forGame']({ romId }).find((x) => x.emuRoot === emuRoot);
+    if (!rom || !e) throw new Error('That emulator wasn’t found.');
+    if (!e.folder) throw new Error(`Cartridge couldn’t read this game’s ID, so it doesn’t know which ${e.name} folder it goes in.`);
+    if (require('./raLogin').running().has(e.id)) throw new Error(`Close ${e.name} first.`);
+    const kind = pack.source === 'ps2' ? 'ps2' : /^(eden|citron|yuzu|ryujinx)$/.test(e.id) ? 'switch' : 'plain';
+    const dest = kind === 'ps2' ? path.dirname(e.folder) : e.folder; // PCSX2: textures/<SERIAL>, the pack brings replacements/
+    const key = `${pack.source}:${pack.id}${file ? ':' + file.id : ''}:${rom.id}:${e.emuRoot}`;
+    if (addonRecs()[key]) throw new Error('This add-on is already installed.');
+    const dir = path.join(USER_DATA, 'addon-downloads'), base = path.join(dir, String(key).replace(/[^\w.-]+/g, '_'));
+    const urls = pack.source === 'ps2' ? (pack.parts ? pack.parts.map((x) => ({ ...x })) : [{ url: pack.url, size: pack.size, sha256: pack.sha256 }]) : [{ url: file.url, size: file.size, md5: file.md5 }];
+    const total = urls.reduce((s, u) => s + (u.size || 0), 0);
+    const free = await fsp.statfs(fs.existsSync(dest) ? dest : e.root).then((st) => st.bavail * st.bsize).catch(() => Infinity);
+    if (total * 2 > free) throw new Error(`Not enough space: this add-on needs about ${Math.ceil((total * 2) / 1e9)} GB while it installs.`);
+    addonRun = { key, abort: new AbortController() };
+    const send = (o) => broadcast('addon-progress', { romId: rom.id, key, ...o });
+    const A = require('./addonInstall');
+    let got = 0, last = 0;
+    const files = [];
+    try {
+      for (const [i, u] of urls.entries()) {
+        const f = urls.length > 1 ? `${base}.part${i + 1}` : base + (pack.source === 'ps2' ? '.zip' : path.extname(file.name || '.zip'));
+        await downloadTo(u.url, f, addonRun, (n) => { got += n; const now = Date.now(); if (now - last > 400) { last = now; send({ state: 'download', pct: total ? Math.min(99, Math.floor((got / total) * 100)) : null, got, total }); } }, { plain: true });
+        if (u.sha256 && (await A.sha256(f)) !== u.sha256) throw new Error('The download is damaged (its checksum doesn’t match). Try again.');
+        if (u.md5 && (await A.sha256(f, 'md5')) !== u.md5) throw new Error('The download is damaged (its checksum doesn’t match). Try again.');
+        files.push(f);
+      }
+      let archive = files[0];
+      if (files.length > 1) { archive = base + '.zip'; send({ state: 'join' }); await A.join(files, archive); if ((await A.sha256(archive)) !== pack.sha256) throw new Error('The joined download is damaged. Try again.'); }
+      send({ state: 'install', pct: 0 });
+      const r = await A.install(archive, dest, kind, { id: kind === 'switch' ? '' : (e.folder && path.basename(e.folder)), name: pack.name, signal: addonRun.abort.signal, onFile: (n, of) => { const now = Date.now(); if (now - last > 400) { last = now; send({ state: 'install', pct: Math.floor((n / of) * 100) }); } } });
+      const recs = addonRecs();
+      recs[key] = { source: pack.source, id: pack.id, fileId: file?.id || null, name: pack.name, romId: rom.id, game: rom.name, emu: e.id, emuName: e.name, emuRoot: e.emuRoot, dest, files: r.files, bytes: r.bytes, at: Date.now(), from: pack.sourceUrl || pack.url || '' };
+      saveJson(ADDONS_FILE, recs);
+      log('add-on installed', key, r.files.length, 'files');
+      send({ state: 'done' });
+      return { key, files: r.files.length, bytes: r.bytes, textures: kind !== 'switch' && e.on === false };
+    } catch (err) { send({ state: 'error', error: err.message }); throw err; }
+    finally { addonRun = null; for (const f of [...files, base + '.zip']) fs.rmSync(f, { force: true }); fs.rmSync(base + '.zip.unpacked', { recursive: true, force: true }); }
+  },
+  'addons:cancel': () => { addonRun?.abort.abort(); return true; },
+  'addons:installed': () => Object.entries(addonRecs()).map(([key, r]) => ({ key, ...r, files: undefined, count: r.files.length })),
+  'addons:remove': async ({ key }) => {
+    const recs = addonRecs(), r = recs[key];
+    if (!r) throw new Error('Cartridge didn’t install that add-on.');
+    if (require('./raLogin').running().has(r.emu)) throw new Error(`Close ${r.emuName} first.`);
+    await require('./addonInstall').removeFiles(r.dest, r.files);
+    delete recs[key]; saveJson(ADDONS_FILE, recs);
+    log('add-on removed', key);
+    return true;
   },
   // emulator updates (0.9.16): each installed copy, its version and whether a newer one is out
   'emuup:list': async ({ fresh } = {}) => {
