@@ -299,7 +299,8 @@ const sgdb = ref(''), raUser = ref(''), raKey = ref('');
 const guideQr = ref('');
 
 const deviceName = computed(() => `${name.value.trim()}'s ${st.value.device || 'device'}`);
-const serverName = computed(() => { const s = store.config.server || {}; try { return new URL(s.localUrl || s.remoteUrl).host; } catch { return 'your RomM server'; } });
+// RomM has no server name of its own, so the name picked for RomM on this device is Cartridge's label for it
+const serverName = computed(() => { const s = store.config.server || {}; if (store.config.rommLocal?.name && s.localUrl && s.localUrl.includes(':' + store.config.rommLocal.port)) return store.config.rommLocal.name; try { return new URL(s.localUrl || s.remoteUrl).host; } catch { return 'your RomM server'; } });
 
 function go(i, d) { dir.value = d; at.value = Math.max(0, Math.min(STEPS.length - 1, i)); }
 function next() { romm.value = ''; go(at.value + 1, 1); }

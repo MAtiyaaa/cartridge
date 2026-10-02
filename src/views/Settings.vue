@@ -614,14 +614,32 @@ async function chooseWallpaper() {
 }
 // A (0.9.15): each console with enough covers in your library can be the background
 const artBgs = computed(() => (store.lib?.platforms || []).filter((p) => p.rom_count >= 6).map((p) => ({ v: 'art:' + p.slug, l: consoleName(p), sub: 'Your games, slowly panning', group: 'Art' })).sort((a, b) => a.l.localeCompare(b.l)));
-const allBgs = computed(() => { const i = BACKGROUNDS.findIndex((b) => b.group === 'Other'); return [...BACKGROUNDS.slice(0, i), ...artBgs.value, ...BACKGROUNDS.slice(i)]; });
+// your five most used consoles first (0.9.16): play time, then games on this device; each one its
+// designed scene where there is one, else its own games panning
+const SCENE_OF = { ps2: 'ps2', ngc: 'gc', gamecube: 'gc', wii: 'wii', xbox360: 'xbox360', switch: 'switch' };
+const topConsoles = computed(() => {
+  const score = {};
+  for (const r of allRoms()) {
+    const pl = store.play[r.id], inst = !!store.installed[r.id];
+    if (!pl?.min && !inst) continue;
+    const s = (score[r.platform_slug] ||= { min: 0, inst: 0 });
+    s.min += pl?.min || 0; s.inst += inst ? 1 : 0;
+  }
+  return (store.lib?.platforms || []).filter((p) => score[p.slug]).sort((a, b) => score[b.slug].min - score[a.slug].min || score[b.slug].inst - score[a.slug].inst).slice(0, 5);
+});
+const allBgs = computed(() => {
+  const theme = BACKGROUNDS.filter((b) => b.group === 'Theme'), scenes = BACKGROUNDS.filter((b) => b.group === 'Consoles'), other = BACKGROUNDS.filter((b) => b.group === 'Other');
+  const top = topConsoles.value.map((p) => { const b = scenes.find((x) => x.v === SCENE_OF[p.slug]); return { ...(b || { v: 'art:' + p.slug, l: consoleName(p), sub: 'Your games, slowly panning' }), group: 'Top' }; });
+  const used = new Set(top.map((b) => b.v));
+  return [...theme, ...top, ...scenes.filter((b) => !used.has(b.v)), ...artBgs.value.filter((b) => !used.has(b.v)), ...other];
+});
 const bgNow = computed(() => { const v = ui.value.bgStyle || 'solid'; const m = LEGACY_ART[v] ? 'art:' + LEGACY_ART[v] : v; return allBgs.value.find((b) => b.v === m) || BACKGROUNDS[0]; });
-const BG_ICON = { Theme: 'mdiWaves', Consoles: 'mdiGamepadVariantOutline', Art: 'mdiImageMultipleOutline', Other: 'mdiImageOutline' };
+const BG_ICON = { Theme: 'mdiWaves', Top: 'mdiStarOutline', Consoles: 'mdiGamepadVariantOutline', Art: 'mdiImageMultipleOutline', Other: 'mdiImageOutline' };
 async function pickBg() {
   let last = '';
   const pal = paletteOf(ui.value);
   // a picture of each animated one (0.9.3 L); still, artwork and wallpaper keep their icon
-  const options = allBgs.value.map((b) => { const o = { label: b.l, sub: b.sub, value: b.v, icon: BG_ICON[b.group], img: RENDERERS[b.v] ? bgPreview(b.v, pal) : '', selected: bgNow.value.v === b.v, raw: b.group === 'Art', heading: b.group !== last ? { Theme: 'Your theme colours', Consoles: 'Consoles', Art: 'Your games', Other: 'Other' }[b.group] : '' }; last = b.group; return o; });
+  const options = allBgs.value.map((b) => { const o = { label: b.l, sub: b.sub, value: b.v, icon: BG_ICON[b.group], img: RENDERERS[b.v] ? bgPreview(b.v, pal) : '', selected: bgNow.value.v === b.v, raw: b.group === 'Art' || (b.group === 'Top' && b.v.startsWith('art:')), heading: b.group !== last ? { Theme: 'Your theme colours', Top: 'Your most played consoles', Consoles: topConsoles.value.length ? 'More consoles' : 'Consoles', Art: 'Your games', Other: 'Other' }[b.group] : '' }; last = b.group; return o; });
   const v = await choose({ title: 'Background', options });
   if (v) await setBg(v);
 }
