@@ -186,8 +186,8 @@ function shadSet(userDir, changes, mine = {}) {
 //   path, serial, title, title_sort, title_en as u32-length strings, type u8, region u8, size u64,
 //   modified u64, crc u32, rating u8, little-endian). So the game must be in PCSX2's game list.
 // Data folder: $XDG_CONFIG_HOME/PCSX2, ~/.config/PCSX2, the Flatpak's; folders from inis/PCSX2.ini.
-function pcsx2Dirs(home = os.homedir()) {
-  const roots = [process.env.XDG_CONFIG_HOME && path.join(process.env.XDG_CONFIG_HOME, 'PCSX2'), path.join(home, '.config/PCSX2'), path.join(home, '.var/app/net.pcsx2.PCSX2/config/PCSX2')].filter(Boolean);
+function pcsx2Dirs(home = os.homedir(), first = []) {
+  const roots = [...first, process.env.XDG_CONFIG_HOME && path.join(process.env.XDG_CONFIG_HOME, 'PCSX2'), path.join(home, '.config/PCSX2'), path.join(home, '.var/app/net.pcsx2.PCSX2/config/PCSX2')].filter(Boolean);
   const out = [];
   for (const root of [...new Set(roots)]) {
     if (!exists(path.join(root, 'inis'))) continue;

@@ -1719,6 +1719,26 @@ function ps3Serial(romId, where) {
   for (const f of files.filter((x) => /\.pkg$/i.test(x))) { const i = pkgInst.pkgInfo(f); if (i?.titleId && /^[A-Z]{4}\d{5}$/.test(i.titleId)) return i.titleId; }
   return null;
 }
+// The emulator copy a game really starts with (its own pick, else its console's), so its patches go
+// to that copy's own folders (0.9.15): a fork's portable "user" folder, a Flatpak's sandbox folder,
+// a portable PCSX2. Returns the folder list to try first, or [] to use the usual places.
+function patchHome(romId, emu) {
+  let t = null;
+  try { const key = steamMgr.forRom(Number(romId)).console; t = key ? steamMgr._templateForGame(Number(romId), key) : null; } catch {}
+  if (!t?.exe) return { pick: null };
+  const exe = t.exe, dir = path.dirname(exe), flat = (t.args || '').match(/run\s+(?:--\S+\s+)*(\S+)/)?.[1] || '';
+  const home = os.homedir();
+  if (emu === 'shadps4') {
+    if (fs.existsSync(path.join(dir, 'user', 'patches'))) return { pick: exe, shad: [path.join(dir, 'user')] }; // portable copy or fork
+    return { pick: exe };
+  }
+  if (emu === 'rpcs3') return { pick: exe, rpcs3Home: /net\.rpcs3\.RPCS3/.test(flat) ? path.join(home, '.var/app/net.rpcs3.RPCS3/config/rpcs3') : null };
+  if (emu === 'pcsx2') {
+    if (fs.existsSync(path.join(dir, 'portable.ini')) || fs.existsSync(path.join(dir, 'portable.txt'))) return { pick: exe, pcsx2Root: dir };
+    return { pick: exe, pcsx2Root: /net\.pcsx2\.PCSX2/.test(flat) ? path.join(home, '.var/app/net.pcsx2.PCSX2/config/PCSX2') : null };
+  }
+  return { pick: exe };
+}
 function patchState(romId) {
   const r = romIndexMain().get(Number(romId));
   if (/ps4/i.test(`${r?.platform_slug} ${r?.platform_fs_slug}`)) return ps4PatchState(romId, r);
@@ -1728,7 +1748,9 @@ function patchState(romId) {
   if (!where) return { emu: 'rpcs3', why: 'Download the game first.' };
   const serial = ps3Serial(romId, where);
   if (!serial) return { emu: 'rpcs3', why: 'Cartridge couldn’t find this game’s serial (BLUS12345 and so on) in its name or its files.' };
-  const dir = patchesMod.rpcs3Dirs()[0];
+  const ph = patchHome(romId, 'rpcs3');
+  const dirs = patchesMod.rpcs3Dirs();
+  const dir = (ph.rpcs3Home && dirs.find((d) => d.root === ph.rpcs3Home)) || (ph.rpcs3Home === null ? dirs.find((d) => !d.root.includes('/.var/app/')) : null) || dirs[0];
   if (!dir || !fs.existsSync(path.join(dir.patches, 'patch.yml'))) return { emu: 'rpcs3', serial, why: 'RPCS3’s patch list isn’t on this device yet. In RPCS3: Manage → Game Patches → Download latest patches. Then come back.' };
   const version = patchesMod.ps3Version(installs[romId]?.dir || where, rpcs3Hdds(), serial);
   return { emu: 'rpcs3', serial, version, dir };
@@ -1740,7 +1762,8 @@ function ps4PatchState(romId, r) {
   const sfo = patchesMod.sfoAt(path.join(where, 'sce_sys', 'param.sfo'));
   const serial = sfo.TITLE_ID || (`${r?.fs_name || ''} ${r?.name || ''} ${path.basename(where)}`.match(/\b((?:CUSA|PPSA)\d{5})\b/i) || [])[1]?.toUpperCase() || null;
   if (!serial) return { emu: 'shadps4', why: 'Cartridge couldn’t read this game’s serial (CUSA12345).' };
-  const dir = patchesMod.shadDirs()[0];
+  const ph = patchHome(romId, 'shadps4');
+  const dir = (ph.shad || []).find((d) => fs.existsSync(path.join(d, 'patches'))) || patchesMod.shadDirs()[0];
   if (!dir) return { emu: 'shadps4', serial, why: 'shadPS4’s patches aren’t on this device yet. In the shadPS4 launcher: right-click a game → Cheats / Patches → Download Patches. Then come back.' };
   return { emu: 'shadps4', serial, version: patchesMod.ps4Version(where), dir };
 }
@@ -1748,7 +1771,9 @@ function ps4PatchState(romId, r) {
 function ps2PatchState(romId) {
   const where = installedMap[romId];
   if (!where || where === MARKED) return { emu: 'pcsx2', why: 'Download the game first.' };
-  const dir = patchesMod.pcsx2Dirs()[0];
+  const ph = patchHome(romId, 'pcsx2');
+  const all = patchesMod.pcsx2Dirs(os.homedir(), ph.pcsx2Root ? [ph.pcsx2Root] : []);
+  const dir = (ph.pcsx2Root && all.find((d) => d.root === ph.pcsx2Root)) || all[0];
   if (!dir) return { emu: 'pcsx2', why: 'PCSX2’s settings weren’t found on this device. Open PCSX2 once, then come back.' };
   let file = where;
   try { if (fs.statSync(where).isDirectory()) file = fs.readdirSync(where).map((n) => path.join(where, n)).filter((f) => /\.(iso|chd|cso|zso|gz|bin|cue|elf)$/i.test(f)).sort((a, b) => fs.statSync(b).size - fs.statSync(a).size)[0] || where; } catch {}
