@@ -150,3 +150,6 @@ Carried from K: F1 console backgrounds (rebuilt, except Ribbons and XMB; mockups
 12. **PS3 settings per game from a database** when the download finishes (Discuss: see the answer in chat).
 13. **Title case everywhere it applies,** including the items inside the game page's More sheet.
 14. **RPCS3 patches for disc games:** "Cartridge couldn't read this game's serial" on a PS3 game. Read the serial from a disc folder (PS3_GAME/PARAM.SFO) and from ISO names, so disc games get Patches too.
+15. **"on" before a device name** wherever Cartridge says which device a game was played on or a trophy was earned on ("on Steam Deck").
+16. **Vita3K installs fail** for every Vita game tried: "Vita3K didn't install it. Open Vita3K and install the file there (File → Install) to see why." Check how `installVita` starts Vita3K and how it decides the install worked (the new `ux0/app/<ID>` folder), against Vita3K's source and a real install.
+17. **Vita games added to Steam by Cartridge don't boot:** the launch options are wrong. Re-read Vita3K's argument parser (`-r <title ID>`, `-F`, the path it expects) and compare with EmuDeck's and SRM's Vita3K parsers; add a test of the exact line.
