@@ -6,6 +6,32 @@ The branch for 0.9.3 work is `claude/relaxed-fermat-30pigp`. Pull it before star
 
 ---
 
+## 2 Oct 2026 · 0.9.3 K built (read this first)
+
+Everything that needed no decision, plus the owner's picks (entry below), in one update: version 0.9.13, `versionName` "0.9.3 K". Details per feature are in `CLAUDE.md` (0.9.3 K section) and `RELEASE_NOTES.md`.
+
+**Built:** E2 one trophy home; H1 recommendations with reasons (IGDB optional); B3 rumble; F6 quiet connection icon; G4 A (Look & Feel pages + Advanced) and G4 B (one bottom sheet with tabs); shadPS4 core launch choice (A10 test); E6 shadPS4 trophy lists decrypted into Cartridge's cache; E1 names for code-only trophy games; D7 PCSX2 patches; F2 bigger, edgeless headers; F3 sharpest SteamGridDB heroes (headers, idle); H2 RomM version check in Issues; K1 Xenia Windows build through Proton; K2 Flatpak Steam through flatpak-spawn --host; B1 stick hysteresis and dominant axis; J13 tests (Shortcut health, Flatpak Steam, recs, TRP, PCSX2); J14 HANDOFF.md updated.
+
+**Checked here:** `npm test` (all pass), `vite build`, screenshots at 1280x800 and 1920x1080 of Achievements All, the sheets, Look & Feel pages, Home.
+
+**Not done, with reasons:**
+- F5 company logos: needs artwork; drawing Sony, Nintendo or Sega logos would copy their trademarks. Needs the owner's call on a source.
+- BigPEmu (K1): closed source, so its launch line can't be read from source (the rule for new emulators).
+- E1's built-in list of trophy codes to names: no reliable public source to copy; names come from RomM notes and the library instead.
+- J6 performance: can't be measured meaningfully in the cloud container (no real art, no device GPU). J11 screen review: only the screens above were reviewed.
+- G4 A "hide empty rows everywhere in Settings": not audited row by row.
+
+**Owner to test on a device:**
+- PS4: pick "shadPS4 core · without the launcher" on the PS4 console page, Update the shortcut, start a game from Steam; then send shadPS4's log: `~/.local/share/shadPS4/log/shadps4.log` (current builds; the old name was shad_log.txt).
+- PS4 trophies show names for games played before the key was set.
+- PCSX2: Patches on a PS2 game that PCSX2 has in its game list; check PCSX2 shows it on.
+- Rumble in Game Mode (Steam's controller rumble must be on). Stick feel.
+- Flatpak Steam (if anyone has it): the Issues entry, then a game starts.
+- Sharp headers need a SteamGridDB key.
+- Reminder for the owner: the stray `v2.3.1` tag (asked to be reminded in this update).
+
+---
+
 ## 2 Oct 2026 · Owner's picks for 0.9.3 K (decided in chat)
 
 The owner asked for everything not yet built that needs no decision, plus the Discuss items, to ship together as **0.9.3 K** (version 0.9.13). Picks:
@@ -20,7 +46,7 @@ The owner asked for everything not yet built that needs no decision, plus the Di
 
 ---
 
-## 2 Oct 2026 · Morning summary of the night run (read this first)
+## 2 Oct 2026 · Morning summary of the night run
 
 **Released overnight**, each after npm test, vite build, screenshots and a green branch test build (PRs #22 to #28):
 - **0.9.3 D** Vita games through Vita3K; PS3 `.rap` licences found in the download or RomM, no install without; package games wait for the install before Steam; shorter grouped More menu.
