@@ -72,7 +72,7 @@
 // latest unlocks from both in one row, games grouped by console with one card look. The two
 // single-source views stay one LB/RB press away for sign-in, hidden games and folders.
 import { computed, onMounted, ref, watch } from 'vue';
-import { store, call, img, go, setBg, when, GRADE, choose } from '../store.js';
+import { store, call, img, go, setBg, when, GRADE, choose, consoleName } from '../store.js';
 import { useView } from '../useView.js';
 import { focusFirst } from '../nav.js';
 import Icon from '../components/Icon.vue';
@@ -86,20 +86,21 @@ const raOn = computed(() => !!store.config.ra?.user && !!store.config.ra?.key);
 const fmt = (n) => (n || 0).toLocaleString();
 const raDate = (d) => { const t = new Date(String(d || '').replace(' ', 'T') + (/[zZ]|[+-]\d\d:?\d\d$/.test(d || '') ? '' : 'Z')).getTime(); return isNaN(t) ? 0 : t; };
 const CONSOLE = { rpcs3: 'PlayStation 3', shadps4: 'PlayStation 4', xenia: 'Xbox 360', vita3k: 'PlayStation Vita' };
+const romOfTro = (key) => tro.value?.games?.find((g) => g.key === key)?.romId || null;
 const pctOf = (e, t) => (t ? Math.round((e / t) * 100) : 0);
 
 const unlocks = computed(() => {
   const out = [];
-  for (const a of ra.value?.recent || []) out.push({ key: 'ra' + a.id + a.date, t: raDate(a.date), badge: img(a.badge), bg: a.gameIcon ? img(a.gameIcon) : '', title: a.title, desc: a.desc, pts: `${a.points} pts${a.hardcore ? ' · HC' : ''}`, game: a.game, console: a.console, open: () => go('ra-game', { gameId: a.gameId }) });
-  for (const t of tro.value?.recent || []) out.push({ key: 'tr' + t.key + t.id, t: t.time || 0, badge: t.icon, grade: t.grade, title: t.name, desc: t.desc, pts: t.points ? `${t.points} G` : '', game: t.game, console: CONSOLE[t.src] || t.short, open: () => go('trophy-game', { tkey: t.key }) });
+  for (const a of ra.value?.recent || []) out.push({ key: 'ra' + a.id + a.date, t: raDate(a.date), badge: img(a.badge), bg: a.gameIcon ? img(a.gameIcon) : '', title: a.title, desc: a.desc, pts: `${a.points} pts${a.hardcore ? ' · HC' : ''}`, game: a.game, console: consoleName({ romId: a.romId, fallback: a.console }), open: () => go('ra-game', { gameId: a.gameId }) });
+  for (const t of tro.value?.recent || []) out.push({ key: 'tr' + t.key + t.id, t: t.time || 0, badge: t.icon, grade: t.grade, title: t.name, desc: t.desc, pts: t.points ? `${t.points} G` : '', game: t.game, console: consoleName({ romId: romOfTro(t.key), src: t.src, fallback: CONSOLE[t.src] || t.short }), open: () => go('trophy-game', { tkey: t.key }) });
   return out.sort((a, b) => b.t - a.t).slice(0, 30);
 });
 const items = computed(() => {
   const out = [];
-  for (const g of ra.value?.played || []) out.push({ key: 'ra' + g.gameId, src: 'RetroAchievements', kind: 'ra', title: g.title, console: g.console || 'Other', icon: img(g.icon), bg: img(g.boxart || g.icon), romId: g.romId, t: raDate(g.lastPlayed), earned: g.earned, total: g.total, pct: pctOf(g.earned, g.total), extra: g.possible ? `${g.score} / ${g.possible} pts` : '', mastered: g.total && g.earned >= g.total, open: () => go('ra-game', { gameId: g.gameId }) });
+  for (const g of ra.value?.played || []) out.push({ key: 'ra' + g.gameId, src: 'RetroAchievements', kind: 'ra', title: g.title, console: consoleName({ romId: g.romId, fallback: g.console || 'Other' }), icon: img(g.icon), bg: img(g.boxart || g.icon), romId: g.romId, t: raDate(g.lastPlayed), earned: g.earned, total: g.total, pct: pctOf(g.earned, g.total), extra: g.possible ? `${g.score} / ${g.possible} pts` : '', mastered: g.total && g.earned >= g.total, open: () => go('ra-game', { gameId: g.gameId }) });
   for (const g of tro.value?.games || []) {
     if (g.hidden) continue;
-    out.push({ key: 'tr' + g.key, src: g.kind === 'gamerscore' ? 'Gamerscore' : 'Trophies', kind: 'tro', title: g.title, console: CONSOLE[g.src] || g.short, icon: g.icon || (g.cover ? img(g.cover) : ''), bg: g.cover ? img(g.cover) : '', romId: g.romId, t: g.last || 0, earned: g.earned, total: g.total, pct: pctOf(g.earned, g.total), extra: g.kind === 'gamerscore' ? `${g.score} / ${g.possible} G` : '', plat: !!g.grades?.P, open: () => go('trophy-game', { tkey: g.key }) });
+    out.push({ key: 'tr' + g.key, src: g.kind === 'gamerscore' ? 'Gamerscore' : 'Trophies', kind: 'tro', title: g.title, console: consoleName({ romId: g.romId, src: g.src, fallback: CONSOLE[g.src] || g.short }), icon: g.icon || (g.cover ? img(g.cover) : ''), bg: g.cover ? img(g.cover) : '', romId: g.romId, t: g.last || 0, earned: g.earned, total: g.total, pct: pctOf(g.earned, g.total), extra: g.kind === 'gamerscore' ? `${g.score} / ${g.possible} G` : '', plat: !!g.grades?.P, open: () => go('trophy-game', { tkey: g.key }) });
   }
   return out;
 });

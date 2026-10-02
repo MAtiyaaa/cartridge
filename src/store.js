@@ -118,6 +118,17 @@ export async function loadLibrary() {
 }
 export const romById = (id) => (store.libVersion, romIndex.get(Number(id)));
 export const platformById = (id) => (store.libVersion, store.lib?.platforms.find((p) => p.id === Number(id)));
+// A console's name as your RomM server has it now (renamed consoles show their new name everywhere,
+// 0.9.3 L): from the game's console when the game is in the library, else by slug, else the fallback
+const SRC_SLUG = { rpcs3: ['ps3'], shadps4: ['ps4'], xenia: ['xbox360'], vita3k: ['psvita', 'vita'] };
+export function consoleName({ romId, slug, src, fallback = '' } = {}) {
+  const r = romId ? romById(romId) : null;
+  const p = r ? platformById(r.platform_id) : null;
+  if (p) return p.display_name || p.name || fallback;
+  const slugs = slug ? [slug] : SRC_SLUG[src] || [];
+  const q = slugs.length && store.lib?.platforms.find((x) => slugs.includes(x.slug) || slugs.includes(x.fs_slug));
+  return (q && (q.display_name || q.name)) || r?.platform_display_name || fallback;
+}
 export function visiblePlatforms() {
   if (!store.lib) return [];
   return store.lib.platforms.filter((p) => !store.config.ui.hideEmpty || p.rom_count > 0);
