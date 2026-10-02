@@ -201,15 +201,14 @@ const shelves = computed(() => {
   const roms = allRoms().filter(visible);
   const out = [];
   // Mirrors RomM's home: recently added, random picks, then your stuff
-  const playing = roms.filter((r) => r.user?.playing || r.user?.status === 'incomplete').sort((a, b) => lastPlay(b) - lastPlay(a));
-  if (playing.length) out.push({ id: 'playing', title: 'Continue playing', icon: 'mdiPlayCircleOutline', count: playing.length, items: playing });
-  // started (played a while, or marked in RomM) but not finished, and not already above
-  const inPlaying = new Set(playing.map((r) => r.id));
+  // One row for what you're playing (0.9.3 L: "Continue playing" and "Recently played" were two rows
+  // that looked the same): marked as playing in RomM, or played lately on any device, newest first
+  const playing = roms.filter((r) => r.user?.playing || r.user?.status === 'incomplete' || lastPlay(r)).sort((a, b) => lastPlay(b) - lastPlay(a));
+  if (playing.length) out.push({ id: 'playing', title: 'Continue playing', icon: 'mdiPlayCircleOutline', count: '', items: playing, sub: (r) => (store.play[r.id]?.device ? 'on ' + store.play[r.id].device : '') });
+  // started (played a while, or marked in RomM) but not finished, and not already near the front above
+  const inPlaying = new Set(playing.slice(0, 15).map((r) => r.id));
   const started = roms.filter((r) => !inPlaying.has(r.id) && !DONE.has(r.user?.status) && (minsOf(r) >= 30 || r.user?.status === 'incomplete')).sort((a, b) => lastPlay(b) - lastPlay(a));
   if (started.length) out.push({ id: 'started', title: 'Finish what you started', icon: 'mdiFlagCheckered', count: started.length, items: started });
-  const lastPlayed = roms.filter(lastPlay).sort((a, b) => lastPlay(b) - lastPlay(a));
-  // which device it was last played on (this one or another one in RomM)
-  if (lastPlayed.length) out.push({ id: 'played', title: 'Recently played', icon: 'mdiHistory', count: '', items: lastPlayed, sub: (r) => store.play[r.id]?.device || '' });
   const most = roms.filter(minsOf).sort((a, b) => minsOf(b) - minsOf(a));
   if (most.length) out.push({ id: 'most', title: 'Most played', icon: 'mdiChartBar', count: '', items: most, sub: (r) => playtimeText(minsOf(r)) });
   const recent = [...roms].sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
