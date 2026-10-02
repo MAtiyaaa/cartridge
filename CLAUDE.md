@@ -163,6 +163,29 @@ LT/RT switch top tabs. LB/RB only switch sections inside a page. A select, B bac
 - UI: Home rows of 15 + Show all (`store.homeLists`), delete ring (`Ring.vue`, `delete-progress`), game page More grouped (Steam and emulator, Details and artwork), score/age badges, one RomM tab in Settings (`OLD_SEC`), Report a problem (About), Refresh Library (Quick Menu), Hidden Games (Settings → Achievements), RA tab filter and sort. RomM game fields read in `electron/romm.js` (tested).
 - Owner's open items: shadPS4 PS4 games start only after opening shadPS4 once (black screen 30 s, not IPC); options for Discuss items in `docs/options-0.9.3.md`.
 
+## 0.9.3 K (owner's picks, 2 Oct 2026; log: docs/SESSION-LOG.md)
+- Achievements: `AchAll.vue` is the default tab (`store.achTab = 'all'`), RA + trophies merged, grouped by console; LB/RB: all, ra, others.
+- `src/recs.js`: `similarTo` (game page) and `recommend` (Home "Recommended for you"); IGDB `similar` only a bonus; each result has a `why`. Tests in `test/recs.test.js`.
+- Look & Feel pages (`LOOK_PAGES`, `lookPage`, `lookAdv`, LB/RB `stepLook`). `Menu.vue` takes `tabs` (bottom sheet, LB/RB) or `sheet: true`; used by the game page More, Show and sort, console More.
+- Rumble: `setRumble`/`rumble` in nav.js (`ui.rumble`). Stick: stronger axis only, hysteresis 0.55/0.35 (`stickHeld`).
+- Connection: `.net` icon (house/globe), red text only when offline.
+- Sharp heroes: `sharpHero` in main.js (`art:sharpHero`, `heroes/`, `romimg ?hz=`), `store.sharp`, `wantSharp`; `backdropOf` prefers it. Home header 50%, art runs on under the first row.
+- shadPS4 core candidate removed again in L (owner: still a black screen). shadPS4 AppImage shortcuts get `SHAD_START` (`/tmp/.mount_shadPS4/usr/bin`, never exists) as Start in, like the Qt launcher's own (its StartDir is its temporary mount); portable installs keep their folder.
+- shadPS4 trophy lists: `readTrp`, `shadTrophyKey`, `cachedTrophyDefs` in trophies.js into `trophylists/`. Trophy names: `isCode`/`nameOf` in trophyService (a code never replaces a real name in notes).
+- PCSX2 patches in patches.js: `pcsx2Dirs`, `pcsx2GameList` (gamelist.cache v34), `pcsx2List`, `pcsx2Set` (gamesettings `<SERIAL>_<CRC>.ini` [Patches] `Enable =`), patches.zip via `detect.readAppImageFile`.
+- Flatpak Steam: `FLATPAK_STEAM`, `hostLaunch` (`flatpak-spawn --host --directory= --env=`), `readShortcuts` unwraps it, `flatpakSteamAccess` + Issues `fpsteam` (`setup:steamFlatpakAllow`); steamArt wraps Cartridge's own entry. Not for `.exe` (Proton).
+- Xenia Windows build: `EMU.xenia.win`, src `windows`, Proton; exec-bit checks skip `.exe`.
+- RomM version: `rommTooOld` in romm.js, Issues `romm`.
+
+## 0.9.3 L (2 Oct 2026; log: docs/SESSION-LOG.md)
+- Game Mode background: `watchGamescopeFocus` in main.js (xprop GAMESCOPE_FOCUSED_APP vs SteamGameId) → event `background` → nav.js `setBackground` stops pad input.
+- Vita3K: EmuDeck's vita3k.sh always adds `-Fr`, so `argsBy.emudeck: '{SERIAL}'`; `vita3kCommand()` never uses the script (EmuDeck's real Vita3K is `~/Applications/Vita3K/Vita3K`); `vitaPrefs` adds XDG_DATA_HOME and `portable/fs`.
+- RPCS3 database settings: `rpcs3ApplyDb` in patches.js (writes `config/custom_configs/config_<SERIAL>.yml` from RPCS3's config_database.dat or api.rpcs3.net/config/?api=v1, only when none), `rpcs3Settings` in main.js after download/install, `rpcs3-configs.json` records them.
+- `consoleName()` in store.js (RomM's current platform names), `developerOf()` in romm.js, `titleCase()` for Menu labels (`o.raw` opts out), `store.settingsSpot` (store.go remembers the Settings row), `steam:status.added` (`cartridgeInSteam`), `bgPreview()` in bgRenderers.js, Menu `img`.
+- Trophies All: one list (`.aa-row`), owner's pick A. Home: one Continue playing row.
+- Health: learned shortcuts with a gone game get Remove from Steam (only when their ROMs folder exists).
+- PS2 ISO serial/CRC: `ps2IsoInfo` in patches.js (SYSTEM.CNF BOOT2, XOR of the ELF's words) when PCSX2's game list doesn't have the game; CHD still needs the list.
+
 ## Releases (full steps: HANDOFF D8)
 Only when the owner asks. Bump `version` and `build.releaseInfo.releaseName` ("Cartridge X.Y.Z") in `package.json`, put only this version's notes in `RELEASE_NOTES.md` (heading `## Cartridge X.Y.Z · Title`), add them to the top of `CHANGELOG.md`, grouped as New / Changed / Fixed with bold lead-ins. CI builds, launch-checks and publishes.
 
@@ -185,3 +208,4 @@ Only when the owner asks. Bump `version` and `build.releaseInfo.releaseName` ("C
 - 0.9.8: (top bar tint, removed again in 0.9.9 at the owner's request: the bar stays plain). Companion `.gv > * { flex-shrink: 0 }`; no folder path on the console view; CollTile `.lead` sits above the fan and clear of it.
 - 0.9.9: Quick Menu rebuilt (time, status card, 3x2 `.qm-tile` grid, `.qm-list`); the top bar `.sys` is a button that opens it; `store.battery` (WebView) and `Native.battery()` (BatteryManager: status, plugged, tempTenths, voltageMv, currentUa, toFullMs). Companion console/collection view is one computed `group` rendered as `.gx` (full screen, three covers, series use `logoOf(first rom)`); the game view pins `.sum` above `.gv-acts` and keeps Show more's space (`.more.hide`); `.inline-dl` floats above the buttons. Series logo in the Home hero and Gallery header. `rom:manual` is base64 on Android (`wrap` in android-main.js; the JSON bridge broke Buffers). Screenshot viewer img keyed with neighbour preload. nav.js: up/down skip `sameRow` targets.
 - 0.9.12 (merge of abdu2304's 0.9.3 A to J, his tag v0.9.12): no `versionName` in this fork (Settings shows the number). Android adaptations: `src/android/issues.js` (`androidConsoles`, `androidIssues`: no emulator, BIOS, `.pkg`/`.vpk` to install in the emulator with a `pkg:<romId>` confirm; sets `store.issues`, run 8 s after start from app.js), `AndroidEmulators.vue` (Settings → Emulators on Android, per-console pick `android.emus`), `report.js` (Report a problem on Android; ISSUES link points at this fork). Game.vue skips `pkg:check` and Patches on Android. `js-yaml` is in `NODE_DEPS` (patches.js loads at start). His Quick Menu items (Refresh Library, title case) live in this fork's tile layout.
+- 0.9.13 (merge of abdu2304's 0.9.3 K and L, his v0.9.13/v0.9.14): Android: `rumble()` in nav.js uses `navigator.vibrate` in android mode (no pad rumble in the WebView); `appStateChange` → `nav.setBackground(!isActive)` in android/app.js (pad ignored while an emulator is in front). Quick Menu status pills use his connection icons (`netIcon`). MediaBar, GameTimeline and the game banner shade keep plain-colour fallbacks before `color-mix` (older Android WebViews). Settings → Steam's Add Cartridge blocks are desktop only.

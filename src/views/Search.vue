@@ -6,7 +6,7 @@
     <div v-else-if="!results.length" class="empty">Nothing matches “{{ q }}”.</div>
     <template v-else>
       <div class="shelf-title">Games<span class="count">{{ results.length }}{{ results.length === LIMIT ? '+' : '' }}</span></div>
-      <div class="game-grid" style="padding-top: 10px"><GameCard v-for="r in results" :key="r.id" :rom="r" show-platform @open="(r) => go('game', { romId: r.id })" @focused="(r) => setBg(backdropOf(r))" /></div>
+      <div class="game-grid" style="padding-top: var(--s-5)"><GameCard v-for="r in results" :key="r.id" :rom="r" show-platform @open="(r) => go('game', { romId: r.id })" @focused="(r) => setBg(backdropOf(r))" /></div>
     </template>
   </div>
 </template>

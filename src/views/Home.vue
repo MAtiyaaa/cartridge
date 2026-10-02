@@ -92,8 +92,9 @@
 </template>
 
 <script setup>
+import { recommend } from '../recs.js';
 import { computed, ref, nextTick, onMounted, onBeforeUnmount, watch } from 'vue';
-import { tab, img, cover, collections, autoLists, seriesLists, genres, visible, store, go, allRoms, visiblePlatforms, romsOf, isNew, setBg, backdropOf, bytes, year, ago, rating, resync, downloadFor, download, romById, toast, logoOf, call, GRADE, loadPlay, playtimeText } from '../store.js';
+import { tab, img, cover, collections, autoLists, seriesLists, genres, visible, store, go, allRoms, visiblePlatforms, romsOf, isNew, setBg, backdropOf, wantSharp, bytes, year, ago, rating, resync, downloadFor, download, romById, toast, logoOf, call, GRADE, loadPlay, playtimeText } from '../store.js';
 import { useView } from '../useView.js';
 import { ensureFocus, glideTo } from '../nav.js';
 import Icon from '../components/Icon.vue';
@@ -140,7 +141,7 @@ const heroRom = ref(null);
 const heroSys = ref(null);
 const heroCol = ref(null);
 // Media bar art: a screenshot of the highlighted game (or its cover), or art from the highlighted console/collection
-const artOf = (r) => (r ? (store.art?.[r.id]?.hero ? img(store.art[r.id].hero) : r.shot ? img(r.shot) : cover(r, true)) : '');
+const artOf = (r) => (r ? (store.art?.[r.id]?.hero ? img(store.art[r.id].hero) : store.sharp[r.id] || (r.shot ? img(r.shot) : cover(r, true))) : '');
 const heroArt = computed(() => {
   if (heroRom.value) return artOf(heroRom.value);
   if (heroSys.value) return artOf(romsOf(heroSys.value.id).find((r) => r.shot) || romsOf(heroSys.value.id)[0]);
@@ -211,15 +212,14 @@ const shelves = computed(() => {
   const roms = allRoms().filter(visible);
   const out = [];
   // Mirrors RomM's home: recently added, random picks, then your stuff
-  const playing = roms.filter((r) => r.user?.playing || r.user?.status === 'incomplete').sort((a, b) => lastPlay(b) - lastPlay(a));
-  if (playing.length) out.push({ id: 'playing', title: 'Continue playing', icon: 'mdiPlayCircleOutline', count: playing.length, items: playing });
-  // started (played a while, or marked in RomM) but not finished, and not already above
-  const inPlaying = new Set(playing.map((r) => r.id));
+  // One row for what you're playing (0.9.3 L: "Continue playing" and "Recently played" were two rows
+  // that looked the same): marked as playing in RomM, or played lately on any device, newest first
+  const playing = roms.filter((r) => r.user?.playing || r.user?.status === 'incomplete' || lastPlay(r)).sort((a, b) => lastPlay(b) - lastPlay(a));
+  if (playing.length) out.push({ id: 'playing', title: 'Continue playing', icon: 'mdiPlayCircleOutline', count: '', items: playing, sub: (r) => (store.play[r.id]?.device ? 'on ' + store.play[r.id].device : '') });
+  // started (played a while, or marked in RomM) but not finished, and not already near the front above
+  const inPlaying = new Set(playing.slice(0, 15).map((r) => r.id));
   const started = roms.filter((r) => !inPlaying.has(r.id) && !DONE.has(r.user?.status) && (minsOf(r) >= 30 || r.user?.status === 'incomplete')).sort((a, b) => lastPlay(b) - lastPlay(a));
   if (started.length) out.push({ id: 'started', title: 'Finish what you started', icon: 'mdiFlagCheckered', count: started.length, items: started });
-  const lastPlayed = roms.filter(lastPlay).sort((a, b) => lastPlay(b) - lastPlay(a));
-  // which device it was last played on (this one or another one in RomM)
-  if (lastPlayed.length) out.push({ id: 'played', title: 'Recently played', icon: 'mdiHistory', count: '', items: lastPlayed, sub: (r) => store.play[r.id]?.device || '' });
   const most = roms.filter(minsOf).sort((a, b) => minsOf(b) - minsOf(a));
   if (most.length) out.push({ id: 'most', title: 'Most played', icon: 'mdiChartBar', count: '', items: most, sub: (r) => playtimeText(minsOf(r)) });
   const recent = [...roms].sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
@@ -229,6 +229,9 @@ const shelves = computed(() => {
     for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [pool[i], pool[j]] = [pool[j], pool[i]]; }
     discoverSeed = { v: store.libVersion, items: pool.slice(0, 24) };
   }
+  // games like the ones you play, each with its reason (recs.js; works without IGDB)
+  const recs = recommend(roms, { minsOf, lastPlay });
+  if (recs.length >= 4) { const why = new Map(recs.map((x) => [x.rom.id, x.why])); out.push({ id: 'recs', title: 'Recommended for you', icon: 'mdiThumbUpOutline', count: '', items: recs.map((x) => x.rom), sub: (r) => why.get(r.id) || '' }); }
   if (discoverSeed.items.length) out.push({ id: 'picks', title: 'Picks for you', icon: 'mdiDiceMultipleOutline', count: '', items: discoverSeed.items });
   // smart shelves, each only when it has enough games to be worth a row
   const short = roms.filter((r) => r.hours > 0 && r.hours <= 5 && !DONE.has(r.user?.status)).sort((a, b) => (b.rating || 0) - (a.rating || 0) || a.hours - b.hours);
@@ -255,7 +258,7 @@ const shelves = computed(() => {
   return out;
 });
 
-function focusRom(r) { heroRom.value = r; heroSys.value = null; heroCol.value = null; setBg(backdropOf(r)); }
+function focusRom(r) { heroRom.value = r; heroSys.value = null; heroCol.value = null; setBg(backdropOf(r)); wantSharp(r); }
 function focusSys(p) {
   heroSys.value = p; heroRom.value = null; heroCol.value = null;
   const withArt = romsOf(p.id).find((r) => r.shot) || romsOf(p.id).find((r) => r.path_cover_large);
@@ -308,10 +311,12 @@ onMounted(async () => { await nextTick(); ensureFocus(el.value); });
 </script>
 
 <style scoped>
-.home { position: absolute; inset: 0; display: grid; grid-template-rows: minmax(280px, 44%) 1fr; animation: viewIn var(--d-med) var(--ease); }
+.home { position: absolute; inset: 0; display: grid; grid-template-rows: minmax(300px, 50%) 1fr; animation: viewIn var(--d-med) var(--ease); }
 .first-sync { grid-row: 1 / -1; align-content: center; }
 .first-sync h2 { font-size: var(--t-xl); color: var(--text); }
-.hero { position: relative; padding: var(--s-5) var(--s-7) var(--s-4); display: flex; align-items: flex-end; min-height: 0; overflow: hidden; }
+.hero { position: relative; padding: var(--s-5) var(--s-7) var(--s-4); display: flex; align-items: flex-end; min-height: 0; }
+/* the art runs on under the first row and fades out there, so it has no bottom edge (0.9.3 K, F2) */
+.hero :deep(.media) { bottom: -14vh; }
 .hero-in { position: relative; z-index: 1; max-width: 760px; display: flex; flex-direction: column; gap: var(--s-3); }
 .hero-leave-active { left: var(--s-7); bottom: var(--s-4); }
 .hero-title { font-family: var(--display); font-stretch: var(--display-stretch); font-size: clamp(var(--t-2xl), 4.6vw, var(--t-3xl)); font-weight: 800; line-height: 1; letter-spacing: -0.02em; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }

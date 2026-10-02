@@ -22,6 +22,7 @@ const exists = (p) => { try { fs.accessSync(p); return true; } catch { return fa
 const isDir = (p) => { try { return fs.statSync(p).isDirectory(); } catch { return false; } };
 const ls = (p) => { try { return fs.readdirSync(p); } catch { return []; } };
 const real = (p) => { try { return fs.realpathSync(p); } catch { return p; } };
+const readText = (p) => { try { return fs.readFileSync(p, 'utf8'); } catch { return null; } };
 const unq = (s) => String(s || '').trim().replace(/^"(.*)"$/, '$1');
 const q = (s) => `"${s}"`;
 // inside a running AppImage's temporary mount: gone once that app closes or the device restarts
@@ -47,6 +48,8 @@ function loginUsers(root) {
   }
   return out;
 }
+// the Steam account in use is Flatpak Steam's (set by environment(); 0.9.3 K, K2)
+let FLATPAK_STEAM = false;
 function environment() {
   const roots = steamRoots();
   if (!roots.length) return { installed: false, reason: 'nosteam' };
@@ -62,6 +65,7 @@ function environment() {
   }
   if (!accounts.length) return { installed: true, reason: 'noaccount', roots };
   accounts.sort((a, b) => (b.mostRecent - a.mostRecent) || (b.ts - a.ts));
+  FLATPAK_STEAM = !!accounts[0].flatpak;
   return { installed: true, accounts, account: accounts[0], running: steamRunning() };
 }
 const files = (acc) => ({
@@ -85,7 +89,20 @@ function readShortcuts(acc) {
       const extra = toks.slice(1).map((t) => t.raw).join(' ');
       lo = /%command%/.test(lo) ? lo.replace('%command%', `%command% ${extra}`) : `%command% ${extra}${lo ? ' ' + lo : ''}`;
     }
-    return { appid: (e.appid ?? 0) >>> 0, name: e.AppName || e.appname || '', exe, exeRaw, start: unq(e.StartDir || ''), lo, loRaw: e.LaunchOptions || '', last: e.LastPlayTime || 0 };
+    // Flatpak Steam shortcuts made by Cartridge (0.9.3 K): flatpak-spawn --host [--directory= --env=]
+    // [wrappers] "exe" args. Read as the program on the system, so health and learning see it.
+    let start = unq(e.StartDir || ''), host = false;
+    if (/(^|\/)flatpak-spawn$/.test(exe)) {
+      const lt = tokenize(lo);
+      if (lt[0]?.val === '--host') {
+        let i = 1;
+        const pre = [];
+        for (; i < lt.length && /^--/.test(lt[i].val); i++) { const m = /^--(directory|env)=(.*)$/.exec(lt[i].val); if (m?.[1] === 'directory') start = m[2]; else if (m) pre.push(m[2]); }
+        while (i < lt.length - 1 && !/^\//.test(lt[i].val)) pre.push(lt[i++].raw);
+        if (lt[i]) { exe = lt[i].val; lo = [...pre, ...(pre.length ? ['%command%'] : []), ...lt.slice(i + 1).map((t) => t.raw)].join(' '); host = true; }
+      }
+    }
+    return { appid: (e.appid ?? 0) >>> 0, name: e.AppName || e.appname || '', exe, exeRaw, start, lo, loRaw: e.LaunchOptions || '', last: e.LastPlayTime || 0, host };
   });
 }
 // Steam's text VDF (localconfig.vdf): { key: value | { ... } }
@@ -370,11 +387,18 @@ module.exports = function createSteamManager(ctx) {
       const hit = uniq.filter((p) => !/qtlauncher/i.test(p)).sort((a, b) => mtime(b) - mtime(a))[0] || uniq[0];
       // its version (read from inside it by Setup, else the file name) picks arguments that changed over time
       if (hit) mk(hit, path.dirname(hit), 'appimage', path.basename(hit), /qtlauncher/i.test(hit) && e.qtArgs ? e.qtArgs : null, ver(hit), realName(id, path.basename(hit) + ' ' + (scanned(hit)?.name || '')));
+      // a Windows build, started through Proton (Steam's compatibility tool): Xenia Canary (K1). EmuDeck
+      // keeps it in roms/xbox360; its xenia.sh already runs it, so then it isn't listed twice.
+      if (e.win && !new RegExp(e.win.source.replace(/^\^|\$$/g, ''), 'i').test(wrap.text)) {
+        const dirs = [...APP_DIRS(), ...ctx.emulationRoots().flatMap((r) => (e.for || []).map((k) => path.join(r, 'roms', k)))];
+        const exe = dirs.flatMap((d) => [d, ...ls(d).map((n) => path.join(d, n)).filter(isDir)]).flatMap((d) => ls(d).filter((n) => e.win.test(n)).map((n) => path.join(d, n)))[0];
+        if (exe) mk(exe, path.dirname(exe), 'windows', path.basename(exe), null, null, `${e.label} (Windows)`);
+      }
       const fp = (e.fp || []).find((x) => flatpakApps().includes(x));
       if (fp && !wrap.flatpak) mk('/usr/bin/flatpak', '/usr/bin', 'flatpak', fp, `run ${fp} ${argsFor(id, key, 'flatpak')}`, null, realName(id, fp));
       const bin = findBin(e.bin) || foundFor(id).find((x) => x.kind === 'program' || x.kind === 'unpacked' || x.kind === 'script')?.path;
       if (bin && !/flatpak\/exports/.test(bin)) mk(bin, path.dirname(bin), 'native', bin, null, null, realName(id, bin));
-      const SRC = { emudeck: 'EmuDeck', appimage: 'AppImage', flatpak: 'Flatpak', native: 'Installed' };
+      const SRC = { emudeck: 'EmuDeck', appimage: 'AppImage', flatpak: 'Flatpak', native: 'Installed', windows: 'Windows build' };
       // an emulator that is itself a fork (PrimeHack) is listed with the forks, never the default
       if (e.forkOf) { found.forEach((f, i) => forksOut.push({ id: i ? `${id}@${f.src}` : id, label: `${f.name} · fork of ${EMU[e.forkOf]?.label || e.forkOf}${found.length > 1 ? ' · ' + SRC[f.src] : ''}`, fork: true, t: f.t })); continue; }
       found.forEach((f, i) => out.push({ id: i ? `${id}@${f.src}` : id, label: found.length > 1 ? `${f.name} · ${SRC[f.src]}` : f.name, t: f.t }));
@@ -444,12 +468,31 @@ module.exports = function createSteamManager(ctx) {
     const i = toks.findIndex((v) => /^-|\{|%/.test(v));
     return { exe: t.exe, args: i < 0 ? toks : toks.slice(0, i), from: t.from };
   }
+  // Can Flatpak Steam start programs outside its sandbox? It needs --talk-name=org.freedesktop.Flatpak,
+  // from its own metadata or a user/system override.
+  function flatpakSteamAccess() {
+    if (!environment().account?.flatpak) return null;
+    const files = ['/var/lib/flatpak/app/com.valvesoftware.Steam/current/active/metadata', path.join(HOME, '.local/share/flatpak/app/com.valvesoftware.Steam/current/active/metadata'), '/var/lib/flatpak/overrides/com.valvesoftware.Steam', path.join(HOME, '.local/share/flatpak/overrides/com.valvesoftware.Steam')];
+    return files.some((f) => /^\s*org\.freedesktop\.Flatpak\s*=\s*talk/m.test(readText(f) || '')) ? 'ok' : 'needed';
+  }
+  // every AppImage of an emulator that was found (PCSX2's patches.zip is read from inside it)
+  const appImagesFor = (key, re) => [...new Set([...candidates(key).map((c) => c.t.exe), ...APP_DIRS().flatMap((d) => ls(d).map((n) => path.join(d, n)))].filter((f) => /\.appimage$/i.test(f) && re.test(path.basename(f)) && exists(f)))];
   const rpcs3Command = () => emuCommand('ps3', /rpcs3/i);
-  const vita3kCommand = () => emuCommand('psvita', /vita3k/i);
+  // Installing into Vita3K needs Vita3K itself, never EmuDeck's vita3k.sh: that script always runs
+  // "Vita3K -Fr <arguments>", so "--pkg ..." or a .vpk became the game to boot and nothing installed
+  // (0.9.3 L). EmuDeck keeps the real program at <Applications>/Vita3K/Vita3K (an AppImage without
+  // the extension; EmuDeck's emuDeckVita3K.sh).
+  function vita3kCommand() {
+    const direct = candidates('psvita').find((c) => !c.fork && /vita3k/i.test(c.t.exe) && c.t.how !== 'emudeck');
+    if (direct) return { exe: direct.t.exe, args: [], from: direct.t.from };
+    const own = [...new Set([HOME, real(HOME)])]
+      .flatMap((h) => [path.join(h, 'Applications/Vita3K/Vita3K'), path.join(h, 'Applications/Vita3K/Vita3K.AppImage')]).find(exists);
+    return own ? { exe: own, args: [], from: 'EmuDeck Vita3K' } : null;
+  }
   function serialOf(rom, p) {
-    const tag = String(rom.fs_name || '') + ' ' + String(rom.name || '');
-    const m = tag.match(/\b([A-Z]{4}\d{5})\b/);
-    if (m) return m[1];
+    const tag = String(rom.fs_name || '') + ' ' + String(rom.name || '') + ' ' + path.basename(p || '');
+    const m = tag.match(/\b([A-Z]{4})-?(\d{5})\b/); // "BLUS30443" or "BLUS-30443" in a name
+    if (m) return m[1] + m[2];
     // a folder game: PS3_GAME/PARAM.SFO holds the serial
     // (also one folder down: a download folder holding the game folder)
     const sfos = [path.join(p, 'PS3_GAME', 'PARAM.SFO'), path.join(p, 'PARAM.SFO'), path.join(p, 'sce_sys', 'param.sfo')];
@@ -607,31 +650,40 @@ module.exports = function createSteamManager(ctx) {
     if (pick) { const c = candidates(key).find((x) => x.id === pick); if (c) return { ...c.t, emu: c.id, perGame: true }; }
     return templateFor(key);
   }
-  // shadPS4 and its Qt launcher read their settings, keys, chosen version and patches from a folder
-  // named "user" in the folder they start in, else from ~/.local/share/shadPS4 (shadPS4's
-  // common/path_util.cpp; the launcher starts the emulator in its own working folder). shadPS4's own
-  // Steam shortcuts start inside the AppImage's own temporary mount (Start in /tmp/.mount_..., seen on
-  // the owner's device), never next to the AppImage. Cartridge's started next to it and games only
-  // started sometimes (A10). So never start there, unless a "user" folder there is the only shadPS4
-  // data (a portable install).
+  // shadPS4 (owner's finding, A10): its own Steam shortcuts always start; Cartridge's, with the same
+  // Target and Launch options, often showed a black screen and closed. The one difference is Start in.
+  // The Qt launcher writes StartDir = QFileInfo(QCoreApplication::applicationFilePath()).absolutePath()
+  // (qtlauncher create_steam_shortcut.cpp), which for an AppImage is its temporary mount
+  // (/tmp/.mount_XXXX/usr/bin). That folder is gone as soon as the launcher closes, so every launch from
+  // Steam starts with a Start in that doesn't exist, and Steam starts the program without entering it.
+  // Cartridge does exactly the same (0.9.3 L): a mount-style folder that never exists. A portable install
+  // (a "user" folder next to the AppImage is its only shadPS4 data) keeps starting there.
+  const SHAD_START = '/tmp/.mount_shadPS4/usr/bin';
   function startOf(t) {
-    if (!t || !/shadps4/i.test(t.exe || '') || !t.start) return t?.start;
+    if (!t || !/shadps4/i.test(t.exe || '') || !t.start || !/\.appimage$/i.test(t.exe)) return t?.start;
     const data = process.env.XDG_DATA_HOME || path.join(HOME, '.local/share');
     const portable = exists(path.join(t.start, 'user'));
     if (portable && !isDir(path.join(data, 'shadPS4')) && !isDir(path.join(HOME, '.local/share/shadPS4'))) return t.start;
-    for (const d of [path.join(data, 'shadPS4QtLauncher'), path.join(data, 'shadPS4'), HOME]) if (isDir(d) && !exists(path.join(d, 'user'))) return d;
-    return t.start;
+    return SHAD_START;
   }
   // what a shortcut was made with, to spot ones made before the console's setup changed
   // v2: arguments written into Target like Steam ROM Manager (0.7.11)
   // v3: the emulator in Target, its arguments in Launch options again (0.8.2)
-  // (shadPS4 also by its start folder, so shortcuts made in the wrong one show Update: 0.9.3)
-  const sigOf = (t, mode) => (t ? ['v3', mode || 'direct', t.exe, (t.pre || []).join(' '), t.args, ...(/shadps4/i.test(t.exe || '') ? [startOf(t)] : [])].join('|') : '');
+  // (shadPS4 also by its start folder, so shortcuts made in the wrong one show Update: 0.9.3; on
+  // Flatpak Steam also 'host', so ones made before flatpak-spawn show Update: 0.9.3 K)
+  const sigOf = (t, mode) => (t ? ['v3', mode || 'direct', t.exe, (t.pre || []).join(' '), t.args, ...(/shadps4/i.test(t.exe || '') ? [startOf(t)] : []), ...(FLATPAK_STEAM ? ['host'] : [])].join('|') : '');
   // Target is the emulator alone; Launch options hold its arguments and the game. Steam adds Launch
   // options after Target for shortcuts, so no "%command%" in front (a lone or leading %command% kept
   // games from starting). Only when something must run first (vblank_mode=0, an env var) is it
   // "<that> %command% <arguments>".
-  const launchFor = (t, lo, args) => ({ target: q(t.exe), launch: (t.pre || []).length ? lo : args });
+  // Flatpak Steam (0.9.3 K, K2): shortcuts run inside Steam's sandbox, where the emulators (and
+  // flatpak itself) can't be started. flatpak-spawn --host (inside every Flatpak) starts them on the
+  // system instead: their folder with --directory, environment variables with --env, wrappers
+  // (gamemoderun, mangohud) in front. Steam's Flatpak needs to be allowed to talk to Flatpak for it
+  // (flatpakSteamAccess, offered in Settings → Emulators → Issues).
+  const HOST_SPAWN = '/usr/bin/flatpak-spawn';
+  const hostLaunch = (exe, args, start, pre = []) => ({ target: q(HOST_SPAWN), launch: ['--host', start && start !== SHAD_START ? `--directory=${q(start)}` : '', ...pre.filter((x) => /^\w+=/.test(x)).map((x) => `--env=${x}`), ...pre.filter((x) => !/^\w+=/.test(x) && x !== '%command%'), q(exe), args].filter(Boolean).join(' ') });
+  const launchFor = (t, lo, args) => (FLATPAK_STEAM && !/\.exe$/i.test(t.exe) ? hostLaunch(t.exe, args, startOf(t), t.pre || []) : { target: q(t.exe), launch: (t.pre || []).length ? lo : args });
   function buildLaunch(rom, file, t) {
     const ref = gameRef(rom, file, t);
     let args = t.args;
@@ -823,7 +875,7 @@ module.exports = function createSteamManager(ctx) {
       const { lo, args, fallback, missing } = buildLaunch(g.rom, g.file, t);
       if (missing) { skipped.push({ romId: a.romId, name: g.rom.name, why: missing }); continue; }
       let exe = t.exe, start = startOf(t), { target, launch } = launchFor(t, lo, args);
-      if (mode === 'script') { exe = scriptPath(); start = path.dirname(scriptPath()); launch = String(g.rom.id); target = q(exe); }
+      if (mode === 'script') { exe = scriptPath(); start = path.dirname(scriptPath()); launch = String(g.rom.id); target = q(exe); if (FLATPAK_STEAM) ({ target, launch } = hostLaunch(exe, launch, start)); }
       const appid = shortcutId(target, name);
       entries.push({
         romId: g.rom.id, console: g.key, sig: sigOf(t, mode), name, exe, target, start, lo: launch, directLo: lo, directExe: t.exe, directStart: startOf(t), appid, how: t.how, from: t.from, fallback, emu: t.emu || null,
@@ -1101,7 +1153,7 @@ module.exports = function createSteamManager(ctx) {
     if (!t || !t.exe) return { ok: false, error: 'No emulator set for this console' };
     if (t.exe === '/usr/bin/flatpak') { const id = (t.args.match(/run\s+(\S+)/) || [])[1]; return flatpakApps().includes(id) ? { ok: true, note: `Flatpak ${id} is installed` } : { ok: false, error: `Flatpak ${id} is not installed` }; }
     if (!exists(t.exe)) return { ok: false, error: `Target not found: ${t.exe}` };
-    try { fs.accessSync(t.exe, fs.constants.X_OK); } catch { return { ok: false, error: `Target is not executable: ${t.exe}` }; }
+    if (!/\.exe$/i.test(t.exe)) try { fs.accessSync(t.exe, fs.constants.X_OK); } catch { return { ok: false, error: `Target is not executable: ${t.exe}` }; }
     const bios = ctx.biosCheck?.(key);
     return { ok: true, note: bios || 'Target found' };
   }
@@ -1147,7 +1199,7 @@ module.exports = function createSteamManager(ctx) {
       if (dir && exists(dir)) { const a = detect.flatpakCanSee(fpId, dir); if (a.known && !a.ok) add('bad', 'This Flatpak emulator has no access to your games folder, so games won’t open.', { fix: a.fix, copy: a.fix, allow: { id: fpId, dir: real(dir) } }); }
     } else if (!exists(t.exe)) add('bad', `The emulator isn't at ${t.exe.replace(HOME, '~')} any more.`, { relink: true });
     else {
-      try { fs.accessSync(t.exe, fs.constants.X_OK); } catch { add('bad', `${path.basename(t.exe)} isn't allowed to run. Right-click it, Properties, and allow running it as a program (or run: chmod +x on it).`, { copy: `chmod +x "${t.exe}"` }); }
+      if (!/\.exe$/i.test(t.exe)) try { fs.accessSync(t.exe, fs.constants.X_OK); } catch { add('bad', `${path.basename(t.exe)} isn't allowed to run. Right-click it, Properties, and allow running it as a program (or run: chmod +x on it).`, { copy: `chmod +x "${t.exe}"` }); }
       if (detect.appImageType(t.exe) && detect.missingFuse2(t.exe)) add('warn', 'This AppImage may need FUSE 2 (libfuse2), which isn’t installed. If it won’t start, install libfuse2, or tell Steam to unpack it by adding APPIMAGE_EXTRACT_AND_RUN=1 before %command%.');
     }
     const core = (String(t.args).match(/-L\s+("?)([^"\s]+)\1/) || [])[2];
@@ -1261,8 +1313,10 @@ module.exports = function createSteamManager(ctx) {
         const g = byRom.get(r.romId);
         if (!g) p.issues.push({ kind: 'game', text: 'The game isn’t on this device any more.', fix: { label: 'Remove from Steam' } });
         else if (g.file && !exists(g.file)) p.issues.push({ kind: 'game', text: 'The game’s files are gone.', fix: { label: 'Remove from Steam' } });
-      } else if (l?.template?.sample && l.template.sample.startsWith('/') && !exists(l.template.sample)) {
-        p.issues.push({ kind: 'game', text: `The game file isn't at ${shortPath(l.template.sample)} any more.` });
+      } else if (l?.template?.sample && l.template.sample.startsWith('/') && !exists(l.template.sample) && (!l.template.romRoot || isDir(l.template.romRoot))) {
+        // a shortcut you (or an emulator, like shadPS4) made for a game that's gone: offer to remove it
+        // (0.9.3 L). Never while its drive isn't there (an SD card out): the ROMs folder must exist.
+        p.issues.push({ kind: 'game', text: `The game file isn't at ${shortPath(l.template.sample)} any more.`, fix: { label: 'Remove from Steam' } });
       }
       const core = (sc.lo.match(/-L\s+("?)([^"\s]+)\1/) || [])[2];
       if (core && core.includes('/') && !exists(core)) p.issues.push({ kind: 'core', text: `The RetroArch core ${path.basename(core)} is missing. Install it in RetroArch's Online Updater.` });
@@ -1299,7 +1353,7 @@ module.exports = function createSteamManager(ctx) {
             try { if ((await live.updateShortcut(sc.appid, { exe: exeRaw, start: q(to.start), lo: sc.loRaw })) === 'ok') { if (r) Object.assign(r, { exe: to.exe, emuExe: to.exe, inPlace: Date.now() }); fixed++; continue; } } catch (e) { log('health relink', e.message); }
           }
           if (r) { refreshKeys.add(p.console); r.sig = 'moved'; queued++; } else left.push(p.name);
-        } else if (is.kind === 'game' && is.fix && reg[p.appid]) { queueRemove([p.appid]); queued++; }
+        } else if (is.kind === 'game' && is.fix) { queueRemove([p.appid]); queued++; } // only when you pick it in Shortcut health
         else if (is.kind === 'outdated') { refreshKeys.add(p.console); }
       }
     }
@@ -1466,7 +1520,7 @@ module.exports = function createSteamManager(ctx) {
     gameEmu: (romId) => (cfg().gameEmus || {})[romId] || null,
     addedAt: (romId) => Math.min(...Object.values(reg).filter((r) => r.romId === romId && r.at).map((r) => r.at), Infinity),
     // exposed for tests
-    _learnOne: learnOne, _tokenize: tokenize, _buildLaunch: buildLaunch, _learnAll: learnAll, _candidates: candidates, _startOf: startOf, _templateFor: templateFor, _templateForGame: templateForGame,
+    _learnOne: learnOne, _tokenize: tokenize, _buildLaunch: buildLaunch, _learnAll: learnAll, _readShortcuts: () => { const e = environment(); return e.account ? readShortcuts(e.account) : []; }, _candidates: candidates, appImagesFor, serialOf, flatpakSteamAccess, _hostLaunch: hostLaunch, _startOf: startOf, _templateFor: templateFor, _templateForGame: templateForGame,
   };
   return api;
 };

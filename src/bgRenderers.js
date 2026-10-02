@@ -300,3 +300,24 @@ export const BG_BASE = {
 };
 // darker base for renderers that need contrast (theme gradient under the canvas)
 export const DARK_BASE = new Set([]);
+
+// A still picture of a background for the picker (0.9.3 L): the renderer's frame a few seconds in,
+// drawn small over its base colour (theme ones over a dark tint of your accent)
+export function bgPreview(v, pal, w = 320, h = 180) {
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  const g = c.getContext('2d');
+  const base = g.createLinearGradient(0, 0, w, h);
+  const css = BG_BASE[v] || '';
+  const stops = css.match(/#[0-9a-f]{6}/gi) || ['#0c0e15', pal?.accent || '#2a2f45', '#07080c'];
+  stops.forEach((col, i) => base.addColorStop(i / Math.max(1, stops.length - 1), col));
+  g.fillStyle = base; g.fillRect(0, 0, w, h);
+  if (!BG_BASE[v]) { g.fillStyle = 'rgba(5, 6, 10, 0.55)'; g.fillRect(0, 0, w, h); }
+  const R = RENDERERS[v];
+  if (R) {
+    const layer = document.createElement('canvas');
+    layer.width = w; layer.height = h;
+    try { R(layer.getContext('2d'), w, h, w / 1920, pal, true)(4000); g.drawImage(layer, 0, 0); } catch {}
+  }
+  return c.toDataURL('image/png');
+}

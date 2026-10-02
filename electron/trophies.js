@@ -290,13 +290,92 @@ function shadps4Games(userDir) {
   }
   return out;
 }
+// ------------------------------------------------------------ shadPS4 trophy lists (0.9.3 K, E6)
+// A PS4 game ships its trophy list encrypted (sce_sys/trophy/trophy00.trp). shadPS4 only decrypts it
+// into its user folder when the game boots or from "View trophies", and only once the trophy key is
+// set, so a game played before the key was added shows codes and no names. Cartridge decrypts it
+// itself, with the user's own key from shadPS4's settings, into its own cache. Written from the
+// format (header 0xDCA24D00, 64-byte entries; flag 0 PNG, flag 3 encrypted XML: a 16-byte IV, then
+// AES-128-CBC with the key AES-CBC(trophy key, NP comm ID padded to 16, zero IV)). shadPS4's folders
+// are never written.
+function shadTrophyKey(u) {
+  const hex = (v) => (/^[0-9a-f]{32}$/i.test(String(v || '').trim()) ? Buffer.from(String(v).trim(), 'hex') : null);
+  try {
+    const v = JSON.parse(readText(path.join(u, 'keys.json')) || 'null')?.TrophyKeySet?.ReleaseTrophyKey;
+    if (Array.isArray(v) && v.length === 16) return Buffer.from(v);
+    if (hex(v)) return hex(v);
+  } catch {}
+  const m = /^\s*TrophyKey\s*=\s*["']([0-9a-fA-F]{32})["']/m.exec(readText(path.join(u, 'config.toml')) || '');
+  return m ? hex(m[1]) : null;
+}
+function readTrp(buf, npCommId, key) {
+  if (!buf || buf.length < 0x60 || buf.readUInt32BE(0) !== 0xdca24d00) return null;
+  const n = buf.readUInt32BE(16), size = buf.readUInt32BE(20) || 0x40;
+  if (n > 4096) return null;
+  const np = Buffer.alloc(16); np.write(String(npCommId || '').slice(0, 16), 'latin1');
+  let trpKey = null;
+  if (key && key.length === 16) { const c = crypto.createCipheriv('aes-128-cbc', key, Buffer.alloc(16)); c.setAutoPadding(false); trpKey = Buffer.concat([c.update(np), c.final()]); }
+  const files = {};
+  for (let i = 0; i < n; i++) {
+    const e = 0x60 + i * size;
+    if (e + 0x40 > buf.length) break;
+    const name = buf.toString('latin1', e, e + 32).replace(/\0.*$/s, '');
+    const pos = Number(buf.readBigUInt64BE(e + 32)), len = Number(buf.readBigUInt64BE(e + 40)), flag = buf.readUInt32BE(e + 48);
+    if (!/^[\w.-]+$/.test(name) || pos + len > buf.length) continue;
+    if (flag === 0) files[name] = buf.subarray(pos, pos + len);
+    else if (flag === 3 && trpKey && len > 16 && (len - 16) % 16 === 0) {
+      const d = crypto.createDecipheriv('aes-128-cbc', trpKey, buf.subarray(pos, pos + 16)); d.setAutoPadding(false);
+      let xml = Buffer.concat([d.update(buf.subarray(pos + 16, pos + len)), d.final()]);
+      const end = xml.lastIndexOf(0x3e); // '>' ends the XML; the rest is padding
+      xml = end >= 0 ? xml.subarray(0, end + 1) : xml;
+      if (xml.includes('<trophyconf') || xml.includes('<?xml')) files[name.replace('ESFM', 'XML')] = xml;
+    }
+  }
+  return files;
+}
+// the NP comm ID a game's trophies belong to, from its sce_sys/npbind.dat
+const npOfGame = (dir) => (/NPWR\d{5}_\d{2}/.exec((() => { try { return fs.readFileSync(path.join(dir, 'sce_sys', 'npbind.dat')).toString('latin1'); } catch { return ''; } })()) || [])[0] || null;
+// shadPS4's game folders (config.json General.install_dirs, older config.toml installDirs) plus PS4
+// folders in the usual ROM places; each game is a folder with sce_sys in it, one level down
+function shadGameDirs(u) {
+  const dirs = new Set();
+  try { for (const d of JSON.parse(readText(path.join(u, 'config.json')) || '{}')?.General?.install_dirs || []) if (d && d.path && d.enabled !== false) dirs.add(String(d.path)); } catch {}
+  const t = /installDirs\s*=\s*\[([^\]]*)\]/.exec(readText(path.join(u, 'config.toml')) || '');
+  if (t) for (const m of t[1].matchAll(/["']([^"']+)["']/g)) dirs.add(m[1]);
+  for (const r of emulationRoots()) for (const n of ['roms/ps4', 'ROMs/ps4']) dirs.add(path.join(r, n));
+  const games = [];
+  for (const d of dirs) for (const n of ls(d)) { const g = path.join(d, n); if (exists(path.join(g, 'sce_sys', 'trophy', 'trophy00.trp'))) games.push(g); }
+  return games;
+}
+let trpCacheDir = null;
+function setTrpCacheDir(d) { trpCacheDir = d; }
+const trpTried = new Map(); // np -> time a game for it was last looked for and not found
+// the decrypted list for one NP comm ID, from Cartridge's cache (made the first time it's needed)
+function cachedTrophyDefs(u, np) {
+  if (!trpCacheDir || !np || !/^NPWR\d{5}_\d{2}$/.test(np)) return null;
+  const out = path.join(trpCacheDir, np);
+  if (exists(path.join(out, 'Xml'))) return out;
+  if (Date.now() - (trpTried.get(np) || 0) < 10 * 60e3) return null;
+  trpTried.set(np, Date.now());
+  const key = shadTrophyKey(u);
+  if (!key) return null;
+  const game = shadGameDirs(u).find((g) => npOfGame(g) === np);
+  if (!game) return null;
+  let files;
+  try { files = readTrp(fs.readFileSync(path.join(game, 'sce_sys', 'trophy', 'trophy00.trp')), np, key); } catch { return null; }
+  if (!files || !Object.keys(files).some((n) => /\.XML$/i.test(n))) return null;
+  try {
+    for (const [n, b] of Object.entries(files)) { const sub = /\.PNG$/i.test(n) ? 'Icons' : 'Xml'; fs.mkdirSync(path.join(out, sub), { recursive: true }); fs.writeFileSync(path.join(out, sub, n), b); }
+  } catch { return null; }
+  return out;
+}
 const tsMs = (v) => { const n = Number(v); if (!n) return null; return n > 1e14 ? Math.round(n / 1000) : n > 1e11 ? n : n * 1000; };
 function parseShadps4(userDir) {
   const games = new Map();
   const add = (g) => { const k = g.set; const prev = games.get(k); if (!prev || g.trophies.filter((t) => t.unlocked).length >= prev.trophies.filter((t) => t.unlocked).length) games.set(k, g); };
   const iconsOf = (dir, id) => iconToken(path.join(dir, `TROP${String(id).padStart(3, '0')}.PNG`));
   const defsFor = (np, own) => {
-    for (const base of [own, path.join(userDir, 'trophy', np || '_')].filter(Boolean)) {
+    for (const base of [own, path.join(userDir, 'trophy', np || '_'), cachedTrophyDefs(userDir, np)].filter(Boolean)) {
       for (const xd of [path.join(base, 'Xml'), base]) {
         const d = parseTrophyXml(readText(path.join(xd, 'TROP_01.XML'))) || parseTrophyXml(readText(path.join(xd, 'TROP.XML'))) || parseTrophyXml(readText(path.join(xd, 'TROPCONF.XML')));
         if (d && d.trophies.some((t) => t.name)) return { d, icons: exists(path.join(base, 'Icons')) ? path.join(base, 'Icons') : base };
@@ -567,4 +646,4 @@ function signature(dirs) {
   return s;
 }
 
-module.exports = { APP_DIRS, emulationRoots, registerIcon: iconToken, shadKeyState, watchPaths, SOURCES, DETECT, validate, scan, readSource, signature, iconPath, setIconCacheDir, readTropusrPS3, readTropusrVita, parseTrophyXml, parseGpd, readXdbf };
+module.exports = { readTrp, shadTrophyKey, setTrpCacheDir, APP_DIRS, emulationRoots, registerIcon: iconToken, shadKeyState, watchPaths, SOURCES, DETECT, validate, scan, readSource, signature, iconPath, setIconCacheDir, readTropusrPS3, readTropusrVita, parseTrophyXml, parseGpd, readXdbf };

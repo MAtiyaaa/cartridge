@@ -138,6 +138,27 @@ if (!process.env.CARTRIDGE_SMOKE && !process.env.CARTRIDGE_MULTI) {
     app.on('will-quit', () => { try { fs.rmSync(BEAT_FILE, { force: true }); } catch {} });
   }
 }
+// In Game Mode the window keeps its focus while Steam's menu (Home) is in front, and the controller is
+// read straight from the device, so presses still reached Cartridge (0.9.3 L). gamescope says which
+// app is in front in the root window's GAMESCOPE_FOCUSED_APP; Steam gives a shortcut it starts its id
+// in SteamGameId (the app id in the top 32 bits). When another app is in front, the UI stops reading
+// the pad (event 'background'). Without xprop or those ids nothing changes.
+function watchGamescopeFocus() {
+  const gid = process.env.SteamGameId || process.env.STEAM_GAME_ID || '';
+  if (!isGamescope() || !/^\d+$/.test(gid)) return;
+  let mine = BigInt(gid); if (mine > 0xffffffffn) mine >>= 32n;
+  let last = null, busy = false;
+  setInterval(() => {
+    if (busy) return; busy = true;
+    require('child_process').execFile('xprop', ['-root', 'GAMESCOPE_FOCUSED_APP'], { timeout: 1500 }, (err, out) => {
+      busy = false;
+      const m = /=\s*(\d+)/.exec(String(out || ''));
+      if (err || !m) return;
+      const away = BigInt(m[1]) !== mine && m[1] !== '0';
+      if (away !== last) { last = away; broadcast('background', { away }); }
+    });
+  }, 600);
+}
 function isGamescope() {
   const e = process.env;
   const de = ((e.XDG_CURRENT_DESKTOP || '') + ' ' + (e.XDG_SESSION_DESKTOP || '') + ' ' + (e.DESKTOP_SESSION || '')).toLowerCase();
@@ -521,7 +542,7 @@ let playSyncAt = 0; // last play-session sync with RomM (0: do it on the next re
 
 // Transparent game logo from RomM (ScreenScraper "logo" media, or an ES-DE gamelist marquee)
 // what Cartridge keeps of a RomM game (electron/romm.js, tested against several RomM versions)
-const { slimRom, userOf } = require('./romm');
+const { slimRom, userOf, rommTooOld, ROMM_MIN } = require('./romm');
 
 function publicLibrary() {
   if (!library) return null;
@@ -746,6 +767,10 @@ async function handleImage(request) {
   if (tr) {
     const p = trophySvc.iconPath(tr);
     try { return new Response(await fsp.readFile(p), { headers: { 'Content-Type': 'image/png', 'Cache-Control': 'max-age=86400' } }); } catch { return new Response('nf', { status: 404 }); }
+  }
+  const hz = u.searchParams.get('hz');
+  if (hz) {
+    try { return new Response(await fsp.readFile(path.join(HERO_DIR, path.basename(hz))), { headers: { 'Content-Type': 'image/png', 'Cache-Control': 'max-age=31536000' } }); } catch { return new Response('nf', { status: 404 }); }
   }
   const lf = u.searchParams.get('f');
   if (lf) {
@@ -1009,7 +1034,9 @@ async function raOverview({ force } = {}) {
     const idx = raRomIndex();
     return {
       user: profile.User || config.ra.user,
-      avatar: raMedia(profile.UserPic),
+      // the picture keeps its address when it changes, and images are cached by address: ask again every
+      // few hours, and at once on Refresh (0.9.3 L)
+      avatar: profile.UserPic ? `${raMedia(profile.UserPic)}${raMedia(profile.UserPic).includes('?') ? '&' : '?'}v=${force ? Date.now() : Math.floor(Date.now() / 216e5)}` : '',
       points: profile.TotalPoints || 0,
       softPoints: profile.TotalSoftcorePoints || 0,
       truePoints: profile.TotalTruePoints || 0,
@@ -1162,6 +1189,32 @@ async function gameIcon({ key, name, year }) {
   })();
   iconInflight.set(k, job);
   try { return await job; } finally { iconInflight.delete(k); }
+}
+// The sharpest background for headers and the idle screen (0.9.3 K, F2/F3): SteamGridDB's hero at
+// 3840 wide, else 1920 (sgdbImage), saved once per game. RomM's screenshot stays the fallback. A game
+// without one is asked again after a week.
+const HERO_DIR = path.join(USER_DATA, 'heroes');
+const HERO_FILE = path.join(USER_DATA, 'heroes.json');
+let heroCache = {};
+try { heroCache = JSON.parse(fs.readFileSync(HERO_FILE, 'utf8')); } catch {}
+const heroInflight = new Map();
+async function sharpHero({ id, name }) {
+  if (!id || !name) return null;
+  const c = heroCache[id];
+  if (c?.file && fs.existsSync(path.join(HERO_DIR, c.file))) return 'romimg://img/?hz=' + encodeURIComponent(c.file);
+  if (!config.sgdbKey || (c && !c.file && Date.now() - c.t < 7 * 864e5)) return null;
+  if (heroInflight.has(id)) return heroInflight.get(id);
+  const job = (async () => {
+    let png = null;
+    try { png = await sgdbImage(String(name).replace(/[™®©]/g, ''), 'hero'); } catch { return null; } // offline: try again later
+    const file = png ? `${String(id).replace(/[^\w-]/g, '')}.png` : null;
+    if (png) { await fsp.mkdir(HERO_DIR, { recursive: true }); await fsp.writeFile(path.join(HERO_DIR, file), png); }
+    heroCache[id] = { file, t: Date.now() };
+    fsp.writeFile(HERO_FILE, JSON.stringify(heroCache)).catch(() => {});
+    return file ? 'romimg://img/?hz=' + encodeURIComponent(file) : null;
+  })();
+  heroInflight.set(id, job);
+  try { return await job; } finally { heroInflight.delete(id); }
 }
 async function sgdbArt({ name, kind, gameId }) {
   if (!config.sgdbKey) throw new Error('Add a SteamGridDB API key in Settings → Look & feel first.');
@@ -1550,6 +1603,7 @@ async function runJob(it) {
     // a re-download (library check): the new copy is in, so the old one kept aside goes
     if (it.backup) { await fsp.rm(it.backup, { recursive: true, force: true }).catch(() => {}); it.backup = null; }
     // a re-download is the same game as before: Steam already has it, so no automatic add
+    if (!it.redo && it.notice !== 'pkg') rpcs3Settings(rom.id);
     if (!it.redo && it.notice !== 'pkg') try { if (steamMgr.onDownloaded(rom.id)) broadcast('steam-auto', { romId: rom.id, name: rom.name, action: 'add' }); } catch (e) { log('steam auto add', e.message); }
   } catch (e) {
     // stopped on purpose: keep a status set since (paused, or queued again by Resume)
@@ -1760,7 +1814,34 @@ async function installPkg(romId, zrif) {
 
 // Once installed, its Steam shortcut can start it: one Cartridge added is updated to start it from
 // the emulator; otherwise it's added when Add automatically is on (it was held back at download)
+// RPCS3's database settings for a PS3 game that just arrived (0.9.3 L, patches.js rpcs3ApplyDb).
+// RPCS3's own cached database first, else the same address it downloads from (kept a week here).
+const RPCS3_DB_FILE = path.join(USER_DATA, 'rpcs3-config-db.json'), RPCS3_CFG_FILE = path.join(USER_DATA, 'rpcs3-configs.json');
+let rpcs3Cfgs = (() => { try { return JSON.parse(fs.readFileSync(RPCS3_CFG_FILE, 'utf8')); } catch { return {}; } })();
+async function rpcs3DbText(dir) {
+  const own = patchesMod.rpcs3DbCached(dir);
+  if (own) return own;
+  try { const st = fs.statSync(RPCS3_DB_FILE); if (Date.now() - st.mtimeMs < 7 * 864e5) return fs.readFileSync(RPCS3_DB_FILE, 'utf8'); } catch {}
+  const r = await fetch('https://api.rpcs3.net/config/?api=v1', { signal: AbortSignal.timeout(20000) });
+  if (!r.ok) throw new Error(`RPCS3 database: HTTP ${r.status}`);
+  const t = await r.text();
+  await fsp.writeFile(RPCS3_DB_FILE, t).catch(() => {});
+  return t;
+}
+async function rpcs3Settings(romId) {
+  const r = romIndexMain().get(Number(romId));
+  if (!/ps3/i.test(`${r?.platform_slug} ${r?.platform_fs_slug}`) || config.steam?.rpcs3Db === false) return null;
+  const dir = patchesMod.rpcs3Dirs()[0];
+  const serial = ps3Serial(romId, installedMap[romId]);
+  if (!dir || !serial) return null;
+  try {
+    const { result, mine } = patchesMod.rpcs3ApplyDb(dir, serial, await rpcs3DbText(dir), rpcs3Cfgs);
+    if (result === 'written') { rpcs3Cfgs = mine; saveJson(RPCS3_CFG_FILE, rpcs3Cfgs); log('rpcs3 database settings', serial); broadcast('toast', { text: `${r.name}: RPCS3's recommended settings are set for this game`, kind: 'ok', icon: 'mdiTuneVariant' }); }
+    return result;
+  } catch (e) { log('rpcs3 database settings', e.message); return null; }
+}
 function afterInstall(romId) {
+  rpcs3Settings(romId);
   try {
     const st = steamMgr.forRom(romId);
     if (st.inSteam && st.ours) steamMgr.refreshGame(romId, { force: true }).then((r) => { if (r?.count && !r.fixed) broadcast('steam-auto', { romId, action: 'add' }); }).catch((e) => log('steam after install', e.message));
@@ -1778,16 +1859,18 @@ function ps3Serial(romId, where) {
   if (installs[romId]?.serial) return installs[romId].serial;
   for (const f of [path.join(where || '', 'PS3_GAME', 'PARAM.SFO'), path.join(where || '', 'PARAM.SFO')]) { const s = patchesMod.sfoAt(f).TITLE_ID; if (s) return s; }
   const r = romIndexMain().get(Number(romId));
-  return (`${r?.fs_name || ''} ${r?.name || ''} ${path.basename(where || '')}`.match(/\b([A-Z]{4}\d{5})\b/) || [])[1] || null;
+  // disc games too (0.9.3 L): a folder with the game folder inside, an ISO (PS3_DISC.SFB), "BLUS-30443" names
+  try { return steamMgr.serialOf(r || {}, where || '') || null; } catch { return null; }
 }
 function patchState(romId) {
   const r = romIndexMain().get(Number(romId));
   if (/ps4/i.test(`${r?.platform_slug} ${r?.platform_fs_slug}`)) return ps4PatchState(romId, r);
+  if (/^ps2$/i.test(r?.platform_slug || '') || /^ps2$/i.test(r?.platform_fs_slug || '')) return ps2PatchState(romId);
   if (!/ps3/i.test(`${r?.platform_slug} ${r?.platform_fs_slug}`)) return { emu: null };
   const where = installedMap[romId];
   if (!where) return { emu: 'rpcs3', why: 'Download the game first.' };
   const serial = ps3Serial(romId, where);
-  if (!serial) return { emu: 'rpcs3', why: 'Cartridge couldn’t read this game’s serial (BLUS12345 and so on). Patches for disc images are listed in RPCS3 itself.' };
+  if (!serial) return { emu: 'rpcs3', why: 'Cartridge couldn’t find this game’s serial (BLUS12345 and so on) in its name or its files.' };
   const dir = patchesMod.rpcs3Dirs()[0];
   if (!dir || !fs.existsSync(path.join(dir.patches, 'patch.yml'))) return { emu: 'rpcs3', serial, why: 'RPCS3’s patch list isn’t on this device yet. In RPCS3: Manage → Game Patches → Download latest patches. Then come back.' };
   const version = patchesMod.ps3Version(installs[romId]?.dir || where, rpcs3Hdds(), serial);
@@ -1804,9 +1887,23 @@ function ps4PatchState(romId, r) {
   if (!dir) return { emu: 'shadps4', serial, why: 'shadPS4’s patches aren’t on this device yet. In the shadPS4 launcher: right-click a game → Cheats / Patches → Download Patches. Then come back.' };
   return { emu: 'shadps4', serial, version: patchesMod.ps4Version(where), dir };
 }
+// PS2 games: PCSX2 must have the game in its game list (that is where the serial and CRC come from)
+function ps2PatchState(romId) {
+  const where = installedMap[romId];
+  if (!where || where === MARKED) return { emu: 'pcsx2', why: 'Download the game first.' };
+  const dir = patchesMod.pcsx2Dirs()[0];
+  if (!dir) return { emu: 'pcsx2', why: 'PCSX2’s settings weren’t found on this device. Open PCSX2 once, then come back.' };
+  let file = where;
+  try { if (fs.statSync(where).isDirectory()) file = fs.readdirSync(where).map((n) => path.join(where, n)).filter((f) => /\.(iso|chd|cso|zso|gz|bin|cue|elf)$/i.test(f)).sort((a, b) => fs.statSync(b).size - fs.statSync(a).size)[0] || where; } catch {}
+  // PCSX2's game list first; else Cartridge reads the ISO itself (0.9.3 L)
+  const game = patchesMod.pcsx2Game(dir, file) || (/\.iso$/i.test(file) ? patchesMod.ps2IsoInfo(file) : null);
+  if (!game || !game.crc) return { emu: 'pcsx2', why: /\.iso$/i.test(file) ? 'Cartridge couldn’t read this disc image.' : 'This game is compressed (CHD and similar), so its details come from PCSX2: add your PS2 folder in PCSX2 (Settings → Game List) once, let it scan, then come back.' };
+  return { emu: 'pcsx2', serial: game.serial || '', version: patchesMod.crcHex(game.crc), dir, game };
+}
 const EMU_PATCH = {
   rpcs3: { name: 'RPCS3', list: (st, mine) => patchesMod.rpcs3List(st.dir, st.serial, st.version, mine), set: (st, todo, mine) => patchesMod.rpcs3Set(st.dir, todo, mine) },
   shadps4: { name: 'shadPS4', list: (st, mine) => patchesMod.shadList(st.dir, st.serial, st.version, mine), set: (st, todo, mine) => patchesMod.shadSet(st.dir, todo, mine) },
+  pcsx2: { name: 'PCSX2', list: (st, mine) => patchesMod.pcsx2List(st.dir, st.game, patchesMod.pcsx2ZipBuffer(patchesMod.pcsx2ZipSources(os.homedir(), steamMgr.appImagesFor('ps2', /pcsx2/i)), require('./detect').readAppImageFile), mine), set: (st, todo, mine) => patchesMod.pcsx2Set(st.dir, st.game, todo, mine) },
 };
 // D2: a Vita game through Vita3K (.pkg with its zRIF installs with no window; a .vpk or .zip
 // opens Vita3K, which starts the game once installed: the install finishes when it closes)
@@ -2436,6 +2533,11 @@ const handlers09 = {
     require('child_process').execFileSync('flatpak', ['override', '--user', `--filesystem=${dir}`, id], { timeout: 15000 });
     return true;
   },
+  // Flatpak Steam may start programs outside its sandbox (flatpak-spawn --host): 0.9.3 K, K2
+  'setup:steamFlatpakAllow': () => {
+    require('child_process').execFileSync('flatpak', ['override', '--user', '--talk-name=org.freedesktop.Flatpak', 'com.valvesoftware.Steam'], { timeout: 15000 });
+    return true;
+  },
   'setup:done': () => { config.setupDone = Date.now(); saveConfig(); return true; },
   // a game's manual (PDF) from RomM, kept in manuals/ so it opens offline next time
   'rom:manual': async ({ romId }) => {
@@ -2463,12 +2565,16 @@ const handlers09 = {
   'steam:setGameEmu': ({ romId, id }) => steamMgr.setGameEmu(romId, id),
   'steam:refreshGame': ({ romId }) => steamMgr.refreshGame(romId),
   // 0.9.3: everything waiting for you, in one list (Settings → Emulators) instead of start-up pop-ups
-  'issues:list': () => {
+  'issues:list': async () => {
     const out = [];
     const add = (kind, text, sub, fix) => out.push({ kind, text, sub: sub || '', fix });
     try {
+      const v = config.configured ? (await probe(await resolveBase(), config.server, 4000))?.version : null;
+      if (v && rommTooOld(v)) add('romm', `RomM ${v} is older than Cartridge supports (${ROMM_MIN.join('.')} or newer)`, 'Games still sync, but collections, play status and uploads may not work. Update RomM on your server.', 'romm');
+    } catch {}
+    try {
       const miss = steamMgr.verifyCollections() || [];
-      if (miss.length) add('collections', `${miss.length} game${miss.length === 1 ? ' is' : 's are'} missing from ${[...new Set(miss.map((m) => m.collection))].join(', ')}`, 'Steam Cloud may have replaced your Steam collections', 'collections');
+      if (miss.length) { add('collections', `${miss.length} game${miss.length === 1 ? ' is' : 's are'} missing from ${[...new Set(miss.map((m) => m.collection))].join(', ')}`, 'Steam Cloud may have replaced your Steam collections', 'collections'); out[out.length - 1].items = miss.map((m) => ({ name: m.name, collection: m.collection })); }
     } catch {}
     try {
       const h = steamMgr.health();
@@ -2478,6 +2584,7 @@ const handlers09 = {
       if (n.game) add('game', `${n.game} Steam shortcut${n.game === 1 ? ' is' : 's are'} for a game that's gone from this device`, '', 'health');
       if (n.core + n.flatpak) add('core', `${n.core + n.flatpak} Steam shortcut${n.core + n.flatpak === 1 ? ' needs' : 's need'} a missing RetroArch core or Flatpak`, '', 'health');
     } catch (e) { log('issues: health', e.message); }
+    try { if (steamMgr.flatpakSteamAccess() === 'needed') add('fpsteam', 'Flatpak Steam needs permission to start your emulators', 'Its games run in a sandbox. Allow it to start programs on your system (flatpak override). Restart Steam afterwards.', 'fpsteam'); } catch {}
     try {
       for (const m of steamMgr.movedEmulators().filter((x) => !x.shortcuts)) add('setup', `Your launch setup points at ${m.exe}, which isn't there any more`, '', 'setup');
       for (const c of steamMgr.setupOverview().consoles) for (const k of c.checks) if (k.bios && k.level === 'warn') add('bios', `${c.platform}: ${k.text}`, '', 'setup');
@@ -2524,6 +2631,7 @@ const handlers = {
   'logo:fetchAll': () => fetchAllLogos(),
   'logo:stopAll': () => { if (fetchAll) fetchAll.stop = true; return true; },
   'art:all': () => artOverrides,
+  'art:sharpHero': (a) => sharpHero(a || {}),
   'art:search': (q) => sgdbArt(q),
   'art:set': (q) => setArt(q),
   'art:reset': ({ id }) => { delete artOverrides[id]; delete logoCache[id]; saveArt(); saveLogoCache(); fuseStatus.changed('images'); return {}; },
@@ -2734,16 +2842,16 @@ const handlers = {
     broadcast('installed-changed', { romId, path: rec.dir });
     return true;
   },
-  'patches:list': ({ romId }) => {
+  'patches:list': async ({ romId }) => {
     const st = patchState(romId), E = EMU_PATCH[st.emu];
     if (!st.dir || !E) return { emu: st.emu, emuName: E?.name || '', serial: st.serial, why: st.why, list: [] };
-    return { emu: st.emu, emuName: E.name, serial: st.serial, version: st.version, list: E.list(st, patchMine[st.emu] || {}) };
+    return { emu: st.emu, emuName: E.name, serial: st.serial, version: st.version, list: await E.list(st, patchMine[st.emu] || {}) };
   },
   // changes: [{ key, on }]. Patches turned on in RPCS3 itself are never turned off here.
-  'patches:apply': ({ romId, changes }) => {
+  'patches:apply': async ({ romId, changes }) => {
     const st = patchState(romId), E = EMU_PATCH[st.emu];
     if (!st.dir || !E) throw new Error(st.why || 'No patches for this game.');
-    const list = E.list(st, patchMine[st.emu] || {});
+    const list = await E.list(st, patchMine[st.emu] || {});
     const byKey = new Map(list.map((p) => [p.key, p]));
     const todo = (changes || []).map((c) => {
       const p = byKey.get(c.key);
@@ -2820,7 +2928,7 @@ const handlers = {
     log('steam add', JSON.stringify(r));
     return r;
   },
-  'steam:status': () => ({ running: require('./steamArt').steamRunning(), gamescope: isGamescope(), appimage: !!process.env.APPIMAGE }),
+  'steam:status': () => ({ running: require('./steamArt').steamRunning(), gamescope: isGamescope(), appimage: !!process.env.APPIMAGE, added: !!process.env.CARTRIDGE_FROM_STEAM || require('./steamArt').cartridgeInSteam() }),
   'steam:applyArt': () => {
     const res = require('./steamArt').applySteamArt(path.join(__dirname, '../steam-art'));
     if (!res.length) throw new Error('Add Cartridge to Steam first (Add a Non-Steam Game), then try again.');
@@ -2877,7 +2985,7 @@ const handlers = {
   'app:relaunch': () => relaunch(),
   'app:graphics': () => ({ mode: useGpu ? 'hardware' : 'software', setting: config.graphics, status: app.getGPUFeatureStatus?.() }),
   'app:fullscreen': () => win.setFullScreen(!win.isFullScreen()),
-  'app:clearCache': async () => { await fsp.rm(IMG_CACHE, { recursive: true, force: true }); warmTried.clear(); fuseStatus.changed('images'); return true; },
+  'app:clearCache': async () => { await fsp.rm(IMG_CACHE, { recursive: true, force: true }); await fsp.rm(HERO_DIR, { recursive: true, force: true }); heroCache = {}; await fsp.rm(HERO_FILE, { force: true }); warmTried.clear(); fuseStatus.changed('images'); return true; },
 };
 
 // Desktop: the phone remote server (off until turned on in Settings → Phone remote)
@@ -2922,6 +3030,7 @@ app.whenReady().then(() => {
     if (config.configured && every && library && Date.now() - library.syncedAt > every) syncLibrary().catch(() => {});
   }, 60e3);
   win.on('focus', () => { if (library) computeInstalled(); });
+  watchGamescopeFocus();
   setupUpdater();
   // Safety net if the display could not be read up front: a big window drawn in software is
   // unusably slow, so restart once with the GPU. A user or crash-chosen "software" is respected.
