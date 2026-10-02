@@ -379,6 +379,11 @@ module.exports = function createSteamManager(ctx) {
       if (e.forkOf) { found.forEach((f, i) => forksOut.push({ id: i ? `${id}@${f.src}` : id, label: `${f.name} · fork of ${EMU[e.forkOf]?.label || e.forkOf}${found.length > 1 ? ' · ' + SRC[f.src] : ''}`, fork: true, t: f.t })); continue; }
       found.forEach((f, i) => out.push({ id: i ? `${id}@${f.src}` : id, label: found.length > 1 ? `${f.name} · ${SRC[f.src]}` : f.name, t: f.t }));
     }
+    // shadPS4's core on its own, without the Qt launcher (0.9.3 K, A10 test for the owner): the build the
+    // launcher has selected, started the way the launcher starts it (main_window.cpp RestartEmulator:
+    // that file, its own folder as working folder) but without SHADPS4_ENABLE_IPC, so it never waits
+    // for the launcher. Arguments from the core's main.cpp (CLI11: -g/--game, -f/--fullscreen).
+    if (key === 'ps4') { const c = shadCore(); if (c) out.push({ id: 'shadps4@core', label: `shadPS4 core ${c.name} · without the launcher`, t: { exe: c.exe, start: path.dirname(c.exe), pre: [], command: true, args: '-g "{ROM}" -f true', kind: 'eboot', how: 'shadcore', from: `shadPS4 Qt launcher's ${c.name}` } }); }
     // RetroDECK, for people who use it instead of EmuDeck (0.9.3, C5): it starts the game with the
     // emulator it has set for that console (RetroDECK's run_game: -s <system> <game>, ES-DE names).
     // Consoles whose games are folders are left out: RetroDECK reads a folder as "Game/Game".
@@ -414,6 +419,25 @@ module.exports = function createSteamManager(ctx) {
     // emulators they point at are found anyway. They still count in the setup report.
     // EmuDeck's own first, then RetroDECK, then the rest; forks last (C4, C5)
     return [...retrodeck, ...(RA_FIRST.has(key) ? [...ras, ...out] : [...out, ...ras]), ...forksOut];
+  }
+  // The shadPS4 core the Qt launcher has selected: qt_ui.ini [version_manager] versionSelected, else
+  // the newest entry of its versions.json that is still there. The launcher's folder is "launcher"
+  // next to it (portable) or shadPS4QtLauncher in the data folder (shadPS4 qtlauncher path_util.cpp).
+  function shadCore() {
+    const data = [process.env.XDG_DATA_HOME, path.join(HOME, '.local/share'), path.join(real(HOME), '.local/share')].filter(Boolean);
+    const dirs = [...data.map((d) => path.join(d, 'shadPS4QtLauncher')), ...APP_DIRS().map((d) => path.join(d, 'launcher'))];
+    for (const d of [...new Set(dirs)]) {
+      let ini = ''; try { ini = fs.readFileSync(path.join(d, 'qt_ui.ini'), 'utf8'); } catch {}
+      const sec = (ini.split(/^\[version_manager\]\s*$/m)[1] || '').split(/^\[/m)[0];
+      let exe = ((sec.match(/^versionSelected=(.*)$/m) || [])[1] || '').trim().replace(/^"(.*)"$/, '$1');
+      let list = []; try { list = JSON.parse(fs.readFileSync(path.join(d, 'versions.json'), 'utf8')); } catch {}
+      if (!Array.isArray(list)) list = [];
+      if (!exe || !exists(exe)) exe = list.filter((v) => v && v.path && exists(v.path)).sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')))[0]?.path || '';
+      if (!exe || !exists(exe)) continue;
+      const v = list.find((x) => x && x.path === exe);
+      return { exe, name: v?.name || path.basename(path.dirname(exe)) };
+    }
+    return null;
   }
   // SRM parsers whose ROM folder (or title) is this console, with SRM's variables turned into ours
   function srmFor(key) {
@@ -615,7 +639,7 @@ module.exports = function createSteamManager(ctx) {
   // started sometimes (A10). So never start there, unless a "user" folder there is the only shadPS4
   // data (a portable install).
   function startOf(t) {
-    if (!t || !/shadps4/i.test(t.exe || '') || !t.start) return t?.start;
+    if (!t || !/shadps4/i.test(t.exe || '') || !t.start || t.how === 'shadcore') return t?.start;
     const data = process.env.XDG_DATA_HOME || path.join(HOME, '.local/share');
     const portable = exists(path.join(t.start, 'user'));
     if (portable && !isDir(path.join(data, 'shadPS4')) && !isDir(path.join(HOME, '.local/share/shadPS4'))) return t.start;

@@ -69,3 +69,24 @@ test('a PS3 game that came as .pkg can only be added to Steam once installed in 
   const out = JSON.parse(execFileSync(process.execPath, ['-e', code], { env: { ...process.env, HOME: H }, encoding: 'utf8' }).trim().split('\n').pop());
   assert.match(out, /Install it in RPCS3 first/);
 });
+
+// 0.9.3 K (A10): shadPS4's core on its own, the build the Qt launcher has selected, in its own folder
+test('shadPS4 core without the launcher: the selected version, started in its own folder', () => {
+  const H = path.join(TMP, 'shadcore');
+  const L = path.join(H, '.local/share/shadPS4QtLauncher');
+  const v1 = path.join(L, 'versions/v.0.12.0'), v2 = path.join(L, 'versions/Pre-release-abc');
+  for (const d of [v1, v2, H + '/cfg']) fs.mkdirSync(d, { recursive: true });
+  fs.writeFileSync(path.join(v1, 'Shadps4-sdl.AppImage'), ''); fs.writeFileSync(path.join(v2, 'Shadps4-sdl.AppImage'), '');
+  fs.writeFileSync(path.join(L, 'versions.json'), JSON.stringify([{ name: 'v.0.12.0', path: path.join(v1, 'Shadps4-sdl.AppImage'), date: '2026-08-01' }, { name: 'Pre-release-abc', path: path.join(v2, 'Shadps4-sdl.AppImage'), date: '2026-09-20' }]));
+  fs.writeFileSync(path.join(L, 'qt_ui.ini'), `[general]\nx=1\n\n[version_manager]\nversionSelected=${path.join(v1, 'Shadps4-sdl.AppImage')}\n`);
+  const code = `
+    const sm = require(${JSON.stringify(path.join(ROOT, 'electron/steamManager.js'))})({ USER_DATA: ${JSON.stringify(H + '/cfg')}, log() {}, PLATFORM_MAP: {}, getConfig: () => ({}), saveConfig() {}, broadcast() {},
+      emulationRoots: () => [], getLibrary: () => null, installed: () => ({}), romById: () => null, isGamescope: () => false, artFor: () => ({}), MARKED: 'm', markedPath: () => null });
+    const c = sm._candidates('ps4').find((x) => x.id === 'shadps4@core');
+    console.log(JSON.stringify(c && [c.t.exe.replace(${JSON.stringify(H)}, '~'), sm._startOf(c.t).replace(${JSON.stringify(H)}, '~'), c.t.args, c.t.kind]));`;
+  const run = () => JSON.parse(execFileSync(process.execPath, ['-e', code], { env: { ...process.env, HOME: H, XDG_DATA_HOME: '' }, encoding: 'utf8' }).trim().split('\n').pop());
+  assert.deepStrictEqual(run(), ['~/.local/share/shadPS4QtLauncher/versions/v.0.12.0/Shadps4-sdl.AppImage', '~/.local/share/shadPS4QtLauncher/versions/v.0.12.0', '-g "{ROM}" -f true', 'eboot']);
+  // the selected one was removed: the newest still there
+  fs.rmSync(v1, { recursive: true });
+  assert.strictEqual(run()[0], '~/.local/share/shadPS4QtLauncher/versions/Pre-release-abc/Shadps4-sdl.AppImage');
+});
