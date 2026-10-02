@@ -225,5 +225,10 @@ LT/RT switch top tabs. LB/RB only switch sections inside a page. A select, B bac
 - Top bar: words-only tabs, `.tab-ink` underline placed by `placeInk()`, LT/RT only in pad mode. `PIcon` trims SVG margins (alpha box, up to 1.8x). Sega/Microsoft in makers.js. Patches/Add-ons pages grouped by console (`patchGroups`, `.con-head`).
 - Fluidity: GameCard covers fade in only when not yet loaded (`seen`), `:active`/`.pressed` squeeze (nav.js `pressFx` on A).
 
+## 0.9.18 (2 Oct 2026; log: docs/SESSION-LOG.md)
+- `addonInstall.plan` kinds per emulator (pcsx2/duckstation `replacements` anchor + DuckStation `config.yaml`, ppsspp `textures.ini|zip` anchor, dolphin 6/3-char ID folder, azahar/citra title ID folder, cemu `rules.txt` packs, switch Atmosphere `contents/<id>`), `wrapper()` strips folders around everything. `addons:install` dest is the game folder (`/replacements` dropped). PS2 lists GameBanana after EmuCoreX.
+- `pkgInstall` Vita3K: `NO_QT` retry without `QT_QPA_PLATFORM=offscreen` (installVita and installFirmware).
+- `ps3Serial`: `PS3_GAME/PARAM.SFO` two levels down, then RPCS3 `games.yml` paths.
+
 ## Releases (full steps: HANDOFF D8)
 Only when the owner asks. Bump `version` and `build.releaseInfo.releaseName` ("Cartridge X.Y.Z") in `package.json`, and set `versionName` (what Settings → About and update messages show). **0.9.3 is shipped in parts (owner, 1 Oct 2026):** the number goes up as usual (0.9.4, 0.9.5...) but `versionName` and the release title are "0.9.3 B", "0.9.3 C"... until the 0.9.3 plan is done; notes heading `## Cartridge 0.9.3 B · Title`. Then put only this version's notes in `RELEASE_NOTES.md` (heading `## Cartridge X.Y.Z · Title`), add them to the top of `CHANGELOG.md`, grouped as New / Changed / Fixed with bold lead-ins. CI builds, launch-checks and publishes.

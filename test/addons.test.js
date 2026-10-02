@@ -77,3 +77,29 @@ test('unsafe paths are refused', async () => {
   await assert.rejects(I.install(z, path.join(TMP, 'safe'), 'plain'), /empty|Unsafe|invalid/);
   assert.ok(!fs.existsSync(path.join(TMP, 'evil.png')));
 });
+
+// 0.9.18: each emulator's layout found by what it reads, whatever the pack's wrapper folders
+test('texture layouts per emulator: the game folder found by what the emulator reads', () => {
+  const L = (rels) => rels.map((rel) => ({ rel, size: 1 }));
+  const to = (rels, kind, o) => I.plan(L(rels), kind, o).map((x) => x.to).sort();
+  // PCSX2 and DuckStation: the folder above replacements; images with none go into one
+  assert.deepStrictEqual(to(['HD Pack v2/SLUS-21287/replacements/a.png', 'HD Pack v2/readme.txt'], 'pcsx2', { id: 'SLUS-21287' }), ['replacements/a.png']);
+  assert.deepStrictEqual(to(['Pack/SCUS-94900/replacements/x/b.png', 'Pack/SCUS-94900/config.yaml'], 'duckstation', { id: 'SCUS-94900' }), ['config.yaml', 'replacements/x/b.png']);
+  assert.deepStrictEqual(to(['Pack/a.png', 'Pack/sub/b.dds', 'Pack/info.txt'], 'pcsx2', { id: 'SLUS-21287' }), ['replacements/a.png', 'replacements/sub/b.dds']);
+  // PPSSPP: the folder holding textures.ini
+  assert.deepStrictEqual(to(['Wrap/ULUS10041/textures.ini', 'Wrap/ULUS10041/t/1.png', 'Wrap/notes.txt'], 'ppsspp', { id: 'ULUS10041' }), ['t/1.png', 'textures.ini']);
+  assert.deepStrictEqual(to(['textures.ini', 'a.png'], 'ppsspp', { id: 'ULUS10041' }), ['a.png', 'textures.ini']);
+  // Dolphin: a folder named the 6 or 3 character game ID, else as it is minus wrappers
+  assert.deepStrictEqual(to(['Zelda HD/GALE01/tex1_a.png', 'Zelda HD/GALE01/ui/b.png'], 'dolphin', { id: 'GALE01' }), ['tex1_a.png', 'ui/b.png']);
+  assert.deepStrictEqual(to(['Pack/GAL/tex1_a.png'], 'dolphin', { id: 'GALE01' }), ['tex1_a.png']);
+  assert.deepStrictEqual(to(['Pack/one/tex1_a.png', 'Pack/two/tex1_b.png'], 'dolphin', { id: 'GALE01' }), ['one/tex1_a.png', 'two/tex1_b.png']);
+  // Azahar: the title ID folder
+  assert.deepStrictEqual(to(['P/0004000000055D00/tex1.png'], 'azahar', { id: '0004000000055D00' }), ['tex1.png']);
+  // Cemu: each rules.txt folder is a pack; one at the top gets the mod's name
+  assert.deepStrictEqual(to(['Wrap/BotW_60FPS/rules.txt', 'Wrap/BotW_60FPS/patch.asm', 'Wrap/readme.md'], 'cemu', { name: 'x' }), ['BotW_60FPS/patch.asm', 'BotW_60FPS/rules.txt']);
+  assert.deepStrictEqual(to(['rules.txt', 'a.asm'], 'cemu', { name: 'My Pack' }), ['My Pack/a.asm', 'My Pack/rules.txt']);
+  assert.deepStrictEqual(to(['readme.md'], 'cemu', { name: 'x' }), []);
+  // Switch: Atmosphere's contents/<id>/romfs gets the mod's name, a named mod folder keeps its own
+  assert.deepStrictEqual(to(['atmosphere/contents/01007EF00011E000/romfs/a.bin'], 'switch', { name: 'HD' }), ['HD/romfs/a.bin']);
+  assert.deepStrictEqual(to(['Wrap/60 FPS/exefs/main.ips'], 'switch', { name: 'HD' }), ['60 FPS/exefs/main.ips']);
+});

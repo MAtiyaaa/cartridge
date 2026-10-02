@@ -6,6 +6,14 @@ The branch for 0.9.3 work is `claude/relaxed-fermat-30pigp`. Pull it before star
 
 ---
 
+## 2 Oct 2026 · 0.9.18 (read this first)
+
+Owner sent the Vita3K error ("no Qt platform plugin could be initialized", installing Unit 13): Cartridge ran Vita3K with `QT_QPA_PLATFORM=offscreen` and that build has no offscreen plugin. Now retried on the normal display. Texture packs per game with the right paths (owner's ask): layouts per emulator in `addonInstall.plan`. PS3 serials: two more fallbacks, still unconfirmed on the owner's games (needs a folder layout or log if it still fails). Remind the owner about the v2.3.1 tag later (owner asked). The owner asked for a list of everything not yet built before more building starts: given in chat, wait for their pick.
+
+**Owner must test on a device:** a Vita .vpk/.zip install and Vita firmware; a texture pack each in PCSX2, DuckStation, PPSSPP, Dolphin, Azahar, a Cemu graphic pack, a Switch mod; the PS3 games that said "serial not found".
+
+---
+
 ## 2 Oct 2026 · 0.9.17 second list built (read this first)
 
 The owner added 22 items to 0.9.17 (plan section 10) and wanted them all in this update. All built; see CLAUDE.md 0.9.17 and RELEASE_NOTES.md.

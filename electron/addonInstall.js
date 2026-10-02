@@ -49,35 +49,106 @@ async function unpackOther(file, tmp) {
 async function openArchive(file, tmp) { return /\.zip$/i.test(file) || (await isZip(file)) ? zipList(file) : unpackOther(file, tmp); }
 async function isZip(file) { try { const fd = await fsp.open(file, 'r'); const b = Buffer.alloc(4); await fd.read(b, 0, 4, 0); await fd.close(); return b.readUInt32LE(0) === 0x04034b50; } catch { return false; } }
 
-// Where each file goes: plan(list) -> [{ from, to }] (relative to dest). Kinds:
-// - ps2: [SERIAL/]replacements/... -> replacements/..., PNG and DDS only (EmuCoreX's rule)
+// Where each file goes: plan(list, kind) -> [{ e, to }] (relative to dest, the game's own folder in
+// that emulator). Packs come zipped every which way ("Pack v2/SLUS-21287/replacements/...", a bare
+// textures.ini, a rules.txt at the top), so each emulator's layout is found by what it reads (0.9.18,
+// owner: per game, the right paths), never by guessing from the archive's top folder:
+// - ps2 (EmuCoreX): [SERIAL/]replacements/... -> replacements/..., PNG and DDS only (EmuCoreX's rule)
+// - pcsx2, duckstation: textures/<SERIAL>/replacements/<images> (+ DuckStation's config.yaml); the folder
+//   above "replacements" is the game folder; a pack with no replacements folder has its images put in one
+// - ppsspp: PSP/TEXTURES/<ID>/textures.ini (or textures.zip): the folder holding it is the game folder
+// - dolphin: Load/Textures/<GameID>, read with subfolders: a folder named the game ID (6 or 3
+//   characters) is the game folder, else the files go in as they are
+// - azahar, citra: load/textures/<title ID>, with subfolders: a folder named the title ID, else as they are
+// - cemu: graphicPacks/<pack>/rules.txt: each rules.txt's folder is one pack, named after it (or the mod)
 // - switch: a mod is <Name>/{romfs,exefs,cheats}; a bare romfs/exefs gets the mod's name as its folder
-// - plain: a single top folder named like the game ID is dropped, the rest kept as it is
+// - plain: folders wrapping everything are dropped, the rest kept as it is
+const IMG = /\.(png|dds|jpe?g|webp|tga|bmp)$/i;
+const segs = (r) => r.split('/');
+const safeName = (n) => String(n).replace(/[\\/:*?"<>|]+/g, ' ').trim().slice(0, 80) || 'Mod';
+// the folders every file sits under ("Pack/Inner/"), which mean nothing to the emulator
+function wrapper(rels) {
+  if (!rels.length) return '';
+  let pre = segs(rels[0]).slice(0, -1);
+  for (const r of rels) { const s = segs(r).slice(0, -1); let i = 0; while (i < pre.length && i < s.length && pre[i] === s[i]) i++; pre = pre.slice(0, i); }
+  return pre.length ? pre.join('/') + '/' : '';
+}
+// the folder (prefix) above the first match of test(segment) in r, plus where it is
+function anchorAt(r, test) { const s = segs(r); for (let i = 0; i < s.length - 1; i++) if (test(s[i], i, s)) return { pre: s.slice(0, i).join('/'), i }; return null; }
 function plan(list, kind, { id = '', name = 'Mod' } = {}) {
   const rels = list.map((e) => e.rel);
   const tops = new Set(rels.map((r) => r.split('/')[0]));
+  const ID = String(id || '').toUpperCase();
   let map;
   if (kind === 'ps2') {
     map = (r) => { const m = /^(?:[A-Z]{4}-\d{5}\/)?(replacements\/.+)$/i.exec(r); return m && /\.(png|dds)$/i.test(r) ? m[1].replace(/^replacements/i, 'replacements') : null; };
+  } else if (kind === 'pcsx2' || kind === 'duckstation') {
+    const rep = rels.map((r) => anchorAt(r, (x) => /^replacements$/i.test(x))).find(Boolean);
+    if (rep) {
+      const base = rep.pre ? rep.pre + '/' : '';
+      map = (r) => {
+        if (!r.startsWith(base)) return null;
+        const x = r.slice(base.length);
+        if (/^replacements\//i.test(x)) return 'replacements/' + x.slice(13);
+        return kind === 'duckstation' && /^config\.ya?ml$/i.test(x) ? x : null; // DuckStation's per-game texture settings
+      };
+    } else {
+      const w = wrapper(rels.filter((r) => IMG.test(r)));
+      const strip = (r) => { let x = r.slice(w.length); if (ID && segs(x)[0].toUpperCase() === ID) x = segs(x).slice(1).join('/'); return x; };
+      map = (r) => (IMG.test(r) && r.startsWith(w) ? 'replacements/' + strip(r) : null);
+    }
+  } else if (kind === 'ppsspp') {
+    const ini = rels.filter((r) => /(^|\/)textures\.(ini|zip)$/i.test(r)).sort((a, b) => segs(a).length - segs(b).length)[0];
+    const base = ini ? segs(ini).slice(0, -1).join('/') : wrapper(rels).replace(/\/$/, '');
+    const pre = base ? base + '/' : '';
+    map = (r) => (r.startsWith(pre) ? r.slice(pre.length) : null);
+  } else if (kind === 'dolphin' || kind === 'azahar' || kind === 'citra') {
+    const isId = kind === 'dolphin'
+      ? (x) => ID && (x.toUpperCase() === ID || (x.length === 3 && x.toUpperCase() === ID.slice(0, 3)))
+      : (x) => ID && x.toUpperCase() === ID;
+    const r0 = rels.find((r) => anchorAt(r, isId));
+    if (r0) { const pre = segs(r0).slice(0, anchorAt(r0, isId).i + 1).join('/') + '/'; map = (r) => (r.startsWith(pre) ? r.slice(pre.length) : null); }
+    else { const w = wrapper(rels); map = (r) => r.slice(w.length); }
+  } else if (kind === 'cemu') {
+    const packs = rels.filter((r) => /(^|\/)rules\.txt$/i.test(r)).map((r) => segs(r).slice(0, -1).join('/'));
+    if (!packs.length) return [];
+    map = (r) => {
+      const p = packs.filter((d) => !d || r.startsWith(d + '/')).sort((a, b) => b.length - a.length)[0];
+      if (p === undefined) return null;
+      const folder = p ? segs(p).pop() : safeName(name);
+      return `${folder}/${p ? r.slice(p.length + 1) : r}`;
+    };
   } else if (kind === 'switch') {
     const LAYER = /^(romfs|exefs|cheats)$/i;
-    const safe = String(name).replace(/[\\/:*?"<>|]+/g, ' ').trim().slice(0, 80) || 'Mod';
-    const strip = tops.size === 1 && id && [...tops][0].toUpperCase() === id.toUpperCase() ? [...tops][0] + '/' : '';
-    map = (r) => { const x = strip && r.startsWith(strip) ? r.slice(strip.length) : r; return LAYER.test(x.split('/')[0]) ? `${safe}/${x}` : x; };
+    const safe = safeName(name);
+    const strip = tops.size === 1 && id && [...tops][0].toUpperCase() === ID ? [...tops][0] + '/' : '';
+    map = (r) => {
+      const x = strip && r.startsWith(strip) ? r.slice(strip.length) : r;
+      const s = segs(x), i = s.findIndex((p, n) => n < s.length - 1 && LAYER.test(p));
+      if (i < 0) return x;
+      // "<Mod>/romfs/..." keeps the mod's own folder; a bare romfs, or one under wrappers, gets the mod's name
+      const own = i > 0 && !/^[0-9A-F]{16}$/i.test(s[i - 1]) && s[i - 1].toUpperCase() !== ID ? s[i - 1] : safe; // Atmosphere's contents/<id>/romfs too
+      return `${own}/${s.slice(i).join('/')}`;
+    };
   } else {
-    const strip = tops.size === 1 && id && [...tops][0].toUpperCase() === id.toUpperCase() && rels.every((r) => r.includes('/')) ? [...tops][0] + '/' : '';
+    const strip = tops.size === 1 && id && [...tops][0].toUpperCase() === ID && rels.every((r) => r.includes('/')) ? [...tops][0] + '/' : '';
     map = (r) => (strip && r.startsWith(strip) ? r.slice(strip.length) : r);
   }
-  return list.map((e) => ({ e, to: map(e.rel) })).filter((x) => x.to && !x.to.split('/').some((p) => p === '..' || p === ''));
+  return list.map((e) => ({ e, to: map(e.rel) })).filter((x) => x.to && !x.to.split('/').some((p) => p === '..' || p === '' || p === '.'));
 }
 
+const EMPTY = {
+  ps2: 'There are no PNG or DDS textures in a replacements folder in this pack.',
+  pcsx2: 'There are no textures in this add-on.', duckstation: 'There are no textures in this add-on.',
+  cemu: 'This isn’t a Cemu graphic pack (no rules.txt in it).',
+};
 // archive -> dest; refuses before writing anything if a file is already there
 async function install(archive, dest, kind, opts = {}) {
   const tmp = archive + '.unpacked';
   const a = await openArchive(archive, tmp);
   try {
     const todo = plan(a.list, kind, opts);
-    if (!todo.length) throw new Error(kind === 'ps2' ? 'There are no PNG or DDS textures in a replacements folder in this pack.' : 'This add-on is empty.');
+    if (!todo.length) throw new Error(EMPTY[kind] || 'This add-on is empty.');
     for (const t of todo) { const out = path.join(dest, t.to); if (!inside(dest, out)) throw new Error('Unsafe file path in the add-on.'); if (fs.existsSync(out)) throw new Error(`Something is already at ${t.to} in this folder, so nothing was installed. Remove it first.`); }
     const need = todo.reduce((s, t) => s + (t.e.size || 0), 0);
     const free = await fsp.statfs(fs.existsSync(dest) ? dest : path.dirname(dest)).then((st) => st.bavail * st.bsize).catch(() => Infinity);
@@ -109,4 +180,4 @@ async function removeFiles(dest, files) {
   for (const d of [...dirs].sort((a, b) => b.length - a.length)) { try { await fsp.rmdir(d); } catch {} }
 }
 
-module.exports = { sha256, join, plan, install, removeFiles, openArchive };
+module.exports = { sha256, join, plan, wrapper, install, removeFiles, openArchive };

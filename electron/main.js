@@ -1922,6 +1922,23 @@ function ps3Serial(romId, where) {
   const files = (() => { try { return fs.statSync(where).isDirectory() ? fs.readdirSync(where).map((n) => path.join(where, n)) : [where]; } catch { return []; } })();
   for (const f of files.filter((x) => /\.(iso|chd)$/i.test(x))) { const b = patchesMod.isoFile(f, ['PS3_GAME', 'PARAM.SFO']); const id = b && patchesMod.parseSfo(b).TITLE_ID; if (id) return id; }
   for (const f of files.filter((x) => /\.pkg$/i.test(x))) { const i = pkgInst.pkgInfo(f); if (i?.titleId && /^[A-Z]{4}\d{5}$/.test(i.titleId)) return i.titleId; }
+  // 0.9.18: the game folder one or two levels down ("Game/Game [BLUS30443]/PS3_GAME"), then RPCS3's
+  // own game list (config/games.yml: "BLUS30443: /path/to/game/"), which knows every game it has booted
+  const deep = (d, n) => { for (const e of (() => { try { return fs.readdirSync(d, { withFileTypes: true }); } catch { return []; } })()) {
+    if (!e.isDirectory()) continue;
+    const p = path.join(d, e.name), s = patchesMod.sfoAt(path.join(p, 'PS3_GAME', 'PARAM.SFO')).TITLE_ID;
+    if (s) return s;
+    if (n > 1) { const r = deep(p, n - 1); if (r) return r; }
+  } return null; };
+  if (where) { const s = deep(where, 2); if (s) return s; }
+  const want = where && (() => { try { return fs.realpathSync(where); } catch { return where; } })().replace(/\/+$/, '');
+  for (const d of patchesMod.rpcs3Dirs()) {
+    let text = ''; try { text = fs.readFileSync(path.join(d.root, 'games.yml'), 'utf8'); } catch { continue; }
+    for (const m of text.matchAll(/^([A-Z]{4}\d{5})\s*:\s*"?([^"\n]+?)"?\s*$/gm)) {
+      const g = (() => { try { return fs.realpathSync(m[2]); } catch { return m[2]; } })().replace(/\/+$/, '');
+      if (want && (g === want || g.startsWith(want + '/') || want.startsWith(g + '/'))) return m[1];
+    }
+  }
   return null;
 }
 // The emulator copy a game really starts with (its own pick, else its console's), so its patches go
@@ -2992,6 +3009,8 @@ const handlers = {
         if (!emus.some((e) => e.id === 'pcsx2')) out.error = 'PCSX2’s settings weren’t found on this device. Open PCSX2 once, then come back.';
         else if (!serial) out.error = 'Cartridge couldn’t read this game’s serial, which the packs are matched by.';
         else out.packs = S.ps2For(await S.ps2Catalog({ cacheFile: path.join(USER_DATA, 'addons-ps2-catalog.json') }), serial).map((p) => ({ ...p, serial }));
+        // 0.9.18: GameBanana's PS2 texture packs and mods too, after the catalog's (put in the same folder)
+        if (serial) { try { const g = await S.gbGame(rom.name); if (g) { out.gbGame = g; out.packs.push(...(await S.gbMods(g.id))); } } catch {} }
       } else if (emus.length) {
         out.source = 'gb';
         const g = await S.gbGame(rom.name);
@@ -3010,8 +3029,10 @@ const handlers = {
     if (!rom || !e) throw new Error('That emulator wasn’t found.');
     if (!e.folder) throw new Error(`Cartridge couldn’t read this game’s ID, so it doesn’t know which ${e.name} folder it goes in.`);
     if (require('./raLogin').running().has(e.id)) throw new Error(`Close ${e.name} first.`);
-    const kind = pack.source === 'ps2' ? 'ps2' : /^(eden|citron|yuzu|ryujinx)$/.test(e.id) ? 'switch' : 'plain';
-    const dest = kind === 'ps2' ? path.dirname(e.folder) : e.folder; // PCSX2: textures/<SERIAL>, the pack brings replacements/
+    // each emulator's own layout (addonInstall.plan, 0.9.18); PCSX2 and DuckStation: the game folder is
+    // textures/<SERIAL>, the pack brings replacements/ (e.folder ends in it)
+    const kind = pack.source === 'ps2' ? 'ps2' : /^(eden|citron|yuzu|ryujinx)$/.test(e.id) ? 'switch' : ['pcsx2', 'duckstation', 'ppsspp', 'dolphin', 'azahar', 'citra', 'cemu'].includes(e.id) ? e.id : 'plain';
+    const dest = /\/replacements$/.test(e.folder) ? path.dirname(e.folder) : e.folder;
     const key = `${pack.source}:${pack.id}${file ? ':' + file.id : ''}:${rom.id}:${e.emuRoot}`;
     if (addonRecs()[key]) throw new Error('This add-on is already installed.');
     const dir = path.join(USER_DATA, 'addon-downloads'), base = path.join(dir, String(key).replace(/[^\w.-]+/g, '_'));
@@ -3035,7 +3056,7 @@ const handlers = {
       let archive = files[0];
       if (files.length > 1) { archive = base + '.zip'; send({ state: 'join' }); await A.join(files, archive); if ((await A.sha256(archive)) !== pack.sha256) throw new Error('The joined download is damaged. Try again.'); }
       send({ state: 'install', pct: 0 });
-      const r = await A.install(archive, dest, kind, { id: kind === 'switch' ? '' : (e.folder && path.basename(e.folder)), name: pack.name, signal: addonRun.abort.signal, onFile: (n, of) => { const now = Date.now(); if (now - last > 400) { last = now; send({ state: 'install', pct: Math.floor((n / of) * 100) }); } } });
+      const r = await A.install(archive, dest, kind, { id: kind === 'switch' ? '' : path.basename(dest), name: pack.name, signal: addonRun.abort.signal, onFile: (n, of) => { const now = Date.now(); if (now - last > 400) { last = now; send({ state: 'install', pct: Math.floor((n / of) * 100) }); } } });
       const recs = addonRecs();
       recs[key] = { source: pack.source, id: pack.id, fileId: file?.id || null, name: pack.name, romId: rom.id, game: rom.name, emu: e.id, emuName: e.name, emuRoot: e.emuRoot, dest, files: r.files, bytes: r.bytes, at: Date.now(), from: pack.sourceUrl || pack.url || '' };
       saveJson(ADDONS_FILE, recs);

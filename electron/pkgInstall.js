@@ -231,6 +231,7 @@ function vitaLicenced(pref, id, dir) {
   if (fs.existsSync(path.join(dir, 'sce_sys/package/work.bin'))) return true;
   return ls(path.join(pref, 'ux0/license', id)).some((n) => /\.rif$/i.test(n)) || ls(path.join(pref, 'ux0/license/app', id)).some((n) => /\.rif$/i.test(n));
 }
+const NO_QT = /Qt platform plugin/i;
 // Runs Vita3K for one game; returns [{ serial, dir, created }] for what is in ux0/app afterwards
 async function installVita({ cmd, prefs, item, zrif, onStep = () => {}, signal }) {
   const before = appsIn(prefs);
@@ -243,7 +244,8 @@ async function installVita({ cmd, prefs, item, zrif, onStep = () => {}, signal }
   if (item.kind !== 'pkg') env.QT_QPA_PLATFORM = 'offscreen';
   onStep({ step: 1, of: 1, file: path.basename(item.file), opens: false });
   let said = '';
-  await new Promise((resolve, reject) => {
+  const run = () => new Promise((resolve, reject) => {
+    said = '';
     const p = spawn(cmd.exe, [...cmd.args, ...args], { env, stdio: ['ignore', 'pipe', 'pipe'] });
     const kill = () => { try { p.kill(); } catch {} };
     const timer = setTimeout(kill, 3 * 60 * 60e3);
@@ -256,6 +258,10 @@ async function installVita({ cmd, prefs, item, zrif, onStep = () => {}, signal }
     p.on('error', (e) => { clearTimeout(timer); reject(new Error(`Vita3K didn't start: ${e.message}`)); });
     p.on('exit', () => { clearTimeout(timer); resolve(); });
   });
+  await run();
+  // 0.9.18 (owner's error): Vita3K builds without Qt's offscreen plugin refuse to start at all ("no Qt
+  // platform plugin could be initialized"). Run again on the normal display; it's stopped once installed.
+  if (NO_QT.test(said) && env.QT_QPA_PLATFORM) { delete env.QT_QPA_PLATFORM; await run(); }
   const dir = [...appsIn(prefs)].find(([d, n]) => n === item.titleId && vitaSfoId(d) === item.titleId)?.[0];
   if (!dir) { const why = (said.match(/.*(?:error|failed|critical|not a supported|Vitamin)[^\n]*/gi) || []).pop(); if (why) throw new Error(`Vita3K: ${why.replace(/^\[[^\]]*\]\s*/g, '').trim().slice(0, 200)}`); return []; }
   const pref = prefs.find((p) => dir.startsWith(path.join(p, 'ux0/app') + path.sep)) || prefs[0];
@@ -294,7 +300,8 @@ async function installFirmware({ emu, cmd, file, signal }) {
   if (emu === 'vita3k') env.QT_QPA_PLATFORM = 'offscreen';
   const args = emu === 'rpcs3' ? [...cmd.args, '--headless', '--installfw', file] : [...cmd.args, '--firmware', file];
   let tail = '';
-  const code = await new Promise((resolve, reject) => {
+  const run = () => new Promise((resolve, reject) => {
+    tail = '';
     const p = spawn(cmd.exe, args, { env, stdio: ['ignore', 'pipe', 'pipe'] });
     const keep = (b) => { tail = (tail + String(b)).slice(-4000); };
     p.stdout.on('data', keep); p.stderr.on('data', keep);
@@ -304,6 +311,8 @@ async function installFirmware({ emu, cmd, file, signal }) {
     p.on('error', (e) => { clearTimeout(timer); reject(new Error(`${emu === 'rpcs3' ? 'RPCS3' : 'Vita3K'} didn't start: ${e.message}`)); });
     p.on('exit', (c) => { clearTimeout(timer); resolve(c); });
   });
+  let code = await run();
+  if (NO_QT.test(tail) && env.QT_QPA_PLATFORM) { delete env.QT_QPA_PLATFORM; code = await run(); } // as installVita
   if (code && code !== 0) throw new Error(`${emu === 'rpcs3' ? 'RPCS3' : 'Vita3K'} couldn't install the firmware: ${(tail.trim().split('\n').pop() || 'exit ' + code).slice(0, 200)}`);
   return true;
 }
