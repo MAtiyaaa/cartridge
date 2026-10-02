@@ -234,6 +234,7 @@ function trigger(gp, which, v) {
   return !!armed[k] && v > 0.6;
 }
 export const padLive = { pads: [] }; // for Settings → About → Controller test
+const stickHeld = {}; // pad index -> direction -> held (stick hysteresis)
 // Rumble when moving (0.9.3 B3, Look & Feel): a tiny pulse on the pad you last used. Steam Input
 // passes it through in Game Mode only when the pad has motors and Steam's own rumble is on.
 const RUMBLE = { low: 0.12, medium: 0.25, high: 0.45 };
@@ -269,11 +270,16 @@ function poll() {
       if (trigger(gp, 'lta', (gp.axes[2] + 1) / 2)) merged.lt = true;
       if (trigger(gp, 'rta', (gp.axes[5] + 1) / 2)) merged.rt = true;
     }
-    const [ax, ay] = gp.axes;
-    if (ax < -0.55) merged.left = true;
-    if (ax > 0.55) merged.right = true;
-    if (ay < -0.55) merged.up = true;
-    if (ay > 0.55) merged.down = true;
+    // Left stick (0.9.3 K, B1): only the stronger axis counts, so a slightly diagonal push never moves
+    // two ways at once, and a direction lets go only below 0.35 after passing 0.55, so a stick
+    // resting near the edge doesn't flicker into double moves.
+    const [ax = 0, ay = 0] = gp.axes;
+    const held = stickHeld[gp.index] || (stickHeld[gp.index] = {});
+    const horiz = Math.abs(ax) >= Math.abs(ay);
+    for (const [dir, v, on] of [['left', -ax, horiz], ['right', ax, horiz], ['up', -ay, !horiz], ['down', ay, !horiz]]) {
+      held[dir] = on && (v > 0.55 || (held[dir] && v > 0.35));
+      if (held[dir]) merged[dir] = true;
+    }
   }
   padLive.pads = pads;
   if (document.hasFocus()) for (const key of ACTIONS) press(key, !!merged[key], now);
