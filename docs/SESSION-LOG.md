@@ -6,7 +6,22 @@ The branch for 0.9.3 work is `claude/relaxed-fermat-30pigp`. Pull it before star
 
 ---
 
-## 2 Oct 2026 · 0.9.17 started (read this first)
+## 2 Oct 2026 · 0.9.17 built and released (read this first)
+
+Everything in `docs/plan-0.9.17.md`. Remind the owner: check the PS3 games that said "serial not found", and the stray v2.3.1 tag.
+
+**Decisions and notes:**
+- Add-ons button: the owner said add-ons now live in the emulator settings; the game page keeps More → Emulator → Add-ons (same sheet).
+- GameBanana is still blocked from the container: its API is built from public client code (apiv11) and must be checked on a device. The PS2 catalog (EmuCoreX) was read live: 769 packs parse.
+- Podman: SteamOS 3.5+ ships it; what's missing is /etc/subuid ranges (sudo once, password never kept). podman-launcher when there's no Podman at all.
+- Emulator downloads: GitHub AppImages (asset patterns not checked live for eden, ryujinx, shadps4 launcher, flycast); Flatpak for Dolphin, PPSSPP, melonDS, RetroArch. Citron has no GitHub releases, so it isn't offered.
+- Moved to 0.9.18: more console scenes, the small cleanups.
+
+**Owner must test on a device:** Frame Generation with lsfg-vk and MAKO; shadPS4 version per game; multi-disc playlists in DuckStation/PCSX2/Dolphin; PS2 texture pack install; a GameBanana mod; Podman setup on SteamOS (password step) and Bazzite; Get Emulators downloads; BIOS from RomM into emulators; game folders in PCSX2, DuckStation, Dolphin; CHD/CSO/GCZ/PBP games show their serials.
+
+---
+
+## 2 Oct 2026 · 0.9.17 started
 
 Owner's list for 0.9.17 is `docs/plan-0.9.17.md`. Research done before building:
 - ARMSX2's texture catalogs: dl.ps2ktxpak.net (ASTC, phone only) and sashkinbro/EmuCoreX-Textures `textures.json` (PNG/DDS, serials, SHA-256, parts). Cartridge uses EmuCoreX.

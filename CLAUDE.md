@@ -207,5 +207,16 @@ LT/RT switch top tabs. LB/RB only switch sections inside a page. A select, B bac
 - Settings background picker: `topConsoles` (play time, then installed) first, `SCENE_OF`.
 - Vita: `vitaByName`; PS4 trophy titles remembered (`titles.json`); `developerOf` up to two.
 
+## 0.9.17 (2 Oct 2026; log: docs/SESSION-LOG.md, plan: docs/plan-0.9.17.md)
+- Add-ons: `electron/addonSources.js` (EmuCoreX `textures.json` for PS2, GameBanana apiv11 `gbGame`/`gbMods`/`gbFiles`), `electron/addonInstall.js` (zip via yauzl, 7z/rar via bsdtar/7z, `plan()` kinds ps2/switch/plain, never over a file, `removeFiles`), `addons:available/install/remove/installed`, `addons-installed.json`, `AddonsSheet.vue` (modal `addons`), Settings → Emulators → Add-ons.
+- `electron/frameGen.js` (`~/lsfg`, `~/.lsfg`, `~/.local/bin/mako-run`; `steam.frameGen` default/consoles/games), `withFg` + `launchFor` (wrapper after env vars, one %command%), `sigOf` adds `fg:` only when set; `FrameGen.vue` (route `frame-gen`).
+- shadPS4: `shadVersions()` (`shadPS4QtLauncher/versions.json`), `withShadVersion` (`-e "<path>"` for `-d`), `steam.shadVersions`.
+- Multi-disc: `multiDisc()` writes `<folder>.m3u` (flag wx) for `M3U_EMU` emulators.
+- `electron/discImage.js`: `open(file)` 2048-byte view of ISO/raw bin/cue/CHD v5 (Huffman map, zlib/LZMA/zstd, cd codecs)/CSO/ZSO/GCZ; `lzmaDecode`, `pbpDiscId`. `patches.isoFile`/`ps2IsoInfo` use it. Fixtures in `test/fixtures/disc` (chdman).
+- RomM on this device: `rommLocal.prepare` (podman-launcher into `~/.local/share/cartridge-romm/bin/podman`, `sudo -S usermod --add-subuid/--add-subgid`), `cartridge-romm.service` for Cartridge's own Podman, `romm:localPrepare`.
+- `electron/emuGet.js` (`CATALOG` by console, GitHub AppImage into ~/Applications or Flathub `--user`), `emuget:*`, `EmuGet.vue` (welcome Pick your own, Settings → Emulators → Get Emulators).
+- `bios.place()` (copy into set-up emulators' folders, never over), `switchNandDirs` + `switchFirmware`, `bios:all`, `electron/emuFolders.js` (`setup:gameFolders`, `emu-folders.json`), default BIOS folder when none.
+- `makers.js` Nintendo (HVR88 Monochrome Gaming Logos, `evenodd`).
+
 ## Releases (full steps: HANDOFF D8)
 Only when the owner asks. Bump `version` and `build.releaseInfo.releaseName` ("Cartridge X.Y.Z") in `package.json`, and set `versionName` (what Settings → About and update messages show). **0.9.3 is shipped in parts (owner, 1 Oct 2026):** the number goes up as usual (0.9.4, 0.9.5...) but `versionName` and the release title are "0.9.3 B", "0.9.3 C"... until the 0.9.3 plan is done; notes heading `## Cartridge 0.9.3 B · Title`. Then put only this version's notes in `RELEASE_NOTES.md` (heading `## Cartridge X.Y.Z · Title`), add them to the top of `CHANGELOG.md`, grouped as New / Changed / Fixed with bold lead-ins. CI builds, launch-checks and publishes.

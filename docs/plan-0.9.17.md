@@ -1,5 +1,7 @@
 # Cartridge 0.9.17 plan
 
+Status: built and released as 0.9.17 (2 Oct 2026). What was done differently is in docs/SESSION-LOG.md.
+
 Owner, 2 Oct 2026, after 0.9.16 shipped: "package all of these for the next update and start building."
 
 Moved to 0.9.18 (owner): more animated console scenes; the small cleanups (duplicate CSS in Achievements.vue, unused `.padbtn`, the graphics comment at the top of main.js, the two migration lines, steam-games.json written before the helper finishes). Reminder for the owner: check the PS3 games that said "serial not found" (send a log or a folder layout). Owner: shadPS4 now works; dropped: the game page header blend check.
