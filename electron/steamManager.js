@@ -964,11 +964,13 @@ module.exports = function createSteamManager(ctx) {
     const hero = art.hero || rom?.shot || null;
     const fromSgdb = async (kind, fallback) => (await ctx.sgdbImage(rom?.name, kind, sg).catch(() => null)) || (fallback ? ctx.fetchImage(fallback) : null);
     await put(`${e.appid}p.png`, async () => (style ? fromSgdb('grid', cover) : cover ? ctx.fetchImage(cover) : ctx.sgdbImage(rom?.name, 'grid')));
-    await put(`${e.appid}_hero.png`, async () => (style ? fromSgdb('hero', hero) : hero ? ctx.fetchImage(hero) : ctx.sgdbImage(rom?.name, 'hero')));
+    // Cartridge's own art first (0.9.16): yours, then the sharp background Cartridge shows, then RomM's
+    const sharp = !style && !art.hero ? await ctx.sharpHeroPng?.(rom).catch(() => null) : null;
+    await put(`${e.appid}_hero.png`, async () => (style ? fromSgdb('hero', hero) : art.hero ? ctx.fetchImage(art.hero) : sharp || (hero ? ctx.fetchImage(hero) : ctx.sgdbImage(rom?.name, 'hero'))));
     await put(`${e.appid}.png`, async () => { // wide banner: SteamGridDB's, else cut from the background
       const w = await ctx.sgdbImage(rom?.name, 'wide', sg).catch(() => null);
       if (w) return w;
-      const src = hero ? await ctx.fetchImage(hero) : null;
+      const src = sharp || (hero ? await ctx.fetchImage(hero) : null);
       return src ? ctx.cropTo(src, 920, 430) : null;
     });
     await put(`${e.appid}_logo.png`, async () => { const l = await ctx.logoFile(rom); return l ? fs.readFileSync(l) : null; });

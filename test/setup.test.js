@@ -63,3 +63,15 @@ test('Add-ons: GameCube ID and 3DS title ID from the file header', () => {
   const f = path.join(d, 'g.3ds'); fs.writeFileSync(f, c);
   assert.strictEqual(A.n3dsTitleId(f), '0004000000055D00');
 });
+
+const EI = require('../electron/emuIcons.js');
+test('Emulator icons come from the installed copy: Flatpak export, then a .desktop entry', () => {
+  const h = fs.mkdtempSync(path.join(os.tmpdir(), 'ei-'));
+  const put = (p, t) => { fs.mkdirSync(path.dirname(path.join(h, p)), { recursive: true }); fs.writeFileSync(path.join(h, p), t); };
+  put('.local/share/flatpak/exports/share/icons/hicolor/256x256/apps/net.pcsx2.PCSX2.png', 'png');
+  put('.local/share/applications/duck.desktop', '[Desktop Entry]\nExec=/usr/bin/duckstation-qt %f\nIcon=duckstation\n');
+  put('.local/share/icons/hicolor/128x128/apps/duckstation.png', 'png');
+  assert.match(EI.iconFor('pcsx2', { fp: ['net.pcsx2.PCSX2'] }, { home: h }), /net\.pcsx2\.PCSX2\.png$/);
+  assert.match(EI.iconFor('duckstation', { fp: ['org.duckstation.DuckStation'], bin: ['duckstation-qt'] }, { home: h }), /duckstation\.png$/);
+  assert.strictEqual(EI.iconFor('dolphin', { fp: ['x.none'], bin: ['dolphin-emu'] }, { home: h }), null);
+});

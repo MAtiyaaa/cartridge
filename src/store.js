@@ -142,6 +142,15 @@ export function consoleName({ romId, slug, src, fallback = '' } = {}) {
   const q = slugs.length && store.lib?.platforms.find((x) => slugs.includes(x.slug) || slugs.includes(x.fs_slug));
   return (q && (q.display_name || q.name)) || r?.platform_display_name || fallback;
 }
+// which console, as a slug for its logo (0.9.16): the library game's own, the emulator's (trophies),
+// else RetroAchievements' console name
+const RA_SLUG = { 'playstation': 'psx', 'playstation 2': 'ps2', 'playstation portable': 'psp', 'nintendo 64': 'n64', 'snes/super famicom': 'snes', 'nes/famicom': 'nes', 'game boy': 'gb', 'game boy color': 'gbc', 'game boy advance': 'gba', 'nintendo ds': 'nds', 'nintendo dsi': 'nds', 'gamecube': 'ngc', 'wii': 'wii', 'genesis/mega drive': 'genesis', 'master system': 'sms', 'game gear': 'gamegear', 'sega cd': 'segacd', '32x': 'sega32', 'saturn': 'saturn', 'dreamcast': 'dc', 'atari 2600': 'atari2600', 'atari 7800': 'atari7800', 'atari lynx': 'lynx', 'atari jaguar': 'jaguar', 'pc engine/turbografx-16': 'tg16', 'neo geo pocket': 'ngp', 'virtual boy': 'virtualboy', 'arcade': 'arcade', 'msx': 'msx', '3do interactive multiplayer': '3do', 'wonderswan': 'wonderswan' };
+export function consoleSlug({ romId, src, name } = {}) {
+  const r = romId ? romById(romId) : null;
+  if (r?.platform_slug) return r.platform_slug;
+  if (src && SRC_SLUG[src]) return SRC_SLUG[src][0];
+  return RA_SLUG[String(name || '').toLowerCase()] || null;
+}
 export function visiblePlatforms() {
   if (!store.lib) return [];
   return store.lib.platforms.filter((p) => !store.config.ui.hideEmpty || p.rom_count > 0);

@@ -95,7 +95,7 @@
               <p class="muted small" style="margin-top: -6px">Where each emulator looks for texture packs, read from its own settings. A game's folder is in its More menu. Cartridge never changes these settings.</p>
               <div class="stack">
                 <div v-for="e in texEmus" :key="e.root" class="lrow">
-                  <Icon name="mdiTextureBox" :size="24" />
+                  <EmuIcon :id="e.id" :size="24" fallback="mdiTextureBox" />
                   <div class="l-mid"><b>{{ e.name }}{{ e.flatpak ? ' (Flatpak)' : '' }}</b><span class="l-sub mono">{{ e.textures.replace(store.info.home, '~') }}</span><span v-if="!e.on" class="l-sub">{{ e.how }}</span></div>
                   <span class="status" :class="e.on ? 'ok' : 'warn'"><Icon v-if="e.on" name="mdiCheck" :size="14" />{{ e.on ? 'Textures on' : 'Textures off' }}</span>
                 </div>
@@ -432,6 +432,7 @@ import SteamSettings from '../components/SteamSettings.vue';
 import StorageManager from '../components/StorageManager.vue';
 import LibraryCheck from '../components/LibraryCheck.vue';
 import RommUpload from '../components/RommUpload.vue';
+import EmuIcon from '../components/EmuIcon.vue';
 import ServerStatus from '../components/ServerStatus.vue';
 import ControllerTest from '../components/ControllerTest.vue';
 import ReportProblem from '../components/ReportProblem.vue';

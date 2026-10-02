@@ -724,7 +724,7 @@ async function handleImage(request) {
   const tr = u.searchParams.get('tr');
   if (tr) {
     const p = trophySvc.iconPath(tr);
-    try { return new Response(await fsp.readFile(p), { headers: { 'Content-Type': 'image/png', 'Cache-Control': 'max-age=86400' } }); } catch { return new Response('nf', { status: 404 }); }
+    try { return new Response(await fsp.readFile(p), { headers: { 'Content-Type': /\.svg$/i.test(p) ? 'image/svg+xml' : 'image/png', 'Cache-Control': 'max-age=86400' } }); } catch { return new Response('nf', { status: 404 }); }
   }
   const hz = u.searchParams.get('hz');
   if (hz) {
@@ -2097,6 +2097,8 @@ const steamMgr = require('./steamManager')({
   romById: (id) => romIndexMain().get(id) || null,
   artFor: (id) => artOverrides[id] || null,
   fetchImage: async (src) => asPng(await fetchImage(src)),
+  // the sharp background Cartridge itself shows for a game (0.9.16: Steam gets the same one)
+  sharpHeroPng: async (rom) => { const u = rom && await sharpHero({ id: rom.id, name: rom.name }).catch(() => null); const f = u && decodeURIComponent(u.split('hz=')[1] || ''); return f ? fsp.readFile(path.join(HERO_DIR, path.basename(f))).catch(() => null) : null; },
   sgdbImage, cropTo: coverCrop,
   // the square icon Cartridge shows for the game (SteamGridDB), as PNG bytes, or null
   gameIconPng: async (rom) => { if (!rom) return null; const u = await gameIcon({ key: 'rom-' + rom.id, name: rom.name, year: rom.year ? new Date(rom.year > 1e11 ? rom.year : rom.year * 1000).getFullYear() : null }).catch(() => null); return u ? asPng(await fetchImage(u)) : null; },
@@ -2745,6 +2747,14 @@ const handlers = {
     installedMap[romId] = rec.dir;
     broadcast('installed-changed', { romId, path: rec.dir });
     return true;
+  },
+  // an emulator's own icon from where it's installed (0.9.16), served by token like trophy icons
+  'emu:icon': ({ id }) => {
+    const { EMU } = require('./emulators');
+    const base = String(id || '').split('@')[0];
+    let apps = []; try { apps = steamMgr.appImagesFor(EMU[base]?.for?.[0] || base, EMU[base]?.app || /^$/); } catch {}
+    const f = require('./emuIcons').iconFor(base, EMU[base], { appImages: apps, cacheDir: path.join(USER_DATA, 'emu-icons'), readAppImageFile: require('./detect').readAppImageFile });
+    return f ? require('./trophies').registerIcon(f) : '';
   },
   // Add-ons (0.9.15, checkable part): texture folders and their on/off, read from each emulator
   'addons:emulators': () => require('./addons').emulators(),
