@@ -32,7 +32,9 @@ const EMU = {
   // cvar (xenia app/emulator_window.cc)
   xenia: { label: 'Xenia', scripts: ['xenia.sh'], win: /^xenia_canary\.exe$/i, args: '"Z:{ROM}"', argsBy: { windows: '--fullscreen=true "Z:{ROM}"' }, for: ['xbox360'] },
   // Vita games run once installed in Vita3K (from their .pkg/.vpk), started by title ID like EmuDeck does
-  vita3k: { label: 'Vita3K', scripts: ['vita3k.sh'], app: /vita3k/i, fp: [], bin: ['Vita3K', 'vita3k'], args: '-F -r {SERIAL}', kind: 'vitaid', for: ['psvita'] },
+  // Vita3K's own parser (vita3k/config/src/config.cpp): -F fullscreen, -r <title ID of an installed app>.
+  // EmuDeck's vita3k.sh adds "-Fr" itself, so it gets only the title ID (0.9.3 L).
+  vita3k: { label: 'Vita3K', scripts: ['vita3k.sh'], app: /vita3k/i, fp: [], bin: ['Vita3K', 'vita3k'], args: '-F -r {SERIAL}', argsBy: { emudeck: '{SERIAL}' }, kind: 'vitaid', for: ['psvita'] },
   mgba: { label: 'mGBA', scripts: ['mgba.sh'], app: /mgba/i, fp: ['io.mgba.mGBA'], bin: ['mgba-qt', 'mgba'], args: '-f "{ROM}"', for: ['gb', 'gbc', 'gba'] },
   rmg: { label: "Rosalie's Mupen GUI", scripts: ['rosaliesmupengui.sh'], app: /(^rmg|rosalie)/i, fp: ['com.github.Rosalie241.RMG'], bin: ['RMG'], args: '--fullscreen --nogui --quit-after-emulation "{ROM}"', for: ['n64'] },
   simple64: { label: 'simple64', app: /simple64/i, fp: ['io.github.simple64.simple64'], bin: ['simple64-gui'], args: '"{ROM}"', for: ['n64'] },

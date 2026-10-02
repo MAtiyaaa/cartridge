@@ -267,3 +267,18 @@ test('emulator for one game beats the console pick; a pick that is gone falls ba
   assert.deepStrictEqual(run({ 5: 'pcsx2' }), ['pcsx2@flatpak', 'pcsx2', 'pcsx2@flatpak']);
   assert.deepStrictEqual(run({ 5: 'gone-emulator' }), ['pcsx2@flatpak', 'pcsx2@flatpak', 'pcsx2@flatpak']);
 });
+
+// 0.9.3 L: EmuDeck's vita3k.sh always adds "-Fr", so it gets the title ID alone; installs use Vita3K itself
+test('Vita3K through EmuDeck: title ID only; installs never go through the script', () => {
+  const E = require(path.join(ROOT, 'electron/emulators.js'));
+  assert.strictEqual(E.argsFor('vita3k', 'psvita', 'emudeck'), '{SERIAL}');
+  assert.strictEqual(E.argsFor('vita3k', 'psvita', 'appimage'), '-F -r {SERIAL}');
+  const H = setup('vita-emudeck', ({ w }) => { w('/Emulation/tools/launchers/vita3k.sh'); w('/Applications/Vita3K/Vita3K'); });
+  const code = `
+    const sm = require(${JSON.stringify(path.join(ROOT, 'electron/steamManager.js'))})({ USER_DATA: ${JSON.stringify(H + '/cfg')}, log() {}, PLATFORM_MAP: {}, getConfig: () => ({}), saveConfig() {}, broadcast() {},
+      emulationRoots: () => [${JSON.stringify(H + '/Emulation')}], getLibrary: () => null, installed: () => ({}), romById: () => null, isGamescope: () => false, artFor: () => ({}), MARKED: 'm', markedPath: () => null });
+    console.log(JSON.stringify(sm.vita3kCommand()));`;
+  require('fs').mkdirSync(H + '/cfg', { recursive: true });
+  const out = JSON.parse(require('child_process').execFileSync(process.execPath, ['-e', code], { env: { ...process.env, HOME: H }, encoding: 'utf8' }).trim().split('\n').pop());
+  assert.strictEqual(out.exe, H + '/Applications/Vita3K/Vita3K');
+});

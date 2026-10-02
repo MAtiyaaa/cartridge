@@ -478,7 +478,17 @@ module.exports = function createSteamManager(ctx) {
   // every AppImage of an emulator that was found (PCSX2's patches.zip is read from inside it)
   const appImagesFor = (key, re) => [...new Set([...candidates(key).map((c) => c.t.exe), ...APP_DIRS().flatMap((d) => ls(d).map((n) => path.join(d, n)))].filter((f) => /\.appimage$/i.test(f) && re.test(path.basename(f)) && exists(f)))];
   const rpcs3Command = () => emuCommand('ps3', /rpcs3/i);
-  const vita3kCommand = () => emuCommand('psvita', /vita3k/i);
+  // Installing into Vita3K needs Vita3K itself, never EmuDeck's vita3k.sh: that script always runs
+  // "Vita3K -Fr <arguments>", so "--pkg ..." or a .vpk became the game to boot and nothing installed
+  // (0.9.3 L). EmuDeck keeps the real program at <Applications>/Vita3K/Vita3K (an AppImage without
+  // the extension; EmuDeck's emuDeckVita3K.sh).
+  function vita3kCommand() {
+    const direct = candidates('psvita').find((c) => !c.fork && /vita3k/i.test(c.t.exe) && c.t.how !== 'emudeck');
+    if (direct) return { exe: direct.t.exe, args: [], from: direct.t.from };
+    const own = [...new Set([HOME, real(HOME)])]
+      .flatMap((h) => [path.join(h, 'Applications/Vita3K/Vita3K'), path.join(h, 'Applications/Vita3K/Vita3K.AppImage')]).find(exists);
+    return own ? { exe: own, args: [], from: 'EmuDeck Vita3K' } : null;
+  }
   function serialOf(rom, p) {
     const tag = String(rom.fs_name || '') + ' ' + String(rom.name || '') + ' ' + path.basename(p || '');
     const m = tag.match(/\b([A-Z]{4})-?(\d{5})\b/); // "BLUS30443" or "BLUS-30443" in a name
