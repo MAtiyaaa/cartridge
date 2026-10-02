@@ -13,6 +13,12 @@
           <!-- one RomM tab (0.9.3 G1): connection, library and sync, upload -->
           <template v-if="sec === 'romm'">
             <h1>RomM</h1>
+            <!-- 0.9.17: using Cartridge without RomM: one press to connect -->
+            <div v-if="store.config.localOnly" class="card-s glass local-card">
+              <Icon name="mdiFolderPlayOutline" :size="28" />
+              <div class="l-mid"><b>Using Cartridge without RomM</b><span class="muted small">Only games already in your console folders show up, with no covers, details, collections or syncing. Connect a RomM server for all of it.</span></div>
+              <button class="btn primary" data-focus @click="go('setup')"><Icon name="mdiServerNetwork" />Connect to RomM</button>
+            </div>
             <div class="subh"><Icon name="mdiServerNetwork" :size="20" />Connection</div>
             <div class="card-s glass">
               <div class="kv"><span>Local</span><span class="mono">{{ srv.localUrl || '—' }}</span></div>
@@ -1159,4 +1165,6 @@ onMounted(() => {
 .con-head b { font-size: var(--t-lg); font-family: var(--display); }
 .con-head .count { color: var(--muted); font-size: var(--t-sm); }
 .con-emu { margin-left: auto; display: inline-flex; align-items: center; gap: 8px; color: var(--muted); font-size: var(--t-sm); }
+.local-card { display: flex; align-items: center; gap: var(--s-4); margin-bottom: var(--s-4); }
+.local-card .l-mid { flex: 1; display: flex; flex-direction: column; gap: 4px; }
 </style>

@@ -152,7 +152,7 @@ async function start() {
   try {
     result.value = await call('romm:localSetup', { username: f.username, password: f.password, library: f.library, name: f.name });
     store.config = await call('config:get');
-    if (!store.config.configured) await saveConfig({ configured: true });
+    await saveConfig({ configured: true, localOnly: false });
     call('library:sync').catch(() => {});
     phase.value = 'done';
   } catch (e) { if (/Podman isn’t ready/.test(e.message)) { info.value = await call('romm:localInfo').catch(() => info.value); phase.value = 'prep'; return; } error.value = e.message; phase.value = 'error'; }

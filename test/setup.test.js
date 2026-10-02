@@ -210,3 +210,18 @@ test('GitHub: when the API answers 403, the release pages are read (0.9.17)', as
   const rel = await U.latestRelease('rpcs3', { fetchImpl });
   assert.strictEqual(rel.version, '0.0.38');
 });
+
+test('Without RomM: a library from the console folders already on the device (0.9.17)', () => {
+  const L = require('../electron/localLibrary.js');
+  const r = fs.mkdtempSync(path.join(os.tmpdir(), 'loc-'));
+  const put = (p, t = 'x') => { fs.mkdirSync(path.dirname(path.join(r, p)), { recursive: true }); fs.writeFileSync(path.join(r, p), t); };
+  put('ps2/God of War (USA).iso'); put('ps2/notes.txt');
+  put('psx/FF7 (Disc 1).cue'); put('psx/FF7 (Disc 1).bin'); put('psx/FF7 (Disc 2).cue'); put('psx/FF7 (Disc 2).bin'); put('psx/FF7.m3u', 'FF7 (Disc 1).cue\nFF7 (Disc 2).cue\n');
+  fs.mkdirSync(path.join(r, 'ps3/Uncharted 2 [BCUS98123]/PS3_GAME'), { recursive: true });
+  fs.mkdirSync(path.join(r, 'bios')); fs.mkdirSync(path.join(r, 'gamecube'));
+  const lib = L.build(r);
+  const by = Object.fromEntries(lib.platforms.map((p) => [p.slug, lib.roms[p.id].map((x) => x.name)]));
+  assert.deepStrictEqual(by, { ps2: ['God of War'], ps3: ['Uncharted 2'], psx: ['FF7'] });
+  assert.ok(lib.platforms.every((p) => p.id < 0) && Object.values(lib.roms).flat().every((x) => x.id < 0));
+  assert.strictEqual(lib.platforms.find((p) => p.slug === 'psx').display_name, 'PlayStation');
+});

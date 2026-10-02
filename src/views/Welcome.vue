@@ -169,7 +169,7 @@
           <template v-else-if="romm === 'local'">
             <RommLocal @done="only ? close() : next()" @back="only ? close() : (romm = 'what')" />
           </template>
-          <template v-else-if="store.config.configured && romm !== 'change'">
+          <template v-else-if="store.config.configured && !store.config.localOnly && romm !== 'change'">
             <h1>RomM</h1>
             <div class="w-good"><Icon name="mdiCheckCircle" :size="28" /><span>Connected to {{ serverName }}</span></div>
             <div class="w-act">
@@ -180,7 +180,7 @@
           </template>
           <template v-else-if="romm === 'what'">
             <h1>What is RomM?</h1>
-            <p class="w-lead">RomM is a free server for your game collection. It keeps your games in one place, finds their covers and details, and lets Cartridge, your browser and other devices download them. Cartridge is a RomM client, so it needs one.</p>
+            <p class="w-lead">RomM is a free server for your game collection. It keeps your games in one place, finds their covers and details, and lets Cartridge, your browser and other devices download them. Cartridge is built around it and works best with one.</p>
             <div class="w-box stack">
               <button class="lrow" data-focus @click="romm = 'local'">
                 <Icon name="mdiServer" :size="26" />
@@ -190,12 +190,30 @@
                 <Icon name="mdiMonitor" :size="26" />
                 <div class="l-mid"><b>Set it up on another computer</b><span class="l-sub">A home server or an always-on PC. Scan a QR code for RomM's guide.</span></div>
               </button>
-              <button class="lrow" data-focus @click="next()">
-                <Icon name="mdiClockOutline" :size="26" />
-                <div class="l-mid"><b>Later</b><span class="l-sub">Cartridge asks for your server again when you're ready.</span></div>
+              <button class="lrow" data-focus @click="romm = 'without'">
+                <Icon name="mdiFolderPlayOutline" :size="26" />
+                <div class="l-mid"><b>Use Cartridge without RomM</b><span class="l-sub">Play the games already on this device. Many features need RomM.</span></div>
               </button>
             </div>
             <div class="w-act"><button class="btn" data-focus @click="romm = ''"><Icon name="mdiArrowLeft" />Back</button></div>
+          </template>
+          <!-- 0.9.17 (owner): RomM isn't required, but Cartridge works best with it, and this says what's missing -->
+          <template v-else-if="romm === 'without'">
+            <h1>Without RomM</h1>
+            <div class="w-warn"><Icon name="mdiAlertOutline" :size="24" /><span>Cartridge works best with RomM. Without it you miss a lot.</span></div>
+            <ul class="w-miss">
+              <li><b>No downloads:</b> only games already in your console folders show up</li>
+              <li><b>No covers, details or ratings,</b> no recommendations, series or collections</li>
+              <li><b>No syncing</b> of trophies, play time or favourites with your other devices</li>
+              <li><b>No RetroAchievements links</b> from RomM's game matches</li>
+            </ul>
+            <p class="w-lead">Steam shortcuts, emulator setup, patches, add-ons and achievements on this device still work. You can connect RomM any time in Settings → RomM.</p>
+            <p class="muted small">Games folder: {{ store.config.romsRoot ? short(store.config.romsRoot) : 'not set yet' }}</p>
+            <div class="w-act">
+              <button class="btn" data-focus @click="romm = 'what'"><Icon name="mdiArrowLeft" />Back</button>
+              <button class="btn" data-focus @click="pickGamesFolder">{{ store.config.romsRoot ? 'Change games folder' : 'Pick games folder' }}</button>
+              <button class="btn primary" data-focus :disabled="!store.config.romsRoot" @click="goLocal">Continue without RomM<Icon name="mdiArrowRight" /></button>
+            </div>
           </template>
           <template v-else-if="romm === 'other'">
             <h1>RomM on another computer</h1>
@@ -404,6 +422,16 @@ async function flatpakThenRetroDeck() {
   await getRetroDeck();
 }
 const picking = ref(false);
+// without RomM: the games folder (a folder per console), then a library built from it
+async function pickGamesFolder() {
+  const dir = await pickFolder({ title: 'Your games folder (the one with a folder per console)', start: store.config.romsRoot || store.info?.home });
+  if (dir) await saveConfig({ romsRoot: dir });
+}
+async function goLocal() {
+  await saveConfig({ localOnly: true, configured: true });
+  try { const r = await call('library:sync'); await loadLibrary(); toast(`${r?.total || 0} games found on this device`, 'ok', 3000, 'mdiFolderPlayOutline'); } catch (e) { toast(e.message, 'error', 5000); }
+  next();
+}
 const intro = ref(false);
 async function recheck() { await load(); opened.value = ''; picking.value = false; next(); }
 async function saveExtras() {
@@ -434,6 +462,8 @@ async function addSelf() {
 const leaving = ref(false);
 async function finish() {
   leaving.value = true;
+  // no RomM picked, but a games folder: open on the games already here instead of an empty app (0.9.17)
+  if (!store.config.configured && store.config.romsRoot) { await saveConfig({ localOnly: true, configured: true }); call('library:sync').then(() => loadLibrary()).catch(() => {}); }
   await saveConfig({ welcomed: Date.now(), ui: { welcomeStep: '' } });
   await new Promise((r) => setTimeout(r, 420));
   store.welcoming = false;
@@ -485,7 +515,7 @@ async function takeOverAll() {
   await loadScanExtras();
 }
 
-const handlers = { back: () => { if (step.value === 'romm' && romm.value) { romm.value = romm.value === 'other' || romm.value === 'local' ? 'what' : ''; return; } if (at.value > 0) prev(); } };
+const handlers = { back: () => { if (step.value === 'romm' && romm.value) { romm.value = romm.value === 'other' || romm.value === 'local' || romm.value === 'without' ? 'what' : ''; return; } if (at.value > 0) prev(); } };
 useView(handlers, [{ b: 'A', label: 'Select' }, { b: 'B', label: 'Back' }]);
 // Setup and the scan bring their own buttons; the welcome's come back after them
 watch(step, (v) => { if (!replay && !only && v !== 'done') saveConfig({ ui: { welcomeStep: v } }); });
@@ -595,4 +625,7 @@ onBeforeUnmount(() => { off?.(); clearTimeout(padT); window.removeEventListener(
 @keyframes wiRing { 0% { opacity: 0; transform: scale(0.6); } 30% { opacity: 0.9; } 100% { opacity: 0; transform: scale(2.4); } }
 @keyframes wiChar { to { opacity: 1; transform: none; filter: none; } }
 @keyframes wiOut { to { opacity: 0; transform: scale(1.04); visibility: hidden; } }
+.w-warn { display: flex; align-items: center; justify-content: center; gap: 10px; color: #ffd978; font-weight: 600; }
+.w-miss { text-align: left; margin: 0 auto; padding-left: 1.2em; display: flex; flex-direction: column; gap: 6px; max-width: 640px !important; color: var(--muted); line-height: 1.45; }
+.w-miss b { color: var(--text, #fff); }
 </style>

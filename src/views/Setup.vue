@@ -211,7 +211,7 @@ async function browseBios() {
 }
 async function finish() {
   const serverChanged = !store.lib || store.config.server.localUrl !== initial.localUrl || store.config.server.remoteUrl !== initial.remoteUrl || store.config.server.username !== initial.username;
-  await saveConfig({ romsRoot: romsRoot.value, biosPath: biosPath.value, configured: true });
+  await saveConfig({ romsRoot: romsRoot.value, biosPath: biosPath.value, configured: true, localOnly: false });
   if (serverChanged) await call('library:reset');
   call('library:sync').catch((e) => toast(e.message, 'error'));
   if (props.embedded) emit('done'); else tab('home');

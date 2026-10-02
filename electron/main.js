@@ -515,6 +515,7 @@ function publicLibrary() {
     syncedAt: library.syncedAt,
     lastNew: library.lastNew || [],
     collections: library.collections || [],
+    local: !!library.local,
   };
 }
 
@@ -532,6 +533,20 @@ async function syncLibrary() {
   if (syncing) return syncing;
   syncing = (async () => {
     const started = Date.now();
+    // without RomM (0.9.17): the games already in the console folders
+    if (config.localOnly) {
+      try {
+        const { platforms, roms } = require('./localLibrary').build(config.romsRoot);
+        const prevSeen = library?.firstSeen || {}, firstSeen = {};
+        for (const list of Object.values(roms)) for (const r of list) firstSeen[r.id] = prevSeen[r.id] || 1;
+        library = { platforms, roms, firstSeen, syncedAt: Date.now(), base: null, lastNew: [], collections: [], local: true };
+        saveJson(LIBRARY_FILE, library, false);
+        computeInstalled();
+        const total = Object.values(roms).reduce((n, l) => n + l.length, 0);
+        broadcast('library', publicLibrary()); broadcast('sync', { state: 'done', added: 0, removed: 0, total, local: true });
+        return { state: 'done', total, local: true };
+      } finally { syncing = null; }
+    }
     try {
       broadcast('sync', { state: 'running', label: 'Connecting…', done: 0, total: 0 });
       const platforms = (await api('/api/platforms')).map((p) => ({
