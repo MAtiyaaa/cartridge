@@ -1024,7 +1024,19 @@ async function sysLogo({ slug, fs_slug }) {
   try { return await job; } finally { sysLogoInflight.delete(key); }
 }
 
-// Fetch all: prepare logos for the whole library in the background, reporting progress.
+// one image into the image cache (the same file handleImage serves), unless it's there already
+async function prefetchImage(target) {
+  const file = path.join(IMG_CACHE, crypto.createHash('sha1').update(target).digest('hex'));
+  if (fs.existsSync(file)) return;
+  let url = target, headers = {};
+  if (!/^https?:\/\//.test(target)) { url = (await resolveBase()) + (target.startsWith('/') ? '' : '/') + target; headers = authHeaders(); delete headers.Accept; }
+  const r = await fetch(url, { headers, signal: AbortSignal.timeout(20000) });
+  if (!r.ok) return;
+  const buf = Buffer.from(await r.arrayBuffer());
+  await fsp.mkdir(IMG_CACHE, { recursive: true });
+  await Promise.all([fsp.writeFile(file, buf), fsp.writeFile(file + '.type', r.headers.get('content-type') || 'image/jpeg')]);
+}
+// Fetch all: prepare logos and the rest of the art for the whole library in the background, reporting progress.
 let fetchAll = null; // { done, total, found, stop }
 async function fetchAllLogos() {
   if (fetchAll) return { running: true };
@@ -1038,6 +1050,10 @@ async function fetchAllLogos() {
       if (fetchAll.stop) break;
       const romm = r.logo || '';
       try { if (await logoFor({ id: r.id, name: r.name, romm })) fetchAll.found++; } catch (e) { if (e.auth) { report('error'); throw e; } }
+      // 0.9.15, Fetch all metadata: the rest of each game's art too, so nothing loads while you browse:
+      // its sharpest background (SteamGridDB, with a key), cover and first screenshot into the image cache
+      await sharpHero({ id: r.id, name: r.name }).catch(() => {});
+      for (const t of [r.path_cover_large || r.url_cover, r.shot]) if (t) await prefetchImage(t).catch(() => {});
       fetchAll.done++;
       if (Date.now() - last > 250) { last = Date.now(); report('running'); }
     }
