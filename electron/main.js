@@ -174,6 +174,15 @@ function steamLaunches(gid, mine) {
   }
   return out;
 }
+// What this machine is, for the default device name ("Sam's Steam Deck"); DMI product names
+function deviceKind() {
+  let n = ''; try { n = fs.readFileSync('/sys/devices/virtual/dmi/id/product_name', 'utf8').trim(); } catch {}
+  if (/^(Jupiter|Galileo)$/i.test(n)) return 'Steam Deck';
+  if (/ROG Ally/i.test(n)) return 'ROG Ally';
+  if (/^83E1$|Legion Go/i.test(n)) return 'Legion Go';
+  if (/^Claw\b/i.test(n)) return 'MSI Claw';
+  return '';
+}
 function isGamescope() {
   const e = process.env;
   const de = ((e.XDG_CURRENT_DESKTOP || '') + ' ' + (e.XDG_SESSION_DESKTOP || '') + ' ' + (e.DESKTOP_SESSION || '')).toLowerCase();
@@ -2772,6 +2781,44 @@ const handlers = {
   'steam:takeOver': ({ key }) => steamMgr.takeOver(key),
   'steam:refreshArt': ({ style }) => steamMgr.refreshArt(style),
   'steam:liveEnable': () => steamMgr.liveEnable(),
+  // RomM on this device (0.9.15 section 1): Podman pod from RomM's own compose; secrets in romm-local.env
+  'romm:localInfo': async () => {
+    const rl = require('./rommLocal'), h = os.homedir();
+    const emu = readEmuDeckSettings();
+    const libs = [];
+    if (emu.emulationPath && fs.existsSync(path.join(emu.emulationPath, 'roms'))) libs.push({ path: emu.emulationPath, from: 'EmuDeck' });
+    if (fs.existsSync(path.join(h, 'retrodeck', 'roms'))) libs.push({ path: path.join(h, 'retrodeck'), from: 'RetroDECK' });
+    libs.push({ path: path.join(h, 'RomM'), from: 'New folder' });
+    const st = await rl.status();
+    return { ...st, libraries: libs, port: config.rommLocal?.port || null, lan: config.rommLocal?.port ? rl.lanUrls(config.rommLocal.port) : [] };
+  },
+  'romm:localSetup': async ({ username, password, library, name, keys }) => {
+    const rl = require('./rommLocal');
+    const dataDir = path.join(os.homedir(), '.local/share/cartridge-romm');
+    const r = await rl.setup({ username, password, library, dataDir, keys, envFile: path.join(USER_DATA, 'romm-local.env'), port: config.rommLocal?.port }, (p) => broadcast('romm-local', p));
+    config.rommLocal = { port: r.port, library, dataDir, name: String(name || '').slice(0, 40), at: Date.now(), boot: r.boot };
+    config.server = { ...config.server, localUrl: r.base, remoteUrl: config.server.remoteUrl || '', mode: config.server.remoteUrl ? 'auto' : 'local', auth: 'password', username: r.user, password, token: '' };
+    if (!config.romsRoot) config.romsRoot = path.join(library, 'roms');
+    saveConfig();
+    log('romm local: running on port', r.port, 'boot', r.boot);
+    return { ...r, lan: rl.lanUrls(r.port), romsRoot: config.romsRoot };
+  },
+  'romm:localUpdate': () => require('./rommLocal').update({ envFile: path.join(USER_DATA, 'romm-local.env'), library: config.rommLocal?.library, dataDir: config.rommLocal?.dataDir }),
+  // Welcome (0.9.15 onboarding): what's already here, and the "Get your emulators" choices
+  'welcome:state': async () => {
+    const h = os.homedir(), ex = (p) => fs.existsSync(path.join(h, p));
+    let live = { on: false, flag: false }; try { live = await steamMgr.liveInfo(); } catch {}
+    const steamFound = !!steamMgr.steamRoots?.().length;
+    return {
+      emudeck: ex('.config/EmuDeck/settings.sh') || ex('emudeck'),
+      retrodeck: ex('.var/app/net.retrodeck.retrodeck') || ex('retrodeck'),
+      steam: steamFound, live, gamescope: isGamescope(), appimage: !!process.env.APPIMAGE,
+      inSteam: !!process.env.CARTRIDGE_FROM_STEAM || require('./steamArt').cartridgeInSteam(),
+      host: os.hostname(), device: deviceKind(),
+    };
+  },
+  'welcome:emudeck': () => require('./welcome').getEmuDeck((p) => broadcast('welcome-progress', { what: 'emudeck', ...p })).then((r) => { log('welcome: EmuDeck app downloaded', r.version); return r; }),
+  'welcome:retrodeck': () => require('./welcome').getRetroDeck((p) => broadcast('welcome-progress', { what: 'retrodeck', ...p })).then((r) => { log('welcome: RetroDECK installed'); return r; }),
   'steam:queueAdd': (items) => steamMgr.queueAdd(items),
   'steam:queueRemove': (ids) => steamMgr.queueRemove(ids),
   'steam:queueClear': () => steamMgr.queueClear(),

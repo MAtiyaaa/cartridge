@@ -27,7 +27,7 @@ import { paletteOf, lightEffects } from '../themes.js';
 import { lastInput } from '../nav.js';
 
 const mode = computed(() => {
-  const m = store.config?.ui?.bgStyle || 'solid';
+  const m = (store.welcoming && 'ribbons') || store.config?.ui?.bgStyle || 'solid'; // the welcome is on Ribbons
   return RENDERERS[m] || ['solid', 'art', 'wallpaper'].includes(m) ? m : 'solid';
 });
 const painted = computed(() => !!RENDERERS[mode.value] || mode.value === 'solid');

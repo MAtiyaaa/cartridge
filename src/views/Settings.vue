@@ -41,6 +41,19 @@
             <Toggle :model-value="store.config.sync.onLaunch" label="Resync when Cartridge starts" desc="Picks up games you added to RomM since last time" @update:model-value="(v) => saveConfig({ sync: { onLaunch: v } })" />
             <div class="row"><span class="lbl">Auto resync</span><div class="seg"><button v-for="m in every" :key="m.v" data-focus :class="{ on: store.config.sync.everyMinutes === m.v }" @click="saveConfig({ sync: { everyMinutes: m.v } })">{{ m.l }}</button></div></div>
             <p class="muted small">“Scan server” asks RomM to look through its own folders for files you copied in, then resyncs. It needs username &amp; password sign-in.</p>
+            <div class="subh" style="margin-top: 14px"><Icon name="mdiServer" :size="20" />RomM on This Device</div>
+            <template v-if="store.config.rommLocal?.port">
+              <div class="card-s glass">
+                <div class="kv"><span>Server</span><span>{{ store.config.rommLocal.name || 'RomM' }} · port {{ store.config.rommLocal.port }}</span></div>
+                <div class="kv"><span>Games folder</span><span class="mono">{{ store.config.rommLocal.library }}</span></div>
+              </div>
+              <div class="row wrap"><button class="btn" data-focus :disabled="rlBusy" @click="rommLocalUpdate"><Icon name="mdiUpdate" />{{ rlBusy ? 'Updating…' : 'Update RomM' }}</button></div>
+              <p class="muted small">Reachable while this device is on and online. Update RomM gets the newest version; your games, database and account stay.</p>
+            </template>
+            <template v-else>
+              <p class="muted small">No server? Cartridge can run RomM here in the background with Podman. It's only reachable while this device is on and online.</p>
+              <div class="row"><button class="btn" data-focus @click="store.welcoming = 'romm-local'"><Icon name="mdiServerPlus" />Set Up RomM on This Device</button></div>
+            </template>
             <div style="margin-top: 14px"><RommUpload /></div>
           </template>
           <template v-else-if="sec === 'storage'">
@@ -372,6 +385,7 @@
               </div>
               <p class="muted small" style="margin: 0">Shown on your other devices next to games you played here and trophies you unlocked here, for example "Steam Deck" or "Living Room PC".</p>
             </div>
+            <div class="row"><button class="btn" data-focus @click="store.welcoming = true"><Icon name="mdiHandWave" />Run the Welcome Again</button><span class="muted small">Starts from your current settings. Nothing is reset.</span></div>
             <ServerStatus />
             <ControllerTest />
             <ReportProblem />
@@ -480,6 +494,12 @@ async function raEmus() {
     else toast(`${bad.map((r) => `${r.name}: ${r.error}`).join(' · ')}`, 'error', 6000);
   } catch (e) { toast(e.message, 'error', 4200); }
   raBusy.value = false;
+}
+const rlBusy = ref(false);
+async function rommLocalUpdate() {
+  rlBusy.value = true;
+  try { await call('romm:localUpdate'); toast('RomM is up to date and restarting', 'ok', 4000, 'mdiServer'); } catch (e) { toast(e.message, 'error', 6000); }
+  rlBusy.value = false;
 }
 async function raSignOut() { await call('ra:signout'); store.config = await call('config:get'); toast('Signed out of RetroAchievements', 'info', 2200); }
 async function saveSgdb() {
