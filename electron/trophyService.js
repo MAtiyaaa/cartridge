@@ -193,6 +193,11 @@ module.exports = function createTrophyService(ctx) {
   }
 
   // ------------------------------------------------------------ merged view (local + other devices)
+  // A device that only has a code for a game (shadPS4 keeps names with the installed game, so a synced
+  // user folder gives NPWR12345_00; Xenia sometimes has no title) takes the name another device wrote
+  // to RomM, else the linked library game's (0.9.3 K, E1). Nothing is written into emulator folders.
+  const isCode = (t) => !t || /^(NPWR\d{5}_\d{2}|[0-9A-F]{8}|CUSA\d{5}|[A-Z]{4}\d{5}|PCS[A-Z]\d{5})$/i.test(String(t).trim());
+  const nameOf = (title, remTitle, romId) => (!isCode(title) ? title : !isCode(remTitle) ? remTitle : romById(romId)?.name || title || remTitle || 'Unknown game');
   function merged(k) {
     const loc = games.get(k);
     const rem = remote.get(k)?.data;
@@ -213,7 +218,7 @@ module.exports = function createTrophyService(ctx) {
       }
     }
     const romId = k in links ? links[k] || null : remote.get(k)?.romId || (loc ? autoLink(loc) : null);
-    return { ...base, romId: romId || null, key: k };
+    return { ...base, title: nameOf(base.title, rem?.title, romId), romId: romId || null, key: k };
   }
   function light(g) {
     const earned = g.trophies.filter((t) => t.unlocked);
@@ -333,7 +338,10 @@ module.exports = function createTrophyService(ctx) {
     }
     const list = g.trophies.map((t) => ({ id: t.id, name: t.name, desc: (t.desc || '').slice(0, 160), grade: t.grade || null, points: t.points || 0 }));
     if (prev && (prev.list || []).length !== list.length) changed = true;
-    return { changed, data: { cartridge: 'trophies', v: 1, src: g.src, set: g.set, title: g.title, titleId: g.titleId || null, list, unlocks } };
+    // a code never replaces a real name another device wrote
+    const title = isCode(g.title) && prev?.title && !isCode(prev.title) ? prev.title : g.title;
+    if (prev && title !== prev.title) changed = true;
+    return { changed, data: { cartridge: 'trophies', v: 1, src: g.src, set: g.set, title, titleId: g.titleId || null, list, unlocks } };
   }
   async function syncOne(g, romId) {
     const k = keyOf(g);
