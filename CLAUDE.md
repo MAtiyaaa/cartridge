@@ -2,6 +2,8 @@
 
 A controller-first RomM client for SteamOS and Bazzite, shipped as one AppImage. It is added to Steam and used mostly in Game Mode, on a 1080p handheld and a 4K TV.
 
+**Coming back after 0.9.2 (the first account)?** Read `docs/HANDOVER-0.9.3-to-0.9.21.md` first: everything the second account did from 0.9.3 to 0.9.21, the owner's decisions, what broke and how it was fixed, and what is still open.
+
 This file is the short version every session needs. The full handoff (history, every decision, the reasons behind odd-looking code, test notes) is in **`docs/HANDOFF.md`**. Read the parts that relate to your task before changing code. The Steam manager test scripts are in `docs/steam-tests.md`.
 
 ## Stack and layout

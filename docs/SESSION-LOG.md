@@ -6,6 +6,12 @@ The branch for 0.9.3 work is `claude/relaxed-fermat-30pigp`. Pull it before star
 
 ---
 
+## 3 Oct 2026 · Handover back to the first account
+
+The owner is going back to the first account. The full handover for it is `docs/HANDOVER-0.9.3-to-0.9.21.md` (linked from the top of CLAUDE.md). 0.9.21 is released (PR #37). Open first: the Vita3K Steam shortcut that disappeared, the slow-download question (folder game or one file, LAN or Tunnel), and Vita3K's own install error.
+
+---
+
 ## 3 Oct 2026 · 0.9.21 Start, Your Way (read this first)
 
 Owner, after 0.9.20: hide a console page's path; Syncthing view only in its own Settings tab; LT/RT still dead at launch; lag on SteamOS still happens; Start looks AI generated and too snappy: drag to size, any size even a square, resize per edge (touch, D-pad, controller), cool animations, consoles as the Consoles page's boxes, several smaller trophies, a clock scene by time of day; Consoles glyphs clipped; Sega was an S, Microsoft wrong, Nintendo too small; Nintendo, Dreamcast, GameCube, Wii logos small next to Sony and Xbox (never bigger than PS3); Emulators LB/RB on two rows; merge Theme and Background. "Package them into 0.9.21 and just build it."
