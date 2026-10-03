@@ -16,7 +16,7 @@ The repo is public. Nothing private is in this document: no usernames, paths fro
 
 ## Part 1. Where things stand right now
 
-- **Latest release:** v0.9.21 "Cartridge 0.9.21 · Start, Your Way". Published 3 Oct 2026, 07:38 UTC, from PR #37.
+- **Latest release:** v0.9.22 "Cartridge 0.9.22 · Home Fix" (3 Oct 2026), a one-fix release after v0.9.21 "Start, Your Way" (PR #37). See Part 7, item 22.
 - **Branch:** all my work was on `claude/relaxed-fermat-30pigp`. Each PR merged it into `main`, and after each merge the branch was restarted from `main`. `main` is the truth: start your branch from `main`.
 - **package.json:** `version` 0.9.21, `versionName` "0.9.21", `build.releaseInfo.releaseName` "Cartridge 0.9.21".
 - **Tests:** 116 pass (`npm test`, node:test, files in `test/`).
@@ -617,6 +617,7 @@ The tests cover: detection, steam, pkg, vita, patches, rpcs3patches, cheats, add
 19. **Media bar header edges visible (0.9.15/K):** headers fade into the page.
 20. **"%command%" in empty Launch options (your 0.7.12)** is still guarded. Remember Steam does this to live-added shortcuts.
 21. **RetroAchievements sign-in in Settings stopped working** (reported while 0.9.16 was being built): fixed in 0.9.16. It now shows RetroAchievements' own error when it fails, so a future break says why.
+22. **Home vanished after a couple of moves, with no headers (0.9.21, fixed in 0.9.22):** Home.vue's own `heroArt` computed shadowed the store's `heroArt` function, which Home never imported, so `artOf` threw during render. When a view and the store share a name, import the store's under another name.
 
 ---
 

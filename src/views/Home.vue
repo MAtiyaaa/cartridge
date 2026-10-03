@@ -91,7 +91,7 @@
 <script setup>
 import { recommend } from '../recs.js';
 import { computed, ref, nextTick, onMounted, onBeforeUnmount, watch } from 'vue';
-import { tab, img, cover, collections, autoLists, seriesLists, genres, visible, store, go, allRoms, visiblePlatforms, romsOf, isNew, setBg, backdropOf, wantSharp, bytes, year, ago, rating, resync, downloadFor, download, romById, toast, logoOf, call, GRADE, loadPlay, playtimeText } from '../store.js';
+import { tab, img, cover, collections, autoLists, seriesLists, genres, visible, store, go, allRoms, visiblePlatforms, romsOf, isNew, setBg, backdropOf, wantSharp, heroArt as heroOf, bytes, year, ago, rating, resync, downloadFor, download, romById, toast, logoOf, call, GRADE, loadPlay, playtimeText } from '../store.js';
 import { useView } from '../useView.js';
 import { ensureFocus, scrollMode } from '../nav.js';
 import Icon from '../components/Icon.vue';
@@ -137,7 +137,9 @@ const heroRom = ref(null);
 const heroSys = ref(null);
 const heroCol = ref(null);
 // Media bar art: a screenshot of the highlighted game (or its cover), or art from the highlighted console/collection
-const artOf = (r) => heroArt(r)?.src || ''; // SteamGridDB's hero only, no RomM picture first (0.9.21)
+// SteamGridDB's hero only, no RomM picture first (0.9.21). 0.9.22: the store's heroArt under another name:
+// the computed below is also called heroArt, so calling it here threw and Home vanished on the first game
+const artOf = (r) => heroOf(r)?.src || '';
 const heroArt = computed(() => {
   if (heroRom.value) return artOf(heroRom.value);
   if (heroSys.value) return artOf(romsOf(heroSys.value.id).find((r) => r.shot) || romsOf(heroSys.value.id)[0]);

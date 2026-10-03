@@ -269,5 +269,8 @@ LT/RT switch top tabs. LB/RB only switch sections inside a page. A select, B bac
 - `installedEmulators` lists folder builds (kind 'folder': scan programs, or `~/Applications/<Label>/<bin>` with data/ beside); `installKind` knows `translations/` (Vita3K's zip).
 - nav.js `firstSeen`: a pad's first 400 ms counts as triggers at rest (LT/RT at launch). App `background` event sets `store.away` and `body.away` (CSS animations paused, Background.vue stops drawing).
 
+## 0.9.22 · Home Fix (3 Oct 2026)
+- Home.vue imports the store's `heroArt` as `heroOf`: its own computed is also named `heroArt`, so `artOf` called the computed and threw, and Home rendered nothing once a game was highlighted. `pumpSharp` treats a failed SteamGridDB ask as none (blurred cover) instead of leaving the header empty.
+
 ## Releases (full steps: HANDOFF D8)
 Only when the owner asks. Bump `version` and `build.releaseInfo.releaseName` ("Cartridge X.Y.Z") in `package.json`, and set `versionName` (what Settings → About and update messages show). **0.9.3 is shipped in parts (owner, 1 Oct 2026):** the number goes up as usual (0.9.4, 0.9.5...) but `versionName` and the release title are "0.9.3 B", "0.9.3 C"... until the 0.9.3 plan is done; notes heading `## Cartridge 0.9.3 B · Title`. Then put only this version's notes in `RELEASE_NOTES.md` (heading `## Cartridge X.Y.Z · Title`), add them to the top of `CHANGELOG.md`, grouped as New / Changed / Fixed with bold lead-ins. CI builds, launch-checks and publishes.

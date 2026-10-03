@@ -6,6 +6,12 @@ The branch for 0.9.3 work is `claude/relaxed-fermat-30pigp`. Pull it before star
 
 ---
 
+## 3 Oct 2026 · 0.9.22 Home Fix
+
+Owner: Home showed, then after down twice or right once everything disappeared, and no headers showed. Cause: a name clash in Home.vue (`heroArt` the computed vs the store function, not imported), a TypeError in render from 0.9.21. Checked with the stub harness: 0.9.21 code ends with 0 rows and no hero after the same moves, 0.9.22 keeps both. Owner to test on the device: Home with SteamGridDB headers, moving through rows.
+
+---
+
 ## 3 Oct 2026 · Handover back to the first account
 
 The owner is going back to the first account. The full handover for it is `docs/HANDOVER-0.9.3-to-0.9.21.md` (linked from the top of CLAUDE.md). 0.9.21 is released (PR #37). Open first: the Vita3K Steam shortcut that disappeared, the slow-download question (folder game or one file, LAN or Tunnel), and Vita3K's own install error.
