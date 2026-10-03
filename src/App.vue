@@ -41,7 +41,7 @@
         <div class="clock">{{ clock }}</div>
       </div>
     </header>
-    <main class="main" ref="mainEl" data-zone>
+    <main class="main" ref="mainEl" data-zone :data-dir="store.navDir">
       <component :is="views[store.route.name]" :key="viewKey" v-bind="store.route.params" />
     </main>
     <footer class="hintbar">

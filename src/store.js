@@ -14,6 +14,7 @@ export const store = reactive({
   downloads: [],
   bg: '',
   route: { name: 'home', params: {} },
+  navDir: 'in', // how the next page arrives: 'r'/'l' (a tab to the right/left), 'in' (deeper), 'out' (back)
   history: [],
   hints: [],
   viewHandlers: {},
@@ -57,14 +58,19 @@ export function go(name, params = {}) {
   const el = document.activeElement;
   if (store.route.name === 'settings' && el?.closest?.('.pane')) store.settingsSpot = { sec: store.settingsSection, text: (el.textContent || '').trim().slice(0, 60) };
   store.history.push({ ...store.route, focusKey: document.activeElement?.dataset?.key || null });
+  store.navDir = 'in';
   store.route = { name, params };
 }
 export function back() {
   if (!store.history.length) return false;
+  store.navDir = 'out';
   store.route = store.history.pop();
   return true;
 }
 export function tab(name) {
+  // which way the page arrives from (0.9.19): the side its tab is on, relative to the one you leave
+  const order = activeTabs(), from = order.indexOf(store.history[0]?.name || store.route.name), to = order.indexOf(name);
+  store.navDir = from < 0 || to < 0 || from === to ? 'in' : to > from ? 'r' : 'l';
   store.history = [];
   store.route = { name, params: {} };
 }

@@ -127,6 +127,18 @@ img { -webkit-user-drag: none; }
 .view { position: absolute; inset: 0; overflow-y: auto; overflow-x: hidden; padding: var(--s-3) var(--s-7) var(--s-6); animation: viewIn var(--d-med) var(--ease); }
 @media (max-width: 1400px) { .view { padding-left: 36px; padding-right: 36px; } }
 @keyframes viewIn { from { opacity: 0; } }
+/* pages arrive from where they are (0.9.19): a tab from its side, a deeper page settling in, back
+   easing out of the way. Short, one move, then still: no bounce. */
+@keyframes viewFromR { from { opacity: 0; transform: translateX(28px); } }
+@keyframes viewFromL { from { opacity: 0; transform: translateX(-28px); } }
+@keyframes viewDeeper { from { opacity: 0; transform: translateY(10px) scale(0.99); } }
+@keyframes viewBack { from { opacity: 0; transform: scale(1.01); } }
+main.main[data-dir] > * { animation-duration: 360ms; animation-timing-function: cubic-bezier(0.23, 1, 0.32, 1); }
+main.main[data-dir='r'] > * { animation-name: viewFromR; }
+main.main[data-dir='l'] > * { animation-name: viewFromL; }
+main.main[data-dir='in'] > * { animation-name: viewDeeper; }
+main.main[data-dir='out'] > * { animation-name: viewBack; animation-duration: 260ms; }
+body.motion-reduce main.main[data-dir] > * { animation-name: viewIn; animation-duration: 120ms; }
 
 .hintbar { display: flex; align-items: center; gap: 24px; padding: 0 28px; color: var(--text); font-size: var(--t-sm); font-weight: 500; background: var(--s0); border-top: 1px solid rgba(255, 255, 255, 0.05); }
 .hintbar .left { flex: 1; display: flex; gap: 18px; align-items: center; color: var(--muted); }
