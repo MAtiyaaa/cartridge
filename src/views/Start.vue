@@ -9,8 +9,8 @@
     </div>
     <div class="st-scroll" data-scroll>
       <TransitionGroup tag="div" name="st" class="st-grid" :style="{ '--rows': ROWS }">
-        <button v-for="t in tiles" :key="t.id" class="st-tile" :class="['t-' + t.type, 'w' + t.w, 'h' + t.h, { picked: picked === t.id, art: isArt(t) }]"
-          :style="{ gridColumn: `span ${t.w}`, gridRow: `span ${t.h}` }" data-focus :data-key="'tile-' + t.id" :data-id="t.id" :data-hold="editing ? null : ''"
+        <button v-for="(t, n) in tiles" :key="t.id" class="st-tile" :class="['t-' + t.type, 'w' + t.w, 'h' + t.h, { picked: picked === t.id, art: isArt(t) }]"
+          :style="{ gridColumn: `span ${t.w}`, gridRow: `span ${t.h}`, '--n': n }" data-focus :data-key="'tile-' + t.id" :data-id="t.id" :data-hold="editing ? null : ''"
           @click="openTile(t, $event)" @focus="focusTile(t)" @cart-hold="startEdit(t)" @pointerdown="pDown(t, $event)" @contextmenu.prevent>
 
           <!-- Continue playing: the game you played last, its art, logo and when -->
@@ -18,7 +18,7 @@
             <template v-if="cur">
               <div class="st-art" :style="{ backgroundImage: bgUrl(artOf(cur)) }" />
               <div class="st-scrim" />
-              <div class="st-label on-art"><Icon name="mdiPlayCircleOutline" :size="16" />Continue playing</div>
+              <div class="st-label on-art">Continue playing</div>
               <div class="st-cp">
                 <GameLogo :logo="store.config.ui.logos !== false ? logoOf(cur) : null" :name="cur.name" cls="st-cp-name" :area="t.w >= 4 ? 26000 : 14000" :max-w="t.w >= 4 ? 380 : 220" :max-h="t.h >= 2 ? 110 : 54" />
                 <span class="st-cp-when">{{ whenText(cur) }}</span>
@@ -31,22 +31,21 @@
 
           <!-- Clock -->
           <template v-else-if="t.type === 'clock'">
-            <div class="st-label"><Icon name="mdiClockOutline" :size="16" />{{ now.day }}</div>
             <div class="st-clock"><span class="st-big tnum">{{ now.time }}</span><span v-if="now.ampm" class="st-unit">{{ now.ampm }}</span></div>
-            <div class="st-sub">{{ now.date }}</div>
+            <div class="st-sub">{{ now.day }}, {{ now.date }}</div>
           </template>
 
           <!-- Storage: the drive the games live on -->
           <template v-else-if="t.type === 'storage'">
-            <div class="st-label"><Icon name="mdiHarddisk" :size="16" />Storage</div>
+            <div class="st-label">Free space</div>
             <div class="st-clock"><span class="st-big tnum">{{ space ? sizeNum(space.free) : '–' }}</span><span class="st-unit">{{ space ? sizeUnit(space.free) : '' }}</span></div>
             <div v-if="space" class="st-meter"><i :style="{ width: Math.min(100, (1 - space.free / space.total) * 100) + '%' }" /></div>
-            <div class="st-sub">{{ space ? `free of ${bytes(space.total)}` : 'Looking…' }}</div>
+            <div class="st-sub">{{ space ? `of ${bytes(space.total)} on the games drive` : 'Looking…' }}</div>
           </template>
 
           <!-- This week: play time by day -->
           <template v-else-if="t.type === 'week'">
-            <div class="st-label"><Icon name="mdiCalendarWeekOutline" :size="16" />This week</div>
+            <div class="st-label">Played this week</div>
             <div class="st-week">
               <div class="st-clock">
                 <template v-if="weekMin >= 60"><span class="st-big tnum">{{ Math.floor(weekMin / 60) }}</span><span class="st-unit">h</span></template>
@@ -63,8 +62,8 @@
 
           <!-- Consoles -->
           <template v-else-if="t.type === 'consoles'">
-            <div class="st-label"><Icon name="mdiGamepadSquareOutline" :size="16" />Consoles<span class="st-count">{{ consoles.length }}</span></div>
-            <div class="st-chips" :style="{ gridTemplateColumns: `repeat(${t.w + 1}, minmax(0, 1fr))` }">
+            <div class="st-label">Consoles</div>
+            <div class="st-chips" :style="{ gridTemplateColumns: `repeat(${Math.min(t.w + 1, Math.max(1, consoles.length))}, minmax(0, 1fr))` }">
               <ConsoleChip v-for="p in consoles.slice(0, chipsFor(t) - (consoles.length > chipsFor(t) ? 1 : 0))" :key="p.id" :p="p" />
               <span v-if="consoles.length > chipsFor(t)" class="st-more">+{{ consoles.length - chipsFor(t) + 1 }}</span>
             </div>
@@ -72,7 +71,8 @@
 
           <!-- Rows of covers: new, recently played, favourites, recommended -->
           <template v-else-if="COVER_ROWS[t.type]">
-            <div class="st-label"><Icon :name="TILES[t.type].icon" :size="16" />{{ TILES[t.type].name }}<span v-if="rowOf(t.type).length" class="st-count">{{ rowOf(t.type).length }}</span></div>
+            <div v-if="rowOf(t.type).length" class="st-ambient" :style="{ backgroundImage: bgUrl(cover(rowOf(t.type)[0])) }" />
+            <div class="st-label">{{ TILES[t.type].name }}</div>
             <template v-if="rowOf(t.type).length">
               <div class="st-covers">
                 <img v-for="(r, i) in rowOf(t.type).slice(0, coversFor(t))" :key="r.id" class="st-cover" :src="cover(r)" :style="{ '--i': i }" loading="lazy" alt="" />
@@ -84,11 +84,11 @@
 
           <!-- Latest trophies and achievements -->
           <template v-else-if="t.type === 'trophies'">
-            <div class="st-label"><Icon name="mdiTrophyOutline" :size="16" />Latest trophies</div>
-            <div v-if="ach.length" class="st-ach">
+            <div class="st-label">Latest trophies</div>
+            <div v-if="ach.length" class="st-ach" :class="{ one: t.h < 2 }">
               <div v-for="a in ach.slice(0, t.h >= 2 ? 3 : 1)" :key="a.key" class="st-ach-row">
                 <img v-if="a.badge" :src="a.badge" class="st-ach-img" alt="" /><span v-else class="st-ach-img"><Grade :g="a.grade" :size="30" /></span>
-                <span class="st-ach-t"><b>{{ a.title }}</b><span>{{ a.game }}</span></span>
+                <span class="st-ach-t"><b>{{ a.title }}</b><span>{{ a.game }}<template v-if="a.t"> · {{ agoShort(a.t) }}</template></span></span>
               </div>
             </div>
             <div v-else class="st-empty small"><span>Unlocks from your emulators and RetroAchievements show here</span></div>
@@ -96,7 +96,7 @@
 
           <!-- Downloads -->
           <template v-else-if="t.type === 'downloads'">
-            <div class="st-label"><Icon name="mdiTrayArrowDown" :size="16" />Downloads</div>
+            <div class="st-label">Downloads</div>
             <template v-if="activeDl.length">
               <div class="st-clock"><span class="st-big tnum">{{ dlPct }}</span><span class="st-unit">%</span></div>
               <div class="st-meter"><i :style="{ width: dlPct + '%' }" /></div>
@@ -206,7 +206,7 @@ function firstLine(type) {
   if (type === 'recs') return `Try ${r.name}`;
   return r.name;
 }
-const coversFor = (t) => Math.max(2, Math.min(9, Math.round(t.w * (t.h >= 2 ? 1.6 : 1.25))));
+const coversFor = (t) => Math.min(14, t.w * 3); // enough to fill the tile; the row fades out at its right edge
 const consoles = computed(() => {
   const mins = {}, inst = {};
   for (const r of roms.value) { mins[r.platform_id] = (mins[r.platform_id] || 0) + (store.play[r.id]?.min || 0); if (store.installed[r.id]) inst[r.platform_id] = (inst[r.platform_id] || 0) + 1; }
@@ -248,6 +248,7 @@ async function loadAch() {
   ]);
   ach.value = out.sort((a, b) => b.t - a.t).slice(0, 6);
 }
+const agoShort = (t) => { const m = Math.round((Date.now() - t) / 6e4); return m < 60 ? `${Math.max(1, m)} min ago` : m < 1440 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} d ago`; };
 // downloads
 const activeDl = computed(() => store.downloads.filter((d) => d.status === 'downloading' || d.status === 'queued'));
 const dlPct = computed(() => { const t = activeDl.value.reduce((s, d) => s + (d.total || 0), 0), r = activeDl.value.reduce((s, d) => s + (d.received || 0), 0); return t ? Math.floor((r / t) * 100) : 0; });
@@ -396,7 +397,7 @@ function pDown(t, e) {
 // ---- controller
 const hints = () => editing.value
   ? (picked.value ? [{ b: 'A', label: 'Put down' }, { b: 'B', label: 'Put down' }] : [{ b: 'A', label: 'Pick up' }, { b: 'X', label: 'Size' }, { b: 'Y', label: 'Remove' }, { b: 'B', label: 'Done' }])
-  : [{ b: 'A', label: 'Open' }, { b: 'A', label: 'Hold to arrange' }, ...(focusedId.value === 'continue' && playing.value.length > 1 ? [{ b: 'LB+RB', label: 'Game' }] : []), { b: 'Y', label: 'Search' }];
+  : [{ b: 'A', label: 'Open, hold to arrange' }, ...(focusedId.value === 'continue' && playing.value.length > 1 ? [{ b: 'LB+RB', label: 'Game' }] : []), { b: 'Y', label: 'Search' }];
 const focusedTile = () => tiles.value.find((t) => t.id === document.activeElement?.dataset?.id);
 const dirH = (dir) => () => (editing.value && picked.value ? (moveTile(dir), true) : false);
 useView({
@@ -434,7 +435,12 @@ watch(() => store.play, loadWeek);
 /* eight columns, four rows that fill the screen at any size (1280x800 to 4K); more scroll */
 .st-grid { --gap: clamp(10px, 1.1vw, 20px); display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); grid-auto-rows: calc((100cqh - (var(--rows) - 1) * var(--gap)) / var(--rows)); grid-auto-flow: row dense; gap: var(--gap); }
 .st-tile { position: relative; display: flex; flex-direction: column; min-width: 0; min-height: 0; padding: clamp(12px, 1.2vw, 22px); border-radius: var(--r-lg); background: var(--s1); color: var(--text); text-align: left; overflow: hidden; isolation: isolate;
-  transition: transform var(--d-med) var(--ease), background var(--d-fast); }
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05); /* a faint top edge, as light from above (redesign audit: tiles sat flat) */
+  transition: transform var(--d-med) var(--ease), background var(--d-fast);
+  animation: st-in 520ms cubic-bezier(0.23, 1, 0.32, 1) both; animation-delay: calc(var(--n, 0) * 40ms); }
+/* tiles arrive one after another, rising a little (taste: staggered entry, never everything at once) */
+@keyframes st-in { from { opacity: 0; transform: translateY(14px); } }
+:global(body.motion-reduce .st-tile) { animation: none; }
 .st-tile:focus { transform: translateY(-3px); }
 .st-tile:active, .st-tile.pressed { transform: scale(0.985); transition-duration: 90ms; }
 /* arranging: every tile shows its edge; the picked one lifts and the rest step back a little */
@@ -448,7 +454,7 @@ watch(() => store.play, loadWeek);
 .st-enter-active { transition: opacity 260ms var(--ease), transform 340ms cubic-bezier(0.23, 1, 0.32, 1); }
 .st-leave-to { opacity: 0; transform: scale(0.94); }
 .st-leave-active { transition: opacity 180ms ease-in, transform 180ms ease-in; position: absolute; }
-:global(body.motion-reduce) .st-move, :global(body.motion-reduce) .st-enter-active { transition: none; }
+:global(body.motion-reduce .st-move), :global(body.motion-reduce .st-enter-active) { transition: none; }
 
 .st-edit-bar { display: flex; align-items: center; gap: var(--s-4); padding: var(--s-3) var(--s-7) 0; font-size: var(--t-sm); }
 .st-edit-bar b { font-family: var(--display); font-size: var(--t-lg); font-weight: 700; }
@@ -462,9 +468,8 @@ watch(() => store.play, loadWeek);
 .st-add:focus { color: var(--text); box-shadow: var(--ring) !important; }
 
 /* the parts every tile shares */
-.st-label { display: flex; align-items: center; gap: 8px; font-size: var(--t-sm); font-weight: 600; color: var(--muted); position: relative; z-index: 1; }
+.st-label { font-size: var(--t-sm); font-weight: 600; color: var(--muted); letter-spacing: -0.005em; position: relative; z-index: 1; }
 .st-label.on-art { color: rgba(255, 255, 255, 0.86); }
-.st-count { margin-left: auto; font-variant-numeric: tabular-nums; color: var(--dim); font-weight: 500; }
 .st-clock { display: flex; align-items: baseline; gap: 4px; margin-top: auto; line-height: 1; }
 .st-big { font-family: var(--display); font-stretch: var(--display-stretch); font-weight: 800; font-size: clamp(30px, 3.2vw, 64px); letter-spacing: -0.02em; }
 .h2 .st-big, .h3 .st-big { font-size: clamp(44px, 5vw, 96px); }
@@ -513,7 +518,10 @@ watch(() => store.play, loadWeek);
 .st-fill :deep(.cchip-logo) { max-height: 38%; }
 
 /* rows of covers, fanned and overlapping a little, the newest first */
-.st-covers { flex: 1; min-height: 0; display: flex; align-items: stretch; gap: clamp(6px, 0.6vw, 12px); margin-top: 10px; overflow: hidden; }
+.st-covers { flex: 1; min-height: 0; display: flex; align-items: stretch; gap: clamp(6px, 0.6vw, 12px); margin-top: 10px; overflow: hidden; -webkit-mask-image: linear-gradient(90deg, #000 78%, transparent); mask-image: linear-gradient(90deg, #000 78%, transparent); }
+/* the first game's cover, enormous, blurred and dark, so these tiles carry colour of their own */
+.st-ambient { position: absolute; inset: -40px; z-index: -1; background-size: cover; background-position: center; filter: blur(38px) saturate(1.2); opacity: 0.34; }
+.st-ambient::after { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(10, 11, 14, 0.2), rgba(10, 11, 14, 0.75)); }
 .st-cover { flex: none; height: 100%; aspect-ratio: 3 / 4; object-fit: cover; border-radius: var(--r-sm); box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.06); transform-origin: bottom center; transition: transform var(--d-med) var(--ease); transition-delay: calc(var(--i) * 18ms); background: var(--s2); }
 .st-tile:focus .st-cover { transform: translateY(-3px); }
 .st-first { margin-top: 8px; color: var(--text); font-weight: 600; flex: none; }
@@ -521,6 +529,9 @@ watch(() => store.play, loadWeek);
 /* trophies */
 .st-ach { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; gap: 10px; margin-top: 8px; min-height: 0; }
 .st-ach-row { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.st-ach.one { justify-content: center; }
+.st-ach.one .st-ach-img { width: clamp(56px, 5vw, 96px); height: clamp(56px, 5vw, 96px); border-radius: var(--r-md); }
+.st-ach.one .st-ach-t b { font-size: var(--t-lg); }
 .st-ach-img { width: clamp(40px, 3.6vw, 64px); height: clamp(40px, 3.6vw, 64px); flex: none; border-radius: var(--r-sm); object-fit: cover; display: grid; place-items: center; background: var(--s2); }
 .st-ach-t { display: flex; flex-direction: column; min-width: 0; }
 .st-ach-t b { font-family: var(--display); font-weight: 700; font-size: var(--t-md); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

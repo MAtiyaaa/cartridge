@@ -39,5 +39,5 @@ watch(() => props.src, async (src) => {
 .media img.on { opacity: 1; animation: media-settle 1600ms cubic-bezier(0.2, 0, 0, 1) both; }
 /* 0.9.19: each new picture settles in from slightly closer, once (a weighted arrival, not a loop) */
 @keyframes media-settle { from { transform: scale(1.045); } to { transform: none; } }
-:global(body.motion-reduce) .media img.on { animation: none; }
+:global(body.motion-reduce .media img.on) { animation: none; }
 </style>

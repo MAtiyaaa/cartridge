@@ -26,7 +26,7 @@
         <Icon name="mdiMagnify" :size="18" />
         <input ref="searchEl" data-focus data-nofirst data-key="top-search" :value="store.lastSearch" :readonly="builtinKb()" placeholder="Search games" autocomplete="off" spellcheck="false" @input="onSearch" @click="searchOsk" />
         <button v-if="store.lastSearch" class="clear" tabindex="-1" @mousedown.prevent @click="clearSearch"><Icon name="mdiClose" :size="16" /></button>
-        <Btn v-else b="Y" />
+        <Btn v-else-if="padMode" b="Y" /><!-- the Y hint only while a controller is in use, like LT/RT -->
       </label>
       <div class="sys">
         <div v-if="syncBusy" class="item sync-pill"><Icon name="mdiSync" :size="16" class="spin" />{{ syncLabel }}</div>
@@ -352,8 +352,10 @@ watch(viewKey, async () => {
 <style scoped>
 .tab-trig { margin: 0 4px; }
 /* search (0.9.19): a round button with Y until it's used, then it opens into a field */
-.top-search { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; width: 76px; height: 40px; padding: 0 10px 0 12px; border-radius: 20px; background: rgba(255, 255, 255, 0.07); color: rgba(255, 255, 255, 0.7); cursor: text; overflow: hidden; transition: width 320ms cubic-bezier(0.23, 1, 0.32, 1), background 160ms, color 160ms; }
+.top-search { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; width: 40px; height: 40px; padding: 0 10px 0 11px; border-radius: 20px; background: rgba(255, 255, 255, 0.07); color: rgba(255, 255, 255, 0.7); cursor: text; overflow: hidden; transition: width 320ms cubic-bezier(0.23, 1, 0.32, 1), background 160ms, color 160ms; }
 .top-search:hover { background: rgba(255, 255, 255, 0.11); }
+/* a round button with the mouse or touch; room for the Y hint with a controller */
+:global(body.pad-mode .top-search:not(.open):not(:focus-within)) { width: 74px; }
 .top-search.open, .top-search:focus-within { width: min(300px, 26vw); background: rgba(255, 255, 255, 0.14); color: var(--text); }
 .top-search:not(.open):not(:focus-within) input { width: 0; flex: 0; opacity: 0; }
 .top-search:focus-within { box-shadow: 0 0 0 2px var(--focus, #fff); }
