@@ -29,7 +29,9 @@ const SONY_HOST = /^https:\/\/a0\.ww\.np\.dl\.playstation\.net\//;
 async function getText(url, timeout = 15000) {
   const secure = url.replace(/^http:/, 'https:');
   try { return await getOnce(secure, timeout); } catch (e) { if (e.status !== 403 && !/certificate|ECONN|socket|timed|took too long/i.test(e.message)) throw e; }
-  return getOnce(url.replace(/^https:/, 'http:'), timeout);
+  // 0.9.19: Sony's server (Akamai) answers 403, not 404, for a game it has no update list for; when
+  // both addresses say so, that game has no updates rather than the list being out of reach
+  try { return await getOnce(url.replace(/^https:/, 'http:'), timeout); } catch (e) { if (e.status === 403 && SONY_HOST.test(secure)) return ''; throw e; }
 }
 function getOnce(url, timeout) {
   return new Promise((resolve, reject) => {

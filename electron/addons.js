@@ -120,17 +120,62 @@ function ciaTitleId(file) {
 }
 // Switch title ID: the ticket's name in an .nsp (rights ID = title ID + key generation), else one
 // in the file name; an update's ID (…800) folds to its game's (…000), where mods go
-function switchTitleId(file) {
+// 0.9.19: .xci too, and .nsp files without a ticket: the title ID is in each NCA's header, which is
+// encrypted with the console's header_key (AES-128-XTS, 0x200-byte sectors numbered big-endian, as
+// hactool reads it). That key is in the user's prod.keys, which their Switch emulator already has.
+function pfsEntries(fd, base) { // PFS0 (nsp) or HFS0 (xci partitions): [{ name, offset, size }]
+  const h = Buffer.alloc(16); fs.readSync(fd, h, 0, 16, base);
+  const magic = h.toString('latin1', 0, 4), n = h.readUInt32LE(4), strLen = h.readUInt32LE(8);
+  const es = magic === 'PFS0' ? 0x18 : magic === 'HFS0' ? 0x40 : 0;
+  if (!es || n > 4096 || strLen > 1 << 20) return [];
+  const t = Buffer.alloc(n * es + strLen); fs.readSync(fd, t, 0, t.length, base + 16);
+  const data = base + 16 + n * es + strLen, out = [];
+  for (let i = 0; i < n; i++) {
+    const e = i * es, off = Number(t.readBigUInt64LE(e)), size = Number(t.readBigUInt64LE(e + 8)), no = t.readUInt32LE(e + 16);
+    out.push({ name: t.toString('latin1', n * es + no, t.indexOf(0, n * es + no)), offset: data + off, size });
+  }
+  return out;
+}
+let headerKey; // from prod.keys, read once
+function switchHeaderKey(dirs) {
+  if (headerKey !== undefined) return headerKey;
+  headerKey = null;
+  for (const d of dirs) {
+    try { const m = fs.readFileSync(path.join(d, 'prod.keys'), 'utf8').match(/^\s*header_key\s*=\s*([0-9a-f]{64})\s*$/im); if (m) { headerKey = Buffer.from(m[1], 'hex'); break; } } catch {}
+  }
+  return headerKey;
+}
+function ncaHeader(fd, offset, key) {
+  const enc = Buffer.alloc(0x400); fs.readSync(fd, enc, 0, 0x400, offset); // sectors 0 and 1 hold what's needed
+  const out = Buffer.alloc(0x400);
+  for (let s = 0; s < 2; s++) {
+    const iv = Buffer.alloc(16); iv.writeBigUInt64BE(BigInt(s), 8);
+    const d = require('crypto').createDecipheriv('aes-128-xts', key, iv); d.setAutoPadding(false);
+    Buffer.concat([d.update(enc.subarray(s * 0x200, s * 0x200 + 0x200)), d.final()]).copy(out, s * 0x200);
+  }
+  if (!/^NCA[0-3]$/.test(out.toString('latin1', 0x200, 0x204))) return null;
+  return { type: out[0x205], titleId: out.readBigUInt64LE(0x210).toString(16).padStart(16, '0').toUpperCase() };
+}
+function switchTitleId(file, keyDirs = []) {
   let id = null, fd;
   try {
     fd = fs.openSync(file, 'r');
-    const h = Buffer.alloc(16); fs.readSync(fd, h, 0, 16, 0);
+    const h = Buffer.alloc(0x140); fs.readSync(fd, h, 0, 0x140, 0);
+    let ncas = [];
     if (h.toString('latin1', 0, 4) === 'PFS0') {
-      const n = h.readUInt32LE(4), strLen = h.readUInt32LE(8);
-      if (n < 4096 && strLen < 1 << 20) {
-        const names = Buffer.alloc(strLen); fs.readSync(fd, names, 0, strLen, 16 + n * 24);
-        id = (names.toString('latin1').match(/\b(01[0-9a-f]{14})[0-9a-f]{16}\.tik\b/i) || [])[1] || null;
-      }
+      const ents = pfsEntries(fd, 0);
+      id = (ents.map((e) => e.name).join(' ').match(/\b(01[0-9a-f]{14})[0-9a-f]{16}\.tik\b/i) || [])[1] || null;
+      ncas = ents.filter((e) => /\.nca$/i.test(e.name));
+    } else if (h.toString('latin1', 0x100, 0x104) === 'HEAD') { // .xci: root HFS0 -> "secure" partition -> NCAs
+      const root = Number(h.readBigUInt64LE(0x130));
+      const secure = pfsEntries(fd, root).find((e) => e.name === 'secure');
+      if (secure) ncas = pfsEntries(fd, secure.offset).filter((e) => /\.nca$/i.test(e.name));
+    }
+    const key = !id && ncas.length ? switchHeaderKey(keyDirs) : null;
+    if (key) {
+      // the game's Program NCA (type 0); else whatever title the rest name (a Meta NCA, type 1)
+      const heads = ncas.slice(0, 40).map((e) => { try { return ncaHeader(fd, e.offset, key); } catch { return null; } }).filter(Boolean);
+      id = (heads.find((x) => x.type === 0 && /000$/.test(x.titleId)) || heads.find((x) => x.type === 0) || heads.find((x) => x.type === 1) || {}).titleId || null;
     }
   } catch {} finally { if (fd != null) try { fs.closeSync(fd); } catch {} }
   id = (id || (path.basename(file).match(/\b(01[0-9A-F]{14})\b/i) || [])[1] || '').toUpperCase();
@@ -174,4 +219,4 @@ function setTextures(e, on) {
   return true;
 }
 
-module.exports = { emulators, forGame, gcWiiId, n3dsTitleId, psxSerial, ciaTitleId, switchTitleId, iniGet, setTextures, TEX_KEY };
+module.exports = { emulators, forGame, gcWiiId, n3dsTitleId, psxSerial, ciaTitleId, switchTitleId, pfsEntries, iniGet, setTextures, TEX_KEY };

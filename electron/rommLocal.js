@@ -151,7 +151,10 @@ async function setup(opts, onProgress = () => {}, { fetchImpl = fetch } = {}) {
   step(3, 'Creating the server');
   const port = opts.port || await freePort();
   await podman('pod', 'rm', '-f', POD).catch(() => {});
-  await podman('pod', 'create', '--name', POD, '-p', `${port}:8080`);
+  // 0.9.19: the server name the user picked is the server's own host name too (RomM has no name setting
+  // of its own), so it shows in RomM's logs and to anything that asks the pod who it is
+  const host = String(opts.name || '').toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40);
+  await podman('pod', 'create', '--name', POD, '-p', `${port}:8080`, ...(host ? ['--hostname', host] : []));
   step(4, 'Starting the database');
   await podman(...dbArgs(s));
   const dbUp = await waitFor(async () => (await podman('healthcheck', 'run', `${POD}-db`).then(() => true, () => false)), 180000, 3000);

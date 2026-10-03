@@ -8,6 +8,7 @@ const path = require('path');
 const zlib = require('zlib');
 const S = require('../electron/addonSources.js');
 const I = require('../electron/addonInstall.js');
+const A = require('../electron/addons.js');
 
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'cart-addons-'));
 test.after(() => fs.rmSync(TMP, { recursive: true, force: true }));
@@ -102,4 +103,24 @@ test('texture layouts per emulator: the game folder found by what the emulator r
   // Switch: Atmosphere's contents/<id>/romfs gets the mod's name, a named mod folder keeps its own
   assert.deepStrictEqual(to(['atmosphere/contents/01007EF00011E000/romfs/a.bin'], 'switch', { name: 'HD' }), ['HD/romfs/a.bin']);
   assert.deepStrictEqual(to(['Wrap/60 FPS/exefs/main.ips'], 'switch', { name: 'HD' }), ['60 FPS/exefs/main.ips']);
+});
+
+// 0.9.19: an .xci's title ID from its Program NCA header (AES-128-XTS with the header key, big-endian sector tweak)
+test('Switch .xci title ID from the NCA header, with the header key from prod.keys', () => {
+  const crypto = require('crypto');
+  const key = crypto.randomBytes(32), dir = path.join(TMP, 'keys'); fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, 'prod.keys'), `header_key = ${key.toString('hex')}\n`);
+  const head = Buffer.alloc(0x400); head.write('NCA3', 0x200, 'latin1'); head[0x205] = 0; head.writeBigUInt64LE(0x0100abcd12340000n, 0x210);
+  const enc = Buffer.concat([0, 1].map((s) => { const iv = Buffer.alloc(16); iv.writeBigUInt64BE(BigInt(s), 8); const c = crypto.createCipheriv('aes-128-xts', key, iv); c.setAutoPadding(false); return Buffer.concat([c.update(head.subarray(s * 0x200, s * 0x200 + 0x200)), c.final()]); }));
+  const hfs = (files) => { // HFS0 with files [{ name, data }]
+    const names = Buffer.concat(files.map((f) => Buffer.from(f.name + '\0'))); const ents = Buffer.alloc(files.length * 0x40);
+    let off = 0, no = 0; files.forEach((f, i) => { ents.writeBigUInt64LE(BigInt(off), i * 0x40); ents.writeBigUInt64LE(BigInt(f.data.length), i * 0x40 + 8); ents.writeUInt32LE(no, i * 0x40 + 16); off += f.data.length; no += f.name.length + 1; });
+    const h = Buffer.alloc(16); h.write('HFS0', 0, 'latin1'); h.writeUInt32LE(files.length, 4); h.writeUInt32LE(names.length, 8);
+    return Buffer.concat([h, ents, names, ...files.map((f) => f.data)]);
+  };
+  const secure = hfs([{ name: 'abc.nca', data: enc }]);
+  const root = hfs([{ name: 'update', data: Buffer.alloc(0) }, { name: 'secure', data: secure }]);
+  const xh = Buffer.alloc(0x200); xh.write('HEAD', 0x100, 'latin1'); xh.writeBigUInt64LE(0x200n, 0x130);
+  const f = path.join(TMP, 'Game.xci'); fs.writeFileSync(f, Buffer.concat([xh, root]));
+  assert.strictEqual(A.switchTitleId(f, [dir]), '0100ABCD12340000');
 });

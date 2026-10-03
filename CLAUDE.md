@@ -51,8 +51,7 @@ LT/RT switch top tabs. LB/RB only switch sections inside a page. A select, B bac
 
 ## Known issues (details: HANDOFF Part B, "Other bugs" list, and F4)
 - The Steam manager has never run against a real Steam client. Treat real-device reports about it as expected beta issues. The least tested parts are listed in HANDOFF F6.
-- `steam-games.json` is written before the helper finishes (F4).
-- Small cleanups: duplicate CSS in `Achievements.vue`, unused `.padbtn` rules, the out-of-date graphics comment at the top of `main.js`, the two migration lines.
+- `steam-games.json` is written before the helper finishes (F4); since 0.9.19 `reconcile()` drops what isn't in shortcuts.vdf at the next start.
 
 ## Since the handoff (0.6.1)
 - Fixed: helper backup overwrite (per-job lock in `steamHelper.js`, backups never replaced), `addToSteam` key gap, Y on Search, Steam apply progress (`steam-progress` broadcast, top bar pill).
@@ -229,6 +228,18 @@ LT/RT switch top tabs. LB/RB only switch sections inside a page. A select, B bac
 - `addonInstall.plan` kinds per emulator (pcsx2/duckstation `replacements` anchor + DuckStation `config.yaml`, ppsspp `textures.ini|zip` anchor, dolphin 6/3-char ID folder, azahar/citra title ID folder, cemu `rules.txt` packs, switch Atmosphere `contents/<id>`), `wrapper()` strips folders around everything. `addons:install` dest is the game folder (`/replacements` dropped). PS2 lists GameBanana after EmuCoreX.
 - `pkgInstall` Vita3K: `NO_QT` retry without `QT_QPA_PLATFORM=offscreen` (installVita and installFirmware).
 - `ps3Serial`: `PS3_GAME/PARAM.SFO` two levels down, then RPCS3 `games.yml` paths.
+
+## 0.9.19 · Start (3 Oct 2026; log: docs/SESSION-LOG.md, plan: docs/plan-0.9.19.md)
+- Start: `src/views/Start.vue` (route/tab `start`), `src/startTiles.js` (`TILES` with sizes as [cols, rows] of an 8 by 4 screen, `DEFAULT`, `valid`, `pinToStart`), `ConsoleChip.vue`. Saved in `config.ui.start.tiles`. Grid: 8 columns, rows from `100cqh / 4`, `grid-auto-flow: dense`, TransitionGroup FLIP for moves. Arrange: hold A (`data-hold` + nav.js `HOLD_MS` 450, action `hold`, `cart-hold` event), touch/mouse press and hold 520 ms, drag. `config.ui.openOn`, `ui.startAdded` (adds the tab once). Game More → Pin to Start.
+- nav.js: A on `[data-hold]` fires on release; held 450 ms dispatches `hold`. App routes `accept`, `hold` and the D-pad to `store.viewHandlers` first.
+- `play:week` + `notePlayDays` in main.js (`play-days.json`: snapshot of totals, minutes added to the day last played).
+- Top bar: icon tabs, active `.tab-label` opens (grid 0fr to 1fr), `--tab-ink` (brand orange in Cartridge's theme), search folds (`.top-search.open`). Page arrivals: `store.navDir` ('r','l','in','out') set by `tab`/`go`/`back`, `main.main[data-dir]` keyframes.
+- Backgrounds: console scenes removed (owner); `aurora`, `contours` (marching squares), `drift`, `tide` in bgRenderers.js; old scene values map to `art:<slug>` via `LEGACY_ART`.
+- Vita: `vitaArchiveContents`/`vitaUnpack` (from Vita3K interface.cpp: gd -> ux0/app, ac -> ux0/addcont/<id>/<content id from 20>, gp -> ux0/patch merged into app; Vitamin refused); NoNpDrm (PCS* with sce_sys/package) through Vita3K with `QT_TRIES` offscreen, minimal, normal, killed at "will auto-boot". Folder dumps (`kind: 'dir'`).
+- RPCS3 patch list: `load` uses `json: true`; `readPatchFile`/`loosePatchYaml` fallback. webFetch: hidden-window pass for Cloudflare-style checks (`viaWindow`, only when `looksChecked`). Sony 403 on both schemes = no updates.
+- Add-ons: `addons:present` (files in each game's folder, `by` cartridge/other/both). `gbGame` tries `titleForms`. Switch: `pfsEntries`, `switchTitleId(file, keyDirs)` decrypts NCA headers (AES-128-XTS, header_key from prod.keys).
+- Get Emulators: `emuUpdates.forgeRelease` (Forgejo), `REPOS[id].forge/first/zipped`, `appImageFromZip`; `emuGet` CATALOG entries carry a lasting `name` and an `fp` fallback.
+- `steamManager.reconcile()` at start (HANDOFF F4). `electron/syncthing.js` + `SyncCard.vue` (`sync:status`, read only). RomM local: pod `--hostname` from the server name.
 
 ## Releases (full steps: HANDOFF D8)
 Only when the owner asks. Bump `version` and `build.releaseInfo.releaseName` ("Cartridge X.Y.Z") in `package.json`, and set `versionName` (what Settings → About and update messages show). **0.9.3 is shipped in parts (owner, 1 Oct 2026):** the number goes up as usual (0.9.4, 0.9.5...) but `versionName` and the release title are "0.9.3 B", "0.9.3 C"... until the 0.9.3 plan is done; notes heading `## Cartridge 0.9.3 B · Title`. Then put only this version's notes in `RELEASE_NOTES.md` (heading `## Cartridge X.Y.Z · Title`), add them to the top of `CHANGELOG.md`, grouped as New / Changed / Fixed with bold lead-ins. CI builds, launch-checks and publishes.

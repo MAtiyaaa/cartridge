@@ -1234,7 +1234,26 @@ module.exports = function createSteamManager(ctx) {
     }
     let missing = [];
     try { if (Object.keys(reg).length) missing = verifyCollections() || []; } catch {}
+    try { reconcile(last); } catch (e) { log('steam reconcile', e.message); }
     return { last: report, missing };
+  }
+  // 0.9.19 (HANDOFF F4): apply() writes the registry before the helper finishes (play.sh needs it), so
+  // a failed apply left games counted as added. At start, with no helper job still running, games of
+  // this account that aren't in shortcuts.vdf leave the registry. Live adds get a day for Steam to save.
+  function reconcile(last) {
+    if (last && !['done', 'error'].includes(last.state)) return 0; // a helper job is still running
+    const env = environment();
+    if (!env.account || !fs.existsSync(files(env.account).shortcuts)) return 0;
+    const have = new Set(readShortcuts(env.account).map((sc) => String(sc.appid >>> 0)));
+    let dropped = 0;
+    for (const [id, r] of Object.entries(reg)) {
+      if (r.account && r.account !== env.account.id) continue;
+      if (have.has(String(Number(id) >>> 0))) continue;
+      if (r.live && Date.now() - (r.at || 0) < 864e5) continue;
+      delete reg[id]; dropped++;
+    }
+    if (dropped) { saveReg(); log('steam registry: dropped', dropped, 'games not in shortcuts.vdf'); }
+    return dropped;
   }
   function parseTemplate(t) {
     const toks = tokenize(t.lo);

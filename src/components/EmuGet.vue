@@ -56,7 +56,7 @@ import EmuIcon from './EmuIcon.vue';
 import PIcon from './PIcon.vue';
 
 const props = defineProps({ flow: Boolean });
-const SLUG = { psx: 'psx', ps2: 'ps2', ps3: 'ps3', ps4: 'ps4', psp: 'psp', psvita: 'psvita', gc: 'ngc', wiiu: 'wiiu', switch: 'switch', n3ds: '3ds', nds: 'nds', gba: 'gba', n64: 'n64', xbox: 'xbox', dreamcast: 'dc' };
+const SLUG = { psx: 'psx', ps2: 'ps2', ps3: 'ps3', ps4: 'ps4', psp: 'psp', psvita: 'psvita', gc: 'ngc', wiiu: 'wiiu', switch: 'switch', n3ds: '3ds', nds: 'nds', gba: 'gba', n64: 'n64', xbox: 'xbox', dreamcast: 'dc', xbox360: 'xbox360', saturn: 'saturn', arcade: 'arcade' };
 const phase = ref(props.flow && !store.config.emuDir ? 'where' : 'list');
 const drives = ref(null), list = ref(null), q = ref([]), busy = ref(false);
 const el = ref(null);

@@ -85,7 +85,7 @@
         <TextField v-model="keys.ssPass" label="ScreenScraper password" placeholder="Optional" password />
       </div>
       <div class="rl-act">
-        <button class="btn" data-focus :disabled="keyBusy" @click="startAt === 'keys' ? emit('back') : (phase = 'done')">{{ startAt === 'keys' ? 'Close' : 'Skip' }}</button>
+        <button class="btn" data-focus :disabled="keyBusy" @click="startAt === 'keys' ? emit('back') : (phase = 'done')">{{ startAt === 'keys' ? 'Close' : afterKeys ? 'Skip for now' : 'Skip' }}</button>
         <button class="btn primary" data-focus :disabled="keyBusy || !keysReady" @click="saveKeys"><Icon name="mdiCheck" />{{ keyBusy ? 'Restarting RomM…' : 'Save' }}</button>
       </div>
     </template>
@@ -137,7 +137,7 @@ async function prep() {
 const f = reactive({ username: '', password: '', confirm: '', name: '', library: '' });
 const keys = reactive({ igdbId: '', igdbSecret: '', ssUser: '', ssPass: '' });
 const custom = ref('');
-const prog = ref({}), result = ref(null), error = ref('');
+const prog = ref({}), result = ref(null), error = ref(''), afterKeys = ref(false);
 const libs = computed(() => info.value?.libraries || []);
 const ready = computed(() => f.username.trim().length >= 3 && f.password && f.password === f.confirm && f.library);
 const short = (p) => String(p || '').replace(store.info?.home || '\0', '~');
@@ -154,7 +154,7 @@ async function start() {
     store.config = await call('config:get');
     await saveConfig({ configured: true, localOnly: false });
     call('library:sync').catch(() => {});
-    phase.value = 'done';
+    phase.value = 'keys'; afterKeys.value = true; // 0.9.19: metadata keys are a step of their own after setup (Skip goes on)
   } catch (e) { if (/Podman isn’t ready/.test(e.message)) { info.value = await call('romm:localInfo').catch(() => info.value); phase.value = 'prep'; return; } error.value = e.message; phase.value = 'error'; }
 }
 useView({ back: () => { if (phase.value === 'form' || phase.value === 'prep') phase.value = 'intro'; else if (phase.value !== 'work') emit('back'); } }, [{ b: 'A', label: 'Select' }, { b: 'B', label: 'Back' }]);

@@ -77,6 +77,7 @@
             </div>
             <StorageManager :key="storageKey" />
             <LibraryCheck />
+            <SyncCard />
           </template>
 
           <template v-else-if="sec === 'emu'">
@@ -167,7 +168,8 @@
                 <div class="stack">
                   <button v-for="r in g.roms" :key="r.id" class="lrow" data-focus @click="openAddons(r)">
                     <img v-if="coverSmall(r.id)" class="up-cover" :src="coverSmall(r.id)" loading="lazy" /><Icon v-else name="mdiPuzzleOutline" :size="24" />
-                    <div class="l-mid"><b>{{ r.name }}</b><span v-if="addonCount(r.id)" class="l-sub">{{ addonCount(r.id) }} installed</span></div>
+                    <div class="l-mid"><b>{{ r.name }}</b><span v-if="presentText(r.id)" class="l-sub">{{ presentText(r.id) }}</span><span v-else-if="addonCount(r.id)" class="l-sub">{{ addonCount(r.id) }} installed</span></div>
+                    <span v-if="addonsHere[r.id]" class="status ok"><Icon name="mdiCheck" :size="14" />{{ addonsHere[r.id].some((x) => !x.mods) ? 'Texture pack' : 'Mods' }}</span>
                     <span class="l-end">Add-ons</span>
                   </button>
                 </div>
@@ -339,6 +341,8 @@
             <p class="muted small" style="margin-top: -6px">Auto uses the built-in keyboard in Game Mode and your real keyboard on the desktop. Steam leaves typing to the Steam keyboard (Steam + X).</p>
 
             <div class="subh"><Icon name="mdiDockTop" :size="20" />Top Bar</div>
+            <div class="row"><span class="lbl">Open on</span><div class="seg"><button v-for="t in tabsOn.filter((n) => n !== 'settings')" :key="t" data-focus :class="{ on: (ui.openOn || 'home') === t }" @click="saveConfig({ ui: { openOn: t } })">{{ TAB_DEFS[t].label }}</button></div></div>
+            <p class="muted small" style="margin-top: -6px">The menu Cartridge shows when it starts.</p>
             <p class="muted small" style="margin-top: -6px">Pick which tabs show at the top and their order. LT and RT move through them in this order. Settings always stays.</p>
             <div class="tabs-edit">
               <div v-for="(t, i) in tabRows" :key="t.name" class="tab-row" :class="{ off: !t.on }">
@@ -530,6 +534,7 @@ import Btn from '../components/Btn.vue';
 import SteamSettings from '../components/SteamSettings.vue';
 import StorageManager from '../components/StorageManager.vue';
 import LibraryCheck from '../components/LibraryCheck.vue';
+import SyncCard from '../components/SyncCard.vue';
 import RommUpload from '../components/RommUpload.vue';
 import EmuIcon from '../components/EmuIcon.vue';
 import EmuGet from '../components/EmuGet.vue';
@@ -665,9 +670,8 @@ async function chooseWallpaper() {
 }
 // A (0.9.15): each console with enough covers in your library can be the background
 const artBgs = computed(() => (store.lib?.platforms || []).filter((p) => p.rom_count >= 6).map((p) => ({ v: 'art:' + p.slug, l: consoleName(p), sub: 'Your games, slowly panning', group: 'Art' })).sort((a, b) => a.l.localeCompare(b.l)));
-// your five most used consoles first (0.9.16): play time, then games on this device; each one its
-// designed scene where there is one, else its own games panning
-const SCENE_OF = { ps2: 'ps2', ngc: 'gc', gamecube: 'gc', wii: 'wii', xbox360: 'xbox360', switch: 'switch' };
+// your five most used consoles first (0.9.16): play time, then games on this device, each as its
+// own games panning (0.9.19: the console scenes were retired)
 const topConsoles = computed(() => {
   const score = {};
   for (const r of allRoms()) {
@@ -679,10 +683,10 @@ const topConsoles = computed(() => {
   return (store.lib?.platforms || []).filter((p) => score[p.slug]).sort((a, b) => score[b.slug].min - score[a.slug].min || score[b.slug].inst - score[a.slug].inst).slice(0, 5);
 });
 const allBgs = computed(() => {
-  const theme = BACKGROUNDS.filter((b) => b.group === 'Theme'), scenes = BACKGROUNDS.filter((b) => b.group === 'Consoles'), other = BACKGROUNDS.filter((b) => b.group === 'Other');
-  const top = topConsoles.value.map((p) => { const b = scenes.find((x) => x.v === SCENE_OF[p.slug]); return { ...(b || { v: 'art:' + p.slug, l: consoleName(p), sub: 'Your games, slowly panning' }), group: 'Top' }; });
+  const theme = BACKGROUNDS.filter((b) => b.group === 'Theme'), other = BACKGROUNDS.filter((b) => b.group === 'Other');
+  const top = topConsoles.value.map((p) => ({ v: 'art:' + p.slug, l: consoleName(p), sub: 'Your games, slowly panning', group: 'Top' }));
   const used = new Set(top.map((b) => b.v));
-  return [...theme, ...top, ...scenes.filter((b) => !used.has(b.v)), ...artBgs.value.filter((b) => !used.has(b.v)), ...other];
+  return [...theme, ...top, ...artBgs.value.filter((b) => !used.has(b.v)), ...other];
 });
 const bgNow = computed(() => { const v = ui.value.bgStyle || 'solid'; const m = LEGACY_ART[v] ? 'art:' + LEGACY_ART[v] : v; return allBgs.value.find((b) => b.v === m) || BACKGROUNDS[0]; });
 const BG_ICON = { Theme: 'mdiWaves', Top: 'mdiStarOutline', Consoles: 'mdiGamepadVariantOutline', Art: 'mdiImageMultipleOutline', Other: 'mdiImageOutline' };
@@ -690,7 +694,7 @@ async function pickBg() {
   let last = '';
   const pal = paletteOf(ui.value);
   // a picture of each animated one (0.9.3 L); still, artwork and wallpaper keep their icon
-  const options = allBgs.value.map((b) => { const o = { label: b.l, sub: b.sub, value: b.v, icon: BG_ICON[b.group], img: RENDERERS[b.v] ? bgPreview(b.v, pal) : '', selected: bgNow.value.v === b.v, raw: b.group === 'Art' || (b.group === 'Top' && b.v.startsWith('art:')), heading: b.group !== last ? { Theme: 'Your theme colours', Top: 'Your most played consoles', Consoles: topConsoles.value.length ? 'More consoles' : 'Consoles', Art: 'Your games', Other: 'Other' }[b.group] : '' }; last = b.group; return o; });
+  const options = allBgs.value.map((b) => { const o = { label: b.l, sub: b.sub, value: b.v, icon: BG_ICON[b.group], img: RENDERERS[b.v] ? bgPreview(b.v, pal) : '', selected: bgNow.value.v === b.v, raw: b.group === 'Art' || (b.group === 'Top' && b.v.startsWith('art:')), heading: b.group !== last ? { Theme: 'Your theme colours', Top: 'Your most played consoles', Art: 'Your games', Other: 'Other' }[b.group] : '' }; last = b.group; return o; });
   const v = await choose({ title: 'Background', options });
   if (v) await setBg(v);
 }
@@ -808,7 +812,7 @@ useView({ back: () => { if (!document.activeElement?.closest('.rail')) { focusFi
 // Settings → Emulators → Issues
 const issues = ref(null);
 const ISSUE_ICON = { collections: 'mdiFolderSyncOutline', moved: 'mdiLinkVariantOff', game: 'mdiFileHidden', core: 'mdiPuzzleRemoveOutline', setup: 'mdiRadar', bios: 'mdiChip', romm: 'mdiServerOutline', fpsteam: 'mdiSteam' };
-async function loadIssues() { issues.value = await call('issues:list').catch(() => []); store.issues = issues.value.length; texEmus.value = await call('addons:emulators').catch(() => []); }
+async function loadIssues() { issues.value = await call('issues:list').catch(() => []); store.issues = issues.value.length; texEmus.value = (await call('addons:emulators').catch(() => null)) || []; }
 const texEmus = ref([]);
 // Add-ons page (0.9.17): installed games of consoles with add-ons, by console, and what Cartridge installed
 const ADDON_SLUGS = /^(ps2|psx|ngc|gamecube|wii|psp|3ds|n3ds|switch|wiiu)$/i;
@@ -824,7 +828,18 @@ const addonGames = computed(() => {
 });
 const addonsMine = ref([]);
 const addonCount = (romId) => addonsMine.value.filter((a) => a.romId === romId).length;
-async function loadAddons() { addonsMine.value = await call('addons:installed').catch(() => []); }
+async function loadAddons() {
+  addonsMine.value = (await call('addons:installed').catch(() => null)) || [];
+  addonsHere.value = (await call('addons:present', { romIds: addonGames.value.flatMap((g) => g.roms.map((r) => r.id)) }).catch(() => null)) || {};
+}
+// what is already in each game's folder (0.9.19): a texture pack or mods, put in by Cartridge or not
+const addonsHere = ref({});
+const BY_TEXT = { cartridge: 'installed by Cartridge', other: 'added outside Cartridge', both: 'some installed by Cartridge' };
+function presentText(id) {
+  const f = addonsHere.value[id];
+  if (!f) return '';
+  return f.map((x) => `${x.mods ? 'Mods' : 'Texture pack'} in ${x.name}, ${BY_TEXT[x.by]}${!x.mods && !x.on ? ' (textures are off there)' : ''}`).join(' · ');
+}
 async function openAddons(r) { await openModal('addons', { romId: r.id, name: r.name }); loadAddons(); }
 async function removeAddon(a) {
   if (!(await confirm('Remove this add-on?', `${a.name} (${a.game})\n\nOnly the ${a.count} files Cartridge put in ${a.emuName}’s folder are deleted.`, 'Remove', true))) return;

@@ -52,12 +52,23 @@ async function gbGet(path, fetchImpl) {
   return r.json();
 }
 // the GameBanana game for a title: an exact name match only (no guessing between games)
+// 0.9.19: RomM names like "Legend of Zelda, The - Twilight Princess (USA)" are tried as "The Legend of
+// Zelda: Twilight Princess" too; a leading "The" and region tags never stop an exact match
+const loose = (s) => key(String(s || '').replace(/\(.*?\)|\[.*?\]/g, '').replace(/^the\s+/i, ''));
+function titleForms(title) {
+  const t = String(title || '').replace(/\s*\((?:USA|Europe|Japan|World|En|Rev[^)]*|v[\d.]+)[^)]*\)/gi, '').trim();
+  const moved = t.replace(/^(.*?),\s*(The|A|An)\b(.*)$/i, '$2 $1$3'); // "Zelda, The - X" -> "The Zelda - X"
+  return [...new Set([t, moved, moved.replace(/\s+-\s+/g, ': ')].filter(Boolean))];
+}
 async function gbGame(title, { fetchImpl = webFetch } = {}) {
-  const j = await gbGet(`/Util/Search/Results?_sModelName=Game&_sOrder=best_match&_nPage=1&_sSearchString=${encodeURIComponent(title)}`, fetchImpl);
-  const recs = Array.isArray(j?._aRecords) ? j._aRecords : [];
-  const want = key(title);
-  const hit = recs.find((g) => g && g._idRow && key(g._sName) === want) || recs.find((g) => g && g._idRow && key(String(g._sName).replace(/\(.*?\)/g, '')) === want);
-  return hit ? { id: hit._idRow, name: hit._sName } : null;
+  for (const q of titleForms(title)) {
+    const j = await gbGet(`/Util/Search/Results?_sModelName=Game&_sOrder=best_match&_nPage=1&_sSearchString=${encodeURIComponent(q)}`, fetchImpl);
+    const recs = Array.isArray(j?._aRecords) ? j._aRecords : [];
+    const want = loose(q);
+    const hit = recs.find((g) => g && g._idRow && key(g._sName) === key(q)) || recs.find((g) => g && g._idRow && loose(g._sName) === want);
+    if (hit) return { id: hit._idRow, name: hit._sName };
+  }
+  return null;
 }
 function parseGbMods(j) {
   const recs = Array.isArray(j?._aRecords) ? j._aRecords : [];
@@ -79,4 +90,4 @@ async function gbFiles(modId, { fetchImpl = webFetch } = {}) {
   return parseGbFiles(await gbGet(`/Mod/${Number(modId)}?_csvProperties=_aFiles,_sName,_aSubmitter`, fetchImpl));
 }
 
-module.exports = { PS2_CATALOG, parsePs2Catalog, ps2Catalog, ps2For, gbGame, gbMods, gbFiles, parseGbMods, parseGbFiles, key };
+module.exports = { PS2_CATALOG, parsePs2Catalog, ps2Catalog, ps2For, gbGame, gbMods, gbFiles, parseGbMods, parseGbFiles, key, titleForms };

@@ -6,6 +6,7 @@
         <h2>{{ name }}</h2>
         <div v-if="emus.length > 1" class="seg" style="margin: 4px 0 8px"><button v-for="e in emus" :key="e.emuRoot" data-focus :class="{ on: emu?.emuRoot === e.emuRoot }" @click="pickEmu(e)">{{ e.name }}{{ e.flatpak ? ' (Flatpak)' : '' }}</button></div>
         <div v-if="emu" class="muted small mono">{{ emu.folder ? short(emu.folder) : `${short(emu.root)} (this game’s ID couldn’t be read)` }}</div>
+        <div v-if="here" class="ad-here"><Icon name="mdiCheckCircle" :size="18" /><span>{{ here.mods ? 'Mods are' : 'A texture pack is' }} in place for this game ({{ here.files.toLocaleString() }} files), {{ here.by === 'cartridge' ? 'installed by Cartridge' : here.by === 'both' ? 'partly installed by Cartridge' : 'added outside Cartridge' }}.</span></div>
         <div v-if="emu && !emu.mods" class="muted small">{{ emu.on ? 'Custom textures are on.' : 'Custom textures are off: turn them on below, or in ' + emu.name + '.' }}</div>
       </div>
 
@@ -72,7 +73,11 @@ const has = (p) => mine.value.some((r) => String(r.id) === String(p.id));
 const subOf = (p) => (p.source === 'ps2' ? [p.authors.join(', ') && 'by ' + p.authors.join(', '), bytes(p.size), p.files ? p.files.toLocaleString() + ' textures' : '', p.version].filter(Boolean).join(' · ') : [p.authors[0] && 'by ' + p.authors[0], p.category].filter(Boolean).join(' · '));
 const runText = computed(() => { const r = run.value; if (!r) return ''; return r.state === 'download' ? `Downloading ${r.pct != null ? r.pct + '%' : ''}` : r.state === 'join' ? 'Joining the parts…' : r.state === 'install' ? `Installing ${r.pct || 0}%` : 'Starting…'; });
 
+// what is already in the game's folder (0.9.19), Cartridge's or not
+const present = ref([]);
+const here = computed(() => present.value.find((x) => x.emu === emu.value?.id) || null);
 async function load() {
+  call('addons:present', { romIds: [props.romId] }).then((m) => { present.value = m?.[props.romId] || []; }).catch(() => {});
   try { d.value = await call('addons:available', { romId: props.romId }); } catch (e) { d.value = { emus: [], packs: [], installed: [], error: e.message }; }
   if (!emu.value) emu.value = (d.value.source === 'ps2' ? emus.value.find((e) => e.id === 'pcsx2') : null) || emus.value[0] || null;
   else emu.value = emus.value.find((e) => e.emuRoot === emu.value.emuRoot) || emus.value[0] || null;
@@ -128,6 +133,7 @@ onBeforeUnmount(() => { layer?.pop(); off?.(); });
 .mono { font-family: ui-monospace, monospace; word-break: break-all; }
 .ad-list { overflow-y: auto; min-height: 0; flex: 1; display: flex; flex-direction: column; gap: var(--s-2); padding: 2px; }
 .ad-h { font-weight: 600; margin-top: var(--s-2); }
+.ad-here { display: flex; align-items: center; gap: 8px; color: #8be0a4; font-size: var(--t-sm); font-weight: 500; margin-top: 4px; }
 .ad-row { flex: none; display: flex; align-items: center; gap: var(--s-3); text-align: left; padding: var(--s-3) var(--s-4); border-radius: var(--r-md); background: var(--s1); color: inherit; border: 0; font: inherit; }
 .ad-row:focus { background: var(--focus); color: var(--on-focus); outline: none; box-shadow: none; }
 .ad-file { margin-left: var(--s-5); }

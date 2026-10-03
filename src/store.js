@@ -14,6 +14,7 @@ export const store = reactive({
   downloads: [],
   bg: '',
   route: { name: 'home', params: {} },
+  navDir: 'in', // how the next page arrives: 'r'/'l' (a tab to the right/left), 'in' (deeper), 'out' (back)
   history: [],
   hints: [],
   viewHandlers: {},
@@ -57,14 +58,19 @@ export function go(name, params = {}) {
   const el = document.activeElement;
   if (store.route.name === 'settings' && el?.closest?.('.pane')) store.settingsSpot = { sec: store.settingsSection, text: (el.textContent || '').trim().slice(0, 60) };
   store.history.push({ ...store.route, focusKey: document.activeElement?.dataset?.key || null });
+  store.navDir = 'in';
   store.route = { name, params };
 }
 export function back() {
   if (!store.history.length) return false;
+  store.navDir = 'out';
   store.route = store.history.pop();
   return true;
 }
 export function tab(name) {
+  // which way the page arrives from (0.9.19): the side its tab is on, relative to the one you leave
+  const order = activeTabs(), from = order.indexOf(store.history[0]?.name || store.route.name), to = order.indexOf(name);
+  store.navDir = from < 0 || to < 0 || from === to ? 'in' : to > from ? 'r' : 'l';
   store.history = [];
   store.route = { name, params: {} };
 }
@@ -416,6 +422,7 @@ export async function addToCollection(romIds) {
 
 // ---------------- top bar tabs (Look & Feel → Top bar)
 export const TAB_DEFS = {
+  start: { label: 'Start', icon: 'mdiViewDashboardOutline' }, // 0.9.19: the menu you arrange yourself
   home: { label: 'Home', icon: 'mdiHomeVariantOutline' },
   library: { label: 'Library', icon: 'mdiViewGridOutline' },
   consoles: { label: 'Consoles', icon: 'mdiGamepadSquareOutline' },
@@ -425,7 +432,7 @@ export const TAB_DEFS = {
   downloads: { label: 'Downloads', icon: 'mdiTrayArrowDown' },
   settings: { label: 'Settings', icon: 'mdiCogOutline' },
 };
-export const DEFAULT_TABS = ['home', 'library', 'consoles', 'achievements', 'downloads', 'settings'];
+export const DEFAULT_TABS = ['start', 'home', 'library', 'consoles', 'achievements', 'downloads', 'settings'];
 // Settings can't be removed, so the top bar can always be changed back
 export function activeTabs() {
   const t = store.config?.ui?.tabs;

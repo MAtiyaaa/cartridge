@@ -76,8 +76,7 @@ const rawVersion = freshConfig ? DEFAULT_CONFIG.configVersion : config.configVer
 config = deepMerge(DEFAULT_CONFIG, config);
 if (rawVersion < 2) {
   // 0.1.1/0.1.2 saved 'software' as a default, not a user choice: move everyone to Auto (GPU)
-  if (config.graphics !== 'hardware') config.graphics = 'auto';
-  if (config.graphics === 'hardware') config.graphics = 'auto';
+  config.graphics = 'auto'; // whatever 0.1.x saved (HANDOFF B8: the two old lines did exactly this)
   config.configVersion = 2;
   try { fs.mkdirSync(USER_DATA, { recursive: true }); fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2), { mode: 0o600 }); } catch {}
 }
@@ -91,10 +90,10 @@ if (rawVersion < 3 && config.configured) {
   try { fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2), { mode: 0o600 }); } catch {}
 }
 
-// ---------------------------------------------------------------- graphics
-// Chromium's GPU path shows a blank grey window on some Linux handhelds (AMD + KDE
-// Wayland on Bazzite in particular). Software rendering is plenty for this UI and
-// works everywhere, so it's the default; hardware acceleration is opt-in in Settings.
+// ---------------------------------------------------------------- log
+// (How Cartridge picks GPU or software rendering is further down: isGamescope, launchedBySteam,
+// biggestDisplay and forceSoftware. In short: software in Game Mode or under Steam on small
+// screens, the GPU on big screens and on the desktop, with a fallback if the GPU fails.)
 const LOG_FILE = path.join(USER_DATA, 'cartridge.log');
 function log(...a) {
   try { fs.mkdirSync(USER_DATA, { recursive: true }); fs.appendFileSync(LOG_FILE, `[${new Date().toISOString()}] ${a.join(' ')}\n`); } catch {}
@@ -2338,6 +2337,30 @@ function playStats() {
   }
   return out;
 }
+// ---------------- play time by day (0.9.19, Start's This week tile). Steam and RetroArch only keep a
+// total per game, so each time the totals are read, what they grew by since the last read is added to
+// the day the game was last played. Kept for 60 days in play-days.json; the first read only notes totals.
+const PLAY_DAYS_FILE = path.join(USER_DATA, 'play-days.json');
+const dayKey = (t) => { const d = new Date(t); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+function notePlayDays(stats) {
+  const f = loadJson(PLAY_DAYS_FILE, null), first = !f;
+  const st = f || { snap: {}, days: {} };
+  let changed = first;
+  for (const [id, p] of Object.entries(stats)) {
+    const was = st.snap[id] || 0, now = p.min || 0;
+    if (now > was && !first && was) { const k = dayKey(p.last || Date.now()); st.days[k] = (st.days[k] || 0) + (now - was); changed = true; }
+    else if (now > was && !first && !was && p.last && Date.now() - p.last < 7 * 864e5) { const k = dayKey(p.last); st.days[k] = (st.days[k] || 0) + now; changed = true; } // a new game this week: all its time is recent
+    if (now !== was) { st.snap[id] = now; changed = true; }
+  }
+  const cut = dayKey(Date.now() - 60 * 864e5);
+  for (const k of Object.keys(st.days)) if (k < cut) { delete st.days[k]; changed = true; }
+  if (changed) saveJson(PLAY_DAYS_FILE, st);
+}
+function playWeek() {
+  const st = loadJson(PLAY_DAYS_FILE, { days: {} }), out = [];
+  for (let i = 6; i >= 0; i--) { const t = Date.now() - i * 864e5; out.push({ day: dayKey(t), dow: new Date(t).getDay(), min: Math.round(st.days?.[dayKey(t)] || 0) }); }
+  return out;
+}
 // ---------------- recently played across devices (RomM play sessions)
 // When Steam's play time for a game goes up, that time goes to RomM as a play session from this
 // device. Sessions from your other devices come back, with the device's name, so Recently played
@@ -2527,6 +2550,7 @@ const handlers08 = {
   'play:stats': async () => {
     if (Date.now() - playSyncAt > 10 * 60e3 && config.configured) { const p = syncPlay(); if (!playSyncAt) await Promise.race([p, new Promise((r) => setTimeout(r, 4000))]); }
     const out = playStats(), me = deviceName();
+    try { notePlayDays(out); } catch (e) { log('play days', e.message); }
     for (const [id, p] of Object.entries(out)) p.device = me;
     for (const [id, r] of Object.entries(remotePlay)) {
       const cur = out[id];
@@ -2536,6 +2560,9 @@ const handlers08 = {
     return out;
   },
   'play:device': ({ name }) => renameDevice(name),
+  'play:week': () => playWeek(),
+  // Syncthing, first look (0.9.19): read only, what it syncs and with whom
+  'sync:status': () => require('./syncthing').status(),
   // dates for a game's timeline (the game page adds trophies and achievements it already has)
   'rom:timeline': ({ romId }) => {
     const r = romIndexMain().get(romId);
@@ -2971,7 +2998,7 @@ const handlers = {
     if (/\.(3ds|cci)$/i.test(file)) ids.titleId = A.n3dsTitleId(file);
     if (/\.cia$/i.test(file)) ids.titleId = A.ciaTitleId(file);
     if (slug === 'psx' && /\.(bin|img|iso|cue|chd|pbp)$/i.test(file)) ids.serial = A.psxSerial(file);
-    if (slug === 'switch') { const id = A.switchTitleId(file); if (id) { ids.switchId = id; ids.switchIdLower = id.toLowerCase(); } }
+    if (slug === 'switch') { const k = require('./bios').status('switch', { roots: emuRootsAll() }); const id = A.switchTitleId(file, k?.ok ? [path.dirname(k.where)] : []); if (id) { ids.switchId = id; ids.switchIdLower = id.toLowerCase(); } }
     return A.forGame(slug, ids, A.emulators());
   },
   // custom textures on in the emulator (0.9.16); off only where Cartridge turned them on
@@ -3067,6 +3094,27 @@ const handlers = {
     finally { addonRun = null; for (const f of [...files, base + '.zip']) fs.rmSync(f, { force: true }); fs.rmSync(base + '.zip.unpacked', { recursive: true, force: true }); }
   },
   'addons:cancel': () => { addonRun?.abort.abort(); return true; },
+  // 0.9.19 (owner: a green check when a game already has a texture pack, and whether Cartridge put it
+  // there): for each game asked about, the emulators whose folder for it holds files, and whether
+  // those files are all ones Cartridge installed
+  'addons:present': async ({ romIds = [] } = {}) => {
+    const recs = Object.values(addonRecs()), out = {};
+    const count = (d, cap = 200) => { let n = 0; const walk = (x, depth) => { for (const e of (() => { try { return fs.readdirSync(x, { withFileTypes: true }); } catch { return []; } })()) { if (n >= cap) return; if (e.isDirectory()) { if (depth < 6) walk(path.join(x, e.name), depth + 1); } else n++; } }; walk(d, 0); return n; };
+    for (const id of romIds.slice(0, 400)) {
+      let emus = []; try { emus = handlers['addons:forGame']({ romId: id }); } catch {}
+      const found = [];
+      for (const e of emus) {
+        if (!e.folder || path.resolve(e.folder) === path.resolve(e.root) || !e.has) continue; // Cemu's shared graphicPacks folder isn't one game's
+        const files = e.has ? count(e.folder) : 0;
+        if (!files) continue;
+        const mine = recs.filter((r) => r.romId === Number(id) && r.emuRoot === e.emuRoot).reduce((n, r) => n + r.files.length, 0);
+        found.push({ emu: e.id, name: e.name, files, by: mine >= files ? 'cartridge' : mine ? 'both' : 'other', on: e.on, mods: e.mods });
+      }
+      if (found.length) out[id] = found;
+      await new Promise((r) => setImmediate(r)); // a long list never holds up the window
+    }
+    return out;
+  },
   'addons:installed': () => Object.entries(addonRecs()).map(([key, r]) => ({ key, ...r, files: undefined, count: r.files.length })),
   'addons:remove': async ({ key }) => {
     const recs = addonRecs(), r = recs[key];
@@ -3086,7 +3134,7 @@ const handlers = {
       const ck = { retro: 'snes', gc: 'gc' }[key] || key;
       return (steamMgr.candidatesFor(ck) || []).some((c) => c.id.split('@')[0] === e.id);
     };
-    return G.CATALOG.map((c) => ({ key: c.key, name: c.name, emus: c.emus.map((e) => ({ id: e.id, label: require('./emulators').EMU[e.id]?.label || (e.id === 'retroarch' ? 'RetroArch' : e.id), how: e.how, from: e.how === 'flatpak' ? 'Flatpak from Flathub' : `AppImage from ${e.repo.split('/')[0]} on GitHub`, installed: isHere(e, c.key) })) }));
+    return G.CATALOG.map((c) => ({ key: c.key, name: c.name, emus: c.emus.map((e) => ({ id: e.id, label: require('./emulators').EMU[e.id]?.label || { retroarch: 'RetroArch', supermodel: 'Supermodel' }[e.id] || e.id, how: e.how, from: e.how === 'flatpak' ? 'Flatpak from Flathub' : `AppImage from ${e.repo.split('/')[0]}${e.fp ? ', else its Flatpak' : ''}`, installed: isHere(e, c.key) })) }));
   },
   // where emulators live (0.9.17): this device and every mounted drive, with free space
   'emuget:drives': async () => {
@@ -3127,7 +3175,13 @@ const handlers = {
       if (e.how === 'flatpak') r = await G.getFlatpak(e.fp, (pct) => send({ pct }));
       else {
         let got = 0, total = 0, last = 0;
-        r = await G.getAppImage(e, (url, dest, size) => { total = size || 0; return downloadTo(url, dest, emuGetRun, (n) => { got += n; const now = Date.now(); if (now - last > 400) { last = now; send({ pct: total ? Math.min(99, Math.floor((got / total) * 100)) : null }); } }, { plain: true }); });
+        try { r = await G.getAppImage(e, (url, dest, size) => { got = 0; total = size || 0; return downloadTo(url, dest, emuGetRun, (n) => { got += n; const now = Date.now(); if (now - last > 400) { last = now; send({ pct: total ? Math.min(99, Math.floor((got / total) * 100)) : null }); } }, { plain: true }); }); }
+        catch (err) {
+          // 0.9.19: no AppImage to be had (its server refused, or the release has none): its Flatpak instead
+          if (!e.fp || emuGetRun.abort.signal.aborted || !G.hasFlatpak()) throw err;
+          log('emulator AppImage failed, trying Flatpak', id, err.message);
+          r = await G.getFlatpak(e.fp, (pct) => send({ pct }));
+        }
       }
       log('emulator downloaded', id, r.path || r.fp);
       send({ pct: 100, done: true });
@@ -3334,7 +3388,7 @@ const handlers = {
   'romm:localSetup': async ({ username, password, library, name, keys }) => {
     const rl = require('./rommLocal');
     const dataDir = path.join(os.homedir(), '.local/share/cartridge-romm');
-    const r = await rl.setup({ username, password, library, dataDir, keys, envFile: path.join(USER_DATA, 'romm-local.env'), port: config.rommLocal?.port }, (p) => broadcast('romm-local', p));
+    const r = await rl.setup({ username, password, library, dataDir, keys, name, envFile: path.join(USER_DATA, 'romm-local.env'), port: config.rommLocal?.port }, (p) => broadcast('romm-local', p));
     config.rommLocal = { port: r.port, library, dataDir, name: String(name || '').slice(0, 40), at: Date.now(), boot: r.boot };
     config.server = { ...config.server, localUrl: r.base, remoteUrl: config.server.remoteUrl || '', mode: config.server.remoteUrl ? 'auto' : 'local', auth: 'password', username: r.user, password, token: '' };
     if (!config.romsRoot) config.romsRoot = path.join(library, 'roms');

@@ -158,6 +158,7 @@ import { similarTo } from '../recs.js';
 import { addGame, removeGame, applyChanges, pickEmulator, pickCollections } from '../steam.js';
 import { computed, onMounted, onBeforeUnmount, ref, nextTick, watch } from 'vue';
 import { store, call, img, go, cover, bytes, year, rating, toast, confirm, download, downloadFor, romById, platformById, isNew, setBg, logoOf, resetLogos, artFor, choose, openModal, allRoms, visible, isFavourite, addToCollection, playOf, playtimeText, ago, loadPlay, askText, saveConfig, backdropOf, wantSharp } from '../store.js';
+import { pinToStart } from '../startTiles.js';
 import { useView } from '../useView.js';
 import { ensureFocus, focusFirst } from '../nav.js';
 import Icon from '../components/Icon.vue';
@@ -605,6 +606,7 @@ async function more() {
     { label: 'Play status', sub: statusText.value || 'None', value: 'status', icon: 'mdiProgressCheck' },
     { label: 'Add to a collection', sub: 'Yours in RomM, or a new one', value: 'col', icon: 'mdiBookmarkPlusOutline' },
     { label: 'Timeline', sub: 'Added, downloaded, played, trophies', value: 'timeline', icon: 'mdiTimelineClockOutline' },
+    { label: 'Pin to Start', sub: 'A tile of its own on Start', value: 'pin', icon: 'mdiPinOutline' },
   ];
   if (detail.value?.path_manual) details.unshift({ label: 'Manual', sub: 'The game’s manual from RomM', value: 'manual', icon: 'mdiBookOpenPageVariantOutline' });
   // Options (0.9.16): hide, re-download and delete, out of the header
@@ -619,6 +621,7 @@ async function more() {
   // separate tabs since 0.9.16, plus Options.
   const v = await choose({ title: base.value.name, tabs: [{ label: 'Game', options: top }, ...(steam.length ? [{ label: 'Steam', options: steam }] : []), ...(play.length ? [{ label: 'Emulator', options: play }] : []), { label: 'Details and Artwork', options: details }, { label: 'Options', options }] });
   if (!v) return;
+  if (v === 'pin') return pinToStart({ type: 'game', romId: props.romId });
   if (v === 'fav') {
     const on = !fav.value;
     try { await call('fav:set', { romId: Number(props.romId), on }); toast(on ? 'Added to favourites' : 'Removed from favourites', 'ok', 2200, 'mdiHeartOutline'); } catch (e) { toast(e.message, 'error', 6000); }
