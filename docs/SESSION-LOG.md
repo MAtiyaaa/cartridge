@@ -6,6 +6,22 @@ The branch for 0.9.3 work is `claude/relaxed-fermat-30pigp`. Pull it before star
 
 ---
 
+## 3 Oct 2026 · 0.9.19 Start (read this first)
+
+Everything in `docs/plan-0.9.19.md`, built as the owner asked ("don't ask me any questions"). Decisions made without asking, per that instruction:
+- Start's name is "Start"; its tile look follows docs/design.md, not the photographed frontend's widgets (owner disliked those). Default layout: Continue playing 4 by 2, Clock, Storage, This week, Consoles, New, Recently played, Latest trophies. Open on stays Home by default.
+- Top bar follows the photographed frontend's pattern (icon tabs, the current one with its name), read through the taste skill: one accent line, no wordmark, search folded.
+- The taste and img2threejs skills could not be copied into `.claude/skills` (the session's permission check refused writing there): the owner needs to add them, or allow it. The taste skill was read from a local copy and applied.
+- Console scenes removed; four style backgrounds added. Picked scenes fall back to that console's games panning.
+- Vita: only NoNpDrm dumps still need Vita3K (it alone can decrypt them); unencrypted ones never start it.
+- Ryujinx/Eden: their own Forgejo servers first, then GitHub, then Flatpak. Asset names could not be checked live (the container can't reach GitHub's API or those servers); patterns follow EmuDeck's install scripts.
+- 403s: the hosts are blocked from the container, so the hidden-window pass is untested against the real sites.
+- PS3 "serial not found": two more fallbacks in 0.9.18; still waiting on the owner's folder layout if it persists. Remind about the v2.3.1 tag.
+
+**Owner must test on a device:** Start (hold A, sizes, moving, touch drag, Pin to Start, Open on), the new top bar at 1280x800 and 4K, page transitions in Game Mode (software rendering), the four backgrounds (speed with light effects), a Vita .vpk install and a NoNpDrm one, RPCS3 patches list, RA/GameBanana/Sony without 403s, Get Emulators for Eden, Ryujinx, shadPS4, Xenia Edge, an .xci's mod folder, Settings → Storage → Sync with Syncthing running.
+
+---
+
 ## 2 Oct 2026 · 0.9.18 (read this first)
 
 Owner sent the Vita3K error ("no Qt platform plugin could be initialized", installing Unit 13): Cartridge ran Vita3K with `QT_QPA_PLATFORM=offscreen` and that build has no offscreen plugin. Now retried on the normal display. Texture packs per game with the right paths (owner's ask): layouts per emulator in `addonInstall.plan`. PS3 serials: two more fallbacks, still unconfirmed on the owner's games (needs a folder layout or log if it still fails). Remind the owner about the v2.3.1 tag later (owner asked). The owner asked for a list of everything not yet built before more building starts: given in chat, wait for their pick.

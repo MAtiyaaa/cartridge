@@ -2,7 +2,7 @@
 
 Owner, 2 Oct 2026 (after 0.9.18 shipped): "start building this all into 0.9.19 ... package everything and build then ship 0.9.19". No questions: the owner was clear. If the session runs out of credits, it restarts 5 hours later and carries on from the newest docs/SESSION-LOG.md entry.
 
-Status: in progress. Tick items here as they land.
+Status: built and released as 0.9.19 (3 Oct 2026). Not done: copying the taste and img2threejs skills into .claude/skills (permission refused in the session; the owner adds them). Details in docs/SESSION-LOG.md.
 
 ## 1. Start: a new customisable menu (the main item)
 - A new top tab, **Start**, next to Home: a grid of tiles the user arranges (inspired by a frontend the owner photographed; their widget look is not wanted, ours follows docs/design.md and the design skills).
