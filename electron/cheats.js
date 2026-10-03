@@ -60,6 +60,10 @@ function dolphinParse(text) {
   return out;
 }
 const dolphinFiles = (id) => [id.slice(0, 3) + '.ini', id + '.ini'];
+// the user's files for a game, as Dolphin reads them (ConfigLoaders::GetGameIniFilenames): ID3, ID6 and
+// the disc revision's ID6r<N>.ini (0.9.21)
+const dolphinUserFiles = (dir, id) => [...dolphinFiles(id), ...ls(path.join(dir.user, 'GameSettings')).filter((n) => n.startsWith(id + 'r') && /^\w{6}r\d+\.ini$/i.test(n))];
+const ls = (d) => { try { return fs.readdirSync(d); } catch { return []; } };
 // Dolphin's shipped files: a folder, else read from inside its AppImage
 function dolphinSysText(sysDirs, id, appImages = [], readAppImageFile) {
   let text = '';
@@ -102,7 +106,7 @@ async function geckoDownload(id, { cacheDir, fetchImpl = webFetch, maxAge = 7 * 
 }
 function dolphinList(dir, id, sysText, mine = {}, downloaded = []) {
   const g = dolphinParse(sysText);
-  const u = dolphinParse(dolphinFiles(id).map((n) => read(path.join(dir.user, 'GameSettings', n))).join('\n'));
+  const u = dolphinParse(dolphinUserFiles(dir, id).map((n) => read(path.join(dir.user, 'GameSettings', n))).join('\n'));
   const out = [];
   for (const s of DOLPHIN_SECS) {
     const seen = new Set();
@@ -116,7 +120,57 @@ function dolphinList(dir, id, sysText, mine = {}, downloaded = []) {
       out.push({ key, name: c.name, section: s, description: c.name, notes: [s === 'OnFrame' ? 'Patch' : c.download ? 'Cheat · from the code database' : 'Cheat', c.notes].filter(Boolean).join(' · '), author: c.author, version: 'All', on, by: on ? (mine[key] ? 'cartridge' : 'emulator') : null, ...(c.download ? { download: true, lines: c.lines, rawNotes: c.rawNotes } : {}) });
     }
   }
-  return out.sort((a, b) => (a.section === 'OnFrame' ? 0 : 1) - (b.section === 'OnFrame' ? 0 : 1) || a.description.localeCompare(b.description)); // patches first
+  out.push(...dolphinMods(dir, id, mine));
+  const ORDER = { OnFrame: 0, ActionReplay: 1, Gecko: 2, GraphicMods: 3 };
+  return out.sort((a, b) => ORDER[a.section] - ORDER[b.section] || a.description.localeCompare(b.description)); // patches first
+}
+// ---- Dolphin graphics mods (0.9.21, owner: Graphics Mods next to patches, AR and Gecko codes). As Dolphin's
+// GraphicsModGroupConfig: mods live in Sys/Load/GraphicMods and the user's Load/GraphicMods; a mod belongs
+// to a game through a folder named after its ID (or ID3), or any top folder holding <ID>.txt, <ID3>.txt or
+// all.txt (HiresTextures GetTextureDirectoriesWithGameId); each metadata.json under it is one mod
+// (meta: title, author, description). What's on is Config/GraphicMods/<ID>.json {"mods": [{source, path,
+// enabled, weight}]}, path relative to its root; groups and features may be left out (DeserializeFromProfile
+// skips them). Mods only work with GFX.ini [Settings] EnableMods = True.
+function dolphinModRoots(dir) {
+  const sys = dolphinSys(dir.flatpak).map((g) => path.join(path.dirname(g), 'Load/GraphicMods'));
+  return [...sys.map((r) => ({ root: r, source: 'system' })), { root: path.join(dir.user, 'Load/GraphicMods'), source: 'user' }].filter((r) => exists(r.root));
+}
+function modDirsFor(root, id) {
+  const out = new Set();
+  if (exists(path.join(root, id))) out.add(path.join(root, id)); else if (exists(path.join(root, id.slice(0, 3)))) out.add(path.join(root, id.slice(0, 3)));
+  const walk = (d, depth, top) => { for (const n of ls(d)) { const f = path.join(d, n); let st; try { st = fs.statSync(f); } catch { continue; } if (st.isDirectory()) { if (depth < 4) walk(f, depth + 1, top || f); } else if (/\.txt$/i.test(n) && [id, id.slice(0, 3), 'all'].includes(n.slice(0, -4)) && top) out.add(top); } };
+  walk(root, 0, null);
+  return [...out];
+}
+function metaFiles(d, depth = 0, out = []) { for (const n of ls(d)) { const f = path.join(d, n); try { if (fs.statSync(f).isDirectory()) { if (depth < 5) metaFiles(f, depth + 1, out); } else if (n === 'metadata.json') out.push(f); } catch {} } return out; }
+const modProfile = (dir, id) => path.join(dir.config, 'GraphicMods', id + '.json');
+function dolphinMods(dir, id, mine = {}) {
+  let prof = []; try { prof = JSON.parse(read(modProfile(dir, id)) || '{}').mods || []; } catch {}
+  const out = [], seen = new Set();
+  for (const { root, source } of dolphinModRoots(dir)) {
+    for (const d of modDirsFor(root, id)) for (const f of metaFiles(d)) {
+      const rel = path.relative(root, f).split(path.sep).join('/');
+      if (seen.has(source + rel)) continue; seen.add(source + rel);
+      let meta = {}; try { meta = JSON.parse(read(f)).meta || {}; } catch { continue; }
+      const p = prof.find((m) => m.source === source && m.path === rel);
+      const on = !!p?.enabled, key = K('dolphin', dir.user, id, 'GraphicMods', source, rel);
+      out.push({ key, name: rel, section: 'GraphicMods', description: meta.title || path.basename(path.dirname(f)), notes: ['Graphics mod', meta.description].filter(Boolean).join(' · '), author: meta.author || '', version: 'All', on, by: on ? (mine[key] ? 'cartridge' : 'emulator') : null, source, path: rel });
+    }
+  }
+  return out;
+}
+function dolphinModsSet(dir, id, changes, rec) {
+  const f = modProfile(dir, id);
+  let doc = {}; try { doc = JSON.parse(read(f) || '{}'); } catch { doc = {}; }
+  const mods = Array.isArray(doc.mods) ? doc.mods : [];
+  for (const c of changes) {
+    if (!c.on && !rec[c.key]) continue; // only what Cartridge turned on is turned off by it
+    let m = mods.find((x) => x.source === c.source && x.path === c.path);
+    if (!m) { m = { source: c.source, path: c.path, enabled: false, weight: 0 }; mods.push(m); }
+    m.enabled = !!c.on;
+    if (c.on) rec[c.key] = true; else delete rec[c.key];
+  }
+  write(f, JSON.stringify({ ...doc, mods }, null, 2));
 }
 // "$Name" lines in or out of one [Section] (the section is made when missing, left empty when emptied)
 function nameLines(text, section, name, add) {
@@ -156,6 +210,9 @@ function cheatSwitch(mine, flag, wanted, sw) {
 }
 function dolphinSet(dir, id, changes, mine = {}) {
   const rec = { ...mine };
+  const mods = changes.filter((c) => c.section === 'GraphicMods');
+  if (mods.length) dolphinModsSet(dir, id, mods, rec);
+  changes = changes.filter((c) => c.section !== 'GraphicMods');
   const todo = changes.filter((c) => c.on || rec[c.key]);
   if (todo.length) {
     const f = path.join(dir.user, 'GameSettings', id + '.ini');
@@ -171,6 +228,9 @@ function dolphinSet(dir, id, changes, mine = {}) {
   // cheats need Dolphin's cheats switch; off again once no cheat Cartridge turned on is left
   const cheats = Object.keys(rec).some((k) => { const p = k.split('\u0001'); return p[0] === 'dolphin' && p[1] === dir.user && p[3] !== 'OnFrame'; });
   cheatSwitch(rec, K('@cheats', dir.user), cheats, { file: path.join(dir.config, 'Dolphin.ini'), sec: 'Core', key: 'EnableCheats', on: 'True', off: 'False' });
+  // graphics mods need GFX.ini [Settings] EnableMods (0.9.21), off again once none Cartridge turned on is left
+  const anyMod = Object.keys(rec).some((k) => { const p = k.split('\u0001'); return p[0] === 'dolphin' && p[1] === dir.user && p[3] === 'GraphicMods'; });
+  if (mods.length || rec[K('@mods', dir.user)]) cheatSwitch(rec, K('@mods', dir.user), anyMod, { file: path.join(dir.config, 'GFX.ini'), sec: 'Settings', key: 'EnableMods', on: 'True', off: 'False' });
   return rec;
 }
 
@@ -278,4 +338,4 @@ async function ppssppDownloadDb(dir, { fetchImpl = webFetch } = {}) {
   return { updated: true, url };
 }
 
-module.exports = { ppssppDownloadDb, geckoTxt, geckoDownload, addGecko, dolphinDirs, dolphinSys, dolphinParse, dolphinSysText, dolphinList, dolphinSet, nameLines, gcWiiId, ppssppDirs, cwParse, ppssppList, ppssppSet };
+module.exports = { dolphinMods, dolphinModsSet, dolphinUserFiles, ppssppDownloadDb, geckoTxt, geckoDownload, addGecko, dolphinDirs, dolphinSys, dolphinParse, dolphinSysText, dolphinList, dolphinSet, nameLines, gcWiiId, ppssppDirs, cwParse, ppssppList, ppssppSet };

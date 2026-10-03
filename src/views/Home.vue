@@ -137,7 +137,7 @@ const heroRom = ref(null);
 const heroSys = ref(null);
 const heroCol = ref(null);
 // Media bar art: a screenshot of the highlighted game (or its cover), or art from the highlighted console/collection
-const artOf = (r) => (r ? (store.art?.[r.id]?.hero ? img(store.art[r.id].hero) : store.sharp[r.id] || (r.shot ? img(r.shot) : cover(r, true))) : '');
+const artOf = (r) => heroArt(r)?.src || ''; // SteamGridDB's hero only, no RomM picture first (0.9.21)
 const heroArt = computed(() => {
   if (heroRom.value) return artOf(heroRom.value);
   if (heroSys.value) return artOf(romsOf(heroSys.value.id).find((r) => r.shot) || romsOf(heroSys.value.id)[0]);

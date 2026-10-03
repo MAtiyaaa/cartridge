@@ -1219,7 +1219,7 @@ let nextId = 1;
 let psbId = null;
 
 function publicItem(it) {
-  const { abort, ...rest } = it;
+  const { abort, dlw, dlwIdle, dlJob, ...rest } = it; // the worker and its timer never go to the screen
   return rest;
 }
 function emitQueue() { broadcast('downloads', queue.map(publicItem)); }
@@ -1305,24 +1305,35 @@ async function downloadTo(url, dest, it, onBytes, opts = {}) {
   delete headers.Accept;
   const lim = (config.downloads.limitMBs || 0) * 1048576;
   const running = Math.max(1, queue.filter((q) => q.status === 'downloading').length);
-  let w;
-  try { w = new (require('worker_threads').Worker)(path.join(__dirname, 'dlWorker.js'), { workerData: { url, headers, part, start, limit: lim ? Math.floor(lim / running) : 0 } }); }
-  catch (e) { log('download worker could not start, downloading here', e.message); dlWorkersOk = false; return downloadHere(url, dest, it, onBytes, opts); }
+  // one worker per download item, reused for each of its files (0.9.21: a new thread and connection per
+  // file made folder games of thousands of files crawl); it ends 3 s after its last file
+  clearTimeout(it.dlwIdle);
+  let w = it.dlw;
+  if (!w) {
+    try { w = it.dlw = new (require('worker_threads').Worker)(path.join(__dirname, 'dlWorker.js')); }
+    catch (e) { log('download worker could not start, downloading here', e.message); dlWorkersOk = false; return downloadHere(url, dest, it, onBytes, opts); }
+    w.on('exit', () => { if (it.dlw === w) it.dlw = null; });
+  }
+  const job = (it.dlJob = (it.dlJob || 0) + 1);
   const r = await new Promise((resolve, reject) => {
-    const onAbort = () => { try { w.postMessage('abort'); } catch {} setTimeout(() => w.terminate(), 500); };
+    const onAbort = () => { try { w.postMessage('abort'); } catch {} setTimeout(() => { if (!settled) w.terminate(); }, 500); };
     it.abort.signal.addEventListener('abort', onAbort, { once: true });
     let settled = false;
-    const end = (fn, v) => { if (settled) return; settled = true; it.abort.signal.removeEventListener('abort', onAbort); fn(v); };
-    w.on('message', (m) => {
+    const end = (fn, v) => { if (settled) return; settled = true; it.abort.signal.removeEventListener('abort', onAbort); w.off('message', onMsg); w.off('error', onErr); w.off('exit', onExit); fn(v); };
+    const onMsg = (m) => {
+      if (m.job !== job) return;
       if (m.type === 'start') { if (m.resumed) onBytes(start); }
       else if (m.type === 'bytes') onBytes(m.n);
       else if (m.type === 'restart') end(resolve, 'restart');
-      else if (m.type === 'done') end(resolve, 'done');
+      else if (m.type === 'done') { if (m.bytes > 64 << 20) log('downloaded', path.basename(dest), Math.round(m.bytes / 1048576) + ' MB at', (m.bytes / 1048576 / Math.max(0.001, m.ms / 1000)).toFixed(1) + ' MB/s'); end(resolve, 'done'); }
       else if (m.type === 'error') end(reject, Object.assign(new Error(m.message), m.message === 'aborted' ? { name: 'AbortError' } : {}));
-    });
-    w.on('error', (e) => end(reject, e));
-    w.on('exit', () => end(reject, Object.assign(new Error(it.abort.signal.aborted ? 'aborted' : 'Download stopped'), it.abort.signal.aborted ? { name: 'AbortError' } : {})));
+    };
+    const onErr = (e) => end(reject, e);
+    const onExit = () => end(reject, Object.assign(new Error(it.abort.signal.aborted ? 'aborted' : 'Download stopped'), it.abort.signal.aborted ? { name: 'AbortError' } : {}));
+    w.on('message', onMsg); w.on('error', onErr); w.on('exit', onExit);
+    w.postMessage({ type: 'job', job, url, headers, part, start, limit: lim ? Math.floor(lim / running) : 0 });
   });
+  if (it.dlw === w) it.dlwIdle = setTimeout(() => { if (it.dlw === w) { it.dlw = null; w.terminate(); } }, 3000);
   if (r === 'restart') { await fsp.rm(part, { force: true }); return downloadTo(url, dest, it, onBytes, opts); }
   await fsp.rename(part, dest);
 }
@@ -1974,7 +1985,10 @@ function dolphinPatchState(romId) {
   const id = cheatsMod.gcWiiId(file);
   if (!id) return { emu: 'dolphin', why: 'Cartridge couldn’t read this game’s ID from its disc image (ISO, GCM, RVZ, WIA, WBFS and CISO can be read).' };
   const ph = patchHome(romId, 'dolphin'), dirs = cheatsMod.dolphinDirs();
-  const dir = (ph.pick && dirs.find((d) => d.flatpak === !!ph.flatpak)) || dirs[0];
+  // 0.9.21 (owner: codes on in Dolphin didn't show as on): the user folder that holds this game's
+  // settings wins (EmuDeck's launcher hides whether it's the Flatpak), then the copy the game uses
+  const has = (d) => cheatsMod.dolphinUserFiles(d, id).some((n) => fs.existsSync(path.join(d.user, 'GameSettings', n)));
+  const dir = dirs.find(has) || (ph.pick && dirs.find((d) => d.flatpak === !!ph.flatpak)) || dirs[0];
   if (!dir) return { emu: 'dolphin', serial: id, why: 'Dolphin’s settings weren’t found on this device. Open Dolphin once, then come back.' };
   return { emu: 'dolphin', serial: id, version: '', dir };
 }
@@ -2068,15 +2082,16 @@ async function installVitaGame(romId, zrif) {
   if (item.kind === 'pkg' && !/^KO5i[0-9A-Za-z+/=]{40,}$/.test(key)) throw new Error('This .pkg needs its zRIF key (it starts with KO5i).');
   const cmd = steamMgr.vita3kCommand();
   if (!cmd) throw new Error('Vita3K wasn’t found. Set it up in Settings → Emulators.');
+  // Vita3K's own storage first (0.9.21), then any other ux0 found (installVita puts them in order)
   const prefs = emuRoots('vita3k');
-  if (!prefs.length) throw new Error('Vita3K’s storage wasn’t found. Open Vita3K once and finish its setup (firmware included), then try again.');
+  if (!prefs.length && !pkgInst.vita3kFsPaths(cmd.exe).length) throw new Error('Vita3K’s storage wasn’t found. Open Vita3K once and finish its setup (firmware included), then try again.');
   pkgRun = { romId, ac: new AbortController() };
   const send = (o) => broadcast('pkg-progress', { romId, ...o });
   try {
     send({ state: 'running', step: 0, of: 1, opens: false });
     const got = await pkgInst.installVita({ cmd, prefs, item, zrif: key, signal: pkgRun.ac.signal, onStep: (s) => send({ state: 'running', ...s }) });
     const g = got[0];
-    if (!g) throw new Error('Vita3K didn’t install it. Open Vita3K and install the file there (File → Install) to see why.');
+    if (!g) throw new Error('Vita3K didn’t install it. Its own message is in Cartridge’s log (Settings → About → Report a problem).');
     const prev = installs[romId];
     installs[romId] = { emu: 'vita3k', serial: g.serial, dir: g.dir, created: !!(g.created || (prev?.created && prev.serial === g.serial)), at: Date.now(), files: [path.basename(item.file)] };
     saveInstalls();
@@ -2085,7 +2100,7 @@ async function installVitaGame(romId, zrif) {
     afterInstall(romId);
     // without a licence Vita3K can't start it: say so instead of "installed"
     return { ...installs[romId], updates: 0, licenceMissing: g.licenced ? [] : [{ contentId: g.serial, vita: true }] };
-  } catch (e) { send({ state: 'error', error: e.message }); throw e; }
+  } catch (e) { log('vita3k install failed', e.message, e.detail ? '\n' + e.detail : ''); send({ state: 'error', error: e.message }); throw e; }
   finally { pkgRun = null; }
 }
 
@@ -2563,6 +2578,7 @@ const handlers08 = {
   'play:week': () => playWeek(),
   // Syncthing, first look (0.9.19): read only, what it syncs and with whom
   'sync:status': () => require('./syncthing').status(),
+  'sync:browse': (folder) => require('./syncthing').browse(folder),
   // dates for a game's timeline (the game page adds trophies and achievements it already has)
   'rom:timeline': ({ romId }) => {
     const r = romIndexMain().get(romId);
@@ -3085,7 +3101,7 @@ const handlers = {
       send({ state: 'install', pct: 0 });
       const r = await A.install(archive, dest, kind, { id: kind === 'switch' ? '' : path.basename(dest), name: pack.name, signal: addonRun.abort.signal, onFile: (n, of) => { const now = Date.now(); if (now - last > 400) { last = now; send({ state: 'install', pct: Math.floor((n / of) * 100) }); } } });
       const recs = addonRecs();
-      recs[key] = { source: pack.source, id: pack.id, fileId: file?.id || null, name: pack.name, romId: rom.id, game: rom.name, emu: e.id, emuName: e.name, emuRoot: e.emuRoot, dest, files: r.files, bytes: r.bytes, at: Date.now(), from: pack.sourceUrl || pack.url || '' };
+      recs[key] = { source: pack.source, id: pack.id, fileId: file?.id || null, name: pack.name, category: pack.category || '', romId: rom.id, game: rom.name, emu: e.id, emuName: e.name, emuRoot: e.emuRoot, dest, files: r.files, bytes: r.bytes, at: Date.now(), from: pack.sourceUrl || pack.url || '' };
       saveJson(ADDONS_FILE, recs);
       log('add-on installed', key, r.files.length, 'files');
       send({ state: 'done' });
@@ -3134,7 +3150,7 @@ const handlers = {
       const ck = { retro: 'snes', gc: 'gc' }[key] || key;
       return (steamMgr.candidatesFor(ck) || []).some((c) => c.id.split('@')[0] === e.id);
     };
-    return G.CATALOG.map((c) => ({ key: c.key, name: c.name, emus: c.emus.map((e) => ({ id: e.id, label: require('./emulators').EMU[e.id]?.label || { retroarch: 'RetroArch', supermodel: 'Supermodel' }[e.id] || e.id, how: e.how, from: e.how === 'flatpak' ? 'Flatpak from Flathub' : `AppImage from ${e.repo.split('/')[0]}${e.fp ? ', else its Flatpak' : ''}`, installed: isHere(e, c.key) })) }));
+    return G.CATALOG.map((c) => ({ key: c.key, name: c.name, emus: c.emus.map((e) => ({ id: e.id, label: require('./emulators').EMU[e.id]?.label || { retroarch: 'RetroArch', supermodel: 'Supermodel' }[e.id] || e.id, how: e.how, from: e.how === 'flatpak' ? 'Flatpak from Flathub' : `${e.binary ? 'Linux build' : 'AppImage'} from ${e.repo.split('/')[0]}${e.fp ? ', else its Flatpak' : ''}`, installed: isHere(e, c.key) })) }));
   },
   // where emulators live (0.9.17): this device and every mounted drive, with free space
   'emuget:drives': async () => {
@@ -3204,11 +3220,16 @@ const handlers = {
     const out = [];
     for (const e of list) {
       if (e.kind === 'flatpak') { out.push({ ...e, update: fp[e.fp] ? { version: fp[e.fp].version } : null, where: fp[e.fp]?.where }); continue; }
-      let c = cache[e.id];
-      if (U.REPOS[e.id] && (fresh || !c || Date.now() - c.t > 6 * 3600e3)) {
-        try { c = cache[e.id] = { t: Date.now(), rel: await U.latestRelease(e.id) }; } catch (err) { c = { t: c?.t || 0, rel: c?.rel || null, error: err.message }; }
+      // 0.9.21: the release source follows the copy (Xenia Edge, Xenia's Windows build, Eden's variants)
+      // a plain program (not an AppImage, not a folder build Cartridge can update) is never overwritten (0.9.21)
+      const kind = e.kind === 'appimage' || e.kind === 'folder' ? U.installKind(e.path) : null, base = U.specFor(e.id, e.path);
+      const spec = kind === 'folder' ? (base?.folder ? base : null) : kind === 'program' && !base?.zipped ? null : base;
+      const ck = e.id + ':' + path.basename(e.path || '') + (kind === 'folder' ? ':folder' : '');
+      let c = cache[ck];
+      if (spec && (fresh || !c || Date.now() - c.t > 6 * 3600e3)) {
+        try { c = cache[ck] = { t: Date.now(), rel: await U.latestRelease(e.id, { file: e.path }) }; } catch (err) { c = { t: c?.t || 0, rel: c?.rel || null, error: err.message }; }
       }
-      out.push({ ...e, update: c?.rel && U.isNewer(c.rel, e) ? c.rel : null, error: c?.error || null, noSource: !U.REPOS[e.id] });
+      out.push({ ...e, build: kind, update: c?.rel && U.isNewer(c.rel, e) ? c.rel : null, error: c?.error || null, noSource: !spec });
     }
     saveJson(file, cache);
     return out;
@@ -3217,9 +3238,9 @@ const handlers = {
     const U = require('./emuUpdates');
     if (require('./raLogin').running().has(String(id).split('@')[0])) throw new Error('Close the emulator first.');
     if (kind === 'flatpak') { await U.flatpakUpdate(fp, where); log('emulator updated (flatpak)', fp); return true; }
-    const own = steamMgr.installedEmulators().find((e) => e.kind === 'appimage' && e.path === file);
+    const own = steamMgr.installedEmulators().find((e) => (e.kind === 'appimage' || e.kind === 'folder' || e.kind === 'windows') && e.path === file);
     if (!own) throw new Error('That emulator wasn’t found.');
-    const rel = await U.latestRelease(own.id);
+    const rel = await U.latestRelease(own.id, { file });
     if (!rel) throw new Error('No newer AppImage was found for it.');
     broadcast('emu-update', { path: file, state: 'downloading', pct: 0 });
     let got = 0;
@@ -3238,7 +3259,7 @@ const handlers = {
     for (const r of ps3) { const i = await ps3UpdateInfo(r.id, { fresh }).catch(() => null); if (i) out.push({ ...i, name: r.name }); }
     return out;
   },
-  'ps3up:game': ({ romId }) => ps3UpdateInfo(Number(romId)),
+  'ps3up:game': ({ romId, fresh }) => ps3UpdateInfo(Number(romId), { fresh: !!fresh }),
   'ps3up:install': ({ romId }) => ps3InstallUpdates(Number(romId)),
   'ps3up:cancel': () => { ps3upRun?.ac.abort(); return true; },
   'patches:list': async ({ romId }) => {
@@ -3436,6 +3457,7 @@ const handlers = {
   'steam:report': () => steamMgr.startupReport(),
   'steam:last': () => steamMgr.lastStatus(),
   'steam:forRom': ({ romId }) => steamMgr.forRom(Number(romId)),
+  'steam:play': ({ romId }) => steamMgr.play(Number(romId)),
   'steam:addToCollections': ({ romId, names }) => steamMgr.addRomToCollections(Number(romId), names || []),
   // HowLongToBeat times when RomM has none: name plus release year, cached in hltb.json
   'hltb:lookup': ({ name, year }) => hltbSvc.forGame({ name: String(name || ''), year: Number(year) || null }),

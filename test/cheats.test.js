@@ -126,3 +126,25 @@ test('Dolphin: downloaded Gecko codes (codes.rc24.xyz, as Dolphin reads them) sa
   const again = C.dolphinList(dir, 'GALE01', '', {}, codes).filter((x) => x.name === 'Infinite Jumps');
   assert.strictEqual(again.length, 1); // listed once, now from the user's file
 });
+
+// 0.9.21: Dolphin graphics mods, read and switched the way GraphicsModGroupConfig does
+test('Dolphin graphics mods: found by game ID, on/off in Config/GraphicMods/<ID>.json, EnableMods switched', () => {
+  const C = require('../electron/cheats.js');
+  const fs = require('fs'), os = require('os'), path = require('path');
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'dolmods-'));
+  const dir = { user: path.join(home, 'user'), config: path.join(home, 'config'), flatpak: false };
+  const mod = (rel, title) => { const f = path.join(dir.user, 'Load/GraphicMods', rel, 'metadata.json'); fs.mkdirSync(path.dirname(f), { recursive: true }); fs.writeFileSync(f, JSON.stringify({ meta: { title, author: 'me', description: 'd' } })); };
+  mod('GZ2E01/Bloom', 'No bloom'); mod('Pack/hud', 'HUD'); fs.writeFileSync(path.join(dir.user, 'Load/GraphicMods/Pack/GZ2.txt'), '');
+  mod('OTHER1/x', 'Other game');
+  fs.mkdirSync(dir.config, { recursive: true }); fs.writeFileSync(path.join(dir.config, 'GFX.ini'), '[Settings]\n');
+  try {
+    let l = C.dolphinMods(dir, 'GZ2E01');
+    assert.deepStrictEqual(l.map((m) => [m.description, m.path, m.on]).sort(), [['HUD', 'Pack/hud/metadata.json', false], ['No bloom', 'GZ2E01/Bloom/metadata.json', false]]);
+    const rec = C.dolphinSet(dir, 'GZ2E01', [{ ...l.find((m) => m.description === 'HUD'), on: true }], {});
+    const prof = JSON.parse(fs.readFileSync(path.join(dir.config, 'GraphicMods/GZ2E01.json'), 'utf8'));
+    assert.deepStrictEqual(prof.mods, [{ source: 'user', path: 'Pack/hud/metadata.json', enabled: true, weight: 0 }]);
+    assert.match(fs.readFileSync(path.join(dir.config, 'GFX.ini'), 'utf8'), /EnableMods\s*=\s*True/);
+    l = C.dolphinMods(dir, 'GZ2E01', rec);
+    assert.strictEqual(l.find((m) => m.description === 'HUD').by, 'cartridge');
+  } finally { fs.rmSync(home, { recursive: true, force: true }); }
+});

@@ -226,7 +226,8 @@ body.surface-glass .glass { background: var(--glass-bg); border: 1px solid var(-
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), inset 0 0 0 1px rgba(255, 255, 255, 0.1), 0 20px 40px -22px rgba(0, 0, 0, 0.9);
   transition: transform 0.14s ease-out, box-shadow 0.14s ease-out; will-change: transform; }
 .systile::after { content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; background: linear-gradient(170deg, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0.04) 30%, transparent 45%), linear-gradient(0deg, rgba(0, 0, 0, 0.45), transparent 55%); }
-.systile .glyph { position: absolute; right: 12px; top: 10px; height: calc(100% - 20px); aspect-ratio: 1; opacity: 0.55; filter: saturate(0.6) brightness(1.1) drop-shadow(0 10px 18px rgba(0, 0, 0, 0.45));
+/* the picture keeps clear of the rounded corners even when the card is focused (owner, 0.9.21: they were cut off) */
+.systile .glyph { position: absolute; right: 16px; top: 16px; height: calc(100% - 32px); aspect-ratio: 1; opacity: 0.55; filter: saturate(0.6) brightness(1.1) drop-shadow(0 10px 18px rgba(0, 0, 0, 0.45));
   -webkit-mask-image: linear-gradient(90deg, transparent, #000 45%); mask-image: linear-gradient(90deg, transparent, #000 45%); transition: opacity 0.3s, transform 0.4s var(--ease); }
 .systile .glyph > * { width: 100% !important; height: 100% !important; object-fit: contain; } /* PIcon sets a fixed inline size */
 .systile .ico { width: 44px; height: 44px; }
@@ -237,9 +238,10 @@ body.surface-glass .glass { background: var(--glass-bg); border: 1px solid var(-
 /* the maker's logo at the height of the text: wordmarks at cap height, symbols a touch taller (0.9.16) */
 .systile .maker { height: 0.9em; width: auto; fill: currentColor; flex: none; }
 .systile .maker.symbol { height: 1.1em; }
+.systile .maker.tall { height: 1.45em; margin: -0.28em 0; } /* Nintendo: the pill around the letters (0.9.21) */
 .systile .ct { display: inline-flex; gap: 6px; padding: 4px 8px; border-radius: var(--r-sm); background: rgba(0, 0, 0, 0.35); color: #fff; font-size: var(--t-xs); font-weight: 600; }
 .systile:focus { transform: translateY(-4px) scale(1.03); box-shadow: var(--ring), 0 20px 40px -22px rgba(0, 0, 0, 0.9); }
-.systile:focus .glyph { opacity: 0.8; transform: scale(1.05) rotate(-4deg); }
+.systile:focus .glyph { opacity: 0.8; transform: translateY(-2px) scale(1.04); }
 /* without the GPU: no drop shadow filter on the picture */
 body.light-fx .systile .glyph { filter: saturate(0.6) brightness(1.1); }
 
@@ -343,6 +345,12 @@ body.light-fx .coll .art, body.light-fx .coll .mosaic { transition-property: tra
 .status.warn { background: rgba(245, 197, 66, 0.16); color: #ffd978; }
 .status.bad { background: rgba(255, 107, 97, 0.16); color: #ffa39c; }
 .status.none { background: var(--s3); color: var(--muted); }
+/* on a selected row (white, or the Highlights colour) the pills keep their meaning but read against it
+   (0.9.21, owner: "up to date" and the orange version didn't show on a selected row) */
+:is(.lrow, .up-row, .menu-item, .prow, .ss-emu):is(:focus-visible, .pad-mode :focus) .status, .pad-mode :is(.lrow, .up-row, .menu-item, .prow, .ss-emu):focus .status { background: color-mix(in srgb, var(--on-focus) 10%, transparent); color: var(--on-focus); }
+.pad-mode :is(.lrow, .up-row, .menu-item, .prow, .ss-emu):focus .status.ok, :is(.lrow, .up-row, .menu-item, .prow, .ss-emu):focus-visible .status.ok { background: color-mix(in srgb, #1f9d45 18%, transparent); color: color-mix(in srgb, var(--on-focus) 45%, #138a3a); }
+.pad-mode :is(.lrow, .up-row, .menu-item, .prow, .ss-emu):focus .status.warn, :is(.lrow, .up-row, .menu-item, .prow, .ss-emu):focus-visible .status.warn { background: color-mix(in srgb, #e08a00 20%, transparent); color: color-mix(in srgb, var(--on-focus) 40%, #a35f00); }
+.pad-mode :is(.lrow, .up-row, .menu-item, .prow, .ss-emu):focus .status.bad, :is(.lrow, .up-row, .menu-item, .prow, .ss-emu):focus-visible .status.bad { background: color-mix(in srgb, #d93a2f 18%, transparent); color: color-mix(in srgb, var(--on-focus) 40%, #b3261c); }
 .page-head { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--s-5); margin: var(--s-4) 0 var(--s-5); }
 .page-head h1 { font-size: var(--t-2xl); line-height: 1.05; margin: 4px 0 var(--s-2); }
 .page-head .lead { color: var(--muted); font-size: var(--t-md); max-width: 720px; }
@@ -356,3 +364,6 @@ body.light-fx .coll .art, body.light-fx .coll .mosaic { transition-property: tra
 
 /* a small count on a page tab (Emulators → Updates, 0.9.16) */
 .count-dot { display: inline-grid; place-items: center; min-width: 1.4em; height: 1.4em; padding: 0 0.35em; margin-left: 6px; border-radius: 999px; background: #f5c542; color: #1a1400; font-size: 0.75em; font-weight: 700; }
+
+/* Game Mode with another app in front (0.9.21): nothing animates, so nothing repaints behind the game */
+body.away *, body.away *::before, body.away *::after { animation-play-state: paused !important; }

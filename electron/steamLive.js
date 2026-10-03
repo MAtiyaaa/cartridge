@@ -134,5 +134,7 @@ module.exports = function steamLive({ log = () => {} } = {}) {
   const removeShortcut = (appid) => run(`SteamClient.Apps.RemoveShortcut(${appid >>> 0}), true`);
   // What SteamGridDB's Decky plugin does after changing artwork
   const restart = () => run('SteamClient.User.StartRestart(false), true', 5000);
-  return { available, addShortcut, removeShortcut, updateShortcut, settle, setArtwork, restart, flagOn, FLAG, addToCollections };
+  // start a game the way the library's Play button does (0.9.21): 64-bit game id of a shortcut
+  async function runGame(gameId) { return run(`SteamClient.Apps.RunGame(${JSON.stringify(String(gameId))}, '', -1, 100); true`); }
+  return { runGame, available, addShortcut, removeShortcut, updateShortcut, settle, setArtwork, restart, flagOn, FLAG, addToCollections };
 };

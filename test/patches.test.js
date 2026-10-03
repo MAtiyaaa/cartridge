@@ -84,10 +84,12 @@ test('lists this game and version only; versions stay text (01.00, not 1)', () =
   const l = P.rpcs3List(d, 'NPUA80523', '01.01');
   assert.deepStrictEqual(l.map((p) => [p.description, p.version, p.on]), [['60 FPS', '01.01', false], ['Disable blur', 'All', false]]);
   assert.strictEqual(l[0].notes, 'Needs a fast CPU');
-  // 0.9.16: patches for another version of this game are listed after, saying which version
+  // 0.9.21: with the copy's version known, patches for other versions are left out
   const v2 = P.rpcs3List(d, 'NPUA80523', '02.00');
-  assert.deepStrictEqual(v2.map((p) => [p.description, p.other]), [['Disable blur', false], ['60 FPS', true]]);
-  assert.match(v2[1].notes, /For game version .*this copy is 02\.00/);
+  assert.deepStrictEqual(v2.map((p) => [p.description, p.other]), [['Disable blur', false]]);
+  // version unknown: every version's patches, saying which version each is for
+  const any = P.rpcs3List(d, 'NPUA80523', '');
+  assert.ok(any.some((p) => p.description === '60 FPS'));
 });
 
 test('RPCS3\'s patch download: checksum checked, old file kept as patch.yml.old', async () => {

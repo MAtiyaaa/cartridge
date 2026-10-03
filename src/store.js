@@ -4,6 +4,7 @@ const rd = window.cart;
 export const call = (ch, arg) => rd.call(ch, arg ? JSON.parse(JSON.stringify(arg)) : arg);
 
 export const store = reactive({
+  away: false, // Game Mode: another app is in front (0.9.21)
   config: null,
   info: {},
   connection: { base: '', route: '' },
@@ -203,25 +204,45 @@ export function cover(rom, large = false) {
 // Sharp backgrounds (0.9.3 K, F2/F3): SteamGridDB's biggest hero for a game, asked for once it has
 // been highlighted for a moment (main.js sharpHero caches it). undefined: not asked yet, null: none.
 const sharpWait = new Set();
-let sharpT = 0;
+// 0.9.21: a short queue, newest first (the game you just reached comes before ones you passed), at most
+// 8 waiting, one asked at a time after a 250 ms pause; several on screen at once (Start) all get theirs
+const sharpQ = [];
+let sharpBusy = false;
 export function wantSharp(rom) {
   if (!rom || !store.config?.sgdbKey || rom.id in store.sharp || sharpWait.has(rom.id)) return;
-  clearTimeout(sharpT);
-  sharpT = setTimeout(async () => {
-    sharpWait.add(rom.id);
-    try { store.sharp[rom.id] = await call('art:sharpHero', { id: rom.id, name: rom.name }); } catch { /* offline: ask again later */ }
-    sharpWait.delete(rom.id);
-  }, 350);
+  const i = sharpQ.findIndex((r) => r.id === rom.id); if (i >= 0) sharpQ.splice(i, 1);
+  sharpQ.push(rom); if (sharpQ.length > 8) sharpQ.shift();
+  if (!sharpBusy) pumpSharp();
 }
-export function backdropOf(rom) {
-  if (!rom) return '';
+async function pumpSharp() {
+  sharpBusy = true;
+  while (sharpQ.length) {
+    await new Promise((r) => setTimeout(r, 250));
+    const rom = sharpQ.pop();
+    if (!rom || rom.id in store.sharp) continue;
+    sharpWait.add(rom.id);
+    try { store.sharp[rom.id] = await call('art:sharpHero', { id: rom.id, name: rom.name }); if (bgRom === rom.id) setBg(heroArt(rom) || ''); } catch { /* offline: ask again later */ }
+    sharpWait.delete(rom.id);
+  }
+  sharpBusy = false;
+}
+// A game's hero (0.9.21, owner: RomM's picture showed first, then SteamGridDB's replaced it a moment
+// later, which looked off; use SteamGridDB's only): your own pick, else SteamGridDB's sharp hero once
+// it's known (null until then, so nothing shows and the hero fades in once), else, when SteamGridDB
+// has none, the cover blurred. Without a SteamGridDB key RomM's screenshot is still used.
+export function heroArt(rom) {
+  if (!rom) return null;
   const h = store.art?.[rom.id]?.hero;
   if (h) return { src: img(h), blur: false };
   if (store.sharp[rom.id]) return { src: store.sharp[rom.id], blur: false };
-  if (rom.shot) return { src: img(rom.shot), blur: false };
+  if (store.config?.sgdbKey) {
+    if (!(rom.id in store.sharp)) { wantSharp(rom); return null; }
+  } else if (rom.shot) return { src: img(rom.shot), blur: false };
   const c = cover(rom, true);
-  return c ? { src: c, blur: true } : '';
+  return c ? { src: c, blur: true } : null;
 }
+let bgRom = null; // the game the page backdrop is for: its SteamGridDB hero goes in when it arrives
+export function backdropOf(rom) { bgRom = rom?.id ?? null; return heroArt(rom) || ''; }
 let bgTimer;
 export function setBg(b) {
   clearTimeout(bgTimer);

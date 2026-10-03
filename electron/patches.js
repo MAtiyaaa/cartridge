@@ -108,9 +108,10 @@ function rpcs3List(dir, serial, appVer, mine = {}) {
         for (const [title, serials] of Object.entries(games)) {
           const vers = serials?.[serial];
           if (!Array.isArray(vers)) continue;
-          // this game's version, else All; with the version unknown, the one version it lists. Patches
-          // made for another version of this game (usually its last update) are listed too, saying so:
-          // RPCS3 applies them once the game runs as that version (0.9.16)
+          // this game's version, else All; with the version unknown, the one version it lists. 0.9.21
+          // (owner: Uncharted 3 at 1.19 listed every version's patches): when the copy's version is
+          // known, patches for other versions are left out, unless one is already on (so it can be
+          // turned off). With the version unknown, they're listed, saying which version they're for.
           let version = vers.includes(appVer) ? appVer : vers.includes('All') ? 'All' : !appVer && vers.length === 1 ? vers[0] : null;
           let other = null;
           if (!version) { version = [...vers].sort((x, y) => String(y).localeCompare(String(x), undefined, { numeric: true }))[0]; if (!version) continue; other = vers; }
@@ -119,6 +120,7 @@ function rpcs3List(dir, serial, appVer, mine = {}) {
           seen.add(key);
           const node = cfg?.[hash]?.[description]?.[title]?.[serial]?.[version];
           const on = node === 'true' || !!(node && typeof node === 'object' && node.Enabled === 'true');
+          if (other && appVer && !on) continue;
           const note = other ? `For game version ${other.join(', ')}${appVer ? ` (this copy is ${appVer}: install the game's update in RPCS3 for it to apply)` : ''}.` : '';
           out.push({ key, hash, description, title, serial, version, author: p.Author || '', notes: [note, typeof p.Notes === 'string' ? p.Notes : ''].filter(Boolean).join(' '), group: p.Group || '', on, other: !!other, by: on ? (mine[key] ? 'cartridge' : 'emulator') : null });
         }

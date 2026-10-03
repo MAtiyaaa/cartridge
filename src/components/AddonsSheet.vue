@@ -1,13 +1,15 @@
 <template>
-  <div class="scrim" ref="el" @click.self="closeModal(null)">
-    <div class="dialog ad">
+  <div :class="embedded ? 'ad-host' : 'scrim'" ref="el" @click.self="!embedded && closeModal(null)">
+    <div class="ad" :class="{ dialog: !embedded }">
       <div>
-        <div class="eyebrow">Add-ons{{ emu ? ' · ' + emu.name + (emu.flatpak ? ' (Flatpak)' : '') : '' }}</div>
-        <h2>{{ name }}</h2>
+        <template v-if="!embedded">
+          <div class="eyebrow">Add-ons{{ emu ? ' · ' + emu.name + (emu.flatpak ? ' (Flatpak)' : '') : '' }}</div>
+          <h2>{{ name }}</h2>
+        </template>
         <div v-if="emus.length > 1" class="seg" style="margin: 4px 0 8px"><button v-for="e in emus" :key="e.emuRoot" data-focus :class="{ on: emu?.emuRoot === e.emuRoot }" @click="pickEmu(e)">{{ e.name }}{{ e.flatpak ? ' (Flatpak)' : '' }}</button></div>
         <div v-if="emu" class="muted small mono">{{ emu.folder ? short(emu.folder) : `${short(emu.root)} (this game’s ID couldn’t be read)` }}</div>
-        <div v-if="here" class="ad-here"><Icon name="mdiCheckCircle" :size="18" /><span>{{ here.mods ? 'Mods are' : 'A texture pack is' }} in place for this game ({{ here.files.toLocaleString() }} files), {{ here.by === 'cartridge' ? 'installed by Cartridge' : here.by === 'both' ? 'partly installed by Cartridge' : 'added outside Cartridge' }}.</span></div>
-        <div v-if="emu && !emu.mods" class="muted small">{{ emu.on ? 'Custom textures are on.' : 'Custom textures are off: turn them on below, or in ' + emu.name + '.' }}</div>
+        <div v-if="here && wants(here.mods ? 'mods' : 'tex')" class="ad-here"><Icon name="mdiCheckCircle" :size="18" /><span>{{ here.mods ? 'Mods are' : 'A texture pack is' }} in place for this game ({{ here.files.toLocaleString() }} files), {{ here.by === 'cartridge' ? 'installed by Cartridge' : here.by === 'both' ? 'partly installed by Cartridge' : 'added outside Cartridge' }}.</span></div>
+        <div v-if="emu && !emu.mods && wants('tex')" class="muted small">{{ emu.on ? 'Custom textures are on.' : 'Custom textures are off: turn them on below, or in ' + emu.name + '.' }}</div>
       </div>
 
       <div v-if="!d" class="muted"><Icon name="mdiSync" :size="16" class="spin" /> Looking for add-ons…</div>
@@ -23,12 +25,12 @@
           </button>
         </template>
 
-        <div class="ad-h">{{ d.source === 'ps2' ? (d.gbGame ? 'PS2 texture packs and GameBanana' : 'PS2 texture packs') : 'From GameBanana' }}</div>
-        <div v-if="d.error" class="muted small">{{ d.error }}</div>
-        <div v-else-if="!d.packs.length" class="muted small">{{ d.source === 'ps2' ? 'No texture packs for this game in the catalog yet.' : d.source ? 'No mods for this game on GameBanana.' : 'No emulator for this console is set up here.' }}</div>
-        <template v-for="p in d.packs" :key="p.source + p.id">
+        <div class="ad-h">{{ kind === 'mods' ? 'Mods from GameBanana' : kind === 'tex' ? 'Texture packs' : d.source === 'ps2' ? (d.gbGame ? 'PS2 texture packs and GameBanana' : 'PS2 texture packs') : 'From GameBanana' }}</div>
+        <div v-if="d.error && (kind !== 'tex' || d.source === 'ps2')" class="muted small">{{ d.error }}</div>
+        <div v-else-if="!packs.length" class="muted small">{{ !d.emus?.length ? 'No emulator for this console is set up here.' : kind === 'tex' ? (d.source === 'ps2' ? 'No texture packs for this game in the catalog yet.' : 'There’s no texture pack catalog for this console yet. A pack you put in the folder above is used once custom textures are on.') : 'No mods for this game on GameBanana.' }}</div>
+        <template v-for="p in packs" :key="p.source + p.id">
           <button class="ad-row" data-focus :disabled="!!run" @click="act(p)">
-            <img v-if="p.preview" class="ad-img" :src="p.preview" loading="lazy" />
+            <img v-if="p.preview || p.previews?.[0]" class="ad-img" :src="p.preview || p.previews[0]" loading="lazy" />
             <Icon v-else name="mdiPuzzleOutline" :size="22" />
             <span class="ad-mid"><b>{{ p.name }}</b><span class="ad-sub">{{ subOf(p) }}</span></span>
             <span class="ad-end">{{ has(p) ? 'Installed' : p.source === 'gb' ? (open === p.id ? 'Hide files' : 'Files') : 'Install' }}</span>
@@ -43,14 +45,14 @@
             </button>
           </template>
         </template>
-        <p v-if="d.source === 'ps2' && d.packs.length" class="muted small">Packs from the EmuCoreX texture catalog, each credited to its creator. Checked against the catalog’s checksum before anything is installed.</p>
-        <p v-if="d.source === 'gb' || d.packs.some((p) => p.source === 'gb')" class="muted small">Mods made by GameBanana’s community. Check a mod’s page for which version of the game it needs.</p>
+        <p v-if="packs.some((p) => p.source === 'ps2')" class="muted small">Packs from the EmuCoreX texture catalog, each credited to its creator. Checked against the catalog’s checksum before anything is installed.</p>
+        <p v-if="packs.some((p) => p.source === 'gb')" class="muted small">Mods made by GameBanana’s community. Check a mod’s page for which version of the game it needs.</p>
       </div>
 
       <div class="row" style="justify-content: flex-end; flex-wrap: wrap">
-        <button v-if="emu && !emu.mods && !emu.on" class="btn" data-focus @click="texOn"><Icon name="mdiTextureBox" />Turn textures on</button>
+        <button v-if="emu && !emu.mods && !emu.on && wants('tex')" class="btn" data-focus @click="texOn"><Icon name="mdiTextureBox" />Turn textures on</button>
         <button v-if="emu" class="btn" data-focus @click="copy"><Icon name="mdiContentCopy" />Copy folder path</button>
-        <button class="btn" data-focus @click="closeModal(null)">Close</button>
+        <button v-if="!embedded" class="btn" data-focus @click="closeModal(null)">Close</button>
       </div>
     </div>
   </div>
@@ -64,10 +66,16 @@ import { pushLayer, focusFirst } from '../nav.js';
 import { store, call, closeModal, toast, bytes, confirm } from '../store.js';
 import Icon from './Icon.vue';
 
-const props = defineProps({ romId: Number, name: String });
+// embedded (0.9.21): one tab of Game Add-ons (GameAddons.vue); kind 'tex' is the texture pack catalog
+// (EmuCoreX, PS2), kind 'mods' is GameBanana (owner: GameBanana is for mods, keep the two apart)
+const props = defineProps({ romId: Number, name: String, embedded: Boolean, kind: { type: String, default: '' }, onReopen: Function });
 const el = ref(null), d = ref(null), emu = ref(null), open = ref(null), files = ref(null), run = ref(null);
 const emus = computed(() => d.value?.emus || []);
-const mine = computed(() => (d.value?.installed || []).filter((r) => !emu.value || r.emuRoot === emu.value.emuRoot));
+const isTex = (p) => p.source === 'ps2';
+const wants = (k) => !props.kind || props.kind === k;
+const ofKind = (p) => wants(isTex(p) ? 'tex' : 'mods');
+const packs = computed(() => (d.value?.packs || []).filter(ofKind));
+const mine = computed(() => (d.value?.installed || []).filter((r) => (!emu.value || r.emuRoot === emu.value.emuRoot) && ofKind(r)));
 const short = (p) => String(p || '').replace(store.info?.home || '\0', '~');
 const has = (p) => mine.value.some((r) => String(r.id) === String(p.id));
 const subOf = (p) => (p.source === 'ps2' ? [p.authors.join(', ') && 'by ' + p.authors.join(', '), bytes(p.size), p.files ? p.files.toLocaleString() + ' textures' : '', p.version].filter(Boolean).join(' · ') : [p.authors[0] && 'by ' + p.authors[0], p.category].filter(Boolean).join(' · '));
@@ -108,7 +116,7 @@ async function remove(r) {
 // confirm() uses the one modal slot: come back to this sheet afterwards
 const resolveSaved = () => store.modal?.resolve;
 let saved = null;
-function reopen() { if (store.modal?.type !== 'addons') store.modal = { type: 'addons', props: { romId: props.romId, name: props.name }, resolve: saved || (() => {}) }; }
+function reopen() { if (props.embedded) return props.onReopen?.(); if (store.modal?.type !== 'addons') store.modal = { type: 'addons', props: { romId: props.romId, name: props.name }, resolve: saved || (() => {}) }; }
 async function texOn() {
   try { await call('addons:setTextures', { root: emu.value.emuRoot, on: true }); toast(`Custom textures on in ${emu.value.name}`, 'ok', 3000, 'mdiTextureBox'); load(); }
   catch (e) { toast(e.message, 'error', 5000); }
@@ -119,15 +127,17 @@ let off = null, layer;
 onMounted(async () => {
   saved = resolveSaved();
   off = window.cart.on('addon-progress', (m) => { if (m.romId === props.romId && run.value && m.state !== 'done' && m.state !== 'error') run.value = m; });
-  layer = pushLayer(el.value, { back: () => closeModal(null), lb() {}, rb() {}, x() {}, y() {}, select() {}, lt() {}, rt() {} });
+  if (!props.embedded) layer = pushLayer(el.value, { back: () => closeModal(null), lb() {}, rb() {}, x() {}, y() {}, select() {}, lt() {}, rt() {} });
   await load();
-  focusFirst(el.value);
+  if (!props.embedded) focusFirst(el.value);
 });
 onBeforeUnmount(() => { layer?.pop(); off?.(); });
 </script>
 
 <style scoped>
 .ad { width: min(820px, 94vw); max-height: 88vh; display: flex; flex-direction: column; gap: var(--s-4); }
+.ad-host { display: flex; flex-direction: column; min-height: 0; flex: 1; }
+.ad-host > .ad { width: auto; max-height: none; min-height: 0; flex: 1; }
 .ad h2 { margin: 2px 0 6px; font-size: var(--t-xl); line-height: 1.15; }
 .small { font-size: var(--t-sm); }
 .mono { font-family: ui-monospace, monospace; word-break: break-all; }

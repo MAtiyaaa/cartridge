@@ -110,6 +110,7 @@ document.addEventListener('visibilitychange', vis);
 const away = () => cancelAnimationFrame(raf);
 window.addEventListener('blur', away);
 window.addEventListener('focus', start);
+watch(() => store.away, (a) => (a ? cancelAnimationFrame(raf) : start()));
 onBeforeUnmount(() => { cancelAnimationFrame(raf); document.removeEventListener('visibilitychange', vis); window.removeEventListener('resize', onResize); window.removeEventListener('blur', away); window.removeEventListener('focus', start); });
 
 // ---------- your own wallpaper

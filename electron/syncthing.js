@@ -54,10 +54,31 @@ async function status({ fetchImpl = fetch, home = HOME } = {}) {
     const conns = await get('/rest/system/connections').catch(() => ({ connections: {} }));
     for (const x of folders) { try { const c = await get(`/rest/db/completion?folder=${encodeURIComponent(x.id)}`); x.done = Math.round(c.completion ?? 100); } catch {} }
     const me = sys.myID || '';
-    const devices = cfg.devices.filter((d) => d.id !== me).map((d) => ({ name: d.name || d.id.slice(0, 7), online: !!conns.connections?.[d.id]?.connected }));
+    const seen = await get('/rest/stats/device').catch(() => ({}));
+    const devices = cfg.devices.filter((d) => d.id !== me).map((d) => ({ name: d.name || d.id.slice(0, 7), online: !!conns.connections?.[d.id]?.connected, seen: Date.parse(seen?.[d.id]?.lastSeen) || 0 }));
+    folders.sort((a, b) => !!b.saves - !!a.saves); // saves first: that's what the Sync tab is for
     return { ...f, running: true, address: base, me: me.slice(0, 7), uptime: sys.uptime || 0, folders, devices };
   } catch (e) {
     return { ...f, running: false, folders, devices: cfg.devices.map((d) => ({ name: d.name || d.id.slice(0, 7), online: false })), why: /401|403/.test(e.message) ? 'Syncthing refused the key in its settings file.' : 'Syncthing isn’t running right now.' };
   }
 }
-module.exports = { find, status, parseConfig, configFiles, saveHint };
+// what's inside one synced folder, newest first (0.9.21, owner: a Sync tab that shows saves, view only).
+// Syncthing's own index (rest/db/browse) is read, never the files; nothing is opened, copied or changed.
+function flatten(tree, base = '', out = []) {
+  if (Array.isArray(tree)) { for (const e of tree) { const p = base ? base + '/' + e.name : e.name; if (e.type === 'FILE_INFO_TYPE_DIRECTORY' || e.children) flatten(e.children || [], p, out); else out.push({ path: p, size: e.size || 0, at: Date.parse(e.modTime) || 0 }); } return out; }
+  for (const [name, v] of Object.entries(tree || {})) { const p = base ? base + '/' + name : name; if (Array.isArray(v)) out.push({ path: p, at: Date.parse(v[0]) || 0, size: v[1] || 0 }); else flatten(v, p, out); }
+  return out;
+}
+async function browse(folder, { fetchImpl = fetch, home = HOME, limit = 40 } = {}) {
+  const f = find(home);
+  if (!f.config) throw new Error('Syncthing isn’t set up on this device.');
+  const cfg = parseConfig(fs.readFileSync(f.config, 'utf8'));
+  const base = `${cfg.gui.tls ? 'https' : 'http'}://${cfg.gui.address.replace(/^0\.0\.0\.0/, '127.0.0.1')}`;
+  const H = { 'X-API-Key': cfg.gui.apikey };
+  const get = async (p) => { const r = await fetchImpl(base + p, { headers: H, signal: AbortSignal.timeout(6000) }); if (!r.ok) throw new Error(`Syncthing answered ${r.status}`); return r.json(); };
+  const files = flatten(await get(`/rest/db/browse?folder=${encodeURIComponent(folder)}&levels=6`)).filter((x) => !/(^|\/)\.st(folder|ignore|versions)/.test(x.path));
+  let last = null; try { const st = await get('/rest/stats/folder'); last = st?.[folder]?.lastFile || null; } catch {}
+  files.sort((a, b) => b.at - a.at);
+  return { total: files.length, size: files.reduce((n, x) => n + x.size, 0), files: files.slice(0, limit), last: last?.filename ? { path: last.filename, at: Date.parse(last.at) || 0, deleted: !!last.deleted } : null };
+}
+module.exports = { find, status, browse, flatten, parseConfig, configFiles, saveHint };

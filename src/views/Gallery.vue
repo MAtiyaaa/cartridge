@@ -13,9 +13,8 @@
             <h1>{{ title }}</h1>
             <div class="muted row" style="gap: 8px; font-size: 13px">
               <span>{{ source.length }} games</span><span>·</span><span style="color: var(--green-l)">{{ installedCount }} on device</span>
-              <template v-if="mode === 'platform'"><span>·</span>
-                <span class="row" style="gap: 6px"><span class="dot" :class="platform.target?.exists ? 'ok' : ''" /><span class="mono" style="max-width: 340px">{{ platform.target?.path || 'No folder set' }}</span></span>
-              </template>
+              <!-- the folder path is no longer shown (owner, 0.9.21); only a missing folder is worth saying -->
+              <template v-if="mode === 'platform' && !platform.target?.exists"><span>·</span><span>No folder set</span></template>
             </div>
           </div>
           <Btn v-if="mode !== 'all' && !collection?.ordered" b="RB" />

@@ -1,17 +1,22 @@
 <template>
-  <div class="start" :class="{ editing, dragging: !!drag }" ref="el">
+  <div class="start" :class="{ editing, dragging: !!drag, sizing: !!sizing || mode === 'size' }" ref="el">
     <div v-if="editing" class="st-edit-bar">
       <b>Arrange Start</b>
-      <span class="muted">{{ picked ? 'Move it with the D-pad, A to put it down' : 'A picks a tile up · X changes its size · Y removes it' }}</span>
+      <span class="muted">{{ barText }}</span>
       <div class="spacer" />
       <button class="btn small" data-focus data-key="st-reset" @click="resetLayout"><Icon name="mdiRestore" :size="18" />Reset</button>
       <button class="btn small primary" data-focus data-key="st-done" @click="stopEdit"><Icon name="mdiCheck" :size="18" />Done</button>
     </div>
-    <div class="st-scroll" data-scroll>
-      <TransitionGroup tag="div" name="st" class="st-grid" :style="{ '--rows': ROWS }">
-        <button v-for="(t, n) in tiles" :key="t.id" class="st-tile" :class="['t-' + t.type, 'w' + t.w, 'h' + t.h, { picked: picked === t.id, art: isArt(t) }]"
-          :style="{ gridColumn: `span ${t.w}`, gridRow: `span ${t.h}`, '--n': n }" data-focus :data-key="'tile-' + t.id" :data-id="t.id" :data-hold="editing ? null : ''"
+    <div class="st-scroll" data-scroll ref="scroller">
+      <div class="st-board" :style="{ height: boardH + 'px' }">
+        <!-- arranging: the grid's empty cells show, and where the held tile will land -->
+        <div v-if="editing" class="st-slots" aria-hidden="true"><i v-for="c in slots" :key="c.k" :style="c.s" /></div>
+        <div v-if="ghost" class="st-ghost" :style="ghost" aria-hidden="true" />
+
+        <button v-for="(t, n) in tiles" :key="t.id" class="st-tile" :class="['t-' + t.type, { picked: mode === 'move' && focusedId === t.id, held: drag?.id === t.id, resized: sizing?.id === t.id || (mode === 'size' && focusedId === t.id), art: isArt(t), leaving: leaving === t.id }]"
+          :style="tileStyle(t, n)" data-focus :data-key="'tile-' + t.id" :data-id="t.id" :data-hold="editing ? null : ''"
           @click="openTile(t, $event)" @focus="focusTile(t)" @cart-hold="startEdit(t)" @pointerdown="pDown(t, $event)" @contextmenu.prevent>
+          <div class="st-face">
 
           <!-- Continue playing: the game you played last, its art, logo and when -->
           <template v-if="t.type === 'continue'">
@@ -20,32 +25,24 @@
               <div class="st-scrim" />
               <div class="st-label on-art">Continue playing</div>
               <div class="st-cp">
-                <GameLogo :logo="store.config.ui.logos !== false ? logoOf(cur) : null" :name="cur.name" cls="st-cp-name" :area="t.w >= 4 ? 26000 : 14000" :max-w="t.w >= 4 ? 380 : 220" :max-h="t.h >= 2 ? 110 : 54" />
+                <GameLogo :logo="store.config.ui.logos !== false ? logoOf(cur) : null" :name="cur.name" cls="st-cp-name" :area="Math.min(30000, box(t).pw * box(t).ph * 0.11)" :max-w="Math.min(420, box(t).pw * 0.72)" :max-h="Math.min(120, box(t).ph * 0.3)" />
                 <span class="st-cp-when">{{ whenText(cur) }}</span>
-                <span v-if="t.h >= 2" class="st-cp-go"><Btn b="A" />{{ store.installed[cur.id] ? 'Continue' : 'Open' }}</span>
+                <span v-if="box(t).ph >= 230 && box(t).pw >= 200" class="st-cp-go"><Btn b="A" />{{ store.installed[cur.id] ? 'Continue' : 'Open' }}</span>
               </div>
-              <div v-if="playing.length > 1 && t.w >= 3" class="st-dots"><i v-for="(g, i) in playing.slice(0, 5)" :key="g.id" :class="{ on: i === cpIndex }" /></div>
+              <div v-if="playing.length > 1 && box(t).pw >= 280" class="st-dots"><i v-for="(g, i) in playing.slice(0, 5)" :key="g.id" :class="{ on: i === cpIndex }" /></div>
             </template>
             <div v-else class="st-empty"><Icon name="mdiPlayCircleOutline" :size="30" /><b>Nothing played yet</b><span>Games you play show here</span></div>
           </template>
 
-          <!-- Clock: the time over a sky that follows the hour, the sun (or moon) on its path across the tile -->
-          <template v-else-if="t.type === 'clock'">
-            <div class="st-sky" :style="sky.bg" />
-            <div class="st-path" aria-hidden="true">
-              <svg viewBox="0 0 100 50" preserveAspectRatio="none"><path d="M0,48 Q50,-32 100,48" /></svg>
-              <i class="st-orb" :class="sky.night ? 'moon' : 'sun'" :style="{ left: sky.x + '%', top: sky.y + '%' }" />
-            </div>
-            <div class="st-day"><b>{{ now.day }}</b> {{ now.date }}</div>
-            <div class="st-time"><span class="tnum">{{ now.time }}</span><small v-if="now.ampm">{{ now.ampm }}</small></div>
-          </template>
+          <!-- Clock: a scene for the time of day -->
+          <StartClock v-else-if="t.type === 'clock'" :time="now.time" :ampm="now.ampm" :day="now.dayLine" :hour="now.hour" />
 
           <!-- Storage: free space on the drive the games live on, and a gauge of how much is left -->
           <template v-else-if="t.type === 'storage'">
             <div class="st-store">
               <div class="st-store-text">
                 <div class="st-label">Free space</div>
-                <div class="st-clock"><span class="st-big tnum">{{ space ? sizeNum(space.free) : '–' }}</span><span class="st-unit">{{ space ? sizeUnit(space.free) : '' }}</span></div>
+                <div class="st-num"><span class="st-big tnum">{{ space ? sizeNum(space.free) : '–' }}</span><span class="st-unit">{{ space ? sizeUnit(space.free) : '' }}</span></div>
                 <div class="st-sub">{{ space ? `of ${bytes(space.total)}` : 'Looking…' }}</div>
               </div>
               <div class="st-gauge" :class="{ low: freePct < 10 }">
@@ -60,13 +57,13 @@
             <div class="st-week">
               <div class="st-week-text">
                 <div class="st-label">Played this week</div>
-                <div class="st-clock">
+                <div class="st-num">
                   <template v-if="weekMin >= 60"><span class="st-big tnum">{{ Math.floor(weekMin / 60) }}</span><span class="st-unit">h</span><template v-if="weekMin % 60"><span class="st-big tnum">{{ weekMin % 60 }}</span><span class="st-unit">m</span></template></template>
                   <template v-else><span class="st-big tnum">{{ weekMin }}</span><span class="st-unit">min</span></template>
                 </div>
                 <div class="st-sub">{{ weekNote }}</div>
               </div>
-              <div class="st-bars" :class="{ tall: t.h >= 2 }">
+              <div class="st-bars">
                 <div v-for="(d, i) in week" :key="d.day" class="st-bar" :class="{ today: i === week.length - 1, none: !d.min }" :style="{ '--i': i }">
                   <div class="st-col">
                     <i :style="{ height: d.min ? barH(d.min) + '%' : null }" />
@@ -78,12 +75,11 @@
             </div>
           </template>
 
-          <!-- Consoles -->
+          <!-- Consoles: the same cards as the Consoles page, as many as fit -->
           <template v-else-if="t.type === 'consoles'">
             <div class="st-label">Consoles</div>
-            <div class="st-chips" :style="{ gridTemplateColumns: `repeat(${Math.min(t.w + 1, Math.max(1, consoles.length))}, minmax(0, 1fr))` }">
-              <ConsoleChip v-for="p in consoles.slice(0, chipsFor(t) - (consoles.length > chipsFor(t) ? 1 : 0))" :key="p.id" :p="p" />
-              <span v-if="consoles.length > chipsFor(t)" class="st-more">+{{ consoles.length - chipsFor(t) + 1 }}</span>
+            <div class="st-cards" :style="cardsGrid(t)">
+              <ConsoleCard v-for="p in consoles.slice(0, cardsFor(t).n)" :key="p.id" :p="p" :compact="cardsFor(t).compact" />
             </div>
           </template>
 
@@ -92,20 +88,20 @@
             <div v-if="rowOf(t.type).length" class="st-ambient" :style="{ backgroundImage: bgUrl(cover(rowOf(t.type)[0])) }" />
             <div class="st-label">{{ TILES[t.type].name }}</div>
             <template v-if="rowOf(t.type).length">
-              <div class="st-covers">
-                <img v-for="(r, i) in rowOf(t.type).slice(0, coversFor(t))" :key="r.id" class="st-cover" :src="cover(r)" :style="{ '--i': i }" loading="lazy" alt="" />
+              <div class="st-covers" :style="{ gridTemplateRows: `repeat(${coversFor(t).rows}, minmax(0, 1fr))` }">
+                <img v-for="(r, i) in rowOf(t.type).slice(0, coversFor(t).n)" :key="r.id" class="st-cover" :src="cover(r)" :style="{ '--i': i }" loading="lazy" alt="" />
               </div>
               <div class="st-sub st-first">{{ firstLine(t.type) }}</div>
             </template>
             <div v-else class="st-empty small"><span>{{ COVER_ROWS[t.type].empty }}</span></div>
           </template>
 
-          <!-- Latest trophies and achievements -->
+          <!-- Latest trophies and achievements: as many as the tile holds -->
           <template v-else-if="t.type === 'trophies'">
             <div class="st-label">Latest trophies</div>
-            <div v-if="ach.length" class="st-ach" :class="{ one: t.h < 2 }">
-              <div v-for="a in ach.slice(0, t.h >= 2 ? 3 : 1)" :key="a.key" class="st-ach-row">
-                <img v-if="a.badge" :src="a.badge" class="st-ach-img" alt="" /><span v-else class="st-ach-img"><Grade :g="a.grade" :size="30" /></span>
+            <div v-if="ach.length" class="st-ach" :style="{ gridTemplateColumns: `repeat(${achFor(t).cols}, minmax(0, 1fr))` }">
+              <div v-for="(a, i) in ach.slice(0, achFor(t).n)" :key="a.key" class="st-ach-row" :style="{ '--i': i }">
+                <img v-if="a.badge" :src="a.badge" class="st-ach-img" alt="" /><span v-else class="st-ach-img"><Grade :g="a.grade" :size="24" /></span>
                 <span class="st-ach-t"><b>{{ a.title }}</b><span>{{ a.game }}<template v-if="a.t"> · {{ agoShort(a.t) }}</template></span></span>
               </div>
             </div>
@@ -116,7 +112,7 @@
           <template v-else-if="t.type === 'downloads'">
             <div class="st-label">Downloads</div>
             <template v-if="activeDl.length">
-              <div class="st-clock"><span class="st-big tnum">{{ dlPct }}</span><span class="st-unit">%</span></div>
+              <div class="st-num"><span class="st-big tnum">{{ dlPct }}</span><span class="st-unit">%</span></div>
               <div class="st-meter"><i :style="{ width: dlPct + '%' }" /></div>
               <div class="st-sub">{{ activeDl.length === 1 ? activeDl[0].name : `${activeDl.length} games` }}</div>
             </template>
@@ -125,7 +121,7 @@
 
           <!-- Surprise me -->
           <template v-else-if="t.type === 'surprise'">
-            <div class="st-center"><Icon name="mdiDiceMultipleOutline" :size="t.w >= 2 ? 40 : 30" /><b v-if="t.w >= 2 || t.h >= 2">Surprise me</b></div>
+            <div class="st-center"><Icon name="mdiDiceMultipleOutline" :size="40" class="st-dice" /><b>Surprise me</b></div>
           </template>
 
           <!-- One game, pinned -->
@@ -140,31 +136,36 @@
 
           <!-- One console, pinned -->
           <template v-else-if="t.type === 'console'">
-            <ConsoleChip v-if="platformById(t.platformId)" class="st-fill" :p="platformById(t.platformId)" />
+            <ConsoleCard v-if="platformById(t.platformId)" class="st-fill" :p="platformById(t.platformId)" />
             <div v-else class="st-empty small"><span>This console isn't in your library any more</span></div>
           </template>
+          </div>
 
+          <!-- arranging: its size, its edges to drag, and buttons for mouse and touch -->
           <template v-if="editing">
-            <span v-if="focusedId === t.id || picked === t.id" class="st-size">{{ t.w }} by {{ t.h }}</span>
+            <span v-if="focusedId === t.id || drag?.id === t.id || sizing?.id === t.id" class="st-size tnum">{{ t.w }} × {{ t.h }}</span>
+            <span v-for="e in EDGES" :key="e" class="st-handle" :class="['h-' + e, { on: mode === 'size' && focusedId === t.id && corner.includes(e) && e.length === 2 }]" data-nodrag @pointerdown.stop="hDown(t, e, $event)" />
             <span class="st-ctl" data-nodrag>
-              <span class="st-ctl-b" title="Size" @click.stop="cycleSize(t)" @pointerdown.stop><Icon name="mdiResize" :size="16" /></span>
               <span class="st-ctl-b" title="Remove" @click.stop="removeTile(t)" @pointerdown.stop><Icon name="mdiClose" :size="16" /></span>
             </span>
           </template>
         </button>
-        <button v-if="editing" key="add" class="st-tile st-add" style="grid-column: span 2" data-focus data-key="st-add" @click="addTile"><Icon name="mdiPlus" :size="26" /><b>Add a tile</b></button>
-      </TransitionGroup>
+        <button v-if="editing" key="add" class="st-tile st-add" :style="addStyle" data-focus data-key="st-add" @click="addTile"><Icon name="mdiPlus" :size="26" /><b>Add a tile</b></button>
+      </div>
     </div>
   </div>
 </template>
 
 <script setup>
 // Start (0.9.19): a menu of tiles the user arranges (owner: inspired by a frontend on someone's device;
-// its widget look wasn't wanted, these follow docs/design.md). Hold A, or press and hold with a finger
-// or the mouse, to arrange: A picks a tile up and the D-pad moves it, X cycles its size, Y removes it,
-// B is done. Saved in config.ui.start.
+// its widget look wasn't wanted, these follow docs/design.md). 0.9.21 (owner: drag to any size, resize
+// per edge, smooth weighted motion, more character): tiles sit on an 8-column board at their own place
+// (startLayout.js), drawn absolutely so moves and resizes glide; each tile redraws itself for its size.
+// Hold A (or press and hold) to arrange. Controller: A picks a tile up and the D-pad moves it, X resizes
+// (the D-pad moves a corner, LB/RB pick the corner), Y removes, B is done. Touch and mouse: drag a tile
+// to move it, drag an edge or a corner to resize. Saved in config.ui.start.
 import { computed, ref, reactive, onMounted, onBeforeUnmount, nextTick, watch } from 'vue';
-import { store, call, go, tab, img, cover, logoOf, allRoms, visible, visiblePlatforms, romById, isNew, collections, setBg, backdropOf, wantSharp, bytes, saveConfig, choose, playtimeText, loadPlay, toast } from '../store.js';
+import { store, heroArt, call, go, tab, img, cover, logoOf, allRoms, visible, visiblePlatforms, romById, isNew, collections, setBg, backdropOf, wantSharp, bytes, saveConfig, choose, playtimeText, loadPlay, toast } from '../store.js';
 import { useView } from '../useView.js';
 import { recommend } from '../recs.js';
 import { ensureFocus, input } from '../nav.js';
@@ -173,8 +174,9 @@ import Icon from '../components/Icon.vue';
 import Btn from '../components/Btn.vue';
 import Grade from '../components/Grade.vue';
 import GameLogo from '../components/GameLogo.vue';
-import ConsoleChip from '../components/ConsoleChip.vue';
-import { TILES, DEFAULT, valid } from '../startTiles.js';
+import ConsoleCard from '../components/ConsoleCard.vue';
+import StartClock from '../components/StartClock.vue';
+import { TILES, DEFAULT, valid, COLS, MAX_H, pack, settle, bottom } from '../startTiles.js';
 
 const ROWS = 4; // rows that fill the screen; more scroll
 const COVER_ROWS = {
@@ -183,16 +185,59 @@ const COVER_ROWS = {
   favs: { empty: 'Mark games as favourites in RomM or on their page' },
   recs: { empty: 'Play a few games and Cartridge suggests more' },
 };
-const tiles = ref(((store.config.ui.start?.tiles || []).filter(valid).map((t) => ({ ...t }))).length ? store.config.ui.start.tiles.filter(valid).map((t) => ({ ...t })) : DEFAULT());
+const saved = (store.config.ui.start?.tiles || []).filter(valid);
+const tiles = ref(saved.length ? pack(saved.map((t) => ({ ...t }))) : DEFAULT());
 let saveT = 0;
-function save() { clearTimeout(saveT); saveT = setTimeout(() => saveConfig({ ui: { start: { tiles: tiles.value.map((t) => ({ ...t })) } } }), 400); }
+function save() { clearTimeout(saveT); saveT = setTimeout(() => saveConfig({ ui: { start: { tiles: tiles.value.map(({ id, type, x, y, w, h, romId, platformId }) => ({ id, type, x, y, w, h, ...(romId ? { romId } : {}), ...(platformId ? { platformId } : {}) })) } } }), 400); }
 
-const el = ref(null);
-const editing = ref(false), picked = ref(null), focusedId = ref(null);
+const el = ref(null), scroller = ref(null);
+const editing = ref(false), focusedId = ref(null);
+const mode = ref(''); // while arranging with a controller: '' | 'move' (picked up) | 'size'
+const corner = ref('se'); // which corner the D-pad moves while resizing
+const CORNERS = ['se', 'sw', 'nw', 'ne'];
+const EDGES = ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw'];
+const leaving = ref(null);
 const isArt = (t) => t.type === 'continue' ? !!cur.value : t.type === 'game';
 const bgUrl = (u) => (u ? `url("${String(u).replace(/"/g, '%22')}")` : 'none');
-const artOf = (r) => (r ? (store.art?.[r.id]?.hero ? img(store.art[r.id].hero) : store.sharp[r.id] || (r.shot ? img(r.shot) : cover(r, true))) : '');
+const artOf = (r) => heroArt(r)?.src || ''; // SteamGridDB's hero only, no RomM picture first (0.9.21)
 const platformById = (id) => store.lib?.platforms.find((p) => p.id === id) || null;
+
+// ---- the board: cell size from the screen (8 columns, 4 rows fill it), tiles placed in pixels
+const geo = reactive({ cw: 120, ch: 150, gap: 16 });
+function measure() {
+  const s = scroller.value; if (!s) return;
+  const cs = getComputedStyle(s);
+  const W = s.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+  const H = s.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+  geo.gap = Math.round(Math.max(10, Math.min(20, window.innerWidth * 0.011)));
+  geo.cw = Math.max(40, (W - (COLS - 1) * geo.gap) / COLS);
+  geo.ch = Math.max(80, (H - (ROWS - 1) * geo.gap) / ROWS);
+}
+const px = (t) => ({ x: t.x * (geo.cw + geo.gap), y: t.y * (geo.ch + geo.gap), w: t.w * geo.cw + (t.w - 1) * geo.gap, h: t.h * geo.ch + (t.h - 1) * geo.gap });
+const box = (t) => { const r = px(t); return { pw: r.w, ph: r.h }; };
+const boardRows = computed(() => bottom(tiles.value) + (editing.value ? 2 : 0));
+const boardH = computed(() => Math.max(1, boardRows.value) * (geo.ch + geo.gap) - geo.gap);
+function tileStyle(t, n) {
+  const r = px(t), d = drag.value?.id === t.id ? drag.value : null;
+  return { width: r.w + 'px', height: r.h + 'px', transform: d ? `translate3d(${d.vx}px, ${d.vy}px, 0)` : `translate3d(${r.x}px, ${r.y}px, 0)`, '--n': n };
+}
+const addStyle = computed(() => { const r = px({ x: 0, y: bottom(tiles.value), w: 2, h: 1 }); return { width: r.w + 'px', height: r.h + 'px', transform: `translate3d(${r.x}px, ${r.y}px, 0)` }; });
+const slots = computed(() => {
+  const out = [];
+  for (let y = 0; y < boardRows.value; y++) for (let x = 0; x < COLS; x++) { const r = px({ x, y, w: 1, h: 1 }); out.push({ k: x + ',' + y, s: { width: r.w + 'px', height: r.h + 'px', transform: `translate(${r.x}px, ${r.y}px)` } }); }
+  return out;
+});
+// where the held or resized tile will land
+const ghost = computed(() => {
+  const id = drag.value?.id || sizing.value?.id; if (!id) return null;
+  const t = tiles.value.find((x) => x.id === id); if (!t) return null;
+  const r = px(t); return { width: r.w + 'px', height: r.h + 'px', transform: `translate(${r.x}px, ${r.y}px)` };
+});
+// how much fits in a tile of this size
+function cardsFor(t) { const { pw, ph } = box(t); const cols = Math.max(1, Math.round(pw / 250)), rws = Math.max(1, Math.round((ph - 34) / 130)); return { cols, rows: rws, n: Math.min(24, cols * rws), compact: ph / rws < 110 }; }
+const cardsGrid = (t) => { const c = cardsFor(t); return { gridTemplateColumns: `repeat(${c.cols}, minmax(0, 1fr))`, gridTemplateRows: `repeat(${c.rows}, minmax(0, 1fr))` }; };
+function coversFor(t) { const { pw, ph } = box(t); const area = Math.max(40, ph - 74), rws = Math.max(1, Math.round(area / 190)), coverW = (area / rws) * 0.75 + 10; return { rows: rws, n: Math.min(40, rws * Math.ceil(pw / coverW) + rws) }; }
+function achFor(t) { const { pw, ph } = box(t); const cols = Math.max(1, Math.floor(pw / 260)), rws = Math.max(1, Math.floor((ph - 40) / 60)); return { cols, n: Math.min(18, cols * rws) }; }
 
 // ---- data
 const played = ref({});
@@ -224,17 +269,14 @@ function firstLine(type) {
   if (type === 'recs') return `Try ${r.name}`;
   return r.name;
 }
-const coversFor = (t) => Math.min(14, t.w * 3); // enough to fill the tile; the row fades out at its right edge
 const consoles = computed(() => {
   const mins = {}, inst = {};
   for (const r of roms.value) { mins[r.platform_id] = (mins[r.platform_id] || 0) + (store.play[r.id]?.min || 0); if (store.installed[r.id]) inst[r.platform_id] = (inst[r.platform_id] || 0) + 1; }
   return [...visiblePlatforms()].sort((a, b) => (mins[b.id] || 0) - (mins[a.id] || 0) || (inst[b.id] || 0) - (inst[a.id] || 0) || b.rom_count - a.rom_count);
 });
-// a row of chips per tile row, one more chip than the tile has columns, so each stays wide enough to read
-const chipsFor = (t) => Math.min(14, (t.w + 1) * t.h);
 
 // clock
-const now = reactive({ time: '', ampm: '', date: '', day: '' });
+const now = reactive({ time: '', ampm: '', date: '', day: '', dayLine: '', hour: 12 });
 function tick() {
   const d = new Date();
   const parts = new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).formatToParts(d);
@@ -242,19 +284,10 @@ function tick() {
   now.ampm = parts.find((p) => p.type === 'dayPeriod')?.value || '';
   now.day = d.toLocaleDateString(undefined, { weekday: 'long' });
   now.date = d.toLocaleDateString(undefined, { day: 'numeric', month: 'long' });
+  now.dayLine = `${now.day} ${now.date}`;
+  now.hour = d.getHours() + d.getMinutes() / 60;
 }
 tick();
-// the sky: a 6 to 18 day (the location isn't known, so sunrise and sunset are round numbers); the
-// sun rides the arc by day, the moon by night, and the light comes from where it is
-const SKIES = [[0, '74,104,190', 0.2], [5, '120,110,200', 0.2], [6.5, '255,150,110', 0.26], [9, '120,180,255', 0.2], [16, '140,190,255', 0.2], [18, '255,130,90', 0.28], [20, '150,90,190', 0.22], [22, '74,104,190', 0.2], [24, '74,104,190', 0.2]];
-const sky = computed(() => {
-  void now.time;
-  const d = new Date(), h = d.getHours() + d.getMinutes() / 60, night = h < 6 || h >= 18;
-  const p = night ? ((h + 6) % 24) / 12 : (h - 6) / 12;
-  const x = p * 100, y = ((1 - p) ** 2 * 48 + 2 * (1 - p) * p * -32 + p * p * 48) * 2;
-  const k = SKIES.findIndex(([at]) => at > h), [, rgb, a] = SKIES[Math.max(0, k - 1)];
-  return { night, x, y, bg: { background: `radial-gradient(120% 140% at ${x}% ${y}%, rgba(${rgb},${a}), rgba(${rgb},${a / 4}) 45%, transparent 75%)` } };
-});
 // storage: the drive your games are on
 const space = ref(null);
 const loadSpace = () => call('fs:space', store.config.romsRoot || store.info?.home || '/').then((s) => { space.value = s; }).catch(() => {});
@@ -300,7 +333,7 @@ const dlPct = computed(() => { const t = activeDl.value.reduce((s, d) => s + (d.
 // ---- what each tile does
 function openTile(t, ev) {
   if (suppressClick) { suppressClick = false; ev?.preventDefault(); return; }
-  if (editing.value) { if (input.mode === 'pad') togglePick(t); return; }
+  if (editing.value) return; // arranging: A (accept) and the mouse handle tiles themselves
   const T = t.type;
   if (T === 'continue') return cur.value ? go('game', { romId: cur.value.id }) : tab('library');
   if (T === 'clock') return;
@@ -333,36 +366,34 @@ function focusTile(t) {
 }
 
 // ---- arranging
+const barText = computed(() => mode.value === 'move' ? 'Move it with the D-pad. A puts it down.'
+  : mode.value === 'size' ? 'The D-pad moves the lit corner. LB and RB pick another corner. A when done.'
+  : input.mode === 'pad' ? 'A picks a tile up · X resizes · Y removes' : 'Drag a tile to move it, drag its edges to resize');
 function startEdit(t) {
   if (editing.value) return;
-  editing.value = true; picked.value = null;
+  editing.value = true; mode.value = '';
   sfx.accept?.();
   store.hints = hints();
   if (t) nextTick(() => focusKey('tile-' + t.id));
 }
 function stopEdit() {
-  editing.value = false; picked.value = null; save();
+  editing.value = false; mode.value = ''; settle(tiles.value); save();
   store.hints = hints();
   nextTick(() => ensureFocus(el.value));
 }
-function togglePick(t) { picked.value = picked.value === t.id ? null : t.id; store.hints = hints(); }
-function cycleSize(t) {
-  const S = TILES[t.type].sizes, i = S.findIndex(([w, h]) => w === t.w && h === t.h);
-  const [w, h] = S[(i + 1) % S.length];
-  t.w = w; t.h = h; save();
-  sfx.move?.();
-  nextTick(() => keepInView(t.id));
-}
+function setMode(m) { mode.value = mode.value === m ? '' : m; if (mode.value === 'size') corner.value = 'se'; settle(tiles.value); save(); store.hints = hints(); sfx.accept?.(); }
 function removeTile(t) {
   const i = tiles.value.indexOf(t);
-  tiles.value.splice(i, 1);
-  if (picked.value === t.id) picked.value = null;
-  save();
-  toast(`${TILES[t.type].name} removed`, 'info', 2000, 'mdiClose');
-  nextTick(() => { const next = tiles.value[Math.min(i, tiles.value.length - 1)]; focusKey(next ? 'tile-' + next.id : 'st-add'); });
+  leaving.value = t.id; mode.value = '';
+  setTimeout(() => {
+    tiles.value = tiles.value.filter((x) => x.id !== t.id); leaving.value = null;
+    settle(tiles.value); save();
+    toast(`${TILES[t.type].name} removed`, 'info', 2000, 'mdiClose');
+    nextTick(() => { const next = tiles.value[Math.min(i, tiles.value.length - 1)]; focusKey(next ? 'tile-' + next.id : 'st-add'); });
+  }, 200);
 }
 async function resetLayout() {
-  tiles.value = DEFAULT(); picked.value = null; save();
+  tiles.value = DEFAULT(); mode.value = ''; save();
   nextTick(() => focusKey('tile-continue'));
 }
 async function addTile() {
@@ -370,8 +401,8 @@ async function addTile() {
   const opts = Object.entries(TILES).filter(([k]) => k === 'game' || k === 'console' || !have.has(k)).map(([k, v]) => ({ label: v.name, value: k, icon: v.icon, sub: k === 'game' ? 'Pin one game' : k === 'console' ? 'Pin one console' : '' }));
   const type = await choose({ sheet: true, title: 'Add a tile', options: opts });
   if (!type) return nextTick(() => focusKey('st-add'));
-  const [w, h] = TILES[type].sizes[0];
-  const t = { id: type + '-' + Date.now().toString(36), type, w, h };
+  const [w, h] = TILES[type].size;
+  const t = { id: type + '-' + Date.now().toString(36), type, w, h, x: 0, y: bottom(tiles.value) };
   if (type === 'game') {
     const pool = [...playing.value.slice(0, 12), ...rows.value.favs.slice(0, 12), ...rows.value.fresh.slice(0, 12)].filter((r, i, a) => a.findIndex((x) => x.id === r.id) === i).slice(0, 30);
     const id = await choose({ sheet: true, title: 'Pin a game', options: pool.map((r) => ({ label: r.name, value: r.id, img: cover(r), sub: r.platform_display_name, raw: true })) });
@@ -382,36 +413,55 @@ async function addTile() {
     if (!id) return nextTick(() => focusKey('st-add'));
     t.platformId = id;
   }
-  tiles.value.push(t); save();
-  nextTick(() => focusKey('tile-' + t.id));
+  tiles.value.push(t); settle(tiles.value); save();
+  nextTick(() => { focusKey('tile-' + t.id); keepInView(t.id); });
 }
-// D-pad while a tile is picked up: it trades places with the tile in that direction
+// D-pad while a tile is picked up: it trades places with the tile that way, or moves one cell into empty space
 function moveTile(dir) {
-  const ids = tiles.value.map((t) => t.id), me = el.value.querySelector(`[data-id="${CSS.escape(picked.value)}"]`);
-  if (!me) return;
-  const a = me.getBoundingClientRect(), ax = a.left + a.width / 2, ay = a.top + a.height / 2;
-  let best = null, score = Infinity;
+  const t = tiles.value.find((x) => x.id === focusedId.value); if (!t) return;
+  const dx = dir === 'right' ? 1 : dir === 'left' ? -1 : 0, dy = dir === 'down' ? 1 : dir === 'up' ? -1 : 0;
+  const me = el.value.querySelector(`[data-id="${CSS.escape(t.id)}"]`), a = me.getBoundingClientRect();
+  let other = null, score = Infinity;
   for (const n of el.value.querySelectorAll('.st-tile[data-id]')) {
     if (n === me) continue;
-    const r = n.getBoundingClientRect(), x = r.left + r.width / 2, y = r.top + r.height / 2;
-    const p = dir === 'right' ? x - ax : dir === 'left' ? ax - x : dir === 'down' ? y - ay : ay - y;
-    if (p <= 4) continue;
-    const s = p + Math.abs(dir === 'left' || dir === 'right' ? y - ay : x - ax) * 0.6;
-    if (s < score) { score = s; best = n.dataset.id; }
+    const r = n.getBoundingClientRect();
+    const p = dx > 0 ? r.left - a.right : dx < 0 ? a.left - r.right : dy > 0 ? r.top - a.bottom : a.top - r.bottom;
+    const across = dx ? Math.max(0, Math.min(a.bottom, r.bottom) - Math.max(a.top, r.top)) : Math.max(0, Math.min(a.right, r.right) - Math.max(a.left, r.left));
+    if (p < -4 || p > geo.gap + 4 || across <= 0) continue; // only a tile right next to it
+    if (p - across < score) { score = p - across; other = tiles.value.find((x) => x.id === n.dataset.id); }
   }
-  if (!best) return;
-  const i = ids.indexOf(picked.value), j = ids.indexOf(best), list = [...tiles.value];
-  [list[i], list[j]] = [list[j], list[i]];
-  tiles.value = list; save();
+  if (other) { const ox = other.x, oy = other.y; other.x = t.x; other.y = t.y; t.x = ox; t.y = oy; }
+  else { t.x = Math.max(0, Math.min(COLS - t.w, t.x + dx)); t.y = Math.max(0, t.y + dy); }
+  settle(tiles.value, t.id); save();
   sfx.move?.();
-  nextTick(() => { focusKey('tile-' + picked.value); keepInView(picked.value); });
+  nextTick(() => keepInView(t.id));
+}
+// D-pad while resizing: the lit corner's edges move that way (one cell)
+function sizeTile(dir) {
+  const t = tiles.value.find((x) => x.id === focusedId.value); if (!t) return;
+  const c = corner.value, before = `${t.x},${t.y},${t.w},${t.h}`;
+  if (dir === 'left' || dir === 'right') {
+    const d = dir === 'right' ? 1 : -1;
+    if (c.includes('e')) t.w = Math.max(1, Math.min(COLS - t.x, t.w + d));
+    else { const nx = Math.max(0, Math.min(t.x + t.w - 1, t.x + d)); t.w += t.x - nx; t.x = nx; }
+  } else {
+    const d = dir === 'down' ? 1 : -1;
+    if (c.includes('s')) t.h = Math.max(1, Math.min(MAX_H, t.h + d));
+    else { const ny = Math.max(0, Math.min(t.y + t.h - 1, t.y + d)); const nh = t.h + t.y - ny; if (nh <= MAX_H) { t.h = nh; t.y = ny; } }
+  }
+  if (`${t.x},${t.y},${t.w},${t.h}` === before) { sfx.error?.(); return; }
+  settle(tiles.value, t.id); save();
+  sfx.move?.();
+  nextTick(() => keepInView(t.id));
 }
 function focusKey(k) { const n = el.value?.querySelector(`[data-key="${CSS.escape(k)}"]`); if (n) n.focus({ preventScroll: true }); }
 function keepInView(id) { el.value?.querySelector(`[data-id="${CSS.escape(id)}"]`)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }
 
-// touch and mouse: press and hold a tile to arrange; while arranging, drag a tile to move it
+// touch and mouse: press and hold a tile to arrange; while arranging, drag a tile to move it and its
+// edges to resize it. The tile follows the finger exactly; the others make room as it goes.
 let pressT = 0, suppressClick = false;
-const drag = ref(null);
+const drag = ref(null), sizing = ref(null);
+function edgeScroll(y) { const s = scroller.value, r = s.getBoundingClientRect(); if (y > r.bottom - 60) s.scrollTop += 14; else if (y < r.top + 60) s.scrollTop -= 14; }
 function pDown(t, e) {
   if (e.button && e.button !== 0) return;
   const sx = e.clientX, sy = e.clientY;
@@ -423,166 +473,218 @@ function pDown(t, e) {
     window.addEventListener('pointermove', cancel, { passive: true }); window.addEventListener('pointerup', cancel); window.addEventListener('pointercancel', cancel);
     return;
   }
-  // arranging: follow the pointer; the tile moves to wherever it is dragged over
+  const r0 = px(t), st0 = scroller.value.scrollTop;
   const move = (ev) => {
-    if (!drag.value) { if (Math.hypot(ev.clientX - sx, ev.clientY - sy) < 8) return; drag.value = t.id; picked.value = t.id; }
-    const over = document.elementFromPoint(ev.clientX, ev.clientY)?.closest?.('.st-tile[data-id]');
-    if (!over || over.dataset.id === t.id) return;
-    const list = [...tiles.value], i = list.findIndex((x) => x.id === t.id), j = list.findIndex((x) => x.id === over.dataset.id);
-    const [m] = list.splice(i, 1); list.splice(j, 0, m); tiles.value = list;
+    if (!drag.value) { if (Math.hypot(ev.clientX - sx, ev.clientY - sy) < 8) return; drag.value = { id: t.id, vx: r0.x, vy: r0.y }; mode.value = ''; }
+    const vx = r0.x + ev.clientX - sx, vy = r0.y + ev.clientY - sy + scroller.value.scrollTop - st0;
+    drag.value = { id: t.id, vx, vy };
+    const nx = Math.max(0, Math.min(COLS - t.w, Math.round(vx / (geo.cw + geo.gap)))), ny = Math.max(0, Math.round(vy / (geo.ch + geo.gap)));
+    if (nx !== t.x || ny !== t.y) { t.x = nx; t.y = ny; settle(tiles.value, t.id); }
+    edgeScroll(ev.clientY);
   };
   const up = () => {
     window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); window.removeEventListener('pointercancel', up);
-    if (drag.value) { suppressClick = true; setTimeout(() => (suppressClick = false), 60); drag.value = null; picked.value = null; save(); }
+    if (drag.value) { suppressClick = true; setTimeout(() => (suppressClick = false), 60); drag.value = null; settle(tiles.value); save(); }
+  };
+  window.addEventListener('pointermove', move, { passive: true }); window.addEventListener('pointerup', up); window.addEventListener('pointercancel', up);
+}
+function hDown(t, edge, e) {
+  if (e.button && e.button !== 0) return;
+  e.preventDefault();
+  const sx = e.clientX, sy = e.clientY, g0 = { x: t.x, y: t.y, w: t.w, h: t.h };
+  sizing.value = { id: t.id }; mode.value = '';
+  const move = (ev) => {
+    const dc = Math.round((ev.clientX - sx) / (geo.cw + geo.gap)), dr = Math.round((ev.clientY - sy) / (geo.ch + geo.gap));
+    let { x, y, w, h } = g0;
+    if (edge.includes('e')) w = Math.max(1, Math.min(COLS - x, g0.w + dc));
+    if (edge.includes('w')) { x = Math.max(0, Math.min(g0.x + g0.w - 1, g0.x + dc)); w = g0.w + g0.x - x; }
+    if (edge.includes('s')) h = Math.max(1, Math.min(MAX_H, g0.h + dr));
+    if (edge.includes('n')) { y = Math.max(0, Math.max(g0.y + g0.h - MAX_H, Math.min(g0.y + g0.h - 1, g0.y + dr))); h = g0.h + g0.y - y; }
+    if (x !== t.x || y !== t.y || w !== t.w || h !== t.h) { Object.assign(t, { x, y, w, h }); settle(tiles.value, t.id); sfx.move?.(); }
+    edgeScroll(ev.clientY);
+  };
+  const up = () => {
+    window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); window.removeEventListener('pointercancel', up);
+    sizing.value = null; suppressClick = true; setTimeout(() => (suppressClick = false), 60); settle(tiles.value); save();
   };
   window.addEventListener('pointermove', move, { passive: true }); window.addEventListener('pointerup', up); window.addEventListener('pointercancel', up);
 }
 
 // ---- controller
 const hints = () => editing.value
-  ? (picked.value ? [{ b: 'A', label: 'Put down' }, { b: 'B', label: 'Put down' }] : [{ b: 'A', label: 'Pick up' }, { b: 'X', label: 'Size' }, { b: 'Y', label: 'Remove' }, { b: 'B', label: 'Done' }])
+  ? (mode.value === 'move' ? [{ b: 'A', label: 'Put down' }, { b: 'B', label: 'Put down' }]
+    : mode.value === 'size' ? [{ b: 'LB+RB', label: 'Corner' }, { b: 'A', label: 'Done' }, { b: 'B', label: 'Done' }]
+    : [{ b: 'A', label: 'Pick up' }, { b: 'X', label: 'Resize' }, { b: 'Y', label: 'Remove' }, { b: 'B', label: 'Done' }])
   : [{ b: 'A', label: 'Open, hold to arrange' }, ...(focusedId.value === 'continue' && playing.value.length > 1 ? [{ b: 'LB+RB', label: 'Game' }] : []), { b: 'Y', label: 'Search' }];
 const focusedTile = () => tiles.value.find((t) => t.id === document.activeElement?.dataset?.id);
-const dirH = (dir) => () => (editing.value && picked.value ? (moveTile(dir), true) : false);
+const dirH = (dir) => () => {
+  if (!editing.value || !focusedTile()) return false;
+  if (mode.value === 'move') { moveTile(dir); return true; }
+  if (mode.value === 'size') { sizeTile(dir); return true; }
+  return false;
+};
+const stepCorner = (d) => { corner.value = CORNERS[(CORNERS.indexOf(corner.value) + d + CORNERS.length) % CORNERS.length]; sfx.move?.(); };
+const stepGame = (d) => { const n = Math.min(5, playing.value.length); cpIndex.value = (cpIndex.value + d + n) % n; focusTile(focusedTile()); };
 useView({
   accept: () => {
     const t = focusedTile();
     if (!editing.value || !t) return false;
-    togglePick(t); sfx.accept?.(); return true;
+    setMode(mode.value ? '' : 'move'); return true;
   },
   hold: () => { const t = focusedTile(); if (t && !editing.value) { startEdit(t); return true; } return false; },
   up: dirH('up'), down: dirH('down'), left: dirH('left'), right: dirH('right'),
-  x: () => { const t = focusedTile(); if (editing.value && t) cycleSize(t); },
-  y: () => { if (!editing.value) return false; const t = focusedTile(); if (t) removeTile(t); },
-  back: () => { if (!editing.value) return false; if (picked.value) { picked.value = null; store.hints = hints(); } else stopEdit(); },
-  lb: () => { if (focusedTile()?.type === 'continue' && playing.value.length > 1) { cpIndex.value = (cpIndex.value + Math.min(5, playing.value.length) - 1) % Math.min(5, playing.value.length); focusTile(focusedTile()); } },
-  rb: () => { if (focusedTile()?.type === 'continue' && playing.value.length > 1) { cpIndex.value = (cpIndex.value + 1) % Math.min(5, playing.value.length); focusTile(focusedTile()); } },
+  x: () => { const t = focusedTile(); if (editing.value && t) { setMode('size'); return true; } return false; },
+  y: () => { if (!editing.value) return false; const t = focusedTile(); if (t) removeTile(t); return true; },
+  back: () => { if (!editing.value) return false; if (mode.value) setMode(''); else stopEdit(); return true; },
+  lb: () => { if (mode.value === 'size') return stepCorner(-1), true; if (focusedTile()?.type === 'continue' && playing.value.length > 1) stepGame(-1); },
+  rb: () => { if (mode.value === 'size') return stepCorner(1), true; if (focusedTile()?.type === 'continue' && playing.value.length > 1) stepGame(1); },
 }, hints);
 
-let clockT = 0, spaceT = 0;
+let clockT = 0, spaceT = 0, ro = null;
 onMounted(async () => {
   clockT = setInterval(tick, 5000);
   loadSpace(); spaceT = setInterval(loadSpace, 60000);
   loadWeek(); loadAch();
+  measure();
+  ro = new ResizeObserver(measure); ro.observe(scroller.value);
   await nextTick();
   ensureFocus(el.value);
 });
-onBeforeUnmount(() => { clearInterval(clockT); clearInterval(spaceT); clearTimeout(pressT); if (editing.value) save(); });
+onBeforeUnmount(() => { clearInterval(clockT); clearInterval(spaceT); clearTimeout(pressT); ro?.disconnect(); if (editing.value) { settle(tiles.value); save(); } });
 watch(() => store.trophyVer, loadAch);
 watch(() => store.play, loadWeek);
 </script>
 
 <style scoped>
 .start { position: absolute; inset: 0; display: flex; flex-direction: column; animation: viewIn var(--d-slow) var(--ease); }
-.st-scroll { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; padding: var(--s-4) var(--s-7) var(--s-6); container-type: size; }
+.st-scroll { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; padding: var(--s-4) var(--s-7) var(--s-6); }
 @media (max-width: 1400px) { .st-scroll { padding-left: 36px; padding-right: 36px; } }
-/* eight columns, four rows that fill the screen at any size (1280x800 to 4K); more scroll */
-.st-grid { --gap: clamp(10px, 1.1vw, 20px); display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); grid-auto-rows: calc((100cqh - (var(--rows) - 1) * var(--gap)) / var(--rows)); grid-auto-flow: row dense; gap: var(--gap); }
-.st-tile { position: relative; display: flex; flex-direction: column; min-width: 0; min-height: 0; padding: clamp(12px, 1.2vw, 22px); border-radius: var(--r-lg); background: var(--s1); color: var(--text); text-align: left; overflow: hidden; isolation: isolate;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05); /* a faint top edge, as light from above (redesign audit: tiles sat flat) */
-  transition: transform var(--d-med) var(--ease), background var(--d-fast);
-  animation: st-in 520ms cubic-bezier(0.23, 1, 0.32, 1) both; animation-delay: calc(var(--n, 0) * 40ms); }
-/* tiles arrive one after another, rising a little (taste: staggered entry, never everything at once) */
-@keyframes st-in { from { opacity: 0; transform: translateY(14px); } }
-:global(body.motion-reduce .st-tile) { animation: none; }
-.st-tile:focus { transform: translateY(-3px); }
-.st-tile:active, .st-tile.pressed { transform: scale(0.985); transition-duration: 90ms; }
-/* arranging: every tile shows its edge; the picked one lifts and the rest step back a little */
-.editing .st-tile { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12); }
-.editing .st-tile:focus { box-shadow: var(--ring); }
-.editing .st-tile.picked { transform: translateY(-6px) scale(1.025); box-shadow: var(--ring), 0 24px 60px rgba(0, 0, 0, 0.55); z-index: 2; }
-.editing.dragging .st-tile:not(.picked) { opacity: 0.86; }
+/* the board: tiles placed in pixels from their cell (startLayout.js), so moves and resizes glide */
+.st-board { position: relative; transition: height 460ms cubic-bezier(0.32, 0.72, 0, 1); }
+.st-tile { --glide: 460ms cubic-bezier(0.32, 0.72, 0, 1); position: absolute; left: 0; top: 0; padding: 0; background: none; border-radius: var(--r-lg); color: var(--text); text-align: left; will-change: transform;
+  transition: transform var(--glide), width var(--glide), height var(--glide), opacity 200ms ease; }
+.st-tile:focus-visible, .pad-mode .st-tile:focus { box-shadow: none; }
+/* the face carries the look, so the tile itself only moves */
+.st-face { position: absolute; inset: 0; display: flex; flex-direction: column; min-width: 0; min-height: 0; padding: clamp(10px, min(9cqh, 7cqw), 22px); border-radius: inherit; background: var(--s1); overflow: hidden; isolation: isolate; container-type: size;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  transition: transform 380ms cubic-bezier(0.32, 0.72, 0, 1), box-shadow 240ms ease, opacity 200ms ease;
+  animation: st-in 640ms cubic-bezier(0.22, 1, 0.36, 1) both; animation-delay: calc(var(--n, 0) * 45ms); }
+/* tiles arrive one after another, rising and settling */
+@keyframes st-in { from { opacity: 0; transform: translateY(18px) scale(0.97); } }
+:global(body.motion-reduce .st-face) { animation: none; }
+.st-tile:focus-visible .st-face, .pad-mode .st-tile:focus .st-face { box-shadow: var(--ring); transform: translateY(-3px); }
+/* a soft light passes over a tile when it's reached */
+.st-face::after { content: ''; position: absolute; inset: 0; z-index: 3; pointer-events: none; background: linear-gradient(110deg, transparent 35%, rgba(255, 255, 255, 0.10) 50%, transparent 65%); transform: translateX(-110%); }
+.pad-mode .st-tile:focus .st-face::after, .st-tile:focus-visible .st-face::after { animation: st-glint 900ms cubic-bezier(0.22, 1, 0.36, 1); }
+@keyframes st-glint { to { transform: translateX(110%); } }
+:global(body.motion-reduce .st-face::after) { animation: none !important; }
+.st-tile:active .st-face { transform: scale(0.985); transition-duration: 90ms; }
+.st-tile.leaving { opacity: 0; }
+.st-tile.leaving .st-face { transform: scale(0.9); }
+
+/* arranging: the grid shows, every tile shows its edge; a held tile lifts and follows the finger */
+.st-slots i { position: absolute; left: 0; top: 0; border-radius: var(--r-md); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06); background: rgba(255, 255, 255, 0.015); animation: st-fade 300ms ease both; }
+@keyframes st-fade { from { opacity: 0; } }
+.st-ghost { position: absolute; left: 0; top: 0; border-radius: var(--r-lg); box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.45); background: rgba(255, 255, 255, 0.05); transition: transform 220ms cubic-bezier(0.32, 0.72, 0, 1), width 220ms cubic-bezier(0.32, 0.72, 0, 1), height 220ms cubic-bezier(0.32, 0.72, 0, 1); pointer-events: none; }
+.editing .st-face { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12); }
+.editing .st-tile:not(.held):not(.picked) .st-face { transform: scale(0.975); }
+.editing .st-tile:focus .st-face, .editing .st-tile:focus-visible .st-face { box-shadow: var(--ring); transform: none; }
+.st-tile.held { z-index: 5; transition: width var(--glide), height var(--glide); }
+.st-tile.held .st-face, .st-tile.picked .st-face { transform: scale(1.035) rotate(-0.6deg); box-shadow: var(--ring), 0 30px 70px rgba(0, 0, 0, 0.6); }
+.st-tile.picked { z-index: 5; }
+.st-tile.resized { z-index: 4; }
 .editing .st-tile[data-id] { touch-action: none; }
-.st-move { transition: transform 340ms cubic-bezier(0.23, 1, 0.32, 1); }
-.st-enter-from { opacity: 0; transform: scale(0.94); }
-.st-enter-active { transition: opacity 260ms var(--ease), transform 340ms cubic-bezier(0.23, 1, 0.32, 1); }
-.st-leave-to { opacity: 0; transform: scale(0.94); }
-.st-leave-active { transition: opacity 180ms ease-in, transform 180ms ease-in; position: absolute; }
-:global(body.motion-reduce .st-move), :global(body.motion-reduce .st-enter-active) { transition: none; }
+.dragging .st-tile:not(.held) .st-face { opacity: 0.9; }
 
 .st-edit-bar { display: flex; align-items: center; gap: var(--s-4); padding: var(--s-3) var(--s-7) 0; font-size: var(--t-sm); }
 .st-edit-bar b { font-family: var(--display); font-size: var(--t-lg); font-weight: 700; }
 .st-edit-bar .spacer { flex: 1; }
 @media (max-width: 1400px) { .st-edit-bar { padding-left: 36px; padding-right: 36px; } }
-.st-size { position: absolute; top: 10px; right: 10px; z-index: 3; padding: 3px 10px; border-radius: 999px; background: #fff; color: #0c0d10; font-size: var(--t-xs); font-weight: 700; font-variant-numeric: tabular-nums; }
-.st-ctl { position: absolute; bottom: 10px; right: 10px; z-index: 3; display: flex; gap: 6px; }
+.st-size { position: absolute; bottom: 10px; left: 10px; z-index: 6; padding: 3px 10px; border-radius: 999px; background: #fff; color: #0c0d10; font-size: var(--t-xs); font-weight: 700; pointer-events: none; }
+.st-ctl { position: absolute; top: 10px; right: 10px; z-index: 6; display: flex; gap: 6px; }
 .pad-mode .st-ctl { display: none; }
-.st-ctl-b { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; background: rgba(12, 13, 16, 0.78); color: #fff; box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.18); }
-.st-add { align-items: center; justify-content: center; gap: 8px; background: transparent; box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.16) !important; color: var(--muted); }
+.st-ctl-b { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; background: rgba(12, 13, 16, 0.82); color: #fff; box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.18); }
+/* edges and corners to drag (mouse and touch); with a controller only the lit corner shows */
+.st-handle { position: absolute; z-index: 6; touch-action: none; }
+.st-handle::before { content: ''; position: absolute; inset: -10px; } /* a bigger target for fingers */
+.st-handle::after { content: ''; position: absolute; inset: 0; border-radius: 999px; background: #fff; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5); opacity: 0.85; transition: transform 160ms ease, opacity 160ms ease; }
+.st-handle:hover::after { transform: scale(1.25); opacity: 1; }
+.h-n, .h-s { left: calc(50% - 18px); width: 36px; height: 6px; cursor: ns-resize; }
+.h-n { top: -3px; } .h-s { bottom: -3px; }
+.h-e, .h-w { top: calc(50% - 18px); width: 6px; height: 36px; cursor: ew-resize; }
+.h-e { right: -3px; } .h-w { left: -3px; }
+.h-ne, .h-nw, .h-se, .h-sw { width: 14px; height: 14px; }
+.h-ne { top: -5px; right: -5px; cursor: nesw-resize; } .h-sw { bottom: -5px; left: -5px; cursor: nesw-resize; }
+.h-nw { top: -5px; left: -5px; cursor: nwse-resize; } .h-se { bottom: -5px; right: -5px; cursor: nwse-resize; }
+.st-tile:not(:hover):not(:focus):not(.held):not(.resized) .st-handle { opacity: 0; pointer-events: none; }
+.st-handle { transition: opacity 160ms ease; }
+.pad-mode .st-handle { display: none; }
+.pad-mode .st-handle.on { display: block; }
+.st-handle.on::after { background: var(--focus); box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.25), 0 2px 10px rgba(0, 0, 0, 0.6); transform: scale(1.5); animation: st-pulse 1.4s ease-in-out infinite; }
+@keyframes st-pulse { 50% { transform: scale(1.15); } }
+:global(body.light-fx .st-handle.on::after) { animation: none; }
+.st-add { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.16) !important; color: var(--muted); }
 .st-add:focus { color: var(--text); box-shadow: var(--ring) !important; }
 
-/* the parts every tile shares */
-.st-label { font-size: var(--t-sm); font-weight: 600; color: var(--muted); letter-spacing: -0.005em; position: relative; z-index: 1; }
+/* the parts every tile shares; sizes follow the tile (container units) */
+.st-label { font-size: clamp(11px, min(10cqh, 6cqw), 15px); font-weight: 600; color: var(--muted); letter-spacing: -0.005em; position: relative; z-index: 1; flex: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .st-label.on-art { color: rgba(255, 255, 255, 0.86); }
-.st-clock { display: flex; align-items: baseline; gap: 4px; margin-top: auto; line-height: 1; }
-.st-big { font-family: var(--display); font-stretch: var(--display-stretch); font-weight: 800; font-size: clamp(30px, 3.2vw, 64px); letter-spacing: -0.02em; }
-.h2 .st-big, .h3 .st-big { font-size: clamp(44px, 5vw, 96px); }
-.st-unit { font-family: var(--display); font-weight: 700; font-size: clamp(14px, 1.1vw, 22px); color: var(--muted); margin-right: 6px; }
-.st-sub { margin-top: 6px; font-size: var(--t-sm); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.st-num { display: flex; align-items: baseline; gap: 4px; margin-top: auto; line-height: 1; }
+.st-big { font-family: var(--display); font-stretch: var(--display-stretch); font-weight: 800; font-size: clamp(22px, min(32cqh, 20cqw), 104px); letter-spacing: -0.02em; }
+.st-unit { font-family: var(--display); font-weight: 700; font-size: clamp(12px, min(11cqh, 7cqw), 24px); color: var(--muted); margin-right: 6px; }
+.st-sub { margin-top: 6px; font-size: clamp(11px, min(9cqh, 6cqw), 15px); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: none; }
 .st-quiet { margin-top: auto; }
 .tnum { font-variant-numeric: tabular-nums; }
-.st-meter { height: 4px; margin-top: 10px; border-radius: 2px; background: rgba(255, 255, 255, 0.1); overflow: hidden; }
+.st-meter { height: 4px; margin-top: 10px; border-radius: 2px; background: rgba(255, 255, 255, 0.1); overflow: hidden; flex: none; }
 .st-meter i { display: block; height: 100%; border-radius: inherit; background: var(--text); transition: width 600ms var(--ease); }
 .st-empty { margin: auto; display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; color: var(--muted); }
 .st-empty b { color: var(--text); font-family: var(--display); }
 .st-empty.small { font-size: var(--t-sm); padding: 0 var(--s-3); }
 .st-center { margin: auto; display: flex; flex-direction: column; align-items: center; gap: 8px; font-family: var(--display); font-weight: 700; }
+.st-tile:focus .st-dice { animation: st-roll 700ms cubic-bezier(0.22, 1, 0.36, 1); }
+@keyframes st-roll { 40% { transform: rotate(-20deg) scale(1.12); } 70% { transform: rotate(8deg); } }
+@container (max-height: 110px) and (max-width: 200px) { .st-label { display: none; } .st-center b { display: none; } }
+@container (max-height: 90px) { .st-sub { display: none; } }
 
 /* art tiles: the picture fills the tile, a scrim keeps the words readable */
-.st-art { position: absolute; inset: 0; z-index: -2; background-size: cover; background-position: center 30%; transition: transform 600ms var(--ease); }
-.st-tile.art:focus .st-art { transform: scale(1.035); }
+.st-art { position: absolute; inset: 0; z-index: -2; background-size: cover; background-position: center 30%; transition: transform 700ms var(--ease); }
+.st-tile.art:focus .st-art { transform: scale(1.04); }
 .st-scrim { position: absolute; inset: 0; z-index: -1; background: linear-gradient(to top, rgba(8, 9, 12, 0.92) 0%, rgba(8, 9, 12, 0.55) 38%, rgba(8, 9, 12, 0.08) 72%), linear-gradient(to right, rgba(8, 9, 12, 0.5), transparent 60%); }
 .st-cp { margin-top: auto; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; min-width: 0; max-width: 100%; }
 .st-cp :deep(.game-logo) { margin: 0 0 4px; filter: drop-shadow(0 4px 14px rgba(0, 0, 0, 0.55)); }
-.st-cp :deep(.st-cp-name) { margin: 0; font-family: var(--display); font-stretch: var(--display-stretch); font-weight: 800; font-size: clamp(22px, 2.4vw, 44px); line-height: 1.05; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-.st-cp-when { font-size: var(--t-sm); font-weight: 500; color: rgba(255, 255, 255, 0.86); }
+.st-cp :deep(.st-cp-name) { margin: 0; font-family: var(--display); font-stretch: var(--display-stretch); font-weight: 800; font-size: clamp(16px, min(14cqh, 9cqw), 44px); line-height: 1.05; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.st-cp-when { font-size: clamp(11px, min(8cqh, 5cqw), 15px); font-weight: 500; color: rgba(255, 255, 255, 0.86); }
 .st-cp-go { display: inline-flex; align-items: center; gap: 8px; margin-top: 6px; padding: 8px 18px 8px 10px; border-radius: 999px; background: #fff; color: #0c0d10; font-weight: 700; font-size: var(--t-sm); }
+@container (max-height: 140px) { .st-cp-when { display: none; } }
 .st-dots { position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%); display: flex; gap: 6px; }
 .st-dots i { width: 6px; height: 6px; border-radius: 3px; background: rgba(255, 255, 255, 0.4); transition: width var(--d-med) var(--ease), background var(--d-med); }
 .st-dots i.on { width: 18px; background: #fff; }
 .st-pin { margin-top: auto; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.st-pin b { font-family: var(--display); font-weight: 700; font-size: var(--t-md); line-height: 1.15; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.st-pin b { font-family: var(--display); font-weight: 700; font-size: clamp(13px, min(12cqh, 8cqw), 22px); line-height: 1.15; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .st-pin span { font-size: var(--t-xs); color: rgba(255, 255, 255, 0.75); }
+.t-clock .st-face { padding: 0; background: #0e1736; }
 
-/* clock: light from the sun's (or moon's) place on its path, a big light-weight time, the day above */
-.st-sky { position: absolute; inset: 0; z-index: -1; transition: background 2s ease; }
-/* the path keeps to the right, clear of the time */
-.st-path { position: absolute; right: 7%; width: 42%; top: 30%; height: 44%; z-index: -1; }
-.h2 .st-path { right: 9%; width: 82%; top: 22%; height: 34%; }
-.st-path svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
-.st-path path { fill: none; stroke: rgba(255, 255, 255, 0.13); stroke-width: 1.2; stroke-dasharray: 2 5; vector-effect: non-scaling-stroke; }
-.st-orb { position: absolute; width: 10px; height: 10px; margin: -5px 0 0 -5px; border-radius: 50%; transition: left 2s ease, top 2s ease; }
-.st-orb.sun { background: #fff6e8; box-shadow: 0 0 0 4px rgba(255, 220, 170, 0.14); }
-.st-orb.moon { background: transparent; box-shadow: inset -3px -1px 0 0 #e8ecff; }
-.st-day { font-size: var(--t-sm); color: var(--muted); position: relative; }
-.st-day b { color: var(--text); font-weight: 650; margin-right: 4px; }
-.st-time { margin-top: auto; display: flex; align-items: baseline; gap: 6px; line-height: 0.9; font-family: var(--display); }
-.st-time span { font-weight: 300; font-size: clamp(44px, 4.6vw, 92px); letter-spacing: -0.045em; }
-.h2 .st-time span { font-size: clamp(60px, 6.4vw, 128px); }
-.st-time small { font-weight: 600; font-size: clamp(13px, 1vw, 20px); color: var(--muted); letter-spacing: 0.02em; }
-
-/* storage: the number on the left, a ring of ticks on the right lit for what's free (amber when low) */
+/* storage: wide, the number and a gauge side by side; tall, the gauge on top; small, only the gauge */
 .st-store { flex: 1; min-height: 0; display: flex; align-items: stretch; gap: var(--s-3); }
 .st-store-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-.st-gauge { position: relative; flex: none; height: 100%; aspect-ratio: 1; max-width: 46%; display: grid; place-items: center; }
+.st-gauge { position: relative; flex: none; height: 100%; aspect-ratio: 1; max-width: 50%; display: grid; place-items: center; container-type: inline-size; }
 .st-gauge svg { position: absolute; inset: 0; width: 100%; height: 100%; }
 .st-gauge line { stroke: rgba(255, 255, 255, 0.1); stroke-width: 2.6; stroke-linecap: round; transition: stroke 260ms ease; transition-delay: calc(var(--i) * 16ms + 200ms); }
 .st-gauge line.on { stroke: #fff; }
 .st-gauge.low line.on { stroke: #ffb547; }
-.st-gauge > span { font-family: var(--display); font-weight: 700; font-size: clamp(15px, 1.2vw, 26px); letter-spacing: -0.02em; }
+.st-gauge > span { font-family: var(--display); font-weight: 700; font-size: clamp(13px, 22cqw, 40px); letter-spacing: -0.02em; }
 .st-gauge small { font-size: 0.62em; color: var(--muted); margin-left: 1px; }
-.h2 .st-store { flex-direction: column-reverse; }
-.h2 .st-gauge { height: auto; width: 100%; max-width: none; max-height: 58%; align-self: center; }
 :global(body.motion-reduce .st-gauge line) { transition: none; }
+@container (aspect-ratio < 1.2) { .st-store { flex-direction: column-reverse; } .st-gauge { height: auto; width: 100%; max-width: none; aspect-ratio: auto; flex: 1; min-height: 0; container-type: size; } .st-gauge > span { font-size: clamp(13px, min(20cqw, 20cqh), 40px); } .st-store-text .st-num { margin-top: 0; } .st-store-text { flex: none; } }
+@container (max-width: 190px) and (max-height: 190px) { .st-store-text { display: none; } .st-gauge { max-width: none; width: 100%; height: 100%; } }
 
-/* this week: the total and the day played most, then a bar for each day rising in turn (today white) */
+/* this week: wide, the total beside the bars; tall, the bars under it; small, the total only */
 .st-week { flex: 1; min-height: 0; display: flex; align-items: stretch; gap: var(--s-5); }
 .st-week-text { flex: none; min-width: 0; max-width: 46%; display: flex; flex-direction: column; }
-.st-bars { flex: 1; min-width: 0; display: flex; align-items: stretch; justify-content: space-between; gap: clamp(6px, 0.7vw, 14px); padding-top: 4px; }
-.st-bar { flex: 1; max-width: 30px; display: flex; flex-direction: column; align-items: center; gap: 7px; min-height: 0; }
-/* bars sit absolutely in their column so their percentage heights always resolve */
+.st-bars { flex: 1; min-width: 0; display: flex; align-items: stretch; justify-content: space-between; gap: clamp(4px, 2cqw, 14px); padding-top: 14px; }
+.st-bar { flex: 1; max-width: 34px; display: flex; flex-direction: column; align-items: center; gap: 7px; min-height: 0; }
 .st-col { flex: 1; min-height: 0; width: 100%; position: relative; }
-.st-bar i { position: absolute; left: 0; right: 0; bottom: 0; border-radius: 6px; background: linear-gradient(to top, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.24)); transform-origin: bottom; animation: st-rise 700ms cubic-bezier(0.23, 1, 0.32, 1) both; animation-delay: calc(var(--i) * 55ms + 160ms); }
+.st-bar i { position: absolute; left: 0; right: 0; bottom: 0; border-radius: 6px; background: linear-gradient(to top, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.24)); transform-origin: bottom; animation: st-rise 760ms cubic-bezier(0.22, 1, 0.36, 1) both; animation-delay: calc(var(--i) * 55ms + 180ms); transition: height 500ms var(--ease); }
 .st-bar.today i { background: linear-gradient(to top, rgba(255, 255, 255, 0.78), #fff); }
 .st-bar.none i { left: calc(50% - 3px); width: 6px; height: 6px; border-radius: 50%; background: rgba(255, 255, 255, 0.16); }
 .st-bar em { position: absolute; left: 50%; transform: translate(-50%, -6px); font-style: normal; font-size: 11px; font-weight: 700; color: var(--text); white-space: nowrap; font-variant-numeric: tabular-nums; }
@@ -590,30 +692,32 @@ watch(() => store.play, loadWeek);
 .st-bar.today span { color: var(--text); }
 @keyframes st-rise { from { transform: scaleY(0); } }
 :global(body.motion-reduce .st-bar i) { animation: none; }
+@container (aspect-ratio < 1.5) { .st-week { flex-direction: column; gap: var(--s-2); } .st-week-text { max-width: none; } .st-week-text .st-num { margin-top: 6px; } }
+@container (max-height: 120px) and (max-width: 220px) { .st-bars { display: none; } .st-week-text { max-width: none; flex: 1; } }
 
-/* consoles: coloured chips with their wordmarks, never squished: they wrap or count the rest */
-.st-chips { flex: 1; min-height: 0; margin-top: 10px; display: grid; grid-auto-rows: minmax(0, 1fr); gap: 8px; overflow: hidden; }
-.st-more { display: grid; place-items: center; border-radius: var(--r-md); background: var(--s2); font-family: var(--display); font-weight: 700; color: var(--muted); }
+/* consoles: the same cards as the Consoles page */
+.st-cards { flex: 1; min-height: 0; margin-top: 10px; display: grid; gap: clamp(6px, 2cqw, 12px); }
+.st-cards :deep(.systile.static) { border-radius: var(--r-md); }
+@container (max-height: 120px) and (max-width: 220px) { .st-cards { margin-top: 0; } }
 .st-fill { position: absolute; inset: 0; border-radius: inherit; }
-.st-fill :deep(.cchip-logo) { max-height: 38%; }
 
-/* rows of covers, fanned and overlapping a little, the newest first */
-.st-covers { flex: 1; min-height: 0; display: flex; align-items: stretch; gap: clamp(6px, 0.6vw, 12px); margin-top: 10px; overflow: hidden; -webkit-mask-image: linear-gradient(90deg, #000 78%, transparent); mask-image: linear-gradient(90deg, #000 78%, transparent); }
-/* the first game's cover, enormous, blurred and dark, so these tiles carry colour of their own */
+/* rows of covers, the newest first, fading out at the edge; more rows in taller tiles */
+.st-covers { flex: 1; min-height: 0; display: grid; grid-auto-flow: column; grid-auto-columns: max-content; gap: clamp(6px, 1.4cqw, 12px); margin-top: 10px; overflow: hidden; -webkit-mask-image: linear-gradient(90deg, #000 80%, transparent); mask-image: linear-gradient(90deg, #000 80%, transparent); }
 .st-ambient { position: absolute; inset: -40px; z-index: -1; background-size: cover; background-position: center; filter: blur(38px) saturate(1.2); opacity: 0.34; }
 .st-ambient::after { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(10, 11, 14, 0.2), rgba(10, 11, 14, 0.75)); }
-.st-cover { flex: none; height: 100%; aspect-ratio: 3 / 4; object-fit: cover; border-radius: var(--r-sm); box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.06); transform-origin: bottom center; transition: transform var(--d-med) var(--ease); transition-delay: calc(var(--i) * 18ms); background: var(--s2); }
+.st-cover { height: 100%; width: auto; aspect-ratio: 3 / 4; object-fit: cover; border-radius: var(--r-sm); box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.06); transition: transform 380ms cubic-bezier(0.32, 0.72, 0, 1); transition-delay: calc(var(--i) * 18ms); background: var(--s2); }
 .st-tile:focus .st-cover { transform: translateY(-3px); }
-.st-first { margin-top: 8px; color: var(--text); font-weight: 600; flex: none; }
+.st-first { margin-top: 8px; color: var(--text); font-weight: 600; }
+@container (max-height: 150px) { .st-first { display: none; } }
+@container (max-height: 110px) { .st-covers { margin-top: 0; } }
 
-/* trophies */
-.st-ach { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; gap: 10px; margin-top: 8px; min-height: 0; }
-.st-ach-row { display: flex; align-items: center; gap: 12px; min-width: 0; }
-.st-ach.one { justify-content: center; }
-.st-ach.one .st-ach-img { width: clamp(56px, 5vw, 96px); height: clamp(56px, 5vw, 96px); border-radius: var(--r-md); }
-.st-ach.one .st-ach-t b { font-size: var(--t-lg); }
-.st-ach-img { width: clamp(40px, 3.6vw, 64px); height: clamp(40px, 3.6vw, 64px); flex: none; border-radius: var(--r-sm); object-fit: cover; display: grid; place-items: center; background: var(--s2); }
+/* trophies: as many as fit, smaller; a narrow tile shows the newest badge alone */
+.st-ach { flex: 1; min-height: 0; display: grid; align-content: start; gap: 10px 16px; margin-top: 8px; }
+.st-ach-row { display: flex; align-items: center; gap: 10px; min-width: 0; animation: st-in 520ms cubic-bezier(0.22, 1, 0.36, 1) both; animation-delay: calc(var(--i) * 40ms + 120ms); }
+.st-ach-img { width: 44px; height: 44px; flex: none; border-radius: var(--r-sm); object-fit: cover; display: grid; place-items: center; background: var(--s2); }
 .st-ach-t { display: flex; flex-direction: column; min-width: 0; }
-.st-ach-t b { font-family: var(--display); font-weight: 700; font-size: var(--t-md); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.st-ach-t span { font-size: var(--t-sm); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.st-ach-t b { font-family: var(--display); font-weight: 700; font-size: var(--t-sm); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.st-ach-t span { font-size: var(--t-xs); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@container (max-width: 200px) { .st-ach { place-items: center; align-content: center; margin-top: 4px; } .st-ach-t { display: none; } .st-ach-row:not(:first-child) { display: none; } .st-ach-img { width: min(62cqw, 56cqh); height: min(62cqw, 56cqh); border-radius: var(--r-md); } }
+:global(body.motion-reduce .st-ach-row) { animation: none; }
 </style>

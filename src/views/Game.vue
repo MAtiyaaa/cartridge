@@ -59,7 +59,7 @@
               <button v-if="pkgBusy" class="btn xl" data-focus data-autofocus @click="cancelPkg"><Icon name="mdiLoading" class="spin" :size="22" />{{ pkgProg?.opens ? `Close ${emuName} to finish` : `Installing in ${emuName}` }}{{ pkgProg?.of > 1 ? ` · ${pkgProg.step} of ${pkgProg.of}` : '' }}</button>
               <button v-else-if="needsInstall" class="btn primary xl" data-focus data-autofocus @click="installPkg"><Icon name="mdiPackageDown" :size="22" />Install in {{ emuName }}</button>
               <button v-else-if="pkg?.licenceMissing?.length" class="btn primary xl" data-focus data-autofocus @click="addLicence"><Icon name="mdiKeyOutline" :size="22" />Get licence (.rap)</button>
-              <button v-else class="btn ok xl" data-focus data-autofocus @click="toast(installedPath, 'info', 4000, 'mdiFolder')"><Icon name="mdiCheckCircle" />Ready to play</button>
+              <button v-else class="btn ok xl" data-focus data-autofocus @click="playNow"><Icon name="mdiCheckCircle" />Ready to play</button>
               <!-- Re-download and Delete live in More → Options (owner, 0.9.16); the ring shows while deleting -->
               <button v-if="deleting != null" class="btn danger icon-btn" data-focus disabled><Ring :pct="deleting" :size="22" /><span>Deleting</span></button>
             </template>
@@ -157,7 +157,7 @@
 import { similarTo } from '../recs.js';
 import { addGame, removeGame, applyChanges, pickEmulator, pickCollections } from '../steam.js';
 import { computed, onMounted, onBeforeUnmount, ref, nextTick, watch } from 'vue';
-import { store, call, img, go, cover, bytes, year, rating, toast, confirm, download, downloadFor, romById, platformById, isNew, setBg, logoOf, resetLogos, artFor, choose, openModal, allRoms, visible, isFavourite, addToCollection, playOf, playtimeText, ago, loadPlay, askText, saveConfig, backdropOf, wantSharp } from '../store.js';
+import { store, heroArt, call, img, go, cover, bytes, year, rating, toast, confirm, download, downloadFor, romById, platformById, isNew, setBg, logoOf, resetLogos, artFor, choose, openModal, allRoms, visible, isFavourite, addToCollection, playOf, playtimeText, ago, loadPlay, askText, saveConfig, backdropOf, wantSharp } from '../store.js';
 import { pinToStart } from '../startTiles.js';
 import { useView } from '../useView.js';
 import { ensureFocus, focusFirst } from '../nav.js';
@@ -310,14 +310,6 @@ async function installPkg() {
   pkgProg.value = null;
   loadPkg();
 }
-// the emulator's patches for this game; nothing changes until Apply
-async function openPatches() {
-  let info;
-  try { info = await call('patches:list', { romId: Number(props.romId) }); } catch (e) { return toast(e.message, 'error'); }
-  const changes = await openModal('patches', { name: base.value.name, ...info });
-  if (!changes?.length) return;
-  try { const r = await call('patches:apply', { romId: Number(props.romId), changes }); toast(r.count ? `Saved in ${info.emuName}. They apply next time the game starts.` : 'Nothing changed', 'ok', 3500, 'mdiPuzzleOutline'); } catch (e) { toast(e.message, 'error', 7000); }
-}
 // a licence for a game already installed in RPCS3 without one: found in its download or in RomM
 async function addLicence() {
   try { await call('pkg:addLicence', { romId: Number(props.romId) }); toast('Licence added. The game can start now.', 'ok', 3500, 'mdiKeyOutline'); } catch (e) { toast(e.message, 'error', 9000); }
@@ -380,7 +372,9 @@ const banner = computed(() => {
   if (!base.value) return {};
   const h = artFor(props.romId).hero;
   if (h) return { src: img(h) };
-  if (store.sharp[base.value.id]) return { src: store.sharp[base.value.id] };
+  // SteamGridDB's hero only (0.9.21): nothing until it's known, RomM's screenshot only without a key
+  const a = heroArt(base.value);
+  if (a || store.config?.sgdbKey) return a || {};
   const shot = !bannerFail.value && (detail.value?.merged_screenshots?.[0] || cached.value?.shot);
   if (shot) return { src: img(shot) };
   return { src: cover(base.value, true), blur: true };
@@ -596,7 +590,10 @@ async function more() {
   // PS3 game updates from Sony's list (0.9.16); never holds the menu up for long
   if (installedPath.value && !marked.value && /ps3/i.test(slugs)) {
     const up = await Promise.race([call('ps3up:game', { romId: Number(props.romId) }).catch(() => null), new Promise((r) => setTimeout(() => r(null), 1500))]);
+    // 0.9.21 (owner: game updates on the game's own page, not only in Settings): always offered; when
+    // Sony's list is slow to answer, picking it checks and then installs
     if (up?.todo?.length) play.push({ label: `Install game update ${up.todo[up.todo.length - 1].version}`, sub: `${up.todo.length} update${up.todo.length === 1 ? '' : 's'} from Sony · ${bytes(up.size)} · now ${up.have || 'unknown'}`, value: 'ps3up', icon: 'mdiPackageUp' });
+    else play.push({ label: 'Game updates', sub: up ? (up.error ? 'Couldn’t check Sony’s update list' : `Up to date${up.have ? ' · version ' + up.have : ''}`) : 'Check Sony’s update list for this game', value: 'ps3check', icon: 'mdiPackageUp' });
   }
   if (installedPath.value && !marked.value && pe) play.push({ label: pe === 'PPSSPP' ? 'Cheats' : pe === 'Dolphin' ? 'Patches and cheats' : 'Patches', sub: `From ${pe}’s ${pe === 'PPSSPP' ? 'cheat' : 'patch'} list, saved in ${pe}`, value: 'patches', icon: 'mdiPuzzleOutline' });
   if (installedPath.value && !marked.value && /\b(ps2|psx|ngc|gamecube|wii|psp|3ds|n3ds|switch|wiiu)\b/i.test(slugs)) play.push({ label: 'Add-ons', sub: /\bps2\b/i.test(slugs) ? 'Texture packs to download, and what’s installed' : 'Mods and packs to download, and what’s installed', value: 'textures', icon: 'mdiPuzzleOutline' });
@@ -646,9 +643,16 @@ async function more() {
   if (v === 'trophies') { await linkTrophies(); return; }
   if (v === 'path') { toast(installedPath.value, 'info', 5000, 'mdiFolder'); return; }
   if (v === 'pkg') { await installPkg(); return; }
-  if (v === 'patches') { await openPatches(); return; }
+  if (v === 'patches') { await openModal('gameaddons', { romId: Number(props.romId), name: base.value.name, tab: 'patches' }); return; }
   if (v === 'redownload') { await redownload(); return; }
-  if (v === 'ps3up') {
+  if (v === 'ps3check') {
+    toast('Checking Sony’s update list…', 'info', 2500, 'mdiPackageUp');
+    const up = await call('ps3up:game', { romId: Number(props.romId), fresh: true }).catch((e) => ({ error: e.message }));
+    if (up?.error) return toast(up.error, 'error', 5000);
+    if (!up?.todo?.length) return toast(`Up to date${up?.have ? ' · version ' + up.have : ''}`, 'ok', 3000, 'mdiCheck');
+    if (!(await confirm('Install the game updates?', `${up.todo.length} update${up.todo.length === 1 ? '' : 's'} from Sony (${bytes(up.size)}), up to version ${up.todo[up.todo.length - 1].version}. They install into RPCS3 in order.`, 'Install'))) return;
+  }
+  if (v === 'ps3up' || v === 'ps3check') {
     toast('Downloading the updates from Sony, then installing them in RPCS3…', 'info', 4000, 'mdiPackageUp');
     try { const r = await call('ps3up:install', { romId: Number(props.romId) }); toast(`Updated${r.version ? ' to ' + r.version : ''}`, 'ok', 3500, 'mdiPackageUp'); } catch (e) { toast(e.message, 'error', 6000); }
     return;
@@ -660,7 +664,7 @@ async function more() {
     try { await call('steam:addToCollections', { romId: Number(props.romId), names }); toast(`Added to ${names.join(', ')}`, 'ok', 3000, 'mdiSteam'); } catch (e) { toast(e.message, 'error', 6000); }
     return;
   }
-  if (v === 'textures') { await openModal('addons', { romId: Number(props.romId), name: base.value.name }); return; }
+  if (v === 'textures') { await openModal('gameaddons', { romId: Number(props.romId), name: base.value.name, tab: /\bps2\b/i.test(base.value.platform_slug || '') ? 'tex' : 'mods' }); return; }
   if (v === 'refresh') { try { detail.value = await call('api:get', { path: `/api/roms/${props.romId}` }); resetLogos(props.romId); toast('Details refreshed', 'ok', 2000, 'mdiRefresh'); } catch (e) { toast(e.message, 'error'); } return; }
   if (v === 'reset') { store.art = { ...store.art }; delete store.art[props.romId]; await call('art:reset', { id: props.romId }); resetLogos(props.romId); toast('Artwork reset', 'ok', 2000, 'mdiRestore'); return; }
   if (!store.config.sgdbKey) { toast('Add a SteamGridDB API key in Settings → Look & feel first', 'error', 4500); return; }
@@ -671,6 +675,14 @@ async function more() {
   if (v === 'logo') resetLogos(props.romId);
   if (v === 'hero') setBg({ src: img(url) });
   toast({ grid: 'Cover', logo: 'Logo', hero: 'Background' }[v] + ' updated', 'ok', 2000, 'mdiCheck');
+}
+// Ready to play (0.9.21, owner: it did nothing): starts the game's Steam shortcut; not in Steam yet: offers to add it
+async function playNow() {
+  try { await call('steam:play', { romId: Number(props.romId) }); toast('Starting through Steam…', 'info', 2500, 'mdiPlay'); }
+  catch (e) {
+    if (/Add it to Steam/.test(e.message) && (await confirm('Add to Steam to play?', 'Cartridge starts games through their Steam shortcut, so they launch with your emulator setup.', 'Add to Steam'))) return addGame({ ...base.value, id: Number(props.romId) });
+    toast(e.message, 'error', 5000);
+  }
 }
 function goVersion(id) { store.route = { ...store.route, params: { romId: id } }; }
 
@@ -684,7 +696,7 @@ onMounted(async () => {
   focusFirst(el.value);
   try {
     detail.value = await call('api:get', { path: `/api/roms/${props.romId}` });
-    if (!hero && !store.sharp[props.romId] && detail.value.merged_screenshots?.[0]) setBg({ src: img(detail.value.merged_screenshots[0]) });
+    if (!hero && !store.config?.sgdbKey && !store.sharp[props.romId] && detail.value.merged_screenshots?.[0]) setBg({ src: img(detail.value.merged_screenshots[0]) });
   } catch (e) { if (!cached.value) toast(e.message, 'error'); }
   loadRa();
   loadPkg();

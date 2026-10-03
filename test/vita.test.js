@@ -66,3 +66,28 @@ test('unencrypted game, DLC and update unpacked like Vita3K; encrypted and Vitam
   zip(vit, { 'sce_sys/param.sfo': sfo({ TITLE_ID: 'PCSB00003', CATEGORY: 'gd' }), 'sce_module/steroid.suprx': 's' });
   await assert.rejects(P.vitaArchiveContents(vit), /Vitamin/);
 });
+
+// 0.9.21: Vita3K's own storage folder, worked out as Vita3K does (portable, config pref-path, default)
+test('vita3kFsPaths follows Vita3K: portable folder, then config pref-path, then its default', () => {
+  const P = require('../electron/pkgInstall.js');
+  const os = require('os'), fs = require('fs'), path = require('path');
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'v3kfs-'));
+  const saved = { c: process.env.XDG_CONFIG_HOME, d: process.env.XDG_DATA_HOME };
+  delete process.env.XDG_CONFIG_HOME; delete process.env.XDG_DATA_HOME;
+  try {
+    const exe = path.join(home, 'Applications/Vita3K/Vita3K');
+    fs.mkdirSync(path.dirname(exe), { recursive: true }); fs.writeFileSync(exe, '');
+    assert.deepStrictEqual(P.vita3kFsPaths(exe, home), [path.join(home, '.local/share/Vita3K/Vita3K')]);
+    fs.mkdirSync(path.join(home, '.config/Vita3K'), { recursive: true });
+    fs.writeFileSync(path.join(home, '.config/Vita3K/config.yml'), 'log-level: 2\npref-path: /run/media/me/Drive/Emulation/storage/Vita3K/\n');
+    assert.strictEqual(P.vita3kFsPaths(exe, home)[0], '/run/media/me/Drive/Emulation/storage/Vita3K');
+    fs.mkdirSync(path.join(home, 'Applications/Vita3K/portable'));
+    assert.strictEqual(P.vita3kFsPaths(exe, home)[0], path.join(home, 'Applications/Vita3K/portable/fs'));
+  } finally { if (saved.c) process.env.XDG_CONFIG_HOME = saved.c; if (saved.d) process.env.XDG_DATA_HOME = saved.d; fs.rmSync(home, { recursive: true, force: true }); }
+});
+
+test('vita3kWhy gives Vita3K\'s own reason without its log prefix', () => {
+  const P = require('../electron/pkgInstall.js');
+  assert.strictEqual(P.vita3kWhy('[10:00:00.000] |I| [main]: Installing archive from CLI: x.zip\n[10:00:03.120] |E| [is_nonpdrm]: NoNpDrm installation failed, deleting data!'), 'NoNpDrm installation failed, deleting data!');
+  assert.strictEqual(P.vita3kWhy('[10:00:00.000] |I| [main]: all fine'), '');
+});
