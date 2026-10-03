@@ -22,6 +22,7 @@ Every Cartridge release, newest first. Each GitHub release only lists its own ch
 - **Search** in the top bar, when closed, is a plain magnifier like the tab icons, with the Y hint like LT and RT. It opens as before.
 - **Get Emulators:** icons for ares, RetroArch, ScummVM, PPSSPP, MAME, Vita3K, Rosalie's Mupen GUI, Supermodel, PrimeHack, Xenia Edge, Eden and Ryujinx. Xbox 360 lists Xenia Canary first (yours shows as installed), Xenia Edge second.
 - **Xenia's Linux build** (from Get Emulators) starts games with a plain path instead of the Windows-style Z: path.
+- **Rumble when switching pages:** LB/RB and LT/RT (sections and top tabs) give a short, firmer pulse than moving does, at your Look & Feel rumble level.
 - **Start's Consoles tile** uses the same console cards as the Consoles page.
 - **Start's Latest trophies** shows as many as fit, smaller, instead of one.
 - **Look & Feel:** Theme and Background are one page.
