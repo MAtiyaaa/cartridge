@@ -262,6 +262,7 @@ LT/RT switch top tabs. LB/RB only switch sections inside a page. A select, B bac
 - Emulator updates keep the build kind: `installKind` (appimage, folder with data/ lang/, program), `REPOS.vita3k.folder` zip, `replaceFolder`; programs never overwritten. Get Emulators: Xenia Canary first (`binary`, tar.gz), more `ICON_URLS`.
 - Settings → Achievements: Sign In to Emulators row with status (`raTargets`, `ra:emuSignin` ids).
 - `rpcs3List` leaves out other-version patches when `appVer` is known (unless on).
+- Game Add-ons (owner): `GameAddons.vue` (modal `gameaddons`, props romId/name/tab) hosts `AddonsSheet` (`embedded`, `kind` 'mods'/'tex' by GameBanana category, EmuCoreX = tex; `onReopen` after confirm) and `PatchesSheet` (`embedded`, `section`, applies itself); tabs only for what the console has (Dolphin's kinds as tabs `p:<Section>`), Game Updates = `ps3up:game`/`ps3up:install`. Settings → Emulators pages: Overview, Emulators (`<EmuGet updates>`: `emuup:list` per installed emulator, Up to date / Update, "Also on this device"), Game Add-ons (`gaGroups`, search `gaFind`), Console Folders. Add-on records keep `category`. CSP `img-src` allows `https:` (GameBanana previews).
 - nav.js `firstSeen`: a pad's first 400 ms counts as triggers at rest (LT/RT at launch). App `background` event sets `store.away` and `body.away` (CSS animations paused, Background.vue stops drawing).
 
 ## Releases (full steps: HANDOFF D8)

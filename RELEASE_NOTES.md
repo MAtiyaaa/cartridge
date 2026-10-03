@@ -8,7 +8,8 @@
   - **Motion:** tiles glide to their new place and size instead of jumping, a lifted tile follows your finger, and the grid shows while you arrange.
 - **Start's clock is a scene:** sunrise, morning, afternoon, evening and night, each with its own sky and hills. The sun (or moon with stars) moves across it during the day.
 - **Settings → Sync:** Syncthing has its own tab. It shows your devices, the folders it syncs (saves first) and, for each folder, its newest files. View only: Cartridge never opens, copies or changes a file.
-
+- **Game Add-ons:** Game Updates, Patches and Add-ons are one page in Settings → Emulators, listed by console with the emulator each uses, and a search box to find a game quickly. A game opens one sheet with a tab for each thing it can have: Mods, Texture Packs, Patches (for Dolphin: Patches, AR Codes, Gecko Codes and Graphics Mods) and Game Updates (PS3), LB and RB between them. Whether a texture pack or mods are already in place, and whether custom textures are on, shows on the tab it belongs to. Patches and Add-ons in a game's More menu open the same sheet.
+- **Emulators page:** Get Emulators and emulator updates are one list. An emulator you have says Up to date, or shows its update (pick it to install), instead of just Installed. Emulators you have that the list doesn't offer are under Also on this device, with their updates too.
 - **Ready to play starts the game:** on a game's page it now starts the game's Steam shortcut, the same as playing it from Steam (through Steam itself when its live connection is on). A game not in Steam yet offers to add it.
 - **Dolphin patches in tabs:** Patches, AR Codes, Gecko Codes and Graphics Mods, LB and RB between them, each with how many are on. Graphics mods are new: Dolphin's own and yours (Load/GraphicMods) for that game, switched on the way Dolphin does it.
 - **Sign In to Emulators** (Settings → Achievements) says whether they're all signed in ("All signed in", or "2 of 5"). It opens a list of your emulators showing who each is signed in as, with Sign In to All at the top or one at a time.
@@ -39,5 +40,6 @@
 - **LT/RT at launch:** the first trigger pull after starting Cartridge now switches tabs. It used to be ignored until another button was pressed.
 - **Lag in Game Mode:** with a game or Steam in front, Cartridge now stops its animated background and every animation, so it no longer slows the device down in the background.
 - **Vita3K installs:** Cartridge now works out Vita3K's storage folder exactly as Vita3K does (a portable folder, the pref-path in its settings, then its default), puts games there, and also finds them wherever Vita3K's own log says it put them. If Vita3K still refuses a game, the message shows Vita3K's own reason (from its output or vita3k.log) instead of a general one, and the full output goes to Cartridge's log.
+- **Add-on pictures:** the preview images of GameBanana mods and texture packs now show. Cartridge's page rules only allowed its own pictures.
 - **Consoles page:** the controller pictures are no longer cut off at the card corners.
-- **Settings → Emulators:** LB, the pages and RB stay on one row. On Game Updates, the PlayStation 3 card's title and description no longer run together on one line.
+- **Settings → Emulators:** LB, the pages and RB stay on one row.

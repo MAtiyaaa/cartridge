@@ -25,6 +25,8 @@ Also before release (owner): game updates on the game page (always offered for i
 
 Then (owner, while it built): RPCS3 update order (answered: all newer updates are downloaded first, then installed one after another, oldest first, each through rpcs3 --headless --installpkg); SteamGridDB heroes only (heroArt); Ready to play starts the Steam shortcut; search closed look; Sign In to Emulators status and list; Get Emulators icons (checked URLs; Ryujinx's and Eden's not checkable from the container) and Xenia Canary; Dolphin tabs, graphics mods (read in Dolphin's GraphicsModGroup/GraphicsMod/HiresTextures source) and the user-folder choice; Vita3K update breaking Steam shortcuts (EmuDeck's zip build overwritten by the AppImage; now same-kind updates). Owner to test: Vita3K Update (should restore the zip build), a Vita game from Steam after it, Dolphin codes and a graphics mod, Ready to play, heroes on Home and game pages.
 
+Last (owner, photo of Add-ons): add-on pictures didn't show (the page's CSP only allowed romimg:/data:, GameBanana previews are https; now `img-src ... https:`). Game Updates, Patches and Add-ons merged into Game Add-ons (search, by console with the emulator, a game opens `GameAddons.vue` with Mods, Texture Packs, Patches, Game Updates tabs; texture info on its tab). Get Emulators and Updates merged into Emulators (Up to date with the green check, or the update). Owner to test: Game Add-ons on a PS2, GameCube, Switch and PS3 game; a GameBanana install and remove (the sheet reopens on the same tab); Apply on Dolphin's tabs; an emulator update from the Emulators page.
+
 **Owner's list, amended (3 Oct 2026):**
 1. Console page path: done in 0.9.21.
 2. Multi-language: later (1.0 or after).
@@ -41,7 +43,7 @@ Then (owner, while it built): RPCS3 update order (answered: all newer updates ar
 13. Sony 403: owner hasn't checked.
 14. Vita3K installs and booting: owner hasn't checked.
 
-**Owner must test on a device:** Start arranging with the controller (A move, X corner resize, LB/RB corners), touch (hold, drag, edges) and the mouse; tile sizes from 1 by 1 up; the clock at different times of day; LT/RT right after launch; Game Mode lag with a game in front; the console logos on Consoles, game cards and Achievements; Settings → Sync with Syncthing running.
+**Owner must test on a device:** Start arranging with the controller (A move, X corner resize, LB/RB corners), touch (hold, drag, edges) and the mouse; tile sizes from 1 by 1 up; the clock at different times of day; LT/RT right after launch; Game Mode lag with a game in front; the console logos on Consoles, game cards and Achievements; Settings → Sync with Syncthing running; Game Add-ons and the merged Emulators page.
 
 ---
 

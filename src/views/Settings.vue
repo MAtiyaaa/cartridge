@@ -88,7 +88,7 @@
           <template v-else-if="sec === 'emu'">
             <h1>Emulators</h1>
             <!-- pages like Look & Feel (0.9.16, owner): LB/RB move between them -->
-            <div class="lookpages"><Btn b="LB" /><div class="seg"><button v-for="p in EMU_PAGES" :key="p.v" data-focus :data-key="'emup-' + p.v" :class="{ on: emuPage === p.v }" @click="setEmuPage(p.v)">{{ p.l }}<span v-if="p.v === 'updates' && emuUpCount" class="count-dot">{{ emuUpCount }}</span><span v-if="p.v === 'games' && ps3UpCount" class="count-dot">{{ ps3UpCount }}</span></button></div><Btn b="RB" /></div>
+            <div class="lookpages"><Btn b="LB" /><div class="seg"><button v-for="p in EMU_PAGES" :key="p.v" data-focus :data-key="'emup-' + p.v" :class="{ on: emuPage === p.v }" @click="setEmuPage(p.v)">{{ p.l }}<span v-if="p.v === 'addons' && ps3UpCount" class="count-dot">{{ ps3UpCount }}</span></button></div><Btn b="RB" /></div>
             <template v-if="emuPage === 'overview'">
             <!-- what needs you, in one place (0.9.3: replaces the pop-ups at start) -->
             <div class="subh">Issues</div>
@@ -106,80 +106,28 @@
               <button class="lrow" data-focus @click="go('steam-health')"><Icon name="mdiStethoscope" :size="24" /><div class="l-mid"><b>Shortcut health</b><span class="l-sub">Steam shortcuts that would fail, and fixes for them</span></div><Icon name="mdiChevronRight" :size="22" /></button>
             </div>
             </template>
-            <template v-else-if="emuPage === 'updates'">
-              <p class="muted small" style="margin-top: -6px">Your emulators and their versions. Updates come from each emulator's own channel: Flathub for Flatpaks, the emulator's own releases for AppImages (the new file goes where the old one was, so Steam shortcuts keep working). EmuDeck's launchers update through EmuDeck.</p>
-              <div class="row"><button class="btn small" data-focus :disabled="emuUpBusy" @click="loadEmuUpdates(true)"><Icon name="mdiRefresh" :size="18" :class="{ spin: emuUpBusy }" />Check now</button></div>
-              <div v-if="emuUps === null" class="muted small"><Icon name="mdiSync" :size="16" class="spin" /> Checking…</div>
-              <p v-else-if="!emuUps.length" class="muted">No emulators to update were found. Run Emulator setup's scan first.</p>
-              <div v-else class="stack">
-                <!-- 0.9.17: rows always take focus (disabled ones couldn't be reached with a controller); one update
-                     at a time, the rest of the page stays usable; progress as a bar along the row -->
-                <button v-for="e in emuUps" :key="e.path || e.fp" class="lrow up-row" :class="{ busy: emuUpRun === (e.path || e.fp) }" data-focus @click="runEmuUpdate(e)">
-                  <EmuIcon :id="e.id" :size="30" />
-                  <div class="l-mid"><b>{{ e.label }} <span class="muted small">{{ e.kind === 'flatpak' ? 'Flatpak' : e.kind === 'windows' ? 'Windows build' : e.build === 'folder' ? 'Folder build' : e.build === 'program' ? 'Program' : 'AppImage' }}</span></b><span class="l-sub">{{ e.version ? 'Version ' + e.version : e.kind === 'flatpak' ? e.fp : e.path.replace(store.info.home, '~') }}</span></div>
-                  <span v-if="emuUpRun === (e.path || e.fp)" class="status"><Icon name="mdiArrowDownCircle" :size="14" />{{ emuUpPct != null ? emuUpPct + '%' : 'Updating' }}</span>
-                  <span v-else-if="e.update" class="status warn"><Icon name="mdiUpdate" :size="14" />{{ e.update.version || e.update.tag || 'New version' }}</span>
-                  <span v-else-if="e.error" class="status">Couldn’t check</span>
-                  <span v-else-if="e.noSource" class="status">Updates in the app</span>
-                  <span v-else class="status ok"><Icon name="mdiCheck" :size="14" />Up to date</span>
-                  <i v-if="emuUpRun === (e.path || e.fp)" class="up-bar" :class="{ live: emuUpPct == null }" :style="{ width: (emuUpPct ?? 100) + '%' }" />
-                </button>
-              </div>
+            <template v-else-if="emuPage === 'emus'">
+              <!-- 0.9.21 (owner): Get Emulators and emulator updates in one list; installed ones show Up to date or their update -->
+              <p class="muted small" style="margin-top: -6px">Emulators for each console. The ones on this device show whether they're up to date: Flatpaks update from Flathub, AppImages from the emulator's own releases (the new file goes where the old one was, so Steam shortcuts keep working). EmuDeck's launchers update through EmuDeck.</p>
+              <EmuGet updates />
             </template>
-            <template v-else-if="emuPage === 'games'">
-              <div class="ps3-head">
-                <PIcon :p="{ slug: 'ps3', fs_slug: 'ps3' }" :size="44" />
-                <div class="l-mid"><b>PlayStation 3 game updates</b><span class="l-sub">From Sony's own update list, installed into RPCS3 in order. Patches made for a game's last update need it.</span></div>
-                <EmuIcon id="rpcs3" :size="30" />
-              </div>
-              <div class="row"><button class="btn small" data-focus :disabled="ps3UpBusy" @click="loadPs3Updates(true)"><Icon name="mdiRefresh" :size="18" :class="{ spin: ps3UpBusy }" />Check now</button></div>
-              <div v-if="ps3Ups === null" class="muted small"><Icon name="mdiSync" :size="16" class="spin" /> Checking…</div>
-              <p v-else-if="!ps3Ups.length" class="muted">No PS3 games on this device.</p>
-              <div v-else class="stack">
-                <button v-for="g in ps3Ups" :key="g.romId" class="lrow up-row" :class="{ busy: ps3UpRun === g.romId }" data-focus @click="runPs3Update(g)">
-                  <img v-if="coverSmall(g.romId)" class="up-cover" :src="coverSmall(g.romId)" loading="lazy" /><Icon v-else name="mdiPackageUp" :size="26" />
-                  <div class="l-mid"><b>{{ g.name }}</b><span class="l-sub">{{ g.serial }} · {{ g.have ? 'version ' + g.have : 'version unknown' }}{{ g.latest ? ' · newest ' + g.latest : '' }}</span></div>
-                  <span v-if="ps3UpRun === g.romId" class="status"><Icon name="mdiSync" :size="14" class="spin" />{{ ps3UpText }}</span>
-                  <span v-else-if="g.todo.length" class="status warn">{{ g.todo.length }} update{{ g.todo.length === 1 ? '' : 's' }} · {{ bytes(g.size) }}</span>
-                  <span v-else-if="g.error" class="status">Couldn’t check</span>
-                  <span v-else class="status ok"><Icon name="mdiCheck" :size="14" />Up to date</span>
-                  <i v-if="ps3UpRun === g.romId" class="up-bar" :class="{ live: ps3UpPct == null }" :style="{ width: (ps3UpPct ?? 100) + '%' }" />
-                </button>
-              </div>
-            </template>
-            <template v-if="emuPage === 'get'">
-              <p class="muted small" style="margin-top: -6px">Emulators for each console, downloaded from their own releases. A green check means it's already on this device.</p>
-              <EmuGet />
-            </template>
-            <template v-if="emuPage === 'patches'">
-              <p class="muted small" style="margin-top: -6px">Patches and cheats from each emulator's own lists, for the games on this device. The same as Patches in a game's More menu.</p>
-              <p v-if="!patchGames.length" class="muted">No games on this device for the emulators with patches (RPCS3, shadPS4, PCSX2, Dolphin, PPSSPP).</p>
-              <!-- 0.9.17: by console, each with its emulator -->
-              <section v-for="grp in patchGroups" :key="grp.slug" class="con-sec">
-                <div class="con-head"><PIcon :p="grp.p" :size="34" /><b>{{ grp.name }}</b><span class="count">{{ grp.games.length }}</span><span class="con-emu"><EmuIcon :id="grp.id" :size="22" fallback="mdiPuzzleOutline" />{{ grp.emu }}</span></div>
+            <template v-else-if="emuPage === 'addons'">
+              <!-- 0.9.21 (owner): game updates, patches and add-ons in one page; a game opens Game Add-ons with a tab for each -->
+              <p class="muted small" style="margin-top: -6px">Mods, texture packs, patches and game updates for the games on this device, from each emulator's own lists, GameBanana and the EmuCoreX catalog. The same as Game Add-ons in a game's More menu.</p>
+              <TextField v-model="gaFind" placeholder="Find a game" icon="mdiMagnify" mode="game" fkey="ga-find" />
+              <section v-for="grp in gaGroups" :key="grp.slug" class="con-sec">
+                <div class="con-head"><PIcon :p="grp.p" :size="34" /><b>{{ grp.name }}</b><span class="count">{{ grp.games.length }}</span><span v-if="grp.emu" class="con-emu"><EmuIcon :id="grp.id" :size="22" fallback="mdiPuzzleOutline" />{{ grp.emu }}</span></div>
                 <div class="stack">
-                  <button v-for="g in grp.games" :key="g.r.id" class="lrow" data-focus @click="openPatchesFor(g)">
-                    <img v-if="coverSmall(g.r.id)" class="up-cover" :src="coverSmall(g.r.id)" loading="lazy" /><EmuIcon v-else :id="g.id" :size="24" fallback="mdiPuzzleOutline" />
-                    <div class="l-mid"><b>{{ g.r.name }}</b></div>
-                    <span class="l-end">{{ g.emu === 'PPSSPP' ? 'Cheats' : g.emu === 'Dolphin' ? 'Patches and cheats' : 'Patches' }}</span>
+                  <button v-for="r in grp.games" :key="r.id" class="lrow" data-focus @click="openGameAddons(r)">
+                    <img v-if="coverSmall(r.id)" class="up-cover" :src="coverSmall(r.id)" loading="lazy" /><Icon v-else name="mdiPuzzleOutline" :size="24" />
+                    <div class="l-mid"><b>{{ r.name }}</b><span class="l-sub">{{ gaSub(r) }}</span></div>
+                    <span v-if="ps3Todo(r.id)" class="status warn"><Icon name="mdiUpdate" :size="14" />{{ ps3Todo(r.id) }} update{{ ps3Todo(r.id) === 1 ? '' : 's' }}</span>
+                    <span v-else-if="addonsHere[r.id]" class="status ok"><Icon name="mdiCheck" :size="14" />{{ addonsHere[r.id].some((x) => !x.mods) ? 'Texture pack' : 'Mods' }}</span>
+                    <Icon name="mdiChevronRight" :size="22" />
                   </button>
                 </div>
               </section>
-            </template>
-            <template v-if="emuPage === 'tex'">
-              <p class="muted small" style="margin-top: -6px">Texture packs and mods for your games: PS2 packs from the EmuCoreX catalog, other consoles' mods from GameBanana. Pick a game to see what it has. The same as Add-ons in a game's More menu.</p>
-              <template v-for="g in addonGames" :key="g.slug">
-                <div class="con-head"><PIcon :p="{ slug: g.slug, fs_slug: g.slug }" :size="34" /><b>{{ g.name }}</b><span class="count">{{ g.roms.length }}</span></div>
-                <div class="stack">
-                  <button v-for="r in g.roms" :key="r.id" class="lrow" data-focus @click="openAddons(r)">
-                    <img v-if="coverSmall(r.id)" class="up-cover" :src="coverSmall(r.id)" loading="lazy" /><Icon v-else name="mdiPuzzleOutline" :size="24" />
-                    <div class="l-mid"><b>{{ r.name }}</b><span v-if="presentText(r.id)" class="l-sub">{{ presentText(r.id) }}</span><span v-else-if="addonCount(r.id)" class="l-sub">{{ addonCount(r.id) }} installed</span></div>
-                    <span v-if="addonsHere[r.id]" class="status ok"><Icon name="mdiCheck" :size="14" />{{ addonsHere[r.id].some((x) => !x.mods) ? 'Texture pack' : 'Mods' }}</span>
-                    <span class="l-end">Add-ons</span>
-                  </button>
-                </div>
-              </template>
-              <p v-if="!addonGames.length" class="muted">No games on this device for consoles with add-ons yet.</p>
+              <p v-if="!gaGroups.length" class="muted">{{ gaFind ? `No game here matches “${gaFind}”.` : 'No games on this device for consoles with add-ons, patches or game updates yet.' }}</p>
               <template v-if="addonsMine.length">
                 <div class="subh">Installed by Cartridge</div>
                 <div class="stack">
@@ -867,7 +815,6 @@ function presentText(id) {
   if (!f) return '';
   return f.map((x) => `${x.mods ? 'Mods' : 'Texture pack'} in ${x.name}, ${BY_TEXT[x.by]}${!x.mods && !x.on ? ' (textures are off there)' : ''}`).join(' · ');
 }
-async function openAddons(r) { await openModal('addons', { romId: r.id, name: r.name }); loadAddons(); }
 async function removeAddon(a) {
   if (!(await confirm('Remove this add-on?', `${a.name} (${a.game})\n\nOnly the ${a.count} files Cartridge put in ${a.emuName}’s folder are deleted.`, 'Remove', true))) return;
   try { await call('addons:remove', { key: a.key }); toast('Add-on removed', 'ok', 2500); } catch (e) { toast(e.message, 'error', 5000); }
@@ -962,62 +909,44 @@ async function loadAll() {
 }
 const mediaSizes = [{ v: 'compact', l: 'Compact' }, { v: 'spacious', l: 'Spacious' }, { v: 'large', l: 'Large' }];
 // Emulators pages (0.9.16)
-const EMU_PAGES = [{ v: 'overview', l: 'Overview' }, { v: 'updates', l: 'Updates' }, { v: 'games', l: 'Game Updates' }, { v: 'get', l: 'Get Emulators' }, { v: 'patches', l: 'Patches' }, { v: 'tex', l: 'Add-ons' }, { v: 'folders', l: 'Console Folders' }];
+const EMU_PAGES = [{ v: 'overview', l: 'Overview' }, { v: 'emus', l: 'Emulators' }, { v: 'addons', l: 'Game Add-ons' }, { v: 'folders', l: 'Console Folders' }];
 const emuPage = ref('overview');
 // installed games whose emulator has patches (0.9.16), by console then name
 const PATCH_EMU = [[/ps3/i, 'RPCS3', 'rpcs3'], [/ps4/i, 'shadPS4', 'shadps4'], [/\bps2\b/i, 'PCSX2', 'pcsx2'], [/\b(ngc|gamecube|gc|wii)\b/i, 'Dolphin', 'dolphin'], [/\bpsp\b/i, 'PPSSPP', 'ppsspp']];
-const patchGames = computed(() => allRoms().filter((r) => store.installed[r.id]).map((r) => { const m = PATCH_EMU.find(([re]) => re.test(`${r.platform_slug} ${r.platform_fs_slug}`)); return m && { r, emu: m[1], id: m[2] }; }).filter(Boolean)
-  .sort((a, b) => a.emu.localeCompare(b.emu) || String(a.r.platform_slug).localeCompare(String(b.r.platform_slug)) || a.r.name.localeCompare(b.r.name)));
-const patchGroups = computed(() => {
-  const by = new Map();
-  for (const g of patchGames.value) {
-    const slug = g.r.platform_slug;
-    if (!by.has(slug)) by.set(slug, { slug, p: { slug, fs_slug: g.r.platform_fs_slug }, name: consoleName({ romId: g.r.id, slug }), emu: g.emu, id: g.id, games: [] });
-    by.get(slug).games.push(g);
+// Game Add-ons page (0.9.21): every installed game with add-ons, patches or game updates, by console, with a search
+const gaFind = ref('');
+const gaGroups = computed(() => {
+  const q = gaFind.value.trim().toLowerCase(), by = new Map();
+  for (const r of allRoms()) {
+    if (!store.installed[r.id] || (q && !r.name.toLowerCase().includes(q))) continue;
+    const s = `${r.platform_slug} ${r.platform_fs_slug}`, pe = PATCH_EMU.find(([re]) => re.test(s));
+    if (!pe && !ADDON_SLUGS.test(r.platform_slug || '')) continue;
+    if (!by.has(r.platform_slug)) {
+      // the emulator: the one with patches, else the one set up here that takes this console's add-ons
+      const te = !pe && texEmus.value.find((e) => (e.for || []).includes(r.platform_slug));
+      by.set(r.platform_slug, { slug: r.platform_slug, p: { slug: r.platform_slug, fs_slug: r.platform_fs_slug }, name: consoleName({ romId: r.id, slug: r.platform_slug }), emu: pe?.[1] || te?.name || '', id: pe?.[2] || te?.id || '', games: [] });
+    }
+    by.get(r.platform_slug).games.push(r);
   }
+  for (const g of by.values()) g.games.sort((a, b) => a.name.localeCompare(b.name));
   return [...by.values()].sort((a, b) => a.name.localeCompare(b.name));
 });
-async function openPatchesFor(g) {
-  let info;
-  try { info = await call('patches:list', { romId: g.r.id }); } catch (e) { return toast(e.message, 'error'); }
-  const changes = await openModal('patches', { name: g.r.name, ...info });
-  if (!changes?.length) return;
-  try { const r = await call('patches:apply', { romId: g.r.id, changes }); toast(r.count ? `Saved in ${info.emuName}. They apply next time the game starts.` : 'Nothing changed', 'ok', 3500, 'mdiPuzzleOutline'); } catch (e) { toast(e.message, 'error', 7000); }
+const ps3Todo = (id) => (ps3Ups.value || []).find((g) => g.romId === id)?.todo.length || 0;
+function gaSub(r) {
+  const s = `${r.platform_slug} ${r.platform_fs_slug}`, pe = PATCH_EMU.find(([re]) => re.test(s));
+  const parts = [ADDON_SLUGS.test(r.platform_slug || '') && 'Mods and texture packs', pe && (pe[1] === 'PPSSPP' ? 'Cheats' : pe[1] === 'Dolphin' ? 'Patches and codes' : 'Patches'), /ps3/i.test(s) && 'Game updates'].filter(Boolean);
+  return presentText(r.id) || (addonCount(r.id) ? `${addonCount(r.id)} installed by Cartridge` : parts.join(' · '));
 }
-function setEmuPage(v) { emuPage.value = v; if (v === 'tex') loadAddons(); if (v === 'updates' && emuUps.value === null) loadEmuUpdates(); if (v === 'games' && ps3Ups.value === null) loadPs3Updates(); }
+async function openGameAddons(r) { await openModal('gameaddons', { romId: r.id, name: r.name }); loadAddons(); loadPs3Updates(); }
+function setEmuPage(v) { emuPage.value = v; if (v === 'addons') { loadAddons(); if (ps3Ups.value === null) loadPs3Updates(); } }
 function stepEmu(d) {
   const i = EMU_PAGES.findIndex((p) => p.v === emuPage.value), n = EMU_PAGES[(i + d + EMU_PAGES.length) % EMU_PAGES.length].v;
   setEmuPage(n); nextTick(() => focusFirst(paneEl.value, `[data-key="emup-${n}"]`));
 }
-const emuUps = ref(null), emuUpBusy = ref(false), emuUpRun = ref(''), emuUpPct = ref(null);
-const emuUpCount = computed(() => (emuUps.value || []).filter((e) => e.update).length);
-async function loadEmuUpdates(fresh = false) { emuUpBusy.value = true; emuUps.value = await call('emuup:list', { fresh }).catch((e) => { toast(e.message, 'error'); return []; }); emuUpBusy.value = false; }
-async function runEmuUpdate(e) {
-  if (emuUpRun.value) return toast(emuUpRun.value === (e.path || e.fp) ? 'Updating now. You can keep using Cartridge.' : 'One update at a time: this one is next once the current one finishes.', 'info', 3000);
-  if (!e.update) return toast(e.error ? `Couldn’t check for updates: ${e.error}` : e.noSource ? `${e.label} updates from inside ${e.label}.` : `${e.label} is up to date.`, 'info', 3500);
-  if (!(await confirm(`Update ${e.label}?`, `${e.version || 'This copy'} → ${e.update.version || e.update.tag || 'the newest'}. Close ${e.label} first.`, 'Update'))) return;
-  emuUpRun.value = e.path || e.fp; emuUpPct.value = null;
-  try { await call('emuup:run', { id: e.id, kind: e.kind, fp: e.fp, where: e.where, path: e.path }); toast(`${e.label} is up to date`, 'ok', 3000, 'mdiUpdate'); } catch (err) { toast(err.message, 'error', 6000); }
-  emuUpRun.value = ''; await loadEmuUpdates();
-}
-const ps3Ups = ref(null), ps3UpBusy = ref(false), ps3UpRun = ref(0), ps3UpText = ref(''), ps3UpPct = ref(null);
+const ps3Ups = ref(null);
 const coverSmall = (romId) => { const r = romById(romId); return r ? cover(r) : ''; };
 const ps3UpCount = computed(() => (ps3Ups.value || []).filter((g) => g.todo.length).length);
-async function loadPs3Updates(fresh = false) { ps3UpBusy.value = true; ps3Ups.value = await call('ps3up:list', { fresh }).catch((e) => { toast(e.message, 'error'); return []; }); ps3UpBusy.value = false; }
-async function runPs3Update(g) {
-  if (ps3UpRun.value) return toast('One game at a time: wait for the current one to finish.', 'info', 3000);
-  if (!g.todo.length) return toast(g.error ? `Couldn’t check: ${g.error}` : `${g.name} has every update Sony lists.`, 'info', 4000);
-  if (!(await confirm(`Update ${g.name}?`, `${g.todo.map((p) => p.version).join(', ')} (${bytes(g.size)}) from Sony, installed into RPCS3 in order.`, 'Update'))) return;
-  ps3UpRun.value = g.romId; ps3UpText.value = 'Starting';
-  try { const r = await call('ps3up:install', { romId: g.romId }); toast(`${g.name} updated${r.version ? ' to ' + r.version : ''}`, 'ok', 3500, 'mdiPackageUp'); } catch (e) { toast(e.message, 'error', 6000); }
-  ps3UpRun.value = 0; await loadPs3Updates();
-}
-let offEmuUp = null, offPs3Up = null;
-onMounted(() => {
-  offEmuUp = window.cart.on('emu-update', (m) => { if (m.state === 'downloading') emuUpPct.value = m.pct ?? null; });
-  offPs3Up = window.cart.on('ps3-update', (m) => { ps3UpPct.value = m.state === 'downloading' ? m.pct : null; ps3UpText.value = m.state === 'downloading' ? `Downloading ${m.version} · ${m.pct}%` : m.state === 'installing' ? 'Installing in RPCS3' : m.state === 'done' ? 'Done' : ps3UpText.value; });
-});
-onBeforeUnmount(() => { offEmuUp?.(); offPs3Up?.(); });
+async function loadPs3Updates(fresh = false) { ps3Ups.value = await call('ps3up:list', { fresh }).catch(() => []); }
 const LOOK_PAGES = [{ v: 'theme', l: 'Theme' }, { v: 'cards', l: 'Text and Cards' }, { v: 'motion', l: 'Motion and Sound' }, { v: 'controls', l: 'Controls' }];
 const lookPage = ref('theme'), lookAdv = ref(false);
 function setLookPage(v) { lookPage.value = v; lookAdv.value = false; }

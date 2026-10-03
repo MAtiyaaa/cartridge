@@ -310,14 +310,6 @@ async function installPkg() {
   pkgProg.value = null;
   loadPkg();
 }
-// the emulator's patches for this game; nothing changes until Apply
-async function openPatches() {
-  let info;
-  try { info = await call('patches:list', { romId: Number(props.romId) }); } catch (e) { return toast(e.message, 'error'); }
-  const changes = await openModal('patches', { name: base.value.name, ...info });
-  if (!changes?.length) return;
-  try { const r = await call('patches:apply', { romId: Number(props.romId), changes }); toast(r.count ? `Saved in ${info.emuName}. They apply next time the game starts.` : 'Nothing changed', 'ok', 3500, 'mdiPuzzleOutline'); } catch (e) { toast(e.message, 'error', 7000); }
-}
 // a licence for a game already installed in RPCS3 without one: found in its download or in RomM
 async function addLicence() {
   try { await call('pkg:addLicence', { romId: Number(props.romId) }); toast('Licence added. The game can start now.', 'ok', 3500, 'mdiKeyOutline'); } catch (e) { toast(e.message, 'error', 9000); }
@@ -651,7 +643,7 @@ async function more() {
   if (v === 'trophies') { await linkTrophies(); return; }
   if (v === 'path') { toast(installedPath.value, 'info', 5000, 'mdiFolder'); return; }
   if (v === 'pkg') { await installPkg(); return; }
-  if (v === 'patches') { await openPatches(); return; }
+  if (v === 'patches') { await openModal('gameaddons', { romId: Number(props.romId), name: base.value.name, tab: 'patches' }); return; }
   if (v === 'redownload') { await redownload(); return; }
   if (v === 'ps3check') {
     toast('Checking Sony’s update list…', 'info', 2500, 'mdiPackageUp');
@@ -672,7 +664,7 @@ async function more() {
     try { await call('steam:addToCollections', { romId: Number(props.romId), names }); toast(`Added to ${names.join(', ')}`, 'ok', 3000, 'mdiSteam'); } catch (e) { toast(e.message, 'error', 6000); }
     return;
   }
-  if (v === 'textures') { await openModal('addons', { romId: Number(props.romId), name: base.value.name }); return; }
+  if (v === 'textures') { await openModal('gameaddons', { romId: Number(props.romId), name: base.value.name, tab: /\bps2\b/i.test(base.value.platform_slug || '') ? 'tex' : 'mods' }); return; }
   if (v === 'refresh') { try { detail.value = await call('api:get', { path: `/api/roms/${props.romId}` }); resetLogos(props.romId); toast('Details refreshed', 'ok', 2000, 'mdiRefresh'); } catch (e) { toast(e.message, 'error'); } return; }
   if (v === 'reset') { store.art = { ...store.art }; delete store.art[props.romId]; await call('art:reset', { id: props.romId }); resetLogos(props.romId); toast('Artwork reset', 'ok', 2000, 'mdiRestore'); return; }
   if (!store.config.sgdbKey) { toast('Add a SteamGridDB API key in Settings → Look & feel first', 'error', 4500); return; }
