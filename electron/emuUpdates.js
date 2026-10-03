@@ -25,12 +25,20 @@ const REPOS = {
   // shadPS4's launcher ships a linux-qt .zip with the AppImage inside; Eden and Ryujinx publish on their
   // own Forgejo servers first (git.eden-emu.org, git.ryujinx.app), GitHub second
   shadps4: { repo: 'shadps4-emu/shadps4-qtlauncher', asset: /linux-qt.*\.zip$|qt.?launcher.*\.AppImage$/i, zipped: /\.AppImage$/i, only: /qt.?launcher/i },
-  eden: { repo: 'eden-emulator/Releases', asset: /(amd64|x86_64|x64).*\.AppImage$|linux.*\.AppImage$/i, forge: [['https://git.eden-emu.org', 'eden-emu/eden'], ['https://git.eden-emu.org', 'Eden/Eden']] },
+  // 0.9.21 (owner: "couldn't check"): Eden's server is git.eden-emu.dev; .org kept as the older name
+  eden: { repo: 'eden-emulator/Releases', asset: /(amd64|x86_64|x64|steamdeck|rog).*\.AppImage$|linux.*\.AppImage$/i, forge: [['https://git.eden-emu.dev', 'eden-emu/eden'], ['https://git.eden-emu.org', 'eden-emu/eden']], first: 'forge' },
   ryujinx: { repo: 'Ryubing/Stable-Releases', asset: /x64.*\.AppImage$/i, forge: [['https://git.ryujinx.app', 'Ryubing/Stable'], ['https://git.ryujinx.app', 'ryubing/ryujinx']], first: 'forge' },
   flycast: { repo: 'flyinghead/flycast', asset: /x86_64\.AppImage$/i },
   mgba: { repo: 'mgba-emu/mgba', asset: /x64\.AppImage$|x86_64\.AppImage$/i },
   xeniaedge: { repo: 'has207/xenia-edge', asset: /\.AppImage$/i },
+  // Xenia Canary (0.9.21, owner: "updates in the app", make it updatable): its builds are the release
+  // files of xenia-canary-releases; the Linux one is a .tar.gz with the program inside, the Windows one
+  // (run through Proton, as EmuDeck does) a .zip with xenia_canary.exe. Only that one file is replaced.
+  xenia: { repo: 'xenia-canary/xenia-canary-releases', asset: /linux.*\.(tar\.gz|zip)$|\.AppImage$/i, zipped: /^xenia_canary(\.AppImage)?$|\.AppImage$/i },
+  'xenia-win': { repo: 'xenia-canary/xenia-canary-releases', asset: /windows.*\.zip$/i, zipped: /^xenia_canary\.exe$/i },
 };
+// which release source a copy uses: Xenia Edge's AppImage has its own; a Windows build its own files
+const specFor = (id, file = '') => (id === 'xenia' && /edge/i.test(path.basename(file)) ? REPOS.xeniaedge : id === 'xenia' && /\.exe$/i.test(file) ? REPOS['xenia-win'] : REPOS[id]);
 
 function plainEnv() { const env = { ...process.env }; for (const k of ['LD_PRELOAD', 'LD_LIBRARY_PATH', 'APPDIR', 'APPIMAGE', 'ARGV0', 'OWD']) delete env[k]; return env; }
 const run = (cmd, args, timeout = 60000) => new Promise((resolve, reject) => execFile(cmd, args, { env: plainEnv(), timeout, maxBuffer: 8 << 20 }, (e, out, err) => (e ? reject(new Error(String(err || e.message).trim().split('\n').pop())) : resolve(String(out)))));
@@ -58,8 +66,16 @@ async function forgeRelease(host, repo, fetchImpl = require('./webFetch')) {
   const j = (await r.json()).find((x) => !x.draft && !x.prerelease) || null;
   return j && { tag: j.tag_name, date: j.published_at || j.created_at || '', assets: (j.assets || []).map((a) => ({ name: a.name, url: a.browser_download_url, size: a.size || 0 })) };
 }
-async function latestRelease(id, { fetchImpl, spec } = {}) {
-  const r = spec?.repo ? spec : REPOS[id];
+// several builds in one release (Eden: amd64, Steam Deck...): the one whose name shares most words with the copy you have
+const words = (n) => new Set(String(n).toLowerCase().replace(/\d+(\.\d+)*/g, ' ').split(/[^a-z]+/).filter((w) => w.length > 1));
+function pickAsset(assets, re, file) {
+  const ok = (assets || []).filter((a) => re.test(a.name) && !/arm|aarch64/i.test(a.name));
+  if (!file || ok.length < 2) return ok[0];
+  const mine = words(path.basename(file));
+  return [...ok].sort((a, b) => [...words(b.name)].filter((w) => mine.has(w)).length - [...words(a.name)].filter((w) => mine.has(w)).length)[0];
+}
+async function latestRelease(id, { fetchImpl, spec, file } = {}) {
+  const r = spec?.repo ? spec : specFor(id, file);
   if (!r) return null;
   // each source in turn (0.9.19): GitHub (its API, else its release pages when the API limit answers 403,
   // github.js) and the project's own Forgejo server; the first with a matching file wins
@@ -69,8 +85,8 @@ async function latestRelease(id, { fetchImpl, spec } = {}) {
   let lastErr = null;
   for (const t of tries) {
     let rel = null; try { rel = await t(); } catch (e) { lastErr = e; continue; }
-    const asset = (rel?.assets || []).find((a) => r.asset.test(a.name) && !/arm|aarch64/i.test(a.name));
-    if (asset) return { version: verOf(rel.tag) || verOf(asset.name), tag: rel.tag, name: asset.name, url: asset.url, size: asset.size, date: asset.date || rel.date, zipped: /\.zip$/i.test(asset.name) ? r.zipped || /\.AppImage$/i : null };
+    const asset = pickAsset(rel?.assets, r.asset, file);
+    if (asset) return { version: verOf(rel.tag) || verOf(asset.name), tag: rel.tag, name: asset.name, url: asset.url, size: asset.size, date: asset.date || rel.date, zipped: /\.(zip|tar\.gz|tgz)$/i.test(asset.name) ? r.zipped || /\.AppImage$/i : null };
   }
   if (lastErr) throw lastErr; // every source refused: say why
   return null;
@@ -92,6 +108,19 @@ async function appImageFromZip(zipFile, dest, want = /\.AppImage$/i) {
   }));
   fs.chmodSync(dest, 0o755);
 }
+// the program inside a downloaded .tar.gz (Xenia Canary's Linux build), through the system's tar
+async function fileFromTar(tarFile, dest, want) {
+  const dir = dest + '.d';
+  fs.rmSync(dir, { recursive: true, force: true }); fs.mkdirSync(dir, { recursive: true });
+  try {
+    await run('tar', ['-xzf', tarFile, '-C', dir], 10 * 60e3);
+    const all = []; const walk = (d) => { for (const n of fs.readdirSync(d)) { const f = path.join(d, n); if (fs.statSync(f).isDirectory()) walk(f); else all.push(f); } };
+    walk(dir);
+    const hit = all.find((f) => want.test(path.basename(f)));
+    if (!hit) throw new Error('The program wasn’t in the download.');
+    fs.copyFileSync(hit, dest); fs.chmodSync(dest, 0o755);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+}
 // is the release newer than this AppImage? by version when both have one, else by date
 function isNewer(rel, have) {
   if (!rel) return false;
@@ -104,7 +133,7 @@ function isNewer(rel, have) {
 // launch options and shortcuts pointing at it break); Cartridge records the new version itself.
 async function replaceAppImage(file, rel, download) {
   const tmp = file + '.cartridge-new', old = file + '.cartridge-old';
-  if (rel.zipped) { const z = file + '.cartridge-zip'; try { await download(rel.url, z); if (rel.size && fs.statSync(z).size !== rel.size) throw new Error('The download was incomplete. Try again.'); await appImageFromZip(z, tmp, rel.zipped); } finally { fs.rmSync(z, { force: true }); } }
+  if (rel.zipped) { const z = file + '.cartridge-zip'; try { await download(rel.url, z); if (rel.size && fs.statSync(z).size !== rel.size) throw new Error('The download was incomplete. Try again.'); if (/\.(tar\.gz|tgz)$/i.test(rel.name || rel.url)) await fileFromTar(z, tmp, rel.zipped); else await appImageFromZip(z, tmp, rel.zipped); } finally { fs.rmSync(z, { force: true }); } }
   else await download(rel.url, tmp);
   if (!rel.zipped && rel.size && fs.statSync(tmp).size !== rel.size) { fs.rmSync(tmp, { force: true }); throw new Error('The download was incomplete. Try again.'); }
   fs.chmodSync(tmp, 0o755);
@@ -114,4 +143,4 @@ async function replaceAppImage(file, rel, download) {
   return true;
 }
 
-module.exports = { forgeRelease, appImageFromZip, REPOS, verOf, cmpVer, flatpakUpdates, flatpakUpdate, latestRelease, isNewer, replaceAppImage };
+module.exports = { specFor, pickAsset, fileFromTar, forgeRelease, appImageFromZip, REPOS, verOf, cmpVer, flatpakUpdates, flatpakUpdate, latestRelease, isNewer, replaceAppImage };

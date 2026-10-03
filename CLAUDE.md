@@ -254,6 +254,8 @@ LT/RT switch top tabs. LB/RB only switch sections inside a page. A select, B bac
 - `makers.js` entries can have `paths` (all paths of HVR88's files; 0.9.17 kept one, so Sega was an S) and `tall` (Nintendo's pill). `src/consoleOptical.js` `OPTICAL`/`opticalOf`: wordmark scale per logo (ConsoleMark, SysTile, ConsoleCard).
 - Settings: `syncthing` section (Sync, `SyncCard.vue`, `sync:browse` reads Syncthing's index, view only); Look & Feel `bg` page folded into `theme`; `.lookpages` never wraps.
 - Vita3K installs: `vita3kFsPaths(exe)` (Vita3K's own storage: portable/fs, config.yml pref-path, SDL default) goes first in installVita's search, plus roots named in its "Extracting" lines; `vita3kWhy`/`vita3kLogTail` give its reason; `e.detail` (its output) is logged.
+- Emulator updates: `specFor(id, file)` (Xenia Edge, `xenia-win` for xenia_canary.exe, xenia-canary-releases), `pickAsset` (the build closest to your file name), `fileFromTar` (.tar.gz), Eden forge git.eden-emu.dev first; `installedEmulators` lists Windows builds (kind 'windows'); `emuIcons.ICON_URLS` values can be lists. `.status` pills and `.up-bar` read on selected rows (styles.css).
+- Game page More → Emulator: Game updates always for installed PS3 games (`ps3check`, `ps3up:game` with `fresh`).
 - `rpcs3List` leaves out other-version patches when `appVer` is known (unless on).
 - nav.js `firstSeen`: a pad's first 400 ms counts as triggers at rest (LT/RT at launch). App `background` event sets `store.away` and `body.away` (CSS animations paused, Background.vue stops drawing).
 

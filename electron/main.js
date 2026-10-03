@@ -3206,11 +3206,13 @@ const handlers = {
     const out = [];
     for (const e of list) {
       if (e.kind === 'flatpak') { out.push({ ...e, update: fp[e.fp] ? { version: fp[e.fp].version } : null, where: fp[e.fp]?.where }); continue; }
-      let c = cache[e.id];
-      if (U.REPOS[e.id] && (fresh || !c || Date.now() - c.t > 6 * 3600e3)) {
-        try { c = cache[e.id] = { t: Date.now(), rel: await U.latestRelease(e.id) }; } catch (err) { c = { t: c?.t || 0, rel: c?.rel || null, error: err.message }; }
+      // 0.9.21: the release source follows the copy (Xenia Edge, Xenia's Windows build, Eden's variants)
+      const ck = e.id + ':' + path.basename(e.path || ''), spec = U.specFor(e.id, e.path);
+      let c = cache[ck];
+      if (spec && (fresh || !c || Date.now() - c.t > 6 * 3600e3)) {
+        try { c = cache[ck] = { t: Date.now(), rel: await U.latestRelease(e.id, { file: e.path }) }; } catch (err) { c = { t: c?.t || 0, rel: c?.rel || null, error: err.message }; }
       }
-      out.push({ ...e, update: c?.rel && U.isNewer(c.rel, e) ? c.rel : null, error: c?.error || null, noSource: !U.REPOS[e.id] });
+      out.push({ ...e, update: c?.rel && U.isNewer(c.rel, e) ? c.rel : null, error: c?.error || null, noSource: !spec });
     }
     saveJson(file, cache);
     return out;
@@ -3219,9 +3221,9 @@ const handlers = {
     const U = require('./emuUpdates');
     if (require('./raLogin').running().has(String(id).split('@')[0])) throw new Error('Close the emulator first.');
     if (kind === 'flatpak') { await U.flatpakUpdate(fp, where); log('emulator updated (flatpak)', fp); return true; }
-    const own = steamMgr.installedEmulators().find((e) => e.kind === 'appimage' && e.path === file);
+    const own = steamMgr.installedEmulators().find((e) => (e.kind === 'appimage' || e.kind === 'windows') && e.path === file);
     if (!own) throw new Error('That emulator wasn’t found.');
-    const rel = await U.latestRelease(own.id);
+    const rel = await U.latestRelease(own.id, { file });
     if (!rel) throw new Error('No newer AppImage was found for it.');
     broadcast('emu-update', { path: file, state: 'downloading', pct: 0 });
     let got = 0;
@@ -3240,7 +3242,7 @@ const handlers = {
     for (const r of ps3) { const i = await ps3UpdateInfo(r.id, { fresh }).catch(() => null); if (i) out.push({ ...i, name: r.name }); }
     return out;
   },
-  'ps3up:game': ({ romId }) => ps3UpdateInfo(Number(romId)),
+  'ps3up:game': ({ romId, fresh }) => ps3UpdateInfo(Number(romId), { fresh: !!fresh }),
   'ps3up:install': ({ romId }) => ps3InstallUpdates(Number(romId)),
   'ps3up:cancel': () => { ps3upRun?.ac.abort(); return true; },
   'patches:list': async ({ romId }) => {

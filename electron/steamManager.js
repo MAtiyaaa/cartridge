@@ -329,6 +329,14 @@ module.exports = function createSteamManager(ctx) {
     for (const x of found?.items || []) if (x.kind === 'appimage' && x.id && x.conf >= 2 && exists(x.path) && !/\/\.mount_|cartridge/i.test(x.path)) out.push({ id: x.id, label: labelOf(x.id), kind: 'appimage', path: x.path, version: x.version || '' });
     const fps = flatpakApps();
     for (const [id, e] of Object.entries(EMU)) for (const fp of e.fp || []) if (fps.includes(fp)) out.push({ id, label: labelOf(id), kind: 'flatpak', fp });
+    // Windows builds run through Proton (Xenia Canary's xenia_canary.exe, EmuDeck keeps it in roms/xbox360):
+    // updatable from their own releases too (0.9.21)
+    for (const [id, e] of Object.entries(EMU)) {
+      if (!e.win) continue;
+      const dirs = [...APP_DIRS(), ...ctx.emulationRoots().flatMap((r) => (e.for || []).map((k) => path.join(r, 'roms', k)))];
+      const exe = dirs.flatMap((d) => [d, ...ls(d).map((n) => path.join(d, n)).filter(isDir)]).flatMap((d) => ls(d).filter((n) => e.win.test(n)).map((n) => path.join(d, n)))[0];
+      if (exe) out.push({ id, label: `${labelOf(id)} (Windows)`, kind: 'windows', path: exe, version: '' });
+    }
     return out;
   }
   let scanning = null;

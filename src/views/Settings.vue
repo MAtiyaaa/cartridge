@@ -116,7 +116,7 @@
                      at a time, the rest of the page stays usable; progress as a bar along the row -->
                 <button v-for="e in emuUps" :key="e.path || e.fp" class="lrow up-row" :class="{ busy: emuUpRun === (e.path || e.fp) }" data-focus @click="runEmuUpdate(e)">
                   <EmuIcon :id="e.id" :size="30" />
-                  <div class="l-mid"><b>{{ e.label }} <span class="muted small">{{ e.kind === 'flatpak' ? 'Flatpak' : 'AppImage' }}</span></b><span class="l-sub">{{ e.version ? 'Version ' + e.version : e.kind === 'flatpak' ? e.fp : e.path.replace(store.info.home, '~') }}</span></div>
+                  <div class="l-mid"><b>{{ e.label }} <span class="muted small">{{ e.kind === 'flatpak' ? 'Flatpak' : e.kind === 'windows' ? 'Windows build' : 'AppImage' }}</span></b><span class="l-sub">{{ e.version ? 'Version ' + e.version : e.kind === 'flatpak' ? e.fp : e.path.replace(store.info.home, '~') }}</span></div>
                   <span v-if="emuUpRun === (e.path || e.fp)" class="status"><Icon name="mdiArrowDownCircle" :size="14" />{{ emuUpPct != null ? emuUpPct + '%' : 'Updating' }}</span>
                   <span v-else-if="e.update" class="status warn"><Icon name="mdiUpdate" :size="14" />{{ e.update.version || e.update.tag || 'New version' }}</span>
                   <span v-else-if="e.error" class="status">Couldn’t check</span>
@@ -1177,7 +1177,12 @@ onMounted(() => {
 .chip.off { background: rgba(255, 90, 90, 0.14); color: #ffaaaa; }
 .logo-prog { flex: 1; display: flex; flex-direction: column; gap: 6px; max-width: 360px; }
 .up-row { position: relative; overflow: hidden; }
-.up-bar { position: absolute; left: 0; bottom: 0; height: 3px; background: currentColor; opacity: 0.85; border-radius: 0 2px 2px 0; transition: width var(--d-2, 240ms) ease; }
+/* the download along the row: a track and a fill that read on the row and on a selected one (0.9.21) */
+.up-row::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 4px; background: transparent; }
+.up-row.busy::after { background: rgba(255, 255, 255, 0.12); }
+.up-bar { position: absolute; left: 0; bottom: 0; z-index: 1; height: 4px; background: var(--text); border-radius: 0 2px 2px 0; transition: width var(--d-2, 240ms) ease, background 160ms; }
+.pad-mode .up-row:focus .up-bar, .up-row:focus-visible .up-bar { background: var(--on-focus); }
+.pad-mode .up-row.busy:focus::after, .up-row.busy:focus-visible::after { background: color-mix(in srgb, var(--on-focus) 15%, transparent); }
 .up-bar.live { animation: upLive 1.2s ease-in-out infinite; transform-origin: left; }
 @keyframes upLive { 0% { transform: scaleX(0.05); opacity: 0.4; } 50% { transform: scaleX(0.6); opacity: 0.9; } 100% { transform: scaleX(1); opacity: 0.2; } }
 .up-cover { width: 30px; height: 40px; object-fit: cover; border-radius: var(--r-sm); flex: none; }

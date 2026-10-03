@@ -345,6 +345,12 @@ body.light-fx .coll .art, body.light-fx .coll .mosaic { transition-property: tra
 .status.warn { background: rgba(245, 197, 66, 0.16); color: #ffd978; }
 .status.bad { background: rgba(255, 107, 97, 0.16); color: #ffa39c; }
 .status.none { background: var(--s3); color: var(--muted); }
+/* on a selected row (white, or the Highlights colour) the pills keep their meaning but read against it
+   (0.9.21, owner: "up to date" and the orange version didn't show on a selected row) */
+:is(.lrow, .up-row, .menu-item, .prow, .ss-emu):is(:focus-visible, .pad-mode :focus) .status, .pad-mode :is(.lrow, .up-row, .menu-item, .prow, .ss-emu):focus .status { background: color-mix(in srgb, var(--on-focus) 10%, transparent); color: var(--on-focus); }
+.pad-mode :is(.lrow, .up-row, .menu-item, .prow, .ss-emu):focus .status.ok, :is(.lrow, .up-row, .menu-item, .prow, .ss-emu):focus-visible .status.ok { background: color-mix(in srgb, #1f9d45 18%, transparent); color: color-mix(in srgb, var(--on-focus) 45%, #138a3a); }
+.pad-mode :is(.lrow, .up-row, .menu-item, .prow, .ss-emu):focus .status.warn, :is(.lrow, .up-row, .menu-item, .prow, .ss-emu):focus-visible .status.warn { background: color-mix(in srgb, #e08a00 20%, transparent); color: color-mix(in srgb, var(--on-focus) 40%, #a35f00); }
+.pad-mode :is(.lrow, .up-row, .menu-item, .prow, .ss-emu):focus .status.bad, :is(.lrow, .up-row, .menu-item, .prow, .ss-emu):focus-visible .status.bad { background: color-mix(in srgb, #d93a2f 18%, transparent); color: color-mix(in srgb, var(--on-focus) 40%, #b3261c); }
 .page-head { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--s-5); margin: var(--s-4) 0 var(--s-5); }
 .page-head h1 { font-size: var(--t-2xl); line-height: 1.05; margin: 4px 0 var(--s-2); }
 .page-head .lead { color: var(--muted); font-size: var(--t-md); max-width: 720px; }

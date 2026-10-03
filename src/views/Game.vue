@@ -596,7 +596,10 @@ async function more() {
   // PS3 game updates from Sony's list (0.9.16); never holds the menu up for long
   if (installedPath.value && !marked.value && /ps3/i.test(slugs)) {
     const up = await Promise.race([call('ps3up:game', { romId: Number(props.romId) }).catch(() => null), new Promise((r) => setTimeout(() => r(null), 1500))]);
+    // 0.9.21 (owner: game updates on the game's own page, not only in Settings): always offered; when
+    // Sony's list is slow to answer, picking it checks and then installs
     if (up?.todo?.length) play.push({ label: `Install game update ${up.todo[up.todo.length - 1].version}`, sub: `${up.todo.length} update${up.todo.length === 1 ? '' : 's'} from Sony · ${bytes(up.size)} · now ${up.have || 'unknown'}`, value: 'ps3up', icon: 'mdiPackageUp' });
+    else play.push({ label: 'Game updates', sub: up ? (up.error ? 'Couldn’t check Sony’s update list' : `Up to date${up.have ? ' · version ' + up.have : ''}`) : 'Check Sony’s update list for this game', value: 'ps3check', icon: 'mdiPackageUp' });
   }
   if (installedPath.value && !marked.value && pe) play.push({ label: pe === 'PPSSPP' ? 'Cheats' : pe === 'Dolphin' ? 'Patches and cheats' : 'Patches', sub: `From ${pe}’s ${pe === 'PPSSPP' ? 'cheat' : 'patch'} list, saved in ${pe}`, value: 'patches', icon: 'mdiPuzzleOutline' });
   if (installedPath.value && !marked.value && /\b(ps2|psx|ngc|gamecube|wii|psp|3ds|n3ds|switch|wiiu)\b/i.test(slugs)) play.push({ label: 'Add-ons', sub: /\bps2\b/i.test(slugs) ? 'Texture packs to download, and what’s installed' : 'Mods and packs to download, and what’s installed', value: 'textures', icon: 'mdiPuzzleOutline' });
@@ -648,7 +651,14 @@ async function more() {
   if (v === 'pkg') { await installPkg(); return; }
   if (v === 'patches') { await openPatches(); return; }
   if (v === 'redownload') { await redownload(); return; }
-  if (v === 'ps3up') {
+  if (v === 'ps3check') {
+    toast('Checking Sony’s update list…', 'info', 2500, 'mdiPackageUp');
+    const up = await call('ps3up:game', { romId: Number(props.romId), fresh: true }).catch((e) => ({ error: e.message }));
+    if (up?.error) return toast(up.error, 'error', 5000);
+    if (!up?.todo?.length) return toast(`Up to date${up?.have ? ' · version ' + up.have : ''}`, 'ok', 3000, 'mdiCheck');
+    if (!(await confirm('Install the game updates?', `${up.todo.length} update${up.todo.length === 1 ? '' : 's'} from Sony (${bytes(up.size)}), up to version ${up.todo[up.todo.length - 1].version}. They install into RPCS3 in order.`, 'Install'))) return;
+  }
+  if (v === 'ps3up' || v === 'ps3check') {
     toast('Downloading the updates from Sony, then installing them in RPCS3…', 'info', 4000, 'mdiPackageUp');
     try { const r = await call('ps3up:install', { romId: Number(props.romId) }); toast(`Updated${r.version ? ' to ' + r.version : ''}`, 'ok', 3500, 'mdiPackageUp'); } catch (e) { toast(e.message, 'error', 6000); }
     return;

@@ -59,19 +59,26 @@ const ICON_URLS = {
   dolphin: GH + 'dolphin-emu/dolphin/master/Data/dolphin-emu.svg', duckstation: GH + 'stenzek/duckstation/master/data/resources/images/duck.png',
   pcsx2: GH + 'PCSX2/pcsx2/master/bin/resources/icons/AppIconLarge.png', melonds: GH + 'melonDS-emu/melonDS/master/res/icon/melon_256x256.png',
   flycast: GH + 'flyinghead/flycast/master/shell/linux/flycast.png', mgba: GH + 'mgba-emu/mgba/master/res/mgba-256.png',
+  // Eden lives on its own Forgejo (git.eden-emu.dev), not GitHub (0.9.21, owner: no Eden logo); the
+  // first of these that answers with an image is kept
+  eden: ['https://git.eden-emu.dev/eden-emu/eden/raw/branch/master/dist/dev.eden_emu.eden.svg', 'https://git.eden-emu.dev/eden-emu/eden/raw/branch/master/dist/eden.svg', 'https://git.eden-emu.dev/eden-emu/eden/raw/branch/master/dist/eden.png', 'https://git.eden-emu.dev/eden-emu/eden/raw/branch/master/dist/qt_themes/default/icons/256x256/eden.png'],
 };
 async function webIcon(id, cacheDir, fetchImpl = require('./webFetch')) {
-  const url = ICON_URLS[id]; if (!url || !cacheDir) return null;
-  const f = path.join(cacheDir, `${id}-repo${path.extname(url)}`);
-  if (exists(f)) return f;
-  try {
-    const r = await fetchImpl(url, { signal: AbortSignal.timeout(15000) });
-    if (!r.ok) return null;
-    const b = Buffer.from(await r.arrayBuffer());
-    if (b.length < 64) return null;
-    fs.mkdirSync(cacheDir, { recursive: true }); fs.writeFileSync(f, b);
-    return f;
-  } catch { return null; }
+  const urls = [].concat(ICON_URLS[id] || []); if (!urls.length || !cacheDir) return null;
+  for (const ext of ['.svg', '.png']) { const f = path.join(cacheDir, `${id}-repo${ext}`); if (exists(f)) return f; }
+  for (const url of urls) {
+    try {
+      const r = await fetchImpl(url, { signal: AbortSignal.timeout(15000) });
+      if (!r.ok) continue;
+      const b = Buffer.from(await r.arrayBuffer());
+      const svg = /^\s*(<\?xml|<svg)/.test(b.subarray(0, 200).toString('latin1')), png = b.subarray(0, 4).toString('latin1') === '\x89PNG';
+      if (b.length < 64 || !(svg || png)) continue; // a page, not an image
+      const f = path.join(cacheDir, `${id}-repo${svg ? '.svg' : '.png'}`);
+      fs.mkdirSync(cacheDir, { recursive: true }); fs.writeFileSync(f, b);
+      return f;
+    } catch {}
+  }
+  return null;
 }
 
 module.exports = { iconFor, themeIcon, webIcon, ICON_URLS };
