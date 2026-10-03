@@ -167,17 +167,19 @@ function toResults() {
 }
 const viewKey = computed(() => store.route.name + JSON.stringify(store.route.params));
 const cardW = computed(() => (CARD_SIZES[store.config.ui.gridSize] || CARD_SIZES.md).w);
-// the sliding underline under the current tab (transform only, so it costs nothing to move)
+// the white pill behind the current tab (transform and width, so moving it costs no layout)
 const tabsEl = ref(null), ink = ref({ opacity: 0 });
 const padMode = computed(() => input.mode === 'pad');
 function placeInk() {
   const nav = tabsEl.value, el = nav?.querySelector(`[data-tab="${activeTab.value}"]`);
   if (!el) { ink.value = { opacity: 0 }; return; }
-  const x = el.offsetLeft + 12, w = Math.max(18, el.offsetWidth - 24);
+  const x = el.offsetLeft, w = el.offsetWidth;
   ink.value = { width: w + 'px', transform: `translateX(${x}px)`, opacity: 1 };
 }
-// the name opens out over 300 ms: measure again once it has (the line glides with it meanwhile)
+// the name opens out over 300 ms: a ResizeObserver on the tabs keeps the pill hugging it every frame
 function placeInkSoon() { placeInk(); for (const t of [120, 320]) setTimeout(placeInk, t); }
+const inkWatch = typeof ResizeObserver === 'function' ? new ResizeObserver(() => placeInk()) : null;
+watch(tabsEl, (nav) => { inkWatch?.disconnect(); if (nav) { inkWatch?.observe(nav); for (const b of nav.querySelectorAll('.tab')) inkWatch?.observe(b); } });
 const activeTab = computed(() => {
   const n = store.route.name;
   if (tabs.value.find((t) => t.name === n)) return n;
@@ -219,7 +221,7 @@ function viewHandler(action) {
   return h ? h() : false;
 }
 
-watch([() => activeTab.value, () => tabs.value.length, padMode], () => nextTick(placeInkSoon));
+watch([() => activeTab.value, () => tabs.value.length, padMode], () => nextTick(() => { placeInkSoon(); if (inkWatch && tabsEl.value) for (const b of tabsEl.value.querySelectorAll('.tab')) inkWatch.observe(b); }));
 window.addEventListener('resize', () => nextTick(placeInk));
 onMounted(async () => {
   tick(); clockT = setInterval(tick, 10000);

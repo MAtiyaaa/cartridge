@@ -11,7 +11,8 @@
   - **Latest trophies:** one trophy shows large, with how long ago you got it.
   - **Entrance:** tiles arrive one after another, rising a little, rather than all at once.
   - **Hints:** "A Open, hold to arrange" is one hint instead of two.
-- **Top bar:** search is a round button with a mouse or touch. The Y hint shows only while a controller is in use, like LT and RT.
+- **Top bar:** the current tab is back on a white highlight with dark text, as before the underline, now redone: the highlight glides from tab to tab and hugs the name as it opens. A tab picked with the controller or keyboard shows a white ring, so it is never mistaken for the current one.
+- **Search:** search is a round button with a mouse or touch. The Y hint shows only while a controller is in use, like LT and RT.
 - **Design skills:** taste-skill (with its redesign, soft and minimalist skills) and img2threejs are now in the project's design skills.
 
 ### Fixed

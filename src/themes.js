@@ -145,8 +145,6 @@ export function applyTheme(uiOrName) {
   r.setProperty('--xmb-base', surf.black ? '#000' : g[4]);
   // Cartridge's own theme: a flat page, so art and panels meet it without a seam
   if (t.neutral) { r.setProperty('--xmb', surf.black ? '#000' : S[0]); r.setProperty('--xmb-base', surf.black ? '#000' : S[0]); }
-  // the current tab's line (0.9.19): the brand's orange with Cartridge's own white theme, else the theme colour
-  r.setProperty('--tab-ink', t.neutral ? (t.bgAccent?.[0] || '#ef4b23') : 'var(--primary-l)');
   for (let i = 0; i < 6; i++) r.setProperty('--g' + i, g[i]);
   r.setProperty('--tint-rgb', surf.black ? '0, 0, 0' : tint);
   r.setProperty('--glass-bg', surf.glassA < 1 ? `rgba(${surf.black ? '0, 0, 0' : tint}, ${surf.glassA})` : S[1]);

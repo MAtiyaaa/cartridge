@@ -14,7 +14,9 @@ Redesign audit findings (Start and top bar), fixed in 0.9.20: every tile carried
 
 Bug found while checking at 1920: `:global(body.pad-mode) .x` in a scoped style compiles to `body.pad-mode { ... }`. Three motion-reduce rules in 0.9.19 had the same form (harmless but never applied); all fixed.
 
-**Owner must test on a device:** Start's new look and entry animation in Game Mode (software rendering: the blurred backdrops are static, check scrolling stays smooth), search button with mouse and with a controller.
+Owner after seeing the build: "I don't like the white underline I like what we had before with the white highlight and contrasting colour but redone, use taste skill". Done before merging: the underline became a white pill behind the current tab (dark text, soft top light, shadow tinted to the bar, 380 ms glide on transform and width, a ResizeObserver keeps it hugging the opening name); keyboard/pad focus is now a white ring so it can't be confused with the current tab; a tab badge inverts on the pill.
+
+**Owner must test on a device:** the tab pill gliding with LT/RT in Game Mode, Start's new look and entry animation in Game Mode (software rendering: the blurred backdrops are static, check scrolling stays smooth), search button with mouse and with a controller.
 
 ---
 

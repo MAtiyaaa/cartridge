@@ -243,6 +243,7 @@ LT/RT switch top tabs. LB/RB only switch sections inside a page. A select, B bac
 
 ## 0.9.20 · Start, Refined (3 Oct 2026)
 - Redesign-skill audit of Start and the top bar (owner asked): tile labels words only (no icons, no counts), `.st-ambient` (first game's cover, blurred, behind cover tiles), covers fill and fade (`mask-image`), staggered `st-in` entry (`--n`), console chips stretch when few, one-trophy layout. Search folds to a round button; the Y hint only in pad mode.
+- Top bar (owner, after 0.9.19's underline): `.tab-ink` is a white pill (`--focus`) behind the current tab, dark text (`--on-focus`), placed by `placeInk()` with a ResizeObserver; focus is a ring. `--tab-ink` is gone.
 - Vue scoped CSS drops everything after `:global(x)`: write `:global(body.pad-mode .thing)`, never `:global(body.pad-mode) .thing` (it compiled to `body.pad-mode { ... }` and shrank the app).
 
 ## Releases (full steps: HANDOFF D8)
