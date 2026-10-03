@@ -200,6 +200,8 @@ export function dispatch(action) {
   else if (action === 'back') sfx.back();
   else if (['lb', 'rb'].includes(action)) sfx.tab();
   if (h && h(document.activeElement) !== false) return;
+  // A held on something that has a held meaning (data-hold, 0.9.19: Start's tiles): it tells itself
+  if (action === 'hold') { document.activeElement?.dispatchEvent(new CustomEvent('cart-hold', { bubbles: true })); return; }
   if (['up', 'down', 'left', 'right'].includes(action)) return move(action);
   if (action === 'accept') {
     const el = document.activeElement;
@@ -215,6 +217,11 @@ const KEYMAP = {
   q: 'lb', e: 'rb', x: 'x', y: 'y', '/': 'y', Tab: 'select', m: 'start',
   PageUp: 'lt', PageDown: 'rt',
 };
+// A on something with a held meaning ([data-hold]): a press opens it on release, a hold of 450 ms
+// does the held thing instead (0.9.19, owner: hold a Start tile to arrange the menu)
+const HOLD_MS = 450;
+const holdable = () => { const el = document.activeElement, l = topLayer(); return !!(el?.hasAttribute?.('data-hold') && l && inScope(el, l.el)); };
+let keyHold = null;
 window.addEventListener('keydown', (ev) => {
   const t = ev.target;
   const typing = t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA') && !t.readOnly;
@@ -222,8 +229,18 @@ window.addEventListener('keydown', (ev) => {
   const a = KEYMAP[ev.key];
   if (!a) return;
   ev.preventDefault();
+  if (a === 'accept' && (keyHold || (!ev.repeat && holdable()))) {
+    if (!keyHold) keyHold = { fired: false, t: setTimeout(() => { keyHold.fired = true; dispatch('hold'); }, HOLD_MS) };
+    return;
+  }
   if (ev.repeat) lastRepeat = performance.now();
   dispatch(a);
+});
+window.addEventListener('keyup', (ev) => {
+  if (KEYMAP[ev.key] !== 'accept' || !keyHold) return;
+  clearTimeout(keyHold.t);
+  const fired = keyHold.fired; keyHold = null;
+  if (!fired) dispatch('accept');
 });
 // ---------------- pointer: touch vs mouse
 // 'auto' follows whatever was used last; 'touch' never shows a cursor; 'mouse' always does.
@@ -260,6 +277,12 @@ const DELAY = 220, RATE = 70, FAST = 40;
 
 function press(key, isDown, now) {
   const s = state[key] || (state[key] = { down: false, next: 0, n: 0 });
+  if (key === 'accept' && (s.hold || (isDown && !s.down && holdable()))) {
+    if (isDown && !s.down) { s.down = true; s.hold = now; s.held = false; }
+    else if (isDown && !s.held && now - s.hold >= HOLD_MS) { s.held = true; dispatch('hold'); }
+    else if (!isDown) { s.down = false; if (!s.held) dispatch('accept'); s.hold = 0; }
+    return;
+  }
   if (isDown && !s.down) { s.down = true; s.n = 0; s.next = now + DELAY; dispatch(key); }
   else if (isDown && s.down && REPEATABLE.has(key) && now >= s.next) { s.n++; s.next = now + (s.n > 6 ? FAST : RATE); lastRepeat = now; dispatch(key); }
   else if (!isDown) s.down = false;

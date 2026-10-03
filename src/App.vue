@@ -116,6 +116,7 @@ import { steamReport, steam, steamProgressLabel } from './steam.js';
 import ColorPicker from './components/ColorPicker.vue';
 import Setup from './views/Setup.vue';
 import Home from './views/Home.vue';
+import Start from './views/Start.vue';
 import Gallery from './views/Gallery.vue';
 import Consoles from './views/Consoles.vue';
 import Game from './views/Game.vue';
@@ -133,7 +134,7 @@ import EmuSetup from './views/EmuSetup.vue';
 import ShortcutHealth from './views/ShortcutHealth.vue';
 import FrameGen from './views/FrameGen.vue';
 
-const views = { achievements: Achievements, 'ra-game': RaGame, 'trophy-game': TrophyGame, home: Home, library: Gallery, consoles: Consoles, platform: Gallery, collection: Gallery, genre: Gallery, genres: Genres, collections: Collections, game: Game, downloads: Downloads, settings: Settings, search: Search, 'steam-console': SteamConsole, 'steam-missing': SteamMissing, 'emu-setup': EmuSetup, 'steam-health': ShortcutHealth, 'frame-gen': FrameGen };
+const views = { start: Start, achievements: Achievements, 'ra-game': RaGame, 'trophy-game': TrophyGame, home: Home, library: Gallery, consoles: Consoles, platform: Gallery, collection: Gallery, genre: Gallery, genres: Genres, collections: Collections, game: Game, downloads: Downloads, settings: Settings, search: Search, 'steam-console': SteamConsole, 'steam-missing': SteamMissing, 'emu-setup': EmuSetup, 'steam-health': ShortcutHealth, 'frame-gen': FrameGen };
 // the tabs you picked in Look & Feel → Top bar, in your order
 const tabs = computed(() => activeTabs().map((name) => ({ name, ...TAB_DEFS[name] })));
 const mainEl = ref(null);
@@ -233,8 +234,12 @@ onMounted(async () => {
   setPointerPref(store.config.ui.pointer);
   await loadLibrary();
   loadArt();
-  // Home can be taken off the top bar: start on the first tab instead
-  if (store.route.name === 'home' && !activeTabs().includes('home')) tab(activeTabs()[0]);
+  // 0.9.19: Start joins the top bar once for people who had picked their own tabs
+  const ui = store.config.ui;
+  if (!ui.startAdded) { const t = Array.isArray(ui.tabs) && ui.tabs.length ? (ui.tabs.includes('start') ? ui.tabs : ['start', ...ui.tabs]) : undefined; saveConfig({ ui: { startAdded: Date.now(), ...(t ? { tabs: t } : {}) } }); }
+  // the menu Cartridge opens on (Look & Feel → Open on, 0.9.19); one taken off the top bar: the first tab
+  const openOn = ui.openOn || 'home';
+  if (store.route.name === 'home') tab(activeTabs().includes(openOn) ? openOn : activeTabs()[0]);
   // opened from a Steam shortcut whose game is gone (--game <id>), or a second launch handing over
   const openGame = (id) => { if (id && store.lib) { store.quickMenu = false; go('game', { romId: Number(id) }); } };
   call('app:startGame').then(openGame).catch(() => {});
@@ -258,7 +263,10 @@ onMounted(async () => {
     lb: () => { viewHandler('lb'); },
     rb: () => { viewHandler('rb'); },
     y: () => (viewHandler('y') !== false ? undefined : focusSearch()),
-    accept: (a) => (a === searchEl.value ? toResults() : false),
+    accept: (a) => (a === searchEl.value ? toResults() : viewHandler('accept')),
+    hold: () => viewHandler('hold'),
+    // the page can take the D-pad over (0.9.19: Start moves a picked-up tile); otherwise focus moves
+    up: () => viewHandler('up'), down: () => viewHandler('down'), left: () => viewHandler('left'), right: () => viewHandler('right'),
     x: () => viewHandler('x'),
     // Triggers always move between the top tabs; bumpers belong to the page (consoles, collections)
     lt: () => cycleTab(-1),

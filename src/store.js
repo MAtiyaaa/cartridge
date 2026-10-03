@@ -416,6 +416,7 @@ export async function addToCollection(romIds) {
 
 // ---------------- top bar tabs (Look & Feel → Top bar)
 export const TAB_DEFS = {
+  start: { label: 'Start', icon: 'mdiViewDashboardOutline' }, // 0.9.19: the menu you arrange yourself
   home: { label: 'Home', icon: 'mdiHomeVariantOutline' },
   library: { label: 'Library', icon: 'mdiViewGridOutline' },
   consoles: { label: 'Consoles', icon: 'mdiGamepadSquareOutline' },
@@ -425,7 +426,7 @@ export const TAB_DEFS = {
   downloads: { label: 'Downloads', icon: 'mdiTrayArrowDown' },
   settings: { label: 'Settings', icon: 'mdiCogOutline' },
 };
-export const DEFAULT_TABS = ['home', 'library', 'consoles', 'achievements', 'downloads', 'settings'];
+export const DEFAULT_TABS = ['start', 'home', 'library', 'consoles', 'achievements', 'downloads', 'settings'];
 // Settings can't be removed, so the top bar can always be changed back
 export function activeTabs() {
   const t = store.config?.ui?.tabs;

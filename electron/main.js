@@ -2338,6 +2338,30 @@ function playStats() {
   }
   return out;
 }
+// ---------------- play time by day (0.9.19, Start's This week tile). Steam and RetroArch only keep a
+// total per game, so each time the totals are read, what they grew by since the last read is added to
+// the day the game was last played. Kept for 60 days in play-days.json; the first read only notes totals.
+const PLAY_DAYS_FILE = path.join(USER_DATA, 'play-days.json');
+const dayKey = (t) => { const d = new Date(t); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+function notePlayDays(stats) {
+  const f = loadJson(PLAY_DAYS_FILE, null), first = !f;
+  const st = f || { snap: {}, days: {} };
+  let changed = first;
+  for (const [id, p] of Object.entries(stats)) {
+    const was = st.snap[id] || 0, now = p.min || 0;
+    if (now > was && !first && was) { const k = dayKey(p.last || Date.now()); st.days[k] = (st.days[k] || 0) + (now - was); changed = true; }
+    else if (now > was && !first && !was && p.last && Date.now() - p.last < 7 * 864e5) { const k = dayKey(p.last); st.days[k] = (st.days[k] || 0) + now; changed = true; } // a new game this week: all its time is recent
+    if (now !== was) { st.snap[id] = now; changed = true; }
+  }
+  const cut = dayKey(Date.now() - 60 * 864e5);
+  for (const k of Object.keys(st.days)) if (k < cut) { delete st.days[k]; changed = true; }
+  if (changed) saveJson(PLAY_DAYS_FILE, st);
+}
+function playWeek() {
+  const st = loadJson(PLAY_DAYS_FILE, { days: {} }), out = [];
+  for (let i = 6; i >= 0; i--) { const t = Date.now() - i * 864e5; out.push({ day: dayKey(t), dow: new Date(t).getDay(), min: Math.round(st.days?.[dayKey(t)] || 0) }); }
+  return out;
+}
 // ---------------- recently played across devices (RomM play sessions)
 // When Steam's play time for a game goes up, that time goes to RomM as a play session from this
 // device. Sessions from your other devices come back, with the device's name, so Recently played
@@ -2527,6 +2551,7 @@ const handlers08 = {
   'play:stats': async () => {
     if (Date.now() - playSyncAt > 10 * 60e3 && config.configured) { const p = syncPlay(); if (!playSyncAt) await Promise.race([p, new Promise((r) => setTimeout(r, 4000))]); }
     const out = playStats(), me = deviceName();
+    try { notePlayDays(out); } catch (e) { log('play days', e.message); }
     for (const [id, p] of Object.entries(out)) p.device = me;
     for (const [id, r] of Object.entries(remotePlay)) {
       const cur = out[id];
@@ -2536,6 +2561,7 @@ const handlers08 = {
     return out;
   },
   'play:device': ({ name }) => renameDevice(name),
+  'play:week': () => playWeek(),
   // dates for a game's timeline (the game page adds trophies and achievements it already has)
   'rom:timeline': ({ romId }) => {
     const r = romIndexMain().get(romId);
