@@ -76,8 +76,7 @@ const rawVersion = freshConfig ? DEFAULT_CONFIG.configVersion : config.configVer
 config = deepMerge(DEFAULT_CONFIG, config);
 if (rawVersion < 2) {
   // 0.1.1/0.1.2 saved 'software' as a default, not a user choice: move everyone to Auto (GPU)
-  if (config.graphics !== 'hardware') config.graphics = 'auto';
-  if (config.graphics === 'hardware') config.graphics = 'auto';
+  config.graphics = 'auto'; // whatever 0.1.x saved (HANDOFF B8: the two old lines did exactly this)
   config.configVersion = 2;
   try { fs.mkdirSync(USER_DATA, { recursive: true }); fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2), { mode: 0o600 }); } catch {}
 }
@@ -91,10 +90,10 @@ if (rawVersion < 3 && config.configured) {
   try { fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2), { mode: 0o600 }); } catch {}
 }
 
-// ---------------------------------------------------------------- graphics
-// Chromium's GPU path shows a blank grey window on some Linux handhelds (AMD + KDE
-// Wayland on Bazzite in particular). Software rendering is plenty for this UI and
-// works everywhere, so it's the default; hardware acceleration is opt-in in Settings.
+// ---------------------------------------------------------------- log
+// (How Cartridge picks GPU or software rendering is further down: isGamescope, launchedBySteam,
+// biggestDisplay and forceSoftware. In short: software in Game Mode or under Steam on small
+// screens, the GPU on big screens and on the desktop, with a fallback if the GPU fails.)
 const LOG_FILE = path.join(USER_DATA, 'cartridge.log');
 function log(...a) {
   try { fs.mkdirSync(USER_DATA, { recursive: true }); fs.appendFileSync(LOG_FILE, `[${new Date().toISOString()}] ${a.join(' ')}\n`); } catch {}

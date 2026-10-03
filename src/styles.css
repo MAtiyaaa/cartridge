@@ -149,9 +149,6 @@ body.motion-reduce main.main[data-dir] > * { animation-name: viewIn; animation-d
 @media (max-width: 1400px) { .statusbar.has-back .brand-word { display: none; } }
 /* Steam Deck width: tighter tabs (words stay; there are no icons since 0.9.17) */
 @media (max-width: 1400px) { .tab { padding: 0 10px; } .tabs { gap: 0; } .statusbar { gap: 14px; padding: 0 24px; } }
-.padbtn { display: inline-grid; place-items: center; min-width: 24px; height: 24px; padding: 0 6px; border-radius: 12px; font: 700 var(--t-xs) var(--body), sans-serif; color: #0b0d12; background: #d9dee8; box-shadow: 0 2px 0 rgba(0, 0, 0, 0.35); }
-.padbtn.b-a { background: #57d364; } .padbtn.b-b { background: #ff6b61; } .padbtn.b-x { background: #5aa2ff; } .padbtn.b-y { background: #ffd35c; }
-.padbtn.b-lb, .padbtn.b-rb, .padbtn.b-lt, .padbtn.b-rt, .padbtn.b-start, .padbtn.b-select { border-radius: 7px; background: #c7cdd8; font-size: 10px; }
 
 /* ---------- type + common ---------- */
 .eyebrow { font-size: var(--t-sm); font-weight: 600; color: var(--muted); }
