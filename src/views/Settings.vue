@@ -934,7 +934,7 @@ const gaGroups = computed(() => {
 const ps3Todo = (id) => (ps3Ups.value || []).find((g) => g.romId === id)?.todo.length || 0;
 function gaSub(r) {
   const s = `${r.platform_slug} ${r.platform_fs_slug}`, pe = PATCH_EMU.find(([re]) => re.test(s));
-  const parts = [ADDON_SLUGS.test(r.platform_slug || '') && 'Mods and texture packs', pe && (pe[1] === 'PPSSPP' ? 'Cheats' : pe[1] === 'Dolphin' ? 'Patches and codes' : 'Patches'), /ps3/i.test(s) && 'Game updates'].filter(Boolean);
+  const parts = [ADDON_SLUGS.test(r.platform_slug || '') && (/^(switch|wiiu)$/i.test(r.platform_slug) ? 'Mods' : 'Mods and texture packs'), pe && (pe[1] === 'PPSSPP' ? 'Cheats' : pe[1] === 'Dolphin' ? 'Patches and codes' : 'Patches'), /ps3/i.test(s) && 'Game updates'].filter(Boolean);
   return presentText(r.id) || (addonCount(r.id) ? `${addonCount(r.id)} installed by Cartridge` : parts.join(' · '));
 }
 async function openGameAddons(r) { await openModal('gameaddons', { romId: r.id, name: r.name }); loadAddons(); loadPs3Updates(); }

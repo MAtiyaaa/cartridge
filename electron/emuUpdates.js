@@ -44,7 +44,7 @@ const REPOS = {
 function installKind(file) {
   if (!file || /\.exe$/i.test(file)) return 'other';
   const dir = path.dirname(file), here = (n) => { try { return fs.statSync(path.join(dir, n)).isDirectory(); } catch { return false; } };
-  if (here('data') && (here('lang') || here('shaders-builtin'))) return 'folder';
+  if (here('data') && (here('lang') || here('translations') || here('shaders-builtin'))) return 'folder';
   return require('./detect').appImageType(file) ? 'appimage' : 'program';
 }
 // which release source a copy uses: Xenia Edge's AppImage has its own; a Windows build its own files

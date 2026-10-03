@@ -27,6 +27,8 @@ Then (owner, while it built): RPCS3 update order (answered: all newer updates ar
 
 Last (owner, photo of Add-ons): add-on pictures didn't show (the page's CSP only allowed romimg:/data:, GameBanana previews are https; now `img-src ... https:`). Game Updates, Patches and Add-ons merged into Game Add-ons (search, by console with the emulator, a game opens `GameAddons.vue` with Mods, Texture Packs, Patches, Game Updates tabs; texture info on its tab). Get Emulators and Updates merged into Emulators (Up to date with the green check, or the update). Owner to test: Game Add-ons on a PS2, GameCube, Switch and PS3 game; a GameBanana install and remove (the sheet reopens on the same tab); Apply on Dolphin's tabs; an emulator update from the Emulators page.
 
+Then (owner): GameBanana is mods, keep texture packs apart (Texture Packs = EmuCoreX only, with its pictures); downloads slow again (cause found: one worker and one TLS connection per file, so folder games crawled; local test 1000 small files 1.4 s with one worker, about 89 ms per file the old way); Vita3K gone after its update and "not on Steam" (the update put back the zip build, a plain program, and `installedEmulators` listed AppImages only; folder builds listed now). Not explained yet: the owner's own Steam shortcut for Vita3K being gone. Cartridge never removes a shortcut it didn't add except through Shortcut health's Remove; need the shortcut's old target and Cartridge's log (About → Report a problem) to say more.
+
 **Owner's list, amended (3 Oct 2026):**
 1. Console page path: done in 0.9.21.
 2. Multi-language: later (1.0 or after).

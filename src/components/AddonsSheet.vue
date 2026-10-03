@@ -25,12 +25,12 @@
           </button>
         </template>
 
-        <div class="ad-h">{{ kind === 'mods' ? 'Mods from GameBanana' : d.source === 'ps2' ? (d.gbGame ? 'PS2 texture packs and GameBanana' : 'PS2 texture packs') : kind === 'tex' ? 'Texture packs from GameBanana' : 'From GameBanana' }}</div>
-        <div v-if="d.error" class="muted small">{{ d.error }}</div>
-        <div v-else-if="!packs.length" class="muted small">{{ !d.source ? 'No emulator for this console is set up here.' : kind === 'mods' ? 'No mods for this game on GameBanana.' : d.source === 'ps2' ? 'No texture packs for this game in the catalog yet.' : kind === 'tex' ? 'No texture packs for this game on GameBanana.' : 'No mods for this game on GameBanana.' }}</div>
+        <div class="ad-h">{{ kind === 'mods' ? 'Mods from GameBanana' : kind === 'tex' ? 'Texture packs' : d.source === 'ps2' ? (d.gbGame ? 'PS2 texture packs and GameBanana' : 'PS2 texture packs') : 'From GameBanana' }}</div>
+        <div v-if="d.error && (kind !== 'tex' || d.source === 'ps2')" class="muted small">{{ d.error }}</div>
+        <div v-else-if="!packs.length" class="muted small">{{ !d.emus?.length ? 'No emulator for this console is set up here.' : kind === 'tex' ? (d.source === 'ps2' ? 'No texture packs for this game in the catalog yet.' : 'There’s no texture pack catalog for this console yet. A pack you put in the folder above is used once custom textures are on.') : 'No mods for this game on GameBanana.' }}</div>
         <template v-for="p in packs" :key="p.source + p.id">
           <button class="ad-row" data-focus :disabled="!!run" @click="act(p)">
-            <img v-if="p.preview" class="ad-img" :src="p.preview" loading="lazy" />
+            <img v-if="p.preview || p.previews?.[0]" class="ad-img" :src="p.preview || p.previews[0]" loading="lazy" />
             <Icon v-else name="mdiPuzzleOutline" :size="22" />
             <span class="ad-mid"><b>{{ p.name }}</b><span class="ad-sub">{{ subOf(p) }}</span></span>
             <span class="ad-end">{{ has(p) ? 'Installed' : p.source === 'gb' ? (open === p.id ? 'Hide files' : 'Files') : 'Install' }}</span>
@@ -66,12 +66,12 @@ import { pushLayer, focusFirst } from '../nav.js';
 import { store, call, closeModal, toast, bytes, confirm } from '../store.js';
 import Icon from './Icon.vue';
 
-// embedded (0.9.21): one tab of Game Add-ons (GameAddons.vue); kind 'mods' or 'tex' shows only those,
-// sorted by GameBanana's category (the EmuCoreX catalog is all texture packs)
+// embedded (0.9.21): one tab of Game Add-ons (GameAddons.vue); kind 'tex' is the texture pack catalog
+// (EmuCoreX, PS2), kind 'mods' is GameBanana (owner: GameBanana is for mods, keep the two apart)
 const props = defineProps({ romId: Number, name: String, embedded: Boolean, kind: { type: String, default: '' }, onReopen: Function });
 const el = ref(null), d = ref(null), emu = ref(null), open = ref(null), files = ref(null), run = ref(null);
 const emus = computed(() => d.value?.emus || []);
-const isTex = (p) => p.source === 'ps2' || /texture/i.test(p.category || (d.value?.packs || []).find((x) => x.source === p.source && String(x.id) === String(p.id))?.category || '');
+const isTex = (p) => p.source === 'ps2';
 const wants = (k) => !props.kind || props.kind === k;
 const ofKind = (p) => wants(isTex(p) ? 'tex' : 'mods');
 const packs = computed(() => (d.value?.packs || []).filter(ofKind));

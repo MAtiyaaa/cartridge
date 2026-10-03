@@ -1219,7 +1219,7 @@ let nextId = 1;
 let psbId = null;
 
 function publicItem(it) {
-  const { abort, ...rest } = it;
+  const { abort, dlw, dlwIdle, dlJob, ...rest } = it; // the worker and its timer never go to the screen
   return rest;
 }
 function emitQueue() { broadcast('downloads', queue.map(publicItem)); }
@@ -1305,24 +1305,35 @@ async function downloadTo(url, dest, it, onBytes, opts = {}) {
   delete headers.Accept;
   const lim = (config.downloads.limitMBs || 0) * 1048576;
   const running = Math.max(1, queue.filter((q) => q.status === 'downloading').length);
-  let w;
-  try { w = new (require('worker_threads').Worker)(path.join(__dirname, 'dlWorker.js'), { workerData: { url, headers, part, start, limit: lim ? Math.floor(lim / running) : 0 } }); }
-  catch (e) { log('download worker could not start, downloading here', e.message); dlWorkersOk = false; return downloadHere(url, dest, it, onBytes, opts); }
+  // one worker per download item, reused for each of its files (0.9.21: a new thread and connection per
+  // file made folder games of thousands of files crawl); it ends 3 s after its last file
+  clearTimeout(it.dlwIdle);
+  let w = it.dlw;
+  if (!w) {
+    try { w = it.dlw = new (require('worker_threads').Worker)(path.join(__dirname, 'dlWorker.js')); }
+    catch (e) { log('download worker could not start, downloading here', e.message); dlWorkersOk = false; return downloadHere(url, dest, it, onBytes, opts); }
+    w.on('exit', () => { if (it.dlw === w) it.dlw = null; });
+  }
+  const job = (it.dlJob = (it.dlJob || 0) + 1);
   const r = await new Promise((resolve, reject) => {
-    const onAbort = () => { try { w.postMessage('abort'); } catch {} setTimeout(() => w.terminate(), 500); };
+    const onAbort = () => { try { w.postMessage('abort'); } catch {} setTimeout(() => { if (!settled) w.terminate(); }, 500); };
     it.abort.signal.addEventListener('abort', onAbort, { once: true });
     let settled = false;
-    const end = (fn, v) => { if (settled) return; settled = true; it.abort.signal.removeEventListener('abort', onAbort); fn(v); };
-    w.on('message', (m) => {
+    const end = (fn, v) => { if (settled) return; settled = true; it.abort.signal.removeEventListener('abort', onAbort); w.off('message', onMsg); w.off('error', onErr); w.off('exit', onExit); fn(v); };
+    const onMsg = (m) => {
+      if (m.job !== job) return;
       if (m.type === 'start') { if (m.resumed) onBytes(start); }
       else if (m.type === 'bytes') onBytes(m.n);
       else if (m.type === 'restart') end(resolve, 'restart');
-      else if (m.type === 'done') end(resolve, 'done');
+      else if (m.type === 'done') { if (m.bytes > 64 << 20) log('downloaded', path.basename(dest), Math.round(m.bytes / 1048576) + ' MB at', (m.bytes / 1048576 / Math.max(0.001, m.ms / 1000)).toFixed(1) + ' MB/s'); end(resolve, 'done'); }
       else if (m.type === 'error') end(reject, Object.assign(new Error(m.message), m.message === 'aborted' ? { name: 'AbortError' } : {}));
-    });
-    w.on('error', (e) => end(reject, e));
-    w.on('exit', () => end(reject, Object.assign(new Error(it.abort.signal.aborted ? 'aborted' : 'Download stopped'), it.abort.signal.aborted ? { name: 'AbortError' } : {})));
+    };
+    const onErr = (e) => end(reject, e);
+    const onExit = () => end(reject, Object.assign(new Error(it.abort.signal.aborted ? 'aborted' : 'Download stopped'), it.abort.signal.aborted ? { name: 'AbortError' } : {}));
+    w.on('message', onMsg); w.on('error', onErr); w.on('exit', onExit);
+    w.postMessage({ type: 'job', job, url, headers, part, start, limit: lim ? Math.floor(lim / running) : 0 });
   });
+  if (it.dlw === w) it.dlwIdle = setTimeout(() => { if (it.dlw === w) { it.dlw = null; w.terminate(); } }, 3000);
   if (r === 'restart') { await fsp.rm(part, { force: true }); return downloadTo(url, dest, it, onBytes, opts); }
   await fsp.rename(part, dest);
 }
@@ -3211,7 +3222,7 @@ const handlers = {
       if (e.kind === 'flatpak') { out.push({ ...e, update: fp[e.fp] ? { version: fp[e.fp].version } : null, where: fp[e.fp]?.where }); continue; }
       // 0.9.21: the release source follows the copy (Xenia Edge, Xenia's Windows build, Eden's variants)
       // a plain program (not an AppImage, not a folder build Cartridge can update) is never overwritten (0.9.21)
-      const kind = e.kind === 'appimage' ? U.installKind(e.path) : null, base = U.specFor(e.id, e.path);
+      const kind = e.kind === 'appimage' || e.kind === 'folder' ? U.installKind(e.path) : null, base = U.specFor(e.id, e.path);
       const spec = kind === 'folder' ? (base?.folder ? base : null) : kind === 'program' && !base?.zipped ? null : base;
       const ck = e.id + ':' + path.basename(e.path || '') + (kind === 'folder' ? ':folder' : '');
       let c = cache[ck];
@@ -3227,7 +3238,7 @@ const handlers = {
     const U = require('./emuUpdates');
     if (require('./raLogin').running().has(String(id).split('@')[0])) throw new Error('Close the emulator first.');
     if (kind === 'flatpak') { await U.flatpakUpdate(fp, where); log('emulator updated (flatpak)', fp); return true; }
-    const own = steamMgr.installedEmulators().find((e) => (e.kind === 'appimage' || e.kind === 'windows') && e.path === file);
+    const own = steamMgr.installedEmulators().find((e) => (e.kind === 'appimage' || e.kind === 'folder' || e.kind === 'windows') && e.path === file);
     if (!own) throw new Error('That emulator wasn’t found.');
     const rel = await U.latestRelease(own.id, { file });
     if (!rel) throw new Error('No newer AppImage was found for it.');

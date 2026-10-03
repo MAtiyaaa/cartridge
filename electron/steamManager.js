@@ -327,6 +327,12 @@ module.exports = function createSteamManager(ctx) {
   function installedEmulators() {
     const out = [];
     for (const x of found?.items || []) if (x.kind === 'appimage' && x.id && x.conf >= 2 && exists(x.path) && !/\/\.mount_|cartridge/i.test(x.path)) out.push({ id: x.id, label: labelOf(x.id), kind: 'appimage', path: x.path, version: x.version || '' });
+    // folder builds (0.9.21): the program with its data folder beside it, as Vita3K's zip (EmuDeck's
+    // ~/Applications/Vita3K/Vita3K) unpacks; found by the scan, or in its own folder under ~/Applications
+    const U = require('./emuUpdates'), seen = new Set(out.map((x) => x.path));
+    const addFolder = (id, p, version = '') => { if (!seen.has(p) && exists(p) && U.installKind(p) === 'folder') { seen.add(p); out.push({ id, label: labelOf(id), kind: 'folder', path: p, version }); } };
+    for (const x of found?.items || []) if (x.kind === 'program' && x.id && x.conf >= 2 && !/\/\.mount_|cartridge/i.test(x.path)) addFolder(x.id, x.path, x.version || '');
+    for (const [id, e] of Object.entries(EMU)) for (const d of APP_DIRS()) for (const b of e.bin || []) addFolder(id, path.join(d, e.label || id, b));
     const fps = flatpakApps();
     for (const [id, e] of Object.entries(EMU)) for (const fp of e.fp || []) if (fps.includes(fp)) out.push({ id, label: labelOf(id), kind: 'flatpak', fp });
     // Windows builds run through Proton (Xenia Canary's xenia_canary.exe, EmuDeck keeps it in roms/xbox360):
