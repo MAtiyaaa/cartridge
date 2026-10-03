@@ -77,6 +77,7 @@
             </div>
             <StorageManager :key="storageKey" />
             <LibraryCheck />
+            <SyncCard />
           </template>
 
           <template v-else-if="sec === 'emu'">
@@ -533,6 +534,7 @@ import Btn from '../components/Btn.vue';
 import SteamSettings from '../components/SteamSettings.vue';
 import StorageManager from '../components/StorageManager.vue';
 import LibraryCheck from '../components/LibraryCheck.vue';
+import SyncCard from '../components/SyncCard.vue';
 import RommUpload from '../components/RommUpload.vue';
 import EmuIcon from '../components/EmuIcon.vue';
 import EmuGet from '../components/EmuGet.vue';

@@ -225,3 +225,15 @@ test('Without RomM: a library from the console folders already on the device (0.
   assert.ok(lib.platforms.every((p) => p.id < 0) && Object.values(lib.roms).flat().every((x) => x.id < 0));
   assert.strictEqual(lib.platforms.find((p) => p.slug === 'psx').display_name, 'PlayStation');
 });
+
+// 0.9.19: Syncthing's config.xml read for its GUI address, key, folders and devices (read only)
+test('Syncthing config: address, key, folders with save hints, devices', () => {
+  const ST = require('../electron/syncthing.js');
+  const c = ST.parseConfig(`<configuration><folder id="abc-12" label="Saves" path="~/Emulation/saves" type="sendreceive"></folder><folder id="x" label="Photos" path="/data/photos"></folder>
+<device id="AAAA-BBBB" name="Deck"></device><device id="CCCC" name="PC"></device><gui enabled="true" tls="false"><address>127.0.0.1:8384</address><apikey>k3y</apikey></gui></configuration>`);
+  assert.strictEqual(c.gui.address, '127.0.0.1:8384'); assert.strictEqual(c.gui.apikey, 'k3y');
+  assert.deepStrictEqual(c.folders.map((f) => [f.id, f.label]), [['abc-12', 'Saves'], ['x', 'Photos']]);
+  assert.match(c.folders[0].path, /Emulation\/saves$/);
+  assert.strictEqual(ST.saveHint(c.folders[0].path), 'Saves'); assert.strictEqual(ST.saveHint('/home/u/.config/PCSX2/memcards'), 'PCSX2'); assert.strictEqual(ST.saveHint('/data/photos'), null);
+  assert.deepStrictEqual(c.devices.map((d) => d.name), ['Deck', 'PC']);
+});
