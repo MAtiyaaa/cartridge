@@ -810,7 +810,7 @@ useView({ back: () => { if (!document.activeElement?.closest('.rail')) { focusFi
 // Settings → Emulators → Issues
 const issues = ref(null);
 const ISSUE_ICON = { collections: 'mdiFolderSyncOutline', moved: 'mdiLinkVariantOff', game: 'mdiFileHidden', core: 'mdiPuzzleRemoveOutline', setup: 'mdiRadar', bios: 'mdiChip', romm: 'mdiServerOutline', fpsteam: 'mdiSteam' };
-async function loadIssues() { issues.value = await call('issues:list').catch(() => []); store.issues = issues.value.length; texEmus.value = await call('addons:emulators').catch(() => []); }
+async function loadIssues() { issues.value = await call('issues:list').catch(() => []); store.issues = issues.value.length; texEmus.value = (await call('addons:emulators').catch(() => null)) || []; }
 const texEmus = ref([]);
 // Add-ons page (0.9.17): installed games of consoles with add-ons, by console, and what Cartridge installed
 const ADDON_SLUGS = /^(ps2|psx|ngc|gamecube|wii|psp|3ds|n3ds|switch|wiiu)$/i;
@@ -827,8 +827,8 @@ const addonGames = computed(() => {
 const addonsMine = ref([]);
 const addonCount = (romId) => addonsMine.value.filter((a) => a.romId === romId).length;
 async function loadAddons() {
-  addonsMine.value = await call('addons:installed').catch(() => []);
-  addonsHere.value = await call('addons:present', { romIds: addonGames.value.flatMap((g) => g.roms.map((r) => r.id)) }).catch(() => ({}));
+  addonsMine.value = (await call('addons:installed').catch(() => null)) || [];
+  addonsHere.value = (await call('addons:present', { romIds: addonGames.value.flatMap((g) => g.roms.map((r) => r.id)) }).catch(() => null)) || {};
 }
 // what is already in each game's folder (0.9.19): a texture pack or mods, put in by Cartridge or not
 const addonsHere = ref({});
