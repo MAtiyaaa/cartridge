@@ -145,8 +145,9 @@ function parseRpcs3(root) {
     let state = null;
     try { state = readTropusrPS3(fs.readFileSync(usr)); } catch {}
     if (!conf || !state) continue;
+    if (conf.title) rememberTitle(conf.npcommid || np, conf.title); // 0.9.19: every console's names are kept, not only PS4's
     games.push({
-      src: 'rpcs3', set: conf.npcommid || np, title: conf.title || np, titleId: null,
+      src: 'rpcs3', set: conf.npcommid || np, title: conf.title || titles()[conf.npcommid || np] || np, titleId: null,
       icon: iconToken(path.join(d, 'ICON0.PNG')),
       trophies: conf.trophies.map((t) => ({ id: t.id, name: t.name, desc: t.desc, grade: t.grade, hidden: t.hidden, icon: iconToken(path.join(d, `TROP${String(t.id).padStart(3, '0')}.PNG`)), unlocked: !!state.get(t.id)?.unlocked, time: state.get(t.id)?.time || null })),
       files: [usr],
@@ -192,8 +193,9 @@ function parseVita3k(root) {
     try { state = readTropusrVita(fs.readFileSync(usr)); } catch {}
     const conf = parseTrophyXml(readText(path.join(cd, 'TROP.SFM'))) || parseTrophyXml(readText(path.join(cd, 'TROPCONF.SFM')));
     if (!state || !conf) continue;
+    if (conf.title) rememberTitle(conf.npcommid || np, conf.title); // 0.9.19: every console's names are kept, not only PS4's
     games.push({
-      src: 'vita3k', set: conf.npcommid || np, title: conf.title || np, titleId: null,
+      src: 'vita3k', set: conf.npcommid || np, title: conf.title || titles()[conf.npcommid || np] || np, titleId: null,
       icon: iconToken(path.join(cd, 'ICON0.PNG')),
       trophies: conf.trophies.map((t) => ({ id: t.id, name: t.name, desc: t.desc, grade: t.grade, hidden: t.hidden, icon: iconToken(path.join(cd, `TROP${String(t.id).padStart(3, '0')}.PNG`)), unlocked: !!state.get(t.id)?.unlocked, time: state.get(t.id)?.time || null })),
       files: [usr],
@@ -349,7 +351,7 @@ function shadGameDirs(u) {
 }
 let trpCacheDir = null;
 function setTrpCacheDir(d) { trpCacheDir = d; titleMem = null; }
-// NP comm ID -> game name, remembered for good (0.9.16): a deleted game's trophies keep its name.
+// NP comm ID -> game name, remembered for good (0.9.16; PS3 and Vita too since 0.9.19): a deleted game's trophies keep its name.
 // Learned from each PS4 game's own param.sfo (plain text, no trophy key needed) and from decrypted lists.
 let titleMem = null;
 function titles() {
