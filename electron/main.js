@@ -2563,6 +2563,7 @@ const handlers08 = {
   'play:week': () => playWeek(),
   // Syncthing, first look (0.9.19): read only, what it syncs and with whom
   'sync:status': () => require('./syncthing').status(),
+  'sync:browse': (folder) => require('./syncthing').browse(folder),
   // dates for a game's timeline (the game page adds trophies and achievements it already has)
   'rom:timeline': ({ romId }) => {
     const r = romIndexMain().get(romId);

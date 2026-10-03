@@ -249,7 +249,9 @@ onMounted(async () => {
   const openGame = (id) => { if (id && store.lib) { store.quickMenu = false; go('game', { romId: Number(id) }); } };
   call('app:startGame').then(openGame).catch(() => {});
   window.cart.on('open-game', openGame);
-  window.cart.on('background', (b) => setBackground(b?.away));
+  // another app in front in Game Mode (0.9.21, owner: still laggy in the background): gamescope never
+  // hides or blurs the window, so stop the pad, the animated background and every CSS animation here
+  window.cart.on('background', (b) => { setBackground(b?.away); store.away = !!b?.away; document.body.classList.toggle('away', !!b?.away); });
   window.cart.on('toast', (t) => t?.text && toast(t.text, t.kind || 'info', 4500, t.icon));
   setTimeout(steamReport, 2500);
   // 0.9: a new install goes through emulator Setup once, after connecting to RomM (the welcome does it since 0.9.15)

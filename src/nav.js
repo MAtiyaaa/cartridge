@@ -290,10 +290,15 @@ function press(key, isDown, now) {
 // Triggers go by how far they are pulled, never the "pressed" flag: on Linux a trigger can read as
 // half pulled (0.5, "pressed") until it first moves, which made the first LT/RT press do nothing.
 // A trigger only counts once it has been seen at rest.
+// 0.9.21 (owner: LT/RT still did nothing at launch until another button was pressed): Chromium hides a
+// pad until its first press, so a trigger pulled first is seen pulled in the very first reading and was
+// never armed. A pad's first reading (within 400 ms of it appearing) counts as having been at rest.
 const armed = {}; // pad index + trigger -> seen at rest
+const firstSeen = {}; // pad index + id -> when it first showed up
 function trigger(gp, which, v) {
-  const k = gp.index + which;
-  if (v < 0.6) armed[k] = true;
+  const k = gp.index + which, p = gp.index + gp.id;
+  if (!firstSeen[p]) firstSeen[p] = performance.now();
+  if (v < 0.6 || performance.now() - firstSeen[p] < 400) armed[k] = true;
   return !!armed[k] && v > 0.6;
 }
 export const padLive = { pads: [] }; // for Settings → About → Controller test

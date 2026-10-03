@@ -6,7 +6,38 @@ The branch for 0.9.3 work is `claude/relaxed-fermat-30pigp`. Pull it before star
 
 ---
 
-## 3 Oct 2026 · 0.9.20 Start, Refined (read this first)
+## 3 Oct 2026 · 0.9.21 Start, Your Way (read this first)
+
+Owner, after 0.9.20: hide a console page's path; Syncthing view only in its own Settings tab; LT/RT still dead at launch; lag on SteamOS still happens; Start looks AI generated and too snappy: drag to size, any size even a square, resize per edge (touch, D-pad, controller), cool animations, consoles as the Consoles page's boxes, several smaller trophies, a clock scene by time of day; Consoles glyphs clipped; Sega was an S, Microsoft wrong, Nintendo too small; Nintendo, Dreamcast, GameCube, Wii logos small next to Sony and Xbox (never bigger than PS3); Emulators LB/RB on two rows; merge Theme and Background. "Package them into 0.9.21 and just build it."
+
+Done (details in CLAUDE.md 0.9.21): Start board rebuilt on x/y/w/h with tests; arranging by controller (move, corner resize) and by touch/mouse (drag, edge and corner handles); clock scenes; console cards; trophy grid; HVR88 logos with every path; optical sizes for console wordmarks; glyph inset; Sync tab; Theme page; LB/RB row; path hidden.
+
+Causes found:
+- LT/RT: Chromium hides a pad until its first press. A trigger pulled first was never "seen at rest", so it was ignored until it was let go. Now the pad's first 400 ms count as at rest.
+- Lag: in Game Mode the window keeps focus with Steam or a game in front, so the animated background kept drawing (blur never fires). The `background` event from `watchGamescopeFocus` now stops it and pauses CSS animations. Quitting already ends everything within 3 s (0.9.3); if the owner still sees Cartridge alive after Exit, the next step is a process list from the Ally.
+- Sega and Microsoft: 0.9.17 copied only the first path of each HVR88 file.
+
+**Owner's list, amended (3 Oct 2026):**
+1. Console page path: done in 0.9.21.
+2. Multi-language: later (1.0 or after).
+3. Syncthing saves, view only, own Settings tab: done in 0.9.21 (devices, folders, newest files). Nothing is ever written.
+4. Critic score: IGDB's, agreed (RomM has no Metacritic).
+5. The empty "structured technical summary" item: ignored (owner).
+6. LT/RT at launch: fix in 0.9.21, owner to test.
+7. Touch: owner hasn't tested yet.
+8. Lag on SteamOS in the background: fix in 0.9.21, owner to test.
+9. shadPS4 first launch: fixed (owner).
+10. Remove from Steam twice: fixed (owner).
+11. Launching from Game Mode bringing Cartridge up first: owner hasn't checked.
+12. Slower downloads: fixed (owner).
+13. Sony 403: owner hasn't checked.
+14. Vita3K installs and booting: owner hasn't checked.
+
+**Owner must test on a device:** Start arranging with the controller (A move, X corner resize, LB/RB corners), touch (hold, drag, edges) and the mouse; tile sizes from 1 by 1 up; the clock at different times of day; LT/RT right after launch; Game Mode lag with a game in front; the console logos on Consoles, game cards and Achievements; Settings → Sync with Syncthing running.
+
+---
+
+## 3 Oct 2026 · 0.9.20 Start, Refined
 
 Owner installed the taste skill by asking ("install them now"), then "Go build 0.9.20" after being told the 0.9.19 top bar used only part of the taste skill and Start used none of it. Skills copied into `.claude/skills` (taste-skill, redesign-skill, soft-skill, minimalist-skill, img2threejs; third-party text kept as published).
 

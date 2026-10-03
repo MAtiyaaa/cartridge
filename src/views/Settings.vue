@@ -77,6 +77,11 @@
             </div>
             <StorageManager :key="storageKey" />
             <LibraryCheck />
+          </template>
+
+          <!-- Sync: Syncthing, view only (its own tab in 0.9.21, owner) -->
+          <template v-else-if="sec === 'syncthing'">
+            <h1>Sync</h1>
             <SyncCard />
           </template>
 
@@ -226,7 +231,7 @@
 
           <template v-else-if="sec === 'ui'">
             <h1>Look &amp; Feel</h1>
-            <!-- five short pages (0.9.3 K, G4): LB/RB move between them; rarely used options under Advanced -->
+            <!-- four short pages (0.9.3 K, G4; Background folded into Theme in 0.9.21): LB/RB move between them; rarely used options under Advanced -->
             <div class="lookpages"><Btn b="LB" /><div class="seg"><button v-for="p in LOOK_PAGES" :key="p.v" data-focus :data-key="'look-' + p.v" :class="{ on: lookPage === p.v }" @click="setLookPage(p.v)">{{ p.l }}</button></div><Btn b="RB" /></div>
 
             <template v-if="lookPage === 'theme'">
@@ -246,6 +251,19 @@
               <button v-for="(t, k) in THEMES" :key="k" class="swatch" data-focus :class="{ on: (ui.theme || 'cartridge') === k }" :style="{ background: `linear-gradient(135deg, ${t.grad[0]}, ${t.grad[2]} 60%, ${t.grad[4]})` }" :title="t.label" @click="saveConfig({ ui: { theme: k, gameTheme: null } })"><i :style="{ background: t.accent[0] }" /><span>{{ t.label }}</span></button>
               <button class="swatch custom" data-focus :class="{ on: ui.theme === 'custom' }" :style="ui.customColor ? { background: `linear-gradient(135deg, ${customT.grad[0]}, ${customT.grad[2]} 60%, ${customT.grad[4]})` } : {}" @click="pickColor"><Icon name="mdiEyedropperVariant" :size="18" /><span>Custom</span></button>
             </div>
+            <!-- the background is part of the theme (owner, 0.9.21: one page, not two) -->
+            <div class="subh"><Icon name="mdiWallpaper" :size="20" />Background</div>
+            <!-- one row: what's on now, and a menu with every background (theme ones, consoles, other) -->
+            <button class="bgnow glass" data-focus @click="pickBg">
+              <span class="bgnow-ic"><Icon name="mdiWallpaper" :size="22" /></span>
+              <span class="bgnow-t"><b>{{ bgNow.l }}</b><small>{{ bgNow.sub }}</small></span>
+              <span class="bgnow-c">Change<Icon name="mdiChevronRight" :size="18" /></span>
+            </button>
+            <div v-if="ui.bgStyle === 'wallpaper'" class="row wrap" style="gap: 12px">
+              <button class="btn" data-focus @click="chooseWallpaper"><Icon name="mdiImageSearchOutline" :size="18" />{{ ui.wallpaper ? 'Change image' : 'Choose image' }}</button>
+              <div class="seg"><button v-for="d in dims" :key="d.v" data-focus :class="{ on: (ui.wallDim || 'medium') === d.v }" @click="saveConfig({ ui: { wallDim: d.v } })">{{ d.l }}</button></div>
+              <button v-if="ui.wallpaper" class="btn" data-focus @click="clearWallpaper"><Icon name="mdiClose" :size="18" />Remove</button>
+            </div>
             <button class="lrow adv-tg" data-focus @click="lookAdv = !lookAdv"><Icon name="mdiTuneVariant" :size="22" /><div class="l-mid"><b>Advanced</b></div><Icon :name="lookAdv ? 'mdiChevronUp' : 'mdiChevronDown'" :size="22" /></button>
             <template v-if="lookAdv">
             <div class="finetune">
@@ -260,21 +278,6 @@
 
             </template>
             <div class="row"><button class="btn" data-focus @click="resetLook"><Icon name="mdiRestore" />Reset Look &amp; Feel</button></div>
-            </template>
-            <template v-else-if="lookPage === 'bg'">
-            <div class="subh"><Icon name="mdiWallpaper" :size="20" />Background</div>
-            <!-- one row: what's on now, and a menu with every background (theme ones, consoles, other) -->
-            <button class="bgnow glass" data-focus @click="pickBg">
-              <span class="bgnow-ic"><Icon name="mdiWallpaper" :size="22" /></span>
-              <span class="bgnow-t"><b>{{ bgNow.l }}</b><small>{{ bgNow.sub }}</small></span>
-              <span class="bgnow-c">Change<Icon name="mdiChevronRight" :size="18" /></span>
-            </button>
-            <div v-if="ui.bgStyle === 'wallpaper'" class="row wrap" style="gap: 12px">
-              <button class="btn" data-focus @click="chooseWallpaper"><Icon name="mdiImageSearchOutline" :size="18" />{{ ui.wallpaper ? 'Change image' : 'Choose image' }}</button>
-              <div class="seg"><button v-for="d in dims" :key="d.v" data-focus :class="{ on: (ui.wallDim || 'medium') === d.v }" @click="saveConfig({ ui: { wallDim: d.v } })">{{ d.l }}</button></div>
-              <button v-if="ui.wallpaper" class="btn" data-focus @click="clearWallpaper"><Icon name="mdiClose" :size="18" />Remove</button>
-            </div>
-
             </template>
             <template v-else-if="lookPage === 'cards'">
             <div class="subh"><Icon name="mdiFormatFont" :size="20" />Text &amp; Size</div>
@@ -553,6 +556,7 @@ const sections = [
   { id: 'storage', label: 'Storage', icon: 'mdiHarddisk' },
   { id: 'emu', label: 'Emulators', icon: 'mdiGamepadVariantOutline' },
   { id: 'dl', label: 'Downloads', icon: 'mdiTrayArrowDown' },
+  { id: 'syncthing', label: 'Sync', icon: 'mdiSync' },
   { id: 'ui', label: 'Look & Feel', icon: 'mdiPaletteOutline' },
   { id: 'ra', label: 'Achievements', icon: 'mdiTrophyOutline' },
   { id: 'steam', label: 'Steam', icon: 'mdiSteam' },
@@ -991,7 +995,7 @@ onMounted(() => {
   offPs3Up = window.cart.on('ps3-update', (m) => { ps3UpPct.value = m.state === 'downloading' ? m.pct : null; ps3UpText.value = m.state === 'downloading' ? `Downloading ${m.version} · ${m.pct}%` : m.state === 'installing' ? 'Installing in RPCS3' : m.state === 'done' ? 'Done' : ps3UpText.value; });
 });
 onBeforeUnmount(() => { offEmuUp?.(); offPs3Up?.(); });
-const LOOK_PAGES = [{ v: 'theme', l: 'Theme' }, { v: 'bg', l: 'Background' }, { v: 'cards', l: 'Text and Cards' }, { v: 'motion', l: 'Motion and Sound' }, { v: 'controls', l: 'Controls' }];
+const LOOK_PAGES = [{ v: 'theme', l: 'Theme' }, { v: 'cards', l: 'Text and Cards' }, { v: 'motion', l: 'Motion and Sound' }, { v: 'controls', l: 'Controls' }];
 const lookPage = ref('theme'), lookAdv = ref(false);
 function setLookPage(v) { lookPage.value = v; lookAdv.value = false; }
 function stepLook(d) {
@@ -1152,8 +1156,12 @@ onMounted(() => {
 .tab-lbl { flex: 1; min-width: 0; }
 .tab-tg { min-width: 92px; justify-content: center; }
 .subh { display: flex; align-items: center; gap: 10px; font-family: var(--display); font-size: var(--t-lg); font-weight: 700; margin-top: 4px; }
-.lookpages { display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; }
-.lookpages .seg { flex-wrap: wrap; }
+/* LB, the pages and RB always on one row (owner: RB fell to a second row on Emulators' seven pages);
+   the pages scroll sideways when they don't fit */
+.lookpages { display: flex; align-items: center; gap: var(--s-2); flex-wrap: nowrap; min-width: 0; }
+.lookpages > * { flex: none; }
+.lookpages .seg { flex: 0 1 auto; flex-wrap: nowrap; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+.lookpages .seg button { flex: none; white-space: nowrap; }
 .adv-tg { margin-top: var(--s-2); }
 .ra-mk { height: 20px; }
 .srcs { display: flex; flex-direction: column; gap: 10px; }

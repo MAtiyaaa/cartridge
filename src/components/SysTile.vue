@@ -4,14 +4,14 @@
          otherwise slips past the rounded corners (software rendering) -->
     <div class="sys-clip"><div class="glyph"><PIcon :p="p" :size="150" /></div></div>
     <div class="sys-top">
-      <img v-if="logo && !logoFail" class="sys-logo" :src="logo" :alt="p.display_name" @error="logoFail = true" />
+      <img v-if="logo && !logoFail" class="sys-logo" :src="logo" :alt="p.display_name" :style="logoSize" @error="logoFail = true" />
       <template v-else>
         <div class="ico"><PIcon :p="p" :size="40" /></div>
       </template>
     </div>
     <div>
       <div v-if="!logo || logoFail" class="nm">{{ p.display_name }}</div>
-      <div v-if="meta || maker" class="fam"><svg v-if="maker" class="maker" :class="{ symbol: maker.symbol }" :viewBox="maker.vb" :aria-label="maker.name" role="img"><path :d="maker.d" :fill-rule="maker.evenodd ? 'evenodd' : null" /></svg><span v-if="maker && meta">·</span><span v-if="meta">{{ meta }}</span></div>
+      <div v-if="meta || maker" class="fam"><svg v-if="maker" class="maker" :class="{ symbol: maker.symbol, tall: maker.tall }" :viewBox="maker.vb" :aria-label="maker.name" role="img"><path v-for="(q, i) in maker.paths || [maker]" :key="i" :d="q.d" :fill-rule="q.evenodd ? 'evenodd' : null" /></svg><span v-if="maker && meta">·</span><span v-if="meta">{{ meta }}</span></div>
       <div class="ct">{{ p.rom_count }} {{ p.rom_count === 1 ? 'game' : 'games' }}<template v-if="onDevice"> · <span class="ondev">{{ onDevice }} on device</span></template></div>
     </div>
   </button>
@@ -22,6 +22,7 @@ import { store, romsOf, call } from '../store.js';
 import { consoleColors } from '../consoleColors.js';
 import PIcon from './PIcon.vue';
 import { MAKERS, makerOf } from '../makers.js';
+import { opticalOf } from '../consoleOptical.js';
 const props = defineProps({ p: Object });
 defineEmits(['open', 'focused']);
 // the maker as its logo, at the height of the text (0.9.16); the family name stays text when there's none
@@ -33,6 +34,8 @@ const onDevice = computed(() => romsOf(props.p.id).filter((r) => store.installed
 const cache = (globalThis.__sysLogos ||= new Map());
 const logo = ref(cache.get(props.p.slug) || '');
 const logoFail = ref(false);
+// wordmarks with a symbol or a second line get taller so their letters match (0.9.21, consoleOptical.js)
+const logoSize = computed(() => { const f = opticalOf(logo.value, props.p.slug); return f === 1 ? null : { maxHeight: Math.min(44, Math.round(30 * f)) + 'px' }; });
 watch(() => props.p.slug, load, { immediate: true });
 function load() {
   const k = props.p.slug;
@@ -53,7 +56,7 @@ const tileStyle = computed(() => {
 <style>
 .systile .sys-top { height: 44px; display: flex; align-items: center; position: relative; z-index: 1; }
 .systile .sys-top + div { position: relative; z-index: 1; }
-.systile .sys-logo { max-height: 34px; max-width: 170px; object-fit: contain; object-position: left center; filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.45)); transition: transform 0.3s var(--ease); transform-origin: left center; }
+.systile .sys-logo { max-height: 30px; max-width: 170px; object-fit: contain; object-position: left center; filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.45)); transition: transform 0.3s var(--ease); transform-origin: left center; }
 .systile:focus .sys-logo { transform: scale(1.06); }
 .systile .ondev { color: #b9f6ca; }
 .systile .sys-clip { position: absolute; inset: 0; border-radius: inherit; overflow: hidden; clip-path: inset(0 round 16px); pointer-events: none; }

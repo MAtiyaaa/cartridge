@@ -4,6 +4,7 @@ const rd = window.cart;
 export const call = (ch, arg) => rd.call(ch, arg ? JSON.parse(JSON.stringify(arg)) : arg);
 
 export const store = reactive({
+  away: false, // Game Mode: another app is in front (0.9.21)
   config: null,
   info: {},
   connection: { base: '', route: '' },
