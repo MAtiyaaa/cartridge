@@ -19,6 +19,8 @@ Causes found:
 
 Added before release (owner): RPCS3 patches for other game versions are left out when the copy's version (APP_VER, update in dev_hdd0 first) is known, unless already on (`rpcs3List`, test in patches.test.js).
 
+Vita3K (owner, photo: Unit 13.zip, "Vita3K didn't install it", "make this a priority"): read Vita3K master main.cpp, interface.cpp, pkg.cpp, app_init.cpp, config.cpp, logging.cpp. A NoNpDrm zip on the command line goes through install_archive -> install_archive_content (extract, then is_nonpdrm -> decrypt_install_nonpdrm with work.bin, native F00D, no outside keys) into cfg.get_vita_fs_path(); "[ID] installed successfully!" then "Content installed, will auto-boot". Its storage: portable/fs next to the AppImage or program, else config.yml pref-path ($XDG_CONFIG_HOME or ~/.config/Vita3K; portable ignores pref-path), else SDL pref path ~/.local/share/Vita3K/Vita3K. Cartridge only searched ux0 folders that existed before, and the error dropped Vita3K's words unless a line said error/failed. Now `vita3kFsPaths` (tested), "Extracting"/"Decrypt layer" lines say where it went, `vita3kWhy` quotes Vita3K (output or vita3k.log), the full output is logged. Not known yet: the exact reason on the owner's Ally; the next failure message will say it.
+
 **Owner's list, amended (3 Oct 2026):**
 1. Console page path: done in 0.9.21.
 2. Multi-language: later (1.0 or after).

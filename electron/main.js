@@ -2068,15 +2068,16 @@ async function installVitaGame(romId, zrif) {
   if (item.kind === 'pkg' && !/^KO5i[0-9A-Za-z+/=]{40,}$/.test(key)) throw new Error('This .pkg needs its zRIF key (it starts with KO5i).');
   const cmd = steamMgr.vita3kCommand();
   if (!cmd) throw new Error('Vita3K wasn’t found. Set it up in Settings → Emulators.');
+  // Vita3K's own storage first (0.9.21), then any other ux0 found (installVita puts them in order)
   const prefs = emuRoots('vita3k');
-  if (!prefs.length) throw new Error('Vita3K’s storage wasn’t found. Open Vita3K once and finish its setup (firmware included), then try again.');
+  if (!prefs.length && !pkgInst.vita3kFsPaths(cmd.exe).length) throw new Error('Vita3K’s storage wasn’t found. Open Vita3K once and finish its setup (firmware included), then try again.');
   pkgRun = { romId, ac: new AbortController() };
   const send = (o) => broadcast('pkg-progress', { romId, ...o });
   try {
     send({ state: 'running', step: 0, of: 1, opens: false });
     const got = await pkgInst.installVita({ cmd, prefs, item, zrif: key, signal: pkgRun.ac.signal, onStep: (s) => send({ state: 'running', ...s }) });
     const g = got[0];
-    if (!g) throw new Error('Vita3K didn’t install it. Open Vita3K and install the file there (File → Install) to see why.');
+    if (!g) throw new Error('Vita3K didn’t install it. Its own message is in Cartridge’s log (Settings → About → Report a problem).');
     const prev = installs[romId];
     installs[romId] = { emu: 'vita3k', serial: g.serial, dir: g.dir, created: !!(g.created || (prev?.created && prev.serial === g.serial)), at: Date.now(), files: [path.basename(item.file)] };
     saveInstalls();
@@ -2085,7 +2086,7 @@ async function installVitaGame(romId, zrif) {
     afterInstall(romId);
     // without a licence Vita3K can't start it: say so instead of "installed"
     return { ...installs[romId], updates: 0, licenceMissing: g.licenced ? [] : [{ contentId: g.serial, vita: true }] };
-  } catch (e) { send({ state: 'error', error: e.message }); throw e; }
+  } catch (e) { log('vita3k install failed', e.message, e.detail ? '\n' + e.detail : ''); send({ state: 'error', error: e.message }); throw e; }
   finally { pkgRun = null; }
 }
 

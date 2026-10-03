@@ -173,7 +173,7 @@ const VITA_ID = /^PCS[A-Z]\d{5}$/;
 // Vita3K's pref path (where ux0 lives): its config.yml "pref-path", else its default, EmuDeck's storage
 function vitaPrefs(home = os.homedir(), emulationRoots = []) {
   const out = [];
-  for (const c of [path.join(home, '.config/Vita3K/config.yml'), path.join(home, '.local/share/Vita3K/Vita3K/config.yml')]) {
+  for (const c of [path.join(process.env.XDG_CONFIG_HOME || path.join(home, '.config'), 'Vita3K/config.yml'), path.join(home, '.config/Vita3K/config.yml'), path.join(home, '.local/share/Vita3K/Vita3K/config.yml'), path.join(home, 'Applications/Vita3K/config.yml')]) { // the last: older builds kept it next to the program (0.9.21)
     try { const m = fs.readFileSync(c, 'utf8').match(/^pref-path:\s*(.+)$/m); const v = m && m[1].trim().replace(/^['"]|['"]$/g, ''); if (v) out.push(v); } catch {}
   }
   // Vita3K's own defaults (app_init.cpp init_paths): $XDG_DATA_HOME/Vita3K/Vita3K, or a "portable"
@@ -183,6 +183,32 @@ function vitaPrefs(home = os.homedir(), emulationRoots = []) {
   const seen = new Set();
   return out.filter((p) => isDir(path.join(p, 'ux0')) && !seen.has(real(p)) && seen.add(real(p)));
 }
+// The storage folder this copy of Vita3K uses, worked out the way Vita3K does (0.9.21, owner: Unit 13
+// "didn't install"; read from Vita3K app_init.cpp init_paths and config.cpp): a "portable" folder next
+// to its AppImage or program wins (portable/fs); else pref-path in its config.yml ($XDG_CONFIG_HOME or
+// ~/.config/Vita3K, older builds next to the program); else SDL's pref path, $XDG_DATA_HOME or
+// ~/.local/share, then Vita3K/Vita3K. Unlike vitaPrefs, the folder doesn't have to exist yet.
+const prefPathIn = (f) => { try { const m = fs.readFileSync(f, 'utf8').match(/^pref-path:\s*(.+)$/m); const v = m && m[1].trim().replace(/^['"]|['"]$/g, ''); return v && path.isAbsolute(v) ? v : null; } catch { return null; } };
+function vita3kFsPaths(exe, home = os.homedir()) {
+  const out = [], dir = exe ? path.dirname(real(exe)) : null;
+  const portable = dir && isDir(path.join(dir, 'portable')) ? path.join(dir, 'portable') : null;
+  if (portable) out.push(path.join(portable, 'fs'));
+  for (const c of [path.join(process.env.XDG_CONFIG_HOME || path.join(home, '.config'), 'Vita3K/config.yml'), ...(dir ? [path.join(dir, 'config.yml')] : []), ...(portable ? [path.join(portable, 'config.yml')] : [])]) { const v = prefPathIn(c); if (v && !portable) out.push(v); }
+  out.push(path.join(process.env.XDG_DATA_HOME || path.join(home, '.local/share'), 'Vita3K/Vita3K'));
+  const seen = new Set();
+  return out.map((p) => p.replace(/\/+$/, '')).filter((p) => !seen.has(real(p)) && seen.add(real(p)));
+}
+// Vita3K's log (vita3k.log): next to its config when portable, else $XDG_CACHE_HOME or ~/.cache/Vita3K
+function vita3kLogTail(exe, home = os.homedir()) {
+  const dir = exe ? path.dirname(real(exe)) : null;
+  for (const f of [dir && path.join(dir, 'portable/vita3k.log'), path.join(process.env.XDG_CACHE_HOME || path.join(home, '.cache'), 'Vita3K/vita3k.log'), dir && path.join(dir, 'vita3k.log')].filter(Boolean)) {
+    try { const st = fs.statSync(f); if (Date.now() - st.mtimeMs > 10 * 60e3) continue; const fd = fs.openSync(f, 'r'), n = Math.min(st.size, 64 * 1024), b = Buffer.alloc(n); fs.readSync(fd, b, 0, n, st.size - n); fs.closeSync(fd); return b.toString('utf8'); } catch {}
+  }
+  return '';
+}
+// the reason Vita3K gave, from its own words: the last error line, without the time and level prefix
+const vita3kWhy = (text) => (String(text).match(/^.*(?:\b(?:error|critical)\b|failed|not a supported|Vitamin|Install app before patch|already installed)[^\n]*/gim) || []).map((l) => l.replace(/^\s*\[[^\]]*\]\s*/, '').replace(/^\|\w\|\s*/, '').replace(/^\[[^\]]*\]:\s*/, '').trim()).filter((l) => !/Failed to refresh apps list/i.test(l)).pop() || '';
+
 // the title ID in a Vita game's sce_sys/param.sfo (inside a .vpk/.zip, read with yauzl)
 function zipTitleId(file) {
   return new Promise((resolve) => {
@@ -331,6 +357,9 @@ const QT_TRIES = ['offscreen', 'minimal', null];
 
 // Runs Vita3K for one game; returns [{ serial, dir, created }] for what is in ux0/app afterwards
 async function installVita({ cmd, prefs, item, zrif, onStep = () => {}, signal }) {
+  // Vita3K's own storage first: that's where it installs, and where unpacked games must go to be seen
+  const seen = new Set();
+  prefs = [...vita3kFsPaths(cmd?.exe), ...prefs].filter((p) => !seen.has(real(p)) && seen.add(real(p)));
   const before = appsIn(prefs);
   // 0.9.19: unencrypted archives never start Vita3K
   if (item.kind === 'vpk') {
@@ -366,7 +395,7 @@ async function installVita({ cmd, prefs, item, zrif, onStep = () => {}, signal }
     let quiet = null;
     signal?.addEventListener('abort', kill, { once: true });
     const watch = (d) => {
-      said = (said + d.toString()).slice(-8000);
+      said = (said + d.toString()).slice(-24000);
       if (item.kind === 'pkg') return; // --pkg quits by itself without a window
       // all contents done (it boots the game next), or something it won't install: stop it now
       if (/will auto-boot|not a supported content|Vitamin dump|Failed to refresh apps list/i.test(said)) return kill();
@@ -382,8 +411,17 @@ async function installVita({ cmd, prefs, item, zrif, onStep = () => {}, signal }
     await run();
     if (!NO_QT.test(said)) break;
   }
+  // where Vita3K really put it: its "Extracting <ux0>/app/<ID>/..." and "Decrypt layer: <ux0>/app/<ID>" lines
+  const named = [...said.matchAll(/(?:Extracting|Decrypt layer:)\s+(.+?)[\/\\]ux0[\/\\](?:app|patch|addcont)[\/\\]/g)].map((m) => m[1].trim());
+  for (const r of named) if (!prefs.some((p) => real(p) === real(r))) prefs.push(r);
   const dir = [...appsIn(prefs)].find(([d, n]) => n === item.titleId && vitaSfoId(d) === item.titleId)?.[0];
-  if (!dir) { const why = (said.match(/.*(?:error|failed|critical|not a supported|Vitamin)[^\n]*/gi) || []).pop(); if (why) throw new Error(`Vita3K: ${why.replace(/^\[[^\]]*\]\s*/g, '').trim().slice(0, 200)}`); return []; }
+  if (!dir) {
+    const said2 = said + '\n' + vita3kLogTail(cmd?.exe);
+    const why = vita3kWhy(said2);
+    const e = new Error(why ? `Vita3K: ${why.slice(0, 220)}` : new RegExp(`\\[${item.titleId}\\] installed successfully`).test(said2) ? `Vita3K installed it, but not in a folder Cartridge knows (looked in ${prefs.join(', ')}).` : 'Vita3K closed without installing it and didn’t say why.');
+    e.detail = said2.slice(-4000);
+    throw e;
+  }
   const pref = prefs.find((p) => dir.startsWith(path.join(p, 'ux0/app') + path.sep)) || prefs[0];
   return [{ serial: item.titleId, dir, created: ![...before.values()].includes(item.titleId), licenced: vitaLicenced(pref, item.titleId, dir) }];
 }
@@ -440,4 +478,4 @@ async function installFirmware({ emu, cmd, file, signal }) {
   if (code && code !== 0) throw new Error(`${emu === 'rpcs3' ? 'RPCS3' : 'Vita3K'} couldn't install the firmware: ${(tail.trim().split('\n').pop() || 'exit ' + code).slice(0, 200)}`);
   return true;
 }
-module.exports = { installFirmware, pkgInfo, packagesIn, licencePlan, stageLicences, exdataHas, npdOf, rpcs3Hdds, sfoSerial, install, vitaPrefs, vitaContent, findZrif, installVita, vitaArchiveContents, vitaUnpack, safeToRemove };
+module.exports = { vita3kFsPaths, vita3kWhy, installFirmware, pkgInfo, packagesIn, licencePlan, stageLicences, exdataHas, npdOf, rpcs3Hdds, sfoSerial, install, vitaPrefs, vitaContent, findZrif, installVita, vitaArchiveContents, vitaUnpack, safeToRemove };
