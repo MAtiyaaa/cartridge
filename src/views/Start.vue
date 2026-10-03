@@ -64,7 +64,7 @@
           <!-- Consoles -->
           <template v-else-if="t.type === 'consoles'">
             <div class="st-label"><Icon name="mdiGamepadSquareOutline" :size="16" />Consoles<span class="st-count">{{ consoles.length }}</span></div>
-            <div class="st-chips" :style="{ '--n': chipsFor(t) }">
+            <div class="st-chips" :style="{ gridTemplateColumns: `repeat(${t.w + 1}, minmax(0, 1fr))` }">
               <ConsoleChip v-for="p in consoles.slice(0, chipsFor(t) - (consoles.length > chipsFor(t) ? 1 : 0))" :key="p.id" :p="p" />
               <span v-if="consoles.length > chipsFor(t)" class="st-more">+{{ consoles.length - chipsFor(t) + 1 }}</span>
             </div>
@@ -212,7 +212,8 @@ const consoles = computed(() => {
   for (const r of roms.value) { mins[r.platform_id] = (mins[r.platform_id] || 0) + (store.play[r.id]?.min || 0); if (store.installed[r.id]) inst[r.platform_id] = (inst[r.platform_id] || 0) + 1; }
   return [...visiblePlatforms()].sort((a, b) => (mins[b.id] || 0) - (mins[a.id] || 0) || (inst[b.id] || 0) - (inst[a.id] || 0) || b.rom_count - a.rom_count);
 });
-const chipsFor = (t) => Math.max(2, Math.min(8, t.w - (t.w >= 6 ? 1 : 1) + (t.h >= 2 ? t.w - 1 : 0)));
+// a row of chips per tile row, one more chip than the tile has columns, so each stays wide enough to read
+const chipsFor = (t) => Math.min(14, (t.w + 1) * t.h);
 
 // clock
 const now = reactive({ time: '', ampm: '', date: '', day: '' });
@@ -431,7 +432,7 @@ watch(() => store.play, loadWeek);
 .st-scroll { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; padding: var(--s-4) var(--s-7) var(--s-6); container-type: size; }
 @media (max-width: 1400px) { .st-scroll { padding-left: 36px; padding-right: 36px; } }
 /* eight columns, four rows that fill the screen at any size (1280x800 to 4K); more scroll */
-.st-grid { --gap: clamp(10px, 1.1vw, 20px); display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); grid-auto-rows: calc((100cqh - var(--s-4) - var(--s-6) - (var(--rows) - 1) * var(--gap)) / var(--rows)); grid-auto-flow: row dense; gap: var(--gap); }
+.st-grid { --gap: clamp(10px, 1.1vw, 20px); display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); grid-auto-rows: calc((100cqh - (var(--rows) - 1) * var(--gap)) / var(--rows)); grid-auto-flow: row dense; gap: var(--gap); }
 .st-tile { position: relative; display: flex; flex-direction: column; min-width: 0; min-height: 0; padding: clamp(12px, 1.2vw, 22px); border-radius: var(--r-lg); background: var(--s1); color: var(--text); text-align: left; overflow: hidden; isolation: isolate;
   transition: transform var(--d-med) var(--ease), background var(--d-fast); }
 .st-tile:focus { transform: translateY(-3px); }
@@ -506,16 +507,16 @@ watch(() => store.play, loadWeek);
 .w3 .st-bars, .w2 .st-bars { gap: 4px; }
 
 /* consoles: coloured chips with their wordmarks, never squished: they wrap or count the rest */
-.st-chips { flex: 1; min-height: 0; margin-top: 10px; display: grid; grid-template-columns: repeat(auto-fill, minmax(clamp(96px, 9vw, 180px), 1fr)); grid-auto-rows: minmax(0, 1fr); gap: 8px; overflow: hidden; }
+.st-chips { flex: 1; min-height: 0; margin-top: 10px; display: grid; grid-auto-rows: minmax(0, 1fr); gap: 8px; overflow: hidden; }
 .st-more { display: grid; place-items: center; border-radius: var(--r-md); background: var(--s2); font-family: var(--display); font-weight: 700; color: var(--muted); }
 .st-fill { position: absolute; inset: 0; border-radius: inherit; }
 .st-fill :deep(.cchip-logo) { max-height: 38%; }
 
 /* rows of covers, fanned and overlapping a little, the newest first */
-.st-covers { flex: 1; min-height: 0; display: flex; align-items: flex-end; margin-top: 8px; }
-.st-cover { height: 100%; max-height: 100%; aspect-ratio: 3 / 4; object-fit: cover; border-radius: var(--r-sm); box-shadow: 0 8px 22px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.06); margin-right: -6%; transform-origin: bottom center; transition: transform var(--d-med) var(--ease); background: var(--s2); }
-.st-tile:focus .st-cover { transform: translateY(calc(var(--i) * -0.6px - 3px)); }
-.st-first { margin-top: 8px; color: var(--text); font-weight: 600; }
+.st-covers { flex: 1; min-height: 0; display: flex; align-items: stretch; gap: clamp(6px, 0.6vw, 12px); margin-top: 10px; overflow: hidden; }
+.st-cover { flex: none; height: 100%; aspect-ratio: 3 / 4; object-fit: cover; border-radius: var(--r-sm); box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.06); transform-origin: bottom center; transition: transform var(--d-med) var(--ease); transition-delay: calc(var(--i) * 18ms); background: var(--s2); }
+.st-tile:focus .st-cover { transform: translateY(-3px); }
+.st-first { margin-top: 8px; color: var(--text); font-weight: 600; flex: none; }
 
 /* trophies */
 .st-ach { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; gap: 10px; margin-top: 8px; min-height: 0; }

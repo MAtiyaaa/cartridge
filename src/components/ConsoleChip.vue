@@ -31,6 +31,7 @@ const tint = computed(() => {
 <style>
 .cchip { position: relative; display: flex; align-items: center; justify-content: center; min-width: 0; border-radius: var(--r-md); background: linear-gradient(150deg, var(--ca), var(--cb)); overflow: hidden; padding: 10px 12px; }
 .cchip-logo { max-width: 86%; max-height: 46%; min-height: 18px; object-fit: contain; filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.4)); }
-.cchip-ico { display: flex; align-items: center; gap: 8px; min-width: 0; color: #fff; font-family: var(--display); font-weight: 700; font-size: var(--t-sm); }
-.cchip-ico b { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cchip-ico { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; min-width: 0; color: #fff; font-family: var(--display); font-weight: 700; font-size: clamp(12px, 0.9vw, 16px); line-height: 1.1; text-align: center; }
+/* the name wraps to two lines rather than being cut (owner: readable, never squished) */
+.cchip-ico b { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 </style>
