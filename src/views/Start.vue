@@ -29,31 +29,49 @@
             <div v-else class="st-empty"><Icon name="mdiPlayCircleOutline" :size="30" /><b>Nothing played yet</b><span>Games you play show here</span></div>
           </template>
 
-          <!-- Clock -->
+          <!-- Clock: the time over a sky that follows the hour, the sun (or moon) on its path across the tile -->
           <template v-else-if="t.type === 'clock'">
-            <div class="st-clock"><span class="st-big tnum">{{ now.time }}</span><span v-if="now.ampm" class="st-unit">{{ now.ampm }}</span></div>
-            <div class="st-sub">{{ now.day }}, {{ now.date }}</div>
+            <div class="st-sky" :style="sky.bg" />
+            <div class="st-path" aria-hidden="true">
+              <svg viewBox="0 0 100 50" preserveAspectRatio="none"><path d="M0,48 Q50,-32 100,48" /></svg>
+              <i class="st-orb" :class="sky.night ? 'moon' : 'sun'" :style="{ left: sky.x + '%', top: sky.y + '%' }" />
+            </div>
+            <div class="st-day"><b>{{ now.day }}</b> {{ now.date }}</div>
+            <div class="st-time"><span class="tnum">{{ now.time }}</span><small v-if="now.ampm">{{ now.ampm }}</small></div>
           </template>
 
-          <!-- Storage: the drive the games live on -->
+          <!-- Storage: free space on the drive the games live on, and a gauge of how much is left -->
           <template v-else-if="t.type === 'storage'">
-            <div class="st-label">Free space</div>
-            <div class="st-clock"><span class="st-big tnum">{{ space ? sizeNum(space.free) : '–' }}</span><span class="st-unit">{{ space ? sizeUnit(space.free) : '' }}</span></div>
-            <div v-if="space" class="st-meter"><i :style="{ width: Math.min(100, (1 - space.free / space.total) * 100) + '%' }" /></div>
-            <div class="st-sub">{{ space ? `of ${bytes(space.total)} on the games drive` : 'Looking…' }}</div>
+            <div class="st-store">
+              <div class="st-store-text">
+                <div class="st-label">Free space</div>
+                <div class="st-clock"><span class="st-big tnum">{{ space ? sizeNum(space.free) : '–' }}</span><span class="st-unit">{{ space ? sizeUnit(space.free) : '' }}</span></div>
+                <div class="st-sub">{{ space ? `of ${bytes(space.total)}` : 'Looking…' }}</div>
+              </div>
+              <div class="st-gauge" :class="{ low: freePct < 10 }">
+                <svg viewBox="0 0 100 100" aria-hidden="true"><line v-for="k in GAUGE" :key="k.i" :x1="k.x1" :y1="k.y1" :x2="k.x2" :y2="k.y2" :class="{ on: space && k.i < freePct / 100 * GAUGE.length }" :style="{ '--i': k.i }" /></svg>
+                <span class="tnum">{{ space ? Math.round(freePct) : '' }}<small v-if="space">%</small></span>
+              </div>
+            </div>
           </template>
 
-          <!-- This week: play time by day -->
+          <!-- This week: the total, the day you played most, and a bar for each day (today in white) -->
           <template v-else-if="t.type === 'week'">
-            <div class="st-label">Played this week</div>
             <div class="st-week">
-              <div class="st-clock">
-                <template v-if="weekMin >= 60"><span class="st-big tnum">{{ Math.floor(weekMin / 60) }}</span><span class="st-unit">h</span></template>
-                <span class="st-big tnum">{{ weekMin % 60 }}</span><span class="st-unit">min</span>
+              <div class="st-week-text">
+                <div class="st-label">Played this week</div>
+                <div class="st-clock">
+                  <template v-if="weekMin >= 60"><span class="st-big tnum">{{ Math.floor(weekMin / 60) }}</span><span class="st-unit">h</span><template v-if="weekMin % 60"><span class="st-big tnum">{{ weekMin % 60 }}</span><span class="st-unit">m</span></template></template>
+                  <template v-else><span class="st-big tnum">{{ weekMin }}</span><span class="st-unit">min</span></template>
+                </div>
+                <div class="st-sub">{{ weekNote }}</div>
               </div>
               <div class="st-bars" :class="{ tall: t.h >= 2 }">
-                <div v-for="d in week" :key="d.day" class="st-bar" :class="{ today: d.day === week[week.length - 1].day }">
-                  <i :style="{ height: Math.max(4, (d.min / weekMax) * 100) + '%' }" />
+                <div v-for="(d, i) in week" :key="d.day" class="st-bar" :class="{ today: i === week.length - 1, none: !d.min }" :style="{ '--i': i }">
+                  <div class="st-col">
+                    <i :style="{ height: d.min ? barH(d.min) + '%' : null }" />
+                    <em v-if="i === week.length - 1 && d.min" :style="{ bottom: barH(d.min) + '%' }">{{ shortMin(d.min) }}</em>
+                  </div>
                   <span>{{ DOW[d.dow] }}</span>
                 </div>
               </div>
@@ -226,16 +244,42 @@ function tick() {
   now.date = d.toLocaleDateString(undefined, { day: 'numeric', month: 'long' });
 }
 tick();
+// the sky: a 6 to 18 day (the location isn't known, so sunrise and sunset are round numbers); the
+// sun rides the arc by day, the moon by night, and the light comes from where it is
+const SKIES = [[0, '74,104,190', 0.2], [5, '120,110,200', 0.2], [6.5, '255,150,110', 0.26], [9, '120,180,255', 0.2], [16, '140,190,255', 0.2], [18, '255,130,90', 0.28], [20, '150,90,190', 0.22], [22, '74,104,190', 0.2], [24, '74,104,190', 0.2]];
+const sky = computed(() => {
+  void now.time;
+  const d = new Date(), h = d.getHours() + d.getMinutes() / 60, night = h < 6 || h >= 18;
+  const p = night ? ((h + 6) % 24) / 12 : (h - 6) / 12;
+  const x = p * 100, y = ((1 - p) ** 2 * 48 + 2 * (1 - p) * p * -32 + p * p * 48) * 2;
+  const k = SKIES.findIndex(([at]) => at > h), [, rgb, a] = SKIES[Math.max(0, k - 1)];
+  return { night, x, y, bg: { background: `radial-gradient(120% 140% at ${x}% ${y}%, rgba(${rgb},${a}), rgba(${rgb},${a / 4}) 45%, transparent 75%)` } };
+});
 // storage: the drive your games are on
 const space = ref(null);
 const loadSpace = () => call('fs:space', store.config.romsRoot || store.info?.home || '/').then((s) => { space.value = s; }).catch(() => {});
 const sizeNum = (b) => { const s = bytes(b).split(' '); return s[0]; };
 const sizeUnit = (b) => { const s = bytes(b).split(' '); return s[1] || ''; };
+const freePct = computed(() => space.value?.total ? (space.value.free / space.value.total) * 100 : 0);
+// the gauge: 36 ticks round a 270 degree arc, open at the bottom
+const GAUGE = Array.from({ length: 36 }, (_, i) => {
+  const a = (135 + (i / 35) * 270) * Math.PI / 180, c = Math.cos(a), s = Math.sin(a);
+  return { i, x1: 50 + c * 38, y1: 50 + s * 38, x2: 50 + c * 46, y2: 50 + s * 46 };
+});
 // this week
 const week = ref([]);
 const DOW = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 const weekMin = computed(() => week.value.reduce((s, d) => s + d.min, 0));
 const weekMax = computed(() => Math.max(30, ...week.value.map((d) => d.min)));
+// bars leave room above for today's minutes
+const barH = (m) => Math.max(8, (m / weekMax.value) * 82);
+const shortMin = (m) => (m >= 60 ? `${Math.floor(m / 60)}h${m % 60 ? ' ' + (m % 60) + 'm' : ''}` : `${m}m`);
+const weekNote = computed(() => {
+  const w = week.value, top = w.reduce((b, d, i) => (d.min > (w[b]?.min || 0) ? i : b), -1);
+  if (top < 0) return 'Nothing played yet';
+  if (top === w.length - 1) return 'Most of it today';
+  return 'Most on ' + new Date(2026, 0, 4 + w[top].dow).toLocaleDateString(undefined, { weekday: 'long' });
+});
 const loadWeek = () => call('play:week').then((w) => { week.value = w || []; }).catch(() => {});
 // latest trophies and achievements
 const ach = ref([]);
@@ -500,16 +544,52 @@ watch(() => store.play, loadWeek);
 .st-pin b { font-family: var(--display); font-weight: 700; font-size: var(--t-md); line-height: 1.15; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .st-pin span { font-size: var(--t-xs); color: rgba(255, 255, 255, 0.75); }
 
-/* this week: the total, and a bar for each day (today in white) */
-.st-week { flex: 1; display: flex; align-items: flex-end; gap: var(--s-4); min-height: 0; }
-.st-bars { margin-left: auto; height: 70%; display: flex; align-items: flex-end; gap: clamp(6px, 0.6vw, 12px); }
-.st-bars.tall { height: 82%; }
-.st-bar { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 6px; width: clamp(12px, 1.1vw, 22px); }
-.st-bar i { width: 100%; border-radius: 4px; background: rgba(255, 255, 255, 0.22); transition: height 700ms var(--ease); }
-.st-bar.today i { background: #fff; }
+/* clock: light from the sun's (or moon's) place on its path, a big light-weight time, the day above */
+.st-sky { position: absolute; inset: 0; z-index: -1; transition: background 2s ease; }
+/* the path keeps to the right, clear of the time */
+.st-path { position: absolute; right: 7%; width: 42%; top: 30%; height: 44%; z-index: -1; }
+.h2 .st-path { right: 9%; width: 82%; top: 22%; height: 34%; }
+.st-path svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.st-path path { fill: none; stroke: rgba(255, 255, 255, 0.13); stroke-width: 1.2; stroke-dasharray: 2 5; vector-effect: non-scaling-stroke; }
+.st-orb { position: absolute; width: 10px; height: 10px; margin: -5px 0 0 -5px; border-radius: 50%; transition: left 2s ease, top 2s ease; }
+.st-orb.sun { background: #fff6e8; box-shadow: 0 0 0 4px rgba(255, 220, 170, 0.14); }
+.st-orb.moon { background: transparent; box-shadow: inset -3px -1px 0 0 #e8ecff; }
+.st-day { font-size: var(--t-sm); color: var(--muted); position: relative; }
+.st-day b { color: var(--text); font-weight: 650; margin-right: 4px; }
+.st-time { margin-top: auto; display: flex; align-items: baseline; gap: 6px; line-height: 0.9; font-family: var(--display); }
+.st-time span { font-weight: 300; font-size: clamp(44px, 4.6vw, 92px); letter-spacing: -0.045em; }
+.h2 .st-time span { font-size: clamp(60px, 6.4vw, 128px); }
+.st-time small { font-weight: 600; font-size: clamp(13px, 1vw, 20px); color: var(--muted); letter-spacing: 0.02em; }
+
+/* storage: the number on the left, a ring of ticks on the right lit for what's free (amber when low) */
+.st-store { flex: 1; min-height: 0; display: flex; align-items: stretch; gap: var(--s-3); }
+.st-store-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.st-gauge { position: relative; flex: none; height: 100%; aspect-ratio: 1; max-width: 46%; display: grid; place-items: center; }
+.st-gauge svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.st-gauge line { stroke: rgba(255, 255, 255, 0.1); stroke-width: 2.6; stroke-linecap: round; transition: stroke 260ms ease; transition-delay: calc(var(--i) * 16ms + 200ms); }
+.st-gauge line.on { stroke: #fff; }
+.st-gauge.low line.on { stroke: #ffb547; }
+.st-gauge > span { font-family: var(--display); font-weight: 700; font-size: clamp(15px, 1.2vw, 26px); letter-spacing: -0.02em; }
+.st-gauge small { font-size: 0.62em; color: var(--muted); margin-left: 1px; }
+.h2 .st-store { flex-direction: column-reverse; }
+.h2 .st-gauge { height: auto; width: 100%; max-width: none; max-height: 58%; align-self: center; }
+:global(body.motion-reduce .st-gauge line) { transition: none; }
+
+/* this week: the total and the day played most, then a bar for each day rising in turn (today white) */
+.st-week { flex: 1; min-height: 0; display: flex; align-items: stretch; gap: var(--s-5); }
+.st-week-text { flex: none; min-width: 0; max-width: 46%; display: flex; flex-direction: column; }
+.st-bars { flex: 1; min-width: 0; display: flex; align-items: stretch; justify-content: space-between; gap: clamp(6px, 0.7vw, 14px); padding-top: 4px; }
+.st-bar { flex: 1; max-width: 30px; display: flex; flex-direction: column; align-items: center; gap: 7px; min-height: 0; }
+/* bars sit absolutely in their column so their percentage heights always resolve */
+.st-col { flex: 1; min-height: 0; width: 100%; position: relative; }
+.st-bar i { position: absolute; left: 0; right: 0; bottom: 0; border-radius: 6px; background: linear-gradient(to top, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.24)); transform-origin: bottom; animation: st-rise 700ms cubic-bezier(0.23, 1, 0.32, 1) both; animation-delay: calc(var(--i) * 55ms + 160ms); }
+.st-bar.today i { background: linear-gradient(to top, rgba(255, 255, 255, 0.78), #fff); }
+.st-bar.none i { left: calc(50% - 3px); width: 6px; height: 6px; border-radius: 50%; background: rgba(255, 255, 255, 0.16); }
+.st-bar em { position: absolute; left: 50%; transform: translate(-50%, -6px); font-style: normal; font-size: 11px; font-weight: 700; color: var(--text); white-space: nowrap; font-variant-numeric: tabular-nums; }
 .st-bar span { font-size: 11px; font-weight: 600; color: var(--dim); }
 .st-bar.today span { color: var(--text); }
-.w3 .st-bars, .w2 .st-bars { gap: 4px; }
+@keyframes st-rise { from { transform: scaleY(0); } }
+:global(body.motion-reduce .st-bar i) { animation: none; }
 
 /* consoles: coloured chips with their wordmarks, never squished: they wrap or count the rest */
 .st-chips { flex: 1; min-height: 0; margin-top: 10px; display: grid; grid-auto-rows: minmax(0, 1fr); gap: 8px; overflow: hidden; }
