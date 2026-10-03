@@ -204,7 +204,7 @@ call('steam:played').then((m) => { played.value = m || {}; }).catch(() => {});
 loadPlay();
 const minsOf = (r) => store.play[r.id]?.min || 0;
 // media bar size (0.9.15, Look & Feel): Large (the default) is about as tall as a game page's header
-const HERO_H = { compact: '46%', spacious: '54%', large: '62%' };
+const HERO_H = { compact: '50%', spacious: '58%', large: '68%' }; // 0.9.19 (owner): larger and more immersive, not much larger
 const DONE = new Set(['finished', 'completed_100', 'retired', 'never_playing']);
 const shelves = computed(() => {
   const roms = allRoms().filter(visible);

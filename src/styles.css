@@ -107,9 +107,9 @@ img { -webkit-user-drag: none; }
 .tab-badge { margin-left: 6px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; display: inline-grid; place-items: center; font-size: 11px; font-weight: 800; background: var(--focus, #fff); color: var(--on-focus, #000); }
 .tab-dot { margin-left: 6px; width: 7px; height: 7px; border-radius: 50%; background: #ffb547; }
 @media (prefers-reduced-motion: reduce) { .tab-ink { transition: opacity 160ms ease; } }
-.sys { display: flex; align-items: center; gap: 16px; color: rgba(255, 255, 255, 0.78); font-size: var(--t-sm); font-weight: 600; font-variant-numeric: tabular-nums; }
+.statusbar .sys { display: flex; align-items: center; gap: 16px; color: rgba(255, 255, 255, 0.78); font-size: var(--t-sm); font-weight: 600; font-variant-numeric: tabular-nums; }
 /* status reads as one group: a hairline sets it apart from search */
-.sys::before { content: ''; width: 1px; height: 20px; background: rgba(255, 255, 255, 0.16); margin-right: 2px; }
+.statusbar .sys::before { content: ''; width: 1px; height: 20px; background: rgba(255, 255, 255, 0.16); margin-right: 2px; }
 .sys .item { display: flex; align-items: center; gap: 6px; }
 .clock { font-family: var(--display); font-weight: 600; font-size: calc(var(--t-md) * 1.08); color: var(--text); font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
 .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--dim); flex: none; }
