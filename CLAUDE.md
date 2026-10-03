@@ -253,6 +253,7 @@ LT/RT switch top tabs. LB/RB only switch sections inside a page. A select, B bac
 - `StartClock.vue` (phases night, sunrise, morning, afternoon, evening; drawn SVG), `ConsoleCard.vue` (SysTile look, not a button). Trophies/covers/console cards count from `box(t)` (`achFor`, `coversFor`, `cardsFor`). `ConsoleChip.vue` removed.
 - `makers.js` entries can have `paths` (all paths of HVR88's files; 0.9.17 kept one, so Sega was an S) and `tall` (Nintendo's pill). `src/consoleOptical.js` `OPTICAL`/`opticalOf`: wordmark scale per logo (ConsoleMark, SysTile, ConsoleCard).
 - Settings: `syncthing` section (Sync, `SyncCard.vue`, `sync:browse` reads Syncthing's index, view only); Look & Feel `bg` page folded into `theme`; `.lookpages` never wraps.
+- `rpcs3List` leaves out other-version patches when `appVer` is known (unless on).
 - nav.js `firstSeen`: a pad's first 400 ms counts as triggers at rest (LT/RT at launch). App `background` event sets `store.away` and `body.away` (CSS animations paused, Background.vue stops drawing).
 
 ## Releases (full steps: HANDOFF D8)

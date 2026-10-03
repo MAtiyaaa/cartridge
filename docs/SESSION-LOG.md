@@ -17,6 +17,8 @@ Causes found:
 - Lag: in Game Mode the window keeps focus with Steam or a game in front, so the animated background kept drawing (blur never fires). The `background` event from `watchGamescopeFocus` now stops it and pauses CSS animations. Quitting already ends everything within 3 s (0.9.3); if the owner still sees Cartridge alive after Exit, the next step is a process list from the Ally.
 - Sega and Microsoft: 0.9.17 copied only the first path of each HVR88 file.
 
+Added before release (owner): RPCS3 patches for other game versions are left out when the copy's version (APP_VER, update in dev_hdd0 first) is known, unless already on (`rpcs3List`, test in patches.test.js).
+
 **Owner's list, amended (3 Oct 2026):**
 1. Console page path: done in 0.9.21.
 2. Multi-language: later (1.0 or after).
