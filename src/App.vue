@@ -6,13 +6,15 @@
   <div v-else class="shell" :style="{ '--card-w': cardW }">
     <header class="statusbar" :class="{ 'has-back': store.history.length }">
       <button v-if="store.history.length" class="backbtn" aria-label="Back" @click="back()"><Icon name="mdiArrowLeft" :size="22" /></button>
-      <div class="brand"><Logo :size="28" /><span class="brand-word">Cartridge</span></div>
-      <!-- 0.9.17 (owner: the bar looked AI-made): words only, one quiet underline that slides to the
-           current tab, LT/RT only while a controller is in use -->
+      <div class="brand"><Logo :size="28" /></div>
+      <!-- 0.9.19 (owner: make the top bar much better, with the taste skill; photos of the frontend
+           they liked): every tab is its icon, the current one also its name, which opens out as you
+           arrive; one short line slides under it. LT/RT only while a controller is in use. -->
       <nav class="tabs" ref="tabsEl">
         <Btn v-if="padMode" b="LT" class="tab-trig" />
-        <button v-for="t in tabs" :key="t.name" class="tab" :class="{ active: activeTab === t.name }" :data-tab="t.name" @click="tab(t.name)">
-          <span class="tab-label">{{ t.label }}</span>
+        <button v-for="t in tabs" :key="t.name" class="tab" :class="{ active: activeTab === t.name }" :data-tab="t.name" :title="t.label" :aria-label="t.label" @click="tab(t.name)">
+          <Icon :name="t.icon" :size="21" class="tab-ico" />
+          <span class="tab-label"><span>{{ t.label }}</span></span>
           <span v-if="t.name === 'downloads' && activeDl.length" class="tab-badge">{{ activeDl.length }}</span>
           <span v-if="t.name === 'settings' && store.issues" class="tab-dot" :title="`${store.issues} waiting in Settings → Emulators`" />
         </button>
@@ -20,7 +22,7 @@
         <i class="tab-ink" :style="ink" />
       </nav>
       <div class="spacer" />
-      <label class="top-search" :class="{ on: store.route.name === 'search' }">
+      <label class="top-search" :class="{ on: store.route.name === 'search', open: store.route.name === 'search' || !!store.lastSearch }">
         <Icon name="mdiMagnify" :size="18" />
         <input ref="searchEl" data-focus data-nofirst data-key="top-search" :value="store.lastSearch" :readonly="builtinKb()" placeholder="Search games" autocomplete="off" spellcheck="false" @input="onSearch" @click="searchOsk" />
         <button v-if="store.lastSearch" class="clear" tabindex="-1" @mousedown.prevent @click="clearSearch"><Icon name="mdiClose" :size="16" /></button>
@@ -171,10 +173,11 @@ const padMode = computed(() => input.mode === 'pad');
 function placeInk() {
   const nav = tabsEl.value, el = nav?.querySelector(`[data-tab="${activeTab.value}"]`);
   if (!el) { ink.value = { opacity: 0 }; return; }
-  const label = el.querySelector('.tab-label') || el;
-  const x = label.getBoundingClientRect().left - nav.getBoundingClientRect().left, w = label.offsetWidth;
+  const x = el.offsetLeft + 12, w = Math.max(18, el.offsetWidth - 24);
   ink.value = { width: w + 'px', transform: `translateX(${x}px)`, opacity: 1 };
 }
+// the name opens out over 300 ms: measure again once it has (the line glides with it meanwhile)
+function placeInkSoon() { placeInk(); for (const t of [120, 320]) setTimeout(placeInk, t); }
 const activeTab = computed(() => {
   const n = store.route.name;
   if (tabs.value.find((t) => t.name === n)) return n;
@@ -216,7 +219,7 @@ function viewHandler(action) {
   return h ? h() : false;
 }
 
-watch([() => activeTab.value, () => tabs.value.length, padMode], () => nextTick(placeInk));
+watch([() => activeTab.value, () => tabs.value.length, padMode], () => nextTick(placeInkSoon));
 window.addEventListener('resize', () => nextTick(placeInk));
 onMounted(async () => {
   tick(); clockT = setInterval(tick, 10000);
@@ -348,10 +351,11 @@ watch(viewKey, async () => {
 
 <style scoped>
 .tab-trig { margin: 0 4px; }
-/* search (0.9.17): a quiet field that lights up when used, not a pill that competes with the tabs */
-.top-search { display: flex; align-items: center; gap: 8px; flex: 0 1 240px; min-width: 120px; height: 38px; padding: 0 10px 0 12px; border-radius: var(--r-md); background: rgba(255, 255, 255, 0.06); color: rgba(255, 255, 255, 0.55); cursor: text; transition: background 160ms cubic-bezier(0.23, 1, 0.32, 1), color 160ms; }
-.top-search:hover { background: rgba(255, 255, 255, 0.09); }
-.top-search.on, .top-search:focus-within { background: rgba(255, 255, 255, 0.14); color: var(--text); }
+/* search (0.9.19): a round button with Y until it's used, then it opens into a field */
+.top-search { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; width: 76px; height: 40px; padding: 0 10px 0 12px; border-radius: 20px; background: rgba(255, 255, 255, 0.07); color: rgba(255, 255, 255, 0.7); cursor: text; overflow: hidden; transition: width 320ms cubic-bezier(0.23, 1, 0.32, 1), background 160ms, color 160ms; }
+.top-search:hover { background: rgba(255, 255, 255, 0.11); }
+.top-search.open, .top-search:focus-within { width: min(300px, 26vw); background: rgba(255, 255, 255, 0.14); color: var(--text); }
+.top-search:not(.open):not(:focus-within) input { width: 0; flex: 0; opacity: 0; }
 .top-search:focus-within { box-shadow: 0 0 0 2px var(--focus, #fff); }
 .top-search input { flex: 1; min-width: 0; height: 100%; font: inherit; font-size: var(--t-sm); color: var(--text); background: none; border: 0; outline: none; }
 .top-search input:focus { box-shadow: none !important; }
