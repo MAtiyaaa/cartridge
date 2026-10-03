@@ -25,7 +25,7 @@ This file is the short version every session needs. The full handoff (history, e
 - Never use em dashes anywhere: UI text, notes, commits, messages. Use commas, colons, full stops, or "·" in titles.
 - Plain, direct, not AI-sounding writing. British spelling in feature names ("Colour", "Customisation").
 - **No UI overhauls or visual changes beyond what was asked.** Ask first. When a design change is wanted, offer options.
-- The design skills in `.claude/skills/` (animate, apple-design, emil-design-eng and the rest) are used only when the owner asks for them.
+- The design skills in `.claude/skills/` (animate, apple-design, emil-design-eng, taste-skill with redesign/soft/minimalist, img2threejs and the rest) are used only when the owner asks for them. taste-skill and img2threejs are third-party (MIT, Apache 2.0), kept as published.
 - When the owner says "don't build yet" or "just answer", don't change code.
 - Test that it launches before anything is released. Release notes say exactly what changed.
 - Nothing private in the repo or releases.
