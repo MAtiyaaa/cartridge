@@ -91,154 +91,141 @@ const TAU = Math.PI * 2;
 function once(w, h, draw) { const c = document.createElement('canvas'); c.width = w; c.height = h; draw(c.getContext('2d')); return c; }
 function rrect(g, x, y, w, h, r) { g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); }
 
-// 0.9.16 (owner: the console scenes must match XMB Waves and Ribbons). Built the way Ribbons is: many
-// hair-fine lines on smooth curves, added together ('lighter') over a soft glowing body, slow, fading
-// at their ends. No solid shapes. Each in its console's colours, after something from its menu.
+// glow sprite (used by Drift and by Game artwork's light)
 function glow(rgb, size) {
   size = Math.max(2, Math.round(size));
   return once(size, size, (c) => { const r = c.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2); r.addColorStop(0, `rgba(${rgb},1)`); r.addColorStop(0.4, `rgba(${rgb},0.35)`); r.addColorStop(1, `rgba(${rgb},0)`); c.fillStyle = r; c.fillRect(0, 0, size, size); });
 }
-const stamp = (g, img, x, y, a) => { g.globalAlpha = a; g.drawImage(img, x - img.width / 2, y - img.height / 2); g.globalAlpha = 1; };
+const rgbOf = (hex) => { const n = parseInt(String(hex || '#ffffff').slice(1).padEnd(6, '0').slice(0, 6), 16); return `${(n >> 16) & 255},${(n >> 8) & 255},${n & 255}`; };
 
-// PS2: the boot screen's blue depth, as a tunnel of fine light rings that waver as they flow outwards
-function ps2(g, w, h, S, pal, light) {
-  const cx = w * 0.64, cy = h * 0.42, N = light ? 22 : 38, SEG = light ? 56 : 110;
-  const core = glow('120,160,255', h * 0.8), haze = glow('40,80,220', w * 1.1);
+// ---------------------------------------------------------------- styles (0.9.19)
+// The owner retired the console scenes ("they all look bad, except Ribbons and XMB"): backgrounds
+// are styles now, made the way Ribbons is: hair-fine lines or soft points added together ('lighter'),
+// slow, fading at their edges, in your theme's colours. Each costs a few hundred draw calls a frame.
+
+// Aurora: two curtains of light hanging from a slow curving fold: fine rays rise from the fold, bright
+// where they start and fading upwards, over a soft glow that follows it
+function aurora(g, w, h, S, pal, light) {
+  const N = light ? 90 : 220, R = rng(7);
+  const acc = rgbOf(pal?.accent), lig = rgbOf(pal?.light || pal?.accent);
+  const rays = Array.from({ length: N }, (_, i) => ({ u: (i + R()) / N, ph: R() * TAU, k: R() }));
+  const CURT = [{ rgb: acc, y: 0.5, amp: 0.09, sp: 0.11, len: 0.34, off: 0 }, { rgb: lig, y: 0.36, amp: 0.06, sp: -0.08, len: 0.22, off: 2.1 }];
+  const body = glow(acc, Math.round(h * 0.7));
   return (t) => {
     g.clearRect(0, 0, w, h);
     g.globalCompositeOperation = 'lighter';
-    stamp(g, haze, cx, cy, 0.22); stamp(g, core, cx, cy, 0.42);
-    for (let i = 0; i < N; i++) {
-      const z = (i / N + t * 0.03) % 1, R = Math.pow(z, 2.1) * w * 0.95 + h * 0.02;
-      const a = 0.34 * Math.pow(Math.sin(Math.PI * z), 1.6);
-      if (a < 0.01) continue;
-      g.strokeStyle = `rgba(${Math.round(110 + 90 * z)},${Math.round(150 + 70 * z)},255,${a})`;
-      g.lineWidth = (0.7 + 1.1 * z) * S;
-      g.beginPath();
-      for (let j = 0; j <= SEG; j++) {
-        const an = (j / SEG) * TAU, wob = 1 + 0.03 * Math.sin(an * 3 + t * 0.45 + i * 0.7) + 0.015 * Math.sin(an * 5 - t * 0.6 + i);
-        const x = cx + Math.cos(an) * R * wob, y = cy + Math.sin(an) * R * 0.6 * wob;
-        j ? g.lineTo(x, y) : g.moveTo(x, y);
+    g.lineWidth = 2.2 * S; // softer, wider rays read as light rather than strands
+    for (const c of CURT) {
+      const fold = (u) => h * (c.y + c.amp * Math.sin(u * 3.1 + t * c.sp + c.off) + c.amp * 0.45 * Math.sin(u * 7.3 - t * c.sp * 1.6));
+      // the glow along the fold, a few soft stamps
+      for (let i = 0; i <= 6; i++) { const u = i / 6; g.globalAlpha = 0.07; g.drawImage(body, u * w - body.width / 2, fold(u) - body.height * 0.62); }
+      g.globalAlpha = 1;
+      for (const r of rays) {
+        const x = r.u * w + Math.sin(t * 0.13 + r.ph) * w * 0.006, y0 = fold(r.u);
+        // ray length breathes slowly along the curtain, so brightness travels across it
+        const pulse = 0.5 + 0.5 * Math.sin(r.u * 9 - t * 0.35 + c.off + r.ph * 0.3);
+        const len = h * c.len * (0.35 + 0.65 * pulse) * (0.7 + 0.3 * r.k);
+        const gr = g.createLinearGradient(0, y0, 0, y0 - len);
+        gr.addColorStop(0, `rgba(${c.rgb},${0.05 + 0.13 * pulse})`); gr.addColorStop(0.3, `rgba(${c.rgb},${0.03 + 0.06 * pulse})`); gr.addColorStop(1, `rgba(${c.rgb},0)`);
+        g.strokeStyle = gr;
+        g.beginPath(); g.moveTo(x, y0); g.lineTo(x + Math.sin(r.ph + t * 0.05) * w * 0.004, y0 - len); g.stroke();
       }
+    }
+  };
+}
+
+// Contours: slowly shifting height lines, like a map's, drawn by marching squares over a moving field
+function contours(g, w, h, S, pal, light) {
+  const C = light ? 40 : 72, Rw = Math.ceil(C * h / w), dx = w / C, dy = h / Rw;
+  const NL = light ? 9 : 17, LEVELS = Array.from({ length: NL }, (_, i) => -0.8 + (1.6 * i) / (NL - 1));
+  const f = new Float32Array((C + 1) * (Rw + 1));
+  const acc = rgbOf(pal?.accent);
+  return (t) => {
+    const T = t * 0.05;
+    for (let j = 0; j <= Rw; j++) for (let i = 0; i <= C; i++) {
+      const x = i / C * 3.2, y = j / Rw * 1.8;
+      f[j * (C + 1) + i] = 0.55 * Math.sin(x * 1.3 + T * 1.7 + Math.sin(y * 1.1 - T)) + 0.45 * Math.cos(y * 1.9 - T * 1.3 + Math.sin(x * 0.7 + T * 0.6)) * Math.sin(x * 0.5 + y * 0.4 + T * 0.4);
+    }
+    g.clearRect(0, 0, w, h);
+    g.globalCompositeOperation = 'lighter';
+    g.lineWidth = 1.05 * S;
+    LEVELS.forEach((L, li) => {
+      g.beginPath();
+      for (let j = 0; j < Rw; j++) for (let i = 0; i < C; i++) {
+        const a = f[j * (C + 1) + i], b = f[j * (C + 1) + i + 1], c = f[(j + 1) * (C + 1) + i + 1], d = f[(j + 1) * (C + 1) + i];
+        const k = (a > L ? 8 : 0) | (b > L ? 4 : 0) | (c > L ? 2 : 0) | (d > L ? 1 : 0);
+        if (k === 0 || k === 15) continue;
+        const x0 = i * dx, y0 = j * dy;
+        const T_ = [x0 + dx * (L - a) / (b - a), y0], R_ = [x0 + dx, y0 + dy * (L - b) / (c - b)], B_ = [x0 + dx * (L - d) / (c - d), y0 + dy], L_ = [x0, y0 + dy * (L - a) / (d - a)];
+        const seg = (p, q) => { g.moveTo(p[0], p[1]); g.lineTo(q[0], q[1]); };
+        switch (k) {
+          case 1: case 14: seg(L_, B_); break; case 2: case 13: seg(B_, R_); break; case 3: case 12: seg(L_, R_); break;
+          case 4: case 11: seg(T_, R_); break; case 5: seg(L_, T_); seg(B_, R_); break; case 6: case 9: seg(T_, B_); break;
+          case 7: case 8: seg(L_, T_); break; case 10: seg(T_, R_); seg(L_, B_); break;
+        }
+      }
+      // every fourth line heavier, as maps draw their index lines; the middle one in your colour
+      const idx = li % 4 === 0, mid = li === (LEVELS.length - 1) / 2;
+      g.lineWidth = (idx ? 1.6 : 1) * S;
+      g.strokeStyle = mid ? `rgba(${acc},0.34)` : `rgba(255,255,255,${(idx ? 0.13 : 0.065) * (1.1 - Math.abs(L) * 0.5)})`;
       g.stroke();
-    }
+    });
+    // the lines fade towards the left, where the page's words are
+    g.globalCompositeOperation = 'destination-out';
+    const fade = g.createLinearGradient(0, 0, w * 0.55, 0); fade.addColorStop(0, 'rgba(0,0,0,0.85)'); fade.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = fade; g.fillRect(0, 0, w * 0.55, h);
     g.globalCompositeOperation = 'source-over';
   };
 }
 
-// GameCube: the boot cube, turning slowly, drawn only in fine lines of indigo light (each face hatched)
-function gc(g, w, h, S, pal, light) {
-  const cx = w * 0.7, cy = h * 0.36, U = h * 0.115, K = light ? 8 : 14;
-  const halo = glow('125,90,240', h * 1.1);
-  const V = [-1, 1].flatMap((x) => [-1, 1].flatMap((y) => [-1, 1].map((z) => [x, y, z])));
-  const F = [[0, 1, 3, 2], [4, 5, 7, 6], [0, 1, 5, 4], [2, 3, 7, 6], [0, 2, 6, 4], [1, 3, 7, 5]];
+// Drift: soft points of light floating by at three depths, the near ones large and faint
+function drift(g, w, h, S, pal, light) {
+  const R = rng(11), N = light ? 30 : 64;
+  const acc = rgbOf(pal?.accent);
+  // small motes white, the out-of-focus ones in your colour
+  const sprites = [glow('255,255,255', 36 * S), glow(acc, 140 * S), glow(acc, 320 * S)];
+  const pts = Array.from({ length: N }, () => { const z = R(); return { x: R(), y: R(), z, d: z < 0.55 ? 0 : z < 0.88 ? 1 : 2, ph: R() * TAU, sp: 0.4 + R() * 0.6 }; });
   return (t) => {
     g.clearRect(0, 0, w, h);
     g.globalCompositeOperation = 'lighter';
-    stamp(g, halo, cx, cy, 0.3);
-    const a = t / 7, b = 0.55 + Math.sin(t / 11) * 0.25;
-    const P = V.map(([x, y, z]) => { const X = x * Math.cos(a) - z * Math.sin(a); let Z = x * Math.sin(a) + z * Math.cos(a); const Y = y * Math.cos(b) - Z * Math.sin(b); Z = y * Math.sin(b) + Z * Math.cos(b); const k = 4.8 / (Z + 5.2); return [cx + X * U * k, cy + Y * U * k, Z]; });
-    const lerp = (p, q, f) => [p[0] + (q[0] - p[0]) * f, p[1] + (q[1] - p[1]) * f];
-    g.lineWidth = 0.9 * S;
-    for (const f of F) {
-      const z = f.reduce((s, i) => s + P[i][2], 0) / 4, front = z < 0;
-      const base = front ? 0.2 : 0.07;
-      const [p0, p1, p2, p3] = f.map((i) => P[i]);
-      g.strokeStyle = `rgba(150,120,255,${base})`;
-      g.beginPath();
-      for (let k = 1; k < K; k++) { const u = k / K, s0 = lerp(p0, p1, u), s1 = lerp(p3, p2, u); g.moveTo(s0[0], s0[1]); g.lineTo(s1[0], s1[1]); }
-      g.stroke();
-      g.strokeStyle = `rgba(205,190,255,${front ? 0.55 : 0.18})`;
-      g.beginPath(); g.moveTo(p0[0], p0[1]); g.lineTo(p1[0], p1[1]); g.lineTo(p2[0], p2[1]); g.lineTo(p3[0], p3[1]); g.closePath(); g.stroke();
+    for (const p of pts) {
+      const v = (0.006 + p.z * 0.018) * p.sp;
+      const x = ((p.x + t * v) % 1.2 - 0.1) * w + Math.sin(t * 0.3 + p.ph) * 14 * S;
+      const y = ((p.y - t * v * 0.35 + 10) % 1.2 - 0.1) * h + Math.cos(t * 0.23 + p.ph) * 10 * S;
+      const twinkle = 0.55 + 0.45 * Math.sin(t * 0.8 * p.sp + p.ph);
+      const a = [0.32, 0.13, 0.07][p.d] * twinkle;
+      const img = sprites[p.d];
+      g.globalAlpha = a; g.drawImage(img, x - img.width / 2, y - img.height / 2);
     }
-    g.globalCompositeOperation = 'source-over';
+    g.globalAlpha = 1;
   };
 }
 
-// Wii: a sheet of fine pinstripes that breathes like fabric, with a Wii-blue light sweeping across it
-function wii(g, w, h, S, pal, light) {
-  const N = light ? 20 : 38, STEP = light ? 32 : 20;
+// Tide: a sea of fine points in perspective, rising and falling in long slow swells
+function tide(g, w, h, S, pal, light) {
+  const COLS = light ? 46 : 84, ROWS = light ? 18 : 30;
+  const acc = rgbOf(pal?.accent);
   return (t) => {
     g.clearRect(0, 0, w, h);
     g.globalCompositeOperation = 'lighter';
-    const xs = (((t * 0.035) % 1.5) - 0.25) * w;
-    const sweep = g.createLinearGradient(0, 0, w, 0);
-    const st = (x, a) => sweep.addColorStop(Math.min(1, Math.max(0, x / w)), a);
-    st(0, 'rgba(225,235,245,0.08)'); st(xs - w * 0.22, 'rgba(225,235,245,0.08)'); st(xs, 'rgba(140,215,255,0.6)'); st(xs + w * 0.22, 'rgba(225,235,245,0.08)'); st(w, 'rgba(225,235,245,0.08)');
-    g.strokeStyle = sweep; g.lineWidth = 1 * S;
-    for (let k = 0; k < N; k++) {
-      const base = h * (0.16 + 0.78 * (k / N));
-      g.beginPath();
-      for (let x = 0; x <= w + STEP; x += STEP) {
-        const u = x / w, y = base + h * 0.022 * Math.sin(u * 2.2 + t * 0.15 + k * 0.13) + h * 0.011 * Math.sin(u * 5.3 - t * 0.21 + k * 0.29);
-        x ? g.lineTo(x, y) : g.moveTo(x, y);
-      }
-      g.stroke();
-    }
-    g.globalCompositeOperation = 'source-over';
-  };
-}
-
-// Xbox 360: fine green arcs with fading tails circling a soft glowing orb, at their own speeds
-function xbox360(g, w, h, S, pal, light) {
-  const cx = w * 0.68, cy = h * 0.42, M = light ? 10 : 18, TAIL = light ? 8 : 14;
-  const r = rng(360);
-  const arcs = Array.from({ length: M }, (_, m) => ({ R: h * (0.15 + 0.034 * m + r() * 0.02), v: (0.05 + r() * 0.07) * (m % 2 ? 1 : -1), p: r() * TAU, len: 0.7 + r() * 1.5, wd: 0.8 + r() * 1.6, a: 0.2 + r() * 0.3 }));
-  const orb = glow('150,240,90', h * 0.42), halo = glow('60,160,30', w * 0.9);
-  return (t) => {
-    g.clearRect(0, 0, w, h);
-    g.globalCompositeOperation = 'lighter';
-    stamp(g, halo, cx, cy, 0.25); stamp(g, orb, cx, cy, 0.85);
-    for (const c of arcs) {
-      const head = c.p + t * c.v, dir = Math.sign(c.v);
-      g.lineWidth = c.wd * S;
-      for (let s = 0; s < TAIL; s++) {
-        const f0 = s / TAIL, f1 = (s + 1) / TAIL;
-        g.strokeStyle = `rgba(140,235,90,${c.a * Math.pow(f1, 1.7)})`;
-        g.beginPath();
-        const a0 = head - dir * c.len * (1 - f0), a1 = head - dir * c.len * (1 - f1);
-        g.arc(cx, cy, c.R, Math.min(a0, a1), Math.max(a0, a1));
-        g.stroke();
+    const horizon = h * 0.46, sz = 1.6 * S;
+    for (let r = 0; r < ROWS; r++) {
+      const z = 1 + r * 0.42; // depth: near rows first
+      const persp = 1 / z;
+      const a = Math.min(0.75, 0.9 * persp) * (r < 2 ? 0.6 : 1);
+      g.fillStyle = r % 7 === 3 ? `rgba(${acc},${a})` : `rgba(255,255,255,${a * 0.75})`;
+      for (let c = 0; c <= COLS; c++) {
+        const xw = (c / COLS - 0.5) * 2.6;
+        const yw = 0.22 * Math.sin(xw * 1.7 + t * 0.32 + z * 0.55) * Math.cos(z * 0.33 - t * 0.21) + 0.08 * Math.sin(xw * 4.1 - t * 0.5 + z);
+        const X = w / 2 + xw * w * 0.5 * persp * 1.4, Y = horizon + (0.95 - yw) * h * 0.55 * persp;
+        if (X < -10 || X > w + 10 || Y > h + 10) continue;
+        const s = sz * (0.6 + persp * 1.2);
+        g.fillRect(X - s / 2, Y - s / 2, s, s);
       }
     }
-    g.globalCompositeOperation = 'source-over';
   };
 }
 
-// Switch: two silky bands, Joy-Con red from the left and blue from the right, crossing in the middle
-function nswitch(g, w, h, S, pal, light) {
-  const N = light ? 12 : 22, STEP = light ? 32 : 20;
-  const red = g.createLinearGradient(0, 0, w, 0), blue = g.createLinearGradient(0, 0, w, 0);
-  red.addColorStop(0, 'rgba(255,70,85,0.55)'); red.addColorStop(0.65, 'rgba(255,70,85,0.18)'); red.addColorStop(1, 'rgba(255,70,85,0.02)');
-  blue.addColorStop(0, 'rgba(30,175,240,0.02)'); blue.addColorStop(0.35, 'rgba(30,175,240,0.18)'); blue.addColorStop(1, 'rgba(30,175,240,0.55)');
-  const body = (c) => { const b = g.createLinearGradient(0, 0, w, 0); b.addColorStop(c === 'r' ? 0 : 1, c === 'r' ? 'rgba(255,70,85,0.12)' : 'rgba(30,175,240,0.12)'); b.addColorStop(0.5, 'rgba(255,255,255,0.02)'); b.addColorStop(c === 'r' ? 1 : 0, 'rgba(0,0,0,0)'); return b; };
-  const bodies = { r: body('r'), b: body('b') };
-  const band = (t, k, ph, dirY) => (u) => h * (0.4 + dirY * 0.12 * Math.sin(u * 2.4 + t * 0.2 + ph) + 0.05 * Math.sin(u * 4.9 - t * 0.28 + ph * 2)) + (k - N / 2) * h * 0.008 * (1 + 0.7 * Math.sin(u * 3 + t * 0.35 + ph));
-  return (t) => {
-    g.clearRect(0, 0, w, h);
-    g.globalCompositeOperation = 'lighter';
-    g.lineWidth = 1.1 * S;
-    for (const [grad, ph, dy, bk] of [[red, 0, 1, 'r'], [blue, 2.2, -1, 'b']]) {
-      // the soft body under the lines, as Ribbons has
-      const top = band(t, 0, ph, dy), bot = band(t, N, ph, dy);
-      g.beginPath();
-      for (let x = 0; x <= w + STEP; x += STEP) { const yy = top(x / w) - h * 0.025; x ? g.lineTo(x, yy) : g.moveTo(x, yy); }
-      for (let x = Math.ceil((w + STEP) / STEP) * STEP; x >= 0; x -= STEP) g.lineTo(x, bot(x / w) + h * 0.025);
-      g.closePath(); g.fillStyle = bodies[bk]; g.fill();
-      g.strokeStyle = grad;
-      for (let k = 0; k <= N; k++) {
-        const y = band(t, k, ph, dy);
-        g.beginPath();
-        for (let x = 0; x <= w + STEP; x += STEP) { const yy = y(x / w); x ? g.lineTo(x, yy) : g.moveTo(x, yy); }
-        g.stroke();
-      }
-    }
-    g.globalCompositeOperation = 'source-over';
-  };
-}
-
-// A: a slow, dark, blurred pan over this console's own covers, its colour as a soft light.
-// Covers are blurred once when they load; each frame only stamps them.
 export function artPan(urls, rgb = '150,150,170') {
   const imgs = [];
   for (const u of urls.slice(0, 24)) { const im = new Image(); im.crossOrigin = 'anonymous'; im.src = u; imgs.push(im); }
@@ -265,29 +252,23 @@ export function artPan(urls, rgb = '150,150,170') {
   };
 }
 
-export const RENDERERS = { waves, ribbons, ps2, gc, wii, switch: nswitch, xbox360 };
+export const RENDERERS = { waves, ribbons, aurora, contours, drift, tide };
 // Backgrounds from before 0.9.15 whose console now shows its own game art (A)
-export const LEGACY_ART = { wiiu: 'wiiu', ds: 'nds', n3ds: '3ds', xbox: 'xbox' };
+export const LEGACY_ART = { wiiu: 'wiiu', ds: 'nds', n3ds: '3ds', xbox: 'xbox', ps2: 'ps2', gc: 'ngc', wii: 'wii', xbox360: 'xbox360', switch: 'switch' }; // 0.9.19: the console scenes retired too (owner)
 // Picker entries. The first two follow your theme colours, the console ones use their own.
 export const BACKGROUNDS = [
-  { v: 'waves', l: 'XMB Waves', sub: 'PSP style, in your theme colours', group: 'Theme' },
-  { v: 'ribbons', l: 'Ribbons', sub: 'PS3 style, in your theme colours', group: 'Theme' },
-  { v: 'ps2', l: 'PlayStation 2', sub: 'Rings of blue light from the boot screen', group: 'Consoles' },
-  { v: 'gc', l: 'GameCube', sub: 'The boot cube, drawn in fine lines of light', group: 'Consoles' },
-  { v: 'wii', l: 'Wii', sub: 'Silky pinstripes and a sweep of Wii blue', group: 'Consoles' },
-  { v: 'xbox360', l: 'Xbox 360', sub: 'Green arcs circling the glowing orb', group: 'Consoles' },
-  { v: 'switch', l: 'Switch', sub: 'Joy-Con red and blue bands crossing', group: 'Consoles' },
+  { v: 'ribbons', l: 'Ribbons', sub: 'One silky band of fine lines', group: 'Theme' },
+  { v: 'waves', l: 'XMB Waves', sub: 'Soft waves of light', group: 'Theme' },
+  { v: 'aurora', l: 'Aurora', sub: 'Curtains of light that sway and shimmer', group: 'Theme' },
+  { v: 'contours', l: 'Contours', sub: 'Slow height lines, like a map', group: 'Theme' },
+  { v: 'drift', l: 'Drift', sub: 'Soft lights floating by', group: 'Theme' },
+  { v: 'tide', l: 'Tide', sub: 'A sea of points rising and falling', group: 'Theme' },
   { v: 'solid', l: 'Still', sub: 'A still gradient, no motion', group: 'Other' },
   { v: 'art', l: 'Game artwork', sub: 'The highlighted game', group: 'Other' },
   { v: 'wallpaper', l: 'Wallpaper', sub: 'An image of your own', group: 'Other' },
 ];
 // The console backgrounds' own base colours (under the canvas)
 export const BG_BASE = {
-  ps2: 'radial-gradient(120% 90% at 64% 42%, #0e1d5c 0%, #050a22 55%, #01030c 100%)',
-  gc: 'radial-gradient(110% 100% at 64% 42%, #2a1a5a 0%, #120a2c 50%, #07040f 100%)',
-  wii: 'linear-gradient(180deg, #3d444e 0%, #2b3038 50%, #1a1d22 100%)',
-  switch: 'linear-gradient(180deg, #121216 0%, #0b0b0e 60%, #060608 100%)',
-  xbox360: 'radial-gradient(100% 100% at 68% 42%, #0c2a0a 0%, #051205 50%, #020802 100%)',
   art: 'linear-gradient(180deg, #0b0b0d 0%, #070708 100%)',
 };
 // darker base for renderers that need contrast (theme gradient under the canvas)
