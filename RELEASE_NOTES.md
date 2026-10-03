@@ -29,4 +29,4 @@
 - **Lag in Game Mode:** with a game or Steam in front, Cartridge now stops its animated background and every animation, so it no longer slows the device down in the background.
 - **Vita3K installs:** Cartridge now works out Vita3K's storage folder exactly as Vita3K does (a portable folder, the pref-path in its settings, then its default), puts games there, and also finds them wherever Vita3K's own log says it put them. If Vita3K still refuses a game, the message shows Vita3K's own reason (from its output or vita3k.log) instead of a general one, and the full output goes to Cartridge's log.
 - **Consoles page:** the controller pictures are no longer cut off at the card corners.
-- **Settings → Emulators:** LB, the pages and RB stay on one row.
+- **Settings → Emulators:** LB, the pages and RB stay on one row. On Game Updates, the PlayStation 3 card's title and description no longer run together on one line.

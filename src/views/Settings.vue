@@ -1187,7 +1187,10 @@ onMounted(() => {
 @keyframes upLive { 0% { transform: scaleX(0.05); opacity: 0.4; } 50% { transform: scaleX(0.6); opacity: 0.9; } 100% { transform: scaleX(1); opacity: 0.2; } }
 .up-cover { width: 30px; height: 40px; object-fit: cover; border-radius: var(--r-sm); flex: none; }
 .ps3-head { display: flex; align-items: center; gap: var(--s-4); padding: var(--s-4); border-radius: var(--r-lg); background: linear-gradient(120deg, rgba(0, 59, 160, 0.35), rgba(0, 0, 0, 0) 70%), var(--s1); margin-bottom: var(--s-3); }
-.ps3-head b { font-size: var(--t-lg); }
+/* title over its line of text (0.9.21, owner: they ran together on one line) */
+.ps3-head .l-mid { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.ps3-head b { font-family: var(--display); font-size: var(--t-lg); line-height: 1.2; }
+.ps3-head .l-sub { font-size: var(--t-sm); color: var(--muted); line-height: 1.4; max-width: 70ch; }
 .con-sec { margin-bottom: var(--s-4); }
 .con-head { display: flex; align-items: center; gap: var(--s-3); margin: var(--s-4) 0 var(--s-2); }
 .con-head b { font-size: var(--t-lg); font-family: var(--display); }
