@@ -6,6 +6,22 @@ The branch for 0.9.3 work is `claude/relaxed-fermat-30pigp`. Pull it before star
 
 ---
 
+## 3 Oct 2026 · 0.9.20 Start, Refined (read this first)
+
+Owner installed the taste skill by asking ("install them now"), then "Go build 0.9.20" after being told the 0.9.19 top bar used only part of the taste skill and Start used none of it. Skills copied into `.claude/skills` (taste-skill, redesign-skill, soft-skill, minimalist-skill, img2threejs; third-party text kept as published).
+
+Redesign audit findings (Start and top bar), fixed in 0.9.20: every tile carried an icon plus muted label (the templated "eyebrow on every section" rhythm); counts in tile corners; cover rows half empty; every tile the same flat grey (no background diversity); everything mounted at once; the Y glyph in the search pill even without a controller; search pill unbalanced. Kept: the icon-tab pattern from the owner's photos, one accent line, the 8 by 4 grid.
+
+Bug found while checking at 1920: `:global(body.pad-mode) .x` in a scoped style compiles to `body.pad-mode { ... }`. Three motion-reduce rules in 0.9.19 had the same form (harmless but never applied); all fixed.
+
+Owner after seeing the build: "I don't like the white underline I like what we had before with the white highlight and contrasting colour but redone, use taste skill". Done before merging: the underline became a white pill behind the current tab (dark text, soft top light, shadow tinted to the bar, 380 ms glide on transform and width, a ResizeObserver keeps it hugging the opening name); keyboard/pad focus is now a white ring so it can't be confused with the current tab; a tab badge inverts on the pill.
+
+Then: "the start menu widgets look very bad like clock played this week free space redesign them using the taste skill". Clock: sky light from the sun or moon's place on a 6 to 18 path (no location, so round numbers), light-weight time. Free space: tick gauge, amber when low. This week: day played most, today's minutes over its bar, dots for empty days, staggered rise.
+
+**Owner must test on a device:** the Start clock, free space and week tiles in each size (X cycles them), the tab pill gliding with LT/RT in Game Mode, Start's new look and entry animation in Game Mode (software rendering: the blurred backdrops are static, check scrolling stays smooth), search button with mouse and with a controller.
+
+---
+
 ## 3 Oct 2026 · 0.9.19 Start (read this first)
 
 Everything in `docs/plan-0.9.19.md`, built as the owner asked ("don't ask me any questions"). Decisions made without asking, per that instruction:

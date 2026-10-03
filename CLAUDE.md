@@ -25,7 +25,7 @@ This file is the short version every session needs. The full handoff (history, e
 - Never use em dashes anywhere: UI text, notes, commits, messages. Use commas, colons, full stops, or "·" in titles.
 - Plain, direct, not AI-sounding writing. British spelling in feature names ("Colour", "Customisation").
 - **No UI overhauls or visual changes beyond what was asked.** Ask first. When a design change is wanted, offer options.
-- The design skills in `.claude/skills/` (animate, apple-design, emil-design-eng and the rest) are used only when the owner asks for them.
+- The design skills in `.claude/skills/` (animate, apple-design, emil-design-eng, taste-skill with redesign/soft/minimalist, img2threejs and the rest) are used only when the owner asks for them. taste-skill and img2threejs are third-party (MIT, Apache 2.0), kept as published.
 - When the owner says "don't build yet" or "just answer", don't change code.
 - Test that it launches before anything is released. Release notes say exactly what changed.
 - Nothing private in the repo or releases.
@@ -240,6 +240,12 @@ LT/RT switch top tabs. LB/RB only switch sections inside a page. A select, B bac
 - Add-ons: `addons:present` (files in each game's folder, `by` cartridge/other/both). `gbGame` tries `titleForms`. Switch: `pfsEntries`, `switchTitleId(file, keyDirs)` decrypts NCA headers (AES-128-XTS, header_key from prod.keys).
 - Get Emulators: `emuUpdates.forgeRelease` (Forgejo), `REPOS[id].forge/first/zipped`, `appImageFromZip`; `emuGet` CATALOG entries carry a lasting `name` and an `fp` fallback.
 - `steamManager.reconcile()` at start (HANDOFF F4). `electron/syncthing.js` + `SyncCard.vue` (`sync:status`, read only). RomM local: pod `--hostname` from the server name.
+
+## 0.9.20 · Start, Refined (3 Oct 2026)
+- Redesign-skill audit of Start and the top bar (owner asked): tile labels words only (no icons, no counts), `.st-ambient` (first game's cover, blurred, behind cover tiles), covers fill and fade (`mask-image`), staggered `st-in` entry (`--n`), console chips stretch when few, one-trophy layout. Search folds to a round button; the Y hint only in pad mode.
+- Start widgets (owner: taste skill): clock `sky` (6 to 18 day, `SKIES` light colours, sun/moon `.st-orb` on `.st-path`), storage `GAUGE` (36 ticks, 270 degrees, `.low` amber under 10%), week `weekNote`, `barH`, bars absolute in `.st-col`, `st-rise`.
+- Top bar (owner, after 0.9.19's underline): `.tab-ink` is a white pill (`--focus`) behind the current tab, dark text (`--on-focus`), placed by `placeInk()` with a ResizeObserver; focus is a ring. `--tab-ink` is gone.
+- Vue scoped CSS drops everything after `:global(x)`: write `:global(body.pad-mode .thing)`, never `:global(body.pad-mode) .thing` (it compiled to `body.pad-mode { ... }` and shrank the app).
 
 ## Releases (full steps: HANDOFF D8)
 Only when the owner asks. Bump `version` and `build.releaseInfo.releaseName` ("Cartridge X.Y.Z") in `package.json`, and set `versionName` (what Settings → About and update messages show). **0.9.3 is shipped in parts (owner, 1 Oct 2026):** the number goes up as usual (0.9.4, 0.9.5...) but `versionName` and the release title are "0.9.3 B", "0.9.3 C"... until the 0.9.3 plan is done; notes heading `## Cartridge 0.9.3 B · Title`. Then put only this version's notes in `RELEASE_NOTES.md` (heading `## Cartridge X.Y.Z · Title`), add them to the top of `CHANGELOG.md`, grouped as New / Changed / Fixed with bold lead-ins. CI builds, launch-checks and publishes.
