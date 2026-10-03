@@ -165,7 +165,7 @@
 // (the D-pad moves a corner, LB/RB pick the corner), Y removes, B is done. Touch and mouse: drag a tile
 // to move it, drag an edge or a corner to resize. Saved in config.ui.start.
 import { computed, ref, reactive, onMounted, onBeforeUnmount, nextTick, watch } from 'vue';
-import { store, call, go, tab, img, cover, logoOf, allRoms, visible, visiblePlatforms, romById, isNew, collections, setBg, backdropOf, wantSharp, bytes, saveConfig, choose, playtimeText, loadPlay, toast } from '../store.js';
+import { store, heroArt, call, go, tab, img, cover, logoOf, allRoms, visible, visiblePlatforms, romById, isNew, collections, setBg, backdropOf, wantSharp, bytes, saveConfig, choose, playtimeText, loadPlay, toast } from '../store.js';
 import { useView } from '../useView.js';
 import { recommend } from '../recs.js';
 import { ensureFocus, input } from '../nav.js';
@@ -199,7 +199,7 @@ const EDGES = ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw'];
 const leaving = ref(null);
 const isArt = (t) => t.type === 'continue' ? !!cur.value : t.type === 'game';
 const bgUrl = (u) => (u ? `url("${String(u).replace(/"/g, '%22')}")` : 'none');
-const artOf = (r) => (r ? (store.art?.[r.id]?.hero ? img(store.art[r.id].hero) : store.sharp[r.id] || (r.shot ? img(r.shot) : cover(r, true))) : '');
+const artOf = (r) => heroArt(r)?.src || ''; // SteamGridDB's hero only, no RomM picture first (0.9.21)
 const platformById = (id) => store.lib?.platforms.find((p) => p.id === id) || null;
 
 // ---- the board: cell size from the screen (8 columns, 4 rows fill it), tiles placed in pixels

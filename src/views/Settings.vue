@@ -116,7 +116,7 @@
                      at a time, the rest of the page stays usable; progress as a bar along the row -->
                 <button v-for="e in emuUps" :key="e.path || e.fp" class="lrow up-row" :class="{ busy: emuUpRun === (e.path || e.fp) }" data-focus @click="runEmuUpdate(e)">
                   <EmuIcon :id="e.id" :size="30" />
-                  <div class="l-mid"><b>{{ e.label }} <span class="muted small">{{ e.kind === 'flatpak' ? 'Flatpak' : e.kind === 'windows' ? 'Windows build' : 'AppImage' }}</span></b><span class="l-sub">{{ e.version ? 'Version ' + e.version : e.kind === 'flatpak' ? e.fp : e.path.replace(store.info.home, '~') }}</span></div>
+                  <div class="l-mid"><b>{{ e.label }} <span class="muted small">{{ e.kind === 'flatpak' ? 'Flatpak' : e.kind === 'windows' ? 'Windows build' : e.build === 'folder' ? 'Folder build' : e.build === 'program' ? 'Program' : 'AppImage' }}</span></b><span class="l-sub">{{ e.version ? 'Version ' + e.version : e.kind === 'flatpak' ? e.fp : e.path.replace(store.info.home, '~') }}</span></div>
                   <span v-if="emuUpRun === (e.path || e.fp)" class="status"><Icon name="mdiArrowDownCircle" :size="14" />{{ emuUpPct != null ? emuUpPct + '%' : 'Updating' }}</span>
                   <span v-else-if="e.update" class="status warn"><Icon name="mdiUpdate" :size="14" />{{ e.update.version || e.update.tag || 'New version' }}</span>
                   <span v-else-if="e.error" class="status">Couldn’t check</span>
@@ -410,8 +410,16 @@
                 <button class="btn" data-focus @click="tab('achievements')"><Icon name="mdiTrophyOutline" />Open Achievements</button>
                 <button class="btn" data-focus @click="raSignOut"><Icon name="mdiLogout" />Sign out</button>
               </div>
-              <div class="row"><button class="btn" data-focus :disabled="raBusy" @click="raEmus"><Icon name="mdiGamepadVariantOutline" />Sign In to Emulators</button></div>
-              <p class="muted small" style="margin-top: -6px">Signs PCSX2, DuckStation, Dolphin, PPSSPP and RetroArch in with your account. Shows what it changes first. Your password goes to RetroAchievements once and is never saved.</p>
+              <!-- 0.9.21 (owner: it kept saying "Sign in" after signing in): says who's signed in, opens a list -->
+              <button class="lrow" data-focus :disabled="raBusy" @click="raEmus">
+                <Icon name="mdiGamepadVariantOutline" :size="24" />
+                <div class="l-mid"><b>Sign In to Emulators</b><span class="l-sub">PCSX2, DuckStation, Dolphin, PPSSPP, RetroArch and the rest, with your account. Your password goes to RetroAchievements once and is never saved.</span></div>
+                <span v-if="raTargets === null" class="status none">Checking</span>
+                <span v-else-if="!raTargets.length" class="status none">None set up</span>
+                <span v-else-if="raSignedCount === raTargets.length" class="status ok"><Icon name="mdiCheck" :size="14" />All signed in</span>
+                <span v-else class="status warn">{{ raSignedCount }} of {{ raTargets.length }} signed in</span>
+                <Icon name="mdiChevronRight" :size="22" />
+              </button>
               <Toggle :model-value="ui.raOnGames !== false" label="Achievements on game pages" desc="Show progress and badges on games that have RetroAchievements (PS3, PS4, Switch and other unsupported consoles never show them)" @update:model-value="(v) => saveConfig({ ui: { raOnGames: v } })" />
             </template>
 
@@ -598,11 +606,25 @@ async function raSignIn() {
   catch (e) { toast(e.message, 'error', 5000); }
   raBusy.value = false;
 }
-// Emulator sign-in (F14): list what changes, ask the password once, never keep it
+// Emulator sign-in (F14): list what changes, ask the password once, never keep it. 0.9.21: who's signed
+// in shows on the row; the list lets you sign in all of them or just one
+const raTargets = ref(null);
+const isMe = (t) => !!t.user && t.user.toLowerCase() === String(store.config.ra?.user || '').toLowerCase();
+const raSignedCount = computed(() => (raTargets.value || []).filter(isMe).length);
+const loadRaTargets = () => call('ra:emuTargets').then((l) => { raTargets.value = l || []; }).catch(() => { raTargets.value = []; });
+watch(sec, (v) => { if (v === 'ra' && store.config.ra?.user) loadRaTargets(); }, { immediate: true });
 async function raEmus() {
-  const list = await call('ra:emuTargets').catch(() => []);
-  if (!list.length) return toast('No emulators with RetroAchievements set up yet. Open the emulator once, then try again.', 'info', 4200);
+  const all = await call('ra:emuTargets').catch(() => []);
+  raTargets.value = all;
+  if (!all.length) return toast('No emulators with RetroAchievements set up yet. Open the emulator once, then try again.', 'info', 4200);
   const user = store.config.ra.user;
+  const todoAll = all.filter((t) => !isMe(t));
+  const pick = await choose({ sheet: true, title: 'Sign In to Emulators', options: [
+    ...(todoAll.length ? [{ label: todoAll.length === all.length ? 'Sign In to All' : `Sign In to the Other ${todoAll.length}`, sub: todoAll.map((t) => t.name).join(', '), value: '*', icon: 'mdiAccountMultipleCheck' }] : []),
+    ...all.map((t) => ({ label: t.name + (t.flatpak ? ' (Flatpak)' : ''), sub: isMe(t) ? `Signed in as ${t.user}` : t.user ? `Signed in as ${t.user}, not ${user}` : 'Not signed in', value: t.id, icon: isMe(t) ? 'mdiCheckCircle' : 'mdiAccountOutline', raw: true })),
+  ] });
+  if (!pick) return;
+  const list = pick === '*' ? todoAll : all.filter((t) => t.id === pick);
   const lines = list.map((t) => `${t.name}${t.flatpak ? ' (Flatpak)' : ''}${t.user ? `, now signed in as ${t.user}` : ''}: ${t.files.join(', ')}`).join('\n');
   const ok = await confirm(`Sign in ${list.length} emulator${list.length === 1 ? '' : 's'} as ${user}`, `Cartridge turns achievements on and writes your login token here:\n${lines}\n\nClose these emulators first. Your password is sent to RetroAchievements once and never saved.`, 'Continue');
   if (!ok) return;
@@ -610,12 +632,13 @@ async function raEmus() {
   if (!password) return;
   raBusy.value = true;
   try {
-    const res = await call('ra:emuSignin', { user, password });
+    const res = await call('ra:emuSignin', { user, password, ids: list.map((t) => t.id) });
     const bad = res.filter((r) => !r.ok);
     if (!bad.length) toast(`Signed in: ${res.map((r) => r.name).join(', ')}`, 'ok', 3600, 'mdiTrophy');
     else toast(`${bad.map((r) => `${r.name}: ${r.error}`).join(' · ')}`, 'error', 6000);
   } catch (e) { toast(e.message, 'error', 4200); }
   raBusy.value = false;
+  loadRaTargets();
 }
 const rlBusy = ref(false);
 async function rommLocalUpdate() {

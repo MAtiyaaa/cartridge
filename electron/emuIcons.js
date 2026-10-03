@@ -59,6 +59,14 @@ const ICON_URLS = {
   dolphin: GH + 'dolphin-emu/dolphin/master/Data/dolphin-emu.svg', duckstation: GH + 'stenzek/duckstation/master/data/resources/images/duck.png',
   pcsx2: GH + 'PCSX2/pcsx2/master/bin/resources/icons/AppIconLarge.png', melonds: GH + 'melonDS-emu/melonDS/master/res/icon/melon_256x256.png',
   flycast: GH + 'flyinghead/flycast/master/shell/linux/flycast.png', mgba: GH + 'mgba-emu/mgba/master/res/mgba-256.png',
+  // 0.9.21 (owner: icons missing in Get Emulators): every emulator it offers, each URL checked
+  ares: GH + 'ares-emulator/ares/master/desktop-ui/resource/ares.png', retroarch: GH + 'libretro/RetroArch/master/media/retroarch-96x96.png',
+  scummvm: GH + 'scummvm/scummvm/master/icons/scummvm.svg', ppsspp: GH + 'hrydgard/ppsspp/master/icons/hicolor/256x256/apps/ppsspp.png',
+  mame: GH + 'mamedev/mame/master/docs/source/images/MAMElogo.svg', xeniaedge: GH + 'has207/xenia-edge/master/assets/icon/256.png',
+  primehack: GH + 'shiiion/dolphin/master/Data/dolphin-emu.svg', vita3k: GH + 'Vita3K/Vita3K/master/vita3k/Vita3K.png',
+  rmg: GH + 'Rosalie241/RMG/master/Package/com.github.Rosalie241.RMG.svg', supermodel: GH + 'trzy/Supermodel/master/Docs/Images/Real3D_Logo.png',
+  // Ryujinx (Ryubing) is on its own Forgejo too; not checkable from where this was written
+  ryujinx: ['https://git.ryujinx.app/ryubing/ryujinx/raw/branch/master/distribution/misc/Logo.svg', 'https://git.ryujinx.app/ryubing/ryujinx/raw/branch/master/src/Ryujinx/Assets/UIImages/Logo_Ryujinx.png'],
   // Eden lives on its own Forgejo (git.eden-emu.dev), not GitHub (0.9.21, owner: no Eden logo); the
   // first of these that answers with an image is kept
   eden: ['https://git.eden-emu.dev/eden-emu/eden/raw/branch/master/dist/dev.eden_emu.eden.svg', 'https://git.eden-emu.dev/eden-emu/eden/raw/branch/master/dist/eden.svg', 'https://git.eden-emu.dev/eden-emu/eden/raw/branch/master/dist/eden.png', 'https://git.eden-emu.dev/eden-emu/eden/raw/branch/master/dist/qt_themes/default/icons/256x256/eden.png'],

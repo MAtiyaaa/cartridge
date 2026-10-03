@@ -59,7 +59,7 @@
               <button v-if="pkgBusy" class="btn xl" data-focus data-autofocus @click="cancelPkg"><Icon name="mdiLoading" class="spin" :size="22" />{{ pkgProg?.opens ? `Close ${emuName} to finish` : `Installing in ${emuName}` }}{{ pkgProg?.of > 1 ? ` · ${pkgProg.step} of ${pkgProg.of}` : '' }}</button>
               <button v-else-if="needsInstall" class="btn primary xl" data-focus data-autofocus @click="installPkg"><Icon name="mdiPackageDown" :size="22" />Install in {{ emuName }}</button>
               <button v-else-if="pkg?.licenceMissing?.length" class="btn primary xl" data-focus data-autofocus @click="addLicence"><Icon name="mdiKeyOutline" :size="22" />Get licence (.rap)</button>
-              <button v-else class="btn ok xl" data-focus data-autofocus @click="toast(installedPath, 'info', 4000, 'mdiFolder')"><Icon name="mdiCheckCircle" />Ready to play</button>
+              <button v-else class="btn ok xl" data-focus data-autofocus @click="playNow"><Icon name="mdiCheckCircle" />Ready to play</button>
               <!-- Re-download and Delete live in More → Options (owner, 0.9.16); the ring shows while deleting -->
               <button v-if="deleting != null" class="btn danger icon-btn" data-focus disabled><Ring :pct="deleting" :size="22" /><span>Deleting</span></button>
             </template>
@@ -157,7 +157,7 @@
 import { similarTo } from '../recs.js';
 import { addGame, removeGame, applyChanges, pickEmulator, pickCollections } from '../steam.js';
 import { computed, onMounted, onBeforeUnmount, ref, nextTick, watch } from 'vue';
-import { store, call, img, go, cover, bytes, year, rating, toast, confirm, download, downloadFor, romById, platformById, isNew, setBg, logoOf, resetLogos, artFor, choose, openModal, allRoms, visible, isFavourite, addToCollection, playOf, playtimeText, ago, loadPlay, askText, saveConfig, backdropOf, wantSharp } from '../store.js';
+import { store, heroArt, call, img, go, cover, bytes, year, rating, toast, confirm, download, downloadFor, romById, platformById, isNew, setBg, logoOf, resetLogos, artFor, choose, openModal, allRoms, visible, isFavourite, addToCollection, playOf, playtimeText, ago, loadPlay, askText, saveConfig, backdropOf, wantSharp } from '../store.js';
 import { pinToStart } from '../startTiles.js';
 import { useView } from '../useView.js';
 import { ensureFocus, focusFirst } from '../nav.js';
@@ -380,7 +380,9 @@ const banner = computed(() => {
   if (!base.value) return {};
   const h = artFor(props.romId).hero;
   if (h) return { src: img(h) };
-  if (store.sharp[base.value.id]) return { src: store.sharp[base.value.id] };
+  // SteamGridDB's hero only (0.9.21): nothing until it's known, RomM's screenshot only without a key
+  const a = heroArt(base.value);
+  if (a || store.config?.sgdbKey) return a || {};
   const shot = !bannerFail.value && (detail.value?.merged_screenshots?.[0] || cached.value?.shot);
   if (shot) return { src: img(shot) };
   return { src: cover(base.value, true), blur: true };
@@ -682,6 +684,14 @@ async function more() {
   if (v === 'hero') setBg({ src: img(url) });
   toast({ grid: 'Cover', logo: 'Logo', hero: 'Background' }[v] + ' updated', 'ok', 2000, 'mdiCheck');
 }
+// Ready to play (0.9.21, owner: it did nothing): starts the game's Steam shortcut; not in Steam yet: offers to add it
+async function playNow() {
+  try { await call('steam:play', { romId: Number(props.romId) }); toast('Starting through Steam…', 'info', 2500, 'mdiPlay'); }
+  catch (e) {
+    if (/Add it to Steam/.test(e.message) && (await confirm('Add to Steam to play?', 'Cartridge starts games through their Steam shortcut, so they launch with your emulator setup.', 'Add to Steam'))) return addGame({ ...base.value, id: Number(props.romId) });
+    toast(e.message, 'error', 5000);
+  }
+}
 function goVersion(id) { store.route = { ...store.route, params: { romId: id } }; }
 
 watch([installedPath, () => dl.value?.status], async () => { await nextTick(); ensureFocus(el.value); });
@@ -694,7 +704,7 @@ onMounted(async () => {
   focusFirst(el.value);
   try {
     detail.value = await call('api:get', { path: `/api/roms/${props.romId}` });
-    if (!hero && !store.sharp[props.romId] && detail.value.merged_screenshots?.[0]) setBg({ src: img(detail.value.merged_screenshots[0]) });
+    if (!hero && !store.config?.sgdbKey && !store.sharp[props.romId] && detail.value.merged_screenshots?.[0]) setBg({ src: img(detail.value.merged_screenshots[0]) });
   } catch (e) { if (!cached.value) toast(e.message, 'error'); }
   loadRa();
   loadPkg();

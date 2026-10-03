@@ -30,7 +30,8 @@ const EMU = {
   // win: Xenia Canary's Windows build (xenia_canary.exe) started through Proton, as EmuDeck does
   // (0.9.3 K, K1): the game is the positional target as a Windows path (Z: is /), fullscreen is a
   // cvar (xenia app/emulator_window.cc)
-  xenia: { label: 'Xenia', scripts: ['xenia.sh'], win: /^xenia_canary\.exe$/i, args: '"Z:{ROM}"', argsBy: { windows: '--fullscreen=true "Z:{ROM}"' }, for: ['xbox360'] },
+  // 0.9.21: Xenia Canary's Linux build (xenia_canary, from Get Emulators) takes a plain path
+  xenia: { label: 'Xenia', scripts: ['xenia.sh'], win: /^xenia_canary\.exe$/i, bin: ['xenia_canary'], args: '"Z:{ROM}"', argsBy: { windows: '--fullscreen=true "Z:{ROM}"', native: '--fullscreen=true "{ROM}"', appimage: '--fullscreen=true "{ROM}"' }, for: ['xbox360'] },
   // Vita games run once installed in Vita3K (from their .pkg/.vpk), started by title ID like EmuDeck does
   // Vita3K's own parser (vita3k/config/src/config.cpp): -F fullscreen, -r <title ID of an installed app>.
   // EmuDeck's vita3k.sh adds "-Fr" itself, so it gets only the title ID (0.9.3 L).

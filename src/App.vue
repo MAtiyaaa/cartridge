@@ -23,7 +23,7 @@
       </nav>
       <div class="spacer" />
       <label class="top-search" :class="{ on: store.route.name === 'search', open: store.route.name === 'search' || !!store.lastSearch }">
-        <Icon name="mdiMagnify" :size="18" />
+        <Icon name="mdiMagnify" :size="20" style="flex: none" />
         <input ref="searchEl" data-focus data-nofirst data-key="top-search" :value="store.lastSearch" :readonly="builtinKb()" placeholder="Search games" autocomplete="off" spellcheck="false" @input="onSearch" @click="searchOsk" />
         <button v-if="store.lastSearch" class="clear" tabindex="-1" @mousedown.prevent @click="clearSearch"><Icon name="mdiClose" :size="16" /></button>
         <Btn v-else-if="padMode" b="Y" /><!-- the Y hint only while a controller is in use, like LT/RT -->
@@ -359,7 +359,12 @@ watch(viewKey, async () => {
 .top-search { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; width: 40px; height: 40px; padding: 0 10px 0 11px; border-radius: 20px; background: rgba(255, 255, 255, 0.07); color: rgba(255, 255, 255, 0.7); cursor: text; overflow: hidden; transition: width 320ms cubic-bezier(0.23, 1, 0.32, 1), background 160ms, color 160ms; }
 .top-search:hover { background: rgba(255, 255, 255, 0.11); }
 /* a round button with the mouse or touch; room for the Y hint with a controller */
-:global(body.pad-mode .top-search:not(.open):not(:focus-within)) { width: 74px; }
+:global(body.pad-mode .top-search:not(.open):not(:focus-within)) { width: 70px; }
+/* closed (0.9.21, owner: it looked off): no pill, the magnifier like the tab icons and the Y hint like
+   LT/RT; the field keeps no space; it opens into the pill as before */
+.top-search:not(.open):not(:focus-within) { gap: 0; background: transparent; color: rgba(255, 255, 255, 0.5); padding: 0 10px; }
+.top-search:not(.open):not(:focus-within):hover { background: rgba(255, 255, 255, 0.08); color: rgba(255, 255, 255, 0.86); }
+.top-search:not(.open):not(:focus-within) :deep(.pb) { margin-left: 8px; transform: scale(0.88); opacity: 0.55; }
 .top-search.open, .top-search:focus-within { width: min(300px, 26vw); background: rgba(255, 255, 255, 0.14); color: var(--text); }
 .top-search:not(.open):not(:focus-within) input { width: 0; flex: 0; opacity: 0; }
 .top-search:focus-within { box-shadow: 0 0 0 2px var(--focus, #fff); }

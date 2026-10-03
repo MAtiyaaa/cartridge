@@ -1974,7 +1974,10 @@ function dolphinPatchState(romId) {
   const id = cheatsMod.gcWiiId(file);
   if (!id) return { emu: 'dolphin', why: 'Cartridge couldn’t read this game’s ID from its disc image (ISO, GCM, RVZ, WIA, WBFS and CISO can be read).' };
   const ph = patchHome(romId, 'dolphin'), dirs = cheatsMod.dolphinDirs();
-  const dir = (ph.pick && dirs.find((d) => d.flatpak === !!ph.flatpak)) || dirs[0];
+  // 0.9.21 (owner: codes on in Dolphin didn't show as on): the user folder that holds this game's
+  // settings wins (EmuDeck's launcher hides whether it's the Flatpak), then the copy the game uses
+  const has = (d) => cheatsMod.dolphinUserFiles(d, id).some((n) => fs.existsSync(path.join(d.user, 'GameSettings', n)));
+  const dir = dirs.find(has) || (ph.pick && dirs.find((d) => d.flatpak === !!ph.flatpak)) || dirs[0];
   if (!dir) return { emu: 'dolphin', serial: id, why: 'Dolphin’s settings weren’t found on this device. Open Dolphin once, then come back.' };
   return { emu: 'dolphin', serial: id, version: '', dir };
 }
@@ -3136,7 +3139,7 @@ const handlers = {
       const ck = { retro: 'snes', gc: 'gc' }[key] || key;
       return (steamMgr.candidatesFor(ck) || []).some((c) => c.id.split('@')[0] === e.id);
     };
-    return G.CATALOG.map((c) => ({ key: c.key, name: c.name, emus: c.emus.map((e) => ({ id: e.id, label: require('./emulators').EMU[e.id]?.label || { retroarch: 'RetroArch', supermodel: 'Supermodel' }[e.id] || e.id, how: e.how, from: e.how === 'flatpak' ? 'Flatpak from Flathub' : `AppImage from ${e.repo.split('/')[0]}${e.fp ? ', else its Flatpak' : ''}`, installed: isHere(e, c.key) })) }));
+    return G.CATALOG.map((c) => ({ key: c.key, name: c.name, emus: c.emus.map((e) => ({ id: e.id, label: require('./emulators').EMU[e.id]?.label || { retroarch: 'RetroArch', supermodel: 'Supermodel' }[e.id] || e.id, how: e.how, from: e.how === 'flatpak' ? 'Flatpak from Flathub' : `${e.binary ? 'Linux build' : 'AppImage'} from ${e.repo.split('/')[0]}${e.fp ? ', else its Flatpak' : ''}`, installed: isHere(e, c.key) })) }));
   },
   // where emulators live (0.9.17): this device and every mounted drive, with free space
   'emuget:drives': async () => {
@@ -3207,12 +3210,15 @@ const handlers = {
     for (const e of list) {
       if (e.kind === 'flatpak') { out.push({ ...e, update: fp[e.fp] ? { version: fp[e.fp].version } : null, where: fp[e.fp]?.where }); continue; }
       // 0.9.21: the release source follows the copy (Xenia Edge, Xenia's Windows build, Eden's variants)
-      const ck = e.id + ':' + path.basename(e.path || ''), spec = U.specFor(e.id, e.path);
+      // a plain program (not an AppImage, not a folder build Cartridge can update) is never overwritten (0.9.21)
+      const kind = e.kind === 'appimage' ? U.installKind(e.path) : null, base = U.specFor(e.id, e.path);
+      const spec = kind === 'folder' ? (base?.folder ? base : null) : kind === 'program' && !base?.zipped ? null : base;
+      const ck = e.id + ':' + path.basename(e.path || '') + (kind === 'folder' ? ':folder' : '');
       let c = cache[ck];
       if (spec && (fresh || !c || Date.now() - c.t > 6 * 3600e3)) {
         try { c = cache[ck] = { t: Date.now(), rel: await U.latestRelease(e.id, { file: e.path }) }; } catch (err) { c = { t: c?.t || 0, rel: c?.rel || null, error: err.message }; }
       }
-      out.push({ ...e, update: c?.rel && U.isNewer(c.rel, e) ? c.rel : null, error: c?.error || null, noSource: !spec });
+      out.push({ ...e, build: kind, update: c?.rel && U.isNewer(c.rel, e) ? c.rel : null, error: c?.error || null, noSource: !spec });
     }
     saveJson(file, cache);
     return out;
@@ -3440,6 +3446,7 @@ const handlers = {
   'steam:report': () => steamMgr.startupReport(),
   'steam:last': () => steamMgr.lastStatus(),
   'steam:forRom': ({ romId }) => steamMgr.forRom(Number(romId)),
+  'steam:play': ({ romId }) => steamMgr.play(Number(romId)),
   'steam:addToCollections': ({ romId, names }) => steamMgr.addRomToCollections(Number(romId), names || []),
   // HowLongToBeat times when RomM has none: name plus release year, cached in hltb.json
   'hltb:lookup': ({ name, year }) => hltbSvc.forGame({ name: String(name || ''), year: Number(year) || null }),

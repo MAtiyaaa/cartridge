@@ -34,7 +34,8 @@ const CATALOG = [
   { key: 'gba', name: 'Game Boy Advance', emus: [GH('mgba', 'mGBA.AppImage', { fp: 'io.mgba.mGBA' })] },
   { key: 'n64', name: 'Nintendo 64', emus: [FP('rmg', 'com.github.Rosalie241.RMG'), FP('ares', 'dev.ares.ares')] },
   { key: 'xbox', name: 'Xbox', emus: [FP('xemu', 'app.xemu.xemu')] },
-  { key: 'xbox360', name: 'Xbox 360', emus: [GH('xeniaedge', 'xenia_edge.AppImage')] },
+  // 0.9.21 (owner: Xenia installed but listed as Xenia Edge not installed): Xenia Canary first, Edge as the other
+  { key: 'xbox360', name: 'Xbox 360', emus: [GH('xenia', 'xenia_canary', { binary: true }), GH('xeniaedge', 'xenia_edge.AppImage')] },
   { key: 'dreamcast', name: 'Dreamcast', emus: [FP('flycast', 'org.flycast.Flycast')] },
   { key: 'saturn', name: 'Saturn', emus: [FP('ares', 'dev.ares.ares'), FP('retroarch', 'org.libretro.RetroArch')] },
   { key: 'arcade', name: 'Arcade', emus: [FP('mame', 'org.mamedev.MAME'), FP('supermodel', 'com.supermodel3.Supermodel')] },
@@ -52,7 +53,8 @@ const hasFlatpak = () => { try { execFileSync('sh', ['-c', 'command -v flatpak']
 // the newest AppImage of one emulator (GitHub API, as Updates reads it)
 async function release(e, opts) {
   const r = await latestRelease(e.id, { ...opts, spec: { repo: e.repo, asset: e.asset, tag: e.tag, pre: e.pre, forge: e.forge, first: e.first, zipped: e.zipped } });
-  if (!r) throw new Error(`No Linux AppImage in ${e.repo}'s newest release.`);
+  // (Xenia Canary's Linux build is a .tar.gz with the program in it, not an AppImage)
+  if (!r) throw new Error(`No Linux build in ${e.repo}'s newest release.`);
   return r;
 }
 // AppImage into the emulators folder (~/Applications unless a drive was picked) under its lasting name
@@ -61,13 +63,14 @@ async function release(e, opts) {
 async function getAppImage(e, download, opts = {}) {
   const rel = await release(e, opts);
   const name = String(e.name || rel.name).replace(/[\\/]/g, '_');
-  const dest = path.join(APPS(), /\.AppImage$/i.test(name) ? name : name + '.AppImage');
+  const dest = path.join(APPS(), e.binary || /\.AppImage$/i.test(name) ? name : name + '.AppImage'); // binary: a plain program (Xenia Canary's Linux build)
   if (fs.existsSync(dest)) return { path: dest, version: rel.version, already: true };
   fs.mkdirSync(APPS(), { recursive: true });
   const tmp = dest + '.cartridge-new';
   if (rel.zipped) {
     const z = dest + '.cartridge-zip';
-    try { await download(rel.url, z, rel.size); await require('./emuUpdates').appImageFromZip(z, tmp, rel.zipped); } finally { fs.rmSync(z, { force: true }); }
+    const U = require('./emuUpdates');
+    try { await download(rel.url, z, rel.size); if (/\.(tar\.gz|tgz)$/i.test(rel.name || rel.url)) await U.fileFromTar(z, tmp, rel.zipped); else await U.appImageFromZip(z, tmp, rel.zipped); } finally { fs.rmSync(z, { force: true }); }
   } else {
     await download(rel.url, tmp, rel.size);
     if (rel.size && fs.statSync(tmp).size !== rel.size) { fs.rmSync(tmp, { force: true }); throw new Error('The download was incomplete. Try again.'); }

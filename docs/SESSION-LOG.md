@@ -23,6 +23,8 @@ Vita3K (owner, photo: Unit 13.zip, "Vita3K didn't install it", "make this a prio
 
 Also before release (owner): game updates on the game page (always offered for installed PS3 games); Emulators → Updates contrast (status pills and progress bar on a selected row); Eden "couldn't check" (Cartridge asked git.eden-emu.org; the server is git.eden-emu.dev) and no logo (fallback icon URLs on Eden's Forgejo, not verifiable from this container: its network can't reach git.eden-emu.dev or GitHub's API); Xenia "updates in the app" (now from xenia-canary/xenia-canary-releases: Linux .tar.gz or Windows .zip, asset names not verifiable here either). Owner to test: Eden and Xenia Check now and Update.
 
+Then (owner, while it built): RPCS3 update order (answered: all newer updates are downloaded first, then installed one after another, oldest first, each through rpcs3 --headless --installpkg); SteamGridDB heroes only (heroArt); Ready to play starts the Steam shortcut; search closed look; Sign In to Emulators status and list; Get Emulators icons (checked URLs; Ryujinx's and Eden's not checkable from the container) and Xenia Canary; Dolphin tabs, graphics mods (read in Dolphin's GraphicsModGroup/GraphicsMod/HiresTextures source) and the user-folder choice; Vita3K update breaking Steam shortcuts (EmuDeck's zip build overwritten by the AppImage; now same-kind updates). Owner to test: Vita3K Update (should restore the zip build), a Vita game from Steam after it, Dolphin codes and a graphics mod, Ready to play, heroes on Home and game pages.
+
 **Owner's list, amended (3 Oct 2026):**
 1. Console page path: done in 0.9.21.
 2. Multi-language: later (1.0 or after).
