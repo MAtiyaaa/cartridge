@@ -164,6 +164,26 @@ public class CartridgeNativePlugin extends Plugin {
         call.resolve(o);
     }
 
+    // The second screen is Cartridge's only while Cartridge is in front. A Presentation stays on top of that
+    // screen when its activity stops, so left up it covered whatever came next: an app Fuse opened on the
+    // bottom screen, Fuse's own second screen, a DS emulator's bottom screen. It steps aside on stop (kept
+    // loaded, paused) and comes back on start, before app.js refreshes it on resume.
+    private boolean away;
+
+    @Override
+    protected void handleOnStop() {
+        super.handleOnStop();
+        away = true;
+        if (companion != null && companion.isShowing()) companion.away();
+    }
+
+    @Override
+    protected void handleOnStart() {
+        super.handleOnStart();
+        away = false;
+        if (companion != null) companion.back();
+    }
+
     @Override
     protected void handleOnDestroy() {
         displays.unregisterDisplayListener(displayListener);
@@ -218,6 +238,8 @@ public class CartridgeNativePlugin extends Plugin {
         String url = call.getString("url");
         main.post(() -> {
             try {
+                // Away (a display change while another app is in front): it opens when Cartridge is back
+                if (away) { call.resolve(); return; }
                 Display d = secondary();
                 if (d == null) { call.reject("No second screen"); return; }
                 if (companion != null && companion.isShowing() && companion.getDisplay().getDisplayId() == d.getDisplayId() && url.equals(companionUrl)) { call.resolve(); return; }
@@ -270,6 +292,23 @@ public class CartridgeNativePlugin extends Plugin {
             setContentView(web, new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
             web.loadUrl(url);
         }
+
+        /** Off the screen without closing: the page stays loaded and paused until {@link #back()}. */
+        void away() {
+            if (!isShowing()) return;
+            hidden = true;
+            if (web != null) web.onPause();
+            hide();
+        }
+
+        void back() {
+            if (!hidden) return;
+            hidden = false;
+            if (web != null) web.onResume();
+            show();
+        }
+
+        private boolean hidden;
 
         @Override
         public void onDetachedFromWindow() {
