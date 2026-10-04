@@ -43,3 +43,23 @@ test('a folder is shared once, through the key Syncthing accepts (0.9.24 welcome
   assert.strictEqual(posted.length, 1);
   fs.rmSync(home, { recursive: true, force: true });
 });
+
+test('games are found in the main server’s folders too, and texture folders by their game folders (0.9.28)', async () => {
+  const fs = require('fs'), os = require('os'), path = require('path');
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'st-'));
+  fs.mkdirSync(path.join(home, '.local/state/syncthing'), { recursive: true });
+  fs.writeFileSync(path.join(home, '.local/state/syncthing/config.xml'), '<configuration><gui><address>127.0.0.1:8384</address><apikey>k1</apikey></gui></configuration>');
+  const local = { '/rest/config/folders': [{ id: 'saves', label: 'Saves', path: '/s/pcsx2/memcards' }], '/rest/db/browse?folder=saves': [{ name: 'SCUS97328', type: 'FILE_INFO_TYPE_DIRECTORY', children: [{ name: 'x.bin', size: 4 }] }] };
+  const server = { '/rest/config/folders': [{ id: 'saves', label: 'Saves', path: '/srv/saves' }, { id: 'tex', label: 'Dolphin textures', path: '/srv/dolphin/Load/Textures' }], '/rest/db/browse?folder=tex': [{ name: 'GALE01', type: 'FILE_INFO_TYPE_DIRECTORY', children: [] }] };
+  const fetchImpl = async (url) => {
+    const u = new URL(url), key = u.pathname + (u.searchParams.get('folder') ? '?folder=' + u.searchParams.get('folder') : '');
+    const src = u.port === '8384' ? local : server;
+    return { ok: true, status: 200, headers: { get: () => 'application/json' }, json: async () => src[key] || [], text: async () => '' };
+  };
+  const games = [{ id: 1, name: 'Gran Turismo 4', ids: ['SCUS-97328'] }, { id: 2, name: 'Super Smash Bros. Melee', ids: [], discIds: ['GALE01'] }];
+  const r = await S.gamesSynced(games, { fetchImpl, home, server: { address: 'http://10.0.0.5:8385', apikey: 'k2' } });
+  assert.strictEqual(r.folders, 2); // 'saves' read once
+  assert.ok(r.games[1].saves.length);
+  assert.ok(r.games[2].textures.length);
+  fs.rmSync(home, { recursive: true, force: true });
+});

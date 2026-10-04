@@ -2043,12 +2043,19 @@ function ppssppPatchState(romId, r) {
   return { emu: 'ppsspp', serial: id, version: '', dir, title: r?.name || '' };
 }
 // every game with what Syncthing's files can be matched by: its name, serials and title IDs in its file names
+const syncIdCache = new Map();
 function syncGameList() {
   const S = require('./syncthing');
   return [...romIndexMain().values()].map((r) => {
     const where = installedMap[r.id];
     const ids = [...S.serialsIn([r.fs_name, ...(r.files || []).map((f) => f.file_name), where && where !== MARKED ? path.basename(where) : ''].join(' '))];
-    return { id: r.id, name: r.name || '', ids };
+    // 0.9.28: disc IDs read from the game itself, for folders named after them (Dolphin's GALE01, Azahar's title IDs)
+    const discIds = [];
+    if (where && where !== MARKED && /\.(iso|gcm|rvz|wia|wbfs|ciso|gcz|3ds|cci|cia|cxi)$/i.test(where)) {
+      if (!syncIdCache.has(where)) { let id = null; try { id = /\.(3ds|cci|cia|cxi)$/i.test(where) ? require('./addons').n3dsTitleId(where) : cheatsMod.gcWiiId(where); } catch {} syncIdCache.set(where, id); }
+      if (syncIdCache.get(where)) discIds.push(String(syncIdCache.get(where)));
+    }
+    return { id: r.id, name: r.name || '', ids, discIds };
   });
 }
 function patchState(romId) {
@@ -2730,7 +2737,27 @@ const handlers08 = {
     for (let i = 0; i < 30; i++) { await new Promise((r) => setTimeout(r, 1000)); const st = await S.status().catch(() => null); if (st?.running) return st; }
     return S.status();
   },
-  'sync:games': async () => require('./syncthing').gamesSynced(syncGameList()),
+  // Syncthing in Game Mode (0.9.28, owner: it only synced on the desktop): a systemd user service runs it in both
+  // modes. The installed program, else SyncThingy's own syncthing through Flatpak. Nothing needs a password.
+  'sync:service': async ({ enable = true } = {}) => {
+    const unit = path.join(os.homedir(), '.config/systemd/user/cartridge-syncthing.service');
+    const sh = (args) => new Promise((res) => require('child_process').execFile('systemctl', ['--user', ...args], { timeout: 20000 }, (e, out) => res({ ok: !e, out: String(out || '') })));
+    if (!enable) { await sh(['disable', '--now', 'cartridge-syncthing.service']); fs.rmSync(unit, { force: true }); await sh(['daemon-reload']); return { on: false }; }
+    const S = require('./syncthing'), f = S.find();
+    let exec = null;
+    if (f.program) exec = 'syncthing --no-browser --no-restart';
+    else if (f.flatpak) exec = `/usr/bin/flatpak run --command=syncthing ${f.flatpak} --no-browser --no-restart`;
+    if (!exec) throw new Error('Syncthing isn’t installed on this device.');
+    fs.mkdirSync(path.dirname(unit), { recursive: true });
+    fs.writeFileSync(unit, `[Unit]\nDescription=Syncthing, kept running by Cartridge (Game Mode and desktop)\nAfter=network-online.target\n\n[Service]\nExecStart=${exec}\nRestart=on-failure\nRestartSec=30\n\n[Install]\nWantedBy=default.target\n`);
+    await sh(['daemon-reload']);
+    const r = await sh(['enable', '--now', 'cartridge-syncthing.service']);
+    if (!r.ok) throw new Error('The service didn’t start. Syncthing may already be running another way, which is fine.');
+    log('syncthing service on', exec);
+    return { on: true };
+  },
+  'sync:serviceState': async () => ({ on: fs.existsSync(path.join(os.homedir(), '.config/systemd/user/cartridge-syncthing.service')) }),
+  'sync:games': async () => require('./syncthing').gamesSynced(syncGameList(), { server: config.syncthing?.server || null }),
   // dates for a game's timeline (the game page adds trophies and achievements it already has)
   'rom:timeline': ({ romId }) => {
     const r = romIndexMain().get(romId);

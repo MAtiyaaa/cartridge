@@ -443,8 +443,8 @@ const deviceName = computed(() => `${name.value.trim()}'s ${st.value.device || '
 const serverName = computed(() => { const s = store.config.server || {}; if (store.config.rommLocal?.name && s.localUrl && s.localUrl.includes(':' + store.config.rommLocal.port)) return store.config.rommLocal.name; try { return new URL(s.localUrl || s.remoteUrl).host; } catch { return 'your RomM server'; } });
 
 function go(i, d) { dir.value = d; at.value = Math.max(0, Math.min(STEPS.length - 1, i)); }
-function next() { romm.value = ''; sy.value = ''; go(at.value + 1, 1); }
-function prev() { romm.value = ''; sy.value = ''; go(at.value - 1, -1); }
+function next() { romm.value = ''; sy.value = ''; picking.value = false; go(at.value + 1, 1); }
+function prev() { romm.value = ''; sy.value = ''; picking.value = false; go(at.value - 1, -1); }
 
 async function saveName() {
   const n = name.value.trim().slice(0, 40);
@@ -547,7 +547,12 @@ async function saveSyKey() {
 async function installSync() {
   busy.value = true; syPct.value = 0;
   const off = window.cart.on('sync-install', (d) => { syPct.value = d.pct; });
-  try { syst.value = await call('sync:install'); if (!syst.value.running) toast('Syncthing is installed. It may take a moment to start.', 'info', 5000); }
+  try {
+    syst.value = await call('sync:install');
+    // keep it running in Game Mode too (0.9.28)
+    await call('sync:service', { enable: true }).catch(() => {});
+    if (!syst.value.running) toast('Syncthing is installed. It may take a moment to start.', 'info', 5000);
+  }
   catch (e) { toast(e.message, 'error', 6000); }
   off?.(); busy.value = false; syPct.value = null;
 }
@@ -626,7 +631,7 @@ async function takeOverAll() {
   await loadScanExtras();
 }
 
-const handlers = { back: () => { if (step.value === 'romm' && romm.value) { romm.value = romm.value === 'other' || romm.value === 'local' || romm.value === 'without' ? 'what' : ''; return; } if (step.value === 'sync' && sy.value) { sy.value = sy.value === 'folder' ? 'device' : ''; return; } if (at.value > 0) prev(); } };
+const handlers = { back: () => { if (step.value === 'emus' && picking.value) { picking.value = false; return; } /* 0.9.28: Back leaves the installer, not the step */ if (step.value === 'romm' && romm.value) { romm.value = romm.value === 'other' || romm.value === 'local' || romm.value === 'without' ? 'what' : ''; return; } if (step.value === 'sync' && sy.value) { sy.value = sy.value === 'folder' ? 'device' : ''; return; } if (at.value > 0) prev(); } };
 useView(handlers, [{ b: 'A', label: 'Select' }, { b: 'B', label: 'Back' }]);
 // Setup and the scan bring their own buttons; the welcome's come back after them
 watch(step, (v) => { if (!replay && !only && v !== 'done') saveConfig({ ui: { welcomeStep: v } }); });
@@ -636,7 +641,8 @@ watch([step, romm, sy], async () => {
   if (step.value === 'scan') loadScanExtras();
   await nextTick(); await nextTick();
   if (!(step.value === 'scan' || (step.value === 'romm' && (romm.value === 'signin' || romm.value === 'local')))) store.viewHandlers = handlers;
-  setTimeout(() => focusFirst(el.value?.querySelector('.w-step') || el.value, '.w-act .btn.primary, .w-step [data-focus]'), 280);
+  // smart focus (0.9.28, owner: it always landed on Back): the step's main button, else its first choice
+  setTimeout(() => { const root = el.value?.querySelector('.w-step') || el.value; if (!root) return; focusFirst(root, root.querySelector('.w-act .btn.primary:not([disabled])') ? '.w-act .btn.primary:not([disabled])' : root.querySelector('.lrow[data-focus], .w-box [data-focus]') ? '.lrow[data-focus], .w-box [data-focus]' : '[data-focus]'); }, 280);
   if (step.value === 'romm' && romm.value === 'other' && !guideQr.value) {
     const QRCode = (await import('qrcode')).default;
     guideQr.value = await QRCode.toString(ROMM_GUIDE, { type: 'svg', margin: 1, errorCorrectionLevel: 'M', color: { dark: '#000000', light: '#ffffff' } });
