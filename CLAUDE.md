@@ -316,6 +316,7 @@ LT/RT switch top tabs. LB/RB only switch sections inside a page. A select, B bac
 - Onboarding: Back leaves the installer (`picking`), smart focus (main button, else first choice). App picks the opening page before `loadLibrary` (no Home flash).
 - Light effects: the background is one still frame, `.bg-stage .layer.blur` 10px; Home rows from the third use `content-visibility: auto`.
 - Start rows roll (0.9.28, owner): `roll()` in Start.vue every second; one row per `ROLL_TICK` 6 s, each at most every `ROLL_MS` 20 s, `ROLL_HOLD` 45 s after an L1/R1 step (`stepped`); still while arranging, dragging, in the overview, a modal, `store.away`, hidden or `motion-reduce`. Transitions: `.st-row-art` `st-xf` crossfade, `.st-row-lead` `st-lead` out-in, `.st-fan` TransitionGroup `st-fan`.
+- SteamConsole: the shadPS4 version toggle (`.sc-opt`) is inside `.sc-lo` (it ran into the games heading on a handheld).
 - Go to Game Page first in More: TrophyGame (unlinked: `linkGame()` first), RaGame (new More on Y, X is Filter; unmatched: `store.lastSearch` + Search).
 - Unnamed PS4 games: trophyService `sync()` reads other devices' notes for local games that only have a code (`isCode`), sets `remote` (name and romId) and `T.rememberTitle` (trophies.js export) into titles.json; consoles with coded games are read first within the 80 ROMs.
 
