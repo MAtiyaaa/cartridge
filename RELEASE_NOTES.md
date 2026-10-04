@@ -1,38 +1,24 @@
-## Cartridge 0.9.28 · The Dock
+## Cartridge 0.9.29 · The Syncthing Update
 
 ### New
-- **Rows of games move along by themselves:** Recently Played, New in Your Library, Favourites, Recommended and a console's games on Start show their next game every 20 seconds or so, one row at a time, with the art fading across and the covers gliding along. A row you step through with L1/R1 waits a while before moving again, and nothing moves while you arrange, in a pop-up or with reduced motion.
-- **Go to Game Page** is the first option in More on a game's achievements or trophies (RetroAchievements, trophies and gamerscore). A trophy list not linked to a library game asks which game it is first; an achievements list not found in your library searches for it.
-- **The Dock:** the bar of tabs now sits at the bottom, centred, as a floating pill, with its own strip so pages are never cut off under it. Move it to the top or left, align it, and pick Glass, White, Black or Accent in Look & Feel → Text and Cards → Dock.
-- **Button hints are hidden** unless you turn them on (Look & Feel → Text and Cards → Button hints). They still show while you arrange Start.
-- **Start's page overview shows your real pages:** each tile's cover, the clock, your pictures and widget names. The page you pick up lifts with a "Moving" badge and the others slide out of its way. Open it with L1/R1 while arranging.
-- **Start tips:** a short tour of Start the first time you open it.
-- **New widgets:** Console Spotlight (one console's games taking turns with their art) and An Emulator (its version and update status; A opens it).
-- **Picture widget searches:** find a 4K wallpaper (Wallhaven, safe for work) or a GIF (Openverse, openly licensed) right in Cartridge.
-- **Add a Widget in tabs:** Games, Consoles, At a Glance, Pictures and Fun.
-- **Frame generation from a game's menu:** More → Steam → Frame Generation, and always in its Game Settings, saying why when it can't apply.
-- **Cemu packs with choices:** packs like a resolution pack show their options under them, and the one you pick is saved in Cemu.
-- **Emulators from a GitHub link update** from their own project's releases.
-- **Syncthing in Game Mode:** keep it running in both modes (Settings → Syncthing → Keep Running in Game Mode, and turned on after installing it in the welcome).
+- **Every save, found and named:** Cartridge finds the saves on this device for Eden, Citron and the yuzu family, Ryujinx, RPCS3, shadPS4, Vita3K, PPSSPP, PCSX2, DuckStation, Dolphin, Cemu, Azahar, Xenia, RetroArch and games that keep a save beside them. Each one is matched to its game by the save's own serial or title ID (a memory card lists every game on it). They show in Settings → Syncthing → Games and in a game's More → Emulator → Saves on This Device. Cartridge only reads them.
+- **Make this your main Syncthing device:** on a Syncthing nobody has set up yet, Cartridge shares one folder per console's saves (Switch, PS3, PS4, Vita, PSP, PS2, PS1, GameCube, Wii, Wii U, 3DS, Xbox 360, RetroArch) at your emulators' own save folders. Nothing is moved or copied. Syncthing keeps 30 days of older versions, so a replaced save can be restored. A Syncthing you already use is never changed: Cartridge only reads it.
+- **Join your main device:** on another device, enter the main device's ID (or show this one's ID and QR code). The save folders arrive at that device's own emulators' folders, receive only until you choose Make Two-Way. Eden on one device and Citron on another share Switch saves.
+- **Older versions of a save:** a synced save's menu shows the versions Syncthing kept, and puts one back. Copies Syncthing kept when two devices changed the same save are counted on the game's saves.
+- **Welcome:** Sync My Saves Between My Devices sets it all up, installing Syncthing if needed. I Already Use Syncthing only reads your setup.
+- **GPU Always:** Look & Feel → Advanced → Rendering. Uses the GPU in Game Mode on handheld-size screens too, much smoother on handhelds with a strong GPU like the ROG Ally. After the restart Cartridge asks if it looks right, and goes back to Auto by itself if you can't answer.
+- **Recently Launched on the PlayStation 4 page:** each PS4 game you start, with the shadPS4 version that ran it, while "shadPS4: show which version ran a game" is on.
+- **Xbox 360 trophy codes named:** Xenia games known only by their title ID take their name from x360db.
 
 ### Changed
-- **Big widgets fill their space:** the trophies widget leads with the newest unlock as a card, tall library and console tiles show a row of covers, and the storage widget shows each console's small icon, with names only where they fit.
-- **Add-ons on the Downloads page:** Install takes you there, and the pack shows with its game's cover and logo while it downloads and unpacks.
-- **Emulators settings reordered:** Emulators, Game Add-ons, Setup and Health, Console Folders. It opens on Setup and Health when something needs attention.
-- **Smoother on handhelds:** without the GPU the animated background holds still, the blur behind game art is lighter, and Home's lower rows aren't drawn until you get near them.
-- **Title Case** for every widget name and heading on Start.
+- **Smoother without the GPU:** measured with the CPU slowed down and drawing in software. A focus move on Home costs about a third less, moving along Start's rows about a fifth less, and Start uses about a quarter of the CPU it did while idle. Same look and animations: the header's fade is drawn by the compositor and shortened without the GPU, games you only pass while holding a direction don't load their picture, and Start's covers and art move by transform.
+- **Settings → Syncthing:** Games first, then Main Server, then This Device. When this device is the main one, the two are one tab.
+- **The page overview shows your real pages:** a still copy of each page as it looks. A page you haven't opened since Cartridge started shows the simpler map until you visit it.
+- **Switch title IDs read like Eden:** every part of an NSP or XCI is read, and prod.keys is found in more places (Eden's portable user folder, EmuDeck's and RetroDECK's BIOS folders). Switch saves are named from Eden's own game list too.
+- **Language step removed** from the welcome.
 
 ### Fixed
-- **PS3 and PS4 games had no Add-ons on their page** after patches moved into Add-ons in 0.9.24. Game More → Emulator → Add-ons is back for them and shows only what the console has: shadPS4 Patches and GoldHEN for PS4, Patches and Game Updates for PS3.
-- **The PlayStation 4 Steam page** ran its shadPS4 option into the games list on handhelds; it sits inside the emulator panel now.
-- **Unnamed PS4 games:** a PS4 game that isn't installed on this device (only its trophy code, like NPWR06616_00) now takes its name and library game from the device that has it installed, through the trophy notes it already writes to RomM. The name is remembered on this device afterwards.
-- **Touch:** swipes now scroll even on systems that send no movement between the finger going down and up, or send it under another pointer. Before, only Start's page swipe worked there.
-- **Pages slid sideways** when a card near the edge was highlighted, which cut off Home and clipped rows on game pages and in achievements.
-- **Home's header ran off the top** of the screen with the Dock at the bottom.
-- **Dreamcast's logo** was cut off under game cards.
-- **Console chips in Game Add-ons** were clipped when selected; they use the normal highlight now.
-- **Recently Played** sat its name right on the game's logo.
-- **Cartridge opened on Home** for a moment before Start.
-- **Onboarding:** Back from the Cartridge Installer trapped you in it; each step now starts on its main button instead of Back.
-- **Syncthing Games** only found a few games: the main server's folders are read too, each folder gets its own limit, and texture folders named by game ID (GameCube, Wii, 3DS) are matched.
-- **Game Settings** showed nothing for some games; it now says why.
+- **Controls dead after a game closes:** Cartridge asks for focus again over a few seconds when it's back in front, until the page has it. The log says which try worked.
+- **L1 and R1 pressed together** opened and closed the page overview at once.
+- **Storage widget:** console icons were hidden with the names on narrow tiles.
+- **Start's clock clouds** kept drifting without the GPU, which kept the CPU busy all the time.

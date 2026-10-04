@@ -6,6 +6,16 @@ The branch for 0.9.3 work is `claude/relaxed-fermat-30pigp`. Pull it before star
 
 ---
 
+## 4 Oct 2026 · 0.9.29 The Syncthing Update (built and released)
+
+Owner: "take everything we discussed and start building this update", plus optimisation so it feels fluid anywhere (choppy on the ROG Ally), and Settings → Syncthing tabs Games, Main Server, This Device, merged when this device is the main server. Built everything in docs/plan-0.9.29.md.
+
+Decisions taken without the owner (said in the release message): the saves rule stays for Cartridge itself (it never writes a save); Syncthing changes saves only in folders the user made Cartridge set up, versioning always on; restore and Make Two-Way only on the user's choice. Existing Syncthing setups: the main-device option isn't offered at all. Push behaviour: Syncthing's normal always-on syncing for now (pause while playing is still the owner's to decide). PSN sign-in for PS4 names not built (owner to decide). Ryujinx left out of syncing (its save index differs per device). Optional folders (states, BIOS, keys) not offered.
+
+Found: the Ally runs Game Mode at 1080p, so the existing rules draw in software; GPU Always is opt-in with an automatic revert. Start's clock clouds kept animating without the GPU because of a specificity bug (half a core while idle).
+
+Checked here: npm test (147), vite build, launch check, Playwright on the mock RomM and a fake Syncthing REST server (main-device setup, pairing a waiting device, merged tab, Games tab with matched and unmatched saves, overview copies), CPU per focus move measured before and after. Owner to test on devices: two devices with Syncthing (blank on one, join from the other, a save syncing, Make Two-Way, Older Versions), GPU Always on the Ally, controls after closing a game started from Cartridge (send the log if it still needs a tap), Recently Launched, Xbox 360 names, Switch saves matched.
+
 ## 4 Oct 2026 · Plan for 0.9.29 The Syncthing Update (not built)
 
 Owner after 0.9.28 shipped: next update is "The Syncthing Update", saves first (find every save on the device, know which game it belongs to, Syncthing set up by Cartridge only on a blank Syncthing, the onboarding says so plainly). Multi-language is scrapped for now: remove the Language step, never say more languages are coming. Also next: trophy codes to names, Switch title IDs like Eden. "Don't build anything yet": only docs/plan-0.9.29.md was written, after reading Syncthing's docs and Eden's source. Open decisions for the owner are marked "Owner decides" in the plan (the saves rule exception, extra folders, PSN sign-in, how syncing is pushed).
