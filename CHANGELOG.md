@@ -2,6 +2,13 @@
 
 Every Cartridge release, newest first. Each GitHub release only lists its own changes.
 
+## Cartridge 0.9.23 · Holding Still
+
+An Android fix. Nothing changes on Linux.
+
+### Fixed
+- **The screen no longer keeps zooming in and out on Android.** Since 0.9.21 the whole interface grew and shrank over and over on handhelds like the AYN Thor. Cartridge zoomed out because the screen looked smaller than 1280x800, which made it look big enough again, so it zoomed back in, and so on. Android now keeps its own sizing, as before 0.9.21. Look & Feel → Interface size still works.
+
 ## Cartridge 0.9.22 · Your Pages
 
 abdu2304's 0.9.23. On Linux, Cartridge works exactly as his 0.9.23 does, with this fork's phone remote and Fuse bridge on top.

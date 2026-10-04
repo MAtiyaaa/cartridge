@@ -2667,6 +2667,9 @@ fuseStatus.setup({
 // Smaller windows (Steam Deck 1280x800) stay at 100%, which is what they were designed around.
 function autoZoom() {
   if (!win || win.isDestroyed()) return 1;
+  // Android: the WebView already fits its 1280x720 canvas to the screen (android/app.js applyViewport). Zooming
+  // out below 1280x800 there made the canvas taller, which zoomed back in, over and over (the screen pulsed)
+  if (onAndroid) return 1;
   const [w, h] = win.getContentSize();
   // 0.9.17 (owner: clipped in a Desktop Mode window): smaller than the Deck's 1280x800, it zooms out to fit
   if (w < 1280 || h < 800) return Math.max(0.6, Math.round(Math.min(w / 1280, h / 800) * 20) / 20);
