@@ -68,6 +68,9 @@
         android:description="@string/status_permission_description" />
 
     <!-- Permissions -->
+    <!-- Fuse's play sessions (its read-only play provider), so Start shows games played from Fuse too. Fuse
+         also grants Cartridge read access to that provider itself, for when it was installed after Cartridge. -->
+    <uses-permission android:name="io.github.matiyaaa.fuse.permission.READ_PLAY" />
 
     <!-- Android 11+: lets Cartridge see launchable apps (GameNative, GameHub, Winlator) and the emulators it can
          start games in. Keep the package list in step with src/android/emulators.js (npm test checks it). -->

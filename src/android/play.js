@@ -6,6 +6,7 @@ import { store, call, download, saveConfig, toast, choose, bytes, tab } from '..
 import { Native } from './native.js';
 import { EMUS, CONSOLES, BIOS, consoleKey, allPackages, candidatesFor, coreFor, planLaunch, familyOf, baseId, emuName, serialOf } from './emulators.js';
 import { makeBundle, playablePath } from './bundle.js';
+import { noteLaunch } from './playLog.js';
 
 const MARKED = '(marked as installed)';
 
@@ -183,6 +184,7 @@ export function usePlay(g) {
         await Native.openApp({ pkg: plan.pkg });
         toast(`Opened ${emuName(emuId.value, emus.found)}. Pick the game inside it.`, 'info', 5000, 'mdiOpenInNew');
       } else await Native.launchGame({ ...plan, path });
+      noteLaunch(g.romId()); // last played and play time (playLog.js): until Cartridge is in front again
     } catch (e) { toast(e.message, 'error', 6500); }
     st.launching = false;
   }

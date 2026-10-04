@@ -4,7 +4,6 @@
 // keeps tiles from overlapping and lets them fall up into gaps (settle).
 import { store, saveConfig, toast } from './store.js';
 import { pack, settle, bottom } from './startLayout.js';
-import { IS_ANDROID } from './platform.js';
 export { COLS, MAX_H, collide, pack, settle, bottom } from './startLayout.js';
 
 export const TILES = {
@@ -37,9 +36,7 @@ export const GROUPS = [
 ];
 export const MANY = new Set(['game', 'console', 'image', 'html', 'trophies']);
 
-// Android: no This week (its play time comes from Steam on the desktop); Recommended for you in its place
-if (IS_ANDROID) { delete TILES.week; for (const g of GROUPS) g[1] = g[1].filter((k) => TILES[k]); }
-const DEF = [['continue', 4, 2], ['clock', 2, 1], ['storage', 2, 1], IS_ANDROID ? ['recs', 4, 1] : ['week', 4, 1], ['consoles', 4, 1], ['fresh', 4, 1], ['recent', 4, 1], ['trophies', 4, 1]];
+const DEF = [['continue', 4, 2], ['clock', 2, 1], ['storage', 2, 1], ['week', 4, 1], ['consoles', 4, 1], ['fresh', 4, 1], ['recent', 4, 1], ['trophies', 4, 1]];
 export const DEFAULT = () => pack(DEF.map(([type, w, h]) => ({ id: type, type, w, h })));
 
 export const valid = (t) => !!(t && TILES[t.type] && Number.isFinite(t.w) && Number.isFinite(t.h));

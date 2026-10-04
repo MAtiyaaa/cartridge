@@ -115,6 +115,38 @@ public class CartridgeNativePlugin extends Plugin {
         call.resolve(o);
     }
 
+    // Fuse's play sessions, from its read-only play provider (docs/FUSE_BRIDGE.md, Play sessions from Fuse), so
+    // Start's last played and play time count games played from Fuse too. Off the main thread: the provider may
+    // have to start Fuse's process. Fuse missing, too old, or not allowing Cartridge yet: available false, no rows.
+    @PluginMethod
+    public void fusePlay(PluginCall call) {
+        long since = call.getLong("since", 0L);
+        new Thread(() -> {
+            JSObject o = new JSObject();
+            JSArray rows = new JSArray();
+            boolean ok = false;
+            Uri uri = Uri.parse("content://io.github.matiyaaa.fuse.play/sessions").buildUpon().appendQueryParameter("since", String.valueOf(since)).build();
+            try (android.database.Cursor c = getContext().getContentResolver().query(uri, null, null, null, null)) {
+                if (c != null) {
+                    ok = true;
+                    String[] cols = c.getColumnNames();
+                    while (c.moveToNext() && rows.length() < 2000) {
+                        JSObject r = new JSObject();
+                        for (int i = 0; i < cols.length; i++) {
+                            int t = c.getType(i);
+                            if (t == android.database.Cursor.FIELD_TYPE_INTEGER) r.put(cols[i], c.getLong(i));
+                            else if (t == android.database.Cursor.FIELD_TYPE_STRING) r.put(cols[i], c.getString(i));
+                        }
+                        rows.put(r);
+                    }
+                }
+            } catch (Exception ignored) {} // SecurityException: not allowed yet
+            o.put("available", ok);
+            o.put("rows", rows);
+            call.resolve(o);
+        }).start();
+    }
+
     @PluginMethod
     public void wifiAddress(PluginCall call) {
         String ip = "";

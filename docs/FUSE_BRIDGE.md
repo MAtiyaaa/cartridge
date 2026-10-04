@@ -284,6 +284,19 @@ contentResolver.query(games, arrayOf("rom_id", "title", "genres", "cover"), null
 }
 ```
 
+## Play sessions from Fuse
+
+The other way round: Fuse shares its play sessions, so Cartridge's last played, Continue playing, This week, play time and its RomM play sessions count games started from Fuse too. Android only (Cartridge has no other play-time source there; the desktop reads Steam and RetroArch).
+
+- Authority `io.github.matiyaaa.fuse.play` (`${applicationId}.play` in Fuse), exported, read-only. `content://io.github.matiyaaa.fuse.play/sessions?since={epoch ms}`: one row per session that started at or after `since`, newest first, at most 2000. Other URIs return `null`; insert, update and delete throw `UnsupportedOperationException`.
+- Columns: `session_id` (Fuse's id), `rom_id` (the RomM id Cartridge reported for that file, or `null`), `path`, `launch_path`, `title` (as Fuse shows it), `title_original` (from the file name), `platform` (Fuse's platform id), `started_at`, `ended_at` (`null` while open), `source` (`FUSE_LAUNCH`, `USAGE_STATS` or `IMPORTED`).
+- Reading needs `io.github.matiyaaa.fuse.permission.READ_PLAY` (protection level `normal`, Cartridge declares it). As with READ_STATUS, Android only grants it when Fuse was installed first, so Fuse also grants Cartridge a prefix read URI permission on `content://io.github.matiyaaa.fuse.play/` at every start. A `SecurityException` or a missing provider means "no sessions".
+- Cartridge asks at start and every time it comes back to the front, from a day before its last read (a session open then may have ended since), the first time from 400 days back. `IMPORTED` rows are skipped (they may be Cartridge's own history).
+- Matching a row to a game in Cartridge's library: `rom_id` when it is in the library; else `path` or `launch_path` equal to (or inside, or holding) the file Cartridge has on disk; else exactly one game whose name or file name matches `title` or `title_original` (letters and digits, tags in brackets dropped), narrowed to `platform` when several match. A row that matches nothing is left out.
+- Sessions longer than 12 hours count only as last played, never as time (their end was missed). Overlapping sessions of one game count once, so a game both apps saw isn't counted twice.
+
+Games Cartridge starts itself are tracked the same way, launch to return: the session starts when Cartridge hands the game to the emulator and ends when Cartridge is in front again.
+
 ## Security
 
 - Links only change what's on screen, or start a resync. They are checked strictly (ids are digits, slugs are short, total length is capped) and anything unknown is ignored.
@@ -292,6 +305,7 @@ contentResolver.query(games, arrayOf("rom_id", "title", "genres", "cover"), null
 - The status is read-only: behind a permission on Android, your user only on Linux. It holds game titles, platform slugs, local paths and RomM's metadata of downloaded games, never the server address, username, password, tokens, API keys or settings.
 - Pictures are handed over as files Cartridge already has, never as RomM addresses (those would need your sign-in). On Android the provider opens only the picture files it was given for a game, only inside Cartridge's own storage and only for reading.
 - The phone remote never receives the status.
+- Fuse's play provider shares only sessions with the game's ids, paths, titles and platform; Cartridge only reads it.
 
 ## Backwards compatibility
 
@@ -312,3 +326,4 @@ contentResolver.query(games, arrayOf("rom_id", "title", "genres", "cover"), null
 - `electron/fuseStatus.js`: the snapshot, the queue and upload rows, the games rows (`metaOf`, `keepMeta`, `gameRows`), the status file; tests in `test/fuse-status.test.js`.
 - `electron/main.js`: links on the command line and from a second launch (`app:deeplink`), `fuse:status`, `fuse:games`, status updates on each broadcast; the games' fuller metadata (`fuse-meta.json` in the user data folder, kept at download, sync and Edit details) and their pictures (`bridgeImages`, fetched once by `warm` through the image cache).
 - `CartridgeStatusProvider.java` (tables, pictures in `openFile`, the games list in `fuse-games.json` in the app's files folder) and `CartridgeNativePlugin.java` (`publishStatus`, `publishGames`, `returnToCaller`); the link filter, provider and permission in `AndroidManifest.xml`.
+- `electron/androidPlaytime.js` (sessions, totals, days, `matchRow`; tests in `test/androidPlaytime.test.js`), `play:session` and `play:import` in `electron/main.js` (`android-play.json` in the user data folder), `src/android/playLog.js` (launch to return, `importFuse`), `CartridgeNativePlugin.fusePlay`.
