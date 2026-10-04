@@ -229,6 +229,9 @@ Plan:
 - **Only while the switch is on.** Off hides the box and stops recording; the records stay.
 - The game page line reads this game's own last run from the records, not just the newest log.
 
+## 12. Start storage widget: console icons missing on narrow tiles (owner, 4 Oct, photo)
+0.9.28 added a small console icon before each size bar, but on a narrow storage tile the rows show only the bar and the size. Cause found: below 560 px wide the names are hidden with `.st-sc-n > span { display: none }`, and PIcon's root element is also a `span`, so the icon is hidden with the name. Fix: hide only the name (give it its own class), keep the 16 px icon, and check that the row fits at the narrowest tile size at 1280x800, 1920x1080 and 4K.
+
 ---
 
 ## 7. Order of work, when the owner says build
@@ -241,6 +244,7 @@ Plan:
 7. Trophy names (4) and Switch title IDs (5).
 7b. Start page overview fixes (8) and handheld smoothness (9).
 7c. Controls after a game closes (10, device logs first) and shadPS4 Recently Launched (11).
+7d. Storage widget icons (12).
 8. Notes, CLAUDE.md, launch check, release.
 
 **Owner must test on devices:** two devices (Deck plus desktop), a blank Syncthing on one, joining from the other. Then the same with an existing Syncthing setup, confirming nothing in it changed. Use at least Eden, RPCS3, PCSX2 and RetroArch saves.
