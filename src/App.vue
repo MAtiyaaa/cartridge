@@ -188,9 +188,18 @@ const padMode = computed(() => input.mode === 'pad');
 function placeInk() {
   const nav = tabsEl.value, el = nav?.querySelector(`[data-tab="${activeTab.value}"]`);
   if (!el) { ink.value = { opacity: 0 }; return; }
+  // the bar on the left (0.9.24): the pill moves down the column instead of along the row
+  if (document.body.classList.contains('bar-left')) { ink.value = { transform: `translateY(${el.offsetTop}px)`, opacity: 1 }; return; }
   const x = el.offsetLeft, w = el.offsetWidth;
   ink.value = { width: w + 'px', transform: `translateX(${x}px)`, opacity: 1 };
 }
+// where the bar sits and how it looks (Look & Feel → Text and Cards → Top Bar)
+watch(() => [store.config?.ui?.barPos, store.config?.ui?.barAlign, store.config?.ui?.barStyle], ([pos, align, style]) => {
+  const b = document.body.classList;
+  b.toggle('bar-bottom', pos === 'bottom'); b.toggle('bar-left', pos === 'left');
+  b.toggle('bar-center', align === 'center'); b.toggle('bar-pill', style === 'pill'); b.toggle('bar-circle', style === 'circle');
+  nextTick(placeInkSoon);
+}, { immediate: true });
 // the name opens out over 300 ms: a ResizeObserver on the tabs keeps the pill hugging it every frame
 function placeInkSoon() { placeInk(); for (const t of [120, 320]) setTimeout(placeInk, t); }
 const inkWatch = typeof ResizeObserver === 'function' ? new ResizeObserver(() => placeInk()) : null;
