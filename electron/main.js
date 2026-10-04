@@ -2225,10 +2225,25 @@ async function freshRpcs3Patches(romId) {
 }
 // A Switch game's version from its files' names (0.9.23): dumps carry [v<number>] (the title version,
 // 65536 per update) in their names; the highest one in the game's folder is what's installed
-function switchVersionOf(where) {
+// 0.9.30 (owner: "Eden reads its version, Cartridge can't"): read from the files like Eden does (switchNca.js:
+// the update's CNMT version and the version string in its control.nacp), cached per file size and time; the
+// names are only the fallback when prod.keys isn't found
+const switchInfoCache = new Map(), switchNandCache = new Map();
+function switchVersionOf(where, keyDirs = []) {
   if (!where) return null;
-  let names = [path.basename(where)];
-  try { if (fs.statSync(where).isDirectory()) names = fs.readdirSync(where); } catch {}
+  let names = [path.basename(where)], files = [where];
+  try { if (fs.statSync(where).isDirectory()) { names = fs.readdirSync(where); files = names.map((n) => path.join(where, n)); } } catch {}
+  try {
+    const sig = files.map((f) => { try { const st = fs.statSync(f); return `${f}:${st.size}:${st.mtimeMs}`; } catch { return ''; } }).join('|');
+    if (!switchInfoCache.has(sig)) { const A = require('./addons'); A.setKeyRoots([config.emulationRoot]); switchInfoCache.set(sig, A.switchInfo(files, keyDirs)); }
+    const i = switchInfoCache.get(sig);
+    // an update installed into Eden's NAND counts when it's newer than the files (Eden lists both the same way)
+    const id = i?.titleId || require('./addons').switchTitleId(mainFile(where) || where, keyDirs);
+    let nand = null;
+    if (id) { const c = switchNandCache.get(id); if (c && Date.now() - c.at < 60000) nand = c.v; else { nand = require('./addons').switchNandUpdate(id, keyDirs); switchNandCache.set(id, { at: Date.now(), v: nand }); } }
+    if (nand && (!i || i.version == null || nand.version > i.version)) return { number: nand.version, update: Math.floor(nand.version / 65536), display: nand.display || null, text: nand.versionText, titleId: id, name: i?.name || '', dlc: i?.dlc || 0, read: true, installed: 'nand' };
+    if (i && (i.version != null || i.display)) return { number: i.version, update: i.update != null ? Math.floor(i.update / 65536) : null, display: i.display || null, text: i.versionText || null, titleId: i.titleId, name: i.name || '', dlc: i.dlc || 0, read: true };
+  } catch (e) { log('switch version read failed:', e.message); }
   const vs = names.map((n) => (/\[v(\d{5,10})\]/i.exec(n) || /\bv(\d{5,10})\b/i.exec(n) || [])[1]).filter(Boolean).map(Number);
   const disp = names.map((n) => (/\b(?:v|ver\.?\s*)(\d+\.\d+(?:\.\d+)?)\b/i.exec(n) || [])[1]).filter(Boolean).sort().pop();
   if (!vs.length && !disp) return null;
@@ -3477,7 +3492,7 @@ const handlers = {
       }
       if (id) { ids.switchId = id; ids.switchIdLower = id.toLowerCase(); }
     }
-    if (slug === 'switch') { const v = switchVersionOf(where && where !== MARKED ? where : ''); if (v) ids.version = v; }
+    if (slug === 'switch') { const k = require('./bios').status('switch', { roots: emuRootsAll() }); const v = switchVersionOf(where && where !== MARKED ? where : '', k?.ok ? [path.dirname(k.where)] : []); if (v) { ids.version = v; if (!ids.switchId && v.titleId) { ids.switchId = v.titleId; ids.switchIdLower = v.titleId.toLowerCase(); } } }
     if (typeof out === 'function') out(ids);
     return A.forGame(slug, ids, A.emulators());
   },

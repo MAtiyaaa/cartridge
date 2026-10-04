@@ -6,6 +6,10 @@ The branch for 0.9.3 work is `claude/relaxed-fermat-30pigp`. Pull it before star
 
 ---
 
+## 4 Oct 2026 · 0.9.30 Switch, Read Properly (built and released)
+
+Owner: heavy focus on Switch IDs ("Eden reads the game ID and its version, figure out how from its Git"), and console card controllers looking cut out (photo). Found: Electron has no AES-XTS, so Cartridge's NCA header read always threw inside the app (tests run in plain Node, which has it). Rewrote the reader from Eden's source (mirror github.com/eden-emulator/mirror): CNMT for ID, type and version, NACP for the version string and name, tickets/title.keys for title-key NCAs, NCZ bodies, Eden NAND updates. Console cards: the glyph's drop-shadow was clipped by its own mask box. Checked: npm test (155), the reader inside Electron 44 on an OpenSSL-encrypted NSP with keys in Eden's folder, vite build, launch check, before/after render of the card. Owner to test: a game's Add-ons version line for NSP, XCI, NSZ games and an update installed in Eden; console cards on the TV.
+
 ## 4 Oct 2026 · 0.9.29 The Syncthing Update (built and released)
 
 Owner: "take everything we discussed and start building this update", plus optimisation so it feels fluid anywhere (choppy on the ROG Ally), and Settings → Syncthing tabs Games, Main Server, This Device, merged when this device is the main server. Built everything in docs/plan-0.9.29.md.
