@@ -2047,6 +2047,34 @@ function switchVersionOf(where) {
   const n = vs.length ? Math.max(...vs) : null;
   return { number: n, update: n != null ? Math.floor(n / 65536) : null, display: disp || null };
 }
+// Which emulator file a game's settings live in (0.9.23): the same copy its patches use
+function gameSettingsCtx(romId) {
+  require('./gameSettings').setRecsFile(path.join(USER_DATA, 'game-settings.json'));
+  const r = romIndexMain().get(romId), slugs = `${r?.platform_slug} ${r?.platform_fs_slug}`;
+  const where = installedMap[romId];
+  if (!r) return { why: 'That game isn’t in the library.' };
+  if (!where || where === MARKED) return { why: 'Download the game first.' };
+  if (/ps3/i.test(slugs)) {
+    const serial = ps3Serial(romId, where), ph = patchHome(romId, 'rpcs3'), dirs = patchesMod.rpcs3Dirs();
+    const dir = (ph.rpcs3Home && dirs.find((d) => d.root === ph.rpcs3Home)) || dirs[0];
+    if (!serial) return { emu: 'rpcs3', why: 'Cartridge couldn’t find this game’s serial.' };
+    if (!dir) return { emu: 'rpcs3', why: 'RPCS3’s settings weren’t found on this device. Open RPCS3 once, then come back.' };
+    return { emu: 'rpcs3', serial, rpcs3Root: dir.root };
+  }
+  if (/\bpsx\b/i.test(slugs)) {
+    const e = require('./addons').emulators().find((x) => x.id === 'duckstation');
+    if (!e) return { emu: 'duckstation', why: 'Per-game settings for PS1 games are DuckStation’s, and its settings weren’t found here.' };
+    const serial = require('./addons').psxSerial(mainFile(where));
+    return serial ? { emu: 'duckstation', serial, duckRoot: e.root } : { emu: 'duckstation', why: 'Cartridge couldn’t read this game’s serial.' };
+  }
+  const st = patchState(romId);
+  if (!st.emu || st.why && !st.dir) return { emu: st.emu, why: st.why || 'Cartridge can’t change this emulator’s per-game settings.' };
+  if (st.emu === 'pcsx2') return { emu: 'pcsx2', serial: st.serial, crc: st.version, pcsx2: st.dir };
+  if (st.emu === 'dolphin') return { emu: 'dolphin', serial: st.serial, dolphin: st.dir };
+  if (st.emu === 'ppsspp') return { emu: 'ppsspp', serial: st.serial, ppsspp: st.dir };
+  if (st.emu === 'shadps4') return { emu: 'shadps4', serial: st.serial, shadUser: st.dir };
+  return { emu: st.emu, why: 'Cartridge can’t change this emulator’s per-game settings yet.' };
+}
 // shadPS4's two patch lists, fetched like its launcher's Download Patches when missing or a week old (0.9.23)
 async function freshShadPatches(romId) {
   const r = romIndexMain().get(Number(romId));
@@ -3305,6 +3333,18 @@ const handlers = {
     broadcast('emu-update', { path: file, state: 'done' });
     try { steamMgr.scanEmulators?.(); } catch {}
     return { version: rel.version || rel.tag };
+  },
+  // Per-game emulator settings (0.9.23, electron/gameSettings.js): the emulator this game uses and its
+  // per-game file; only written while that emulator is closed (it saves its settings when it quits)
+  'gamesettings:get': ({ romId }) => { const c = gameSettingsCtx(Number(romId)); return c.why ? { why: c.why, emu: c.emu } : require('./gameSettings').describe(c); },
+  'gamesettings:set': ({ romId, changes }) => {
+    const c = gameSettingsCtx(Number(romId));
+    if (c.why) throw new Error(c.why);
+    const names = { rpcs3: 'RPCS3', pcsx2: 'PCSX2', duckstation: 'DuckStation', dolphin: 'Dolphin', ppsspp: 'PPSSPP', shadps4: 'shadPS4' };
+    notRunning(c.emu, names[c.emu]);
+    const d = require('./gameSettings').apply(c, changes || []);
+    log('game settings', c.emu, c.serial, (changes || []).map((x) => `${x.id}=${x.value}`).join(' '));
+    return d;
   },
   // shadPS4 versions (0.9.23): installed ones, which games use each, and shadPS4's releases to add
   'shadv:list': async ({ online } = {}) => {
