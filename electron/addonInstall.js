@@ -82,6 +82,19 @@ function plan(list, kind, { id = '', name = 'Mod' } = {}) {
   let map;
   if (kind === 'ps2') {
     map = (r) => { const m = /^(?:[A-Z]{4}-\d{5}\/)?(replacements\/.+)$/i.exec(r); return m && /\.(png|dds)$/i.test(r) ? m[1].replace(/^replacements/i, 'replacements') : null; };
+  } else if (kind === 'pcsx2' && !rels.some((r) => IMG.test(r)) && rels.some((r) => /\.pnach$/i.test(r))) {
+    // 0.9.23: a PS2 mod that is a patch (.pnach, as GameBanana's often are) goes in PCSX2's own patches
+    // folder (alt.patches), each under its own name, where PCSX2 lists it in the game's Patches
+    map = (r) => (/\.pnach$/i.test(r) ? '@patches/' + segs(r).pop() : null);
+  } else if (kind === 'dolphin' && rels.some((r) => /(^|\/)metadata\.json$/i.test(r))) {
+    // 0.9.23: a Dolphin graphics mod (a metadata.json beside its assets) goes in Load/GraphicMods/<mod>,
+    // where Dolphin's Graphics Mods list finds it (GraphicsModGroup)
+    const roots = rels.filter((r) => /(^|\/)metadata\.json$/i.test(r)).map((r) => segs(r).slice(0, -1).join('/'));
+    map = (r) => {
+      const root = roots.filter((d) => !d || r.startsWith(d + '/')).sort((a, b) => b.length - a.length)[0];
+      if (root === undefined) return null;
+      return `@graphicmods/${root ? segs(root).pop() : safeName(name)}/${root ? r.slice(root.length + 1) : r}`;
+    };
   } else if (kind === 'pcsx2' || kind === 'duckstation') {
     const rep = rels.map((r) => anchorAt(r, (x) => /^replacements$/i.test(x))).find(Boolean);
     if (rep) {
@@ -143,13 +156,20 @@ const EMPTY = {
   cemu: 'This isn’t a Cemu graphic pack (no rules.txt in it).',
 };
 // archive -> dest; refuses before writing anything if a file is already there
+// "@patches/x" and "@graphicmods/x" (0.9.23) land in the emulator's other folders (opts.alt)
+function where(dest, to, alt = {}) {
+  const m = /^@(\w+)\/(.+)$/.exec(to);
+  if (!m) return { base: dest, out: path.join(dest, to) };
+  if (!alt[m[1]]) return null;
+  return { base: alt[m[1]], out: path.join(alt[m[1]], m[2]) };
+}
 async function install(archive, dest, kind, opts = {}) {
-  const tmp = archive + '.unpacked';
+  const tmp = (opts.tmpBase || archive) + '.unpacked';
   const a = await openArchive(archive, tmp);
   try {
     const todo = plan(a.list, kind, opts);
     if (!todo.length) throw new Error(EMPTY[kind] || 'This add-on is empty.');
-    for (const t of todo) { const out = path.join(dest, t.to); if (!inside(dest, out)) throw new Error('Unsafe file path in the add-on.'); if (fs.existsSync(out)) throw new Error(`Something is already at ${t.to} in this folder, so nothing was installed. Remove it first.`); }
+    for (const t of todo) { const w = where(dest, t.to, opts.alt); if (!w || !inside(w.base, w.out)) throw new Error('Unsafe file path in the add-on.'); if (fs.existsSync(w.out)) throw new Error(`Something is already at ${t.to.replace(/^@\w+\//, '')} in this folder, so nothing was installed. Remove it first.`); }
     const need = todo.reduce((s, t) => s + (t.e.size || 0), 0);
     const free = await fsp.statfs(fs.existsSync(dest) ? dest : path.dirname(dest)).then((st) => st.bavail * st.bsize).catch(() => Infinity);
     if (need > free) throw new Error(`Not enough space: it needs ${Math.ceil(need / 1e9)} GB.`);
@@ -157,25 +177,25 @@ async function install(archive, dest, kind, opts = {}) {
     try {
       for (const [i, t] of todo.entries()) {
         if (opts.signal?.aborted) throw new Error('aborted');
-        const out = path.join(dest, t.to);
+        const out = where(dest, t.to, opts.alt).out;
         await fsp.mkdir(path.dirname(out), { recursive: true });
         const rs = await t.e.read();
         await new Promise((ok, bad) => { const ws = fs.createWriteStream(out, { flags: 'wx' }); rs.on('error', bad); ws.on('error', bad); ws.on('finish', ok); rs.pipe(ws); });
         written.push(t.to);
         opts.onFile?.(i + 1, todo.length);
       }
-    } catch (e) { await removeFiles(dest, written); throw e; }
+    } catch (e) { await removeFiles(dest, written, opts.alt); throw e; }
     return { files: written, bytes: need };
   } finally { try { a.close(); } catch {} }
 }
 // only the files listed, then folders left empty, never above dest
-async function removeFiles(dest, files) {
+async function removeFiles(dest, files, alt = {}) {
   const dirs = new Set();
   for (const rel of files || []) {
-    const f = path.join(dest, rel);
-    if (!inside(dest, f)) continue;
-    await fsp.rm(f, { force: true });
-    for (let d = path.dirname(f); inside(dest, d); d = path.dirname(d)) dirs.add(d);
+    const w = where(dest, rel, alt);
+    if (!w || !inside(w.base, w.out)) continue;
+    await fsp.rm(w.out, { force: true });
+    for (let d = path.dirname(w.out); inside(w.base, d); d = path.dirname(d)) dirs.add(d);
   }
   for (const d of [...dirs].sort((a, b) => b.length - a.length)) { try { await fsp.rmdir(d); } catch {} }
 }

@@ -66,6 +66,8 @@
   <PatchesSheet v-if="store.modal?.type === 'patches'" v-bind="store.modal.props" />
   <AddonsSheet v-if="store.modal?.type === 'addons'" :key="'addons' + store.modal.props.romId" v-bind="store.modal.props" />
   <GameAddons v-if="store.modal?.type === 'gameaddons'" :key="'ga' + store.modal.props.romId" v-bind="store.modal.props" />
+  <ShadVersions v-if="store.modal?.type === 'shadversions'" v-bind="store.modal.props" />
+  <GameSettings v-if="store.modal?.type === 'gamesettings'" :key="'gs' + store.modal.props.romId" v-bind="store.modal.props" />
   <IdleScreen v-if="store.config?.configured" />
 
   <div class="pops">
@@ -112,6 +114,8 @@ const ManualViewer = defineAsyncComponent(() => import('./components/ManualViewe
 import PatchesSheet from './components/PatchesSheet.vue';
 import AddonsSheet from './components/AddonsSheet.vue';
 import GameAddons from './components/GameAddons.vue';
+import ShadVersions from './components/ShadVersions.vue';
+import GameSettings from './components/GameSettings.vue';
 import IdleScreen from './components/IdleScreen.vue';
 import SteamCollections from './components/SteamCollections.vue';
 import SteamPreview from './components/SteamPreview.vue';
@@ -245,7 +249,7 @@ onMounted(async () => {
   const ui = store.config.ui;
   if (!ui.startAdded) { const t = Array.isArray(ui.tabs) && ui.tabs.length ? (ui.tabs.includes('start') ? ui.tabs : ['start', ...ui.tabs]) : undefined; saveConfig({ ui: { startAdded: Date.now(), ...(t ? { tabs: t } : {}) } }); }
   // the menu Cartridge opens on (Look & Feel → Open on, 0.9.19); one taken off the top bar: the first tab
-  const openOn = ui.openOn || 'home';
+  const openOn = ui.openOn || 'start'; // 0.9.23 (owner): Start by default
   if (store.route.name === 'home') tab(activeTabs().includes(openOn) ? openOn : activeTabs()[0]);
   // opened from a Steam shortcut whose game is gone (--game <id>), or a second launch handing over
   const openGame = (id) => { if (id && store.lib) { store.quickMenu = false; go('game', { romId: Number(id) }); } };
@@ -277,6 +281,7 @@ onMounted(async () => {
     // the page can take the D-pad over (0.9.19: Start moves a picked-up tile); otherwise focus moves
     up: () => viewHandler('up'), down: () => viewHandler('down'), left: () => viewHandler('left'), right: () => viewHandler('right'),
     x: () => viewHandler('x'),
+    rsleft: () => { viewHandler('rsleft'); }, rsright: () => { viewHandler('rsright'); }, // right stick: Start's pages
     // Triggers always move between the top tabs; bumpers belong to the page (consoles, collections)
     lt: () => cycleTab(-1),
     rt: () => cycleTab(1),

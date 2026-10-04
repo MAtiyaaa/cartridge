@@ -34,7 +34,7 @@ function fit(e) {
     let x0 = N, y0 = N, x1 = -1, y1 = -1;
     for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) if (d[(y * N + x) * 4 + 3] > 24) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
     if (x1 > x0 && y1 > y0) {
-      const bw = x1 - x0 + 1, bh = y1 - y0 + 1, s = Math.min(1.8, (N * 0.94) / Math.max(bw, bh));
+      const bw = x1 - x0 + 1, bh = y1 - y0 + 1, s = Math.min(1.8, (N * 1.18) / bw, (N * 0.94) / bh); // 0.9.23: a wide drawing (Switch) may run a little past the box sideways, so it isn't tiny
       const cx = (x0 + x1 + 1) / 2 - N / 2, cy = (y0 + y1 + 1) / 2 - N / 2;
       if (s > 1.04 || Math.abs(cx) > 2 || Math.abs(cy) > 2) t = `scale(${s.toFixed(3)}) translate(${((-cx / N) * 100).toFixed(2)}%, ${((-cy / N) * 100).toFixed(2)}%)`;
     }

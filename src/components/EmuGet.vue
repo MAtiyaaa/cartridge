@@ -30,8 +30,9 @@
           <div class="eg-head"><PIcon v-if="SLUG[c.key]" :p="{ slug: SLUG[c.key], fs_slug: SLUG[c.key] }" :size="30" /><Icon v-else name="mdiGamepadSquareOutline" :size="28" /><b>{{ c.name }}</b></div>
           <button v-for="e in c.emus" :key="c.key + e.id" class="eg-emu" :class="{ have: e.installed, busy: stateOf(c, e)?.state === 'run' }" data-focus @click="get(c, e)">
             <EmuIcon :id="e.id" :size="34" fallback="mdiGamepadVariantOutline" />
-            <span class="eg-mid"><b>{{ e.label }}</b><span class="muted small">{{ e.from }}</span></span>
+            <span class="eg-mid"><b>{{ e.label }}</b><span class="muted small">{{ e.from }}<template v-if="e.installed && upOf(e.id)?.channel && CH[upOf(e.id).channel]"> · {{ CH[upOf(e.id).channel] }}</template></span></span>
             <span v-if="e.installed && upRun && upOf(e.id) && upRun === (upOf(e.id).path || upOf(e.id).fp)" class="status"><Icon name="mdiArrowDownCircle" :size="14" />{{ upPct != null ? upPct + '%' : 'Updating' }}</span>
+            <span v-else-if="e.installed && upOf(e.id)?.broken" class="status bad"><Icon name="mdiWrench" :size="14" />Repair</span>
             <span v-else-if="e.installed && upOf(e.id)?.update" class="status warn"><Icon name="mdiUpdate" :size="14" />Update · {{ upOf(e.id).update.version || upOf(e.id).update.tag || 'new' }}</span>
             <span v-else-if="e.installed" class="status ok"><Icon name="mdiCheck" :size="14" />{{ updates && ups && upOf(e.id) && !upOf(e.id).noSource && !upOf(e.id).error ? 'Up to date' : 'Installed' }}</span>
             <span v-else-if="stateOf(c, e)?.state === 'run'" class="status"><Icon name="mdiArrowDownCircle" :size="14" />{{ stateOf(c, e).pct != null ? stateOf(c, e).pct + '%' : 'Starting' }}</span>
@@ -45,10 +46,11 @@
         <!-- emulators you have that the list above doesn't offer (forks aside): their updates too -->
         <section v-if="updates && others.length" class="eg-con">
           <div class="eg-head"><Icon name="mdiGamepadVariantOutline" :size="28" /><b>Also on this device</b></div>
-          <button v-for="u in others" :key="u.path || u.fp" class="eg-emu have" data-focus @click="runUpdate(u)">
+          <button v-for="u in others" :key="u.path || u.fp" class="eg-emu have" data-focus @click="manage(u)">
             <EmuIcon :id="u.id" :size="34" fallback="mdiGamepadVariantOutline" />
             <span class="eg-mid"><b>{{ u.label }}</b><span class="muted small">{{ u.version ? 'Version ' + u.version : u.kind === 'flatpak' ? 'Flatpak' : u.kind === 'windows' ? 'Windows build' : '' }}</span></span>
             <span v-if="upRun === (u.path || u.fp)" class="status"><Icon name="mdiArrowDownCircle" :size="14" />{{ upPct != null ? upPct + '%' : 'Updating' }}</span>
+            <span v-else-if="u.broken" class="status bad"><Icon name="mdiWrench" :size="14" />Repair</span>
             <span v-else-if="u.update" class="status warn"><Icon name="mdiUpdate" :size="14" />Update · {{ u.update.version || u.update.tag || 'new' }}</span>
             <span v-else class="status ok"><Icon name="mdiCheck" :size="14" />{{ u.noSource || u.error ? 'Installed' : 'Up to date' }}</span>
             <i v-if="upRun === (u.path || u.fp)" class="eg-bar-fill" :class="{ live: upPct == null }" :style="{ width: (upPct ?? 100) + '%' }" />
@@ -65,7 +67,7 @@
 // Download all; first where they live, as an ES-DE style Emulation folder on the drive you pick).
 // Used by the welcome (flow) and Settings → Emulators → Get Emulators.
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
-import { store, call, toast, bytes, confirm } from '../store.js';
+import { store, call, toast, bytes, confirm, choose, openModal } from '../store.js';
 import { focusFirst } from '../nav.js';
 import Icon from './Icon.vue';
 import EmuIcon from './EmuIcon.vue';
@@ -79,13 +81,43 @@ const upCount = computed(() => (ups.value || []).filter((u) => u.update).length)
 const upOf = (id) => { const l = (ups.value || []).filter((u) => u.id === id); return l.find((u) => u.update) || l[0] || null; };
 const others = computed(() => { const known = new Set(all.value.map((x) => x.e.id)); return (ups.value || []).filter((u) => !known.has(u.id)); });
 async function loadUps(fresh = false) { if (!props.updates) return; upBusy.value = true; ups.value = await call('emuup:list', { fresh }).catch((e) => { toast(e.message, 'error'); return []; }); upBusy.value = false; }
-async function runUpdate(u) {
+async function runUpdate(u, force = false) {
   if (upRun.value) return toast('One update at a time: wait for this one to finish.', 'info', 3000);
-  if (!u.update) return toast(u.error ? `Couldn’t check for updates: ${u.error}` : u.noSource ? `${u.label} updates from inside ${u.label}.` : `${u.label} is up to date.`, 'info', 3500);
-  if (!(await confirm(`Update ${u.label}?`, `${u.version || 'This copy'} → ${u.update.version || u.update.tag || 'the newest'}. Close ${u.label} first.`, 'Update'))) return;
+  if (!force && !u.update) return toast(u.error ? `Couldn’t check for updates: ${u.error}` : u.noSource ? `${u.label} updates from inside ${u.label}.` : `${u.label} is up to date.`, 'info', 3500);
+  const to = (u.update || u.latest)?.version || (u.update || u.latest)?.tag || 'the newest';
+  const what = u.broken ? `Repair ${u.label}?` : force ? `Download ${u.label} again?` : `Update ${u.label}?`;
+  const why = u.broken ? `This copy can’t start: it needs ${u.broken.slice(0, 2).join(', ')}, which this system doesn’t have. Cartridge puts the ${to} build in its place, at the same path, so your Steam shortcuts keep working.` : `${u.version || 'This copy'} → ${to}. Close ${u.label} first.`;
+  if (!(await confirm(what, why, u.broken ? 'Repair' : force ? 'Download Again' : 'Update'))) return;
   upRun.value = u.path || u.fp; upPct.value = null;
-  try { await call('emuup:run', { id: u.id, kind: u.kind, fp: u.fp, where: u.where, path: u.path }); toast(`${u.label} is up to date`, 'ok', 3000, 'mdiUpdate'); } catch (err) { toast(err.message, 'error', 6000); }
-  upRun.value = ''; await loadUps();
+  try { await call('emuup:run', { id: u.id, kind: u.kind, fp: u.fp, where: u.where, path: u.path, force: force || !!u.broken }); toast(u.broken ? `${u.label} is repaired` : `${u.label} is up to date`, 'ok', 3000, 'mdiUpdate'); } catch (err) { toast(err.message, 'error', 6000); }
+  upRun.value = ''; await loadUps(true);
+}
+// 0.9.23 (owner: delete and download emulators again, stable or pre-release, shadPS4's versions):
+// an installed emulator opens one sheet with everything you can do to it
+const CH = { stable: 'Stable releases', pre: 'Pre-releases', rolling: 'Rolling build', flathub: '' };
+async function manage(u) {
+  if (!u) return;
+  const ch = u.channels || [];
+  const opts = [
+    ...(u.broken ? [{ label: 'Repair', sub: 'It can’t start on this system', value: 'repair', icon: 'mdiWrench' }] : u.update ? [{ label: 'Update', sub: `${u.version || 'This copy'} → ${u.update.version || u.update.tag || 'newest'}`, value: 'update', icon: 'mdiUpdate' }] : []),
+    ...(u.kind === 'flatpak' || u.latest ? [{ label: 'Download Again', sub: u.kind === 'flatpak' ? 'Reinstall from Flathub' : `The newest ${CH[u.channel] ? CH[u.channel].toLowerCase().replace(/s$/, '') : 'build'}`, value: 'again', icon: 'mdiDownload' }] : []),
+    ...(ch.length > 1 ? ch.map((c) => ({ heading: c === ch[0] ? 'Updates Follow' : undefined, label: CH[c], sub: c === 'pre' ? 'Nightlies and test builds' : 'Releases the project calls finished', value: 'ch:' + c, icon: c === 'pre' ? 'mdiFlask' : 'mdiCheckDecagram', selected: u.channel === c })) : []),
+    ...(u.id === 'shadps4' ? [{ label: 'Versions', sub: 'Which games use which, and more to add', value: 'versions', icon: 'mdiLayersTriple' }] : []),
+    ...(u.page ? [{ label: 'Open Its Releases Page', value: 'page', icon: 'mdiOpenInNew' }] : []),
+    { label: 'Delete', sub: u.kind === 'flatpak' ? 'Uninstall the Flatpak' : 'Your saves and settings stay', value: 'delete', icon: 'mdiDeleteOutline', danger: true },
+  ];
+  const v = await choose({ title: u.label, message: [u.version ? 'Version ' + u.version : '', CH[u.channel] || (u.kind === 'flatpak' ? 'Flatpak from Flathub' : ''), u.path ? short(u.path) : ''].filter(Boolean).join(' · '), options: opts, sheet: true });
+  if (!v) return;
+  if (v === 'repair' || v === 'update') return runUpdate(u);
+  if (v === 'again') return runUpdate(u, true);
+  if (v.startsWith('ch:')) { await call('emuup:setChannel', { id: u.id, channel: v.slice(3) }); toast(`${u.label} follows ${CH[v.slice(3)].toLowerCase()} now`, 'ok', 3000); return loadUps(true); }
+  if (v === 'versions') return openModal('shadversions', {});
+  if (v === 'page') return window.open(u.page);
+  if (v === 'delete') {
+    if (!(await confirm(`Delete ${u.label}?`, `${u.kind === 'flatpak' ? 'Its Flatpak is uninstalled.' : 'The program is deleted.'} Saves and settings stay. Steam shortcuts that used it will show up in Shortcut health.`, 'Delete', true))) return;
+    try { await call('emuget:remove', { id: u.id, kind: u.kind, fp: u.fp, where: u.where, path: u.path }); toast(`${u.label} was deleted`, 'ok', 3000, 'mdiDeleteOutline'); } catch (err) { toast(err.message, 'error', 6000); }
+    await load(); await loadUps();
+  }
 }
 const SLUG = { psx: 'psx', ps2: 'ps2', ps3: 'ps3', ps4: 'ps4', psp: 'psp', psvita: 'psvita', gc: 'ngc', wiiu: 'wiiu', switch: 'switch', n3ds: '3ds', nds: 'nds', gba: 'gba', n64: 'n64', xbox: 'xbox', dreamcast: 'dc', xbox360: 'xbox360', saturn: 'saturn', arcade: 'arcade' };
 const phase = ref(props.flow && !store.config.emuDir ? 'where' : 'list');
@@ -112,7 +144,7 @@ async function pickDrive(d) {
   busy.value = false;
 }
 async function get(c, e) {
-  if (e.installed) { const u = props.updates && upOf(e.id); return u ? runUpdate(u) : toast(`${e.label} is already on this device.`, 'info', 2500); }
+  if (e.installed) { const u = props.updates && upOf(e.id); return u ? manage(u) : toast(`${e.label} is already on this device.`, 'info', 2500); }
   const s = stateOf(c, e);
   if (s && /wait|run/.test(s.state)) return toast(s.state === 'run' ? 'Downloading now. You can keep going.' : 'It’s in the queue.', 'info', 2500);
   q.value = await call('emuget:queue', { items: [{ key: c.key, id: e.id }] }).catch((err) => { toast(err.message, 'error'); return q.value; });

@@ -47,6 +47,9 @@ const cls = computed(() => {
 <style>
 .pb { display: inline-grid; place-items: center; height: 22px; min-width: 22px; padding: 0 6px; border-radius: var(--r-md); font: 700 11px/1 var(--body), sans-serif; color: #0b0d12; background: #d9dee8; box-shadow: 0 1px 0 rgba(0, 0, 0, 0.35); flex: none; vertical-align: middle; }
 .pb.face { width: 22px; padding: 0; }
+/* the letter sits in the middle of its button (0.9.23): the text box is cut to the capital letters, so
+   the font's room for accents and descenders no longer pushes it off centre */
+.pb { text-box: trim-both cap alphabetic; }
 .pb.shoulder, .pb.sys, .pb.other { border-radius: var(--r-sm); background: #c7cdd8; font-size: var(--t-xs); }
 .pb.shoulder { min-width: 28px; }
 .pb.sys { width: 28px; padding: 0; }

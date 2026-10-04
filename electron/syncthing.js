@@ -81,4 +81,108 @@ async function browse(folder, { fetchImpl = fetch, home = HOME, limit = 40 } = {
   files.sort((a, b) => b.at - a.at);
   return { total: files.length, size: files.reduce((n, x) => n + x.size, 0), files: files.slice(0, limit), last: last?.filename ? { path: last.filename, at: Date.parse(last.at) || 0, deleted: !!last.deleted } : null };
 }
-module.exports = { find, status, browse, flatten, parseConfig, configFiles, saveHint };
+
+// ---- 0.9.23 (owner: a proper Syncthing integration, a main server, which games have saves and textures synced)
+// Still read only for files: Cartridge asks Syncthing's REST API and never opens, copies or changes a synced
+// file. The one thing it asks Syncthing to do is rescan a folder (POST rest/db/scan), as Syncthing's own button does.
+function localApi(home = HOME) {
+  const f = find(home);
+  if (!f.config) throw new Error('Syncthing isn’t set up on this device.');
+  const cfg = parseConfig(fs.readFileSync(f.config, 'utf8'));
+  return { cfg, base: `${cfg.gui.tls ? 'https' : 'http'}://${cfg.gui.address.replace(/^0\.0\.0\.0/, '127.0.0.1')}`, key: cfg.gui.apikey };
+}
+function api(base, key, fetchImpl = fetch, ms = 6000) {
+  base = String(base || '').trim().replace(/\/+$/, '');
+  if (!/^https?:\/\//i.test(base)) base = 'http://' + base;
+  const call = async (p, opts = {}) => {
+    let r;
+    try { r = await fetchImpl(base + p, { ...opts, headers: { 'X-API-Key': key, ...(opts.headers || {}) }, signal: AbortSignal.timeout(ms) }); }
+    catch (e) { throw new Error(/cert|self.signed|SSL|TLS/i.test(String(e.cause?.code || e.cause?.message || e.message)) ? 'Its HTTPS certificate isn’t trusted. Use its http:// address on your network instead.' : 'It didn’t answer at that address.'); }
+    if (r.status === 401 || r.status === 403) throw new Error('It refused the API key.');
+    if (!r.ok) throw new Error(`Syncthing answered ${r.status}.`);
+    return (r.headers.get('content-type') || '').includes('json') ? r.json() : r.text();
+  };
+  return { base, get: (p) => call(p), post: (p) => call(p, { method: 'POST' }) };
+}
+// everything about one Syncthing (this device's, or the main server): who it is, its devices, its folders
+async function overview(a) {
+  const [sys, ver, conf, conns, seen] = await Promise.all([a.get('/rest/system/status'), a.get('/rest/system/version').catch(() => ({})), a.get('/rest/config'), a.get('/rest/system/connections').catch(() => ({ connections: {} })), a.get('/rest/stats/device').catch(() => ({}))]);
+  const me = sys.myID || '';
+  const devices = (conf.devices || []).filter((d) => d.deviceID !== me).map((d) => {
+    const c = conns.connections?.[d.deviceID] || {};
+    return { id: d.deviceID, name: d.name || d.deviceID.slice(0, 7), online: !!c.connected, address: c.connected ? c.address || '' : '', client: c.clientVersion || '', seen: Date.parse(seen?.[d.deviceID]?.lastSeen) || 0, paused: !!(d.paused || c.paused) };
+  });
+  const folders = await Promise.all((conf.folders || []).map(async (x) => {
+    const out = { id: x.id, label: x.label || x.id, path: String(x.path || '').replace(/^~(?=\/)/, HOME), paused: !!x.paused, type: x.type, devices: (x.devices || []).map((d) => d.deviceID).filter((id) => id !== me).length };
+    out.saves = saveHint(out.path); out.textures = textureHint(out.path);
+    try { const c = await a.get(`/rest/db/completion?folder=${encodeURIComponent(x.id)}`); out.done = Math.round(c.completion ?? 100); } catch {}
+    return out;
+  }));
+  folders.sort((x, y) => (!!y.saves - !!x.saves) || (!!y.textures - !!x.textures));
+  return { address: a.base, me, short: me.slice(0, 7), version: ver.version || '', os: [ver.os, ver.arch].filter(Boolean).join(' '), uptime: sys.uptime || 0, devices, folders, name: (conf.devices || []).find((d) => d.deviceID === me)?.name || '' };
+}
+const TEX_HINT = /textures?|graphicmods|hires|load\/|texture.?pack/i;
+const textureHint = (p) => (TEX_HINT.test(p) ? 'Textures' : null);
+async function local({ fetchImpl = fetch, home = HOME } = {}) {
+  const l = localApi(home);
+  return overview(api(l.base, l.key, fetchImpl));
+}
+async function server({ address, apikey }, { fetchImpl = fetch } = {}) {
+  if (!address || !apikey) throw new Error('Add the main server’s address and API key first.');
+  return overview(api(address, apikey, fetchImpl, 8000));
+}
+async function rescan(folder, { fetchImpl = fetch, home = HOME } = {}) {
+  const l = localApi(home);
+  await api(l.base, l.key, fetchImpl).post(`/rest/db/scan?folder=${encodeURIComponent(folder)}`);
+  return true;
+}
+// Which games have saves or textures synced (smart search). Every synced folder's index is read from
+// Syncthing (rest/db/browse), and each file path is matched to games by serial or title ID (PS1/PS2/PSP,
+// PS3, PS4, Vita, Switch, GameCube/Wii) or by name: the whole name, or one of 8+ letters inside a folder or file
+// name, so "Sonic" isn't taken for "Sonic Heroes".
+const norm = (s) => String(s || '').toLowerCase().replace(/&/g, 'and').replace(/[^a-z0-9]+/g, '');
+const SERIAL_RE = /\b([A-Z]{4})[-_. ]?(\d{3})\.?(\d{2})\b|\b(CUSA|PPSA|PCS[A-Z])[-_]?(\d{5})\b|\b(0100[0-9A-F]{12})\b/gi;
+function serialsIn(text) {
+  const out = new Set();
+  for (const m of String(text || '').matchAll(SERIAL_RE)) out.add(m[6] ? m[6].toUpperCase() : m[4] ? (m[4] + m[5]).toUpperCase() : (m[1] + m[2] + m[3]).toUpperCase());
+  return out;
+}
+// games: [{ id, name, ids: [serial or title id...] }] -> { [id]: { saves: [{ folder, files, at }], textures: [...] } }
+function matchGames(games, folders) {
+  const byId = new Map(), byName = [];
+  for (const g of games) {
+    for (const s of g.ids || []) if (s) byId.set(String(s).toUpperCase().replace(/[-_.]/g, ''), g.id);
+    const k = norm(g.name.replace(/\s*[([].*$/, ''));
+    if (k.length >= 5) byName.push([k, g.id]);
+  }
+  byName.sort((a, b) => b[0].length - a[0].length); // the longer name wins ("Sonic 2" over "Sonic")
+  const out = {};
+  const add = (gid, kind, folder, f) => {
+    const g = (out[gid] ||= { saves: [], textures: [] });
+    let e = g[kind].find((x) => x.folder === folder.id);
+    if (!e) g[kind].push((e = { folder: folder.id, label: folder.label, files: 0, size: 0, at: 0 }));
+    e.files++; e.size += f.size || 0; if (f.at > e.at) e.at = f.at;
+  };
+  for (const folder of folders) for (const f of folder.files || []) {
+    const kind = textureHint(folder.path + '/' + f.path) ? 'textures' : 'saves';
+    let gid = null;
+    for (const s of serialsIn(f.path)) { if (byId.has(s)) { gid = byId.get(s); break; } }
+    if (gid == null) { const parts = f.path.split('/').map((p) => norm(p.replace(/\.[^.]+$/, ''))); for (const [k, id] of byName) { if (parts.some((p) => p === k || (k.length >= 8 && p.includes(k)))) { gid = id; break; } } }
+    if (gid != null) add(gid, kind, folder, f);
+  }
+  return out;
+}
+async function gamesSynced(games, { fetchImpl = fetch, home = HOME, cap = 20000 } = {}) {
+  const l = localApi(home), a = api(l.base, l.key, fetchImpl, 15000);
+  const conf = await a.get('/rest/config/folders');
+  const folders = [];
+  let n = 0;
+  for (const x of conf) {
+    if (n > cap) break;
+    let files = []; try { files = flatten(await a.get(`/rest/db/browse?folder=${encodeURIComponent(x.id)}&levels=8`)).filter((f) => !/(^|\/)\.st(folder|ignore|versions)/.test(f.path)); } catch {}
+    n += files.length;
+    folders.push({ id: x.id, label: x.label || x.id, path: String(x.path || ''), files: files.slice(0, cap) });
+  }
+  return { games: matchGames(games, folders), folders: folders.length, files: n };
+}
+module.exports = { find, status, browse, flatten, parseConfig, configFiles, saveHint, textureHint, local, server, rescan, gamesSynced, matchGames, serialsIn, norm };

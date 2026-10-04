@@ -576,6 +576,11 @@ async function more() {
       } else steam.push({ label: 'Add to Steam', sub: 'Launches with your emulator setup', value: 'steamadd', icon: 'mdiSteam' });
       const ge = await call('steam:gameEmu', { romId: Number(props.romId) }).catch(() => null);
       play.push({ label: 'Emulator for this game', sub: ge?.current ? 'Its own pick' : 'Same as its console', value: 'gameemu', icon: 'mdiGamepadVariantOutline' });
+      // 0.9.23 (owner: change the launch version for any game from its own page)
+      if (/ps4/i.test(`${base.value?.platform_slug} ${base.value?.platform_fs_slug}`)) {
+        const sv = await call('steam:shadVersions', { romId: Number(props.romId) }).catch(() => null);
+        play.push({ label: 'shadPS4 version', sub: sv?.current ? (sv.list.find((x) => x.path === sv.current)?.name || 'Its own pick') : 'shadPS4’s default', value: 'shadver', icon: 'mdiLayersTriple' });
+      }
       steamInfo = st;
     }
   }
@@ -595,6 +600,8 @@ async function more() {
     if (up?.todo?.length) play.push({ label: `Install game update ${up.todo[up.todo.length - 1].version}`, sub: `${up.todo.length} update${up.todo.length === 1 ? '' : 's'} from Sony · ${bytes(up.size)} · now ${up.have || 'unknown'}`, value: 'ps3up', icon: 'mdiPackageUp' });
     else play.push({ label: 'Game updates', sub: up ? (up.error ? 'Couldn’t check Sony’s update list' : `Up to date${up.have ? ' · version ' + up.have : ''}`) : 'Check Sony’s update list for this game', value: 'ps3check', icon: 'mdiPackageUp' });
   }
+  // 0.9.23 (owner: edit a game's emulator settings from Cartridge)
+  if (installedPath.value && !marked.value && (pe || /\bpsx\b/i.test(slugs))) play.push({ label: 'Game settings', sub: `${pe || 'DuckStation'}’s settings for this game only`, value: 'gamesettings', icon: 'mdiTune' });
   if (installedPath.value && !marked.value && pe) play.push({ label: pe === 'PPSSPP' ? 'Cheats' : pe === 'Dolphin' ? 'Patches and cheats' : 'Patches', sub: `From ${pe}’s ${pe === 'PPSSPP' ? 'cheat' : 'patch'} list, saved in ${pe}`, value: 'patches', icon: 'mdiPuzzleOutline' });
   if (installedPath.value && !marked.value && /\b(ps2|psx|ngc|gamecube|wii|psp|3ds|n3ds|switch|wiiu)\b/i.test(slugs)) play.push({ label: 'Add-ons', sub: /\bps2\b/i.test(slugs) ? 'Texture packs to download, and what’s installed' : 'Mods and packs to download, and what’s installed', value: 'textures', icon: 'mdiPuzzleOutline' });
   if (installedPath.value) play.push({ label: 'Show file location', value: 'path', icon: 'mdiFolderOutline' });
@@ -639,6 +646,21 @@ async function more() {
   }
   if (v === 'steamapply') { await applyChanges(); return; }
   if (v === 'gameemu') { await pickGameEmu(); return; }
+  if (v === 'gamesettings') { openModal('gamesettings', { romId: Number(props.romId), name: base.value.name }); return; }
+  if (v === 'shadver') {
+    const sv = await call('steam:shadVersions', { romId: Number(props.romId) }).catch(() => null);
+    const p = await choose({ sheet: true, title: 'shadPS4 version', message: base.value.name, options: [
+      { label: 'shadPS4’s default', sub: 'The version picked in shadPS4’s launcher', value: '__default', icon: 'mdiArrowULeftTop', selected: !sv?.current },
+      ...(sv?.list || []).map((x) => ({ label: x.name, sub: [x.codename, x.date].filter(Boolean).join(' · '), value: x.path, icon: 'mdiSourceBranch', selected: sv.current === x.path, raw: true })),
+      { label: 'Add Versions', sub: 'Download older or newer shadPS4 builds', value: '__add', icon: 'mdiDownload' },
+    ] });
+    if (!p) return;
+    if (p === '__add') { openModal('shadversions', {}); return; }
+    await call('steam:setShadVersion', { romId: Number(props.romId), path: p === '__default' ? null : p });
+    await call('steam:refreshGame', { romId: Number(props.romId) }).catch(() => {});
+    toast(p === '__default' ? 'It uses shadPS4’s default now' : `It starts with ${sv.list.find((x) => x.path === p)?.name} now`, 'ok', 2800);
+    return;
+  }
   if (v === 'mark' || v === 'unmark') { await setMark(v === 'mark'); return; }
   if (v === 'trophies') { await linkTrophies(); return; }
   if (v === 'path') { toast(installedPath.value, 'info', 5000, 'mdiFolder'); return; }

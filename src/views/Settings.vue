@@ -3,7 +3,7 @@
     <nav class="rail">
       <div class="eyebrow" style="padding: 0 14px 10px">Settings</div>
       <button v-for="s in sections" :key="s.id" class="rail-item" :class="{ on: sec === s.id }" data-focus :data-key="'sec-' + s.id" :data-autofocus="sec === s.id ? '' : undefined" @focus="sec = s.id" @click="enter">
-        <Icon :name="s.icon" :size="20" />{{ s.label }}
+        <SyncthingLogo v-if="s.id === 'syncthing'" :size="20" /><Icon v-else :name="s.icon" :size="20" />{{ s.label }}
       </button>
     </nav>
     <section class="pane" data-scroll data-zone ref="paneEl">
@@ -79,9 +79,8 @@
             <LibraryCheck />
           </template>
 
-          <!-- Sync: Syncthing, view only (its own tab in 0.9.21, owner) -->
+          <!-- Syncthing (its own tab in 0.9.21; renamed with its logo in 0.9.23, owner) -->
           <template v-else-if="sec === 'syncthing'">
-            <h1>Sync</h1>
             <SyncCard />
           </template>
 
@@ -292,7 +291,7 @@
             <p class="muted small" style="margin-top: -6px">Auto uses the built-in keyboard in Game Mode and your real keyboard on the desktop. Steam leaves typing to the Steam keyboard (Steam + X).</p>
 
             <div class="subh"><Icon name="mdiDockTop" :size="20" />Top Bar</div>
-            <div class="row"><span class="lbl">Open on</span><div class="seg"><button v-for="t in tabsOn.filter((n) => n !== 'settings')" :key="t" data-focus :class="{ on: (ui.openOn || 'home') === t }" @click="saveConfig({ ui: { openOn: t } })">{{ TAB_DEFS[t].label }}</button></div></div>
+            <div class="row"><span class="lbl">Open on</span><div class="seg"><button v-for="t in tabsOn.filter((n) => n !== 'settings')" :key="t" data-focus :class="{ on: (ui.openOn || 'start') === t }" @click="saveConfig({ ui: { openOn: t } })">{{ TAB_DEFS[t].label }}</button></div></div>
             <p class="muted small" style="margin-top: -6px">The menu Cartridge shows when it starts.</p>
             <p class="muted small" style="margin-top: -6px">Pick which tabs show at the top and their order. LT and RT move through them in this order. Settings always stays.</p>
             <div class="tabs-edit">
@@ -494,6 +493,7 @@ import SteamSettings from '../components/SteamSettings.vue';
 import StorageManager from '../components/StorageManager.vue';
 import LibraryCheck from '../components/LibraryCheck.vue';
 import SyncCard from '../components/SyncCard.vue';
+import SyncthingLogo from '../components/SyncthingLogo.vue';
 import RommUpload from '../components/RommUpload.vue';
 import EmuIcon from '../components/EmuIcon.vue';
 import EmuGet from '../components/EmuGet.vue';
@@ -512,7 +512,7 @@ const sections = [
   { id: 'storage', label: 'Storage', icon: 'mdiHarddisk' },
   { id: 'emu', label: 'Emulators', icon: 'mdiGamepadVariantOutline' },
   { id: 'dl', label: 'Downloads', icon: 'mdiTrayArrowDown' },
-  { id: 'syncthing', label: 'Sync', icon: 'mdiSync' },
+  { id: 'syncthing', label: 'Syncthing', icon: 'mdiSync' },
   { id: 'ui', label: 'Look & Feel', icon: 'mdiPaletteOutline' },
   { id: 'ra', label: 'Achievements', icon: 'mdiTrophyOutline' },
   { id: 'steam', label: 'Steam', icon: 'mdiSteam' },
@@ -782,7 +782,18 @@ const syncLine = computed(() => {
 const every = [{ v: 0, l: 'Off' }, { v: 30, l: '30 min' }, { v: 60, l: '1 h' }, { v: 180, l: '3 h' }];
 const folderList = computed(() => (store.libVersion, showAll.value ? supported.value : store.lib?.platforms || []));
 
-useView({ back: () => { if (!document.activeElement?.closest('.rail')) { focusFirst(el.value, `[data-key="sec-${sec.value}"]`); return; } return false; }, lb: () => (sec.value === 'emu' ? stepEmu(-1) : stepLook(-1)), rb: () => (sec.value === 'emu' ? stepEmu(1) : stepLook(1)) },
+// D-pad (0.9.23, owner): right from the list of sections goes to the first item on the right; left at the
+// left edge of the right side goes back to its section in the list (not the top of the list)
+function railRight() { if (!document.activeElement?.closest('.rail')) return false; enter(); }
+function paneLeft() {
+  const cur = document.activeElement;
+  if (!cur?.closest('.pane') || !paneEl.value) return false;
+  const c = cur.getBoundingClientRect();
+  const more = [...paneEl.value.querySelectorAll('[data-focus]')].some((e) => { if (e === cur || e.disabled) return false; const r = e.getBoundingClientRect(); return r.width > 0 && r.right <= c.left + 4 && r.bottom > c.top && r.top < c.bottom; });
+  if (more) return false;
+  focusFirst(el.value, `[data-key="sec-${sec.value}"]`);
+}
+useView({ right: railRight, left: paneLeft, back: () => { if (!document.activeElement?.closest('.rail')) { focusFirst(el.value, `[data-key="sec-${sec.value}"]`); return; } return false; }, lb: () => (sec.value === 'emu' ? stepEmu(-1) : stepLook(-1)), rb: () => (sec.value === 'emu' ? stepEmu(1) : stepLook(1)) },
   [{ b: 'A', label: 'Select' }, { b: 'B', label: 'Back' }, { b: 'LT+RT', label: 'Tabs' }]);
 // Settings → Emulators → Issues
 const issues = ref(null);
