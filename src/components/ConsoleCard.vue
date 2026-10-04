@@ -48,7 +48,7 @@ const tileStyle = computed(() => {
 .systile.static .sys-top { height: auto; max-width: 70%; }
 .systile.static .sys-logo { max-height: min(30px, 26cqh); max-width: 100%; }
 .systile.static .nm { font-size: clamp(12px, 15cqh, 20px); max-width: 100%; }
-.systile.static .glyph { right: 7%; top: 10%; height: 80%; }
+.systile.static .glyph { right: calc(7% - var(--gp)); top: calc(10% - var(--gp)); height: 80%; }
 .systile.static .cc-foot { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-width: 0; }
 .systile.static .fam { font-size: clamp(10px, 9cqh, 12px); margin: 0; }
 .systile.static .ct { font-size: clamp(10px, 9cqh, 12px); padding: 3px 7px; }
