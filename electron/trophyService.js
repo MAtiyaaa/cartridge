@@ -198,7 +198,8 @@ module.exports = function createTrophyService(ctx) {
   // user folder gives NPWR12345_00; Xenia sometimes has no title) takes the name another device wrote
   // to RomM, else the linked library game's (0.9.3 K, E1). Nothing is written into emulator folders.
   const isCode = (t) => !t || /^(NPWR\d{5}_\d{2}|[0-9A-F]{8}|CUSA\d{5}|[A-Z]{4}\d{5}|PCS[A-Z]\d{5})$/i.test(String(t).trim());
-  const nameOf = (title, remTitle, romId) => (!isCode(title) ? title : !isCode(remTitle) ? remTitle : romById(romId)?.name || title || remTitle || 'Unknown game');
+  // 0.9.29: then a built-in name for the code (titleNames: Xbox 360 title IDs from x360db)
+  const nameOf = (title, remTitle, romId, src) => (!isCode(title) ? title : !isCode(remTitle) ? remTitle : romById(romId)?.name || ctx.codeName?.(src, title || remTitle) || title || remTitle || 'Unknown game');
   function merged(k) {
     const loc = games.get(k);
     const rem = remote.get(k)?.data;
@@ -220,7 +221,7 @@ module.exports = function createTrophyService(ctx) {
     }
     const romId = k in links ? links[k] || null : remote.get(k)?.romId || (loc ? autoLink(loc) : null);
     // still only a code (a game deleted before Cartridge learnt its name): say so, keep the code (0.9.16)
-    const title = nameOf(base.title, rem?.title, romId), unnamed = isCode(title);
+    const title = nameOf(base.title, rem?.title, romId, base.src), unnamed = isCode(title);
     return { ...base, title: unnamed ? `Unnamed ${T.SOURCES[base.src]?.short || ''} game`.replace('  ', ' ') : title, code: unnamed ? title : null, romId: romId || null, key: k };
   }
   function light(g) {

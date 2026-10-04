@@ -137,6 +137,23 @@ if (!process.env.CARTRIDGE_SMOKE && !process.env.CARTRIDGE_MULTI) {
 // app is in front in the root window's GAMESCOPE_FOCUSED_APP; Steam gives a shortcut it starts its id
 // in SteamGameId (the app id in the top 32 bits). When another app is in front, the UI stops reading
 // the pad (event 'background'). Without xprop or those ids nothing changes.
+// 0.9.29 (owner: after a game started from Cartridge closes, the controller does nothing until the screen is
+// tapped): Chromium only hands the page gamepad input while its document has focus. One focus call right as
+// gamescope switches back can land before the window is really in front, so it's asked again over a few
+// seconds (blur first, so the focus is a change Chromium acts on) until the page says it has focus. Logged,
+// so a device report shows which step worked.
+function refocus() {
+  let n = 0;
+  const step = async () => {
+    if (!win || win.isDestroyed() || gameFocus.away) return;
+    try { if (!win.isVisible()) win.showInactive(); if (n > 1) win.blur(); win.focus(); win.webContents.focus(); } catch {}
+    let has = false; try { has = await win.webContents.executeJavaScript('document.hasFocus()'); } catch {}
+    if (has) { if (n) log('back in front, focused after try', n + 1); return; }
+    if (++n < 6) setTimeout(step, [150, 400, 800, 1500, 2500][n - 1]);
+    else log('back in front, the page still has no focus after 6 tries');
+  };
+  setTimeout(step, 0); // after the caller has noted that the game is gone (gameFocus.away)
+}
 function watchGamescopeFocus() {
   const gid = process.env.SteamGameId || process.env.STEAM_GAME_ID || '';
   if (!isGamescope() || !/^\d+$/.test(gid)) return;
@@ -154,7 +171,7 @@ function watchGamescopeFocus() {
         last = away; broadcast('background', { away });
         // back in front after a game (0.9.24, owner: controls dead after closing a game): the window came back
         // without focus (showInactive), and the page only reads the pad while focused
-        if (!away && win && !win.isDestroyed()) { try { if (!win.isVisible()) win.showInactive(); win.focus(); win.webContents.focus(); } catch {} }
+        if (!away && win && !win.isDestroyed()) refocus();
       }
       gameFocus.away = away && m[1] !== '769'; if (gameFocus.away) gameFocus.otherAt = Date.now(); // 769 is Steam's own menu, where Exit game for Cartridge is
       // F11: a game Steam just started has no window yet, so gamescope shows the one it has (ours).
@@ -2075,7 +2092,7 @@ function saveIdsOf(r, where) {
   if (saveIdCache.has(k)) return saveIdCache.get(k);
   const ids = [];
   try {
-    if (/\bswitch\b/i.test(slugs) && file) { const id = require('./addons').switchTitleId(file); if (id) ids.push(id); }
+    if (/\bswitch\b/i.test(slugs) && file) { const A = require('./addons'); A.setKeyRoots([config.emulationRoot]); const id = A.switchTitleId(file); if (id) ids.push(id); }
     else if (/ps3/i.test(slugs)) { const id = ps3Serial(r.id, where); if (id) ids.push(id); }
     else if (/\bpsx\b/i.test(slugs) && file) { const id = require('./addons').psxSerial(file); if (id) ids.push(id); }
     else if (/\bpsp\b/i.test(slugs) && file) { const id = ppssppPatchState(r.id, r)?.serial; if (id) ids.push(id); }
@@ -2428,7 +2445,9 @@ function createWindow() {
 const trophySvc = require('./trophyService')({
   USER_DATA, api, broadcast: (c, d) => broadcast(c, d), log, loadJson,
   getConfig: () => config, saveConfig: () => saveConfig(), getLibrary: () => library,
+  codeName: (src, code) => require('./titleNames').nameFor(src, code),
 });
+require('./titleNames').setup({ dir: USER_DATA, fetchImpl: (...a) => webFetch(...a) });
 // ---------------------------------------------------------------- Steam ROM manager
 function coverCrop(buf, W, H) {
   const { nativeImage } = require('electron');
@@ -2959,7 +2978,12 @@ const handlers09 = {
   'steam:setGameTemplate': ({ romId, template }) => steamMgr.setGameTemplate(romId, template),
   'steam:refreshGame': ({ romId }) => steamMgr.refreshGame(romId),
   // shadPS4 version per game (0.9.17): the Qt launcher's versions, and this game's pick
-  'steam:shadVersions': ({ romId }) => { let last = null; if ((config.steam || {}).shadProof) try { last = require('./shadVersions').lastRun(os.homedir(), emuRootsAll().map((r) => path.join(r, 'storage', 'shadps4'))); } catch {} return { list: steamMgr.shadVersions(), current: ((config.steam || {}).shadVersions || {})[romId] || null, last }; },
+  'steam:shadVersions': ({ romId }) => {
+    let last = null;
+    if ((config.steam || {}).shadProof) { noteShadRun(); const r = loadJson(SHAD_RUNS_FILE, []); last = r.find((x) => x.romId === Number(romId)) || null; } // this game's own last run (0.9.29)
+    return { list: steamMgr.shadVersions(), current: ((config.steam || {}).shadVersions || {})[romId] || null, last };
+  },
+  'shadv:runs': () => { noteShadRun(); return loadJson(SHAD_RUNS_FILE, []); },
   'steam:setShadVersion': ({ romId, path: p }) => { const m = ((config.steam ||= {}).shadVersions ||= {}); if (p) m[romId] = p; else delete m[romId]; saveConfig(); return true; },
   // frame generation (0.9.17): what's installed, the picks, and Cartridge's games in Steam with theirs
   'steam:frameGen': () => {
@@ -3809,7 +3833,7 @@ const handlers = {
       log('emulator opened', id || '', fp || file);
       if (isGamescope()) {
         broadcast('background', { away: true });
-        p.once('exit', () => { broadcast('background', { away: false }); try { if (win && !win.isDestroyed()) { if (!win.isVisible()) win.showInactive(); win.focus(); win.webContents.focus(); } } catch {} });
+        p.once('exit', () => { broadcast('background', { away: false }); refocus(); });
       }
       p.unref();
       resolve(true);
@@ -4109,6 +4133,22 @@ for (const [ch, fn] of Object.entries(handlers)) {
 }
 
 setTimeout(() => { try { watchJoin(); } catch {} }, 15000);
+// shadPS4's Recently Launched (0.9.29, owner): shadPS4 keeps one log that each run replaces, so each run is
+// noted here (shad-runs.json, newest first, 50 kept) while "show which version ran a game" is on. Read only.
+const SHAD_RUNS_FILE = path.join(USER_DATA, 'shad-runs.json');
+function noteShadRun() {
+  if (!(config.steam || {}).shadProof) return;
+  let last; try { last = require('./shadVersions').lastRun(os.homedir(), emuRootsAll().map((r) => path.join(r, 'storage', 'shadps4'))); } catch { return; }
+  if (!last?.at) return;
+  const runs = loadJson(SHAD_RUNS_FILE, []);
+  if (runs.some((x) => x.at === last.at && x.file === last.file)) return;
+  const ps4 = [...romIndexMain().values()].filter((r) => /ps4/i.test(`${r.platform_slug} ${r.platform_fs_slug}`));
+  const rom = last.serial ? ps4.find((r) => [r.fs_name, ...(r.files || []).map((f) => f.file_name), installedMap[r.id] && installedMap[r.id] !== MARKED ? installedMap[r.id] : ''].join(' ').toUpperCase().includes(last.serial)) : null;
+  runs.unshift({ at: last.at, file: last.file, version: last.version, nightly: !!last.nightly, serial: last.serial || '', romId: rom?.id || null, name: rom?.name || '' });
+  saveJson(SHAD_RUNS_FILE, runs.slice(0, 50));
+  broadcast('shad-runs', {});
+}
+setInterval(() => { try { noteShadRun(); } catch {} }, 60000);
 // a GPU trial nobody confirmed (a blank window can't be answered) goes back to Auto and restarts
 if (gpuTrial) setTimeout(() => { if (config.gpuKept || config.graphics !== 'gpu') return; log('gpu trial not confirmed, back to auto'); config.graphics = 'auto'; saveConfig(); relaunch(); }, GPU_TRIAL_MS);
 app.whenReady().then(() => {

@@ -286,10 +286,13 @@
       <TransitionGroup tag="div" name="st-ovm" class="st-ov-list">
         <button v-for="(pg, i) in pages" :key="pgKey(pg, i)" class="st-ov-page" :class="{ on: i === page, moving: ov.moving === i, dim: ov.moving != null && ov.moving !== i }" data-focus :data-key="'pg-' + i" @click="ovPick(i)">
           <span class="st-ov-map">
-            <i v-for="x in pg" :key="x.id" :class="{ pic: !!ovThumb(x).pic }" :style="{ left: (x.x / COLS) * 100 + '%', top: (x.y / ovRows(pg)) * 100 + '%', width: (x.w / COLS) * 100 + '%', height: (x.h / ovRows(pg)) * 100 + '%', backgroundImage: ovThumb(x).pic ? `url('${ovThumb(x).pic}')` : undefined }">
+            <!-- 0.9.29 (owner: "it doesn't show the whole actual widgets"): a still copy of the page itself, taken when
+                 the overview opens or the page was last left; a page not seen yet keeps the map below -->
+            <span v-if="snapOf(pg)" class="st-ov-snap" inert :style="{ width: snapOf(pg).w + 'px', height: snapOf(pg).h + 'px', transform: `scale(${ovW / snapOf(pg).w})` }" v-html="snapOf(pg).html" />
+            <template v-else><i v-for="x in pg" :key="x.id" :class="{ pic: !!ovThumb(x).pic }" :style="{ left: (x.x / COLS) * 100 + '%', top: (x.y / ovRows(pg)) * 100 + '%', width: (x.w / COLS) * 100 + '%', height: (x.h / ovRows(pg)) * 100 + '%', backgroundImage: ovThumb(x).pic ? `url('${ovThumb(x).pic}')` : undefined }">
               <span v-if="x.type === 'clock'" class="st-ov-clock">{{ clockShort }}</span>
               <span v-else-if="!ovThumb(x).pic" class="st-ov-tag"><Icon :name="ovThumb(x).icon" :size="14" /><em>{{ ovThumb(x).name }}</em></span>
-            </i>
+            </i></template>
           </span>
           <span class="st-ov-n">Page {{ i + 1 }}<em>{{ pg.length }} {{ pg.length === 1 ? 'widget' : 'widgets' }}</em></span>
           <span v-if="ov.moving === i" class="st-ov-carry"><Icon name="mdiArrowLeftRight" :size="16" />Moving</span>
@@ -821,8 +824,23 @@ async function configure(t) {
 }
 // ---- pages
 const pageDir = ref('next');
+// still copies of pages for the overview (0.9.29): the board's own elements, cloned without focus targets,
+// handles or animations, kept per page layout (a moved or resized tile makes a new copy necessary)
+const snaps = reactive(new Map()), ovW = ref(300);
+const pageSig = (pg) => pg.map((x) => `${x.id}:${x.x},${x.y},${x.w},${x.h}:${x.src || x.platformId || x.romId || ''}`).sort().join('|');
+const snapOf = (pg) => snaps.get(pageSig(pg)) || null;
+function snapPage() {
+  const b = el.value?.querySelector('.st-board'), pg = pages.value[page.value];
+  if (!b || !pg?.length) return;
+  const c = b.cloneNode(true);
+  c.querySelectorAll('.st-handle, .st-slot, .st-ghost, .st-slots').forEach((n) => n.remove());
+  c.querySelectorAll('[data-focus], [tabindex], [data-key], [data-hold]').forEach((n) => { n.removeAttribute('data-focus'); n.removeAttribute('tabindex'); n.removeAttribute('data-key'); n.removeAttribute('data-hold'); });
+  c.style.height = '';
+  snaps.set(pageSig(pg), { html: c.outerHTML, w: b.offsetWidth, h: Math.max(b.offsetHeight, 1) });
+}
 function goPage(i) {
   if (i === page.value || i < 0 || i >= pages.value.length) return;
+  snapPage();
   if (mode.value) setMode('');
   pageDir.value = i > page.value ? 'next' : 'prev';
   page.value = i; store.startPage = i;
@@ -853,8 +871,10 @@ function openOv() {
   ovAt = performance.now();
   if (ov.value) return closeOv();
   if (mode.value) setMode('');
+  snapPage();
   ov.value = { moving: null };
   nextTick(() => {
+    const m = ovEl.value?.querySelector('.st-ov-map'); if (m) ovW.value = m.clientWidth;
     ovLayer = pushLayer(ovEl.value, {
       back: () => (ov.value.moving != null ? (ov.value.moving = null) : closeOv()),
       lt() {}, rt() {}, start: closeOv, select() {}, x() {}, y() {}, lb: ovShoulder, rb: ovShoulder,
@@ -1211,6 +1231,9 @@ watch(() => store.play, loadWeek);
 .st-ov-map { position: relative; aspect-ratio: 16 / 9; border-radius: var(--r-md); background: rgba(255, 255, 255, 0.03); overflow: hidden; }
 .st-ov-map i { position: absolute; box-sizing: border-box; border: 2px solid transparent; background: rgba(255, 255, 255, 0.12); border-radius: 6px; background-clip: padding-box; background-size: cover; background-position: center 30%; overflow: hidden; display: flex; align-items: flex-end; padding: 4px; }
 .st-ov-map i.pic { background-color: #111; }
+.st-ov-snap { position: absolute; left: 0; top: 0; transform-origin: 0 0; pointer-events: none; }
+.st-ov-snap :deep(*) { animation: none !important; transition: none !important; }
+.st-ov-snap :deep(.st-board) { position: relative; inset: auto; }
 .st-ov-tag { display: flex; align-items: center; gap: 4px; min-width: 0; color: rgba(255, 255, 255, 0.8); font-size: 10px; font-weight: 600; }
 .st-ov-tag em { font-style: normal; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .st-ov-clock { align-self: center; margin: auto; font-family: var(--display); font-weight: 800; font-size: clamp(12px, 1.4vw, 22px); color: #fff; }

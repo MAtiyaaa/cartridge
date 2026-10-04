@@ -35,6 +35,15 @@
         <!-- 0.9.27 (owner): on the PlayStation 4 page, not Steam's main page. Off by default. Inside the emulator
              panel since 0.9.28: loose between the panel and the games it ran into the games heading on a handheld -->
         <Toggle v-if="ckey === 'ps4'" class="sc-opt" :model-value="!!store.config.steam?.shadProof" label="shadPS4: show which version ran a game" desc="Reads shadPS4's own log after a game runs and shows the version that actually started it on the game page" @update:model-value="setShadProof" />
+        <!-- 0.9.29 (owner): Recently Launched, only while the switch above is on -->
+        <button v-if="ckey === 'ps4' && store.config.steam?.shadProof" class="lrow sc-runs" data-focus @click="allRuns">
+          <Icon name="mdiHistory" :size="22" />
+          <span class="l-mid"><b>Recently Launched</b>
+            <span v-if="!runs.length" class="l-sub">Nothing yet. Start a PS4 game and it shows here with the shadPS4 version that ran it.</span>
+            <span v-for="r in runs.slice(0, 3)" :key="r.at" class="l-sub">{{ r.name || r.serial || 'A PS4 game' }} · {{ r.version ? 'v' + r.version : 'version not in the log' }}{{ r.nightly ? ' (nightly)' : '' }} · {{ ago(r.at) }}</span>
+          </span>
+          <span v-if="runs.length > 3" class="l-end muted small">All {{ runs.length }}</span>
+        </button>
       </section>
 
       <div v-if="con.outdated && !steam.queue.total" class="ss-queue">
@@ -63,7 +72,7 @@
 
 <script setup>
 import { computed, onMounted, ref, watch, nextTick } from 'vue';
-import { store, call, choose, confirm, toast, openModal, back, go, romById, cover } from '../store.js';
+import { store, call, choose, confirm, toast, openModal, back, go, romById, cover, ago } from '../store.js';
 import { steam, applyChanges, addGame, removeGame, pickCollections, pickEmulator } from '../steam.js';
 import { useView } from '../useView.js';
 import { ensureFocus } from '../nav.js';
@@ -74,7 +83,15 @@ import Toggle from '../components/Toggle.vue';
 
 // Settings → Steam → a console: its games with Add / Remove, and the emulator setup behind More
 const props = defineProps({ ckey: String });
-async function setShadProof(v) { store.config.steam = await call('steam:setConfig', { shadProof: v }); }
+async function setShadProof(v) { store.config.steam = await call('steam:setConfig', { shadProof: v }); loadRuns(); }
+// shadPS4 runs Cartridge noted (shad-runs.json, newest first)
+const runs = ref([]);
+async function loadRuns() { if (props.ckey === 'ps4' && store.config.steam?.shadProof) runs.value = await call('shadv:runs').catch(() => []); }
+async function allRuns() {
+  if (!runs.value.length) return;
+  const v = await choose({ title: 'Recently Launched', message: 'Each PS4 game started, with the shadPS4 version that ran it, from shadPS4\'s own log.', options: runs.value.map((r) => ({ label: r.name || r.serial || 'A PS4 game', sub: `${r.version ? 'v' + r.version : 'Version not in the log'}${r.nightly ? ' · nightly' : ''} · ${new Date(r.at).toLocaleString()}`, value: r.romId || 0, icon: 'mdiHistory', raw: true })) });
+  if (v) go('game', { romId: v });
+}
 const el = ref(null);
 const ov = ref(null);
 const HOW = { learned: 'From your shortcuts', yours: 'Set by you', emudeck: 'EmuDeck', appimage: 'AppImage', flatpak: 'Flatpak', native: 'Installed program', retrodeck: 'RetroDECK', windows: 'Windows build (Proton)' };
@@ -215,7 +232,7 @@ async function more() {
 }
 useView({ x: () => { if (missing.value.length && con.value?.template) addAll(); }, y: () => more() },
   [{ b: 'A', label: 'Options' }, { b: 'X', label: 'Add all' }, { b: 'Y', label: 'More' }, { b: 'B', label: 'Back' }]);
-onMounted(async () => { await load(); await nextTick(); ensureFocus(el.value); });
+onMounted(async () => { await load(); loadRuns(); await nextTick(); ensureFocus(el.value); });
 </script>
 
 <style scoped>
@@ -231,6 +248,8 @@ onMounted(async () => { await load(); await nextTick(); ensureFocus(el.value); }
 .lo b { font-weight: 400; min-width: 0; word-break: break-all; }
 .small { font-size: var(--t-xs); }
 .sc-opt { margin-top: var(--s-2); flex: none; }
+.sc-runs { flex: none; align-items: flex-start; }
+.sc-runs .l-sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .sc-opt > div { min-width: 0; }
 .ss-queue { display: flex; align-items: center; gap: 14px; padding: 14px 18px; border-radius: var(--r-md); background: rgba(var(--primary-rgb), 0.2); border: 1px solid rgba(var(--primary-l-rgb), 0.5); margin-bottom: 18px; }
 .ss-q-t { display: flex; flex-direction: column; flex: 1; min-width: 0; }
