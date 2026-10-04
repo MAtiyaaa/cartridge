@@ -3623,6 +3623,28 @@ const handlers = {
   // program file is deleted; a folder build's folder only when nothing of the user's lives in it (a
   // portable/ or user/ folder means saves and settings, so then only the program goes). EmuDeck's own
   // launcher scripts are EmuDeck's to remove. Steam shortcuts that used it show up in Shortcut health.
+  // Open an emulator on its own (0.9.25, owner: from Settings → Emulators → Emulators), for its own settings.
+  // Started without the AppImage's library paths, like games. In Game Mode it opens inside Cartridge's
+  // window group (same SteamGameId), so the pad is paused until it closes, then the window takes focus back.
+  'emuget:open': ({ id, kind, fp, path: file }) => new Promise((resolve, reject) => {
+    let cmd, args = [], cwd = os.homedir();
+    if (kind === 'windows') return reject(new Error('Windows builds start through Proton: open it from its Steam shortcut.'));
+    if (kind === 'flatpak') { if (!fp) return reject(new Error('That Flatpak wasn’t found.')); cmd = 'flatpak'; args = ['run', fp]; }
+    else { if (!file || !fs.existsSync(file)) return reject(new Error('That emulator isn’t there any more.')); cmd = file; cwd = path.dirname(file); }
+    const env = { ...process.env };
+    for (const k of ['LD_PRELOAD', 'LD_LIBRARY_PATH', 'APPDIR', 'APPIMAGE', 'ARGV0', 'OWD']) delete env[k];
+    const p = require('child_process').spawn(cmd, args, { cwd, env, detached: true, stdio: 'ignore' });
+    p.once('error', (e) => reject(new Error(e.code === 'EACCES' ? 'It isn’t allowed to run (its file isn’t executable).' : `It didn’t start: ${e.message}`)));
+    p.once('spawn', () => {
+      log('emulator opened', id || '', fp || file);
+      if (isGamescope()) {
+        broadcast('background', { away: true });
+        p.once('exit', () => { broadcast('background', { away: false }); try { if (win && !win.isDestroyed()) { if (!win.isVisible()) win.showInactive(); win.focus(); win.webContents.focus(); } } catch {} });
+      }
+      p.unref();
+      resolve(true);
+    });
+  }),
   'emuget:remove': async ({ id, kind, fp, where, path: file }) => {
     const U = require('./emuUpdates');
     if (require('./raLogin').running().has(String(id).split('@')[0])) throw new Error('Close the emulator first.');

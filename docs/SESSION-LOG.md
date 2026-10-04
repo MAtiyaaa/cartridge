@@ -6,6 +6,14 @@ The branch for 0.9.3 work is `claude/relaxed-fermat-30pigp`. Pull it before star
 
 ---
 
+## 4 Oct 2026 · 0.9.25 Open Emulators
+
+Owner: "Build 0.9.25 just with this: open emulator from Cartridge, Settings, Emulators, Emulators." Done: Open at the top of each emulator's menu. Checked here: npm test, vite build, the handler in the app (a program starts; missing file, Windows build and a file without the exec bit each give a clear message), launch check. Owner to test on the device: Open for an AppImage, a Flatpak and an EmuDeck launcher, in Desktop Mode and in Game Mode (the emulator shows in front, the controller doesn't move Cartridge underneath, and Cartridge answers the controller again after the emulator closes).
+
+0.9.24 was published (v0.9.24, Cartridge-x86_64.AppImage).
+
+---
+
 ## 4 Oct 2026 · 0.9.24 Set Up Your Way
 
 Owner's list (with photos): console glyph clipped, page dots (no RS, below the tiles), trophies/storage/week too empty when big, L1/R1 through games on row cards; emulator folders editable, shadPS4 version proof; Start add button, page overview on LT/RT, console widgets, square console cards, logos, any orientation; controls dead after a game, touch, double LT Caps, right to a pop-up's buttons; icon flicker, reinstall relink, Vita3K, Switch icon; Syncthing key and L1/R1; shadPS4 advanced settings in tabs, per-game frame generation; Cemu packs, HenrikoMagnifico, add-on size/author, add-on detail page, Switch IDs and version, add-on downloads on Downloads, Game Add-ons less cluttered, Patches row gone; What's New; onboarding A/B, EmuDeck folders, end on Start with a tour; auto add applies; No internet pill. Extras: weaker-device animations, card weight, frame gen updates shortcuts, Pin a Game picker, varied shine, keyboard from search, page-turn haptics, idle logos, multi-drive plan, Steam collections rework, Cartridge Installer, top bar placement, Metadata page, Licences, Syncthing icon/smarter/onboarding.

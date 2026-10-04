@@ -297,5 +297,8 @@ LT/RT switch top tabs. LB/RB only switch sections inside a page. A select, B bac
 - From a GitHub link: `electron/customEmu.js` (`repoOf`, `pickAsset` x86_64 AppImage, `fileName`; tested), `emuget:custom` (download to `config.emuDir`, `looksRunnable`, then `markFork` or `useFile`, never over a file it didn't put there, `config.customEmus`), EmuGet `gh` card (inline, not a modal, so the keyboard modal works). shadPS4 last-run line only with `steam.shadProof` (off by default).
 - Plan only: `docs/plan-multidrive.md` (games on several drives, emulator game-list folders, what can't be split).
 
+## 0.9.25 · Open Emulators (4 Oct 2026)
+- `emuget:open` (main.js): Open in the emulator's menu (EmuGet `manage`). Spawned detached without `LD_PRELOAD`/`LD_LIBRARY_PATH`/AppImage vars, Flatpaks through `flatpak run`, Windows builds refused (Proton). In gamescope it broadcasts `background` away until the emulator exits, then focuses the window.
+
 ## Releases (full steps: HANDOFF D8)
 Only when the owner asks. Bump `version` and `build.releaseInfo.releaseName` ("Cartridge X.Y.Z") in `package.json`, and set `versionName` (what Settings → About and update messages show). **0.9.3 is shipped in parts (owner, 1 Oct 2026):** the number goes up as usual (0.9.4, 0.9.5...) but `versionName` and the release title are "0.9.3 B", "0.9.3 C"... until the 0.9.3 plan is done; notes heading `## Cartridge 0.9.3 B · Title`. Then put only this version's notes in `RELEASE_NOTES.md` (heading `## Cartridge X.Y.Z · Title`), add them to the top of `CHANGELOG.md`, grouped as New / Changed / Fixed with bold lead-ins. CI builds, launch-checks and publishes.
