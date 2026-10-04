@@ -2,7 +2,7 @@
 // sessions. Two sources, both "launch to return", what an app can honestly see:
 // - games Cartridge starts: noteLaunch() when it hands the game to an emulator, back() when Cartridge is in
 //   front again. The start is kept in localStorage, so a session survives Android stopping Cartridge meanwhile.
-// - games Fuse starts: Fuse's play provider (Native.fusePlay), read at start and every time Cartridge comes back.
+// - games Fuse starts (optional: without Fuse only the first source counts): Fuse's play provider (Native.fusePlay), read at start and every time Cartridge comes back.
 // main.js (play:session, play:import, electron/androidPlaytime.js) keeps them and feeds play:stats and play:week.
 import { call, loadPlay } from '../store.js';
 import { Native } from './native.js';
