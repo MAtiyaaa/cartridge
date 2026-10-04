@@ -10,14 +10,17 @@
           <div v-else-if="mode !== 'all'" class="hicon"><Icon :name="headIcon" :size="30" /></div>
           <div style="min-width: 0">
             <div v-if="mode !== 'platform'" class="eyebrow">{{ eyebrow }}</div>
+            <!-- Android: the console's wordmark and a series' logo lead the header; the desktop keeps the plain title -->
+            <template v-if="IS_ANDROID">
             <div v-if="mode === 'platform'" class="eyebrow">{{ title }}</div>
             <GameLogo v-if="mode === 'collection' && collection?.series && store.config.ui.logos !== false" class="head-logo" :logo="logoOf(romById(collection.rom_ids[0]))" :name="title" :area="9000" :max-w="360" :max-h="56" />
             <h1 v-else :class="{ 'sys-mark': mode === 'platform' }"><ConsoleMark v-if="mode === 'platform'" :slug="platform.slug" :fs="platform.fs_slug" :label="title" /><template v-else>{{ title }}</template></h1>
+            </template>
+            <h1 v-else>{{ title }}</h1>
             <div class="muted row" style="gap: 8px; font-size: 13px">
               <span>{{ source.length }} games</span><span>·</span><span style="color: var(--green-l)">{{ installedCount }} on device</span>
-              <template v-if="mode === 'platform'"><span>·</span>
-                <span class="row" style="gap: 6px"><span class="dot" :class="platform.target?.exists ? 'ok' : ''" /><span class="mono" style="max-width: 340px">{{ platform.target?.path || 'No folder set' }}</span></span>
-              </template>
+              <!-- the folder path is no longer shown (owner, 0.9.21); only a missing folder is worth saying -->
+              <template v-if="mode === 'platform' && !platform.target?.exists"><span>·</span><span>No folder set</span></template>
             </div>
           </div>
           <Btn v-if="mode !== 'all' && !collection?.ordered" b="RB" />
@@ -369,7 +372,7 @@ async function getBios() {
   try {
     const r = await call('bios:download', { platformId: platform.value.id, slug: platform.value.slug });
     const n = r.files.filter((f) => !f.skipped).length;
-    toast(`BIOS · ${n} downloaded, ${r.files.length - n} already there`, 'ok', 3400, 'mdiChip');
+    toast(r.installed ? `Firmware installed in ${r.emu === 'rpcs3' ? 'RPCS3' : 'Vita3K'}` : `BIOS · ${n} downloaded, ${r.files.length - n} already there`, 'ok', 3400, 'mdiChip');
   } catch (e) { toast(e.message, 'error'); }
 }
 async function downloadAll() {

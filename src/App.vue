@@ -6,25 +6,30 @@
   <div v-else class="shell" :style="{ '--card-w': cardW }">
     <header class="statusbar" :class="{ 'has-back': store.history.length }">
       <button v-if="store.history.length" class="backbtn" aria-label="Back" @click="back()"><Icon name="mdiArrowLeft" :size="22" /></button>
-      <div class="brand"><Logo :size="30" /><span class="brand-word">Cartridge</span></div>
-      <nav class="tabs">
-        <Btn b="LT" class="tab-trig" />
-        <button v-for="t in tabs" :key="t.name" class="tab" :class="{ active: activeTab === t.name }" @click="tab(t.name)">
-          <Icon :name="t.icon" :size="18" /><span class="tab-label">{{ t.label }}</span>
+      <div class="brand"><Logo :size="28" /></div>
+      <!-- 0.9.19 (owner: make the top bar much better, with the taste skill; photos of the frontend
+           they liked): every tab is its icon, the current one also its name, which opens out as you
+           arrive; one short line slides under it. LT/RT only while a controller is in use. -->
+      <nav class="tabs" ref="tabsEl">
+        <Btn v-if="padMode" b="LT" class="tab-trig" />
+        <button v-for="t in tabs" :key="t.name" class="tab" :class="{ active: activeTab === t.name }" :data-tab="t.name" :title="t.label" :aria-label="t.label" @click="tab(t.name)">
+          <Icon :name="t.icon" :size="21" class="tab-ico" />
+          <span class="tab-label"><span>{{ t.label }}</span></span>
           <span v-if="t.name === 'downloads' && activeDl.length" class="tab-badge">{{ activeDl.length }}</span>
           <span v-if="t.name === 'settings' && store.issues" class="tab-dot" :title="`${store.issues} waiting in Settings → Emulators`" />
         </button>
-        <Btn b="RT" class="tab-trig" />
+        <Btn v-if="padMode" b="RT" class="tab-trig" />
+        <i class="tab-ink" :style="ink" />
       </nav>
       <div class="spacer" />
-      <label class="top-search" :class="{ on: store.route.name === 'search' }">
-        <Icon name="mdiMagnify" :size="18" />
+      <label class="top-search" :class="{ on: store.route.name === 'search', open: store.route.name === 'search' || !!store.lastSearch }">
+        <Icon name="mdiMagnify" :size="20" style="flex: none" />
         <input ref="searchEl" data-focus data-nofirst data-key="top-search" :value="store.lastSearch" :readonly="builtinKb()" placeholder="Search games" autocomplete="off" spellcheck="false" @input="onSearch" @click="searchOsk" />
         <button v-if="store.lastSearch" class="clear" tabindex="-1" @mousedown.prevent @click="clearSearch"><Icon name="mdiClose" :size="16" /></button>
-        <Btn v-else b="Y" />
+        <Btn v-else-if="padMode" b="Y" /><!-- the Y hint only while a controller is in use, like LT/RT -->
       </label>
-      <!-- the status area opens the Quick Menu, which shows the same things in more detail -->
-      <button class="sys" tabindex="-1" aria-label="Quick Menu" @click="store.quickMenu = !store.quickMenu">
+      <!-- Android: the status area is a button that opens the Quick Menu, which shows the same things in more detail -->
+      <component :is="IS_ANDROID ? 'button' : 'div'" class="sys" v-bind="IS_ANDROID ? { tabindex: -1, 'aria-label': 'Quick Menu' } : {}" v-on="IS_ANDROID ? { click: () => (store.quickMenu = !store.quickMenu) } : {}">
         <div v-if="syncBusy" class="item sync-pill"><Icon name="mdiSync" :size="16" class="spin" />{{ syncLabel }}</div>
         <div v-if="steam.progress" class="item sync-pill"><Icon name="mdiSteam" :size="16" />{{ steamProgressLabel(steam.progress) }}</div>
         <div v-if="activeDl.length" class="item">
@@ -35,9 +40,9 @@
         <div v-else class="item net bad"><Icon name="mdiCloudOffOutline" :size="18" />Offline</div>
         <div v-if="battery" class="item"><Icon :name="batteryIcon" :size="18" />{{ battery.level }}%</div>
         <div class="clock">{{ clock }}</div>
-      </button>
+      </component>
     </header>
-    <main class="main" ref="mainEl" data-zone>
+    <main class="main" ref="mainEl" data-zone :data-dir="store.navDir">
       <component :is="views[store.route.name]" :key="viewKey" v-bind="store.route.params" />
     </main>
     <footer class="hintbar">
@@ -61,6 +66,8 @@
   <FirstTour v-if="store.modal?.type === 'tour'" />
   <ManualViewer v-if="store.modal?.type === 'manual'" v-bind="store.modal.props" />
   <PatchesSheet v-if="store.modal?.type === 'patches'" v-bind="store.modal.props" />
+  <AddonsSheet v-if="store.modal?.type === 'addons'" :key="'addons' + store.modal.props.romId" v-bind="store.modal.props" />
+  <GameAddons v-if="store.modal?.type === 'gameaddons'" :key="'ga' + store.modal.props.romId" v-bind="store.modal.props" />
   <IdleScreen v-if="store.config?.configured" />
 
   <div class="pops">
@@ -84,7 +91,7 @@
 import { computed, onMounted, onBeforeUnmount, ref, watch, nextTick, defineAsyncComponent } from 'vue';
 import { store, loadConfig, loadLibrary, loadArt, back, rootBack, tab, go, call, toast, choose, saveConfig, builtinKb, askText, GRADE, activeTabs, TAB_DEFS } from './store.js';
 import { desktopLinks } from './links.js';
-import { pushLayer, focusFirst } from './nav.js';
+import { pushLayer, focusFirst, input } from './nav.js';
 import { setSoundEnabled, setSoundStyle, sfx } from './sfx.js';
 import { applyTheme, CARD_SIZES } from './themes.js';
 import { setPointerPref, setRumble, setBackground } from './nav.js';
@@ -94,7 +101,7 @@ import Btn from './components/Btn.vue';
 import Logo from './components/Logo.vue';
 import Background from './components/Background.vue';
 import Welcome from './views/Welcome.vue';
-import QuickMenu from './components/QuickMenu.vue';
+import DesktopQuickMenu from './components/QuickMenu.vue';
 import TextPrompt from './components/TextPrompt.vue';
 import Keyboard from './components/Keyboard.vue';
 import Grade from './components/Grade.vue';
@@ -106,6 +113,8 @@ import FirstTour from './components/FirstTour.vue';
 // the manual reader brings pdf.js: loaded the first time a manual opens, not at start
 const ManualViewer = defineAsyncComponent(() => import('./components/ManualViewer.vue'));
 import PatchesSheet from './components/PatchesSheet.vue';
+import AddonsSheet from './components/AddonsSheet.vue';
+import GameAddons from './components/GameAddons.vue';
 import IdleScreen from './components/IdleScreen.vue';
 import SteamCollections from './components/SteamCollections.vue';
 import SteamPreview from './components/SteamPreview.vue';
@@ -114,8 +123,11 @@ import { steamReport, steam, steamProgressLabel } from './steam.js';
 import ColorPicker from './components/ColorPicker.vue';
 import PairOverlay from './components/PairOverlay.vue';
 import { IS_ANDROID } from './platform.js';
+// Android has its own Quick Menu (time, status card, tiles); the desktop keeps upstream's
+const QuickMenu = import.meta.env.MODE === 'android' ? defineAsyncComponent(() => import('./android/QuickMenu.vue')) : DesktopQuickMenu;
 import Setup from './views/Setup.vue';
 import Home from './views/Home.vue';
+import Start from './views/Start.vue';
 import Gallery from './views/Gallery.vue';
 import Consoles from './views/Consoles.vue';
 import Game from './views/Game.vue';
@@ -131,9 +143,10 @@ import Genres from './views/Genres.vue';
 import Collections from './views/Collections.vue';
 import EmuSetup from './views/EmuSetup.vue';
 import ShortcutHealth from './views/ShortcutHealth.vue';
+import FrameGen from './views/FrameGen.vue';
 import FuseUpload from './views/FuseUpload.vue';
 
-const views = { achievements: Achievements, 'ra-game': RaGame, 'trophy-game': TrophyGame, home: Home, library: Gallery, consoles: Consoles, platform: Gallery, collection: Gallery, genre: Gallery, genres: Genres, collections: Collections, game: Game, downloads: Downloads, settings: Settings, search: Search, 'steam-console': SteamConsole, 'steam-missing': SteamMissing, 'emu-setup': EmuSetup, 'steam-health': ShortcutHealth, 'fuse-upload': FuseUpload };
+const views = { start: Start, achievements: Achievements, 'ra-game': RaGame, 'trophy-game': TrophyGame, home: Home, library: Gallery, consoles: Consoles, platform: Gallery, collection: Gallery, genre: Gallery, genres: Genres, collections: Collections, game: Game, downloads: Downloads, settings: Settings, search: Search, 'steam-console': SteamConsole, 'steam-missing': SteamMissing, 'emu-setup': EmuSetup, 'steam-health': ShortcutHealth, 'frame-gen': FrameGen, 'fuse-upload': FuseUpload };
 // the tabs you picked in Look & Feel → Top bar, in your order
 const tabs = computed(() => activeTabs().map((name) => ({ name, ...TAB_DEFS[name] })));
 const mainEl = ref(null);
@@ -164,6 +177,19 @@ function toResults() {
 }
 const viewKey = computed(() => store.route.name + JSON.stringify(store.route.params));
 const cardW = computed(() => (CARD_SIZES[store.config.ui.gridSize] || CARD_SIZES.md).w);
+// the white pill behind the current tab (transform and width, so moving it costs no layout)
+const tabsEl = ref(null), ink = ref({ opacity: 0 });
+const padMode = computed(() => input.mode === 'pad');
+function placeInk() {
+  const nav = tabsEl.value, el = nav?.querySelector(`[data-tab="${activeTab.value}"]`);
+  if (!el) { ink.value = { opacity: 0 }; return; }
+  const x = el.offsetLeft, w = el.offsetWidth;
+  ink.value = { width: w + 'px', transform: `translateX(${x}px)`, opacity: 1 };
+}
+// the name opens out over 300 ms: a ResizeObserver on the tabs keeps the pill hugging it every frame
+function placeInkSoon() { placeInk(); for (const t of [120, 320]) setTimeout(placeInk, t); }
+const inkWatch = typeof ResizeObserver === 'function' ? new ResizeObserver(() => placeInk()) : null;
+watch(tabsEl, (nav) => { inkWatch?.disconnect(); if (nav) { inkWatch?.observe(nav); for (const b of nav.querySelectorAll('.tab')) inkWatch?.observe(b); } });
 const activeTab = computed(() => {
   const n = store.route.name;
   if (tabs.value.find((t) => t.name === n)) return n;
@@ -205,6 +231,8 @@ function viewHandler(action) {
   return h ? h() : false;
 }
 
+watch([() => activeTab.value, () => tabs.value.length, padMode], () => nextTick(() => { placeInkSoon(); if (inkWatch && tabsEl.value) for (const b of tabsEl.value.querySelectorAll('.tab')) inkWatch.observe(b); }));
+window.addEventListener('resize', () => nextTick(placeInk));
 onMounted(async () => {
   tick(); clockT = setInterval(tick, 10000);
   navigator.getBattery?.().then((b) => {
@@ -227,8 +255,12 @@ onMounted(async () => {
     window.cart.on('remote:settings', (r) => r?.enabled && pub());
   }
   loadArt();
-  // Home can be taken off the top bar: start on the first tab instead
-  if (store.route.name === 'home' && !activeTabs().includes('home')) tab(activeTabs()[0]);
+  // 0.9.19: Start joins the top bar once for people who had picked their own tabs
+  const ui = store.config.ui;
+  if (!ui.startAdded) { const t = Array.isArray(ui.tabs) && ui.tabs.length ? (ui.tabs.includes('start') ? ui.tabs : ['start', ...ui.tabs]) : undefined; saveConfig({ ui: { startAdded: Date.now(), ...(t ? { tabs: t } : {}) } }); }
+  // the menu Cartridge opens on (Look & Feel → Open on, 0.9.19); one taken off the top bar: the first tab
+  const openOn = ui.openOn || 'home';
+  if (store.route.name === 'home') tab(activeTabs().includes(openOn) ? openOn : activeTabs()[0]);
   // opened from a Steam shortcut whose game is gone (--game <id>), or a second launch handing over
   const openGame = (id) => { if (id && store.lib) { store.quickMenu = false; go('game', { romId: Number(id) }); } };
   call('app:startGame').then(openGame).catch(() => {});
@@ -237,7 +269,9 @@ onMounted(async () => {
   if (!IS_ANDROID) desktopLinks();
   // Android: Steam and emulator setup only when Settings → Android → Steam & PC game apps is on
   const steamOn = !IS_ANDROID || store.config?.android?.steamApps;
-  window.cart.on('background', (b) => setBackground(b?.away));
+  // another app in front in Game Mode (0.9.21, owner: still laggy in the background): gamescope never
+  // hides or blurs the window, so stop the pad, the animated background and every CSS animation here
+  window.cart.on('background', (b) => { setBackground(b?.away); store.away = !!b?.away; document.body.classList.toggle('away', !!b?.away); });
   window.cart.on('toast', (t) => t?.text && toast(t.text, t.kind || 'info', 4500, t.icon));
   if (steamOn) setTimeout(steamReport, 2500);
   // 0.9: a new install goes through emulator Setup once, after connecting to RomM (the welcome does it since 0.9.15)
@@ -256,7 +290,10 @@ onMounted(async () => {
     lb: () => { viewHandler('lb'); },
     rb: () => { viewHandler('rb'); },
     y: () => (viewHandler('y') !== false ? undefined : focusSearch()),
-    accept: (a) => (a === searchEl.value ? toResults() : false),
+    accept: (a) => (a === searchEl.value ? toResults() : viewHandler('accept')),
+    hold: () => viewHandler('hold'),
+    // the page can take the D-pad over (0.9.19: Start moves a picked-up tile); otherwise focus moves
+    up: () => viewHandler('up'), down: () => viewHandler('down'), left: () => viewHandler('left'), right: () => viewHandler('right'),
     x: () => viewHandler('x'),
     // Triggers always move between the top tabs; bumpers belong to the page (consoles, collections)
     lt: () => cycleTab(-1),
@@ -341,29 +378,39 @@ watch(viewKey, async () => {
   if (key) {
     for (let i = 0; i < 30; i++) {
       const el = root.querySelector(`[data-key="${CSS.escape(key)}"]`);
-      // centre it inside its own list; .main itself never scrolls (it did, and cut the Home banner in half)
-      if (el) { el.focus({ preventScroll: true }); el.scrollIntoView({ block: 'center', inline: 'center' }); root.scrollTop = 0; root.scrollLeft = 0; return; }
+      // Android: centre it inside its own list; .main itself never scrolls (it did, and cut the Home banner in half)
+      if (el) { el.focus({ preventScroll: true }); el.scrollIntoView({ block: 'center', inline: 'center' }); if (IS_ANDROID) { root.scrollTop = 0; root.scrollLeft = 0; } return; }
       await new Promise((r) => setTimeout(r, 50));
     }
   }
   focusFirst(root);
-  root.scrollTop = 0; root.scrollLeft = 0;
+  if (IS_ANDROID) { root.scrollTop = 0; root.scrollLeft = 0; }
 });
 </script>
 
 <style scoped>
 .tab-trig { margin: 0 4px; }
-.top-search { display: flex; align-items: center; gap: 8px; flex: 0 1 260px; min-width: 130px; height: 40px; padding: 0 10px 0 14px; border-radius: 999px; background: var(--s2); color: var(--muted); cursor: text; transition: border-color 0.14s, background 0.14s; }
-.top-search.on, .top-search:focus-within { background: var(--sel); border-color: transparent; color: var(--text); }
-.top-search:focus-within { box-shadow: var(--ring); }
+/* search (0.9.19): a round button with Y until it's used, then it opens into a field */
+.top-search { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; width: 40px; height: 40px; padding: 0 10px 0 11px; border-radius: 20px; background: rgba(255, 255, 255, 0.07); color: rgba(255, 255, 255, 0.7); cursor: text; overflow: hidden; transition: width 320ms cubic-bezier(0.23, 1, 0.32, 1), background 160ms, color 160ms; }
+.top-search:hover { background: rgba(255, 255, 255, 0.11); }
+/* a round button with the mouse or touch; room for the Y hint with a controller */
+:global(body.pad-mode .top-search:not(.open):not(:focus-within)) { width: 70px; }
+/* closed (0.9.21, owner: it looked off): no pill, the magnifier like the tab icons and the Y hint like
+   LT/RT; the field keeps no space; it opens into the pill as before */
+.top-search:not(.open):not(:focus-within) { gap: 0; background: transparent; color: rgba(255, 255, 255, 0.5); padding: 0 10px; }
+.top-search:not(.open):not(:focus-within):hover { background: rgba(255, 255, 255, 0.08); color: rgba(255, 255, 255, 0.86); }
+.top-search:not(.open):not(:focus-within) :deep(.pb) { margin-left: 8px; transform: scale(0.88); opacity: 0.55; }
+.top-search.open, .top-search:focus-within { width: min(300px, 26vw); background: rgba(255, 255, 255, 0.14); color: var(--text); }
+.top-search:not(.open):not(:focus-within) input { width: 0; flex: 0; opacity: 0; }
+.top-search:focus-within { box-shadow: 0 0 0 2px var(--focus, #fff); }
 .top-search input { flex: 1; min-width: 0; height: 100%; font: inherit; font-size: var(--t-sm); color: var(--text); background: none; border: 0; outline: none; }
 .top-search input:focus { box-shadow: none !important; }
-.top-search input::placeholder { color: var(--muted); }
+.top-search input::placeholder { color: rgba(255, 255, 255, 0.5); }
 .top-search .clear { background: none; border: 0; color: var(--muted); padding: 4px; display: grid; place-items: center; }
-.backbtn { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; background: var(--s2); margin-right: -6px; }
-.backbtn:active { background: rgba(255, 255, 255, 0.2); }
-.tab-dot { position: absolute; top: 6px; right: 6px; width: 8px; height: 8px; border-radius: 50%; background: #ffd978; }
-.tab-badge { position: absolute; top: 2px; right: 6px; min-width: 16px; height: 16px; border-radius: var(--r-md); background: var(--peach); color: var(--on-primary); font-size: var(--t-xs); font-weight: 700; display: grid; place-items: center; padding: 0 4px; }
+.top-search :deep(.pb) { transform: scale(0.85); opacity: 0.8; }
+.backbtn { width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; background: rgba(255, 255, 255, 0.08); margin-right: -4px; transition: background 160ms; }
+.backbtn:hover { background: rgba(255, 255, 255, 0.14); }
+.backbtn:active { background: rgba(255, 255, 255, 0.2); transform: scale(0.96); }
 .pops { position: fixed; top: 76px; right: 24px; z-index: 80; display: flex; flex-direction: column; gap: 10px; pointer-events: none; }
 .pop { display: flex; gap: 14px; align-items: center; width: 380px; padding: 12px 16px 12px 12px; border-radius: var(--r-lg); background: rgba(18, 20, 32, 0.92); box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.12); }
 .pop-icon { width: 60px; height: 60px; border-radius: var(--r-md); overflow: hidden; flex: none; display: grid; place-items: center; background: rgba(0, 0, 0, 0.35); }

@@ -1,0 +1,174 @@
+<template>
+  <div class="eg">
+    <!-- 1: where emulators live (the welcome, or when no Emulation folder was made yet) -->
+    <template v-if="phase === 'where'">
+      <div class="eg-intro"><b>Where should your emulators live?</b><span class="muted">Cartridge makes an Emulation folder there, laid out like ES-DE: roms (a folder per console), bios and emulators.</span></div>
+      <div v-if="!drives" class="muted small"><Icon name="mdiSync" :size="16" class="spin" /> Looking at your drives…</div>
+      <div v-else class="eg-drives">
+        <button v-for="d in drives" :key="d.path" class="eg-drive" data-focus :disabled="busy" @click="pickDrive(d)">
+          <Icon :name="d.internal ? 'mdiHarddisk' : 'mdiSd'" :size="34" />
+          <b>{{ d.label }}</b>
+          <span class="muted small mono">{{ short(d.path) }}/Emulation</span>
+          <span v-if="d.total" class="eg-space"><i :style="{ width: Math.round(((d.total - d.free) / d.total) * 100) + '%' }" /></span>
+          <span class="muted small">{{ d.total ? `${bytes(d.free)} free of ${bytes(d.total)}` : '' }}{{ d.emulation ? ' · has an Emulation folder' : '' }}</span>
+        </button>
+      </div>
+    </template>
+
+    <!-- 2: every console's emulators -->
+    <template v-else>
+      <div class="eg-bar">
+        <div class="eg-sum"><b>{{ haveCount }} of {{ allCount }}</b><span class="muted small">emulators on this device{{ store.config.emuDir ? ' · new ones go in ' + short(store.config.emuDir) : '' }}</span></div>
+        <span v-if="running" class="eg-now"><Icon name="mdiArrowDownCircle" :size="16" />{{ runningName }} {{ running.pct != null ? running.pct + '%' : '' }}<template v-if="waiting"> · {{ waiting }} waiting</template></span>
+        <button class="btn small" data-focus :disabled="!missingFirst.length" @click="getAll"><Icon name="mdiDownloadMultiple" :size="18" />{{ missingFirst.length ? `Download all (${missingFirst.length})` : 'Everything is here' }}</button>
+        <button v-if="!flow" class="btn small" data-focus @click="phase = 'where'; loadDrives()"><Icon name="mdiFolderMove" :size="18" />Where they go</button>
+        <button v-if="updates" class="btn small" data-focus :disabled="upBusy" @click="loadUps(true)"><Icon name="mdiRefresh" :size="18" :class="{ spin: upBusy }" />{{ upCount ? `Check updates (${upCount} ready)` : 'Check for updates' }}</button>
+      </div>
+      <div v-if="!list" class="muted small"><Icon name="mdiSync" :size="16" class="spin" /> Looking at what's installed…</div>
+      <div v-else class="eg-grid">
+        <section v-for="c in list" :key="c.key" class="eg-con">
+          <div class="eg-head"><PIcon v-if="SLUG[c.key]" :p="{ slug: SLUG[c.key], fs_slug: SLUG[c.key] }" :size="30" /><Icon v-else name="mdiGamepadSquareOutline" :size="28" /><b>{{ c.name }}</b></div>
+          <button v-for="e in c.emus" :key="c.key + e.id" class="eg-emu" :class="{ have: e.installed, busy: stateOf(c, e)?.state === 'run' }" data-focus @click="get(c, e)">
+            <EmuIcon :id="e.id" :size="34" fallback="mdiGamepadVariantOutline" />
+            <span class="eg-mid"><b>{{ e.label }}</b><span class="muted small">{{ e.from }}</span></span>
+            <span v-if="e.installed && upRun && upOf(e.id) && upRun === (upOf(e.id).path || upOf(e.id).fp)" class="status"><Icon name="mdiArrowDownCircle" :size="14" />{{ upPct != null ? upPct + '%' : 'Updating' }}</span>
+            <span v-else-if="e.installed && upOf(e.id)?.update" class="status warn"><Icon name="mdiUpdate" :size="14" />Update · {{ upOf(e.id).update.version || upOf(e.id).update.tag || 'new' }}</span>
+            <span v-else-if="e.installed" class="status ok"><Icon name="mdiCheck" :size="14" />{{ updates && ups && upOf(e.id) && !upOf(e.id).noSource && !upOf(e.id).error ? 'Up to date' : 'Installed' }}</span>
+            <span v-else-if="stateOf(c, e)?.state === 'run'" class="status"><Icon name="mdiArrowDownCircle" :size="14" />{{ stateOf(c, e).pct != null ? stateOf(c, e).pct + '%' : 'Starting' }}</span>
+            <span v-else-if="stateOf(c, e)?.state === 'wait'" class="status">Waiting</span>
+            <span v-else-if="stateOf(c, e)?.state === 'error'" class="status warn" :title="stateOf(c, e).error">Try again</span>
+            <span v-else class="eg-get"><Icon name="mdiDownload" :size="18" /></span>
+            <i v-if="stateOf(c, e)?.state === 'run'" class="eg-bar-fill" :class="{ live: stateOf(c, e).pct == null }" :style="{ width: (stateOf(c, e).pct ?? 100) + '%' }" />
+            <i v-else-if="e.installed && upRun && upOf(e.id) && upRun === (upOf(e.id).path || upOf(e.id).fp)" class="eg-bar-fill" :class="{ live: upPct == null }" :style="{ width: (upPct ?? 100) + '%' }" />
+          </button>
+        </section>
+        <!-- emulators you have that the list above doesn't offer (forks aside): their updates too -->
+        <section v-if="updates && others.length" class="eg-con">
+          <div class="eg-head"><Icon name="mdiGamepadVariantOutline" :size="28" /><b>Also on this device</b></div>
+          <button v-for="u in others" :key="u.path || u.fp" class="eg-emu have" data-focus @click="runUpdate(u)">
+            <EmuIcon :id="u.id" :size="34" fallback="mdiGamepadVariantOutline" />
+            <span class="eg-mid"><b>{{ u.label }}</b><span class="muted small">{{ u.version ? 'Version ' + u.version : u.kind === 'flatpak' ? 'Flatpak' : u.kind === 'windows' ? 'Windows build' : '' }}</span></span>
+            <span v-if="upRun === (u.path || u.fp)" class="status"><Icon name="mdiArrowDownCircle" :size="14" />{{ upPct != null ? upPct + '%' : 'Updating' }}</span>
+            <span v-else-if="u.update" class="status warn"><Icon name="mdiUpdate" :size="14" />Update · {{ u.update.version || u.update.tag || 'new' }}</span>
+            <span v-else class="status ok"><Icon name="mdiCheck" :size="14" />{{ u.noSource || u.error ? 'Installed' : 'Up to date' }}</span>
+            <i v-if="upRun === (u.path || u.fp)" class="eg-bar-fill" :class="{ live: upPct == null }" :style="{ width: (upPct ?? 100) + '%' }" />
+          </button>
+        </section>
+      </div>
+      <p class="muted small">Each comes from the emulator's own releases: its AppImage from GitHub, or its Flatpak from Flathub. Downloads keep going in the background while you use Cartridge.</p>
+    </template>
+  </div>
+</template>
+
+<script setup>
+// Get emulators (0.9.17, owner: a sleek page, every console's emulators, downloads in the background,
+// Download all; first where they live, as an ES-DE style Emulation folder on the drive you pick).
+// Used by the welcome (flow) and Settings → Emulators → Get Emulators.
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
+import { store, call, toast, bytes, confirm } from '../store.js';
+import { focusFirst } from '../nav.js';
+import Icon from './Icon.vue';
+import EmuIcon from './EmuIcon.vue';
+import PIcon from './PIcon.vue';
+
+const props = defineProps({ flow: Boolean, updates: Boolean });
+// 0.9.21 (owner: merge Get Emulators and the emulators' updates): in Settings each installed emulator also
+// says whether it's up to date, and picking one with an update installs it (same channels as before)
+const ups = ref(null), upBusy = ref(false), upRun = ref(''), upPct = ref(null);
+const upCount = computed(() => (ups.value || []).filter((u) => u.update).length);
+const upOf = (id) => { const l = (ups.value || []).filter((u) => u.id === id); return l.find((u) => u.update) || l[0] || null; };
+const others = computed(() => { const known = new Set(all.value.map((x) => x.e.id)); return (ups.value || []).filter((u) => !known.has(u.id)); });
+async function loadUps(fresh = false) { if (!props.updates) return; upBusy.value = true; ups.value = await call('emuup:list', { fresh }).catch((e) => { toast(e.message, 'error'); return []; }); upBusy.value = false; }
+async function runUpdate(u) {
+  if (upRun.value) return toast('One update at a time: wait for this one to finish.', 'info', 3000);
+  if (!u.update) return toast(u.error ? `Couldn’t check for updates: ${u.error}` : u.noSource ? `${u.label} updates from inside ${u.label}.` : `${u.label} is up to date.`, 'info', 3500);
+  if (!(await confirm(`Update ${u.label}?`, `${u.version || 'This copy'} → ${u.update.version || u.update.tag || 'the newest'}. Close ${u.label} first.`, 'Update'))) return;
+  upRun.value = u.path || u.fp; upPct.value = null;
+  try { await call('emuup:run', { id: u.id, kind: u.kind, fp: u.fp, where: u.where, path: u.path }); toast(`${u.label} is up to date`, 'ok', 3000, 'mdiUpdate'); } catch (err) { toast(err.message, 'error', 6000); }
+  upRun.value = ''; await loadUps();
+}
+const SLUG = { psx: 'psx', ps2: 'ps2', ps3: 'ps3', ps4: 'ps4', psp: 'psp', psvita: 'psvita', gc: 'ngc', wiiu: 'wiiu', switch: 'switch', n3ds: '3ds', nds: 'nds', gba: 'gba', n64: 'n64', xbox: 'xbox', dreamcast: 'dc', xbox360: 'xbox360', saturn: 'saturn', arcade: 'arcade' };
+const phase = ref(props.flow && !store.config.emuDir ? 'where' : 'list');
+const drives = ref(null), list = ref(null), q = ref([]), busy = ref(false);
+const el = ref(null);
+const short = (p) => String(p || '').replace(store.info?.home || '\0', '~');
+const all = computed(() => (list.value || []).flatMap((c) => c.emus.map((e) => ({ c, e }))));
+const uniq = computed(() => [...new Map(all.value.map((x) => [x.e.id, x])).values()]);
+const allCount = computed(() => uniq.value.length);
+const haveCount = computed(() => uniq.value.filter((x) => x.e.installed).length);
+const stateOf = (c, e) => q.value.filter((x) => x.key === c.key && x.id === e.id).pop();
+// Download all: the first emulator of each console that has none yet
+const missingFirst = computed(() => (list.value || []).filter((c) => !c.emus.some((e) => e.installed)).map((c) => c.emus[0]).filter((e, i, a) => a.findIndex((x) => x.id === e.id) === i));
+const running = computed(() => q.value.find((x) => x.state === 'run'));
+const waiting = computed(() => q.value.filter((x) => x.state === 'wait').length);
+const runningName = computed(() => all.value.find((x) => x.c.key === running.value?.key && x.e.id === running.value?.id)?.e.label || '');
+
+async function loadDrives() { drives.value = await call('emuget:drives').catch(() => []); }
+async function load() { list.value = await call('emuget:list').catch(() => []); q.value = await call('emuget:state').catch(() => []); }
+async function pickDrive(d) {
+  busy.value = true;
+  try { const r = await call('emuget:prepare', { base: d.path }); store.config = await call('config:get'); toast(`Made ${short(r.root)}`, 'ok', 3000, 'mdiFolderPlus'); phase.value = 'list'; await load(); await nextTick(); focusFirst(document.querySelector('.eg'), '.eg-bar .btn'); }
+  catch (e) { toast(e.message, 'error', 5000); }
+  busy.value = false;
+}
+async function get(c, e) {
+  if (e.installed) { const u = props.updates && upOf(e.id); return u ? runUpdate(u) : toast(`${e.label} is already on this device.`, 'info', 2500); }
+  const s = stateOf(c, e);
+  if (s && /wait|run/.test(s.state)) return toast(s.state === 'run' ? 'Downloading now. You can keep going.' : 'It’s in the queue.', 'info', 2500);
+  q.value = await call('emuget:queue', { items: [{ key: c.key, id: e.id }] }).catch((err) => { toast(err.message, 'error'); return q.value; });
+}
+async function getAll() {
+  if (!missingFirst.value.length) return;
+  const items = (list.value || []).filter((c) => !c.emus.some((e) => e.installed)).map((c) => ({ key: c.key, id: c.emus[0].id }));
+  q.value = await call('emuget:queue', { items }).catch((err) => { toast(err.message, 'error'); return q.value; });
+  toast(`${items.length} emulator${items.length === 1 ? '' : 's'} downloading in the background`, 'ok', 3000, 'mdiDownloadMultiple');
+}
+let off = null, offP = null, offU = null, lastDone = 0;
+onMounted(async () => {
+  off = window.cart.on('emuget-state', (s) => {
+    q.value = s;
+    const done = s.filter((x) => x.state === 'done' || x.state === 'error').length;
+    if (done !== lastDone) { lastDone = done; load(); }
+  });
+  offP = window.cart.on('emuget-progress', (m) => { const x = q.value.find((y) => y.key === m.key && y.id === m.id && y.state === 'run'); if (x && m.pct != null) x.pct = m.pct; });
+  offU = window.cart.on('emu-update', (m) => { if (m.path === upRun.value && m.pct != null) upPct.value = m.pct; });
+  if (phase.value === 'where') await loadDrives(); else await load();
+  loadUps();
+});
+onBeforeUnmount(() => { off?.(); offP?.(); offU?.(); });
+defineExpose({ load });
+</script>
+
+<style scoped>
+.eg { display: flex; flex-direction: column; gap: var(--s-4); text-align: left; }
+.small { font-size: var(--t-sm); }
+.mono { font-family: ui-monospace, monospace; word-break: break-all; }
+.eg-intro { display: flex; flex-direction: column; gap: 6px; text-align: center; }
+.eg-intro b { font-size: var(--t-lg); }
+.eg-drives { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: var(--s-3); }
+.eg-drive { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding: var(--s-4); border-radius: var(--r-lg); background: var(--s2); color: inherit; border: 0; text-align: left; transition: transform var(--d-1, 0.12s), background var(--d-1, 0.12s); }
+.eg-drive b { font-size: var(--t-md); }
+.eg-drive:focus { background: var(--focus); color: var(--on-focus); outline: none; transform: translateY(-2px); }
+.eg-drive:focus .muted { color: var(--on-focus-dim); }
+.eg-space { width: 100%; height: 6px; border-radius: 3px; background: rgba(255, 255, 255, 0.12); overflow: hidden; }
+.eg-space i { display: block; height: 100%; background: currentColor; opacity: 0.7; }
+.eg-bar { display: flex; align-items: center; gap: var(--s-3); flex-wrap: wrap; }
+.eg-sum { display: flex; flex-direction: column; flex: 1; min-width: 200px; }
+.eg-sum b { font-size: var(--t-xl); font-family: var(--display); }
+.eg-now { display: inline-flex; align-items: center; gap: 6px; font-size: var(--t-sm); color: var(--muted); }
+.eg-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: var(--s-3); }
+.eg-con { display: flex; flex-direction: column; gap: 6px; padding: var(--s-3); border-radius: var(--r-lg); background: var(--s1); }
+.eg-head { display: flex; align-items: center; gap: 10px; padding: 2px 4px 6px; }
+.eg-head b { font-family: var(--display); font-size: var(--t-md); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.eg-emu { position: relative; overflow: hidden; display: flex; align-items: center; gap: var(--s-3); padding: 10px 12px; border-radius: var(--r-md); background: var(--s2); color: inherit; border: 0; text-align: left; font: inherit; flex: none; }
+.eg-emu:focus { background: var(--focus); color: var(--on-focus); outline: none; }
+.eg-emu:focus .muted { color: var(--on-focus-dim); }
+.eg-mid { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.eg-mid b { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.eg-mid .small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.eg-get { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: rgba(255, 255, 255, 0.08); flex: none; }
+.eg-emu:focus .eg-get { background: rgba(0, 0, 0, 0.1); }
+.eg-bar-fill { position: absolute; left: 0; bottom: 0; height: 3px; background: currentColor; transition: width 0.3s ease; }
+.eg-bar-fill.live { animation: egLive 1.2s ease-in-out infinite; transform-origin: left; }
+@keyframes egLive { 0% { transform: scaleX(0.05); opacity: 0.4; } 50% { transform: scaleX(0.6); opacity: 0.9; } 100% { transform: scaleX(1); opacity: 0.2; } }
+</style>

@@ -260,6 +260,231 @@ Included in this fork from 0.9.2.
 
 Included in this fork from 0.9.17.
 
+## Cartridge 0.9.16 to 0.9.22 (abdu2304)
+
+Merged into this fork after 0.9.20. On Android, the parts that need a Linux desktop (Steam, Flatpak and AppImage emulators, Syncthing, emulator add-ons and updates) are left out.
+
+## Cartridge 0.9.22 · Home Fix (abdu2304)
+
+### Fixed
+- **Home disappeared** after moving a couple of times (down twice, or right once): the header and every row vanished. Home called the wrong thing to find a game's header picture, which failed the moment a game was highlighted and took the whole page down with it. It came in with 0.9.21's change to SteamGridDB headers.
+- **No header pictures on Home:** the same fault stopped Home's header from showing. Headers are SteamGridDB's, as asked in 0.9.21. When SteamGridDB can't be reached, the game's cover shows blurred instead of nothing.
+
+## Cartridge 0.9.21 · Start, Your Way (abdu2304)
+
+### New
+- **Start, resize and move freely:**
+  - **Any size:** a tile can be any size from a 1 by 1 square to the full width and four rows tall, and it rearranges what it shows to fit.
+  - **Drag to resize:** with touch or the mouse, hold a tile to arrange, then drag any edge or corner. Drag the tile itself to move it anywhere on the grid; the other tiles make room.
+  - **Controller:** hold A to arrange. A picks a tile up and the D-pad moves it. X resizes: the D-pad moves the lit corner, and LB and RB pick another corner. Y removes, B is done.
+  - **Motion:** tiles glide to their new place and size instead of jumping, a lifted tile follows your finger, and the grid shows while you arrange.
+- **Start's clock is a scene:** sunrise, morning, afternoon, evening and night, each with its own sky and hills. The sun (or moon with stars) moves across it during the day.
+- **Settings → Sync:** Syncthing has its own tab. It shows your devices, the folders it syncs (saves first) and, for each folder, its newest files. View only: Cartridge never opens, copies or changes a file.
+- **Game Add-ons:** Game Updates, Patches and Add-ons are one page in Settings → Emulators, listed by console with the emulator each uses, and a search box to find a game quickly. A game opens one sheet with a tab for each thing it can have: Mods, Texture Packs, Patches (for Dolphin: Patches, AR Codes, Gecko Codes and Graphics Mods) and Game Updates (PS3), LB and RB between them. Mods are GameBanana's; Texture Packs are the PS2 texture pack catalog (EmuCoreX), kept apart so the two aren't mixed up. Switch and Wii U games have no Texture Packs tab, since their emulators take mods only. Whether a texture pack or mods are already in place, and whether custom textures are on, shows on the tab it belongs to. Patches and Add-ons in a game's More menu open the same sheet.
+- **Emulators page:** Get Emulators and emulator updates are one list. An emulator you have says Up to date, or shows its update (pick it to install), instead of just Installed. Emulators you have that the list doesn't offer are under Also on this device, with their updates too.
+- **Ready to play starts the game:** on a game's page it now starts the game's Steam shortcut, the same as playing it from Steam (through Steam itself when its live connection is on). A game not in Steam yet offers to add it.
+- **Dolphin patches in tabs:** Patches, AR Codes, Gecko Codes and Graphics Mods, LB and RB between them, each with how many are on. Graphics mods are new: Dolphin's own and yours (Load/GraphicMods) for that game, switched on the way Dolphin does it.
+- **Sign In to Emulators** (Settings → Achievements) says whether they're all signed in ("All signed in", or "2 of 5"). It opens a list of your emulators showing who each is signed in as, with Sign In to All at the top or one at a time.
+
+### Changed
+- **Game heroes:** only SteamGridDB's heroes are used (with a SteamGridDB key). RomM's picture no longer shows first and then swaps; the hero fades in once SteamGridDB's is there. A game SteamGridDB has nothing for shows its cover, blurred.
+- **Search** in the top bar, when closed, is a plain magnifier like the tab icons, with the Y hint like LT and RT. It opens as before.
+- **Get Emulators:** icons for ares, RetroArch, ScummVM, PPSSPP, MAME, Vita3K, Rosalie's Mupen GUI, Supermodel, PrimeHack, Xenia Edge, Eden and Ryujinx. Xbox 360 lists Xenia Canary first (yours shows as installed), Xenia Edge second.
+- **Xenia's Linux build** (from Get Emulators) starts games with a plain path instead of the Windows-style Z: path.
+- **Rumble when switching pages:** LB/RB and LT/RT (sections and top tabs) give a short, firmer pulse than moving does, at your Look & Feel rumble level.
+- **Start's Consoles tile** uses the same console cards as the Consoles page.
+- **Start's Latest trophies** shows as many as fit, smaller, instead of one.
+- **Look & Feel:** Theme and Background are one page.
+- **Console logos:**
+  - **Wordmarks:** Sega and Microsoft now show their full wordmarks, and Nintendo's is as big as Sony's.
+  - **Console names:** Switch, GameCube, Wii, Dreamcast, Genesis and the other Nintendo and Sega logos are sized to read as large as the PlayStation and Xbox ones, on the Consoles page, game cards and Achievements.
+- **PS3 patches:** only the patches for your copy's game version are listed (Uncharted 3 at 1.19 shows the 1.19 patches, not every version's). A patch for another version that is already on stays listed so you can turn it off. When the version can't be read, every version's patches show, each saying which version it's for. shadPS4 patches already follow the game's version, and PCSX2's are tied to the exact disc.
+- **Emulator updates:**
+  - **Eden** is checked on its own server (git.eden-emu.dev) first, and the update keeps your build (Steam Deck or amd64). If its AppImage has no readable icon, Eden's logo is fetched from its own server.
+  - **Xenia** can be updated from Cartridge: the Linux build from Xenia Canary's releases, and the Windows build that runs through Proton (xenia_canary.exe is replaced in place).
+  - **Contrast:** on a selected row, the progress bar and the status (Up to date, the new version, Couldn't check) now stand out, here and on every list with status labels.
+- **PS3 game updates on the game page:** More → Emulator always has Game updates for an installed PS3 game. It checks Sony's list when picked and offers to install what's new.
+- **A console's page** no longer shows its folder path under the title. It only says when no folder is set.
+
+### Fixed
+- **Updating Vita3K broke its Steam shortcuts:** EmuDeck's Vita3K is the zip build (the program with its data and lang folders), and the update wrote the AppImage over it. Updates now keep the kind of build you have: the zip build updates from Vita3K's zip, unpacked over its folder, and a copy that was already overwritten is put back the same way by Update. A plain program Cartridge can't update in kind is never overwritten.
+- **Dolphin codes on in Dolphin showing as off:** Cartridge now reads the Dolphin user folder that holds the game's settings (EmuDeck's launcher hid whether it's the Flatpak), and Dolphin's per-revision files (ID6r1.ini) too.
+- **LT/RT at launch:** the first trigger pull after starting Cartridge now switches tabs. It used to be ignored until another button was pressed.
+- **Lag in Game Mode:** with a game or Steam in front, Cartridge now stops its animated background and every animation, so it no longer slows the device down in the background.
+- **Vita3K installs:** Cartridge now works out Vita3K's storage folder exactly as Vita3K does (a portable folder, the pref-path in its settings, then its default), puts games there, and also finds them wherever Vita3K's own log says it put them. If Vita3K still refuses a game, the message shows Vita3K's own reason (from its output or vita3k.log) instead of a general one, and the full output goes to Cartridge's log.
+- **Add-on pictures:** GameBanana mods and PS2 texture packs show their preview pictures. Cartridge's page rules only allowed its own pictures, and the texture packs' pictures were never shown.
+- **Slow downloads of games made of many files** (PS3, PS4 and Vita folders): every file started its own download thread and a new connection to RomM, which cost far more than the file itself for small ones. Each game now uses one thread and one connection for all its files (about 60 times faster per small file in a local test). Large single files were not affected by this.
+- **Vita3K missing after its update:** the update correctly put back Vita3K's own build (the program in its folder, as EmuDeck installs it), but Cartridge only listed emulators that are AppImages, so Vita3K disappeared from the Emulators page. Folder builds are listed again, with their updates.
+- **Consoles page:** the controller pictures are no longer cut off at the card corners.
+- **Settings → Emulators:** LB, the pages and RB stay on one row.
+
+## Cartridge 0.9.20 · Start, Refined (abdu2304)
+
+### Changed
+- **Start, after a design review with the new taste and redesign skills:**
+  - **Labels:** each tile is named in plain words, without the small icon and count every tile used to carry.
+  - **Clock:** shows just the time, with the day and date under it.
+  - **Storage:** now reads "Free space … of 931 GB on the games drive".
+  - **This week:** now reads "Played this week".
+  - **Cover rows:** New, Recently played, Favourites and Recommended fill their tile and fade out at the edge. Each has a soft, dark wash of its first game's colours behind it, so not every tile is the same grey.
+  - **Consoles:** a few consoles stretch to fill the tile instead of leaving it half empty.
+  - **Latest trophies:** one trophy shows large, with how long ago you got it.
+  - **Entrance:** tiles arrive one after another, rising a little, rather than all at once.
+  - **Hints:** "A Open, hold to arrange" is one hint instead of two.
+- **Start widgets, redrawn:**
+  - **Clock:** a large, light time over a soft sky that changes with the hour. The sun (or the moon at night) moves along a faint path across the tile.
+  - **Free space:** a ring of ticks lit for the space that's left, with the percentage in the middle. It turns amber below 10%.
+  - **Played this week:** says which day you played most, today's bar shows its own minutes, days without play are a dot, and the bars rise in turn.
+- **Top bar:** the current tab is back on a white highlight with dark text, as before the underline, now redone: the highlight glides from tab to tab and hugs the name as it opens. A tab picked with the controller or keyboard shows a white ring, so it is never mistaken for the current one.
+- **Search:** search is a round button with a mouse or touch. The Y hint shows only while a controller is in use, like LT and RT.
+- **Design skills:** taste-skill (with its redesign, soft and minimalist skills) and img2threejs are now in the project's design skills.
+
+### Fixed
+- **Reduced motion:** it now also stops the media bar's settle and Start's tile animations. Three of 0.9.19's style rules were written in a way the app's style compiler doesn't support, so they never applied.
+
+## Cartridge 0.9.19 · Start (abdu2304)
+
+### New
+- **Start: a menu you arrange yourself.** A new tab of tiles: Continue playing (LB/RB through your recent games), Clock, Storage, This week (play time by day), Consoles, New in your library, Recently played, Latest trophies, Downloads, Favourites, Recommended for you, Surprise me, and any game or console you pin.
+  - Hold A on a tile (or press and hold with a finger or the mouse) to arrange. A picks a tile up and the D-pad moves it, X changes its size ("4 by 2"), Y removes it, B is done. With touch or a mouse, drag tiles where you want them.
+  - **Pin to Start** is in a game's More menu.
+  - Look & Feel → Top Bar → **Open on** picks the menu Cartridge starts on.
+- **Backgrounds are styles now.** The console scenes are gone. In their place, built the way Ribbons is:
+  - **Aurora:** curtains of light.
+  - **Contours:** slow height lines, like a map.
+  - **Drift:** soft lights floating by.
+  - **Tide:** a sea of points rising and falling.
+  - If you had a console scene picked, you now see that console's games panning.
+- **Vita games install in the background,** like RPCS3, without opening Vita3K. Unencrypted .vpk, .zip and folder dumps are unpacked by Cartridge the way Vita3K's own installer does it (game, update and DLC folders). NoNpDrm dumps still need Vita3K to decrypt them, so Vita3K runs with no window.
+- **Texture packs already in place show a green check,** with whether Cartridge installed them or they were added outside Cartridge.
+- **Get Emulators:** Xbox 360 (Xenia Edge), Saturn, arcade (MAME, Supermodel), ScummVM and ares.
+- **Switch .xci files** (and .nsp files without a ticket) have their title ID read from the game itself, using the keys your Switch emulator already has, for mod folders.
+- **Syncthing, first look** (Settings → Storage → Sync): Cartridge finds your Syncthing and shows what it shares and with whom, and which folders look like emulator saves. It changes nothing.
+
+### Changed
+- **Top bar redesigned:**
+  - each tab is its icon, and the current one opens out with its name over a short line;
+  - search folds into a button until you use it;
+  - status is one tidy group.
+- **Pages move with you:** a tab slides in from its side, a deeper page settles in, back eases out. Reduced motion keeps a plain fade.
+- **Home's media bar is larger,** and each new picture settles in once.
+- **Emulator downloads and updates:**
+  - releases are read from each emulator's own sources: GitHub, plus Eden's and Ryujinx's own servers;
+  - shadPS4's launcher comes as a .zip and is unpacked;
+  - an emulator falls back to its Flatpak when there's no AppImage;
+  - downloaded AppImages get one lasting name (like `DuckStation.AppImage`) and updates never rename them, so launch options keep working.
+- **GameBanana** also finds games whose RomM names are written "Title, The".
+- **RomM on this device:**
+  - the server name you pick becomes the server's own host name;
+  - adding IGDB and ScreenScraper keys is a step straight after setup.
+- **Trophy names** are remembered for PS3 and Vita games too, so a code never shows where a name was known.
+
+### Fixed
+- **RPCS3 patches showed none.** RPCS3's patch list can name a key twice, which RPCS3 accepts but Cartridge's reader rejected, throwing the whole list away. Cartridge now reads it as forgivingly as RPCS3 does.
+- **Vita3K installs:** "no Qt platform plugin could be initialized".
+- **403 errors:** when a site answers with a browser check, Cartridge passes it once in a hidden window, as a browser would, then retries. Sony's "403" for a game with no update list now means no updates.
+- **Steam games from a failed apply** no longer count as added: they're dropped from Cartridge's list at start.
+
+## Cartridge 0.9.18 · Textures In Place (abdu2304)
+
+### New
+- **GameBanana for PS2 games too:** PS2 texture packs and mods from GameBanana are listed after the EmuCoreX catalog's packs, and go in the same folder.
+
+### Changed
+- **Texture packs and mods go in the exact folder each emulator reads for that game,** whatever folders the pack was zipped in:
+  - **PCSX2 and DuckStation:** `textures/<serial>/replacements`, plus DuckStation's per-game `config.yaml`. Packs with no replacements folder have their images put in one.
+  - **PPSSPP:** the folder holding the pack's `textures.ini`, under `PSP/TEXTURES/<game ID>`.
+  - **Dolphin:** `Load/Textures/<game ID>`, with packs in a 6 or 3 character ID folder unwrapped.
+  - **Azahar and Citra:** `load/textures/<title ID>`.
+  - **Cemu:** each graphic pack (a folder with `rules.txt`) in its own folder in `graphicPacks`.
+  - **Switch emulators:** a mod's own folder name is kept, and Atmosphere-style mods (`contents/<title ID>/romfs`) get the mod's name.
+- **PS3 serials are found in more places:** game folders nested one or two levels deeper, and RPCS3's own game list for games it has already booted.
+
+### Fixed
+- **Vita3K installs:** "no Qt platform plugin could be initialized". Vita3K builds without Qt's hidden display mode are run again on the normal display, and closed as soon as the game is installed. The same fix applies to Vita firmware installs.
+
+## Cartridge 0.9.17 · Set Up In One Place (abdu2304)
+
+### New
+- **Add-on downloads.** A game's More → Emulator → Add-ons, and the new Add-ons page in Settings → Emulators, show what can be downloaded for it:
+  - **PS2 texture packs** from the EmuCoreX texture catalog (the one ARMSX2 uses, in the PC format), installed into PCSX2's textures folder for that game. Each pack is checked against the catalog's checksum before anything is installed.
+  - **Mods for other consoles** (Switch, Wii U, GameCube, Wii, 3DS, PSP) from GameBanana, installed into the emulator's folder for that game.
+  - An add-on never replaces a file that's already there, and Remove deletes only the files Cartridge put in.
+- **Frame Generation** (Settings → Steam): lsfg-vk or MAKO, whichever is installed, for every game, a console or one game. It goes at the start of Launch options, after settings like vblank_mode=0, before the one %command%.
+- **shadPS4 version per game:** on a PS4 game's Steam settings, start it with one of the versions in shadPS4's launcher.
+- **Pick your own emulators:** a third choice in the welcome, next to EmuDeck and RetroDECK, and Settings → Emulators → Get Emulators. Each console's emulators, a green check for the ones you have, and Download for the rest. Downloads come from the emulator's own GitHub releases (an AppImage into ~/Applications), or as a Flatpak from Flathub when there's no AppImage.
+- **Set up your emulators from Cartridge** (Emulator setup):
+  - Get every console's BIOS and firmware from RomM in one go. Files are copied into each emulator that reads them, without replacing anything. PS3 and Vita firmware is installed, and Switch keys and firmware are put in place for Eden and the other yuzu-family emulators.
+  - Add your console folders to the PCSX2, DuckStation and Dolphin game lists.
+- **RomM on this device sets up Podman itself.** It downloads Podman when there's none, and asks for your device password once to let Podman run as you. The password is never saved.
+- **Multi-disc games** get a playlist (.m3u) in their folder, so Steam starts disc 1 and the emulator can change discs.
+- **A new welcome.** An opening animation (any press skips it), a Your controls step that shows the controller Linux sees (or keyboard, touch or mouse) with a choice of button labels, Cartridge's own keyboard while setting up (back to Auto after), a back arrow for touch and A/B hints for controllers.
+- **Download emulators in the welcome and Settings → Emulators → Get Emulators:** pick a drive, Cartridge makes an ES-DE style Emulation folder there (a ROMs folder per console, bios, emulators), then shows every console's emulators with progress bars, Download all, Continue and Later. Downloads keep going in the background.
+- **RetroDECK without Flatpak:** the welcome offers to install Flatpak with your system's package manager (device password, used once), then RetroDECK.
+- **Use Cartridge without RomM:** a library built from the console folders already on your device. RomM is still strongly recommended, and the welcome lists what you miss without it. Connect to RomM later in Settings → RomM.
+- **Roll back** to an earlier release in Settings → Updates (automatic updates pause until Check for updates), with this version's changes shown in a card.
+- **GameCube and Wii cheat codes** downloaded the way Dolphin's Download Codes does, for many more games.
+- **Steam's keyboard opens by itself** when you type in Game Mode.
+
+### Changed
+- **More disc images are read:** CHD (PS1 and PS2), CSO, ZSO, GCZ and PBP, for serials, patches and add-on folders.
+- **Nintendo's logo** on console cards, at the size of the text.
+- **Texture Packs in Settings → Emulators is now Add-ons,** with your games by console, what Cartridge installed, and each emulator's folders.
+- **Top bar redesigned:** words-only tabs with a sliding underline, LT/RT shown only when you use a controller, a quieter search field.
+- **Feels smoother:** covers fade in instead of popping, and buttons, rows and cards give a small squeeze when pressed (mouse, touch and A).
+- **Emulator updates:** shadPS4's launcher, Eden, Ryujinx, Flycast and mGBA update from Cartridge too. Forks, old copies and shadPS4's own versions are hidden. The page stays usable during an update, with a progress bar along the row, and every emulator has an icon.
+- **Patches and Add-ons pages are split by console,** with the console's icon and the game covers.
+- **Game Updates** look clearly PS3 and every row can be selected.
+- **Console logos:** Nintendo's pictures are as big as the rest, and Sega and Microsoft have their wordmarks.
+- **Windows smaller than 1280x800** zoom out to fit instead of clipping.
+
+### Fixed
+- **403 errors** from GitHub, RetroAchievements, SteamGridDB and Sony's PS3 update list. Cartridge now reaches them the way a browser does, and reads GitHub's release pages when its API limit is hit.
+- **RPCS3 patches showed none:** the patch list is downloaded the way RPCS3 does, and an error says why when it can't be.
+- **Emulator updates didn't stick** (RPCS3): the new version is remembered.
+- **Skipping the welcome** no longer leaves an empty app when you have a games folder.
+- **Dark text on a dark row** with mouse and touch focus.
+- **EmuDeck's description** in the welcome is easier to read.
+
+## Cartridge 0.9.16 · Your Emulators (abdu2304)
+
+### New
+- **Emulators has its own pages** (Settings → Emulators, LB/RB): Overview, Updates, Game Updates, Patches, Texture Packs and Console Folders. Each emulator shows its own icon, taken from your installed copy.
+- **Update your emulators from Cartridge.** Updates checks the emulators you have against their own releases: Flatpaks through Flatpak, AppImages from the emulator's own GitHub releases, swapped in place so your Steam shortcuts keep working. Nothing is updated until you press Update. EmuDeck's launchers still update through EmuDeck.
+- **PS3 game updates.** Cartridge reads Sony's own update list for each PS3 game (the same list ps3.aldostools.org uses), shows what's newer than your copy, and installs the updates into RPCS3 in order. Also on the game page when one is waiting.
+- **Patches and cheats for more consoles.** GameCube and Wii through Dolphin (its patches, Action Replay and Gecko codes) and PSP through PPSSPP (its cheat list), in the same sheet as the PlayStation patches. When PPSSPP has no cheat list yet, Cartridge fetches it from PPSSPP's own source. Turning on a cheat also turns on the emulator's cheats setting, and only what Cartridge turned on is turned off again.
+- **RPCS3's patch list** is fetched the way RPCS3 does it when it's missing or a week old, so games like Uncharted 2 show their patches without opening RPCS3 first. Patches for another version of the game are listed too, with a note.
+- **Turn custom textures on from Cartridge** for PCSX2, DuckStation, Dolphin, PPSSPP and Azahar, written the way each emulator writes it. Close the emulator first. Cartridge only turns off what it turned on.
+- **Mods for Switch and Wii U:** the mod folder for each game in Eden, Citron, Yuzu and Ryujinx, and Cemu's graphic packs folder.
+- **More games recognised for texture packs:** PS1 discs (from the disc itself), GameCube and Wii in RVZ, WIA, WBFS and CISO, 3DS .cia and Switch .nsp.
+- **PS3 and Vita firmware from RomM** now installs into RPCS3 and Vita3K.
+- **Add to a Steam collection** from a game's More menu.
+- **Backgrounds follow your library:** your five most played consoles come first in the picker, each with its scene, or its own games panning when it has no scene.
+
+### Changed
+- **Downloads run in their own thread,** so nothing else in Cartridge can slow them down. Game Mode's process check no longer holds anything up.
+- **Controller movement:** up and down always go to the very next row and start at its first item (grids keep their column), and left and right stay in the row.
+- **Game page:** the header has Ready to play and More only, and going up to it shows the whole header. More is split into Game, Steam, Emulator, Details and Artwork (Manual is here now) and Options (Hide, Re-download, Delete).
+- **Steam artwork for games** uses the same sharp background Cartridge shows for the hero and banner.
+- **Console backgrounds** for PS2, GameCube, Wii, Xbox 360 and Switch rebuilt from fine lines of light, the way Ribbons is made.
+- **Welcome:** each step sits in a card over the background, it opens and closes with a short animation, picks up where you left it, and its system scan shows your console folders (fix a match), games already in Steam and anything that needs you.
+- **Consoles page and Achievements** show console makers and consoles as logos at text size.
+- **Continue playing** shows the console as a logo and the device in a quieter label.
+- **RomM on this device** asks for metadata keys (IGDB, ScreenScraper) as a step after setup, keeps them for updates, and uses the name you gave it. The "on another computer" QR code opens RomM's setup guide.
+- **Recommended for you** drops the "Same series" line.
+
+### Fixed
+- **RetroAchievements sign-in** works again and shows RetroAchievements' own error when it fails.
+- **Vita games installed in Vita3K before Cartridge** no longer ask to be installed again.
+- **PS4 trophies** of games not on this device show the game's name instead of an NPWR code, or say they're unnamed and can be linked.
+- **Developer names:** games with two developers show both (Tokyo Jungle shows Crispy's! and Japan Studio).
+- **Home shelf titles** no longer shrink and clip as you scroll, and are a bit bigger.
+- **The welcome's "Your system" step** scrolls.
+- **The latest unlocks** on the RetroAchievements and Trophies tabs are as big as on All.
+- **Patches sheet** focus box is no longer cut by a dark line.
+
+## Cartridge 0.9.15 · Welcome Home
+
 0.9.15 brings together everything planned for 0.9.3 M and 0.9.4. The 0.9.3 parts ended with L, and the version number now matches GitHub again.
 
 ### New

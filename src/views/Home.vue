@@ -13,7 +13,7 @@
         <Transition name="hero">
           <div v-if="heroRom" :key="'r' + heroRom.id" class="hero-in">
             <div class="eyebrow row" style="gap: 8px"><PIcon :p="{ slug: heroRom.platform_slug, fs_slug: heroRom.platform_fs_slug }" :size="18" />{{ heroRom.platform_display_name }}</div>
-            <GameLogo :logo="store.config.ui.logos !== false ? logoOf(heroRom) : null" :name="heroRom.name" cls="hero-title" :area="32000" :max-w="420" :max-h="logoMaxH" />
+            <GameLogo :logo="store.config.ui.logos !== false ? logoOf(heroRom) : null" :name="heroRom.name" cls="hero-title" :area="42000" :max-w="500" :max-h="logoMaxH" />
             <div class="meta">
               <span v-if="isNew(heroRom)" class="chip new">NEW</span>
               <span v-if="store.installed[heroRom.id]" class="chip green"><Icon name="mdiCheckCircle" :size="14" />On this device</span>
@@ -27,9 +27,15 @@
             <p class="summary">{{ heroRom.summary }}</p>
           </div>
           <div v-else-if="heroSys" :key="'s' + heroSys.id" class="hero-in">
-            <!-- the console's wordmark leads, like a game's logo; its name sits small above -->
+            <!-- Android: the console's wordmark leads, like a game's logo; its name sits small above -->
+            <template v-if="IS_ANDROID">
             <div class="eyebrow row" style="gap: 8px"><PIcon :p="heroSys" :size="18" />{{ heroSys.display_name }}</div>
             <h1 class="hero-title sys-mark"><ConsoleMark :slug="heroSys.slug" :fs="heroSys.fs_slug" :label="heroSys.display_name" /></h1>
+            </template>
+            <template v-else>
+            <div class="eyebrow">System</div>
+            <h1 class="hero-title">{{ heroSys.display_name }}</h1>
+            </template>
             <div class="meta">
               <span>{{ heroSys.rom_count }} games on your server</span>
               <span class="chip green" v-if="sysOnDevice(heroSys)">{{ sysOnDevice(heroSys) }} on this device</span>
@@ -38,8 +44,8 @@
           </div>
           <div v-else-if="heroCol" :key="'c' + heroCol.id" class="hero-in">
             <div class="eyebrow">{{ heroCol.genre ? 'Genre' : heroCol.series ? 'Series' : heroCol.auto ? 'Made by Cartridge' : heroCol.smart ? 'Smart collection' : 'Collection' }}</div>
-            <!-- a series leads with its first game's logo, like its tile -->
-            <GameLogo v-if="heroCol.series" :logo="store.config.ui.logos !== false ? logoOf(romById(heroCol.rom_ids[0])) : null" :name="heroCol.name" cls="hero-title" :area="32000" :max-w="420" :max-h="logoMaxH" />
+            <!-- Android: a series leads with its first game's logo, like its tile -->
+            <GameLogo v-if="IS_ANDROID && heroCol.series" :logo="store.config.ui.logos !== false ? logoOf(romById(heroCol.rom_ids[0])) : null" :name="heroCol.name" cls="hero-title" :area="32000" :max-w="420" :max-h="logoMaxH" />
             <h1 v-else class="hero-title">{{ heroCol.name }}</h1>
             <div class="meta"><span>{{ heroCol.rom_ids.length }} games</span><span v-if="heroCol.description">{{ heroCol.description }}</span></div>
           </div>
@@ -78,7 +84,7 @@
               <CollTile v-for="c in s.items.slice(0, ROW)" :key="c.id" :c="c" wide @open="openCol" @focused="focusCol" />
             </template>
             <template v-else>
-              <GameCard v-for="r in s.items.slice(0, ROW)" :key="r.id" :rom="r" eager :show-platform="true" :extra="s.sub ? s.sub(r) : ''" @open="openGame" @focused="focusRom" />
+              <GameCard v-for="r in s.items.slice(0, ROW)" :key="r.id" :rom="r" :eager="IS_ANDROID" :show-platform="true" :extra="s.sub ? s.sub(r) : ''" :device="s.id === 'playing'" @open="openGame" @focused="focusRom" />
             </template>
             <!-- a row shows its first 15; the 16th card opens the whole list (0.9.3) -->
             <button v-if="s.type !== 'ra' && s.items.length > ROW" class="card show-all" :class="{ wide: s.type === 'col' || s.type === 'genre' || s.type === 'sys' }" data-focus :data-key="'all-' + s.id" @click="showAll(s)" @focus="clearHero">
@@ -94,9 +100,10 @@
 <script setup>
 import { recommend } from '../recs.js';
 import { computed, ref, nextTick, onMounted, onBeforeUnmount, watch } from 'vue';
-import { tab, img, cover, collections, autoLists, seriesLists, genres, visible, store, go, allRoms, visiblePlatforms, romsOf, isNew, setBg, backdropOf, wantSharp, bytes, year, ago, rating, resync, downloadFor, download, romById, toast, logoOf, call, GRADE, loadPlay, playtimeText, MEDIA_DEFAULT } from '../store.js';
+import { tab, img, cover, collections, autoLists, seriesLists, genres, visible, store, go, allRoms, visiblePlatforms, romsOf, isNew, setBg, backdropOf, wantSharp, heroArt as heroOf, bytes, year, ago, rating, resync, downloadFor, download, romById, toast, logoOf, call, GRADE, loadPlay, playtimeText, MEDIA_DEFAULT } from '../store.js';
+import { IS_ANDROID } from '../platform.js';
 import { useView } from '../useView.js';
-import { ensureFocus, glideTo } from '../nav.js';
+import { ensureFocus, scrollMode } from '../nav.js';
 import Icon from '../components/Icon.vue';
 import Logo from '../components/Logo.vue';
 import PIcon from '../components/PIcon.vue';
@@ -115,17 +122,24 @@ const shelvesEl = ref(null);
 // The hero sits in a fixed-height row. A tall logo plus a wrapped info line could push the top of
 // it (the console name) up under the top bar, so the logo shrinks until everything fits.
 const heroEl = ref(null);
-const logoMaxH = ref(140);
+// 0.9.16: each game starts from the full size again (it used to only ratchet down, so one long info
+// line left every later logo tiny and clipped), and the full size follows the header's height.
+const logoMaxH = ref(160);
+function heroAvail() {
+  const h = heroEl.value;
+  if (!h) return 0;
+  const cs = getComputedStyle(h);
+  return h.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+}
+const logoCeil = () => Math.round(Math.min(230, Math.max(110, heroAvail() * 0.42)));
 function fitHero() {
   const h = heroEl.value, inner = h?.querySelector('.hero-in:not(.hero-leave-active)');
-  if (!h || !inner) return;
-  const cs = getComputedStyle(h);
-  const avail = h.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+  if (!h || !inner || h.querySelector('.hero-leave-active')) return; // not mid-crossfade: both would be measured
   const logo = inner.querySelector('.game-logo, .hero-title');
   const logoH = logo ? logo.getBoundingClientRect().height / (parseFloat(getComputedStyle(document.body).zoom) || 1) : 0;
-  const over = inner.scrollHeight - avail;
-  if (over > 0) logoMaxH.value = Math.max(48, Math.floor(Math.min(logoMaxH.value, logoH) - over - 2));
-  else if (over < -12 && logoMaxH.value < 140) logoMaxH.value = Math.min(140, logoMaxH.value + Math.floor(-over - 8));
+  const over = inner.scrollHeight - heroAvail(), ceil = logoCeil();
+  if (over > 0) logoMaxH.value = Math.max(72, Math.floor(Math.min(logoMaxH.value, logoH) - over - 2));
+  else if (over < -12 && logoMaxH.value < ceil) logoMaxH.value = Math.min(ceil, logoMaxH.value + Math.floor(-over - 8));
 }
 let ro;
 // Fit again once the logo image arrives and after the view's entrance animation: coming back from a
@@ -133,6 +147,7 @@ let ro;
 const refit = () => requestAnimationFrame(fitHero);
 onMounted(() => {
   if (window.ResizeObserver) { ro = new ResizeObserver(refit); if (heroEl.value) ro.observe(heroEl.value); }
+  if (!IS_ANDROID) return;
   heroEl.value?.addEventListener('load', refit, true);
   el.value?.addEventListener('animationend', refit);
 });
@@ -141,7 +156,9 @@ const heroRom = ref(null);
 const heroSys = ref(null);
 const heroCol = ref(null);
 // Media bar art: a screenshot of the highlighted game (or its cover), or art from the highlighted console/collection
-const artOf = (r) => (r ? (store.art?.[r.id]?.hero ? img(store.art[r.id].hero) : store.sharp[r.id] || (r.shot ? img(r.shot) : cover(r, true))) : '');
+// SteamGridDB's hero only, no RomM picture first (0.9.21). 0.9.22: the store's heroArt under another name:
+// the computed below is also called heroArt, so calling it here threw and Home vanished on the first game
+const artOf = (r) => heroOf(r)?.src || '';
 const heroArt = computed(() => {
   if (heroRom.value) return artOf(heroRom.value);
   if (heroSys.value) return artOf(romsOf(heroSys.value.id).find((r) => r.shot) || romsOf(heroSys.value.id)[0]);
@@ -208,7 +225,7 @@ call('steam:played').then((m) => { played.value = m || {}; }).catch(() => {});
 loadPlay();
 const minsOf = (r) => store.play[r.id]?.min || 0;
 // media bar size (0.9.15, Look & Feel): Large (the default) is about as tall as a game page's header
-const HERO_H = { compact: '46%', spacious: '54%', large: '62%' };
+const HERO_H = { compact: '50%', spacious: '58%', large: '68%' }; // 0.9.19 (owner): larger and more immersive, not much larger
 const DONE = new Set(['finished', 'completed_100', 'retired', 'never_playing']);
 const shelves = computed(() => {
   const roms = allRoms().filter(visible);
@@ -289,7 +306,12 @@ function onShelfFocus(e) {
   const wrap = e.target.closest('.shelf-wrap');
   if (!wrap || !shelvesEl.value) return;
   if (!document.body.classList.contains('pad-mode')) return; // only snap rows when using a controller
-  glideTo(shelvesEl.value, wrap.offsetTop - 4);
+  // 0.9.16: the browser's own smooth scroll runs off the main thread, so the header swapping to the new
+  // game at the same moment can't make it stutter (owner: up/down still felt rough). Held: instant.
+  const top = wrap.offsetTop - 4, sc = shelvesEl.value;
+  if (Math.abs(sc.scrollTop - top) < 2) return;
+  if (scrollMode() === 'auto' || document.body.classList.contains('motion-reduce')) sc.scrollTop = top;
+  else sc.scrollTo({ top, behavior: 'smooth' });
 }
 
 useView(
@@ -305,6 +327,7 @@ useView(
 );
 
 watch(() => [heroRom.value?.id, heroSys.value?.id, heroCol.value?.id, heroRom.value && store.logos[heroRom.value.id]], async () => {
+  logoMaxH.value = logoCeil() || 160; // a new game: full size first, then fit
   await nextTick();
   for (const t of [0, 180, 600]) setTimeout(() => requestAnimationFrame(fitHero), t);
 });
@@ -325,7 +348,7 @@ onMounted(async () => { await nextTick(); ensureFocus(el.value); });
 .hero-title.sys-mark :deep(.cmark) { height: 1.15em; max-width: min(460px, 100%); object-fit: contain; object-position: left bottom; opacity: 1; filter: brightness(0) invert(1) drop-shadow(0 4px 18px rgba(0, 0, 0, 0.55)); }
 .meta { display: flex; align-items: center; gap: var(--s-4); flex-wrap: nowrap; white-space: nowrap; overflow: hidden; min-width: 0; color: var(--text); font-size: var(--t-md); font-weight: 500; }
 .summary { margin: 0; max-width: 680px; color: var(--muted); line-height: 1.5; font-size: var(--t-md); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-.shelves { position: relative; overflow-y: auto; padding: var(--s-3) var(--s-7) var(--s-6); /* was 60vh: you could scroll into empty space past the last row */ }
+.shelves { position: relative; overflow-y: auto; padding: var(--s-3) var(--s-7) 60vh; }
 .shelf-wrap { margin-bottom: var(--s-4); }
 .shelf { padding: 22px var(--s-7) 18px; margin: -12px calc(-1 * var(--s-7)) 0; scroll-padding: 0 var(--s-7); }
 @media (max-width: 1400px) { .hero { padding-left: 36px; padding-right: 36px; } .hero-leave-active { left: 36px; } .shelves { padding-left: 36px; padding-right: 36px; } .shelf { padding-left: 36px; padding-right: 36px; margin-left: -36px; margin-right: -36px; scroll-padding: 0 36px; } }

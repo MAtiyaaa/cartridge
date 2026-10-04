@@ -2,6 +2,8 @@
 
 A controller-first RomM client for SteamOS and Bazzite, shipped as one AppImage. It is added to Steam and used mostly in Game Mode, on a 1080p handheld and a 4K TV.
 
+**Coming back after 0.9.2 (the first account)?** Read `docs/HANDOVER-0.9.3-to-0.9.21.md` first: everything the second account did from 0.9.3 to 0.9.21, the owner's decisions, what broke and how it was fixed, and what is still open.
+
 This file is the short version every session needs. The full handoff (history, every decision, the reasons behind odd-looking code, test notes) is in **`docs/HANDOFF.md`**. Read the parts that relate to your task before changing code. The Steam manager test scripts are in `docs/steam-tests.md`.
 
 ## Stack and layout
@@ -25,7 +27,7 @@ This file is the short version every session needs. The full handoff (history, e
 - Never use em dashes anywhere: UI text, notes, commits, messages. Use commas, colons, full stops, or "·" in titles.
 - Plain, direct, not AI-sounding writing. British spelling in feature names ("Colour", "Customisation").
 - **No UI overhauls or visual changes beyond what was asked.** Ask first. When a design change is wanted, offer options.
-- The design skills in `.claude/skills/` (animate, apple-design, emil-design-eng and the rest) are used only when the owner asks for them.
+- The design skills in `.claude/skills/` (animate, apple-design, emil-design-eng, taste-skill with redesign/soft/minimalist, img2threejs and the rest) are used only when the owner asks for them. taste-skill and img2threejs are third-party (MIT, Apache 2.0), kept as published.
 - When the owner says "don't build yet" or "just answer", don't change code.
 - Test that it launches before anything is released. Release notes say exactly what changed.
 - Nothing private in the repo or releases.
@@ -51,8 +53,7 @@ LT/RT switch top tabs. LB/RB only switch sections inside a page. A select, B bac
 
 ## Known issues (details: HANDOFF Part B, "Other bugs" list, and F4)
 - The Steam manager has never run against a real Steam client. Treat real-device reports about it as expected beta issues. The least tested parts are listed in HANDOFF F6.
-- `steam-games.json` is written before the helper finishes (F4).
-- Small cleanups: duplicate CSS in `Achievements.vue`, unused `.padbtn` rules, the out-of-date graphics comment at the top of `main.js`, the two migration lines.
+- `steam-games.json` is written before the helper finishes (F4); since 0.9.19 `reconcile()` drops what isn't in shortcuts.vdf at the next start.
 
 ## Since the handoff (0.6.1)
 - Fixed: helper backup overwrite (per-job lock in `steamHelper.js`, backups never replaced), `addToSteam` key gap, Y on Search, Steam apply progress (`steam-progress` broadcast, top bar pill).
@@ -153,7 +154,7 @@ LT/RT switch top tabs. LB/RB only switch sections inside a page. A select, B bac
 - Cartridge theme accent is white (`bgAccent` keeps the brand colour for animated backgrounds). `applyTheme` sets `--focus` (white, or `colors.highlight`), `--on-focus`/`--on-focus-dim` by luminance, `--sel` (chosen, not focused), `--knob`. Near-white picks stay white (`accentOf`).
 - Selected states use a `--sel` fill, never stripes or outlines; the active top tab has a faint outline. A focused `.btn.primary` also gets the ring.
 - `nav.js` zones: `move()` never leaves the nearest `[data-zone]` (App `<main>`, Settings `.pane`). Settings' B returns to the rail.
-- The 0.9.3 plan is `docs/plan-0.9.3.md`, 0.9.4 is `docs/plan-0.9.4.md`. Work in progress and decisions made in chat are logged in `docs/SESSION-LOG.md` (read its newest entry first).
+- The 0.9.3 plan is `docs/plan-0.9.3.md`, 0.9.4/0.9.15 is `docs/plan-0.9.4.md`, 0.9.16 is `docs/plan-0.9.16.md`, 0.9.17 is `docs/plan-0.9.17.md`. Work in progress and decisions made in chat are logged in `docs/SESSION-LOG.md` (read its newest entry first).
 
 ## 0.9.3 (shipped in parts A to I, Oct 2026; log: docs/SESSION-LOG.md)
 - Emulators: Settings → Emulators (Issues list `issues:list`, Emulator setup, Shortcut health, Console Folders). Forks: `FORKS`/`forkOf`, `REAL_NAMES`/`realName` in emulators.js, `steam.forks[path]` (`markFork`, `setup:fork`), `EMU.forkOf` (PrimeHack); forks never default. RetroDECK candidate (`how: 'retrodeck'`) only without EmuDeck. SRM setups no longer candidates. Learned shortcuts are a second choice in `templateFor`. `takeOver` (console page More). shadPS4 `startOf()` (Start in never next to the AppImage). New emulators each read from their own source (DeSmuME, Mupen64Plus, Snes9x, Mesen, Play!, Kronos, Xenia Edge).
@@ -195,6 +196,81 @@ LT/RT switch top tabs. LB/RB only switch sections inside a page. A select, B bac
 - Backgrounds (owner's pick A + B): scenes `ps2`, `gc`, `wii`, `xbox360`, `switch`; `art:<slug>` = `artPan` over that console's covers; `LEGACY_ART` maps retired styles.
 - Add-ons (checkable part): `electron/addons.js` (`addons:emulators`, `addons:forGame`, `addons:makeFolder`), game More → Texture packs. Downloads are 0.9.16.
 - Per-game templates `steam.gameTemplates` (`steam:setGameTemplate`), `pickEmulator` groups forks, `patchHome` sends patches to the copy the game uses.
+
+## 0.9.16 (2 Oct 2026; log: docs/SESSION-LOG.md, plan: docs/plan-0.9.16.md)
+- Downloads: `electron/dlWorker.js` (one worker per download, 1 MB writes, progress every 250 ms, shared speed limit); `downloadTo(..., opts.plain)` never sends RomM auth to other hosts.
+- Settings → Emulators pages (`EMU_PAGES`, LB/RB `stepEmu`): Overview, Updates (`electron/emuUpdates.js`, `emuup:list/run`: Flatpak `remote-ls --updates`/`update`, AppImage from the emulator's GitHub releases `REPOS`, replaced at the same path), Game Updates (`electron/ps3Updates.js`, Sony's `<SERIAL>-ver.xml`, `ps3up:*`, installs in order through RPCS3, cache `ps3-updates.json`), Patches (installed games, same sheet), Texture Packs, Console Folders. `electron/emuIcons.js` + `EmuIcon.vue` (Flatpak export, AppImage .DirIcon, .desktop Icon=).
+- Patches: `electron/cheats.js` Dolphin (Sys + user GameSettings ID3/ID6, `[OnFrame|ActionReplay|Gecko]`, `<Section>_Enabled/_Disabled`, `[Core] EnableCheats`) and PPSSPP (`PSP/Cheats/<ID>.ini` `_C0/_C1`, cheat.db, `[General] EnableCheats`, `ppssppDownloadDb` from metadata.ppsspp.org/cheats.json). `EMU_PATCH` dolphin/ppsspp refuse while the emulator runs. `freshRpcs3Patches` (rpcs3.net patch API, 7 days). `gcWiiId` reads ISO/GCM/RVZ/WIA/WBFS/CISO.
+- Add-ons: `setTextures`/`TEX_KEY` (`addons:setTextures`, `texture-settings.json`), Switch mods (yuzu family `load_directory`, Ryujinx `mods/contents/<id lower>`), Cemu `graphicPacks` (`mods: true`), `psxSerial`, `ciaTitleId`, `switchTitleId`.
+- Firmware: `pkgInstall.installFirmware` (RPCS3 `--installfw`, Vita3K `--firmware`) from `downloadBios`.
+- nav.js `pickRow`: up/down to the next row (hscroll row: first item; same grid: column; else leftmost); left/right only within the row; `[data-top]` scrolls the page to the top.
+- Game page More tabs: Game, Steam, Emulator, Details and Artwork, Options. `steam:addToCollections`.
+- Settings background picker: `topConsoles` (play time, then installed) first, `SCENE_OF`.
+- Vita: `vitaByName`; PS4 trophy titles remembered (`titles.json`); `developerOf` up to two.
+
+## 0.9.17 (2 Oct 2026; log: docs/SESSION-LOG.md, plan: docs/plan-0.9.17.md)
+- Add-ons: `electron/addonSources.js` (EmuCoreX `textures.json` for PS2, GameBanana apiv11 `gbGame`/`gbMods`/`gbFiles`), `electron/addonInstall.js` (zip via yauzl, 7z/rar via bsdtar/7z, `plan()` kinds ps2/switch/plain, never over a file, `removeFiles`), `addons:available/install/remove/installed`, `addons-installed.json`, `AddonsSheet.vue` (modal `addons`), Settings → Emulators → Add-ons.
+- `electron/frameGen.js` (`~/lsfg`, `~/.lsfg`, `~/.local/bin/mako-run`; `steam.frameGen` default/consoles/games), `withFg` + `launchFor` (wrapper after env vars, one %command%), `sigOf` adds `fg:` only when set; `FrameGen.vue` (route `frame-gen`).
+- shadPS4: `shadVersions()` (`shadPS4QtLauncher/versions.json`), `withShadVersion` (`-e "<path>"` for `-d`), `steam.shadVersions`.
+- Multi-disc: `multiDisc()` writes `<folder>.m3u` (flag wx) for `M3U_EMU` emulators.
+- `electron/discImage.js`: `open(file)` 2048-byte view of ISO/raw bin/cue/CHD v5 (Huffman map, zlib/LZMA/zstd, cd codecs)/CSO/ZSO/GCZ; `lzmaDecode`, `pbpDiscId`. `patches.isoFile`/`ps2IsoInfo` use it. Fixtures in `test/fixtures/disc` (chdman).
+- RomM on this device: `rommLocal.prepare` (podman-launcher into `~/.local/share/cartridge-romm/bin/podman`, `sudo -S usermod --add-subuid/--add-subgid`), `cartridge-romm.service` for Cartridge's own Podman, `romm:localPrepare`.
+- `electron/emuGet.js` (`CATALOG` by console, GitHub AppImage into ~/Applications or Flathub `--user`), `emuget:*`, `EmuGet.vue` (welcome Pick your own, Settings → Emulators → Get Emulators).
+- `bios.place()` (copy into set-up emulators' folders, never over), `switchNandDirs` + `switchFirmware`, `bios:all`, `electron/emuFolders.js` (`setup:gameFolders`, `emu-folders.json`), default BIOS folder when none.
+- `makers.js` Nintendo (HVR88 Monochrome Gaming Logos, `evenodd`).
+- Second list (plan section 10): `electron/webFetch.js` (Electron `net.fetch` for outside services, avoids Cloudflare 403s; guarded for plain Node), `electron/github.js` (`release`, release-page fallback `fromPages`/`parseAssets` when the API answers 403). Sony's list HTTPS first (`rejectUnauthorized:false` for that host only). RPCS3 patches from rpcs3.net's own patch API into `<config>/patches/patch.yml`.
+- Dolphin Gecko: `geckoTxt`/`geckoDownload`/`addGecko` in cheats.js (codes.rc24.xyz, parsed like GeckoCodeConfig.cpp).
+- Emulator updates: `emuup:list` hides forks, `_old`/previous/`.cartridge-*` copies and launcher `versions` folders; `cache.installed[path]` remembers the version. `emuIcons.ICON_URLS`/`webIcon`.
+- Updates: `update:releases`, `update:rollback` (`config.updateHold` pauses autoDownload until `update:check`), `ChangelogCard.vue` (`RELEASE_NOTES.md?raw`). `steam:keyboard` (TextPrompt in gamescope).
+- Welcome: intro overlay, Your controls step (`ui.buttons`), `.w-back`, `.w-hints`, Flatpak offer (`welcome:flatpak`), `EmuGet.vue` flow (`emuget:drives/prepare/queue/state`, ES-DE folders, `emuDir`), Use without RomM (`config.localOnly`, `electron/localLibrary.js`, negative ids). `builtinKb()` true while welcoming; Keyboard `caps`, cursor on LB/RB. `autoZoom` below 1280x800 (to 0.6).
+- Top bar: words-only tabs, `.tab-ink` underline placed by `placeInk()`, LT/RT only in pad mode. `PIcon` trims SVG margins (alpha box, up to 1.8x). Sega/Microsoft in makers.js. Patches/Add-ons pages grouped by console (`patchGroups`, `.con-head`).
+- Fluidity: GameCard covers fade in only when not yet loaded (`seen`), `:active`/`.pressed` squeeze (nav.js `pressFx` on A).
+
+## 0.9.18 (2 Oct 2026; log: docs/SESSION-LOG.md)
+- `addonInstall.plan` kinds per emulator (pcsx2/duckstation `replacements` anchor + DuckStation `config.yaml`, ppsspp `textures.ini|zip` anchor, dolphin 6/3-char ID folder, azahar/citra title ID folder, cemu `rules.txt` packs, switch Atmosphere `contents/<id>`), `wrapper()` strips folders around everything. `addons:install` dest is the game folder (`/replacements` dropped). PS2 lists GameBanana after EmuCoreX.
+- `pkgInstall` Vita3K: `NO_QT` retry without `QT_QPA_PLATFORM=offscreen` (installVita and installFirmware).
+- `ps3Serial`: `PS3_GAME/PARAM.SFO` two levels down, then RPCS3 `games.yml` paths.
+
+## 0.9.19 · Start (3 Oct 2026; log: docs/SESSION-LOG.md, plan: docs/plan-0.9.19.md)
+- Start: `src/views/Start.vue` (route/tab `start`), `src/startTiles.js` (`TILES` with sizes as [cols, rows] of an 8 by 4 screen, `DEFAULT`, `valid`, `pinToStart`), `ConsoleChip.vue`. Saved in `config.ui.start.tiles`. Grid: 8 columns, rows from `100cqh / 4`, `grid-auto-flow: dense`, TransitionGroup FLIP for moves. Arrange: hold A (`data-hold` + nav.js `HOLD_MS` 450, action `hold`, `cart-hold` event), touch/mouse press and hold 520 ms, drag. `config.ui.openOn`, `ui.startAdded` (adds the tab once). Game More → Pin to Start.
+- nav.js: A on `[data-hold]` fires on release; held 450 ms dispatches `hold`. App routes `accept`, `hold` and the D-pad to `store.viewHandlers` first.
+- `play:week` + `notePlayDays` in main.js (`play-days.json`: snapshot of totals, minutes added to the day last played).
+- Top bar: icon tabs, active `.tab-label` opens (grid 0fr to 1fr), `--tab-ink` (brand orange in Cartridge's theme), search folds (`.top-search.open`). Page arrivals: `store.navDir` ('r','l','in','out') set by `tab`/`go`/`back`, `main.main[data-dir]` keyframes.
+- Backgrounds: console scenes removed (owner); `aurora`, `contours` (marching squares), `drift`, `tide` in bgRenderers.js; old scene values map to `art:<slug>` via `LEGACY_ART`.
+- Vita: `vitaArchiveContents`/`vitaUnpack` (from Vita3K interface.cpp: gd -> ux0/app, ac -> ux0/addcont/<id>/<content id from 20>, gp -> ux0/patch merged into app; Vitamin refused); NoNpDrm (PCS* with sce_sys/package) through Vita3K with `QT_TRIES` offscreen, minimal, normal, killed at "will auto-boot". Folder dumps (`kind: 'dir'`).
+- RPCS3 patch list: `load` uses `json: true`; `readPatchFile`/`loosePatchYaml` fallback. webFetch: hidden-window pass for Cloudflare-style checks (`viaWindow`, only when `looksChecked`). Sony 403 on both schemes = no updates.
+- Add-ons: `addons:present` (files in each game's folder, `by` cartridge/other/both). `gbGame` tries `titleForms`. Switch: `pfsEntries`, `switchTitleId(file, keyDirs)` decrypts NCA headers (AES-128-XTS, header_key from prod.keys).
+- Get Emulators: `emuUpdates.forgeRelease` (Forgejo), `REPOS[id].forge/first/zipped`, `appImageFromZip`; `emuGet` CATALOG entries carry a lasting `name` and an `fp` fallback.
+- `steamManager.reconcile()` at start (HANDOFF F4). `electron/syncthing.js` + `SyncCard.vue` (`sync:status`, read only). RomM local: pod `--hostname` from the server name.
+
+## 0.9.20 · Start, Refined (3 Oct 2026)
+- Redesign-skill audit of Start and the top bar (owner asked): tile labels words only (no icons, no counts), `.st-ambient` (first game's cover, blurred, behind cover tiles), covers fill and fade (`mask-image`), staggered `st-in` entry (`--n`), console chips stretch when few, one-trophy layout. Search folds to a round button; the Y hint only in pad mode.
+- Start widgets (owner: taste skill): clock `sky` (6 to 18 day, `SKIES` light colours, sun/moon `.st-orb` on `.st-path`), storage `GAUGE` (36 ticks, 270 degrees, `.low` amber under 10%), week `weekNote`, `barH`, bars absolute in `.st-col`, `st-rise`.
+- Top bar (owner, after 0.9.19's underline): `.tab-ink` is a white pill (`--focus`) behind the current tab, dark text (`--on-focus`), placed by `placeInk()` with a ResizeObserver; focus is a ring. `--tab-ink` is gone.
+- Vue scoped CSS drops everything after `:global(x)`: write `:global(body.pad-mode .thing)`, never `:global(body.pad-mode) .thing` (it compiled to `body.pad-mode { ... }` and shrank the app).
+
+## 0.9.21 · Start, Your Way (3 Oct 2026; log: docs/SESSION-LOG.md)
+- Start board: `src/startLayout.js` (no imports, tested in `test/startLayout.test.js`): tiles carry `x, y, w, h` on 8 columns, `MAX_H` 4; `pack` places old saves, `settle(list, fixedId)` pushes overlaps down and lets tiles fall up. Tiles are absolutely placed in pixels (`geo` from a ResizeObserver, `px()`), so moves and resizes are CSS transitions; the look is on `.st-face` (`container-type: size`, content adapts with `@container`).
+- Arranging: hold A or press and hold. Controller `mode` '' / 'move' (D-pad swaps with the neighbour or steps one cell) / 'size' (X; D-pad moves `corner`, LB/RB cycle `CORNERS`). Touch/mouse: drag body (`pDown`, `drag`), drag `.st-handle` edges/corners (`hDown`, `sizing`), `ghost` shows the landing cell, `slots` show the grid.
+- `StartClock.vue` (phases night, sunrise, morning, afternoon, evening; drawn SVG), `ConsoleCard.vue` (SysTile look, not a button). Trophies/covers/console cards count from `box(t)` (`achFor`, `coversFor`, `cardsFor`). `ConsoleChip.vue` removed.
+- `makers.js` entries can have `paths` (all paths of HVR88's files; 0.9.17 kept one, so Sega was an S) and `tall` (Nintendo's pill). `src/consoleOptical.js` `OPTICAL`/`opticalOf`: wordmark scale per logo (ConsoleMark, SysTile, ConsoleCard).
+- Settings: `syncthing` section (Sync, `SyncCard.vue`, `sync:browse` reads Syncthing's index, view only); Look & Feel `bg` page folded into `theme`; `.lookpages` never wraps.
+- Vita3K installs: `vita3kFsPaths(exe)` (Vita3K's own storage: portable/fs, config.yml pref-path, SDL default) goes first in installVita's search, plus roots named in its "Extracting" lines; `vita3kWhy`/`vita3kLogTail` give its reason; `e.detail` (its output) is logged.
+- Emulator updates: `specFor(id, file)` (Xenia Edge, `xenia-win` for xenia_canary.exe, xenia-canary-releases), `pickAsset` (the build closest to your file name), `fileFromTar` (.tar.gz), Eden forge git.eden-emu.dev first; `installedEmulators` lists Windows builds (kind 'windows'); `emuIcons.ICON_URLS` values can be lists. `.status` pills and `.up-bar` read on selected rows (styles.css).
+- Game page More → Emulator: Game updates always for installed PS3 games (`ps3check`, `ps3up:game` with `fresh`).
+- Heroes: `heroArt(rom)` in store.js (own pick, SteamGridDB sharp hero, else blurred cover; RomM screenshot only without an sgdbKey; null while pending), `wantSharp` is a newest-first queue (8), `bgRom` puts the hero in when it arrives.
+- Ready to play: `steam:play` → `steamManager.play` (`steamLive.runGame` `SteamClient.Apps.RunGame`, else steam://rungameid/<appid<<32|0x02000000>).
+- Dolphin: tabs in PatchesSheet (`KINDS` by `section`), graphics mods `dolphinMods`/`dolphinModsSet` (Config/GraphicMods/<ID>.json, GFX.ini [Settings] EnableMods, tested), `dolphinUserFiles` (ID6r<N>.ini), dolphinPatchState prefers the user folder holding the game's settings.
+- Emulator updates keep the build kind: `installKind` (appimage, folder with data/ lang/, program), `REPOS.vita3k.folder` zip, `replaceFolder`; programs never overwritten. Get Emulators: Xenia Canary first (`binary`, tar.gz), more `ICON_URLS`.
+- Settings → Achievements: Sign In to Emulators row with status (`raTargets`, `ra:emuSignin` ids).
+- `rpcs3List` leaves out other-version patches when `appVer` is known (unless on).
+- Game Add-ons (owner): `GameAddons.vue` (modal `gameaddons`, props romId/name/tab) hosts `AddonsSheet` (`embedded`, `kind` 'mods'/'tex' by GameBanana category, EmuCoreX = tex; `onReopen` after confirm) and `PatchesSheet` (`embedded`, `section`, applies itself); tabs only for what the console has (Dolphin's kinds as tabs `p:<Section>`), Game Updates = `ps3up:game`/`ps3up:install`. Settings → Emulators pages: Overview, Emulators (`<EmuGet updates>`: `emuup:list` per installed emulator, Up to date / Update, "Also on this device"), Game Add-ons (`gaGroups`, search `gaFind`), Console Folders. Add-on records keep `category`. CSP `img-src` allows `https:` (GameBanana previews). Texture Packs tab = `source === 'ps2'` only (GameBanana is all Mods), not for switch/wiiu; EmuCoreX `previews[0]` shown.
+- Downloads: `dlWorker.js` takes jobs (`{ type: 'job', job, url, ... }`); `downloadTo` keeps one worker per item (`it.dlw`, ended 3 s after its last file, `dlwIdle`), so folder games reuse one connection; `publicItem` leaves them out. Big files log their MB/s.
+- `installedEmulators` lists folder builds (kind 'folder': scan programs, or `~/Applications/<Label>/<bin>` with data/ beside); `installKind` knows `translations/` (Vita3K's zip).
+- nav.js `firstSeen`: a pad's first 400 ms counts as triggers at rest (LT/RT at launch). App `background` event sets `store.away` and `body.away` (CSS animations paused, Background.vue stops drawing).
+
+## 0.9.22 · Home Fix (3 Oct 2026)
+- Home.vue imports the store's `heroArt` as `heroOf`: its own computed is also named `heroArt`, so `artOf` called the computed and threw, and Home rendered nothing once a game was highlighted. `pumpSharp` treats a failed SteamGridDB ask as none (blurred cover) instead of leaving the header empty.
 
 ## Releases (full steps: HANDOFF D8)
 Only when the owner asks. Bump `version` and `build.releaseInfo.releaseName` ("Cartridge X.Y.Z") in `package.json`, put only this version's notes in `RELEASE_NOTES.md` (heading `## Cartridge X.Y.Z · Title`), add them to the top of `CHANGELOG.md`, grouped as New / Changed / Fixed with bold lead-ins. CI builds, launch-checks and publishes.

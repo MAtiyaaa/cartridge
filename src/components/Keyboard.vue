@@ -1,9 +1,9 @@
 <template>
   <div class="scrim" ref="el">
-    <div class="dialog kb">
+    <div class="dialog kb" :class="{ sleek: store.welcoming }">
       <h2>{{ title }}</h2>
       <div class="kb-display" :class="{ empty: !text }">
-        <span v-if="text">{{ shown }}</span><span v-else class="ph">{{ placeholder }}</span><i class="caret" />
+        <template v-if="text"><span>{{ shown.slice(0, pos) }}</span><i class="caret" /><span>{{ shown.slice(pos) }}</span></template><template v-else><i class="caret" /><span class="ph">{{ placeholder }}</span></template>
         <button v-if="password" class="reveal" data-focus @click="reveal = !reveal"><Icon :name="reveal ? 'mdiEyeOff' : 'mdiEye'" /></button>
       </div>
       <!-- game names: whole titles that match, then the word being typed, completed -->
@@ -19,6 +19,7 @@
           <button v-for="k in row" :key="k" class="key" data-focus :data-autofocus="k === autofocusKey ? '' : undefined" @click="type(k)">{{ k }}</button>
         </div>
         <div class="kb-row">
+          <button class="key wide" :class="{ on: caps }" data-focus @click="caps = !caps; shift = false"><Icon name="mdiAppleKeyboardCaps" /> Caps</button>
           <button class="key wide" :class="{ on: shift }" data-focus @click="shift = !shift"><Icon name="mdiAppleKeyboardShift" /> Shift</button>
           <button class="key wide" :class="{ on: sym }" data-focus @click="sym = !sym">{{ sym ? 'ABC' : '#+=' }}</button>
           <button class="key space" data-focus @click="type(' ')">Space</button>
@@ -28,7 +29,7 @@
         </div>
       </div>
       <div class="kb-hints">
-        <span class="hint"><Btn b="X" />Delete</span><span class="hint"><Btn b="Y" />Space</span>
+        <span class="hint"><Btn b="LB+RB" />Move</span><span class="hint"><Btn b="X" />Delete</span><span class="hint"><Btn b="Y" />Space</span>
         <span class="hint"><Btn b="LT" />Shift</span><span class="hint"><Btn b="RT" />Symbols</span><span class="hint"><Btn b="START" />Done</span><span class="hint"><Btn b="B" />Cancel</span>
       </div>
     </div>
@@ -39,7 +40,7 @@
 // Built-in on-screen keyboard for controllers (Settings → Look & Feel → On-screen keyboard)
 import { computed, onMounted, onBeforeUnmount, ref } from 'vue';
 import { pushLayer, focusFirst } from '../nav.js';
-import { closeModal, call, allRoms } from '../store.js';
+import { store, closeModal, call, allRoms } from '../store.js';
 import Icon from './Icon.vue';
 import Btn from './Btn.vue';
 
@@ -55,7 +56,11 @@ const text = ref(props.value || '');
 const shift = ref(false);
 const sym = ref(false);
 const reveal = ref(false);
-const autofocusKey = computed(() => (sym.value ? '1' : shift.value ? 'Q' : 'q'));
+// 0.9.17 (owner): a cursor moved with LB/RB (or the arrow keys), so a typo is fixed where it is; Caps stays on
+const caps = ref(false);
+const pos = ref(text.value.length);
+const upper = computed(() => shift.value !== caps.value);
+const autofocusKey = computed(() => (sym.value ? '1' : upper.value ? 'Q' : 'q'));
 
 const base = [
   ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'],
@@ -69,7 +74,7 @@ const symbols = [
   ['=', '+', '[', ']', '{', '}', '\\', '|', ';', ':'],
   ["'", '"', ',', '<', '>', '?', '`', '~', '.', '/'],
 ];
-const rows = computed(() => (sym.value ? symbols : base.map((r) => r.map((k) => (shift.value ? k.toUpperCase() : k)))));
+const rows = computed(() => (sym.value ? symbols : base.map((r) => r.map((k) => (upper.value ? k.toUpperCase() : k)))));
 const quick = computed(() => (props.mode === 'url' ? ['http://', 'https://', '192.168.', ':8080', '.xyz', '.com', ':', 'localhost'] : []));
 const shown = computed(() => (props.password && !reveal.value ? '•'.repeat(text.value.length) : text.value));
 
@@ -96,15 +101,18 @@ const suggestions = computed(() => {
   return [...titles.map((t) => ({ kind: 'title', v: t.n })), ...words.map((w) => ({ kind: 'word', v: w }))];
 });
 function pick(g) {
-  if (g.kind === 'title') { text.value = g.v; return; }
-  text.value = text.value.replace(/\S*$/, '') + g.v + ' ';
+  if (g.kind === 'title') text.value = g.v;
+  else text.value = text.value.replace(/\S*$/, '') + g.v + ' ';
+  pos.value = text.value.length;
 }
+function insert(k) { text.value = text.value.slice(0, pos.value) + k + text.value.slice(pos.value); pos.value += k.length; }
 function type(k) {
-  text.value += k;
+  insert(k);
   if (shift.value && k.length === 1) shift.value = false;
 }
-async function paste() { try { const t = await call('clip:read'); if (t) text.value += t; } catch {} }
-function del() { text.value = text.value.slice(0, -1); }
+async function paste() { try { const t = await call('clip:read'); if (t) insert(t); } catch {} }
+function del() { if (!pos.value) return; text.value = text.value.slice(0, pos.value - 1) + text.value.slice(pos.value); pos.value--; }
+const move = (d) => { pos.value = Math.max(0, Math.min(text.value.length, pos.value + d)); };
 function done() { closeModal(text.value); }
 
 function onKey(ev) {
@@ -115,8 +123,9 @@ function onKey(ev) {
   }
   if (ev.key === 'Enter' && !ev.repeat && ev.isTrusted) { ev.preventDefault(); ev.stopImmediatePropagation(); done(); return; }
   if (ev.key === 'Backspace') { ev.preventDefault(); ev.stopImmediatePropagation(); del(); return; }
-  if (ev.key.length === 1 && !ev.ctrlKey && !ev.altKey && ev.key !== ' ') { ev.preventDefault(); ev.stopImmediatePropagation(); text.value += ev.key; return; }
-  if (ev.key === ' ') { ev.preventDefault(); ev.stopImmediatePropagation(); text.value += ' '; }
+  if ((ev.key === 'ArrowLeft' || ev.key === 'ArrowRight') && ev.isTrusted && !ev.altKey && document.activeElement?.closest?.('.kb-display')) { ev.preventDefault(); ev.stopImmediatePropagation(); move(ev.key === 'ArrowLeft' ? -1 : 1); return; }
+  if (ev.key.length === 1 && !ev.ctrlKey && !ev.altKey && ev.key !== ' ') { ev.preventDefault(); ev.stopImmediatePropagation(); insert(ev.key); return; }
+  if (ev.key === ' ') { ev.preventDefault(); ev.stopImmediatePropagation(); insert(' '); }
 }
 
 let layer;
@@ -129,7 +138,7 @@ onMounted(() => {
     lt: () => (shift.value = !shift.value),
     rt: () => (sym.value = !sym.value),
     start: done,
-    lb: () => {}, rb: () => {}, select: () => {},
+    lb: () => move(-1), rb: () => move(1), select: () => {},
   });
   focusFirst(el.value, '[data-autofocus]');
 });
@@ -160,4 +169,13 @@ onBeforeUnmount(() => { window.removeEventListener('keydown', onKey, true); laye
 .key.sg.title { background: rgba(var(--primary-rgb), 0.18); border-color: rgba(var(--primary-rgb), 0.45); }
 .kb-hints { display: flex; gap: 18px; justify-content: center; color: var(--muted); font-size: var(--t-xs); }
 .hint { display: flex; align-items: center; gap: 6px; }
+/* the welcome's keyboard (0.9.17): glass like the welcome card, quiet keys, the white focus box */
+.kb.sleek { background: rgba(14, 16, 22, 0.72); backdrop-filter: blur(28px) saturate(1.3); border: 1px solid rgba(255, 255, 255, 0.08); box-shadow: 0 30px 90px rgba(0, 0, 0, 0.55); }
+.kb.sleek h2 { font-weight: 600; letter-spacing: -0.01em; }
+.kb.sleek .kb-display { background: rgba(255, 255, 255, 0.06); border: 0; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1); }
+.kb.sleek .caret { background: #fff; }
+.kb.sleek .key { background: rgba(255, 255, 255, 0.06); border: 0; border-radius: var(--r-md); font-weight: 500; transition: background var(--d-1, 0.12s), transform var(--d-1, 0.12s); }
+.kb.sleek .key.on { background: rgba(255, 255, 255, 0.18); }
+.kb.sleek .key:focus { background: var(--focus, #fff); color: var(--on-focus, #000); box-shadow: none; transform: scale(1.04); }
+.kb.sleek .key.done { background: #fff; color: #000; }
 </style>

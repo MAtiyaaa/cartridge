@@ -5,6 +5,7 @@ const rd = window.cart;
 export const call = (ch, arg) => rd.call(ch, arg ? JSON.parse(JSON.stringify(arg)) : arg);
 
 export const store = reactive({
+  away: false, // Game Mode: another app is in front (0.9.21)
   config: null,
   info: {},
   connection: { base: '', route: '' },
@@ -17,6 +18,7 @@ export const store = reactive({
   fuseUpload: null, // the request of the last cartridge://upload link, until its page reads it
   bg: '',
   route: { name: 'home', params: {} },
+  navDir: 'in', // how the next page arrives: 'r'/'l' (a tab to the right/left), 'in' (deeper), 'out' (back)
   history: [],
   hints: [],
   viewHandlers: {},
@@ -61,14 +63,19 @@ export function go(name, params = {}) {
   const el = document.activeElement;
   if (store.route.name === 'settings' && el?.closest?.('.pane')) store.settingsSpot = { sec: store.settingsSection, text: (el.textContent || '').trim().slice(0, 60) };
   store.history.push({ ...store.route, focusKey: document.activeElement?.dataset?.key || null });
+  store.navDir = 'in';
   store.route = { name, params };
 }
 export function back() {
   if (!store.history.length) return false;
+  store.navDir = 'out';
   store.route = store.history.pop();
   return true;
 }
 export function tab(name) {
+  // which way the page arrives from (0.9.19): the side its tab is on, relative to the one you leave
+  const order = activeTabs(), from = order.indexOf(store.history[0]?.name || store.route.name), to = order.indexOf(name);
+  store.navDir = from < 0 || to < 0 || from === to ? 'in' : to > from ? 'r' : 'l';
   store.history = [];
   store.route = { name, params: {} };
 }
@@ -98,6 +105,7 @@ export function closeModal(value) {
 export const askText = (props) => openModal('keyboard', props);
 // Built-in on-screen keyboard: always, never (Steam keyboard), or Auto = in Game Mode only
 export function builtinKb() {
+  if (store.welcoming) return true; // the welcome always uses Cartridge's own (0.9.17); Auto after it
   const k = store.config?.ui?.keyboard || 'auto';
   // Android: the system keyboard would grab the D-pad, so Auto uses the built-in one there too
   return k === 'builtin' || (k === 'auto' && (!!store.info?.gamescope || IS_ANDROID));
@@ -157,6 +165,15 @@ export function consoleName({ romId, slug, src, fallback = '' } = {}) {
   const q = slugs.length && store.lib?.platforms.find((x) => slugs.includes(x.slug) || slugs.includes(x.fs_slug));
   return (q && (q.display_name || q.name)) || r?.platform_display_name || fallback;
 }
+// which console, as a slug for its logo (0.9.16): the library game's own, the emulator's (trophies),
+// else RetroAchievements' console name
+const RA_SLUG = { 'playstation': 'psx', 'playstation 2': 'ps2', 'playstation portable': 'psp', 'nintendo 64': 'n64', 'snes/super famicom': 'snes', 'nes/famicom': 'nes', 'game boy': 'gb', 'game boy color': 'gbc', 'game boy advance': 'gba', 'nintendo ds': 'nds', 'nintendo dsi': 'nds', 'gamecube': 'ngc', 'wii': 'wii', 'genesis/mega drive': 'genesis', 'master system': 'sms', 'game gear': 'gamegear', 'sega cd': 'segacd', '32x': 'sega32', 'saturn': 'saturn', 'dreamcast': 'dc', 'atari 2600': 'atari2600', 'atari 7800': 'atari7800', 'atari lynx': 'lynx', 'atari jaguar': 'jaguar', 'pc engine/turbografx-16': 'tg16', 'neo geo pocket': 'ngp', 'virtual boy': 'virtualboy', 'arcade': 'arcade', 'msx': 'msx', '3do interactive multiplayer': '3do', 'wonderswan': 'wonderswan' };
+export function consoleSlug({ romId, src, name } = {}) {
+  const r = romId ? romById(romId) : null;
+  if (r?.platform_slug) return r.platform_slug;
+  if (src && SRC_SLUG[src]) return SRC_SLUG[src][0];
+  return RA_SLUG[String(name || '').toLowerCase()] || null;
+}
 export function visiblePlatforms() {
   if (!store.lib) return [];
   return store.lib.platforms.filter((p) => !store.config.ui.hideEmpty || p.rom_count > 0);
@@ -197,6 +214,8 @@ export function cover(rom, large = false) {
   const o = store.art?.[rom.id]?.grid;
   if (o) return img(o);
   let p = (large ? rom.path_cover_large || rom.path_cover_small : rom.path_cover_small || rom.path_cover_large) || rom.url_cover;
+  if (!IS_ANDROID && !IS_REMOTE) return img(p); // the desktop: RomM's cover only, as upstream
+  // Android and the phone page:
   if (/^[a-z-]*file:\/\//i.test(p || '')) p = ''; // a gamelist.xml cover RomM never copied: only RomM can read it
   // with a SteamGridDB key, main.js fills in a cover when RomM has none (or answers without one)
   const sg = store.config?.sgdbKey && rom.id ? `g=${encodeURIComponent(rom.id)}&n=${encodeURIComponent(rom.name || '')}` : '';
@@ -206,25 +225,48 @@ export function cover(rom, large = false) {
 // Sharp backgrounds (0.9.3 K, F2/F3): SteamGridDB's biggest hero for a game, asked for once it has
 // been highlighted for a moment (main.js sharpHero caches it). undefined: not asked yet, null: none.
 const sharpWait = new Set();
-let sharpT = 0;
+// 0.9.21: a short queue, newest first (the game you just reached comes before ones you passed), at most
+// 8 waiting, one asked at a time after a 250 ms pause; several on screen at once (Start) all get theirs
+const sharpQ = [];
+let sharpBusy = false;
 export function wantSharp(rom) {
   if (!rom || !store.config?.sgdbKey || rom.id in store.sharp || sharpWait.has(rom.id)) return;
-  clearTimeout(sharpT);
-  sharpT = setTimeout(async () => {
-    sharpWait.add(rom.id);
-    try { store.sharp[rom.id] = await call('art:sharpHero', { id: rom.id, name: rom.name }); } catch { /* offline: ask again later */ }
-    sharpWait.delete(rom.id);
-  }, 350);
+  const i = sharpQ.findIndex((r) => r.id === rom.id); if (i >= 0) sharpQ.splice(i, 1);
+  sharpQ.push(rom); if (sharpQ.length > 8) sharpQ.shift();
+  if (!sharpBusy) pumpSharp();
 }
-export function backdropOf(rom) {
-  if (!rom) return '';
+async function pumpSharp() {
+  sharpBusy = true;
+  while (sharpQ.length) {
+    await new Promise((r) => setTimeout(r, 250));
+    const rom = sharpQ.pop();
+    if (!rom || rom.id in store.sharp) continue;
+    sharpWait.add(rom.id);
+    try { store.sharp[rom.id] = await call('art:sharpHero', { id: rom.id, name: rom.name }); if (bgRom === rom.id) setBg(heroArt(rom) || ''); }
+    // 0.9.22: a failed ask (offline, SteamGridDB down) counts as none for now, so the blurred cover shows
+    // instead of no header at all; asked again when Cartridge next starts
+    catch { store.sharp[rom.id] = null; if (bgRom === rom.id) setBg(heroArt(rom) || ''); }
+    sharpWait.delete(rom.id);
+  }
+  sharpBusy = false;
+}
+// A game's hero (0.9.21, owner: RomM's picture showed first, then SteamGridDB's replaced it a moment
+// later, which looked off; use SteamGridDB's only): your own pick, else SteamGridDB's sharp hero once
+// it's known (null until then, so nothing shows and the hero fades in once), else, when SteamGridDB
+// has none, the cover blurred. Without a SteamGridDB key RomM's screenshot is still used.
+export function heroArt(rom) {
+  if (!rom) return null;
   const h = store.art?.[rom.id]?.hero;
   if (h) return { src: img(h), blur: false };
   if (store.sharp[rom.id]) return { src: store.sharp[rom.id], blur: false };
-  if (rom.shot) return { src: img(rom.shot), blur: false };
+  if (store.config?.sgdbKey) {
+    if (!(rom.id in store.sharp)) { wantSharp(rom); return null; }
+  } else if (rom.shot) return { src: img(rom.shot), blur: false };
   const c = cover(rom, true);
-  return c ? { src: c, blur: true } : '';
+  return c ? { src: c, blur: true } : null;
 }
+let bgRom = null; // the game the page backdrop is for: its SteamGridDB hero goes in when it arrives
+export function backdropOf(rom) { bgRom = rom?.id ?? null; return heroArt(rom) || ''; }
 let bgTimer;
 export function setBg(b) {
   clearTimeout(bgTimer);
@@ -444,6 +486,7 @@ export async function addToCollection(romIds) {
 
 // ---------------- top bar tabs (Look & Feel → Top bar)
 export const TAB_DEFS = {
+  start: { label: 'Start', icon: 'mdiViewDashboardOutline' }, // 0.9.19: the menu you arrange yourself
   home: { label: 'Home', icon: 'mdiHomeVariantOutline' },
   library: { label: 'Library', icon: 'mdiViewGridOutline' },
   consoles: { label: 'Consoles', icon: 'mdiGamepadSquareOutline' },
@@ -455,7 +498,7 @@ export const TAB_DEFS = {
 };
 // Home's media bar size (0.9.15 Look & Feel). Android's screens are short: Large left room for barely one row
 export const MEDIA_DEFAULT = IS_ANDROID ? 'compact' : 'large';
-export const DEFAULT_TABS = ['home', 'library', 'consoles', 'achievements', 'downloads', 'settings'];
+export const DEFAULT_TABS = ['start', 'home', 'library', 'consoles', 'achievements', 'downloads', 'settings'];
 // Settings can't be removed, so the top bar can always be changed back
 export function activeTabs() {
   const t = store.config?.ui?.tabs;

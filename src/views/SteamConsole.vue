@@ -100,6 +100,7 @@ async function act(g) {
   const v = await choose({ sheet: true, title: g.name, message: own ? `${own.exe}${own.own ? ' · set for this game' : pick?.current ? ' · its own emulator' : ''}` : '', options: [
     { label: st.act === 'Open game' ? 'Set its game folder' : st.act === 'Apply' ? 'Apply waiting changes' : st.act === 'Remove' ? 'Remove from Steam' : 'Add to Steam', value: 'main', icon: st.act === 'Remove' ? 'mdiSteamOff' : 'mdiSteam' },
     { label: 'Emulator for this game', sub: pick?.current ? 'Its own pick' : 'Same as the console', value: 'emu', icon: 'mdiGamepadVariantOutline' },
+    ...(props.ckey === 'ps4' && /qtlauncher/i.test(own?.exe || '') ? [{ label: 'shadPS4 version for this game', sub: 'Start it with one of the versions in shadPS4’s launcher', value: 'shadver', icon: 'mdiSourceBranch' }] : []),
     { label: 'Edit Target, Start in and Launch options', sub: own?.own ? 'Set for this game' : 'Only for this game', value: 'edit', icon: 'mdiPencil' },
     { label: 'Open game page', value: 'page', icon: 'mdiOpenInNew' },
   ] });
@@ -110,6 +111,19 @@ async function act(g) {
     const id = await pickEmulator({ title: 'Emulator for this game', message: g.name, list, current: pick?.current, first: [{ label: 'Same as its console', value: '__console', selected: !pick?.current, icon: 'mdiArrowULeftTop' }] });
     if (!id) return;
     await call('steam:setGameEmu', { romId: g.romId, id: id === '__console' ? null : id });
+    return afterGameChange(g);
+  }
+  // 0.9.17: the Qt launcher's -e <version> instead of -d (its default version)
+  if (v === 'shadver') {
+    const sv = await call('steam:shadVersions', { romId: g.romId }).catch(() => null);
+    if (!sv?.list.length) return toast('No versions found in shadPS4’s launcher. Download versions there (Version Manager), then come back.', 'info', 5000);
+    const p = await choose({ sheet: true, title: 'shadPS4 version', message: g.name, options: [
+      { label: 'The launcher’s default', sub: 'The version picked in shadPS4’s launcher', value: '__default', icon: 'mdiArrowULeftTop', selected: !sv.current },
+      ...sv.list.map((x) => ({ label: x.name, sub: [x.codename, x.date].filter(Boolean).join(' · '), value: x.path, icon: 'mdiSourceBranch', selected: sv.current === x.path, raw: true })),
+    ] });
+    if (!p) return;
+    await call('steam:setShadVersion', { romId: g.romId, path: p === '__default' ? null : p });
+    toast(p === '__default' ? `${g.name} uses the launcher’s default` : `${g.name} starts with ${sv.list.find((x) => x.path === p)?.name}`, 'ok', 2500);
     return afterGameChange(g);
   }
   if (v === 'edit') {

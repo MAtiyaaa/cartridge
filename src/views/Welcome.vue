@@ -1,13 +1,23 @@
 <template>
-  <div class="welcome" ref="el">
+  <div class="welcome" :class="{ 'w-out': leaving, 'w-intro-on': intro }" ref="el">
+    <!-- 0.9.17: the opening, once, before the first card (any press skips it) -->
+    <div v-if="intro" class="w-intro" @pointerdown="intro = false">
+      <div class="wi-ring" /><div class="wi-ring r2" />
+      <div class="wi-mark"><Logo :size="132" /><i class="wi-glint" /></div>
+      <div class="wi-name"><span v-for="(c, i) in 'Cartridge'" :key="i" :style="{ animationDelay: 0.75 + i * 0.045 + 's' }">{{ c }}</span></div>
+    </div>
     <div class="w-top">
+      <!-- 0.9.17: going back is always visible: an arrow to tap, and B on a controller (hint below) -->
+      <button v-if="at > 0 && !only" class="w-back" data-focus aria-label="Back" @click="handlers.back()"><Icon name="mdiArrowLeft" :size="22" /></button>
       <Logo :size="34" />
       <div class="w-dots"><template v-if="!only"><i v-for="(s, i) in STEPS" :key="s" :class="{ on: i === at, done: i < at }" /></template></div>
       <button class="btn small" data-focus @click="leave"><Icon name="mdiClose" :size="18" />{{ only ? 'Close' : replay ? 'Leave' : 'Skip setup' }}</button>
     </div>
 
+    <!-- every step is one centred card over the background (owner, 0.9.16) -->
+    <div class="w-stage">
     <Transition :name="dir > 0 ? 'w-next' : 'w-prev'" mode="out-in">
-      <section :key="step" class="w-step" :class="'w-' + step" data-scroll>
+      <section :key="step" class="w-step glass" :class="'w-' + step" data-scroll>
         <!-- 1 -->
         <template v-if="step === 'hello'">
           <Logo :size="96" class="w-logo" />
@@ -41,14 +51,22 @@
 
         <!-- 4 -->
         <template v-else-if="step === 'pad'">
-          <h1>Controller check</h1>
-          <p class="w-lead">Press <Btn b="A" /> on your controller.</p>
-          <div class="w-pad" :class="{ ok: padOk }"><Icon :name="padOk ? 'mdiCheckCircle' : 'mdiGamepadVariantOutline'" :size="72" /><b>{{ padOk ? 'Your controller works' : 'Waiting for A…' }}</b></div>
+          <!-- 0.9.17: what's actually in use (the controller Linux sees, or keyboard, touch, mouse), and its button labels -->
+          <h1>Your controls</h1>
+          <div class="w-pad" :class="{ ok: padOk }">
+            <Icon :name="padOk ? 'mdiCheckCircle' : using === 'pad' ? USING_ICON[padKind] || USING_ICON.pad : USING_ICON[using]" :size="72" />
+            <b>{{ padOk ? 'Your controller works' : usingText }}</b>
+            <span v-if="using === 'pad' && !padOk" class="muted small">Press <Btn b="A" /> to check it.</span>
+            <span v-else-if="!padOk" class="muted small">Everything works with {{ using === 'touch' ? 'touch' : using === 'keys' ? 'a keyboard' : 'a mouse' }} too. A controller is picked up as soon as you use one.</span>
+          </div>
+          <div class="w-box stack" style="align-items: center">
+            <span class="muted small">Button labels</span>
+            <div class="seg"><button v-for="o in LABELS" :key="o.v" data-focus :class="{ on: (store.config.ui.buttons || 'auto') === o.v }" @click="saveConfig({ ui: { buttons: o.v } })">{{ o.l }}</button></div>
+          </div>
           <div class="w-act">
             <button class="btn" data-focus @click="prev"><Icon name="mdiArrowLeft" />Back</button>
-            <button class="btn primary" data-focus @click="padPress">{{ padOk ? 'Continue' : 'Press A' }}<Icon name="mdiArrowRight" /></button>
+            <button class="btn primary" data-focus @click="padPress">{{ padOk || using !== 'pad' ? 'Continue' : 'Press A' }}<Icon name="mdiArrowRight" /></button>
           </div>
-          <p class="muted small">Using touch, a mouse or a keyboard? Tap Press A to go on. Everything works with all of them.</p>
         </template>
 
         <!-- 5 -->
@@ -75,12 +93,23 @@
 
         <!-- 6 -->
         <template v-else-if="step === 'emus'">
-          <template v-if="st.emudeck || st.retrodeck">
+          <!-- 0.9.17: pick your own, by console (also in Settings → Emulators → Get Emulators) -->
+          <template v-if="picking">
+            <h1>Download emulators</h1>
+            <div class="w-box"><EmuGet flow /></div>
+            <div class="w-act">
+              <button class="btn" data-focus @click="picking = false"><Icon name="mdiArrowLeft" />Back</button>
+              <button class="btn" data-focus @click="recheck">Later</button>
+              <button class="btn primary" data-focus @click="recheck">Continue<Icon name="mdiArrowRight" /></button>
+            </div>
+          </template>
+          <template v-else-if="st.emudeck || st.retrodeck">
             <h1>Emulators</h1>
             <div class="w-good"><Icon name="mdiCheckCircle" :size="28" /><span>Good news, you already have {{ st.emudeck && st.retrodeck ? 'EmuDeck and RetroDECK' : st.emudeck ? 'EmuDeck' : 'RetroDECK' }}</span></div>
             <p class="w-lead">Cartridge uses the emulators it set up. The system scan in a moment finds every other one too.</p>
             <div class="w-act">
               <button class="btn" data-focus @click="prev"><Icon name="mdiArrowLeft" />Back</button>
+              <button class="btn" data-focus @click="picking = true"><Icon name="mdiDownload" />Download more emulators</button>
               <button class="btn primary" data-focus @click="next()">Continue<Icon name="mdiArrowRight" /></button>
             </div>
           </template>
@@ -88,9 +117,19 @@
             <h1>Get your emulators</h1>
             <p class="w-lead">Cartridge starts games with the emulators on this device. If you don't have any yet, one of these sets them up for you.</p>
             <div v-if="getting" class="w-box glass w-prog">
-              <b>{{ getting === 'emudeck' ? 'Downloading EmuDeck' : 'Installing RetroDECK' }}</b>
+              <b>{{ getting === 'emudeck' ? 'Downloading EmuDeck' : getting === 'flatpak' ? 'Installing Flatpak' : 'Installing RetroDECK' }}</b>
               <div class="bar live"><i :style="{ width: (progress ?? 0) + '%' }" /></div>
               <span class="muted small">{{ progress != null ? progress + '%' : 'Starting…' }}</span>
+            </div>
+            <!-- 0.9.17: no Flatpak on this system: say so, and offer to install it, then RetroDECK, in the background -->
+            <div v-else-if="needFlatpak" class="w-box glass w-prog" style="text-align: left">
+              <b>RetroDECK needs Flatpak</b>
+              <span class="muted small">RetroDECK only comes as a Flatpak, and Flatpak isn't installed on this system. Cartridge can install Flatpak with your system's own installer, then RetroDECK, while you wait. It needs your device password once; it isn't saved.</span>
+              <TextField v-model="devPass" label="Device password" placeholder="Your password for this device" password icon="mdiLock" />
+              <div class="row" style="gap: 10px; justify-content: flex-end">
+                <button class="btn" data-focus @click="needFlatpak = false">Not now</button>
+                <button class="btn primary" data-focus :disabled="!devPass" @click="flatpakThenRetroDeck"><Icon name="mdiPackageDown" />Install Flatpak and RetroDECK</button>
+              </div>
             </div>
             <div v-else-if="opened" class="w-box glass w-prog">
               <b>{{ opened === 'emudeck' ? 'EmuDeck is open' : 'RetroDECK is open' }}</b>
@@ -104,6 +143,10 @@
               <button class="lrow" data-focus @click="getRetroDeck">
                 <Icon name="mdiPackageDown" :size="26" />
                 <div class="l-mid"><b>RetroDECK</b><span class="l-sub">Installed from Flathub with a progress bar (works in Game Mode), then opened for its own setup.</span></div>
+              </button>
+              <button class="lrow" data-focus @click="picking = true">
+                <Icon name="mdiFormatListChecks" :size="26" />
+                <div class="l-mid"><b>Download emulators</b><span class="l-sub">Pick a drive, then the emulators you want, console by console. Each comes from its own releases and installs in the background.</span></div>
               </button>
               <button class="lrow" data-focus @click="next()">
                 <Icon name="mdiHandBackRight" :size="26" />
@@ -126,7 +169,7 @@
           <template v-else-if="romm === 'local'">
             <RommLocal @done="only ? close() : next()" @back="only ? close() : (romm = 'what')" />
           </template>
-          <template v-else-if="store.config.configured && romm !== 'change'">
+          <template v-else-if="store.config.configured && !store.config.localOnly && romm !== 'change'">
             <h1>RomM</h1>
             <div class="w-good"><Icon name="mdiCheckCircle" :size="28" /><span>Connected to {{ serverName }}</span></div>
             <div class="w-act">
@@ -137,7 +180,7 @@
           </template>
           <template v-else-if="romm === 'what'">
             <h1>What is RomM?</h1>
-            <p class="w-lead">RomM is a free server for your game collection. It keeps your games in one place, finds their covers and details, and lets Cartridge, your browser and other devices download them. Cartridge is a RomM client, so it needs one.</p>
+            <p class="w-lead">RomM is a free server for your game collection. It keeps your games in one place, finds their covers and details, and lets Cartridge, your browser and other devices download them. Cartridge is built around it and works best with one.</p>
             <div class="w-box stack">
               <button v-if="!IS_ANDROID" class="lrow" data-focus @click="romm = 'local'">
                 <Icon name="mdiServer" :size="26" />
@@ -147,12 +190,30 @@
                 <Icon name="mdiMonitor" :size="26" />
                 <div class="l-mid"><b>Set it up on another computer</b><span class="l-sub">A home server or an always-on PC. Scan a QR code for RomM's guide.</span></div>
               </button>
-              <button class="lrow" data-focus @click="next()">
-                <Icon name="mdiClockOutline" :size="26" />
-                <div class="l-mid"><b>Later</b><span class="l-sub">Cartridge asks for your server again when you're ready.</span></div>
+              <button class="lrow" data-focus @click="romm = 'without'">
+                <Icon name="mdiFolderPlayOutline" :size="26" />
+                <div class="l-mid"><b>Use Cartridge without RomM</b><span class="l-sub">Play the games already on this device. Many features need RomM.</span></div>
               </button>
             </div>
             <div class="w-act"><button class="btn" data-focus @click="romm = ''"><Icon name="mdiArrowLeft" />Back</button></div>
+          </template>
+          <!-- 0.9.17 (owner): RomM isn't required, but Cartridge works best with it, and this says what's missing -->
+          <template v-else-if="romm === 'without'">
+            <h1>Without RomM</h1>
+            <div class="w-warn"><Icon name="mdiAlertOutline" :size="24" /><span>Cartridge works best with RomM. Without it you miss a lot.</span></div>
+            <ul class="w-miss">
+              <li><b>No downloads:</b> only games already in your console folders show up</li>
+              <li><b>No covers, details or ratings,</b> no recommendations, series or collections</li>
+              <li><b>No syncing</b> of trophies, play time or favourites with your other devices</li>
+              <li><b>No RetroAchievements links</b> from RomM's game matches</li>
+            </ul>
+            <p class="w-lead">Steam shortcuts, emulator setup, patches, add-ons and achievements on this device still work. You can connect RomM any time in Settings → RomM.</p>
+            <p class="muted small">Games folder: {{ store.config.romsRoot ? short(store.config.romsRoot) : 'not set yet' }}</p>
+            <div class="w-act">
+              <button class="btn" data-focus @click="romm = 'what'"><Icon name="mdiArrowLeft" />Back</button>
+              <button class="btn" data-focus @click="pickGamesFolder">{{ store.config.romsRoot ? 'Change games folder' : 'Pick games folder' }}</button>
+              <button class="btn primary" data-focus :disabled="!store.config.romsRoot" @click="goLocal">Continue without RomM<Icon name="mdiArrowRight" /></button>
+            </div>
           </template>
           <template v-else-if="romm === 'other'">
             <h1>RomM on another computer</h1>
@@ -184,6 +245,23 @@
         <!-- 8 -->
         <template v-else-if="step === 'scan'">
           <p class="w-lead w-scan-lead">Let us scan your system. Everything here can be changed later in Settings → Emulators.</p>
+          <!-- your games and console folders, games already in Steam, anything that needs a look (0.9.16) -->
+          <div class="w-scan-extra">
+            <button v-if="store.config.configured" class="lrow" data-focus @click="consoleFolders">
+              <Icon name="mdiFolderMultipleOutline" :size="24" />
+              <div class="l-mid"><b>Games and console folders</b><span class="l-sub">{{ store.config.romsRoot ? short(store.config.romsRoot) : 'No games folder yet' }}<template v-if="folders.total"> · {{ folders.found }} of {{ folders.total }} console folders found</template></span></div>
+              <span class="l-end">Fix a match</span>
+            </button>
+            <button v-if="theirs.total" class="lrow" data-focus :disabled="busy" @click="takeOverAll">
+              <Icon name="mdiSteam" :size="24" />
+              <div class="l-mid"><b>Already in Steam: {{ theirs.total }} game{{ theirs.total === 1 ? '' : 's' }} you added yourself</b><span class="l-sub">Bring them under Cartridge so they start the same way as the rest (play time, collections and artwork stay), or leave them as they are.</span></div>
+              <span class="l-end">{{ busy ? 'Working…' : 'Bring them under Cartridge' }}</span>
+            </button>
+            <div v-if="issues.length" class="lrow">
+              <Icon name="mdiAlertCircleOutline" :size="24" />
+              <div class="l-mid"><b>{{ issues.length }} thing{{ issues.length === 1 ? '' : 's' }} to look at</b><span class="l-sub">{{ issues.slice(0, 2).map((i) => i.text).join(' · ') }}. All of them are in Settings → Emulators → Issues.</span></div>
+            </div>
+          </div>
           <EmuSetup welcome @done="next()" @back="prev" class="w-emu" />
         </template>
 
@@ -242,6 +320,8 @@
         </template>
       </section>
     </Transition>
+    </div>
+    <div v-if="input.mode === 'pad' && !intro" class="w-hints"><span><Btn b="A" />Select</span><span v-if="at > 0 && !only"><Btn b="B" />Back</span></div>
   </div>
 </template>
 
@@ -250,7 +330,7 @@
 // A replay starts from the current settings: done steps show a green check, nothing is reset, and
 // leaving halfway keeps everything as it was.
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { store, call, saveConfig, toast, tab, confirm, openModal } from '../store.js';
+import { store, call, saveConfig, toast, tab, confirm, openModal, choose, pickFolder, loadLibrary } from '../store.js';
 import { focusFirst, input } from '../nav.js';
 import { useView } from '../useView.js';
 import Logo from '../components/Logo.vue';
@@ -259,13 +339,15 @@ import Btn from '../components/Btn.vue';
 import TextField from '../components/TextField.vue';
 import Setup from './Setup.vue';
 import EmuSetup from './EmuSetup.vue';
+import EmuGet from '../components/EmuGet.vue';
 import RommLocal from '../components/RommLocal.vue';
+import { padInfo, detectPad, padKind } from '../pad.js';
 import { IS_ANDROID } from '../platform.js';
 
 // Android: no Steam, no EmuDeck or RetroDECK, no desktop scan; emulators are picked in Settings → Emulators
 const DESKTOP_ONLY = ['steam', 'emus', 'scan', 'self'];
 const STEPS = ['hello', 'name', 'lang', 'pad', 'steam', 'emus', 'romm', 'scan', 'extras', 'self', 'done'].filter((s) => !IS_ANDROID || !DESKTOP_ONLY.includes(s));
-const ROMM_GUIDE = 'https://docs.romm.app';
+const ROMM_GUIDE = 'https://docs.romm.app/latest/getting-started/quick-start/'; // RomM's setup guide (owner: not the docs home)
 const el = ref(null);
 const at = ref(0), dir = ref(1);
 const step = computed(() => STEPS[at.value]);
@@ -282,7 +364,8 @@ const sgdb = ref(''), raUser = ref(''), raKey = ref('');
 const guideQr = ref('');
 
 const deviceName = computed(() => `${name.value.trim()}'s ${st.value.device || 'device'}`);
-const serverName = computed(() => { const s = store.config.server || {}; try { return new URL(s.localUrl || s.remoteUrl).host; } catch { return 'your RomM server'; } });
+// RomM has no server name of its own, so the name picked for RomM on this device is Cartridge's label for it
+const serverName = computed(() => { const s = store.config.server || {}; if (store.config.rommLocal?.name && s.localUrl && s.localUrl.includes(':' + store.config.rommLocal.port)) return store.config.rommLocal.name; try { return new URL(s.localUrl || s.remoteUrl).host; } catch { return 'your RomM server'; } });
 
 function go(i, d) { dir.value = d; at.value = Math.max(0, Math.min(STEPS.length - 1, i)); }
 function next() { romm.value = ''; go(at.value + 1, 1); }
@@ -295,6 +378,21 @@ async function saveName() {
   await saveConfig(patch);
   next();
 }
+// what's in use right now: the controller Linux reports (pad.js reads /proc/bus/input/devices), or
+// the keyboard, touch or mouse, from the last thing pressed (0.9.17)
+const using = ref(input.mode === 'pad' ? 'pad' : 'mouse');
+const USING_ICON = { pad: 'mdiController', xbox: 'mdiMicrosoftXboxController', playstation: 'mdiSonyPlaystation', nintendo: 'mdiNintendoSwitch', steam: 'mdiSteam', keys: 'mdiKeyboardOutline', touch: 'mdiGestureTap', mouse: 'mdiMouse' };
+const LABELS = [{ v: 'auto', l: 'Auto' }, { v: 'xbox', l: 'Xbox' }, { v: 'playstation', l: 'PlayStation' }, { v: 'nintendo', l: 'Nintendo' }, { v: 'steam', l: 'Steam' }];
+const usingText = computed(() => {
+  if (using.value === 'keys') return 'Using a keyboard';
+  if (using.value === 'touch') return 'Using touch';
+  if (using.value === 'mouse') return 'Using a mouse';
+  const n = padInfo.value?.name;
+  return n ? `${n} found` : input.padName ? 'Controller found' : 'Waiting for a controller…';
+});
+watch(() => input.mode, (m) => { if (m === 'pad') using.value = 'pad'; });
+const onKeyUse = (e) => { if (e.isTrusted && !/^(Gamepad|Unidentified)/.test(e.key)) using.value = 'keys'; };
+const onPointerUse = (e) => { using.value = e.pointerType === 'touch' ? 'touch' : 'mouse'; };
 // A from a controller counts; touch, mouse and keyboard just go on
 let padT = null;
 function padPress() {
@@ -313,13 +411,32 @@ async function getEmuDeck() {
   catch (e) { toast(e.message, 'error', 6000); }
   getting.value = '';
 }
+const needFlatpak = ref(false), devPass = ref('');
 async function getRetroDeck() {
   getting.value = 'retrodeck'; progress.value = null;
   try { await call('welcome:retrodeck'); opened.value = 'retrodeck'; }
-  catch (e) { toast(e.message, 'error', 6000); }
+  catch (e) { if (/Flatpak isn't installed/i.test(e.message)) needFlatpak.value = true; else toast(e.message, 'error', 6000); }
   getting.value = '';
 }
-async function recheck() { await load(); opened.value = ''; next(); }
+async function flatpakThenRetroDeck() {
+  getting.value = 'flatpak'; progress.value = null;
+  try { await call('welcome:flatpak', { password: devPass.value }); needFlatpak.value = false; devPass.value = ''; toast('Flatpak is installed. Now RetroDECK…', 'ok', 3000, 'mdiPackageDown'); }
+  catch (e) { devPass.value = ''; getting.value = ''; return toast(e.message, 'error', 7000); }
+  await getRetroDeck();
+}
+const picking = ref(false);
+// without RomM: the games folder (a folder per console), then a library built from it
+async function pickGamesFolder() {
+  const dir = await pickFolder({ title: 'Your games folder (the one with a folder per console)', start: store.config.romsRoot || store.info?.home });
+  if (dir) await saveConfig({ romsRoot: dir });
+}
+async function goLocal() {
+  await saveConfig({ localOnly: true, configured: true });
+  try { const r = await call('library:sync'); await loadLibrary(); toast(`${r?.total || 0} games found on this device`, 'ok', 3000, 'mdiFolderPlayOutline'); } catch (e) { toast(e.message, 'error', 5000); }
+  next();
+}
+const intro = ref(false);
+async function recheck() { await load(); opened.value = ''; picking.value = false; next(); }
 async function saveExtras() {
   busy.value = true;
   try {
@@ -344,8 +461,14 @@ async function addSelf() {
   } catch (e) { toast(e.message, 'error', 6000); }
   busy.value = false;
 }
+// Done: the card lifts away, then the main page fades in under it (0.9.16)
+const leaving = ref(false);
 async function finish() {
-  await saveConfig({ welcomed: Date.now() });
+  leaving.value = true;
+  // no RomM picked, but a games folder: open on the games already here instead of an empty app (0.9.17)
+  if (!store.config.configured && store.config.romsRoot) { await saveConfig({ localOnly: true, configured: true }); call('library:sync').then(() => loadLibrary()).catch(() => {}); }
+  await saveConfig({ welcomed: Date.now(), ui: { welcomeStep: '' } });
+  await new Promise((r) => setTimeout(r, 420));
   store.welcoming = false;
   if (store.config.configured) tab('home');
   if (!store.config.ui.toured) { await openModal('tour'); saveConfig({ ui: { toured: true } }); }
@@ -353,19 +476,58 @@ async function finish() {
 async function leave() {
   if (only) return close();
   if (!replay && !(await confirm('Skip the setup?', 'You can run it again any time from Settings → About.', 'Skip'))) return;
-  if (!replay) await saveConfig({ welcomed: 'skipped' });
+  if (!replay) await saveConfig({ welcomed: 'skipped', ui: { welcomeStep: '' } });
   store.welcoming = false;
   if (store.config.configured) tab(replay ? 'settings' : 'home');
 }
 async function load() { try { st.value = await call('welcome:state'); } catch {} }
+// scan step extras
+const theirs = ref({ total: 0, consoles: [] }), issues = ref([]);
+const short = (p) => String(p || '').replace(store.info?.home || '\0', '~');
+const folders = computed(() => { const ps = (store.lib?.platforms || []).filter((p) => p.rom_count); return { total: ps.length, found: ps.filter((p) => p.target?.exists).length }; });
+async function loadScanExtras() {
+  theirs.value = await call('setup:steamTheirs').catch(() => ({ total: 0, consoles: [] }));
+  issues.value = await call('issues:list').catch(() => []);
+}
+async function consoleFolders() {
+  const ps = (store.lib?.platforms || []).filter((p) => p.rom_count).sort((a, b) => (a.target?.exists ? 1 : 0) - (b.target?.exists ? 1 : 0) || String(a.display_name).localeCompare(String(b.display_name)));
+  const v = await choose({ sheet: true, title: 'Console Folders', message: `Matched inside ${short(store.config.romsRoot) || 'your games folder'} by their usual names.`, options: [
+    { label: 'Change the games folder', sub: short(store.config.romsRoot) || 'Not set', value: '__root', icon: 'mdiFolderOpen' },
+    ...ps.map((p) => ({ label: p.display_name, sub: `${p.target?.path ? short(p.target.path) : 'No folder'} · ${p.target?.source === 'custom' ? 'Yours' : p.target?.exists ? 'Found' : 'Will be made'}`, value: p.slug, icon: p.target?.exists ? 'mdiFolderCheckOutline' : 'mdiFolderAlertOutline', raw: true })),
+  ] });
+  if (!v) return;
+  if (v === '__root') {
+    const dir = await pickFolder({ title: 'Your games folder (the one with a folder per console)', start: store.config.romsRoot || store.info?.home });
+    if (dir) await saveConfig({ romsRoot: dir });
+  } else {
+    const p = ps.find((x) => x.slug === v);
+    const dir = await pickFolder({ title: `Folder for ${p.display_name}`, start: p.target?.exists ? p.target.path : store.config.romsRoot || undefined });
+    if (!dir) return consoleFolders();
+    store.config = await call('config:setPath', { slug: p.slug, path: dir });
+  }
+  await loadLibrary(); call('installed:rescan').catch(() => {});
+  return consoleFolders();
+}
+async function takeOverAll() {
+  if (!(await confirm('Bring them under Cartridge?', `${theirs.value.total} game${theirs.value.total === 1 ? '' : 's'} you added to Steam yourself will start the way Cartridge starts the rest, with the emulator picked for their console. Play time, collections and artwork stay.`, 'Bring them under Cartridge'))) return;
+  busy.value = true;
+  let done = 0;
+  for (const c of theirs.value.consoles) { try { done += (await call('steam:takeOver', { key: c.key }))?.count || 0; } catch (e) { toast(e.message, 'error', 4000); } }
+  busy.value = false;
+  toast(done ? `${done} game${done === 1 ? '' : 's'} now start through Cartridge` : 'Nothing changed', done ? 'ok' : 'info', 3500, 'mdiSteam');
+  await loadScanExtras();
+}
 
 // Android: on the controller check B counts too. Android's button layouts can send B for the button
 // marked A, and going back from here looked like the check failed
-const handlers = { back: () => { if (IS_ANDROID && step.value === 'pad' && input.mode === 'pad') return padPress(); if (step.value === 'romm' && romm.value) { romm.value = romm.value === 'other' || romm.value === 'local' ? 'what' : ''; return; } if (at.value > 0) prev(); } };
+const handlers = { back: () => { if (IS_ANDROID && step.value === 'pad' && input.mode === 'pad') return padPress(); if (step.value === 'romm' && romm.value) { romm.value = romm.value === 'other' || romm.value === 'local' || romm.value === 'without' ? 'what' : ''; return; } if (at.value > 0) prev(); } };
 useView(handlers, [{ b: 'A', label: 'Select' }, { b: 'B', label: 'Back' }]);
 // Setup and the scan bring their own buttons; the welcome's come back after them
+watch(step, (v) => { if (!replay && !only && v !== 'done') saveConfig({ ui: { welcomeStep: v } }); });
+watch(picking, async () => { await nextTick(); setTimeout(() => focusFirst(el.value?.querySelector('.w-step') || el.value, '.w-step [data-focus]'), 120); });
 watch([step, romm], async () => {
   if (step.value === 'self' && st.value.inSteam === false) await load();
+  if (step.value === 'scan') loadScanExtras();
   await nextTick(); await nextTick();
   if (!(step.value === 'scan' || (step.value === 'romm' && (romm.value === 'signin' || romm.value === 'local')))) store.viewHandlers = handlers;
   setTimeout(() => focusFirst(el.value?.querySelector('.w-step') || el.value, '.w-act .btn.primary, .w-step [data-focus]'), 280);
@@ -376,12 +538,22 @@ watch([step, romm], async () => {
 });
 onMounted(async () => {
   if (only) { at.value = STEPS.indexOf('romm'); romm.value = 'local'; }
+  // picks up where it was left (closed halfway, or off to Desktop Mode for EmuDeck), 0.9.16
+  else if (!replay && STEPS.includes(store.config.ui.welcomeStep)) at.value = STEPS.indexOf(store.config.ui.welcomeStep);
   store.welcoming ||= true;
+  if (step.value === 'hello' && !only && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    intro.value = true;
+    const skip = () => { intro.value = false; };
+    setTimeout(skip, 2600);
+    window.addEventListener('keydown', skip, { once: true, capture: true });
+  }
   off = window.cart.on('welcome-progress', (p) => { if (p.percent != null) progress.value = p.percent; });
+  window.addEventListener('keydown', onKeyUse, true); window.addEventListener('pointerdown', onPointerUse, true);
+  detectPad();
   await load();
   await nextTick(); focusFirst(el.value, '.w-act .btn.primary');
 });
-onBeforeUnmount(() => { off?.(); clearTimeout(padT); });
+onBeforeUnmount(() => { off?.(); clearTimeout(padT); window.removeEventListener('keydown', onKeyUse, true); window.removeEventListener('pointerdown', onPointerUse, true); });
 </script>
 
 <style scoped>
@@ -391,9 +563,14 @@ onBeforeUnmount(() => { off?.(); clearTimeout(padT); });
 .w-dots i { width: 8px; height: 8px; border-radius: 50%; background: rgba(255, 255, 255, 0.22); transition: background var(--d-2, 0.2s), transform var(--d-2, 0.2s); }
 .w-dots i.done { background: rgba(255, 255, 255, 0.55); }
 .w-dots i.on { background: #fff; transform: scale(1.3); }
-.w-step { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; align-items: center; gap: var(--s-4); padding: var(--s-5) 20px 48px; text-align: center; }
-.w-step > * { max-width: 860px; width: 100%; }
-.w-hello, .w-done { justify-content: center; }
+.w-stage { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; padding: 0 var(--s-5) calc(var(--s-6) + 28px); } /* room for the A/B hints */
+.w-step { width: min(960px, 100%); max-height: 100%; overflow-y: auto; display: flex; flex-direction: column; align-items: center; gap: var(--s-4); padding: var(--s-6) var(--s-6) var(--s-6); text-align: center; box-shadow: 0 24px 80px rgba(0, 0, 0, 0.45); }
+.w-step > * { max-width: 820px; width: 100%; flex: none; }
+.w-hello, .w-done { padding-block: calc(var(--s-6) * 1.6); }
+.w-step.w-scan, .w-step.w-emus { width: min(1240px, 100%); }
+.w-step.w-emus > * { max-width: 1180px; }
+/* rows sit one step lighter than the card, as rows do on the page */
+.w-step :deep(.lrow:not(:focus):not(.sel)) { background: var(--s2); }
 .w-step h1 { font-size: var(--t-2xl); font-weight: 800; letter-spacing: -0.02em; margin: 0; }
 .w-big { font-size: calc(var(--t-2xl) * 1.35) !important; }
 .w-logo { width: auto !important; margin-bottom: var(--s-2); }
@@ -415,10 +592,45 @@ onBeforeUnmount(() => { off?.(); clearTimeout(padT); });
 .lrow .status { margin-left: 8px; vertical-align: middle; }
 .lrow.sel { background: var(--sel); }
 .w-scan { text-align: left; align-items: stretch; }
-.w-scan-lead { text-align: center; max-width: 1100px !important; }
-.w-emu { position: relative !important; inset: auto !important; height: auto !important; overflow: visible !important; padding: 0 !important; text-align: left; max-width: 1100px !important; }
+.w-scan-extra { display: flex; flex-direction: column; gap: var(--s-2); max-width: 1180px !important; text-align: left; }
+.w-scan-extra .l-end { color: var(--muted); font-size: var(--t-sm); white-space: nowrap; }
+.w-scan-extra .lrow:focus-visible .l-end, .pad-mode .w-scan-extra .lrow:focus .l-end { color: var(--on-focus-dim, inherit); }
+.w-scan-lead { text-align: center; max-width: 1180px !important; }
+.w-emu { position: relative !important; inset: auto !important; height: auto !important; overflow: visible !important; padding: 0 !important; text-align: left; max-width: 1180px !important; animation: none !important; }
+/* the first screen arrives in a short sequence: the mark, the title, then the rest (0.9.16) */
+.w-hello > * { animation: wIn 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+.w-hello > .w-logo { animation-name: wLogo; animation-duration: 0.9s; }
+.w-hello > :nth-child(2) { animation-delay: 0.18s; }
+.w-hello > :nth-child(3) { animation-delay: 0.32s; }
+.w-hello > :nth-child(4) { animation-delay: 0.46s; }
+@keyframes wIn { from { opacity: 0; transform: translateY(18px); } }
+@keyframes wLogo { 0% { opacity: 0; transform: scale(0.7) rotate(-6deg); } 60% { opacity: 1; transform: scale(1.06) rotate(1deg); } 100% { transform: none; } }
+.welcome.w-out .w-stage, .welcome.w-out .w-top { transition: opacity 0.4s ease, transform 0.4s cubic-bezier(0.4, 0, 0.2, 1); opacity: 0; transform: translateY(-24px) scale(0.97); }
 .w-next-enter-active, .w-next-leave-active, .w-prev-enter-active, .w-prev-leave-active { transition: opacity 0.22s ease, transform 0.22s ease; }
 .w-next-enter-from, .w-prev-leave-to { opacity: 0; transform: translateX(40px); }
 .w-next-leave-to, .w-prev-enter-from { opacity: 0; transform: translateX(-40px); }
 @media (prefers-reduced-motion: reduce) { .w-next-enter-active, .w-next-leave-active, .w-prev-enter-active, .w-prev-leave-active { transition: opacity 0.15s; transform: none !important; } }
+.w-back { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; background: rgba(255, 255, 255, 0.08); color: inherit; border: 0; flex: none; }
+.w-back:focus, .w-back:hover { background: var(--focus); color: var(--on-focus); outline: none; }
+.w-hints { position: absolute; left: 0; right: 0; bottom: 14px; display: flex; justify-content: center; gap: 22px; color: var(--muted); font-size: var(--t-sm); pointer-events: none; }
+.w-hints span { display: inline-flex; align-items: center; gap: 8px; }
+/* the opening (0.9.17): the mark comes into focus inside two rings of light, a glint crosses it, the
+   name follows letter by letter, then everything lifts away to the first card */
+.w-intro { position: absolute; inset: 0; z-index: 5; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px; background: radial-gradient(60% 60% at 50% 45%, rgba(18, 18, 22, 0.55), rgba(5, 5, 7, 0.96)); animation: wiOut 0.5s cubic-bezier(0.4, 0, 0.2, 1) 2.1s forwards; }
+.wi-mark { position: relative; animation: wiMark 1.1s cubic-bezier(0.16, 1, 0.3, 1) both; overflow: hidden; border-radius: 28px; }
+.wi-glint { position: absolute; inset: -20%; background: linear-gradient(105deg, transparent 38%, rgba(255, 255, 255, 0.55) 50%, transparent 62%); transform: translateX(-120%); animation: wiGlint 0.9s ease-in-out 0.7s forwards; mix-blend-mode: overlay; }
+.wi-ring { position: absolute; top: 45%; left: 50%; width: 180px; height: 180px; margin: -90px 0 0 -90px; border-radius: 50%; border: 1.5px solid rgba(239, 75, 35, 0.55); box-shadow: 0 0 60px rgba(239, 75, 35, 0.35); opacity: 0; animation: wiRing 1.6s cubic-bezier(0.16, 1, 0.3, 1) 0.15s forwards; }
+.wi-ring.r2 { border-color: rgba(255, 255, 255, 0.25); box-shadow: none; animation-delay: 0.35s; }
+.wi-name { display: flex; font-family: var(--display); font-size: calc(var(--t-2xl) * 1.2); font-weight: 800; letter-spacing: -0.02em; }
+.wi-name span { opacity: 0; transform: translateY(14px); filter: blur(6px); animation: wiChar 0.55s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+.welcome.w-intro-on .w-top, .welcome.w-intro-on .w-stage { opacity: 0; }
+.welcome:not(.w-intro-on) .w-top, .welcome:not(.w-intro-on) .w-stage { transition: opacity 0.5s ease; }
+@keyframes wiMark { 0% { opacity: 0; transform: scale(0.62); filter: blur(14px); } 100% { opacity: 1; transform: none; filter: none; } }
+@keyframes wiGlint { to { transform: translateX(120%); } }
+@keyframes wiRing { 0% { opacity: 0; transform: scale(0.6); } 30% { opacity: 0.9; } 100% { opacity: 0; transform: scale(2.4); } }
+@keyframes wiChar { to { opacity: 1; transform: none; filter: none; } }
+@keyframes wiOut { to { opacity: 0; transform: scale(1.04); visibility: hidden; } }
+.w-warn { display: flex; align-items: center; justify-content: center; gap: 10px; color: #ffd978; font-weight: 600; }
+.w-miss { text-align: left; margin: 0 auto; padding-left: 1.2em; display: flex; flex-direction: column; gap: 6px; max-width: 640px !important; color: var(--muted); line-height: 1.45; }
+.w-miss b { color: var(--text, #fff); }
 </style>

@@ -1,5 +1,5 @@
 <template>
-  <div class="view" data-scroll ref="el">
+  <div class="view" :data-scroll="welcome ? null : ''" ref="el"><!-- inside the welcome its card scrolls -->
     <header class="page-head">
       <div style="min-width: 0">
         <div class="eyebrow">{{ first || welcome ? 'Setup' : 'Settings · Emulators' }}</div>
@@ -28,6 +28,20 @@
     <template v-if="ov">
       <div v-if="facts.length" class="facts">
         <span v-for="f in facts" :key="f.t" class="status" :class="f.k"><Icon :name="f.i" :size="14" />{{ f.t }}</span>
+      </div>
+
+      <!-- 0.9.17: set the emulators up from here: BIOS and firmware from RomM into each emulator, game folders in their lists -->
+      <div class="sec-title">Set up your emulators</div>
+      <div class="stack">
+        <button class="lrow" data-focus :disabled="!!prepBusy" @click="allBios">
+          <Icon name="mdiChip" :size="24" />
+          <div class="l-mid"><b>Get BIOS and firmware from RomM</b><span class="l-sub">{{ prepBusy === 'bios' ? 'Working… firmware for PS3 and Vita takes a minute' : 'Every console’s files from your RomM server, copied into each emulator that reads them (never over a file), PS3 and Vita firmware installed, Switch keys and firmware put in place' }}</span></div>
+          <span v-if="prepBusy === 'bios'" class="status"><Icon name="mdiSync" :size="14" class="spin" />Working</span>
+        </button>
+        <button class="lrow" data-focus :disabled="!!prepBusy" @click="gameFolders">
+          <Icon name="mdiFolderPlusOutline" :size="24" />
+          <div class="l-mid"><b>Add your game folders to emulators</b><span class="l-sub">Your console folders added to PCSX2’s, DuckStation’s and Dolphin’s game lists. Close them first.</span></div>
+        </button>
       </div>
 
       <template v-if="ov.unknown.length">
@@ -131,11 +145,31 @@ async function load() {
   }
 }
 const bios = ref({});
+const prepBusy = ref('');
+async function allBios() {
+  prepBusy.value = 'bios';
+  try {
+    const r = await call('bios:all');
+    const ok = r.filter((x) => !x.error), bad = r.filter((x) => x.error);
+    toast(!r.length ? 'Your RomM server has no BIOS or firmware files.' : `${ok.length} console${ok.length === 1 ? '' : 's'} done${ok.some((x) => x.placed) ? `, ${ok.reduce((n, x) => n + (x.placed || 0), 0)} files copied into emulators` : ''}${bad.length ? `. Not done: ${bad.map((x) => `${x.name} (${x.error})`).join(', ')}` : ''}`, bad.length ? 'info' : 'ok', 8000, 'mdiChip');
+    await load();
+  } catch (e) { toast(e.message, 'error', 6000); }
+  prepBusy.value = '';
+}
+async function gameFolders() {
+  prepBusy.value = 'folders';
+  try {
+    const r = await call('setup:gameFolders');
+    const added = r.filter((x) => x.added.length), skipped = r.filter((x) => x.skipped);
+    toast(!r.length ? 'None of PCSX2, DuckStation or Dolphin is set up here yet.' : `${added.length ? 'Added to ' + added.map((x) => x.name).join(', ') : 'Every folder was already there'}${skipped.length ? `. Close ${skipped.map((x) => x.name).join(', ')} and try again for ${skipped.length === 1 ? 'it' : 'them'}.` : ''}`, skipped.length ? 'info' : 'ok', 6000, 'mdiFolderPlusOutline');
+  } catch (e) { toast(e.message, 'error', 6000); }
+  prepBusy.value = '';
+}
 // into your BIOS folder (Settings → Library), where EmuDeck and RetroArch setups look. Nothing is
 // copied into an emulator's own folders.
 async function getBios(c) {
-  if (!store.config.biosPath) return toast('Set your BIOS folder in Settings → Storage first.', 'info', 5000);
-  try { const r = await call('bios:download', { platformId: c.pid, slug: c.slug }); toast(`${r.files.filter((f) => !f.skipped).length} BIOS file${r.count === 1 ? '' : 's'} saved in ${r.dir}`, 'ok', 5000, 'mdiChip'); await load(); }
+  toast(/^(ps3|psvita)$/.test(c.slug) ? 'Getting the firmware and installing it. This takes a minute.' : 'Getting the BIOS files…', 'info', 4000, 'mdiChip');
+  try { const r = await call('bios:download', { platformId: c.pid, slug: c.slug }); toast(r.installed ? `Firmware installed in ${r.emu === 'rpcs3' ? 'RPCS3' : 'Vita3K'}` : `${r.files.filter((f) => !f.skipped).length} BIOS file${r.count === 1 ? '' : 's'} saved in ${r.dir}`, 'ok', 5000, 'mdiChip'); await load(); }
   catch (e) { toast(e.message, 'error', 6000); }
 }
 async function scan(drives) {

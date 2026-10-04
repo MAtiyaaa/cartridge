@@ -219,7 +219,9 @@ module.exports = function createTrophyService(ctx) {
       }
     }
     const romId = k in links ? links[k] || null : remote.get(k)?.romId || (loc ? autoLink(loc) : null);
-    return { ...base, title: nameOf(base.title, rem?.title, romId), romId: romId || null, key: k };
+    // still only a code (a game deleted before Cartridge learnt its name): say so, keep the code (0.9.16)
+    const title = nameOf(base.title, rem?.title, romId), unnamed = isCode(title);
+    return { ...base, title: unnamed ? `Unnamed ${T.SOURCES[base.src]?.short || ''} game`.replace('  ', ' ') : title, code: unnamed ? title : null, romId: romId || null, key: k };
   }
   function light(g) {
     const earned = g.trophies.filter((t) => t.unlocked);
@@ -228,7 +230,7 @@ module.exports = function createTrophyService(ctx) {
     const last = earned.reduce((m, t) => Math.max(m, t.time || 0), 0);
     const rom = romById(g.romId);
     return {
-      key: g.key, src: g.src, set: g.set, title: g.title, icon: g.icon, romId: g.romId, remoteOnly: !!g.remoteOnly,
+      key: g.key, src: g.src, set: g.set, title: g.title, code: g.code || null, icon: g.icon, romId: g.romId, remoteOnly: !!g.remoteOnly,
       platform: T.SOURCES[g.src].platform, short: T.SOURCES[g.src].short, kind: T.SOURCES[g.src].kind,
       earned: earned.length, total: g.trophies.length, grades,
       score: g.trophies.reduce((s, t) => s + (t.unlocked ? t.points || 0 : 0), 0), possible: g.trophies.reduce((s, t) => s + (t.points || 0), 0),

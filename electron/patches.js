@@ -1,4 +1,5 @@
 'use strict';
+const webFetch = require('./webFetch');
 // Emulator patches (0.9.3 D7, owner's option 1). The patches themselves are the emulator's own
 // (RPCS3 downloads its patch.yml); Cartridge lists the ones for a game and turns them on or off in
 // the emulator's own patch settings, so they stay on exactly as if ticked in the emulator. It only
@@ -11,9 +12,48 @@ const yaml = require('js-yaml');
 
 const exists = (p) => { try { fs.accessSync(p); return true; } catch { return false; } };
 // Everything as text (FAILSAFE): RPCS3's app version keys like 01.00 must not turn into numbers
-const load = (t) => yaml.load(t, { schema: yaml.FAILSAFE_SCHEMA }) || {};
+// json: true lets a key appear twice (the later wins), as yaml-cpp, which RPCS3 uses, reads it (0.9.19:
+// a duplicate key in RPCS3's patch list made js-yaml throw, so no patches showed at all)
+const load = (t) => yaml.load(t, { schema: yaml.FAILSAFE_SCHEMA, json: true }) || {};
 const dump = (o) => yaml.dump(o, { schema: yaml.FAILSAFE_SCHEMA, lineWidth: -1, noRefs: true });
 const readYaml = (f) => { try { const o = load(fs.readFileSync(f, 'utf8')); return o && typeof o === 'object' ? o : {}; } catch { return {}; } };
+// A patch file read for listing only: js-yaml first, else a forgiving reader of the parts Cartridge needs
+// (hash > description > Games > title > serial > versions, Author, Notes, Group), so one line RPCS3's own
+// yaml-cpp accepts but js-yaml doesn't never hides the whole list
+function readPatchFile(f) {
+  let text; try { text = fs.readFileSync(f, 'utf8'); } catch { return {}; }
+  try { const o = load(text); if (o && typeof o === 'object') return o; } catch {}
+  return loosePatchYaml(text);
+}
+function loosePatchYaml(text) {
+  const unq = (v) => { v = String(v).trim(); const m = /^"((?:[^"\\]|\\.)*)"$|^'((?:[^']|'')*)'$/.exec(v); return m ? (m[1] !== undefined ? m[1].replace(/\\"/g, '"') : m[2].replace(/''/g, "'")) : v; };
+  const flow = (v) => v.replace(/^\[|\]$/g, '').split(',').map((x) => unq(x)).filter((x) => x !== '');
+  const KEY = /^("(?:[^"\\]|\\.)*"|'(?:[^']|'')*'|[^:]+?)\s*:(?:\s+(.*))?$/;
+  const root = {}, st = [{ indent: -1, node: root }];
+  let block = null; // indent of a | or > block scalar being skipped
+  for (const raw of text.split(/\r?\n/)) {
+    if (!raw.trim() || /^\s*#/.test(raw)) continue;
+    const indent = raw.length - raw.trimStart().length, line = raw.trim();
+    if (block !== null) { if (indent > block) continue; block = null; }
+    const item = line === '-' || line.startsWith('- ');
+    // a "- item" at the same indent as its key's list stays in that list
+    while (st.length > 1 && indent <= st[st.length - 1].indent && !(item && Array.isArray(st[st.length - 1].node) && indent === st[st.length - 1].indent)) st.pop();
+    const top = st[st.length - 1];
+    if (item) {
+      if (!Array.isArray(top.node) && top.parent && !Object.keys(top.node).length) { top.parent[top.key] = []; top.node = top.parent[top.key]; top.indent = indent; }
+      if (Array.isArray(top.node)) top.node.push(unq(line.slice(1).trim()));
+      continue;
+    }
+    const m = KEY.exec(line);
+    if (!m || Array.isArray(top.node)) continue;
+    const key = unq(m[1]); let val = (m[2] || '').replace(/\s+#.*$/, '').trim();
+    if (/^&\S+$/.test(val)) val = ''; // an anchor on a map: the map follows
+    if (/^[|>][-+]?$/.test(val)) { top.node[key] = ''; block = indent; continue; }
+    if (!val) { const child = {}; top.node[key] = child; st.push({ indent, node: child, key, parent: top.node }); continue; }
+    top.node[key] = val.startsWith('[') ? flow(val) : unq(val);
+  }
+  return root;
+}
 
 // PARAM.SFO (PS3, PS4, Vita): header "\0PSF", key table and data table offsets, then entries
 // { key offset u16, format u16, length u32, max u32, data offset u32 }. Returns { KEY: value }.
@@ -47,6 +87,9 @@ function rpcs3Dirs(home = os.homedir()) {
 function ps3Version(gameDir, hdds, serial) {
   for (const h of hdds) { const s = sfoAt(path.join(h, 'game', serial, 'PARAM.SFO')); if (s.APP_VER) return s.APP_VER; }
   for (const f of [path.join(gameDir || '', 'PS3_GAME', 'PARAM.SFO'), path.join(gameDir || '', 'PARAM.SFO')]) { const s = sfoAt(f); if (s.APP_VER) return s.APP_VER; }
+  // a disc image (or a folder holding one): PS3_GAME/PARAM.SFO inside the ISO (0.9.16)
+  try { if (fs.statSync(gameDir).isDirectory()) { const iso = fs.readdirSync(gameDir).find((n) => /\.iso$/i.test(n)); if (iso) gameDir = path.join(gameDir, iso); } } catch {}
+  if (/\.iso$/i.test(gameDir || '')) { const b = isoFile(gameDir, ['PS3_GAME', 'PARAM.SFO']); const v = b && parseSfo(b).APP_VER; if (v) return v; }
   return null;
 }
 // Patches for one game: [{ key, hash, description, title, serial, version, author, notes, group, on, by }]
@@ -56,7 +99,7 @@ function rpcs3List(dir, serial, appVer, mine = {}) {
   const cfg = readYaml(dir.config);
   const out = [], seen = new Set();
   for (const f of files) {
-    const doc = readYaml(f);
+    const doc = readPatchFile(f);
     for (const [hash, descs] of Object.entries(doc)) {
       if (hash === 'Version' || hash === 'Anchors' || !descs || typeof descs !== 'object') continue;
       for (const [description, p] of Object.entries(descs)) {
@@ -65,20 +108,49 @@ function rpcs3List(dir, serial, appVer, mine = {}) {
         for (const [title, serials] of Object.entries(games)) {
           const vers = serials?.[serial];
           if (!Array.isArray(vers)) continue;
-          // this game's version, else All; with the version unknown, the one version it lists
-          const version = vers.includes(appVer) ? appVer : vers.includes('All') ? 'All' : !appVer && vers.length === 1 ? vers[0] : null;
-          if (!version) continue;
+          // this game's version, else All; with the version unknown, the one version it lists. 0.9.21
+          // (owner: Uncharted 3 at 1.19 listed every version's patches): when the copy's version is
+          // known, patches for other versions are left out, unless one is already on (so it can be
+          // turned off). With the version unknown, they're listed, saying which version they're for.
+          let version = vers.includes(appVer) ? appVer : vers.includes('All') ? 'All' : !appVer && vers.length === 1 ? vers[0] : null;
+          let other = null;
+          if (!version) { version = [...vers].sort((x, y) => String(y).localeCompare(String(x), undefined, { numeric: true }))[0]; if (!version) continue; other = vers; }
           const key = [hash, description, title, serial, version].join('\u0001');
           if (seen.has(key)) continue;
           seen.add(key);
           const node = cfg?.[hash]?.[description]?.[title]?.[serial]?.[version];
           const on = node === 'true' || !!(node && typeof node === 'object' && node.Enabled === 'true');
-          out.push({ key, hash, description, title, serial, version, author: p.Author || '', notes: typeof p.Notes === 'string' ? p.Notes : '', group: p.Group || '', on, by: on ? (mine[key] ? 'cartridge' : 'emulator') : null });
+          if (other && appVer && !on) continue;
+          const note = other ? `For game version ${other.join(', ')}${appVer ? ` (this copy is ${appVer}: install the game's update in RPCS3 for it to apply)` : ''}.` : '';
+          out.push({ key, hash, description, title, serial, version, author: p.Author || '', notes: [note, typeof p.Notes === 'string' ? p.Notes : ''].filter(Boolean).join(' '), group: p.Group || '', on, other: !!other, by: on ? (mine[key] ? 'cartridge' : 'emulator') : null });
         }
       }
     }
   }
-  return out.sort((a, b) => a.description.localeCompare(b.description));
+  const exact = new Set(out.filter((x) => !x.other).map((x) => [x.hash, x.description, x.title].join('\u0001')));
+  return out.filter((x) => !x.other || !exact.has([x.hash, x.description, x.title].join('\u0001'))).sort((a, b) => a.other - b.other || a.description.localeCompare(b.description));
+}
+// RPCS3's own patch download (rpcs3qt/patch_manager_dialog.cpp): GET rpcs3.net/compatibility?patch&api=v1
+// &v=<patch engine 1.2>[&sha256=<current file>]; JSON return_code 0 new, 1 up to date, <0 error; version
+// must be 1.2 and sha256 must match the patch text; RPCS3 keeps the old file as patch.yml.old.
+const RPCS3_PATCH_ENGINE = '1.2';
+async function rpcs3DownloadPatches(patchesDir, { fetchImpl = webFetch, base = 'https://rpcs3.net' } = {}) {
+  const file = path.join(patchesDir, 'patch.yml');
+  let url = `${base}/compatibility?patch&api=v1&v=${RPCS3_PATCH_ENGINE}`;
+  try { url += '&sha256=' + require('crypto').createHash('sha256').update(fs.readFileSync(file)).digest('hex'); } catch {}
+  const r = await fetchImpl(url);
+  if (!r.ok) throw new Error(`rpcs3.net answered ${r.status}`);
+  const j = await r.json();
+  if (j.return_code === 1) return { updated: false };
+  if (j.return_code !== 0) throw new Error(`rpcs3.net: no patches (code ${j.return_code})`);
+  if (j.version !== RPCS3_PATCH_ENGINE || typeof j.patch !== 'string' || !j.patch) throw new Error('rpcs3.net sent a patch list for another RPCS3 version');
+  if (String(j.sha256 || '').toLowerCase() !== require('crypto').createHash('sha256').update(j.patch).digest('hex')) throw new Error('The downloaded patch list failed its checksum');
+  // RPCS3 validates with its own loader (yaml-cpp); here the forgiving reader must find a Version 1.2 file
+  { const o = (() => { try { return load(j.patch); } catch { return loosePatchYaml(j.patch); } })(); if (o.Version !== RPCS3_PATCH_ENGINE) throw new Error('The downloaded patch list isn’t one RPCS3 1.2 reads'); }
+  fs.mkdirSync(patchesDir, { recursive: true });
+  if (exists(file)) fs.renameSync(file, file + '.old');
+  fs.writeFileSync(file, j.patch);
+  return { updated: true };
 }
 // Turn patches on (Enabled: true) or off in patch_config.yml. Off only for ones Cartridge turned on.
 // Everything else in the file is written back as it was. Returns the new { key: true } record.
@@ -234,9 +306,10 @@ function pcsx2Game(dir, file) {
   return hit && hit.crc ? { serial: hit.serial, crc: hit.crc } : null;
 }
 // One file from a plain ISO9660 image (a PS3 disc's PS3_GAME/PARAM.SFO), or null
+// any image discImage can open: ISO, raw .bin/.cue, CHD, CSO/ZSO, GCZ (0.9.17)
 function isoFile(file, parts, max = 1 << 20) {
-  let fd; try { fd = fs.openSync(file, 'r'); } catch { return null; }
-  const read = (pos, len) => { const b = Buffer.alloc(len); const n = fs.readSync(fd, b, 0, len, pos); return b.subarray(0, n); };
+  const img = require('./discImage').open(file); if (!img) return null;
+  const read = img.read;
   try {
     const pvd = read(16 * 2048, 2048);
     if (pvd[0] !== 1 || pvd.toString('latin1', 1, 6) !== 'CD001') return null;
@@ -249,15 +322,15 @@ function isoFile(file, parts, max = 1 << 20) {
       d = hit;
     }
     return d.size <= max ? read(d.lba * 2048, d.size) : null;
-  } catch { return null; } finally { try { fs.closeSync(fd); } catch {} }
+  } catch { return null; } finally { img.close(); }
 }
 // A PS2 ISO's serial and CRC the way PCSX2 works them out itself (0.9.3 L; CDVD.cpp GetPS2ElfName,
 // Elfheader.cpp GetCRC): SYSTEM.CNF's BOOT2 names the game's program ("cdrom0:\SLUS_213.86;1"),
 // the serial is that name with "." removed and "_" as "-", the CRC is every 32-bit word of the
-// program XORed together. Plain ISO9660 images only (CHD is compressed: PCSX2's game list then).
+// program XORed together. Any image discImage opens (CHD and CSO since 0.9.17).
 function ps2IsoInfo(file) {
-  let fd; try { fd = fs.openSync(file, 'r'); } catch { return null; }
-  const read = (pos, len) => { const b = Buffer.alloc(len); const n = fs.readSync(fd, b, 0, len, pos); return b.subarray(0, n); };
+  const img = require('./discImage').open(file); if (!img) return null; // CHD and CSO too (0.9.17)
+  const read = img.read;
   try {
     const pvd = read(16 * 2048, 2048);
     if (pvd[0] !== 1 || pvd.toString('latin1', 1, 6) !== 'CD001') return null;
@@ -281,7 +354,7 @@ function ps2IsoInfo(file) {
     const name = parts[parts.length - 1];
     const serial = /^[A-Z]{4}[_-]\d{3}\.\d{2}/i.test(name) ? name.replace(/\./g, '').replace(/_/g, '-').toUpperCase() : '';
     return { serial, crc };
-  } catch { return null; } finally { try { fs.closeSync(fd); } catch {} }
+  } catch { return null; } finally { img.close(); }
 }
 const crcHex = (crc) => (crc >>> 0).toString(16).toUpperCase().padStart(8, '0');
 // patches.zip from the PCSX2 that is installed: AppImage (read from inside it), Flatpak, distro package
@@ -404,4 +477,4 @@ function rpcs3ApplyDb(dir, serial, dbText, mine = {}) {
   return { result: 'written', mine: { ...mine, [serial]: { at: Date.now(), file: f } } };
 }
 
-module.exports = { isoFile, rpcs3DbFromText, rpcs3CustomPath, rpcs3DbCached, rpcs3ApplyDb, parseSfo, sfoAt, rpcs3Dirs, ps3Version, rpcs3List, rpcs3Set, shadDirs, ps4Version, shadList, shadSet, load, dump, pcsx2Dirs, pcsx2GameList, pcsx2Game, ps2IsoInfo, pcsx2ZipSources, pcsx2ZipBuffer, pnachList, pcsx2List, pcsx2Set, crcHex };
+module.exports = { loosePatchYaml, readPatchFile, rpcs3DownloadPatches, isoFile, rpcs3DbFromText, rpcs3CustomPath, rpcs3DbCached, rpcs3ApplyDb, parseSfo, sfoAt, rpcs3Dirs, ps3Version, rpcs3List, rpcs3Set, shadDirs, ps4Version, shadList, shadSet, load, dump, pcsx2Dirs, pcsx2GameList, pcsx2Game, ps2IsoInfo, pcsx2ZipSources, pcsx2ZipBuffer, pnachList, pcsx2List, pcsx2Set, crcHex };

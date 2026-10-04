@@ -16,6 +16,7 @@ const os = require('os');
 const crypto = require('crypto');
 const { spawn, execFileSync } = require('child_process');
 const { parseVdf, shortcutId, steamRunning } = require('./steamArt');
+const frameGen = require('./frameGen');
 
 const HOME = os.homedir();
 const exists = (p) => { try { fs.accessSync(p); return true; } catch { return false; } };
@@ -173,7 +174,7 @@ function tokenize(s) {
   return out;
 }
 // Frame generation wrappers are not part of how a game launches: leave them out of new shortcuts
-const FRAMEGEN = /(^|\/)(mako-run|lsfg(-vk)?|lsfg-vk-.*|framegen)$/i;
+const FRAMEGEN = /(^|\/)\.?(mako-run|lsfg(-vk)?|lsfg-vk-.*|framegen)$/i;
 const FRAMEGEN_ENV = /^(LSFG_|ENABLE_LSFG|MAKO_)/i;
 function stripFramegen(tokens) {
   return tokens.filter((t) => !FRAMEGEN.test(t.val) && !FRAMEGEN_ENV.test(t.val));
@@ -321,6 +322,28 @@ module.exports = function createSteamManager(ctx) {
   function foundFor(id) {
     const ok = cfg().confirmed || {};
     return (found?.items || []).filter((x) => (ok[x.path] ? ok[x.path] === id : x.id === id && x.conf >= 2) && exists(x.path));
+  }
+  // every emulator copy that could be updated (0.9.16): AppImages the scan is sure of, and Flatpaks
+  function installedEmulators() {
+    const out = [];
+    for (const x of found?.items || []) if (x.kind === 'appimage' && x.id && x.conf >= 2 && exists(x.path) && !/\/\.mount_|cartridge/i.test(x.path)) out.push({ id: x.id, label: labelOf(x.id), kind: 'appimage', path: x.path, version: x.version || '' });
+    // folder builds (0.9.21): the program with its data folder beside it, as Vita3K's zip (EmuDeck's
+    // ~/Applications/Vita3K/Vita3K) unpacks; found by the scan, or in its own folder under ~/Applications
+    const U = require('./emuUpdates'), seen = new Set(out.map((x) => x.path));
+    const addFolder = (id, p, version = '') => { if (!seen.has(p) && exists(p) && U.installKind(p) === 'folder') { seen.add(p); out.push({ id, label: labelOf(id), kind: 'folder', path: p, version }); } };
+    for (const x of found?.items || []) if (x.kind === 'program' && x.id && x.conf >= 2 && !/\/\.mount_|cartridge/i.test(x.path)) addFolder(x.id, x.path, x.version || '');
+    for (const [id, e] of Object.entries(EMU)) for (const d of APP_DIRS()) for (const b of e.bin || []) addFolder(id, path.join(d, e.label || id, b));
+    const fps = flatpakApps();
+    for (const [id, e] of Object.entries(EMU)) for (const fp of e.fp || []) if (fps.includes(fp)) out.push({ id, label: labelOf(id), kind: 'flatpak', fp });
+    // Windows builds run through Proton (Xenia Canary's xenia_canary.exe, EmuDeck keeps it in roms/xbox360):
+    // updatable from their own releases too (0.9.21)
+    for (const [id, e] of Object.entries(EMU)) {
+      if (!e.win) continue;
+      const dirs = [...APP_DIRS(), ...ctx.emulationRoots().flatMap((r) => (e.for || []).map((k) => path.join(r, 'roms', k)))];
+      const exe = dirs.flatMap((d) => [d, ...ls(d).map((n) => path.join(d, n)).filter(isDir)]).flatMap((d) => ls(d).filter((n) => e.win.test(n)).map((n) => path.join(d, n)))[0];
+      if (exe) out.push({ id, label: `${labelOf(id)} (Windows)`, kind: 'windows', path: exe, version: '' });
+    }
+    return out;
   }
   let scanning = null;
   function scanEmulators({ drives = false } = {}) {
@@ -528,12 +551,22 @@ module.exports = function createSteamManager(ctx) {
     } catch {}
     return null;
   }
-  // Vita3K keeps installed games in <pref>/ux0/app/<title ID>
-  function vitaInstalled(id) {
-    const prefs = [path.join(HOME, '.local/share/Vita3K/Vita3K'), path.join(HOME, '.local/share/Vita3K'), ...ctx.emulationRoots().map((r) => path.join(r, 'storage/Vita3K'))];
-    for (const c of [path.join(HOME, '.config/Vita3K/config.yml'), path.join(HOME, '.local/share/Vita3K/Vita3K/config.yml')]) { try { const m = fs.readFileSync(c, 'utf8').match(/^pref-path:\s*(.+)$/m); if (m) prefs.unshift(m[1].trim().replace(/^['"]|['"]$/g, '')); } catch {} }
-    return prefs.some((p) => isDir(path.join(p, 'ux0/app', id)));
+  // Vita3K keeps installed games in <pref>/ux0/app/<title ID>; the same folders the installer uses
+  const vitaPrefsAll = () => require('./pkgInstall').vitaPrefs(HOME, ctx.emulationRoots());
+  function vitaInstalled(id) { return vitaPrefsAll().some((p) => isDir(path.join(p, 'ux0/app', id))); }
+  // games installed in Vita3K before Cartridge (or with no .pkg on this device): matched by the
+  // title in their param.sfo, so they start by title ID like any other (0.9.16)
+  function vitaByName(rom) {
+    const want = nameKeyOf(rom.name), sfo = require('./patches').sfoAt;
+    if (!want) return null;
+    for (const p of vitaPrefsAll()) for (const id of ls(path.join(p, 'ux0/app'))) {
+      if (!/^PCS[A-Z]\d{5}$/.test(id)) continue;
+      const t = nameKeyOf(sfo(path.join(p, 'ux0/app', id, 'sce_sys', 'param.sfo')).TITLE);
+      if (t && (t === want || t.replace(/ /g, '') === want.replace(/ /g, ''))) return id;
+    }
+    return null;
   }
+  const nameKeyOf = (n) => String(n || '').toLowerCase().replace(/\([^)]*\)|\[[^\]]*\]/g, '').replace(/[™®©]/g, '').replace(/&/g, ' and ').replace(/[^a-z0-9]+/g, ' ').trim();
   function rpcs3Knows(serial) {
     for (const f of [path.join(HOME, '.config/rpcs3/games.yml'), path.join(HOME, '.var/app/net.rpcs3.RPCS3/config/rpcs3/games.yml')]) {
       try { if (new RegExp(`^${serial}\\s*:`, 'm').test(fs.readFileSync(f, 'utf8'))) return true; } catch {}
@@ -595,8 +628,11 @@ module.exports = function createSteamManager(ctx) {
     }
     if (t.kind === 'vitaid') { // installed in Vita3K? then by title ID; otherwise it can't start yet
       const id = vitaTitleId(rom, file);
+      if (id && vitaInstalled(id)) return { SERIAL: id };
+      const named = vitaByName(rom);
+      if (named) return { SERIAL: named };
       const how = 'in Vita3K first (File → Install .pkg or .vpk), then add it to Steam.';
-      return id && vitaInstalled(id) ? { SERIAL: id } : { missing: id ? `Install ${id} ${how}` : `Install this game ${how}` };
+      return { missing: id ? `Install ${id} ${how}` : `Install this game ${how}` };
     }
     if (t.kind === 'eboot') { const e = findEboot(file); return { ROM: styled(e || file, t) }; }
     if (t.kind === 'rpx' && isDir(file)) { // Wii U game folder: code/<name>.rpx
@@ -607,8 +643,32 @@ module.exports = function createSteamManager(ctx) {
     // a game kept as a folder: the emulator gets the game file inside (RetroArch, xemu and most
     // others can't open a folder). Consoles that take folders keep it.
     const key = keyOf(rom.platform_slug, rom.platform_fs_slug);
-    if (isDir(file) && !DIR_GAMES.has(key)) { const f = playableFile(file, key); if (f) return { ROM: styled(f, t) }; }
+    if (isDir(file) && !DIR_GAMES.has(key)) {
+      const m3u = M3U_EMU.test(`${t.exe} ${t.args} ${t.emu || ''}`) ? multiDisc(file, key) : null;
+      if (m3u) return { ROM: styled(m3u, t) };
+      const f = playableFile(file, key); if (f) return { ROM: styled(f, t) };
+    }
     return { ROM: styled(file, t) };
+  }
+  // Multi-disc games (0.9.17): discs named "(Disc 1)", "Disc 2", "CD3"... with no playlist get one,
+  // <folder>.m3u in the game's folder listing them in order (Cartridge's own file; never replaced),
+  // so Steam starts disc 1 and the emulator can switch discs. Only emulators that read .m3u.
+  const M3U_EMU = /duckstation|pcsx2|dolphin|retroarch|flycast|mednafen|kronos|yaba|\.so\b|-L\s/i;
+  const DISC_EXT = { psx: ['cue', 'chd', 'ccd', 'iso', 'pbp'], ps2: ['chd', 'iso', 'cso', 'zso'], gc: ['rvz', 'iso', 'gcm', 'ciso', 'gcz'], wii: ['rvz', 'wbfs', 'iso'], saturn: ['cue', 'chd', 'ccd'], segacd: ['cue', 'chd'], dreamcast: ['gdi', 'chd', 'cdi'], pcfx: ['cue', 'chd'], tg16: ['cue', 'chd'], '3do': ['cue', 'chd', 'iso'] };
+  const discNo = (n) => { const m = /[\s._(\[-](?:disc|disk|cd)[\s._-]*(\d{1,2})\b/i.exec(n); return m ? Number(m[1]) : 0; };
+  function multiDisc(dir, key) {
+    const own = ls(dir).find((n) => /\.m3u$/i.test(n));
+    if (own) return path.join(dir, own);
+    for (const e of DISC_EXT[key] || []) {
+      const discs = ls(dir).filter((n) => path.extname(n).slice(1).toLowerCase() === e && discNo(n) && !isDir(path.join(dir, n)));
+      const nums = new Set(discs.map(discNo));
+      if (discs.length < 2 || nums.size !== discs.length) continue;
+      discs.sort((a, b) => discNo(a) - discNo(b));
+      const f = path.join(dir, `${path.basename(dir).replace(/[\\/]/g, '_')}.m3u`);
+      try { fs.writeFileSync(f, discs.join('\n') + '\n', { flag: 'wx' }); } catch (err) { if (err.code !== 'EEXIST') return null; }
+      return f;
+    }
+    return null;
   }
   // the file to start in a game folder: a playlist or disc descriptor, then the console's game
   // extensions in order, else the biggest file. Looks two folders deep.
@@ -651,12 +711,33 @@ module.exports = function createSteamManager(ctx) {
     return learned[key] ? { ...learned[key], emu: 'learned' } : null;
   }
   // A game can use another emulator than its console (picked on the game page): cfg().gameEmus[romId]
-  function templateForGame(romId, key) {
+  function templateForGame(romId, key) { return withFg(withShadVersion(baseTemplateForGame(romId, key), romId, key), romId, key); }
+  // shadPS4 version per game (0.9.17, owner: some games need 0.17, some 0.18): the Qt launcher keeps
+  // its versions in <XDG_DATA_HOME or ~/.local/share>/shadPS4QtLauncher/versions.json ([{ name, path,
+  // codename, date, type }]) and takes -e <name|path> (its main.cpp) where -d means the default one
+  function shadVersions() {
+    const dir = path.join(process.env.XDG_DATA_HOME || path.join(os.homedir(), '.local/share'), 'shadPS4QtLauncher');
+    let list = []; try { list = JSON.parse(fs.readFileSync(path.join(dir, 'versions.json'), 'utf8')); } catch {}
+    return (Array.isArray(list) ? list : []).filter((v) => v && v.path && exists(v.path)).map((v) => ({ name: String(v.name || path.basename(v.path)), path: v.path, codename: v.codename || '', date: v.date || '' }));
+  }
+  function withShadVersion(t, romId, key) {
+    const want = (cfg().shadVersions || {})[romId];
+    if (!t || key !== 'ps4' || !want || !/qtlauncher/i.test(t.exe || '') || !exists(want)) return t;
+    const args = /(^|\s)-d(?=\s)/.test(t.args) ? t.args.replace(/(^|\s)-d(?=\s)/, `$1-e ${q(want)}`) : /(^|\s)-e\s+("[^"]*"|\S+)/.test(t.args) ? t.args.replace(/(^|\s)-e\s+("[^"]*"|\S+)/, `$1-e ${q(want)}`) : `-e ${q(want)} ${t.args}`;
+    return { ...t, args, shadVersion: want };
+  }
+  function baseTemplateForGame(romId, key) {
     const own = (cfg().gameTemplates || {})[romId];
     if (own && own.exe) return { ...own, how: 'yours', perGame: true };
     const pick = (cfg().gameEmus || {})[romId];
     if (pick) { const c = candidates(key).find((x) => x.id === pick); if (c) return { ...c.t, emu: c.id, perGame: true }; }
     return templateFor(key);
+  }
+  // frame generation (0.9.17): the wrapper picked for this game, kept on the template as fg
+  function withFg(t, romId, key) {
+    if (!t || /\.exe$/i.test(t.exe || '')) return t;
+    const w = frameGen.wrapperFor(cfg().frameGen, romId, key, frameGen.detect());
+    return w ? { ...t, fg: w } : t;
   }
   // shadPS4 (owner's finding, A10): its own Steam shortcuts always start; Cartridge's, with the same
   // Target and Launch options, often showed a black screen and closed. The one difference is Start in.
@@ -681,7 +762,7 @@ module.exports = function createSteamManager(ctx) {
   // v3: the emulator in Target, its arguments in Launch options again (0.8.2)
   // (shadPS4 also by its start folder, so shortcuts made in the wrong one show Update: 0.9.3; on
   // Flatpak Steam also 'host', so ones made before flatpak-spawn show Update: 0.9.3 K)
-  const sigOf = (t, mode) => (t ? ['v3', mode || 'direct', t.exe, (t.pre || []).join(' '), t.args, ...(/shadps4/i.test(t.exe || '') ? [startOf(t)] : []), ...(FLATPAK_STEAM ? ['host'] : [])].join('|') : '');
+  const sigOf = (t, mode) => (t ? ['v3', mode || 'direct', t.exe, (t.pre || []).join(' '), t.args, ...(/shadps4/i.test(t.exe || '') ? [startOf(t)] : []), ...(FLATPAK_STEAM ? ['host'] : []), ...(t.fg ? ['fg:' + t.fg] : [])].join('|') : '');
   // Target is the emulator alone; Launch options hold its arguments and the game. Steam adds Launch
   // options after Target for shortcuts, so no "%command%" in front (a lone or leading %command% kept
   // games from starting). Only when something must run first (vblank_mode=0, an env var) is it
@@ -693,7 +774,12 @@ module.exports = function createSteamManager(ctx) {
   // (flatpakSteamAccess, offered in Settings → Emulators → Issues).
   const HOST_SPAWN = '/usr/bin/flatpak-spawn';
   const hostLaunch = (exe, args, start, pre = []) => ({ target: q(HOST_SPAWN), launch: ['--host', start && start !== SHAD_START ? `--directory=${q(start)}` : '', ...pre.filter((x) => /^\w+=/.test(x)).map((x) => `--env=${x}`), ...pre.filter((x) => !/^\w+=/.test(x) && x !== '%command%'), q(exe), args].filter(Boolean).join(' ') });
-  const launchFor = (t, lo, args) => (FLATPAK_STEAM && !/\.exe$/i.test(t.exe) ? hostLaunch(t.exe, args, startOf(t), t.pre || []) : { target: q(t.exe), launch: (t.pre || []).length ? lo : args });
+  // A frame generation wrapper (t.fg) goes first, after environment variables, then the one %command%
+  const launchFor = (t, lo, args) => {
+    if (FLATPAK_STEAM && !/\.exe$/i.test(t.exe)) return hostLaunch(t.exe, args, startOf(t), [...(t.pre || []), ...(t.fg ? [q(t.fg)] : [])]);
+    if (t.fg) return { target: q(t.exe), launch: [...(t.pre || []).filter((x) => x !== '%command%'), q(t.fg), '%command%', args].filter(Boolean).join(' ') };
+    return { target: q(t.exe), launch: (t.pre || []).length ? lo : args };
+  };
   function buildLaunch(rom, file, t) {
     const ref = gameRef(rom, file, t);
     let args = t.args;
@@ -794,7 +880,7 @@ module.exports = function createSteamManager(ctx) {
         emus: az([...(learned[k] ? [{ id: 'learned', label: 'From your Steam shortcuts', sub: learned[k].from }] : []), ...candidates(k).map((c) => ({ id: c.id, label: c.label, sub: c.t.from, fork: !!c.fork }))]),
         emu: t?.how === 'yours' ? 'yours' : t?.emu || null,
         own: ps.filter((g) => g.inSteam && !g.ours && g.appid && g.file).length, // added some other way: Take over offers them (C7)
-        outdated: t ? ps.filter((g) => g.inSteam && g.ours && (g.badLo || reg[g.appid]?.sig !== sigOf(((cfg().gameEmus || {})[g.romId] || (cfg().gameTemplates || {})[g.romId]) ? templateForGame(g.romId, k) : t, (cfg().modes || {})[k]))).length : 0 };
+        outdated: t ? ps.filter((g) => g.inSteam && g.ours && (g.badLo || reg[g.appid]?.sig !== sigOf(templateForGame(g.romId, k), (cfg().modes || {})[k]))).length : 0 };
     }).sort((a, b) => a.platform.localeCompare(b.platform));
     return {
       steam: env.installed ? (env.account ? { account: env.account.name, accounts: env.accounts.map((a) => a.name), running: env.running, flatpak: env.account.flatpak } : { error: 'Steam is installed but no account has signed in yet. Open Steam once, then come back.' }) : { error: 'Steam was not found on this device.' },
@@ -833,6 +919,16 @@ module.exports = function createSteamManager(ctx) {
     return out;
   }
   // One game: is it in Steam, and would Cartridge know how to add it?
+  // a game already in Steam into collections (game page → More → Steam, 0.9.16). Needs Steam's
+  // instant changes, which edit collections the way Steam's own library does.
+  async function addRomToCollections(romId, names) {
+    const f = forRom(romId), env = environment();
+    if (!f.inSteam || !f.appid) throw new Error('Add the game to Steam first.');
+    if (!env.account || !(await live.available(env.account.root))) throw new Error('Collections can be changed while Steam runs once instant Steam changes are on (Settings → Steam).');
+    await live.addToCollections(f.appid, names);
+    const c = cfg(); c.lastCollections ||= {}; c.lastCollections[f.console] = names; ctx.saveConfig();
+    return true;
+  }
   function forRom(romId) {
     const env = environment();
     const g = installedGames().find((x) => x.rom.id === romId);
@@ -845,6 +941,22 @@ module.exports = function createSteamManager(ctx) {
     return out;
   }
   // ---------------------------------------------------------------- queue
+  // Ready to play (0.9.21, owner: start the Steam shortcut Cartridge made, straight from Cartridge):
+  // Steam's own way when its live connection is on, else steam://rungameid (a shortcut's 64-bit game id)
+  async function play(romId) {
+    const f = forRom(romId);
+    if (!f.inSteam || !f.appid) throw new Error('Add it to Steam first (More → Steam).');
+    const gameId = ((BigInt(f.appid >>> 0) << 32n) | 0x02000000n).toString(), env = environment();
+    if (env.account && (await live.available(env.account.root).catch(() => false))) { try { await live.runGame(gameId); return { via: 'steam' }; } catch (e) { log('live run failed', e.message); } }
+    const e2 = { ...process.env }; for (const k of ['LD_PRELOAD', 'LD_LIBRARY_PATH', 'APPDIR', 'APPIMAGE']) delete e2[k];
+    const url = `steam://rungameid/${gameId}`;
+    const { spawn } = require('child_process');
+    const tryRun = (cmd, args) => new Promise((ok) => { try { const p = spawn(cmd, args, { detached: true, stdio: 'ignore', env: e2 }); p.on('error', () => ok(false)); p.on('spawn', () => { p.unref(); ok(true); }); } catch { ok(false); } });
+    if (await tryRun('xdg-open', [url])) return { via: 'url' };
+    if (await tryRun('steam', [url])) return { via: 'url' };
+    if (await tryRun('flatpak', ['run', 'com.valvesoftware.Steam', url])) return { via: 'url' };
+    throw new Error('Steam couldn’t be asked to start it.');
+  }
   function queueInfo() { return { add: queue.add.length, remove: queue.remove.length, total: queue.add.length + queue.remove.length }; }
   function queueAdd(items) { // [{ romId, collections? }]
     for (const it of items) {
@@ -876,7 +988,7 @@ module.exports = function createSteamManager(ctx) {
       const g = byRom.get(a.romId);
       if (!g) { skipped.push({ romId: a.romId, why: 'not on this device any more' }); continue; }
       if (!g.file) { skipped.push({ romId: a.romId, name: g.rom.name, why: 'Cartridge does not know where this game\'s folder is. Open the game and use Add to Steam to pick it.' }); continue; }
-      const t = a.template || templateForGame(g.rom.id, g.key);
+      const t = a.template ? withFg(a.template, g.rom.id, g.key) : templateForGame(g.rom.id, g.key);
       if (!t) { skipped.push({ romId: a.romId, name: g.rom.name, why: `No emulator found for ${SHORT[g.key] || g.platform.display_name}. Set one in Settings → Steam → Emulators.` }); continue; }
       const mode = (cfg().modes || {})[g.key] || 'direct';
       let name = g.rom.name.replace(/\s+/g, ' ').trim();
@@ -941,11 +1053,13 @@ module.exports = function createSteamManager(ctx) {
     const hero = art.hero || rom?.shot || null;
     const fromSgdb = async (kind, fallback) => (await ctx.sgdbImage(rom?.name, kind, sg).catch(() => null)) || (fallback ? ctx.fetchImage(fallback) : null);
     await put(`${e.appid}p.png`, async () => (style ? fromSgdb('grid', cover) : cover ? ctx.fetchImage(cover) : ctx.sgdbImage(rom?.name, 'grid')));
-    await put(`${e.appid}_hero.png`, async () => (style ? fromSgdb('hero', hero) : hero ? ctx.fetchImage(hero) : ctx.sgdbImage(rom?.name, 'hero')));
+    // Cartridge's own art first (0.9.16): yours, then the sharp background Cartridge shows, then RomM's
+    const sharp = !style && !art.hero ? await ctx.sharpHeroPng?.(rom).catch(() => null) : null;
+    await put(`${e.appid}_hero.png`, async () => (style ? fromSgdb('hero', hero) : art.hero ? ctx.fetchImage(art.hero) : sharp || (hero ? ctx.fetchImage(hero) : ctx.sgdbImage(rom?.name, 'hero'))));
     await put(`${e.appid}.png`, async () => { // wide banner: SteamGridDB's, else cut from the background
       const w = await ctx.sgdbImage(rom?.name, 'wide', sg).catch(() => null);
       if (w) return w;
-      const src = hero ? await ctx.fetchImage(hero) : null;
+      const src = sharp || (hero ? await ctx.fetchImage(hero) : null);
       return src ? ctx.cropTo(src, 920, 430) : null;
     });
     await put(`${e.appid}_logo.png`, async () => { const l = await ctx.logoFile(rom); return l ? fs.readFileSync(l) : null; });
@@ -1150,7 +1264,26 @@ module.exports = function createSteamManager(ctx) {
     }
     let missing = [];
     try { if (Object.keys(reg).length) missing = verifyCollections() || []; } catch {}
+    try { reconcile(last); } catch (e) { log('steam reconcile', e.message); }
     return { last: report, missing };
+  }
+  // 0.9.19 (HANDOFF F4): apply() writes the registry before the helper finishes (play.sh needs it), so
+  // a failed apply left games counted as added. At start, with no helper job still running, games of
+  // this account that aren't in shortcuts.vdf leave the registry. Live adds get a day for Steam to save.
+  function reconcile(last) {
+    if (last && !['done', 'error'].includes(last.state)) return 0; // a helper job is still running
+    const env = environment();
+    if (!env.account || !fs.existsSync(files(env.account).shortcuts)) return 0;
+    const have = new Set(readShortcuts(env.account).map((sc) => String(sc.appid >>> 0)));
+    let dropped = 0;
+    for (const [id, r] of Object.entries(reg)) {
+      if (r.account && r.account !== env.account.id) continue;
+      if (have.has(String(Number(id) >>> 0))) continue;
+      if (r.live && Date.now() - (r.at || 0) < 864e5) continue;
+      delete reg[id]; dropped++;
+    }
+    if (dropped) { saveReg(); log('steam registry: dropped', dropped, 'games not in shortcuts.vdf'); }
+    return dropped;
   }
   function parseTemplate(t) {
     const toks = tokenize(t.lo);
@@ -1523,8 +1656,8 @@ module.exports = function createSteamManager(ctx) {
     },
     liveInfo: async () => { const env = environment(); if (!env.account) return { on: false, flag: false }; return { on: await live.available(env.account.root), flag: live.flagOn(env.account.root) }; },
     liveEnable: () => { const env = environment(); if (!env.account) throw new Error('Steam was not found.'); fs.writeFileSync(path.join(env.account.root, live.FLAG), ''); return true; },
-    onDownloaded, onDeleted, lastStatus, writeScript, startupReport, forRom, fixCollections, played, playtime, steamRoots, refreshArt,
-    scanEmulators, rpcs3Command, vita3kCommand, setupOverview, confirm, markFork, useFile, health, healthFix, movedEmulators, setupReport, syncConsoleCollections, preflight: (key) => preflight(key, templateFor(key)),
+    installedEmulators, addRomToCollections, onDownloaded, onDeleted, lastStatus, writeScript, startupReport, forRom, fixCollections, played, playtime, steamRoots, refreshArt,
+    play, scanEmulators, rpcs3Command, vita3kCommand, setupOverview, confirm, markFork, useFile, health, healthFix, movedEmulators, setupReport, syncConsoleCollections, preflight: (key) => preflight(key, templateFor(key)),
     candidatesFor: (key) => az(candidates(key).map((c) => ({ id: c.id, label: c.label, sub: shortPath(c.t.how === 'flatpak' ? c.t.from : c.t.exe), fork: !!c.fork }))),
     // one game's own Target, Start in and Launch options (console page, 0.9.15); null goes back
     setGameTemplate: (romId, t) => { const c = cfg(); c.gameTemplates ||= {}; if (t) c.gameTemplates[romId] = parseTemplate(t); else delete c.gameTemplates[romId]; ctx.saveConfig(); return true; },
@@ -1533,7 +1666,7 @@ module.exports = function createSteamManager(ctx) {
     gameEmu: (romId) => (cfg().gameEmus || {})[romId] || null,
     addedAt: (romId) => Math.min(...Object.values(reg).filter((r) => r.romId === romId && r.at).map((r) => r.at), Infinity),
     // exposed for tests
-    _learnOne: learnOne, _tokenize: tokenize, _buildLaunch: buildLaunch, _learnAll: learnAll, _readShortcuts: () => { const e = environment(); return e.account ? readShortcuts(e.account) : []; }, _candidates: candidates, appImagesFor, serialOf, flatpakSteamAccess, _hostLaunch: hostLaunch, _startOf: startOf, _templateFor: templateFor, _templateForGame: templateForGame,
+    _learnOne: learnOne, _tokenize: tokenize, _buildLaunch: buildLaunch, _learnAll: learnAll, _readShortcuts: () => { const e = environment(); return e.account ? readShortcuts(e.account) : []; }, _candidates: candidates, appImagesFor, serialOf, flatpakSteamAccess, _hostLaunch: hostLaunch, _launchFor: launchFor, _withFg: withFg, _withShadVersion: withShadVersion, shadVersions, _multiDisc: multiDisc, _startOf: startOf, _templateFor: templateFor, _templateForGame: templateForGame,
   };
   return api;
 };

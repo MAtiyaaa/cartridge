@@ -6,7 +6,163 @@ The branch for 0.9.3 work is `claude/relaxed-fermat-30pigp`. Pull it before star
 
 ---
 
-## 2 Oct 2026 · 0.9.15 built (read this first)
+## 3 Oct 2026 · 0.9.22 Home Fix
+
+Owner: Home showed, then after down twice or right once everything disappeared, and no headers showed. Cause: a name clash in Home.vue (`heroArt` the computed vs the store function, not imported), a TypeError in render from 0.9.21. Checked with the stub harness: 0.9.21 code ends with 0 rows and no hero after the same moves, 0.9.22 keeps both. Owner to test on the device: Home with SteamGridDB headers, moving through rows.
+
+---
+
+## 3 Oct 2026 · Handover back to the first account
+
+The owner is going back to the first account. The full handover for it is `docs/HANDOVER-0.9.3-to-0.9.21.md` (linked from the top of CLAUDE.md). 0.9.21 is released (PR #37). Open first: the Vita3K Steam shortcut that disappeared, the slow-download question (folder game or one file, LAN or Tunnel), and Vita3K's own install error.
+
+---
+
+## 3 Oct 2026 · 0.9.21 Start, Your Way (read this first)
+
+Owner, after 0.9.20: hide a console page's path; Syncthing view only in its own Settings tab; LT/RT still dead at launch; lag on SteamOS still happens; Start looks AI generated and too snappy: drag to size, any size even a square, resize per edge (touch, D-pad, controller), cool animations, consoles as the Consoles page's boxes, several smaller trophies, a clock scene by time of day; Consoles glyphs clipped; Sega was an S, Microsoft wrong, Nintendo too small; Nintendo, Dreamcast, GameCube, Wii logos small next to Sony and Xbox (never bigger than PS3); Emulators LB/RB on two rows; merge Theme and Background. "Package them into 0.9.21 and just build it."
+
+Done (details in CLAUDE.md 0.9.21): Start board rebuilt on x/y/w/h with tests; arranging by controller (move, corner resize) and by touch/mouse (drag, edge and corner handles); clock scenes; console cards; trophy grid; HVR88 logos with every path; optical sizes for console wordmarks; glyph inset; Sync tab; Theme page; LB/RB row; path hidden.
+
+Causes found:
+- LT/RT: Chromium hides a pad until its first press. A trigger pulled first was never "seen at rest", so it was ignored until it was let go. Now the pad's first 400 ms count as at rest.
+- Lag: in Game Mode the window keeps focus with Steam or a game in front, so the animated background kept drawing (blur never fires). The `background` event from `watchGamescopeFocus` now stops it and pauses CSS animations. Quitting already ends everything within 3 s (0.9.3); if the owner still sees Cartridge alive after Exit, the next step is a process list from the Ally.
+- Sega and Microsoft: 0.9.17 copied only the first path of each HVR88 file.
+
+Added before release (owner): RPCS3 patches for other game versions are left out when the copy's version (APP_VER, update in dev_hdd0 first) is known, unless already on (`rpcs3List`, test in patches.test.js).
+
+Vita3K (owner, photo: Unit 13.zip, "Vita3K didn't install it", "make this a priority"): read Vita3K master main.cpp, interface.cpp, pkg.cpp, app_init.cpp, config.cpp, logging.cpp. A NoNpDrm zip on the command line goes through install_archive -> install_archive_content (extract, then is_nonpdrm -> decrypt_install_nonpdrm with work.bin, native F00D, no outside keys) into cfg.get_vita_fs_path(); "[ID] installed successfully!" then "Content installed, will auto-boot". Its storage: portable/fs next to the AppImage or program, else config.yml pref-path ($XDG_CONFIG_HOME or ~/.config/Vita3K; portable ignores pref-path), else SDL pref path ~/.local/share/Vita3K/Vita3K. Cartridge only searched ux0 folders that existed before, and the error dropped Vita3K's words unless a line said error/failed. Now `vita3kFsPaths` (tested), "Extracting"/"Decrypt layer" lines say where it went, `vita3kWhy` quotes Vita3K (output or vita3k.log), the full output is logged. Not known yet: the exact reason on the owner's Ally; the next failure message will say it.
+
+Also before release (owner): game updates on the game page (always offered for installed PS3 games); Emulators → Updates contrast (status pills and progress bar on a selected row); Eden "couldn't check" (Cartridge asked git.eden-emu.org; the server is git.eden-emu.dev) and no logo (fallback icon URLs on Eden's Forgejo, not verifiable from this container: its network can't reach git.eden-emu.dev or GitHub's API); Xenia "updates in the app" (now from xenia-canary/xenia-canary-releases: Linux .tar.gz or Windows .zip, asset names not verifiable here either). Owner to test: Eden and Xenia Check now and Update.
+
+Then (owner, while it built): RPCS3 update order (answered: all newer updates are downloaded first, then installed one after another, oldest first, each through rpcs3 --headless --installpkg); SteamGridDB heroes only (heroArt); Ready to play starts the Steam shortcut; search closed look; Sign In to Emulators status and list; Get Emulators icons (checked URLs; Ryujinx's and Eden's not checkable from the container) and Xenia Canary; Dolphin tabs, graphics mods (read in Dolphin's GraphicsModGroup/GraphicsMod/HiresTextures source) and the user-folder choice; Vita3K update breaking Steam shortcuts (EmuDeck's zip build overwritten by the AppImage; now same-kind updates). Owner to test: Vita3K Update (should restore the zip build), a Vita game from Steam after it, Dolphin codes and a graphics mod, Ready to play, heroes on Home and game pages.
+
+Last (owner, photo of Add-ons): add-on pictures didn't show (the page's CSP only allowed romimg:/data:, GameBanana previews are https; now `img-src ... https:`). Game Updates, Patches and Add-ons merged into Game Add-ons (search, by console with the emulator, a game opens `GameAddons.vue` with Mods, Texture Packs, Patches, Game Updates tabs; texture info on its tab). Get Emulators and Updates merged into Emulators (Up to date with the green check, or the update). Owner to test: Game Add-ons on a PS2, GameCube, Switch and PS3 game; a GameBanana install and remove (the sheet reopens on the same tab); Apply on Dolphin's tabs; an emulator update from the Emulators page.
+
+Then (owner): GameBanana is mods, keep texture packs apart (Texture Packs = EmuCoreX only, with its pictures); downloads slow again (cause found: one worker and one TLS connection per file, so folder games crawled; local test 1000 small files 1.4 s with one worker, about 89 ms per file the old way); Vita3K gone after its update and "not on Steam" (the update put back the zip build, a plain program, and `installedEmulators` listed AppImages only; folder builds listed now). Not explained yet: the owner's own Steam shortcut for Vita3K being gone. Cartridge never removes a shortcut it didn't add except through Shortcut health's Remove; need the shortcut's old target and Cartridge's log (About → Report a problem) to say more.
+
+**Owner's list, amended (3 Oct 2026):**
+1. Console page path: done in 0.9.21.
+2. Multi-language: later (1.0 or after).
+3. Syncthing saves, view only, own Settings tab: done in 0.9.21 (devices, folders, newest files). Nothing is ever written.
+4. Critic score: IGDB's, agreed (RomM has no Metacritic).
+5. The empty "structured technical summary" item: ignored (owner).
+6. LT/RT at launch: fix in 0.9.21, owner to test.
+7. Touch: owner hasn't tested yet.
+8. Lag on SteamOS in the background: fix in 0.9.21, owner to test.
+9. shadPS4 first launch: fixed (owner).
+10. Remove from Steam twice: fixed (owner).
+11. Launching from Game Mode bringing Cartridge up first: owner hasn't checked.
+12. Slower downloads: fixed (owner).
+13. Sony 403: owner hasn't checked.
+14. Vita3K installs and booting: owner hasn't checked.
+
+**Owner must test on a device:** Start arranging with the controller (A move, X corner resize, LB/RB corners), touch (hold, drag, edges) and the mouse; tile sizes from 1 by 1 up; the clock at different times of day; LT/RT right after launch; Game Mode lag with a game in front; the console logos on Consoles, game cards and Achievements; Settings → Sync with Syncthing running; Game Add-ons and the merged Emulators page.
+
+---
+
+## 3 Oct 2026 · 0.9.20 Start, Refined
+
+Owner installed the taste skill by asking ("install them now"), then "Go build 0.9.20" after being told the 0.9.19 top bar used only part of the taste skill and Start used none of it. Skills copied into `.claude/skills` (taste-skill, redesign-skill, soft-skill, minimalist-skill, img2threejs; third-party text kept as published).
+
+Redesign audit findings (Start and top bar), fixed in 0.9.20: every tile carried an icon plus muted label (the templated "eyebrow on every section" rhythm); counts in tile corners; cover rows half empty; every tile the same flat grey (no background diversity); everything mounted at once; the Y glyph in the search pill even without a controller; search pill unbalanced. Kept: the icon-tab pattern from the owner's photos, one accent line, the 8 by 4 grid.
+
+Bug found while checking at 1920: `:global(body.pad-mode) .x` in a scoped style compiles to `body.pad-mode { ... }`. Three motion-reduce rules in 0.9.19 had the same form (harmless but never applied); all fixed.
+
+Owner after seeing the build: "I don't like the white underline I like what we had before with the white highlight and contrasting colour but redone, use taste skill". Done before merging: the underline became a white pill behind the current tab (dark text, soft top light, shadow tinted to the bar, 380 ms glide on transform and width, a ResizeObserver keeps it hugging the opening name); keyboard/pad focus is now a white ring so it can't be confused with the current tab; a tab badge inverts on the pill.
+
+Then: "the start menu widgets look very bad like clock played this week free space redesign them using the taste skill". Clock: sky light from the sun or moon's place on a 6 to 18 path (no location, so round numbers), light-weight time. Free space: tick gauge, amber when low. This week: day played most, today's minutes over its bar, dots for empty days, staggered rise.
+
+**Owner must test on a device:** the Start clock, free space and week tiles in each size (X cycles them), the tab pill gliding with LT/RT in Game Mode, Start's new look and entry animation in Game Mode (software rendering: the blurred backdrops are static, check scrolling stays smooth), search button with mouse and with a controller.
+
+---
+
+## 3 Oct 2026 · 0.9.19 Start (read this first)
+
+Everything in `docs/plan-0.9.19.md`, built as the owner asked ("don't ask me any questions"). Decisions made without asking, per that instruction:
+- Start's name is "Start"; its tile look follows docs/design.md, not the photographed frontend's widgets (owner disliked those). Default layout: Continue playing 4 by 2, Clock, Storage, This week, Consoles, New, Recently played, Latest trophies. Open on stays Home by default.
+- Top bar follows the photographed frontend's pattern (icon tabs, the current one with its name), read through the taste skill: one accent line, no wordmark, search folded.
+- The taste and img2threejs skills could not be copied into `.claude/skills` (the session's permission check refused writing there): the owner needs to add them, or allow it. The taste skill was read from a local copy and applied.
+- Console scenes removed; four style backgrounds added. Picked scenes fall back to that console's games panning.
+- Vita: only NoNpDrm dumps still need Vita3K (it alone can decrypt them); unencrypted ones never start it.
+- Ryujinx/Eden: their own Forgejo servers first, then GitHub, then Flatpak. Asset names could not be checked live (the container can't reach GitHub's API or those servers); patterns follow EmuDeck's install scripts.
+- 403s: the hosts are blocked from the container, so the hidden-window pass is untested against the real sites.
+- PS3 "serial not found": two more fallbacks in 0.9.18; still waiting on the owner's folder layout if it persists. Remind about the v2.3.1 tag.
+
+**Owner must test on a device:** Start (hold A, sizes, moving, touch drag, Pin to Start, Open on), the new top bar at 1280x800 and 4K, page transitions in Game Mode (software rendering), the four backgrounds (speed with light effects), a Vita .vpk install and a NoNpDrm one, RPCS3 patches list, RA/GameBanana/Sony without 403s, Get Emulators for Eden, Ryujinx, shadPS4, Xenia Edge, an .xci's mod folder, Settings → Storage → Sync with Syncthing running.
+
+---
+
+## 2 Oct 2026 · 0.9.18 (read this first)
+
+Owner sent the Vita3K error ("no Qt platform plugin could be initialized", installing Unit 13): Cartridge ran Vita3K with `QT_QPA_PLATFORM=offscreen` and that build has no offscreen plugin. Now retried on the normal display. Texture packs per game with the right paths (owner's ask): layouts per emulator in `addonInstall.plan`. PS3 serials: two more fallbacks, still unconfirmed on the owner's games (needs a folder layout or log if it still fails). Remind the owner about the v2.3.1 tag later (owner asked). The owner asked for a list of everything not yet built before more building starts: given in chat, wait for their pick.
+
+**Owner must test on a device:** a Vita .vpk/.zip install and Vita firmware; a texture pack each in PCSX2, DuckStation, PPSSPP, Dolphin, Azahar, a Cemu graphic pack, a Switch mod; the PS3 games that said "serial not found".
+
+---
+
+## 2 Oct 2026 · 0.9.17 second list built (read this first)
+
+The owner added 22 items to 0.9.17 (plan section 10) and wanted them all in this update. All built; see CLAUDE.md 0.9.17 and RELEASE_NOTES.md.
+
+**Decisions and notes:**
+- Top bar: the owner asked for the design skills ("taste" skill isn't in `.claude/skills`; apple-design and emil-design-eng were used). Words-only tabs with a sliding underline, LT/RT only with a controller.
+- Vita3K install error: the owner said "Getting this error" but no text came through. Ask for the message.
+- Sony, GameBanana and metadata.ppsspp are blocked from the container: the 403 fixes (net.fetch, HTTPS for Sony) must be checked on a device.
+
+**Owner must test on a device:** the welcome (animation, controller step, keyboard, Flatpak offer, Download emulators flow, without RomM), Roll back, Steam keyboard in Game Mode, emulator updates (RPCS3 sticking), Gecko codes in Dolphin, RPCS3 patches list, the top bar at 1280x800 and 4K, press feedback with a controller.
+
+---
+
+## 2 Oct 2026 · 0.9.17 built and released (read this first)
+
+Everything in `docs/plan-0.9.17.md`. Remind the owner: check the PS3 games that said "serial not found", and the stray v2.3.1 tag.
+
+**Decisions and notes:**
+- Add-ons button: the owner said add-ons now live in the emulator settings; the game page keeps More → Emulator → Add-ons (same sheet).
+- GameBanana is still blocked from the container: its API is built from public client code (apiv11) and must be checked on a device. The PS2 catalog (EmuCoreX) was read live: 769 packs parse.
+- Podman: SteamOS 3.5+ ships it; what's missing is /etc/subuid ranges (sudo once, password never kept). podman-launcher when there's no Podman at all.
+- Emulator downloads: GitHub AppImages (asset patterns not checked live for eden, ryujinx, shadps4 launcher, flycast); Flatpak for Dolphin, PPSSPP, melonDS, RetroArch. Citron has no GitHub releases, so it isn't offered.
+- Moved to 0.9.18: more console scenes, the small cleanups.
+
+**Owner must test on a device:** Frame Generation with lsfg-vk and MAKO; shadPS4 version per game; multi-disc playlists in DuckStation/PCSX2/Dolphin; PS2 texture pack install; a GameBanana mod; Podman setup on SteamOS (password step) and Bazzite; Get Emulators downloads; BIOS from RomM into emulators; game folders in PCSX2, DuckStation, Dolphin; CHD/CSO/GCZ/PBP games show their serials.
+
+---
+
+## 2 Oct 2026 · 0.9.17 started
+
+Owner's list for 0.9.17 is `docs/plan-0.9.17.md`. Research done before building:
+- ARMSX2's texture catalogs: dl.ps2ktxpak.net (ASTC, phone only) and sashkinbro/EmuCoreX-Textures `textures.json` (PNG/DDS, serials, SHA-256, parts). Cartridge uses EmuCoreX.
+- gamebanana.com is blocked from the container (curl and fetch); its API is built from public client code.
+- SteamOS 3.5+ ships Podman; it needs /etc/subuid ranges (sudo once). podman-launcher for systems without.
+- lsfg-vk: Decky LSFG-VK writes `~/lsfg` (and `~/.lsfg`); MAKO: `~/.local/bin/mako-run %command%`.
+- shadPS4 Qt launcher: `-e <name|path>`, versions in `<XDG_DATA_HOME or ~/.local/share>/shadPS4QtLauncher/versions.json`.
+Owner said shadPS4 now works. Remind the owner to check the PS3 "serial not found" games.
+
+---
+
+## 2 Oct 2026 · 0.9.16 built and released
+
+Everything in `docs/plan-0.9.16.md` sections 1 to 8, as one update "0.9.16 · Your Emulators". Remind the owner about the stray v2.3.1 tag.
+
+**Decisions and notes:**
+- Game page header holds only Ready to play and More (owner, list 2 item 11), so the planned Add-ons button (section 2) was not added: Patches and Texture packs live in More → Emulator, and Settings → Emulators has Patches and Texture Packs pages.
+- Add-ons downloads (section 1): GameBanana and libretro's buildbot are still blocked from the cloud container, so no texture pack or mod downloads. What was built uses each emulator's own source: RPCS3's patch API, PPSSPP's cheat list (metadata.ppsspp.org/cheats.json, fallback the CWCheat Database Plus it lists), Dolphin's shipped GameSettings. Texture pack downloads need the owner to paste GameBanana responses.
+- Podman (section 4): a user-level copy isn't possible without the system (newuidmap/newgidmap setuid and /etc/subuid). The clear message stays. RomM has no server name setting: the name is Cartridge's label (Settings → RomM, welcome).
+- Backgrounds (section 5): the picker lists your five most played consoles first; only PS2, GameCube, Wii, Xbox 360 and Switch have scenes, the rest use their games' art.
+- Nintendo has no maker logo (Simple Icons has only an "N"); it stays text.
+
+**Owner must test on a device:** download speed (worker threads); controller movement everywhere; PS3/Vita firmware from RomM; PS3 game updates (Sony's list is plain HTTP); emulator updates (AppImage asset names per emulator are from their release pages, not checked live); textures on; Dolphin and PPSSPP cheats in game; RetroAchievements sign-in; Switch/Cemu mod folders; RVZ/WBFS IDs.
+
+---
+
+## 2 Oct 2026 · 0.9.15 released, 0.9.16 listed
+
+0.9.15 merged (PR #31). The owner moved everything left over from 0.9.15 into 0.9.16, with the Add-ons downloads: `docs/plan-0.9.16.md`. Not started; build when the owner says so. Remind the owner about the v2.3.1 tag.
+
+---
+
+## 2 Oct 2026 · 0.9.15 built
 
 The owner merged 0.9.3 M into the 0.9.4 plan and asked for one update called **0.9.15** (version, versionName and release title all "0.9.15"). Plan: `docs/plan-0.9.4.md`. Built: all of section F, section 0 (welcome), section 1 (RomM on this device), and the checkable part of section 2 (Add-ons).
 

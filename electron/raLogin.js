@@ -13,6 +13,7 @@
 // Only emulators that have been opened once (their settings exist) are offered; nothing is created
 // for an emulator that isn't set up.
 const fs = require('fs');
+const webFetch = require('./webFetch');
 const path = require('path');
 const os = require('os');
 const crypto = require('crypto');
@@ -145,7 +146,7 @@ function writeOne(t, { user, token, now = Math.floor(Date.now() / 1000), machine
 }
 
 // Emulators running now would write their settings back over ours when they close
-const PROC = { pcsx2: /pcsx2/i, duckstation: /duckstation/i, dolphin: /dolphin-emu/i, ppsspp: /ppsspp/i, retroarch: /retroarch/i };
+const PROC = { pcsx2: /pcsx2/i, duckstation: /duckstation/i, dolphin: /dolphin-emu/i, ppsspp: /ppsspp/i, retroarch: /retroarch/i, azahar: /azahar/i, citra: /citra/i };
 function running(procDir = '/proc') {
   const out = new Set();
   let ids = []; try { ids = fs.readdirSync(procDir).filter((d) => /^\d+$/.test(d)); } catch { return out; }
@@ -158,11 +159,13 @@ function running(procDir = '/proc') {
 }
 
 // RetroAchievements' own login (what rcheevos sends): the token comes back, the password goes nowhere else
-async function login(user, password, { fetchImpl = fetch, host = 'https://retroachievements.org' } = {}) {
+// RetroAchievements turns away requests with no proper User-Agent (0.9.16: the sign-in failed with
+// Node's default one), so it says who it is, as emulators do.
+async function login(user, password, { fetchImpl = webFetch, host = 'https://retroachievements.org', ua = 'Cartridge' } = {}) {
   const body = new URLSearchParams({ r: 'login2', u: user, p: password });
-  const r = await fetchImpl(`${host}/dorequest.php`, { method: 'POST', body, headers: { 'Content-Type': 'application/x-www-form-urlencoded' } });
+  const r = await fetchImpl(`${host}/dorequest.php`, { method: 'POST', body: body.toString(), headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': ua, Accept: 'application/json' } });
   let j = {}; try { j = await r.json(); } catch {}
-  if (!j.Success || !j.Token) throw new Error(j.Error || (r.status === 401 ? 'Wrong username or password' : `RetroAchievements answered ${r.status}`));
+  if (!j.Success || !j.Token) throw new Error(j.Error ? `RetroAchievements: ${j.Error}` : (r.status === 401 ? 'Wrong username or password' : `RetroAchievements answered ${r.status}`));
   return { user: j.User || user, token: j.Token };
 }
 
