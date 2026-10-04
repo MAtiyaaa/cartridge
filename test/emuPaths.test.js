@@ -41,13 +41,15 @@ test('RPCS3 vfs.yml keeps $(EmulatorDir) and Eden writes the default flag', () =
   fs.mkdirSync(path.join(r, 'config'), { recursive: true }); fs.mkdirSync(path.join(r, 'patches'));
   fs.writeFileSync(path.join(r, 'config/vfs.yml'), '$(EmulatorDir): ""\n/dev_hdd0/: $(EmulatorDir)dev_hdd0/\n/games/: $(EmulatorDir)games/\n');
   assert.strictEqual(P.describe('rpcs3', h).items[0].path, path.join(r, 'dev_hdd0'));
-  P.setPath('rpcs3', '/dev_hdd0/', '/mnt/big/hdd0', h);
-  assert.match(fs.readFileSync(path.join(r, 'config/vfs.yml'), 'utf8'), /^\/dev_hdd0\/: \/mnt\/big\/hdd0\/$/m);
+  // paths inside the test home: setPath makes the new folder, and CI runs as a normal user (no /mnt)
+  const big = path.join(h, 'big/hdd0'), nand = path.join(h, 'nand');
+  P.setPath('rpcs3', '/dev_hdd0/', big, h);
+  assert.ok(fs.readFileSync(path.join(r, 'config/vfs.yml'), 'utf8').split('\n').includes(`/dev_hdd0/: ${big}/`));
   const e = path.join(h, '.config/eden'); fs.mkdirSync(e, { recursive: true });
   fs.writeFileSync(path.join(e, 'qt-config.ini'), '[Data%20Storage]\nnand_directory\\default=true\nnand_directory=/old/nand/\n');
-  P.setPath('eden', 'Data%20Storage.nand_directory', '/mnt/nand', h);
+  P.setPath('eden', 'Data%20Storage.nand_directory', nand, h);
   const t = fs.readFileSync(path.join(e, 'qt-config.ini'), 'utf8');
-  assert.match(t, /^nand_directory=\/mnt\/nand\/$/m); assert.match(t, /^nand_directory\\default=false$/m);
+  assert.ok(t.split('\n').includes(`nand_directory=${nand}/`)); assert.match(t, /^nand_directory\\default=false$/m);
 });
 
 test('TOML lists for shadPS4', () => {

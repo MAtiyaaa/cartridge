@@ -1,7 +1,7 @@
 ## Cartridge 0.9.24 · Set Up Your Way
 
 ### New
-- **Cartridge Installer:** Settings → Emulators → Cartridge Installer, and in the welcome. Pick a drive, tick the emulators you want (the first for each console is ticked for you), then watch each install with its own bar. Cartridge makes an Emulation folder laid out like ES-DE and EmuDeck (roms, bios, saves, storage), puts AppImages in ~/Applications where EmuDeck keeps them, and links each emulator's saves and textures into the Emulation folder. Links only: nothing is moved, and nothing already there is replaced. When EmuDeck is already set up, its folders are used.
+- **Cartridge Installer:** Settings → Emulators → Cartridge Installer, and in the welcome. Pick a drive, tick the emulators you want (the first for each console is ticked for you), then watch each install with its own bar. Cartridge makes an Emulation folder laid out like ES-DE and EmuDeck (roms, bios, saves, storage), puts AppImages in ~/Applications where EmuDeck keeps them, and links each emulator's saves and textures into the Emulation folder. Links only: nothing is moved, and nothing already there is replaced. The folder layout and links are only made on a fresh setup: with EmuDeck, RetroDECK or any emulator already on the device, Cartridge only adds the emulators you tick and leaves everything else as it is.
 - **Steam collections:** Settings → Steam → Collections (LB/RB). Cartridge reads the collections you already have and finds the ones for a console by their words (PS2, PlayStation 2, GameCube, Mega Drive and more). Rename each to Cartridge's name ("Sony PlayStation 2") or keep yours. Either way, new games go into the collection you already have. "Add downloaded games to their console's collection" waits until you've reviewed them once.
 - **Sync Your Saves in the welcome:** connect to your main Syncthing server, or check this device and install Syncthing (SyncThingy from Flathub, for your user, no password), then pick the folder it shares: your Emulation saves, ~/Sync, or any folder.
 - **Emulator folders:** each emulator's menu has Folders. See, open and change where it keeps games, installed content (DLC, updates), saves and textures, written to the emulator's own settings. Works for PCSX2, DuckStation, Dolphin, Eden and the yuzu family, Azahar, Ryujinx, Cemu, RPCS3, shadPS4 and Vita3K.
@@ -32,6 +32,7 @@
 - **On-screen keyboard:** press LT twice for Caps.
 - **Long pop-up menus:** right on the D-pad jumps to the buttons at the bottom.
 - The Nintendo Switch picture is bigger.
+- **Right stick hint** on Start is round, like a thumbstick, instead of a square key.
 
 ### Fixed
 - **Controls stopped working after returning from a game** in Game Mode. Cartridge now takes focus back when it's in front again.

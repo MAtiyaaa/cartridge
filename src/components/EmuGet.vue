@@ -2,19 +2,19 @@
   <div class="eg">
     <!-- Cartridge Installer (0.9.24, owner: feel like an installer): where, what, installing, done -->
     <div v-if="flow" class="eg-steps">
-      <span v-for="(t, i) in STEP_NAMES" :key="t" class="eg-step" :class="{ on: stepAt === i, past: stepAt > i }"><i>{{ stepAt > i ? '✓' : i + 1 }}</i>{{ t }}</span>
+      <template v-for="(t, i) in STEP_NAMES" :key="t"><span v-if="i || !fresh || fresh.fresh" class="eg-step" :class="{ on: stepAt === i, past: stepAt > i }"><i>{{ stepAt > i ? '✓' : fresh && !fresh.fresh ? i : i + 1 }}</i>{{ t }}</span></template>
     </div>
     <!-- 1: where emulators live (the welcome, or when no Emulation folder was made yet) -->
     <template v-if="phase === 'where'">
       <div class="eg-intro"><b>Where should your emulators live?</b><span class="muted">Cartridge makes an Emulation folder there, laid out like ES-DE and EmuDeck: roms (a folder per console), bios, saves and storage.</span></div>
       <div v-if="!drives" class="muted small"><Icon name="mdiSync" :size="16" class="spin" /> Looking at your drives…</div>
       <div v-else class="eg-drives">
-        <button v-for="d in drives" :key="d.path" class="eg-drive" data-focus :disabled="busy" @click="pickDrive(d)">
+        <button v-for="d in drives" :key="d.path" class="eg-drive" data-focus :disabled="busy || (d.emulation && store.config.emulationRoot !== d.path + '/Emulation')" @click="pickDrive(d)">
           <Icon :name="d.internal ? 'mdiHarddisk' : 'mdiSd'" :size="34" />
           <b>{{ d.label }}</b>
           <span class="muted small mono">{{ short(d.path) }}/Emulation</span>
           <span v-if="d.total" class="eg-space"><i :style="{ width: Math.round(((d.total - d.free) / d.total) * 100) + '%' }" /></span>
-          <span class="muted small">{{ d.total ? `${bytes(d.free)} free of ${bytes(d.total)}` : '' }}{{ d.emulation ? ' · has an Emulation folder' : '' }}</span>
+          <span class="muted small">{{ d.total ? `${bytes(d.free)} free of ${bytes(d.total)}` : '' }}{{ d.emulation ? ' · already has an Emulation folder, left as it is' : '' }}</span>
         </button>
       </div>
     </template>
@@ -22,8 +22,8 @@
     <!-- 2 (installer): tick the emulators to install; the first of each console without one is ticked -->
     <template v-else-if="phase === 'pick'">
       <div class="eg-bar">
-        <div class="eg-sum"><b>{{ picked.length ? `${picked.length} to install` : 'Pick emulators' }}</b><span class="muted small">AppImages go in {{ short(store.config.emuDir) || '~/Applications' }}, where EmuDeck keeps them. Flatpaks install for your user.</span></div>
-        <button class="btn" data-focus @click="phase = 'where'; loadDrives(false)"><Icon name="mdiArrowLeft" :size="18" />Location</button>
+        <div class="eg-sum"><b>{{ picked.length ? `${picked.length} to install` : 'Pick emulators' }}</b><span class="muted small">AppImages go in {{ short(store.config.emuDir) || '~/Applications' }}, where EmuDeck keeps them. Flatpaks install for your user.<template v-if="fresh && !fresh.fresh">{{ ' ' + existingNote }}</template></span></div>
+        <button v-if="fresh?.fresh" class="btn" data-focus @click="phase = 'where'; loadDrives(false)"><Icon name="mdiArrowLeft" :size="18" />Location</button>
         <button class="btn primary" data-focus :disabled="!picked.length" @click="install"><Icon name="mdiDownload" :size="18" />Install {{ picked.length || '' }}</button>
       </div>
       <div v-if="!list" class="muted small"><Icon name="mdiSync" :size="16" class="spin" /> Looking at what's installed…</div>
@@ -209,7 +209,13 @@ const running = computed(() => q.value.find((x) => x.state === 'run'));
 const waiting = computed(() => q.value.filter((x) => x.state === 'wait').length);
 const runningName = computed(() => all.value.find((x) => x.c.key === running.value?.key && x.e.id === running.value?.id)?.e.label || '');
 
+// 0.9.24 (owner): the Emulation folder and links are only for a fresh setup. With EmuDeck, RetroDECK or any
+// emulator already here, Location is skipped and nothing but the new emulators is added.
+const fresh = ref(null);
+const existingNote = computed(() => `Your ${fresh.value?.emudeck ? 'EmuDeck' : fresh.value?.retrodeck ? 'RetroDECK' : 'emulator'} setup stays as it is: no folders or links are made.`);
 async function loadDrives(auto = true) {
+  if (props.flow) fresh.value ||= await call('emuget:fresh').catch(() => ({ fresh: false }));
+  if (props.flow && !fresh.value.fresh && !fresh.value.emudeck) { await call('emuget:useExisting').catch(() => {}); store.config = await call('config:get'); phase.value = 'pick'; await load(); return; }
   // EmuDeck found: use its folders and say so, instead of asking for a drive (0.9.24)
   const ed = auto && (await call('emuget:emudeck').catch(() => null));
   if (ed) { try { await call('emuget:useEmuDeck'); store.config = await call('config:get'); toast(`Using EmuDeck’s setup in ${short(ed.root)}: new emulators go beside its own`, 'ok', 4500, 'mdiCheck'); phase.value = props.flow ? 'pick' : 'list'; await load(); return; } catch {} }
@@ -248,7 +254,7 @@ onMounted(async () => {
   });
   offP = window.cart.on('emuget-progress', (m) => { const x = q.value.find((y) => y.key === m.key && y.id === m.id && y.state === 'run'); if (x && m.pct != null) x.pct = m.pct; });
   offU = window.cart.on('emu-update', (m) => { if (m.path === upRun.value && m.pct != null) upPct.value = m.pct; });
-  if (phase.value === 'where') await loadDrives(); else await load();
+  if (phase.value === 'where') await loadDrives(); else { if (props.flow) fresh.value = await call('emuget:fresh').catch(() => ({ fresh: false })); await load(); }
   loadUps();
 });
 onBeforeUnmount(() => { off?.(); offP?.(); offU?.(); });

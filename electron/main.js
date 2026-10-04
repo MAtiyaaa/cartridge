@@ -3412,19 +3412,35 @@ const handlers = {
   'emuget:emudeck': () => { const e = readEmuDeckSettings(); return e.emulationPath && isDir(e.emulationPath) ? { root: e.emulationPath, roms: e.romsPath || path.join(e.emulationPath, 'roms'), bios: e.biosPath || path.join(e.emulationPath, 'bios'), apps: path.join(os.homedir(), 'Applications') } : null; },
   'emuget:useEmuDeck': () => {
     const e = handlers['emuget:emudeck'](); if (!e) throw new Error('EmuDeck’s setup wasn’t found.');
-    config.romsRoot ||= e.roms; config.biosPath ||= e.bios; config.emuDir = e.apps; config.emulationRoot ||= e.root;
+    config.romsRoot ||= e.roms; config.biosPath ||= e.bios; config.emuDir = e.apps; config.emulationFresh = false;
     saveConfig(); require('./emuGet').setAppsDir(config.emuDir);
     if (library) { broadcast('library', publicLibrary()); computeInstalled(); }
     return e;
   },
-  // an ES-DE style Emulation folder there: roms/<console>, bios, emulators (Cartridge's AppImages)
+  // Cartridge Installer (0.9.24, owner: the folders and links only for a fresh setup, so nothing already
+  // set up is touched): fresh = no EmuDeck, no RetroDECK and no emulator found on this device
+  'emuget:fresh': () => {
+    const h = os.homedir(), ex = (p) => fs.existsSync(path.join(h, p));
+    const emudeck = ex('.config/EmuDeck/settings.sh') || ex('emudeck'), retrodeck = ex('.var/app/net.retrodeck.retrodeck') || ex('retrodeck');
+    // anything installed counts: programs found by the scan, and the installer's own list (launcher scripts, Flatpaks)
+    let emulators = 0; try { emulators = steamMgr.installedEmulators().length; } catch {}
+    try { emulators += handlers['emuget:list']().reduce((n, c) => n + c.emus.filter((e) => e.installed).length, 0); } catch {}
+    // the Emulation folder the installer made earlier is Cartridge's own setup: later installs carry on with it
+    const own = !!(config.emulationFresh && config.emulationRoot && isDir(config.emulationRoot));
+    return { fresh: own || (!emudeck && !retrodeck && !emulators), own, emudeck, retrodeck, emulators };
+  },
+  // not fresh: new emulators only, next to the ones there (~/Applications), no folders or links made
+  'emuget:useExisting': () => { config.emuDir ||= path.join(os.homedir(), 'Applications'); config.emulationFresh = false; saveConfig(); require('./emuGet').setAppsDir(config.emuDir); return { emuDir: config.emuDir }; },
+  // an ES-DE style Emulation folder there: roms/<console>, bios, saves, storage (fresh setups only)
   'emuget:prepare': ({ base }) => {
     if (!base || !isDir(base)) throw new Error('That drive isn’t there.');
+    if (!handlers['emuget:fresh']().fresh) throw new Error('Emulators are already set up on this device, so Cartridge leaves their folders as they are.');
+    if (isDir(path.join(base, 'Emulation')) && path.join(base, 'Emulation') !== config.emulationRoot) throw new Error('That drive already has an Emulation folder. Cartridge leaves it as it is.');
     const root = path.join(base, 'Emulation'), G = require('./emuGet');
     // 0.9.24 (Cartridge Installer, owner: like EmuDeck): saves and storage beside roms and bios, AppImages in
     // ~/Applications where EmuDeck keeps them (on any drive the Emulation folder is on)
     for (const d of [...G.ESDE.map((c) => path.join(root, 'roms', c)), path.join(root, 'bios'), path.join(root, 'saves'), path.join(root, 'storage')]) fs.mkdirSync(d, { recursive: true });
-    config.romsRoot = path.join(root, 'roms'); config.biosPath ||= path.join(root, 'bios'); config.emuDir = path.join(os.homedir(), 'Applications'); config.emulationRoot = root;
+    config.romsRoot = path.join(root, 'roms'); config.biosPath ||= path.join(root, 'bios'); config.emuDir = path.join(os.homedir(), 'Applications'); config.emulationRoot = root; config.emulationFresh = true;
     saveConfig(); G.setAppsDir(config.emuDir);
     if (library) { broadcast('library', publicLibrary()); computeInstalled(); }
     log('emulation folder made', root);
@@ -3457,7 +3473,7 @@ const handlers = {
       log('emulator downloaded', id, r.path || r.fp);
       send({ pct: 100, done: true });
       // its saves and storage linked into the Emulation folder (esdeLinks.js: links only, nothing moved)
-      if (config.emulationRoot && isDir(config.emulationRoot)) { try { r.links = require('./esdeLinks').make(id, { root: config.emulationRoot, home: os.homedir(), kind: r.fp ? 'flatpak' : 'appimage' }); } catch {} }
+      if (config.emulationFresh && config.emulationRoot && isDir(config.emulationRoot)) { try { r.links = require('./esdeLinks').make(id, { root: config.emulationRoot, home: os.homedir(), kind: r.fp ? 'flatpak' : 'appimage' }); } catch {} }
       // 0.9.24 (owner: deleted and installed again, it should say where and fix its launch options): scan,
       // then point every Steam shortcut whose emulator went missing at the new copy
       r.relinked = 0;
