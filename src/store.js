@@ -118,6 +118,8 @@ export const confirm = (title, message, okLabel = 'Confirm', danger = false) =>
 export async function loadConfig() {
   store.config = await call('config:get');
   store.info = await call('app:info');
+  // heroes already downloaded show at once, without waiting in the queue (0.9.23)
+  try { const k = await call('art:sharpKnown'); for (const [id, v] of Object.entries(k || {})) if (!(id in store.sharp)) store.sharp[id] = v; } catch {}
 }
 export async function saveConfig(patch) {
   store.config = await call('config:set', patch);
@@ -216,12 +218,14 @@ export function wantSharp(rom) {
 }
 async function pumpSharp() {
   sharpBusy = true;
+  let first = true;
   while (sharpQ.length) {
-    await new Promise((r) => setTimeout(r, 250));
+    if (!first) await new Promise((r) => setTimeout(r, 250)); // 0.9.23: the first ask goes at once
+    first = false;
     const rom = sharpQ.pop();
     if (!rom || rom.id in store.sharp) continue;
     sharpWait.add(rom.id);
-    try { store.sharp[rom.id] = await call('art:sharpHero', { id: rom.id, name: rom.name }); if (bgRom === rom.id) setBg(heroArt(rom) || ''); }
+    try { store.sharp[rom.id] = await call('art:sharpHero', { id: rom.id, name: rom.name, aspect: store.heroAspect || innerWidth / (innerHeight * 0.62) }); if (bgRom === rom.id) setBg(heroArt(rom) || ''); }
     // 0.9.22: a failed ask (offline, SteamGridDB down) counts as none for now, so the blurred cover shows
     // instead of no header at all; asked again when Cartridge next starts
     catch { store.sharp[rom.id] = null; if (bgRom === rom.id) setBg(heroArt(rom) || ''); }

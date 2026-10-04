@@ -1188,7 +1188,7 @@ const HERO_FILE = path.join(USER_DATA, 'heroes.json');
 let heroCache = {};
 try { heroCache = JSON.parse(fs.readFileSync(HERO_FILE, 'utf8')); } catch {}
 const heroInflight = new Map();
-async function sharpHero({ id, name }) {
+async function sharpHero({ id, name, aspect }) {
   if (!id || !name) return null;
   const c = heroCache[id];
   if (c?.file && fs.existsSync(path.join(HERO_DIR, c.file))) return 'romimg://img/?hz=' + encodeURIComponent(c.file);
@@ -1196,7 +1196,7 @@ async function sharpHero({ id, name }) {
   if (heroInflight.has(id)) return heroInflight.get(id);
   const job = (async () => {
     let png = null;
-    try { png = await sgdbImage(String(name).replace(/[™®©]/g, ''), 'hero'); } catch { return null; } // offline: try again later
+    try { png = await sgdbImage(String(name).replace(/[™®©]/g, ''), 'hero', undefined, Number(aspect) || 0); } catch { return null; } // offline: try again later
     const file = png ? `${String(id).replace(/[^\w-]/g, '')}.png` : null;
     if (png) { await fsp.mkdir(HERO_DIR, { recursive: true }); await fsp.writeFile(path.join(HERO_DIR, file), png); }
     heroCache[id] = { file, t: Date.now() };
@@ -2331,7 +2331,7 @@ function asPng(buf) {
   const im = nativeImage.createFromBuffer(buf);
   return im.isEmpty() ? null : im.toPNG();
 }
-async function sgdbImage(name, kind, style) {
+async function sgdbImage(name, kind, style, aspect = 0) {
   if (!config.sgdbKey || !name) return null;
   const g = (await sgdbGames(name))[0];
   if (!g) return null;
@@ -2345,6 +2345,12 @@ async function sgdbImage(name, kind, style) {
   // none come in those sizes, any big enough one
   if (kind === 'hero' && !list.length) list = ((await sgdb(`/heroes/game/${g.id}?types=static&nsfw=false&humor=false${st}`)) || []).filter((x) => !x.width || x.width >= 1600);
   list.sort((a, b) => (kind === 'hero' ? (b.width || 0) - (a.width || 0) : 0) || (b.score || 0) - (a.score || 0));
+  // 0.9.23 (owner: backgrounds cut off at the edges): among the sharp ones (1600+ wide), the hero whose shape
+  // is closest to the space it fills, so the least is cropped away; then the sharpest and best voted
+  if (kind === 'hero' && aspect > 0) {
+    const off = (x) => (x.width && x.height ? Math.abs(Math.log((x.width / x.height) / aspect)) : 1);
+    list.sort((a, b) => ((b.width || 0) >= 1600) - ((a.width || 0) >= 1600) || Math.round((off(a) - off(b)) * 10) || (b.width || 0) - (a.width || 0) || (b.score || 0) - (a.score || 0));
+  }
   // only take images of the right shape (a portrait cover is no use as a wide banner)
   const fits = (w, h) => (kind === 'grid' ? h > w : kind === 'wide' ? w > h * 1.6 : w > h * 1.4);
   for (const i of list.filter((x) => !x.width || fits(x.width, x.height)).slice(0, 3)) {
@@ -2874,6 +2880,16 @@ const handlers = {
   'logo:stopAll': () => { if (fetchAll) fetchAll.stop = true; return true; },
   'art:all': () => artOverrides,
   'art:sharpHero': (a) => sharpHero(a || {}),
+  // every hero already on disk (and every game SteamGridDB has none for, this week), asked once at start, so
+  // those show at once instead of each waiting its turn in the queue (0.9.23, owner: Home's hero loads instantly)
+  'art:sharpKnown': () => {
+    const out = {};
+    for (const [id, c] of Object.entries(heroCache)) {
+      if (c?.file) { if (fs.existsSync(path.join(HERO_DIR, c.file))) out[id] = 'romimg://img/?hz=' + encodeURIComponent(c.file); }
+      else if (c && Date.now() - c.t < 7 * 864e5) out[id] = null;
+    }
+    return out;
+  },
   'art:search': (q) => sgdbArt(q),
   'art:set': (q) => setArt(q),
   'art:reset': ({ id }) => { delete artOverrides[id]; delete logoCache[id]; saveArt(); saveLogoCache(); return {}; },

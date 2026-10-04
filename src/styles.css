@@ -45,6 +45,9 @@
   --gap-x: 18px;
   --gap-y: 22px;
   --ease: cubic-bezier(0.2, 0, 0, 1);
+  /* 0.9.23 motion (owner: other menus should feel like Start, smooth and not distracting): one strong
+     ease-out for things arriving, one ease-in-out for things moving on screen */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1); --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1); --d-settle: 520ms;
 }
 * { box-sizing: border-box; }
 html, body, #app { height: 100%; margin: 0; }
@@ -133,16 +136,30 @@ img { -webkit-user-drag: none; }
 @keyframes viewIn { from { opacity: 0; } }
 /* pages arrive from where they are (0.9.19): a tab from its side, a deeper page settling in, back
    easing out of the way. Short, one move, then still: no bounce. */
-@keyframes viewFromR { from { opacity: 0; transform: translateX(28px); } }
-@keyframes viewFromL { from { opacity: 0; transform: translateX(-28px); } }
+@keyframes viewFromR { from { opacity: 0; transform: translateX(20px); } }
+@keyframes viewFromL { from { opacity: 0; transform: translateX(-20px); } }
 @keyframes viewDeeper { from { opacity: 0; transform: translateY(10px) scale(0.99); } }
 @keyframes viewBack { from { opacity: 0; transform: scale(1.01); } }
-main.main[data-dir] > * { animation-duration: 360ms; animation-timing-function: cubic-bezier(0.23, 1, 0.32, 1); }
+main.main[data-dir] > * { animation-duration: 360ms; animation-timing-function: var(--ease-out); }
 main.main[data-dir='r'] > * { animation-name: viewFromR; }
 main.main[data-dir='l'] > * { animation-name: viewFromL; }
 main.main[data-dir='in'] > * { animation-name: viewDeeper; }
 main.main[data-dir='out'] > * { animation-name: viewBack; animation-duration: 260ms; }
 body.motion-reduce main.main[data-dir] > * { animation-name: viewIn; animation-duration: 120ms; }
+/* 0.9.23: Start's arrival everywhere. A page's parts (its header, then each section or row) settle in one
+   after another: up a little, from just smaller, 40 ms apart, once when the page opens. Only opacity
+   and transform, so it stays smooth without the GPU; Settings' sections change on every move, so they
+   only fade, quickly. */
+@keyframes settle { from { opacity: 0; transform: translateY(14px) scale(0.985); } }
+.view > *, .home > .hero, .home .shelves > .shelf-wrap { animation: settle var(--d-settle) var(--ease-out) backwards; } /* backwards: no transform left behind (a fixed child would follow it) */
+.view > :nth-child(2), .home .shelves > .shelf-wrap:nth-child(1) { animation-delay: 40ms; }
+.view > :nth-child(3), .home .shelves > .shelf-wrap:nth-child(2) { animation-delay: 80ms; }
+.view > :nth-child(4), .home .shelves > .shelf-wrap:nth-child(3) { animation-delay: 120ms; }
+.view > :nth-child(5), .home .shelves > .shelf-wrap:nth-child(4) { animation-delay: 160ms; }
+.view > :nth-child(n+6), .home .shelves > .shelf-wrap:nth-child(n+5) { animation-delay: 200ms; }
+.view > .viewer, .view > [data-noanim] { animation: none; }
+.pane-in { animation: viewIn 180ms var(--ease-out); }
+body.motion-reduce .view > *, body.motion-reduce .home > .hero, body.motion-reduce .home .shelves > .shelf-wrap { animation: viewIn 120ms ease-out backwards; }
 
 .hintbar { display: flex; align-items: center; gap: 24px; padding: 0 28px; color: var(--text); font-size: var(--t-sm); font-weight: 500; background: var(--s0); border-top: 1px solid rgba(255, 255, 255, 0.05); }
 .hintbar .left { flex: 1; display: flex; gap: 18px; align-items: center; color: var(--muted); }
