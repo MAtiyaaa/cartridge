@@ -140,6 +140,7 @@ function watchGamescopeFocus() {
   if (!isGamescope() || !/^\d+$/.test(gid)) return;
   let mine = BigInt(gid); if (mine > 0xffffffffn) mine >>= 32n;
   let last = null, busy = false, seen = new Set(), first = true, hiddenFor = 0, tick = false, scanning = false;
+  gameFocus.watched = true;
   setInterval(() => {
     if (busy) return; busy = true;
     require('child_process').execFile('xprop', ['-root', 'GAMESCOPE_FOCUSED_APP'], { timeout: 1500 }, (err, out) => {
@@ -148,6 +149,7 @@ function watchGamescopeFocus() {
       if (err || !m) return;
       const away = BigInt(m[1]) !== mine && m[1] !== '0';
       if (away !== last) { last = away; broadcast('background', { away }); }
+      gameFocus.away = away && m[1] !== '769'; if (gameFocus.away) gameFocus.otherAt = Date.now(); // 769 is Steam's own menu, where Exit game for Cartridge is
       // F11: a game Steam just started has no window yet, so gamescope shows the one it has (ours).
       // Stay unmapped until the game holds focus (769 is Steam's own UI) or 45 s pass, then come back behind it.
       if (hiddenFor && ((away && m[1] !== '769') || Date.now() - hiddenFor > 45000)) { hiddenFor = 0; try { win?.showInactive(); } catch {} }
@@ -157,12 +159,28 @@ function watchGamescopeFocus() {
     steamLaunches(gid, mine).then((now) => {
       scanning = false;
       const fresh = [...now].some((p) => !seen.has(p));
+      if (now.size) gameFocus.otherAt = Date.now();
+      // the other game ended: come back now rather than waiting out the 45 s
+      if (seen.size && !now.size && hiddenFor) { hiddenFor = 0; log('the other game ended, showing again'); try { win?.showInactive(); } catch {} }
       seen = now;
       if (fresh && first) { first = false; return; }
       first = false;
       if (fresh && win && !win.isDestroyed() && win.isVisible()) { log('steam started another game, stepping aside'); hiddenFor = Date.now(); win.hide(); }
     }, () => { scanning = false; });
   }, 600);
+}
+// Game Mode, another app in front or just closed (0.9.23, owner: closing a game started from Steam closed
+// Cartridge too). Steam ends a game by signalling its launch session, and on the way back Cartridge got
+// one as well. A signal in that moment is logged and ignored; a second one within 10 s still quits.
+const gameFocus = { watched: false, away: false, otherAt: 0, ignoredAt: 0 };
+function ignoreSignal(sig) {
+  if (!gameFocus.watched || sig === 'SIGINT') return false;
+  const now = Date.now();
+  if (now - gameFocus.ignoredAt < 10000) return false;
+  if (!gameFocus.away && now - gameFocus.otherAt > 8000) return false;
+  gameFocus.ignoredAt = now;
+  log('got', sig, 'while another app was in front or just closed, staying open');
+  return true;
 }
 // pids of Steam's launch wrappers (reaper SteamLaunch AppId=N) for any app but ours. Read without
 // blocking (0.9.16): the main thread also runs Cartridge's own work, which must never wait on this.
@@ -3721,4 +3739,4 @@ app.on('before-quit', () => {
   if (fetchAll) fetchAll.stop = true;
 });
 // Steam's Exit game (and a shutdown) ask politely first: treat it like Quit
-for (const sig of ['SIGTERM', 'SIGINT', 'SIGHUP']) process.on(sig, () => { log('got', sig); app.quit(); setTimeout(() => app.exit(0), 3000).unref?.(); });
+for (const sig of ['SIGTERM', 'SIGINT', 'SIGHUP']) process.on(sig, () => { if (ignoreSignal(sig)) return; log('got', sig); app.quit(); setTimeout(() => app.exit(0), 3000).unref?.(); });
