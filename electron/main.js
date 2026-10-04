@@ -3112,7 +3112,7 @@ const handlers = {
     const wf = require('./webFetch'), term = String(q || '').trim().slice(0, 80);
     if (!term) return [];
     if (kind === 'gif') {
-      const r = await wf(`https://api.openverse.org/v1/images/?q=${encodeURIComponent(term)}&extension=gif&page_size=30&page=${page}`, { headers: { 'User-Agent': 'Cartridge' }, signal: AbortSignal.timeout(15000) });
+      const r = await wf(`https://api.openverse.org/v1/images/?q=${encodeURIComponent(term)}&extension=gif&page_size=20&page=${page}`, { headers: { 'User-Agent': 'Cartridge' }, signal: AbortSignal.timeout(15000) });
       if (!r.ok) throw new Error(`Openverse answered ${r.status}`);
       const j = await r.json();
       return (j.results || []).filter((x) => x.url && (x.width || 0) >= 320).sort((a, b) => (b.width || 0) - (a.width || 0)).map((x) => ({ url: x.url, thumb: x.thumbnail || x.url, w: x.width || 0, h: x.height || 0, by: x.creator || '', license: (x.license || '').toUpperCase() }));
