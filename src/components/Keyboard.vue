@@ -30,7 +30,7 @@
       </div>
       <div class="kb-hints">
         <span class="hint"><Btn b="LB+RB" />Move</span><span class="hint"><Btn b="X" />Delete</span><span class="hint"><Btn b="Y" />Space</span>
-        <span class="hint"><Btn b="LT" />Shift</span><span class="hint"><Btn b="RT" />Symbols</span><span class="hint"><Btn b="START" />Done</span><span class="hint"><Btn b="B" />Cancel</span>
+        <span class="hint"><Btn b="LT" />Shift, twice: Caps</span><span class="hint"><Btn b="RT" />Symbols</span><span class="hint"><Btn b="START" />Done</span><span class="hint"><Btn b="B" />Cancel</span>
       </div>
     </div>
   </div>
@@ -128,14 +128,15 @@ function onKey(ev) {
   if (ev.key === ' ') { ev.preventDefault(); ev.stopImmediatePropagation(); insert(' '); }
 }
 
-let layer;
+let layer, lastLt = 0;
 onMounted(() => {
   window.addEventListener('keydown', onKey, true);
   layer = pushLayer(el.value, {
     back: () => closeModal(null),
     x: del,
     y: () => type(' '),
-    lt: () => (shift.value = !shift.value),
+    // LT is Shift; two quick presses are Caps (0.9.24, owner), as on a phone
+    lt: () => { const now = performance.now(); if (now - lastLt < 380) { caps.value = !caps.value; shift.value = false; lastLt = 0; return; } lastLt = now; shift.value = !shift.value; },
     rt: () => (sym.value = !sym.value),
     start: done,
     lb: () => move(-1), rb: () => move(1), select: () => {},

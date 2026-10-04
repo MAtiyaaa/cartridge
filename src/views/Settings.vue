@@ -328,6 +328,7 @@
               <button class="btn" :class="{ primary: store.update.state !== 'ready' }" data-focus :disabled="['checking', 'downloading'].includes(store.update.state)" @click="checkUpdates"><Icon name="mdiCloudDownloadOutline" />Check for updates</button>
             </div>
             <p class="muted small">New versions come from the GitHub Releases page. They download in the background and replace this AppImage in place, so your Steam shortcut and settings stay as they are.</p>
+            <button class="lrow" data-focus @click="openModal('whatsnew')"><Icon name="mdiNewspaperVariantOutline" :size="22" /><span class="l-mid"><b>What’s New</b><span class="l-sub">Every version’s changes, newest first</span></span><span class="l-end"><Icon name="mdiChevronRight" :size="20" /></span></button>
             <ChangelogCard />
             <div class="subh">Roll back</div>
             <p class="muted small" style="margin-top: -6px">Go back to an earlier version if this one gives you trouble. Your settings stay. Automatic updates pause until you press Check for updates.</p>
@@ -1001,7 +1002,7 @@ async function rollBack() {
   try { await call('update:rollback', { tag }); toast('Restarting…', 'ok', 3000, 'mdiHistory'); } catch (e) { toast(e.message, 'error', 6000); rollBusy.value = false; }
 }
 async function checkUpdates() { try { await call('update:check'); } catch (e) { toast(e.message, 'info', 4000); } }
-async function setPointer(v) { await saveConfig({ ui: { pointer: v } }); setPointerPref(v); }
+async function setPointer(v) { await saveConfig({ ui: { pointer: v } }); setPointerPref(v === 'auto' && store.info?.gamescope ? 'touch' : v); }
 async function setGraphics(v) {
   if ((store.config.graphics || 'auto') === v) return;
   await saveConfig({ graphics: v });

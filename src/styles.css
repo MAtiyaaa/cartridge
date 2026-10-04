@@ -61,7 +61,7 @@ body {
   font-family: var(--body); font-size: var(--t-md); font-feature-settings: 'cv11', 'ss01'; /* Inter: single-storey a, open digits */
   overflow: hidden; user-select: none; -webkit-font-smoothing: antialiased;
 }
-body.pad-mode, body.touch-mode, body.touch-mode * { cursor: none !important; }
+body.pad-mode, body.pad-mode *, body.touch-mode, body.touch-mode * { cursor: none !important; } /* no cursor over buttons either (0.9.24) */
 /* swipes are handled in nav.js, so the browser must not also pan (it fought the custom scroll) */
 /* touch scrolls natively like a phone: pages up and down, shelves sideways, no pinch zoom */
 html, body { touch-action: pan-x pan-y; }

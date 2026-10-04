@@ -1,7 +1,11 @@
 import { reactive, markRaw } from 'vue';
 
 const rd = window.cart;
-export const call = (ch, arg) => rd.call(ch, arg ? JSON.parse(JSON.stringify(arg)) : arg);
+// network failures read as one plain sentence (0.9.24, owner: "net::ERR_NAME_NOT_RESOLVED" was shown)
+const OFFLINE = /ERR_NAME_NOT_RESOLVED|ERR_INTERNET_DISCONNECTED|ERR_NETWORK_CHANGED|ERR_CONNECTION_(REFUSED|RESET|TIMED_OUT|CLOSED)|ERR_ADDRESS_UNREACHABLE|ENOTFOUND|EAI_AGAIN|ENETUNREACH|EHOSTUNREACH|ECONNRESET|getaddrinfo|fetch failed|Failed to fetch|socket hang up/i;
+export const NO_NET = 'No internet connection. Check your connection and try again.';
+export const isOffline = (e) => OFFLINE.test(String(e?.message || e || ''));
+export const call = (ch, arg) => rd.call(ch, arg ? JSON.parse(JSON.stringify(arg)) : arg).catch((e) => { if (isOffline(e)) { const n = new Error(NO_NET); n.offline = true; throw n; } throw e; });
 
 export const store = reactive({
   away: false, // Game Mode: another app is in front (0.9.21)
@@ -79,6 +83,7 @@ export function tab(name) {
 // ---------------- toasts
 let tid = 1;
 export function toast(msg, kind = 'info', ms = 3400, icon) {
+  if (kind === 'error' && msg === NO_NET) icon = 'mdiCloseCircle'; // the opposite of the green check
   const t = { id: tid++, msg, kind, icon: icon || { ok: 'mdiCheck', error: 'mdiAlertCircleOutline', info: 'mdiInformationVariant' }[kind] };
   store.toasts.push(t);
   if (store.toasts.length > 4) store.toasts.shift();

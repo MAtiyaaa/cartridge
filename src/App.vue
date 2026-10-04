@@ -67,6 +67,7 @@
   <AddonsSheet v-if="store.modal?.type === 'addons'" :key="'addons' + store.modal.props.romId" v-bind="store.modal.props" />
   <GameAddons v-if="store.modal?.type === 'gameaddons'" :key="'ga' + store.modal.props.romId" v-bind="store.modal.props" />
   <ShadVersions v-if="store.modal?.type === 'shadversions'" v-bind="store.modal.props" />
+  <WhatsNew v-if="store.modal?.type === 'whatsnew'" v-bind="store.modal.props" />
   <GameSettings v-if="store.modal?.type === 'gamesettings'" :key="'gs' + store.modal.props.romId" v-bind="store.modal.props" />
   <IdleScreen v-if="store.config?.configured" />
 
@@ -114,6 +115,7 @@ const ManualViewer = defineAsyncComponent(() => import('./components/ManualViewe
 import PatchesSheet from './components/PatchesSheet.vue';
 import AddonsSheet from './components/AddonsSheet.vue';
 import GameAddons from './components/GameAddons.vue';
+import WhatsNew from './components/WhatsNew.vue';
 import ShadVersions from './components/ShadVersions.vue';
 import GameSettings from './components/GameSettings.vue';
 import IdleScreen from './components/IdleScreen.vue';
@@ -242,7 +244,9 @@ onMounted(async () => {
   setRumble(store.config.ui.rumble);
   applyTheme(store.config.ui);
   detectPad();
-  setPointerPref(store.config.ui.pointer);
+  // Game Mode (0.9.24, owner: touch still showed a cursor): the screen's touches arrive as a mouse there and
+  // nobody uses a mouse in Game Mode, so Auto means Touch: no cursor, and drags scroll
+  setPointerPref(store.config.ui.pointer || (store.info?.gamescope ? 'touch' : 'auto'));
   await loadLibrary();
   loadArt();
   // 0.9.19: Start joins the top bar once for people who had picked their own tabs

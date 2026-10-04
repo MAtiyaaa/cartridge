@@ -148,7 +148,12 @@ function watchGamescopeFocus() {
       const m = /=\s*(\d+)/.exec(String(out || ''));
       if (err || !m) return;
       const away = BigInt(m[1]) !== mine && m[1] !== '0';
-      if (away !== last) { last = away; broadcast('background', { away }); }
+      if (away !== last) {
+        last = away; broadcast('background', { away });
+        // back in front after a game (0.9.24, owner: controls dead after closing a game): the window came back
+        // without focus (showInactive), and the page only reads the pad while focused
+        if (!away && win && !win.isDestroyed()) { try { if (!win.isVisible()) win.showInactive(); win.focus(); win.webContents.focus(); } catch {} }
+      }
       gameFocus.away = away && m[1] !== '769'; if (gameFocus.away) gameFocus.otherAt = Date.now(); // 769 is Steam's own menu, where Exit game for Cartridge is
       // F11: a game Steam just started has no window yet, so gamescope shows the one it has (ours).
       // Stay unmapped until the game holds focus (769 is Steam's own UI) or 45 s pass, then come back behind it.
