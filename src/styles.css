@@ -64,8 +64,12 @@ body {
 body.pad-mode, body.pad-mode *, body.touch-mode, body.touch-mode * { cursor: none !important; } /* no cursor over buttons either (0.9.24) */
 /* swipes are handled in nav.js, so the browser must not also pan (it fought the custom scroll) */
 /* touch scrolls natively like a phone: pages up and down, shelves sideways, no pinch zoom */
-html, body { touch-action: pan-x pan-y; }
+/* 0.9.26 (the touch update): Cartridge's own engine in nav.js scrolls every touch, however the system delivers it,
+   so the browser's touch scrolling is off; "The browser's" in Look & Feel → Controls turns it back on (html.touch-native) */
+html, body { touch-action: none; }
+html.touch-native, html.touch-native body { touch-action: pan-x pan-y; }
 input, textarea { touch-action: manipulation; }
+img, a, svg { -webkit-user-drag: none; } /* a picture never starts a drag-and-drop instead of the swipe (0.9.26) */
 .view, .shelves, .menu-list, [data-scroll] { overscroll-behavior: contain; }
 .shelf, [data-hscroll] { overscroll-behavior-x: contain; }
 body.dragging * { pointer-events: none; }

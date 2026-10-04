@@ -1,5 +1,5 @@
 <template>
-  <div class="start" :class="{ editing, dragging: !!drag, sizing: !!sizing || mode === 'size' }" ref="el">
+  <div class="start" :class="{ editing, dragging: !!drag, sizing: !!sizing || mode === 'size' }" :data-nodrag="editing || undefined" ref="el"><!-- arranging: fingers move tiles, not the page (0.9.26) -->
     <div v-if="editing" class="st-edit-bar">
       <b>Arrange Start</b>
       <span class="muted">{{ barText }}</span>

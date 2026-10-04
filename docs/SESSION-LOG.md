@@ -6,6 +6,18 @@ The branch for 0.9.3 work is `claude/relaxed-fermat-30pigp`. Pull it before star
 
 ---
 
+## 4 Oct 2026 · 0.9.26 The Touch Update
+
+Owner: touch never worked anywhere (Game Mode or desktop): taps work, but no swiping, scrolling or gestures; other apps on SteamOS scroll fine. Asked for an update only about touch.
+
+Found: driving Chromium with real touch input (CDP touch events) and with mouse-style drags, every page scrolled, so the pages themselves were never the problem: on the device the browser isn't turning touches into scrolling. Rather than depend on that, Cartridge now scrolls every touch itself (`touch-action: none`, the nav.js engine), whichever way the touch arrives. Checked here: real touches (Cartridge scrolls, no double scroll with the browser), touches the browser ignores, mouse-style drags, a tap opens a game, edge swipe goes back, top bar swipe changes tab, touch mode kept (no focus rings), npm test, vite build, launch check.
+
+Owner to test on the device, Game Mode and desktop: scrolling Home, Library, Settings and a menu; flicks glide; a swipe doesn't open a game; left-edge swipe back; top bar swipe; Start arranging by touch. If anything still fails: Settings → About, the Touch check line (it says how touches arrive and who scrolled), and try Look & Feel → Controls → Touch scrolling → The Browser's.
+
+0.9.25 was published (v0.9.25).
+
+---
+
 ## 4 Oct 2026 · 0.9.25 Open Emulators
 
 Owner: "Build 0.9.25 just with this: open emulator from Cartridge, Settings, Emulators, Emulators." Done: Open at the top of each emulator's menu. Checked here: npm test, vite build, the handler in the app (a program starts; missing file, Windows build and a file without the exec bit each give a clear message), launch check. Owner to test on the device: Open for an AppImage, a Flatpak and an EmuDeck launcher, in Desktop Mode and in Game Mode (the emulator shows in front, the controller doesn't move Cartridge underneath, and Cartridge answers the controller again after the emulator closes).

@@ -12,6 +12,8 @@ const PLATFORM_MAP = require('./platformMap');
 // started its zygote) makes renderers crash with "/dev/shm ... No such process".
 // The AppImage launcher already passes --no-sandbox when user namespaces are missing.
 app.commandLine.appendSwitch('enable-features', 'OverlayScrollbar');
+// touch screens (0.9.26): the touch event API on, whatever Chromium guessed about the screen at start
+app.commandLine.appendSwitch('touch-events', 'enabled');
 app.setName('Cartridge');
 
 protocol.registerSchemesAsPrivileged([

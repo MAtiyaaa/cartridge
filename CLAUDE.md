@@ -46,7 +46,7 @@ LT/RT switch top tabs. LB/RB only switch sections inside a page. A select, B bac
 - Steam must be closed before `shortcuts.vdf` is written. The helper is copied out of the AppImage and run through `systemd-run --user ... KillMode=process`. Steam's appid formula with quotes around the exe. Existing shortcuts are kept exactly.
 - Shortcut learning: keep Target, Start in and Launch options, strip frame generation wrappers (mako-run, lsfg), keep `vblank_mode`, keep quoting, first `/roms/` in a path, replace `/tmp/.mount_` Start In, `styled()` path aliases.
 - Trophies: read only; unlocks only added, earliest wins; notes title prefix `'Cartridge troph'`; picture notes under 44,000 characters; folders de-duplicated by device:inode; icons served by token only.
-- Touch (rebuilt in 0.8.2 at the owner's request): real touches scroll natively (`touch-action: pan-x pan-y`); mouse-typed pointers (Game Mode can send touches as mouse) use the drag in `nav.js` (applied once per frame, momentum). The app starts in pad mode; instant scroll while a direction is held.
+- Touch (rebuilt again in 0.9.26, the touch update, owner: "touch never worked, only taps"): `html, body { touch-action: none }` and the engine in `nav.js` scrolls every touch, pen and mouse-style drag (once per frame, momentum, eats the ending click). `ui.touchScroll: 'browser'` (`html.touch-native`) gives Chromium's own touch scrolling back, and the engine then steps back on pointercancel or a native scroll. Gestures: left-edge swipe = Back, swipe on the top bar's tabs = LT/RT (`dispatch(a, { keepMode: true })`). `[data-nodrag]` keeps the engine out (Start while arranging). The app starts in pad mode; instant scroll while a direction is held.
 - Delete refuses the ROMs root and console folders; a mark never touches files.
 - Single modal slot: nested dialogs save `store.modal.resolve` and reopen themselves (see FolderPicker, SteamCollections, SteamEmu).
 - Square-only game icons (`iconOpaque`), `sgScore` match ranking.
@@ -299,6 +299,9 @@ LT/RT switch top tabs. LB/RB only switch sections inside a page. A select, B bac
 
 ## 0.9.25 · Open Emulators (4 Oct 2026)
 - `emuget:open` (main.js): Open in the emulator's menu (EmuGet `manage`). Spawned detached without `LD_PRELOAD`/`LD_LIBRARY_PATH`/AppImage vars, Flatpaks through `flatpak run`, Windows builds refused (Proton). In gamescope it broadcasts `background` away until the emulator exits, then focuses the window.
+
+## 0.9.26 · The Touch Update (4 Oct 2026; log: docs/SESSION-LOG.md)
+- Found by driving Chromium with real touch input (CDP Input.dispatchTouchEvent): Cartridge's pages scroll when the browser scrolls touches, so the device problem is how touches arrive. Now Cartridge scrolls every touch itself (see the Touch line above). `touchInfo` / `window.cartTouch` count touches, mouse presses, touch events, who scrolled and gestures; ControllerTest shows it (About). `img, a, svg { -webkit-user-drag: none }` plus a `dragstart` guard. `touch-events=enabled` switch in main.js.
 
 ## Releases (full steps: HANDOFF D8)
 Only when the owner asks. Bump `version` and `build.releaseInfo.releaseName` ("Cartridge X.Y.Z") in `package.json`, and set `versionName` (what Settings → About and update messages show). **0.9.3 is shipped in parts (owner, 1 Oct 2026):** the number goes up as usual (0.9.4, 0.9.5...) but `versionName` and the release title are "0.9.3 B", "0.9.3 C"... until the 0.9.3 plan is done; notes heading `## Cartridge 0.9.3 B · Title`. Then put only this version's notes in `RELEASE_NOTES.md` (heading `## Cartridge X.Y.Z · Title`), add them to the top of `CHANGELOG.md`, grouped as New / Changed / Fixed with bold lead-ins. CI builds, launch-checks and publishes.
