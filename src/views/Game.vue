@@ -610,6 +610,9 @@ async function more() {
   // 0.9.28 (owner: PS4 patches had gone from here): PS3 and PS4 too; Game Add-ons shows only the tabs the console has
   if (installedPath.value && !marked.value && /\b(ps2|ps3|ps4|psx|ngc|gamecube|gc|wii|psp|3ds|n3ds|switch|wiiu)\b/i.test(slugs)) play.push({ label: 'Add-ons', value: 'textures', icon: 'mdiPuzzleOutline',
     sub: /ps4/i.test(slugs) ? 'Patches from shadPS4 and GoldHEN' : /ps3/i.test(slugs) ? 'Patches and game updates' : /\bps2\b/i.test(slugs) ? 'Texture packs and patches' : /\bpsp\b/i.test(slugs) ? 'Mods and cheats' : 'Mods, packs and patches, and what’s installed' });
+  // 0.9.29 (The Syncthing Update): this game's saves on this device, found by the save's own ID
+  const sv = await Promise.race([call('saves:forRom', { romId: Number(props.romId) }).catch(() => []), new Promise((r) => setTimeout(() => r(null), 1500))]);
+  if (sv?.length) play.push({ label: 'Saves on This Device', sub: `${sv.length} ${sv.length === 1 ? 'save' : 'saves'} · ${sv.some((x) => x.synced) ? 'synced with Syncthing' : 'not synced'} · changed ${ago(Math.max(...sv.map((x) => x.at || 0)))}`, value: 'saves', icon: 'mdiContentSaveOutline' });
   if (installedPath.value) play.push({ label: 'Show file location', value: 'path', icon: 'mdiFolderOutline' });
   const top = [
     { label: fav.value ? 'Remove from favourites' : 'Add to favourites', sub: 'Saved in RomM', value: 'fav', icon: fav.value ? 'mdiHeartOff' : 'mdiHeartOutline' },
@@ -670,6 +673,12 @@ async function more() {
   if (v === 'mark' || v === 'unmark') { await setMark(v === 'mark'); return; }
   if (v === 'trophies') { await linkTrophies(); return; }
   if (v === 'path') { toast(installedPath.value, 'info', 5000, 'mdiFolder'); return; }
+  if (v === 'saves') {
+    const list = sv || [];
+    const p = await choose({ title: 'Saves on This Device', message: 'Read only: Cartridge never changes a save. A to copy where it is.', options: list.map((x) => ({ label: x.emuName + (x.shared ? ' · Memory Card' : ''), sub: `${bytes(x.size || 0)} · changed ${ago(x.at)} · ${x.synced ? 'synced in ' + x.synced.label : 'not synced'}`, value: x.path, icon: x.synced ? 'mdiSync' : 'mdiContentSaveOutline', raw: true })) });
+    if (p) { try { await call('clip:write', { text: p }); toast('Location copied', 'ok', 2200, 'mdiContentCopy'); } catch (e) { toast(e.message, 'error'); } }
+    return;
+  }
   if (v === 'pkg') { await installPkg(); return; }
   if (v === 'patches') { await openModal('gameaddons', { romId: Number(props.romId), name: base.value.name, tab: 'patches' }); return; }
   if (v === 'redownload') { await redownload(); return; }

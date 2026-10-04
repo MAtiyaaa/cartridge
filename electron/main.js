@@ -2065,6 +2065,53 @@ function syncGameList() {
     return { id: r.id, name: r.name || '', ids, discIds };
   });
 }
+// ---- Saves on this device (0.9.29, The Syncthing Update): electron/saves.js finds them, this matches them
+// to the library with every ID Cartridge can read from the game itself (cached per file and size)
+const saveIdCache = new Map();
+function saveIdsOf(r, where) {
+  const file = mainFile(where), slugs = `${r.platform_slug} ${r.platform_fs_slug}`;
+  let st; try { st = fs.statSync(file || where); } catch { return []; }
+  const k = (file || where) + ':' + st.size;
+  if (saveIdCache.has(k)) return saveIdCache.get(k);
+  const ids = [];
+  try {
+    if (/\bswitch\b/i.test(slugs) && file) { const id = require('./addons').switchTitleId(file); if (id) ids.push(id); }
+    else if (/ps3/i.test(slugs)) { const id = ps3Serial(r.id, where); if (id) ids.push(id); }
+    else if (/\bpsx\b/i.test(slugs) && file) { const id = require('./addons').psxSerial(file); if (id) ids.push(id); }
+    else if (/\bpsp\b/i.test(slugs) && file) { const id = ppssppPatchState(r.id, r)?.serial; if (id) ids.push(id); }
+  } catch {}
+  saveIdCache.set(k, ids);
+  return ids;
+}
+function savesGameList() {
+  return syncGameList().map((g) => {
+    const r = romIndexMain().get(g.id), where = installedMap[g.id];
+    return where && where !== MARKED && r ? { ...g, ids: [...g.ids, ...saveIdsOf(r, where)] } : g;
+  });
+}
+let savesCache = null;
+async function savesList(fresh) {
+  if (!fresh && savesCache && Date.now() - savesCache.at < 30000) return savesCache.list;
+  const S = require('./saves'), extra = {};
+  try { for (const v of require('./shadVersions').installed()) if (v.path) (extra.shadps4 ||= []).push(path.dirname(v.path)); } catch {} // portable shadPS4 builds keep user/ beside them
+  try { const exe = steamMgr.vita3kCommand?.()?.exe; for (const d of pkgInst.vita3kFsPaths(exe)) (extra.vita3k ||= []).push(d); } catch {}
+  const list = S.match(S.scan({ extra }), savesGameList());
+  // games that keep their save beside the game file (melonDS, mGBA and other emulators' default)
+  for (const [id, where] of Object.entries(installedMap)) {
+    if (!where || where === MARKED) continue;
+    const file = mainFile(where); if (!file) continue;
+    const stem = file.replace(/\.[^./]+$/, '');
+    for (const ext of ['.sav', '.srm', '.dsv']) { try { const st = fs.statSync(stem + ext); list.push({ emu: 'beside', emuName: 'Beside the game', kind: 'save', path: stem + ext, keys: {}, romIds: [Number(id)], size: st.size, at: st.mtimeMs, files: 1 }); } catch {} }
+  }
+  // which saves Syncthing already keeps in step (a save folder inside one of its folders)
+  try {
+    const l = await require('./syncthing').local();
+    const synced = (l?.folders || []).map((f) => ({ path: (f.path || '').replace(/^~(?=\/)/, os.homedir()), label: f.label || f.id, id: f.id })).filter((f) => f.path);
+    for (const s of list) { const f = synced.find((x) => s.path === x.path || s.path.startsWith(x.path.replace(/\/$/, '') + '/') || x.path.startsWith(s.path + '/')); if (f) s.synced = { id: f.id, label: f.label }; }
+  } catch {}
+  savesCache = { at: Date.now(), list };
+  return list;
+}
 function patchState(romId) {
   const r = romIndexMain().get(Number(romId));
   const slugs = `${r?.platform_slug} ${r?.platform_fs_slug}`;
@@ -2724,6 +2771,9 @@ const handlers08 = {
   },
   // 0.9.23 Syncthing page: this device in full, the main server (config.syncthing.server), games with synced files
   'sync:local': () => require('./syncthing').local(),
+  // every save on this device with the game it belongs to (0.9.29); read only
+  'saves:list': ({ fresh } = {}) => savesList(fresh),
+  'saves:forRom': async ({ romId }) => (await savesList()).filter((s) => (s.romIds || []).includes(Number(romId))),
   'sync:server': () => require('./syncthing').server(config.syncthing?.server || {}),
   'sync:setServer': async (srv) => {
     if (srv && srv.address) await require('./syncthing').server(srv); // only saved once it answers
