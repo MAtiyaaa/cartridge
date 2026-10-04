@@ -1,35 +1,44 @@
-## Cartridge 0.9.23 · Make It Yours
+## Cartridge 0.9.24 · Set Up Your Way
 
 ### New
-- **Start pages:** add more pages to Start and flick the right stick left or right to switch (swipe on touch). Each page has its own widgets. Add Page and Remove Page are in Arrange.
-- **New Start widgets:** Your Library (games, hours played, on this device, consoles), Game of the Day (a new game from your library every day), A Picture (any PNG, JPG, WebP, AVIF or GIF from your device) and Your Own Widget (paste HTML, or start from a note or a countdown). Your own widgets run on their own and can't reach your library or settings.
-- **Trophies per console:** the trophies widget can show one console's unlocks, and you can add it more than once.
-- **Per-game emulator settings:** game page → More → Emulator → Game Settings. Change the settings that matter most for one game (resolution, frame limit, renderer and more) for RPCS3, PCSX2, DuckStation, Dolphin, PPSSPP and shadPS4. They are written to the emulator's own per-game settings, so the emulator uses them too.
-- **shadPS4 versions:** Settings → Emulators → shadPS4 → Versions. See which games use which version, add releases and the nightly from shadPS4's GitHub, remove ones you don't need. Pick a version per game from the game page.
-- **Emulators page:** each emulator has a menu with Update, Download Again, Delete, Open Its Releases Page and the update channel: stable or pre-release (nightly). Updates follow the kind you first had until you switch.
-- **Syncthing:** the Sync tab is now Syncthing, with its logo. This Device shows its ID, version, devices and folders (with Rescan). Main Server connects to the Syncthing your devices sync with and shows which devices are connected to it. Games lists which of your games have saves or textures in your synced folders, found by serial, title ID or name, with search.
-- **Add-ons install themselves the right way:** PCSX2 patch mods go to PCSX2's patches folder, Dolphin graphics mods to GraphicMods, and textures are turned on for you after a texture pack is installed. Install a Download installs a pack you downloaded yourself.
-- **More texture packs for GameCube:** HenrikoMagnifico's packs and others show as Featured on the games they're made for.
-- **PS4 patches from two lists:** shadPS4's and GoldHEN's, each in its own tab (LB/RB).
-- **Switch game version:** Add-ons show the installed version of a Switch game.
+- **Cartridge Installer:** Settings → Emulators → Cartridge Installer, and in the welcome. Pick a drive, tick the emulators you want (the first for each console is ticked for you), then watch each install with its own bar. Cartridge makes an Emulation folder laid out like ES-DE and EmuDeck (roms, bios, saves, storage), puts AppImages in ~/Applications where EmuDeck keeps them, and links each emulator's saves and textures into the Emulation folder. Links only: nothing is moved, and nothing already there is replaced. When EmuDeck is already set up, its folders are used.
+- **Steam collections:** Settings → Steam → Collections (LB/RB). Cartridge reads the collections you already have and finds the ones for a console by their words (PS2, PlayStation 2, GameCube, Mega Drive and more). Rename each to Cartridge's name ("Sony PlayStation 2") or keep yours. Either way, new games go into the collection you already have. "Add downloaded games to their console's collection" waits until you've reviewed them once.
+- **Sync Your Saves in the welcome:** connect to your main Syncthing server, or check this device and install Syncthing (SyncThingy from Flathub, for your user, no password), then pick the folder it shares: your Emulation saves, ~/Sync, or any folder.
+- **Emulator folders:** each emulator's menu has Folders. See, open and change where it keeps games, installed content (DLC, updates), saves and textures, written to the emulator's own settings. Works for PCSX2, DuckStation, Dolphin, Eden and the yuzu family, Azahar, Ryujinx, Cemu, RPCS3, shadPS4 and Vita3K.
+- **Cemu graphic packs:** Wii U games have Graphics, Enhancements, Mods and Workarounds tabs in Game Add-ons, switched in Cemu's own settings.
+- **Add-on details:** A on any mod, texture pack or patch shows all its text, pictures, size, maker and files, with Install at the bottom. Size and maker also show in the list.
+- **HenrikoMagnifico's texture packs** for GameCube, Wii and 3DS show on the games they're made for, read live from his site.
+- **Add-on downloads** and their unpacking show on the Downloads page.
+- **shadPS4: which version ran a game.** The game page shows the version and game from shadPS4's last log.
+- **More shadPS4 game settings**, from shadPS4's own code, in Graphics, Advanced and System tabs. Every Game Settings page has tabs (L1/R1).
+- **Frame generation per game** in Game Settings. Changing frame generation updates the Steam shortcuts at once.
+- **Start:** L1/R1 step through the games on Recently Played and other game rows, and through trophies. New console widgets (a console's games, a console's numbers). Pin a Game opens on Recently Played, then consoles, each listing its games A to Z. In Arrange, LT/RT opens an overview of your pages to reorder them, and the top bar stays put. Turning a page gives a small rumble.
+- **Top bar placement:** Look & Feel → Text and Cards. Put the bar at the top, bottom or left, aligned or centred, plain, a floating glass pill or round buttons. Pages slide in from the bar's side.
+- **Look & Feel → Metadata:** SteamGridDB key, and Fetch All, or only logos, backgrounds, or covers and screenshots.
+- **What's New** in Settings → Updates opens every version's notes.
+- **Licences and Acknowledgements** in About: the libraries Cartridge uses, the projects and emulators it works with, and the data it reads, each credited.
+- **Onboarding ends on Start** with a short tour of it, and uses EmuDeck's folders when EmuDeck is there.
 
 ### Changed
-- **Start redesigned:** game rows (New, Recently Played, Favourites, Recommended) show the first game's art and logo with the rest fanned beside it; Surprise Me deals three games and opens the one in front; the trophies widget shows the newest unlock large with the ones before it as badges; pinned games show their logo; console cards show the maker and game counts like the Consoles page; Played This Week keeps its bars at 1x1; widgets have a softer look; a new Add a Widget button and a grouped widget list.
-- **Cartridge opens on Start** unless you picked another tab in Look & Feel.
-- **Pages settle in** the way Start does, and animations are calmer overall.
-- **Home's header** shows at once for games whose header was already downloaded, and the header picked is the one that fits the space best, so less is cut off at the edges.
-- **Settings:** right goes to the first item on the right, and left at the edge goes back to that section in the list.
-- **Onboarding:** headings in Title Case, and Optional Extras says Next once a key or sign-in is filled in.
-- **Flatpak emulator updates** are faster (Cartridge no longer updates the runtimes with them) and show progress.
-- The Nintendo Switch picture is bigger on console cards.
+- **Start looks right at any size:** console pictures are never cut off, console cards are close to square with the console's logo, the PS3 trophies and storage widgets fill big tiles, the week's play time is a proper chart, and the page dots sit in their own row below the tiles without an RS button. Cards have a little weight under them, the shine varies from card to card, and the Add a Tile slot is quieter.
+- **All cards** sit on the page with a soft shadow instead of floating.
+- **Smoother on weaker devices:** when Cartridge draws without the GPU, animations only fade and do less work.
+- **Game Add-ons** shows one console at a time, with console chips at the top. The game page's Emulator tab no longer has a separate Patches row: patches are in Add-ons.
+- **Auto add to Steam** now applies by itself after a download when Steam can be changed live.
+- **Search:** the keyboard grows out of the search box.
+- **Idle screen:** bigger game and console logos.
+- **Syncthing:** files are labelled with the game and kind (saves or textures), L1/R1 moves between its tabs, and its logo is white in Settings and readable when selected.
+- **No internet:** a plain "No internet connection" message instead of raw errors.
+- **On-screen keyboard:** press LT twice for Caps.
+- **Long pop-up menus:** right on the D-pad jumps to the buttons at the bottom.
+- The Nintendo Switch picture is bigger.
 
 ### Fixed
-- **Vita3K wouldn't open after an update:** the update put a build in place that needs Qt 6, which SteamOS doesn't have. Vita3K now updates only to its AppImage, every download is checked before it replaces anything, and a broken Vita3K shows Repair on the Emulators page.
-- **Vita3K installs failed on a fresh setup:** Vita3K stops before installing when its ux0/app folder doesn't exist. Cartridge creates it first.
-- **Cartridge closed in Game Mode** when another game or app you opened from Steam was closed.
-- **Start:** moving a tile past another and back pushed tiles away and spoiled the layout. Tiles now go back where they were.
-- **On-screen keyboard:** moving up or down jumped to the start of the row instead of the key above or below.
-- **Touch in Game Mode** showed a mouse cursor and behaved like a mouse. Taps count as touch now.
-- **Switch game IDs** couldn't be read when the keys were in another emulator's folder, and NSZ/XCZ games were skipped.
-- **Media bar:** pictures didn't crossfade, a picture that failed to load left the previous game's picture up, and the blurred cover stand-in showed sharp.
-- **Controller button letters** (A, B) weren't centred in their circles.
+- **Controls stopped working after returning from a game** in Game Mode. Cartridge now takes focus back when it's in front again.
+- **Touch:** in Game Mode, Auto now treats the screen as touch, so the cursor no longer shows over buttons and scrolling is smooth.
+- **Syncthing "refused the key":** Cartridge tries every Syncthing settings file on the device, and a key you paste, until Syncthing accepts one.
+- **Emulator icons flickered** while updating.
+- **An emulator deleted and installed again** now says where it went and points your Steam shortcuts at the new copy.
+- **Downloads of emulators are checked** before they replace anything, so a broken download can't break a working emulator.
+- **Switch title IDs** are found from Eden's rules: from the game file, its update or DLC IDs, or the file name.
+- **A and B hints in the welcome** sit in the middle of their buttons.

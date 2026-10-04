@@ -6,6 +6,26 @@ The branch for 0.9.3 work is `claude/relaxed-fermat-30pigp`. Pull it before star
 
 ---
 
+## 4 Oct 2026 · 0.9.24 Set Up Your Way
+
+Owner's list (with photos): console glyph clipped, page dots (no RS, below the tiles), trophies/storage/week too empty when big, L1/R1 through games on row cards; emulator folders editable, shadPS4 version proof; Start add button, page overview on LT/RT, console widgets, square console cards, logos, any orientation; controls dead after a game, touch, double LT Caps, right to a pop-up's buttons; icon flicker, reinstall relink, Vita3K, Switch icon; Syncthing key and L1/R1; shadPS4 advanced settings in tabs, per-game frame generation; Cemu packs, HenrikoMagnifico, add-on size/author, add-on detail page, Switch IDs and version, add-on downloads on Downloads, Game Add-ons less cluttered, Patches row gone; What's New; onboarding A/B, EmuDeck folders, end on Start with a tour; auto add applies; No internet pill. Extras: weaker-device animations, card weight, frame gen updates shortcuts, Pin a Game picker, varied shine, keyboard from search, page-turn haptics, idle logos, multi-drive plan, Steam collections rework, Cartridge Installer, top bar placement, Metadata page, Licences, Syncthing icon/smarter/onboarding.
+
+Done: all of it (details in CLAUDE.md 0.9.24). Notes:
+- A/B hints in the welcome were off centre because `.w-hints span` also matched the button glyphs (now `.w-hints > span`).
+- EmuDeck in the background: EmuDeck's setup only runs through its own app (no supported headless mode), so the Cartridge Installer does the same job itself: ES-DE/EmuDeck folders, AppImages in ~/Applications, saves and storage linked in, its own launch options.
+- Steam collection rename live uses Steam's collection object (`m_strName`, or `SetName` when a build has it) and reads the name back; if it didn't stick, the helper renames it in the cloud-storage file while Steam is closed. Never run against a real Steam client yet.
+- Multi-drive: planning only, `docs/plan-multidrive.md`.
+
+Answered: RPCS3 patches already follow the installed game version. Gemini's GTK4 idea isn't possible in Electron. HenrikoMagnifico's site can't be reached from the build container; the app reads it live on the device (7-day cache) with a built-in list as fallback.
+
+Checked here: `npm test` (132), vite build, Playwright on the mock RomM: Start tiles at 1280x800 and 1920x1080, top bar placements, Steam Collections review and rename through the helper (fake Steam), welcome Syncthing step, Cartridge Installer location and pick steps (Emulation folder made).
+
+Owner to test on the device: Steam Collections rename with live changes on and off; the console collection toggle after review; Cartridge Installer on internal and on an SD card (links in Emulation/saves and storage); Syncthing install from the welcome and a folder share; emulator Folders change for RPCS3 and Eden; Cemu graphic packs; controls after closing a game in Game Mode; touch in Game Mode; top bar at the bottom and left on the TV; Start L1/R1 and page overview.
+
+Still blocked: installing Graphify and the skills (the environment's safety check).
+
+---
+
 ## 4 Oct 2026 · 0.9.23 Make It Yours
 
 Owner's list (after reading the other account's handover): Vita3K update bricked the AppImage and installs still failed; Emulators delete/redownload, stable vs nightly, page link, Flatpak updates too slow, shadPS4 versions; add-ons install per emulator automatically, more texture pack sources (not PS2), shadPS4 and GoldHEN patches as tabs, Switch IDs and version, RPCS3 patches follow the game version; per-game emulator settings; instant Home hero, wider backgrounds, Switch icon size, media bar bugs; calmer animations like Start; a Start overhaul (pages on the right stick, widgets, custom HTML and pictures, tile-move bug, rows, Surprise me, trophies per console, console cards, 1x1 play time, wording, add button, Start by default); keyboard rows, Settings left/right, touch cursor, onboarding wording; Syncthing integration; Cartridge closing in Game Mode when another game closes.
