@@ -114,6 +114,10 @@
               <!-- 0.9.21 (owner): game updates, patches and add-ons in one page; a game opens Game Add-ons with a tab for each -->
               <p class="muted small" style="margin-top: -6px">Mods, texture packs, patches and game updates for the games on this device, from each emulator's own lists, GameBanana and the EmuCoreX catalog. The same as Game Add-ons in a game's More menu.</p>
               <TextField v-model="gaFind" placeholder="Find a game" icon="mdiMagnify" mode="game" fkey="ga-find" />
+              <!-- one console at a time (0.9.24, owner: too long to scroll from Nintendo 3DS to PS4): pick it here, or LB/RB -->
+              <div v-if="gaAll.length > 1 && !gaFind" class="ga-cons" data-hscroll>
+                <button v-for="grp in gaAll" :key="grp.slug" class="ga-con" :class="{ on: gaCon === grp.slug }" data-focus @click="gaCon = grp.slug"><PIcon :p="grp.p" :size="26" /><span>{{ grp.name }}</span><em>{{ grp.games.length }}</em></button>
+              </div>
               <section v-for="grp in gaGroups" :key="grp.slug" class="con-sec">
                 <div class="con-head"><PIcon :p="grp.p" :size="34" /><b>{{ grp.name }}</b><span class="count">{{ grp.games.length }}</span><span v-if="grp.emu" class="con-emu"><EmuIcon :id="grp.id" :size="22" fallback="mdiPuzzleOutline" />{{ grp.emu }}</span></div>
                 <div class="stack">
@@ -927,7 +931,11 @@ const emuPage = ref('overview');
 const PATCH_EMU = [[/ps3/i, 'RPCS3', 'rpcs3'], [/ps4/i, 'shadPS4', 'shadps4'], [/\bps2\b/i, 'PCSX2', 'pcsx2'], [/\b(ngc|gamecube|gc|wii)\b/i, 'Dolphin', 'dolphin'], [/\bpsp\b/i, 'PPSSPP', 'ppsspp']];
 // Game Add-ons page (0.9.21): every installed game with add-ons, patches or game updates, by console, with a search
 const gaFind = ref('');
-const gaGroups = computed(() => {
+const gaCon = ref('');
+// with nothing searched, one console's games at a time; searching looks through all of them
+const gaGroups = computed(() => (gaFind.value.trim() || gaAll.value.length < 2 ? gaAll.value : gaAll.value.filter((g) => g.slug === (gaCon.value || gaAll.value[0]?.slug))));
+function stepGaCon(d) { const l = gaAll.value; if (l.length < 2) return; const i = Math.max(0, l.findIndex((g) => g.slug === gaCon.value)); gaCon.value = l[(i + d + l.length) % l.length].slug; }
+const gaAll = computed(() => {
   const q = gaFind.value.trim().toLowerCase(), by = new Map();
   for (const r of allRoms()) {
     if (!store.installed[r.id] || (q && !r.name.toLowerCase().includes(q))) continue;
@@ -1041,6 +1049,12 @@ onMounted(() => {
 .rail-item.on { color: var(--text); }
 .rail-item:focus { background: var(--focus); color: var(--on-focus); box-shadow: none; }
 .pane { overflow-y: auto; padding: 6px 12px 60px 24px; }
+.ga-cons { display: flex; gap: 8px; overflow-x: auto; padding: 4px 2px 8px; }
+.ga-con { flex: none; display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 999px; background: var(--s1); box-shadow: var(--weight-edge); font-weight: 600; font-size: var(--t-sm); }
+.ga-con em { font-style: normal; color: var(--muted); font-weight: 500; }
+.ga-con.on { background: var(--sel); }
+.ga-con:focus-visible, .pad-mode .ga-con:focus { background: var(--focus); color: var(--on-focus); }
+.pad-mode .ga-con:focus em { color: var(--on-focus-dim); }
 .pane-in { display: flex; flex-direction: column; gap: 16px; max-width: 860px; }
 .pane h1 { font-size: var(--t-2xl); font-weight: 700; margin: 4px 0 6px; }
 .card-s { padding: 18px 20px; display: flex; flex-direction: column; gap: 10px; }

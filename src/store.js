@@ -17,6 +17,7 @@ export const store = reactive({
   installed: {},
   sync: { state: 'idle' },
   downloads: [],
+  addonJobs: {}, // key -> add-on downloading or installing (0.9.24: shown on the Downloads page)
   bg: '',
   route: { name: 'home', params: {} },
   navDir: 'in', // how the next page arrives: 'r'/'l' (a tab to the right/left), 'in' (deeper), 'out' (back)

@@ -69,6 +69,7 @@
   <ShadVersions v-if="store.modal?.type === 'shadversions'" v-bind="store.modal.props" />
   <WhatsNew v-if="store.modal?.type === 'whatsnew'" v-bind="store.modal.props" />
   <EmuPaths v-if="store.modal?.type === 'emupaths'" v-bind="store.modal.props" />
+  <AddonDetail v-if="store.modal?.type === 'addondetail'" v-bind="store.modal.props" />
   <GameSettings v-if="store.modal?.type === 'gamesettings'" :key="'gs' + store.modal.props.romId" v-bind="store.modal.props" />
   <IdleScreen v-if="store.config?.configured" />
 
@@ -118,6 +119,7 @@ import AddonsSheet from './components/AddonsSheet.vue';
 import GameAddons from './components/GameAddons.vue';
 import WhatsNew from './components/WhatsNew.vue';
 import EmuPaths from './components/EmuPaths.vue';
+import AddonDetail from './components/AddonDetail.vue';
 import ShadVersions from './components/ShadVersions.vue';
 import GameSettings from './components/GameSettings.vue';
 import IdleScreen from './components/IdleScreen.vue';
@@ -264,6 +266,11 @@ onMounted(async () => {
   // another app in front in Game Mode (0.9.21, owner: still laggy in the background): gamescope never
   // hides or blurs the window, so stop the pad, the animated background and every CSS animation here
   window.cart.on('background', (b) => { setBackground(b?.away); store.away = !!b?.away; document.body.classList.toggle('away', !!b?.away); });
+  window.cart.on('addon-progress', (m) => {
+    if (!m?.key) return;
+    store.addonJobs[m.key] = { ...(store.addonJobs[m.key] || {}), ...m, at: Date.now() };
+    if (m.state === 'done' || m.state === 'error') setTimeout(() => { if (store.addonJobs[m.key]?.state === m.state) delete store.addonJobs[m.key]; }, 12000);
+  });
   window.cart.on('toast', (t) => t?.text && toast(t.text, t.kind || 'info', 4500, t.icon));
   setTimeout(steamReport, 2500);
   // 0.9: a new install goes through emulator Setup once, after connecting to RomM (the welcome does it since 0.9.15)

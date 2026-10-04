@@ -3256,6 +3256,7 @@ const handlers = {
     return out;
   },
   'addons:gbFiles': ({ modId }) => require('./addonSources').gbFiles(modId),
+  'addons:gbMod': ({ modId }) => require('./addonSources').gbMod(modId),
   // { romId, emuRoot (the emulator copy), pack (from addons:available), file (GameBanana only) }
   'addons:install': async ({ romId, emuRoot, pack, file }) => {
     if (addonRun) throw new Error('Another add-on is being installed. Wait for it to finish.');
@@ -3281,7 +3282,7 @@ const handlers = {
     const free = await fsp.statfs(fs.existsSync(dest) ? dest : e.root).then((st) => st.bavail * st.bsize).catch(() => Infinity);
     if (total * 2 > free) throw new Error(`Not enough space: this add-on needs about ${Math.ceil((total * 2) / 1e9)} GB while it installs.`);
     addonRun = { key, abort: new AbortController() };
-    const send = (o) => broadcast('addon-progress', { romId: rom.id, key, ...o });
+    const send = (o) => broadcast('addon-progress', { romId: rom.id, key, name: pack.name, game: rom.name, emu: e.name, ...o }); // also listed on the Downloads page (0.9.24)
     const A = require('./addonInstall');
     let got = 0, last = 0;
     const files = [];

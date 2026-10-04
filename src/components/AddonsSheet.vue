@@ -42,7 +42,7 @@
             <img v-if="p.preview || p.previews?.[0]" class="ad-img" :src="p.preview || p.previews[0]" loading="lazy" />
             <Icon v-else name="mdiPuzzleOutline" :size="22" />
             <span class="ad-mid"><b>{{ p.name }}</b><span class="ad-sub">{{ subOf(p) }}</span></span>
-            <span class="ad-end">{{ has(p) ? 'Installed' : p.source === 'gb' ? (open === p.id ? 'Hide files' : 'Files') : 'Install' }}</span>
+            <span class="ad-end">{{ has(p) ? 'Installed' : 'Details' }}</span>
           </button>
           <template v-if="open === p.id">
             <div v-if="!files" class="muted small ad-files"><Icon name="mdiSync" :size="14" class="spin" /> Loading files…</div>
@@ -73,7 +73,7 @@
 // picked above: PS2 texture packs from the EmuCoreX catalog, other consoles' mods from GameBanana.
 import { computed, onMounted, onBeforeUnmount, ref } from 'vue';
 import { pushLayer, focusFirst } from '../nav.js';
-import { store, call, closeModal, toast, bytes, confirm, pickFolder } from '../store.js';
+import { store, call, closeModal, toast, bytes, confirm, pickFolder, openModal } from '../store.js';
 import Icon from './Icon.vue';
 
 // embedded (0.9.21): one tab of Game Add-ons (GameAddons.vue); kind 'tex' is the texture pack catalog
@@ -100,7 +100,7 @@ async function fromFile() {
 const mine = computed(() => (d.value?.installed || []).filter((r) => (!emu.value || r.emuRoot === emu.value.emuRoot) && ofKind(r)));
 const short = (p) => String(p || '').replace(store.info?.home || '\0', '~');
 const has = (p) => mine.value.some((r) => String(r.id) === String(p.id));
-const subOf = (p) => (p.source === 'ps2' ? [p.authors.join(', ') && 'by ' + p.authors.join(', '), bytes(p.size), p.files ? p.files.toLocaleString() + ' textures' : '', p.version].filter(Boolean).join(' · ') : [p.authors[0] && 'by ' + p.authors[0], p.category].filter(Boolean).join(' · '));
+const subOf = (p) => [p.authors?.[0] ? 'by ' + p.authors.join(', ') : '', p.size ? bytes(p.size) : '', p.files ? p.files.toLocaleString() + ' textures' : '', p.version, p.category].filter(Boolean).join(' · ');
 const runText = computed(() => { const r = run.value; if (!r) return ''; return r.state === 'download' ? `Downloading ${r.pct != null ? r.pct + '%' : ''}` : r.state === 'join' ? 'Joining the parts…' : r.state === 'install' ? `Installing ${r.pct || 0}%` : 'Starting…'; });
 
 // what is already in the game's folder (0.9.19), Cartridge's or not
@@ -113,12 +113,14 @@ async function load() {
   else emu.value = emus.value.find((e) => e.emuRoot === emu.value.emuRoot) || emus.value[0] || null;
 }
 function pickEmu(e) { emu.value = e; }
+// A opens the add-on in full (0.9.24): its text, pictures, size and maker, and Install at the bottom
 async function act(p) {
+  const r = await openModal('addondetail', { p: JSON.parse(JSON.stringify(p)), installed: has(p), kind: props.kind });
+  reopen();
+  if (!r) return;
   if (has(p)) return toast('Already installed. Remove it from the list above.', 'info', 3000);
-  if (p.source === 'ps2') return install(p, null);
-  if (open.value === p.id) { open.value = null; return; }
-  open.value = p.id; files.value = null;
-  try { files.value = await call('addons:gbFiles', { modId: p.id }); } catch (e) { files.value = []; toast(e.message, 'error'); }
+  if (r.file) return install(p, r.file);
+  if (r.install && p.source === 'ps2') return install(p, null);
 }
 async function install(p, f) {
   if (!emu.value) return toast('No emulator for this game is set up here.', 'info');

@@ -86,6 +86,13 @@ function parseGbFiles(j) {
   return files.filter((f) => f && f._idRow && /^https:\/\//.test(f._sDownloadUrl || '') && ARCHIVE.test(f._sFile || '') && !f._bContainsExe)
     .map((f) => ({ id: f._idRow, name: f._sFile, size: f._nFilesize || 0, url: f._sDownloadUrl, md5: /^[0-9a-f]{32}$/i.test(f._sMd5Checksum || '') ? f._sMd5Checksum.toLowerCase() : '', description: f._sDescription || '' }));
 }
+// one mod in full (0.9.24, owner: A opens a page with everything about it): its files, its text, pictures
+async function gbMod(modId, { fetchImpl = webFetch } = {}) {
+  const j = await gbGet(`/Mod/${Number(modId)}?_csvProperties=_aFiles,_sName,_aSubmitter,_sText,_aPreviewMedia,_nLikeCount,_tsDateUpdated,_sVersion`, fetchImpl);
+  const text = String(j?._sText || '').replace(/<br\s*\/?>/gi, '\n').replace(/<\/(p|div|li|h\d)>/gi, '\n').replace(/<li[^>]*>/gi, '• ').replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#0?39;/g, '’').replace(/\n{3,}/g, '\n\n').trim();
+  const images = (j?._aPreviewMedia?._aImages || []).map((im) => (im?._sBaseUrl && im._sFile ? `${im._sBaseUrl}/${im._sFile530 || im._sFile}` : '')).filter(Boolean).slice(0, 6);
+  return { files: parseGbFiles(j), text: text.slice(0, 6000), images, version: j?._sVersion || '', updated: j?._tsDateUpdated ? j._tsDateUpdated * 1000 : 0, likes: j?._nLikeCount || 0, author: j?._aSubmitter?._sName || '' };
+}
 async function gbFiles(modId, { fetchImpl = webFetch } = {}) {
   return parseGbFiles(await gbGet(`/Mod/${Number(modId)}?_csvProperties=_aFiles,_sName,_aSubmitter`, fetchImpl));
 }
@@ -167,4 +174,4 @@ function featuredFor(ids = {}, live = []) {
   return out;
 }
 
-module.exports = { FEATURED, HENRIKO, featuredFor, parseHenriko, henrikoCatalog, namesGame, PS2_CATALOG, parsePs2Catalog, ps2Catalog, ps2For, gbGame, gbMods, gbFiles, parseGbMods, parseGbFiles, key, titleForms };
+module.exports = { gbMod, FEATURED, HENRIKO, featuredFor, parseHenriko, henrikoCatalog, namesGame, PS2_CATALOG, parsePs2Catalog, ps2Catalog, ps2For, gbGame, gbMods, gbFiles, parseGbMods, parseGbFiles, key, titleForms };
