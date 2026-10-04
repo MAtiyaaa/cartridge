@@ -34,6 +34,9 @@
         <div v-else class="muted">No emulator found for this console. Press More → Edit to set one.</div>
       </section>
 
+      <!-- 0.9.27 (owner): on the PlayStation 4 page, not Steam's main page. Off by default -->
+      <Toggle v-if="ckey === 'ps4'" :model-value="!!store.config.steam?.shadProof" label="shadPS4: show which version ran a game" desc="Reads shadPS4's own log after a game runs and shows the version that actually started it on the game page" @update:model-value="setShadProof" />
+
       <div v-if="con.outdated && !steam.queue.total" class="ss-queue">
         <Icon name="mdiUpdate" :size="22" />
         <div class="ss-q-t"><b>{{ con.outdated }} game{{ con.outdated === 1 ? '' : 's' }} in Steam use{{ con.outdated === 1 ? 's' : '' }} an older setup</b><small>Update them to start with the emulator and options above.</small></div>
@@ -67,9 +70,11 @@ import { ensureFocus } from '../nav.js';
 import Icon from '../components/Icon.vue';
 import Btn from '../components/Btn.vue';
 import PIcon from '../components/PIcon.vue';
+import Toggle from '../components/Toggle.vue';
 
 // Settings → Steam → a console: its games with Add / Remove, and the emulator setup behind More
 const props = defineProps({ ckey: String });
+async function setShadProof(v) { store.config.steam = await call('steam:setConfig', { shadProof: v }); }
 const el = ref(null);
 const ov = ref(null);
 const HOW = { learned: 'From your shortcuts', yours: 'Set by you', emudeck: 'EmuDeck', appimage: 'AppImage', flatpak: 'Flatpak', native: 'Installed program', retrodeck: 'RetroDECK', windows: 'Windows build (Proton)' };

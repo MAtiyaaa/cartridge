@@ -73,8 +73,6 @@
         <div class="subh"><Icon name="mdiTuneVariant" :size="20" />Options</div>
         <Toggle :model-value="sc.preview !== false" label="Show what changes first" desc="See every Target, Start in and Launch options before Steam is touched" @update:model-value="(v) => setC({ preview: v })" />
         <Toggle :model-value="!!sc.autoAdd" label="Add games after they download" desc="Queues each finished download for Steam, using that console's last collections" @update:model-value="(v) => setC({ autoAdd: v })" />
-        <!-- 0.9.24 (owner): off by default; on, the game page reads shadPS4's log for the version that started the game last -->
-        <Toggle :model-value="!!sc.shadProof" label="shadPS4: show which version ran a game" desc="Reads shadPS4's own log after a game runs and shows the version that actually started it on the game page" @update:model-value="(v) => setC({ shadProof: v })" />
         <Toggle :model-value="!!sc.autoRemove" label="Remove games from Steam when you delete them" desc="Only shortcuts Cartridge added" @update:model-value="(v) => setC({ autoRemove: v })" />
         <div class="row"><span class="lbl">Console in names</span><div class="seg"><button v-for="m in nameOpts" :key="m.v" data-focus :class="{ on: (sc.consoleInName || 'clash') === m.v }" @click="setC({ consoleInName: m.v })">{{ m.l }}</button></div></div>
         <p class="muted small" style="margin-top: -6px">"Only on clashes" adds the console, like "God of War (PS2)", when two games share a name.</p>

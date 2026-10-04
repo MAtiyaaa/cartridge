@@ -6,6 +6,14 @@ The branch for 0.9.3 work is `claude/relaxed-fermat-30pigp`. Pull it before star
 
 ---
 
+## 4 Oct 2026 · 0.9.27 Collection Names
+
+Owner: Steam console collections should be maker then console (Nintendo Wii, Sony PlayStation 3 and 4, Sega Dreamcast, Microsoft Xbox), and the shadPS4 version toggle belongs on the PlayStation 4 page, not Steam's main page (photo). Done. Checked here: npm test (new name tests), the Collections review on the fake Steam ("PlayStation" now proposes "Sony PlayStation"), vite build, launch check. Owner to test on the device: Settings → Steam → Collections renames, a new download going into the existing collection, the toggle on the PlayStation 4 page.
+
+0.9.26 was published (v0.9.26).
+
+---
+
 ## 4 Oct 2026 · 0.9.26 The Touch Update
 
 Owner: touch never worked anywhere (Game Mode or desktop): taps work, but no swiping, scrolling or gestures; other apps on SteamOS scroll fine. Asked for an update only about touch.
