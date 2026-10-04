@@ -301,6 +301,8 @@ function save() { clearTimeout(saveT); saveT = setTimeout(() => saveConfig({ ui:
 
 const el = ref(null), scroller = ref(null);
 const editing = ref(false), focusedId = ref(null);
+// arranging needs its buttons spelled out, even with the hints strip off (0.9.28)
+watch(editing, (v) => { store.forceHints = v; });
 const mode = ref(''); // while arranging with a controller: '' | 'move' (picked up) | 'size'
 const corner = ref('se'); // which corner the D-pad moves while resizing
 const CORNERS = ['se', 'sw', 'nw', 'ne'];
@@ -895,7 +897,7 @@ onMounted(async () => {
   await nextTick();
   ensureFocus(el.value);
 });
-onBeforeUnmount(() => { clearInterval(clockT); clearInterval(spaceT); clearTimeout(pressT); ro?.disconnect(); if (editing.value) { settle(tiles.value); save(); } });
+onBeforeUnmount(() => { store.forceHints = false; clearInterval(clockT); clearInterval(spaceT); clearTimeout(pressT); ro?.disconnect(); if (editing.value) { settle(tiles.value); save(); } });
 watch(() => store.trophyVer, loadAch);
 watch(() => store.play, loadWeek);
 </script>

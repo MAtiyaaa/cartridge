@@ -198,8 +198,12 @@ function placeInk() {
 // where the bar sits and how it looks (Look & Feel → Text and Cards → Top Bar)
 // touch scrolling (0.9.26): Cartridge's engine unless the browser's was picked in Look & Feel → Controls
 watch(() => store.config?.ui?.touchScroll, (v) => document.documentElement.classList.toggle('touch-native', v === 'browser'), { immediate: true });
-watch(() => [store.config?.ui?.barPos, store.config?.ui?.barAlign, store.config?.ui?.barStyle], ([pos, align, style]) => {
+// 0.9.28 (owner): the Dock (the bar of tabs) sits at the bottom, centred, as a pill unless chosen otherwise;
+// the strip of button hints is hidden unless turned on; the Dock's colour (pill style)
+watch(() => [store.config?.ui?.barPos || 'bottom', store.config?.ui?.barAlign || 'center', store.config?.ui?.barStyle || 'pill', store.config?.ui?.hints === true || !!store.forceHints, store.config?.ui?.dockColor || ''], ([pos, align, style, hints, dock]) => {
   const b = document.body.classList;
+  b.toggle('bar-top', pos === 'top'); b.toggle('hints-on', hints);
+  for (const c of ['white', 'black', 'accent']) b.toggle('dock-' + c, dock === c);
   b.toggle('bar-bottom', pos === 'bottom'); b.toggle('bar-left', pos === 'left');
   b.toggle('bar-center', align === 'center'); b.toggle('bar-pill', style === 'pill'); b.toggle('bar-circle', style === 'circle');
   nextTick(placeInkSoon);

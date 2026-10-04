@@ -319,10 +319,12 @@ onMounted(async () => { await nextTick(); ensureFocus(el.value); });
 </script>
 
 <style scoped>
-.home { position: absolute; inset: 0; display: grid; grid-template-rows: minmax(300px, var(--hero-h, 46%)) 1fr; animation: viewIn var(--d-med) var(--ease); }
+.home { position: absolute; inset: 0; display: grid; grid-template-rows: minmax(min-content, var(--hero-h, 46%)) 1fr; /* 0.9.28: grows to fit the logo and text, never runs off the top */ animation: viewIn var(--d-med) var(--ease); }
 .first-sync { grid-row: 1 / -1; align-content: center; }
 .first-sync h2 { font-size: var(--t-xl); color: var(--text); }
-.hero { position: relative; padding: var(--s-5) var(--s-7) var(--s-4); display: flex; align-items: flex-end; min-height: 0; }
+.hero { position: relative; padding: var(--s-5) var(--s-7) var(--s-4); display: flex; align-items: flex-end; min-height: 300px; }
+/* with the Dock at the bottom or the side, nothing sits above the header: room under the screen's top edge */
+:global(body:not(.bar-top) .home .hero) { padding-top: var(--s-7); }
 /* the art runs on under the first row and fades out there, so it has no bottom edge (0.9.3 K, F2) */
 .hero :deep(.media) { bottom: -14vh; }
 .hero-in { position: relative; z-index: 1; max-width: 760px; display: flex; flex-direction: column; gap: var(--s-3); }
