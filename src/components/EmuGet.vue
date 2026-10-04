@@ -95,6 +95,7 @@ async function runUpdate(u, force = false) {
 // 0.9.23 (owner: delete and download emulators again, stable or pre-release, shadPS4's versions):
 // an installed emulator opens one sheet with everything you can do to it
 const CH = { stable: 'Stable releases', pre: 'Pre-releases', rolling: 'Rolling build', flathub: '' };
+const PATH_IDS = new Set(['pcsx2', 'duckstation', 'dolphin', 'eden', 'citron', 'yuzu', 'azahar', 'citra', 'ryujinx', 'cemu', 'rpcs3', 'shadps4', 'vita3k']);
 async function manage(u) {
   if (!u) return;
   const ch = u.channels || [];
@@ -102,6 +103,8 @@ async function manage(u) {
     ...(u.broken ? [{ label: 'Repair', sub: 'It can’t start on this system', value: 'repair', icon: 'mdiWrench' }] : u.update ? [{ label: 'Update', sub: `${u.version || 'This copy'} → ${u.update.version || u.update.tag || 'newest'}`, value: 'update', icon: 'mdiUpdate' }] : []),
     ...(u.kind === 'flatpak' || u.latest ? [{ label: 'Download Again', sub: u.kind === 'flatpak' ? 'Reinstall from Flathub' : `The newest ${CH[u.channel] ? CH[u.channel].toLowerCase().replace(/s$/, '') : 'build'}`, value: 'again', icon: 'mdiDownload' }] : []),
     ...(ch.length > 1 ? ch.map((c) => ({ heading: c === ch[0] ? 'Updates Follow' : undefined, label: CH[c], sub: c === 'pre' ? 'Nightlies and test builds' : 'Releases the project calls finished', value: 'ch:' + c, icon: c === 'pre' ? 'mdiFlask' : 'mdiCheckDecagram', selected: u.channel === c })) : []),
+    // the emulator's own folders: games, installed content, saves, textures (0.9.24)
+    ...(PATH_IDS.has(u.id) ? [{ label: 'Folders', sub: 'Where it keeps games, installed content and saves', value: 'folders', icon: 'mdiFolderCogOutline' }] : []),
     ...(u.id === 'shadps4' ? [{ label: 'Versions', sub: 'Which games use which, and more to add', value: 'versions', icon: 'mdiLayersTriple' }] : []),
     ...(u.page ? [{ label: 'Open Its Releases Page', value: 'page', icon: 'mdiOpenInNew' }] : []),
     { label: 'Delete', sub: u.kind === 'flatpak' ? 'Uninstall the Flatpak' : 'Your saves and settings stay', value: 'delete', icon: 'mdiDeleteOutline', danger: true },
@@ -112,6 +115,7 @@ async function manage(u) {
   if (v === 'again') return runUpdate(u, true);
   if (v.startsWith('ch:')) { await call('emuup:setChannel', { id: u.id, channel: v.slice(3) }); toast(`${u.label} follows ${CH[v.slice(3)].toLowerCase()} now`, 'ok', 3000); return loadUps(true); }
   if (v === 'versions') return openModal('shadversions', {});
+  if (v === 'folders') return openModal('emupaths', { id: u.id, name: u.label });
   if (v === 'page') return window.open(u.page);
   if (v === 'delete') {
     if (!(await confirm(`Delete ${u.label}?`, `${u.kind === 'flatpak' ? 'Its Flatpak is uninstalled.' : 'The program is deleted.'} Saves and settings stay. Steam shortcuts that used it will show up in Shortcut health.`, 'Delete', true))) return;

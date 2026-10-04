@@ -2885,6 +2885,16 @@ const handlers = {
   'start:htmlGet': ({ id }) => { try { return fs.readFileSync(path.join(USER_DATA, 'start-widgets', String(id || '').replace(/[^\w-]/g, '') + '.html'), 'utf8'); } catch { return ''; } },
   'start:imageRemove': ({ url }) => { const m = /[?&]st=([^&]+)/.exec(url || ''); if (m) try { fs.rmSync(path.join(USER_DATA, 'start-images', path.basename(decodeURIComponent(m[1])))); } catch {} return true; },
   'wallpaper:clear': () => { for (const f of fs.readdirSync(USER_DATA)) if (/^wallpaper\./.test(f)) try { fs.rmSync(path.join(USER_DATA, f)); } catch {} config.ui.wallpaper = ''; saveConfig(); return config; },
+  // an emulator's own folders (0.9.24): see, open and change them, written to the emulator's settings
+  'emupaths:get': ({ id }) => require('./emuPaths').describe(id),
+  'emupaths:set': ({ id, rid, value }) => {
+    const P = require('./emuPaths');
+    notRunning(id, P.NAMES[id] || id);
+    const d = P.setPath(id, rid, value);
+    log('emulator folder', id, rid, Array.isArray(value) ? value.join(', ') : value || '(default)');
+    return d;
+  },
+  'fs:openFolder': async ({ path: p }) => { if (!p || !isDir(p)) throw new Error('That folder isn’t there yet.'); const err = await require('electron').shell.openPath(p); if (err) throw new Error(err); return true; },
   'clip:write': ({ text }) => { require('electron').clipboard.writeText(String(text || '')); return true; },
   'clip:read': async () => String((await require('electron').clipboard.readText()) || '').trim().slice(0, 4000),
   'logo:get': (r) => logoFor(r),

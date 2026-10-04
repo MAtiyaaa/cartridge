@@ -68,6 +68,7 @@
   <GameAddons v-if="store.modal?.type === 'gameaddons'" :key="'ga' + store.modal.props.romId" v-bind="store.modal.props" />
   <ShadVersions v-if="store.modal?.type === 'shadversions'" v-bind="store.modal.props" />
   <WhatsNew v-if="store.modal?.type === 'whatsnew'" v-bind="store.modal.props" />
+  <EmuPaths v-if="store.modal?.type === 'emupaths'" v-bind="store.modal.props" />
   <GameSettings v-if="store.modal?.type === 'gamesettings'" :key="'gs' + store.modal.props.romId" v-bind="store.modal.props" />
   <IdleScreen v-if="store.config?.configured" />
 
@@ -116,6 +117,7 @@ import PatchesSheet from './components/PatchesSheet.vue';
 import AddonsSheet from './components/AddonsSheet.vue';
 import GameAddons from './components/GameAddons.vue';
 import WhatsNew from './components/WhatsNew.vue';
+import EmuPaths from './components/EmuPaths.vue';
 import ShadVersions from './components/ShadVersions.vue';
 import GameSettings from './components/GameSettings.vue';
 import IdleScreen from './components/IdleScreen.vue';
