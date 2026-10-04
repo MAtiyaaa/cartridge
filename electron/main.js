@@ -247,8 +247,15 @@ function biggestDisplay() {
 }
 const display = biggestDisplay();
 const bigScreen = display.w >= 2560 || display.h >= 1440 || process.env.CARTRIDGE_BIG === '1';
-const forceSoftware = ((inGamescope || fromSteam) && !bigScreen) || process.argv.includes('--disable-gpu') || process.env.CARTRIDGE_SAFE_GPU === '1';
+const autoSoftware = (inGamescope || fromSteam) && !bigScreen;
+// 'gpu' (0.9.29, owner: "choppy on my ROG Ally"): the user's own choice to use the GPU where Auto keeps
+// software (Game Mode on handheld-size screens). Auto is unchanged. Game Mode on big screens already runs
+// the GPU, so it works there; a trial that isn't confirmed within GPU_TRIAL_MS goes back to Auto by itself.
+const gpuChosen = config.graphics === 'gpu';
+const forceSoftware = (autoSoftware && !gpuChosen) || process.argv.includes('--disable-gpu') || process.env.CARTRIDGE_SAFE_GPU === '1';
 const useGpu = !forceSoftware && config.graphics !== 'software';
+const gpuTrial = useGpu && autoSoftware && gpuChosen && !config.gpuKept;
+const GPU_TRIAL_MS = 25000;
 const startedAt = Date.now();
 if (!useGpu) app.disableHardwareAcceleration();
 log('start', app.getVersion(), 'gpu=' + (useGpu ? 'hardware' : 'software'), 'session=' + (process.env.XDG_SESSION_TYPE || '?'), 'desktop=' + (process.env.XDG_CURRENT_DESKTOP || '?'), 'appimage=' + (process.env.APPIMAGE || 'no'), 'display=' + (display.w ? display.w + 'x' + display.h : '?'), 'gamescope=' + inGamescope, 'steam=' + fromSteam, 'overlay=' + /gameoverlayrenderer/.test(process.env.LD_PRELOAD || ''), 'wl=' + (process.env.WAYLAND_DISPLAY || '-'), 'x=' + (process.env.DISPLAY || '-'), 'gs=' + (process.env.GAMESCOPE_WAYLAND_DISPLAY || '-'));
@@ -3995,7 +4002,11 @@ const handlers = {
     return file;
   },
   'app:relaunch': () => relaunch(),
-  'app:graphics': () => ({ mode: useGpu ? 'hardware' : 'software', setting: config.graphics, status: app.getGPUFeatureStatus?.() }),
+  'app:graphics': () => ({ mode: useGpu ? 'hardware' : 'software', setting: config.graphics, status: app.getGPUFeatureStatus?.(), trial: gpuTrial && !config.gpuKept, auto: autoSoftware ? 'software' : 'gpu' }),
+  'app:gpuKeep': ({ keep }) => {
+    if (keep) { config.gpuKept = true; saveConfig(); log('gpu trial kept'); return true; }
+    config.graphics = 'auto'; config.gpuKept = false; saveConfig(); log('gpu trial declined, back to auto'); relaunch(); return false;
+  },
   'app:fullscreen': () => win.setFullScreen(!win.isFullScreen()),
   'app:clearCache': async () => { await fsp.rm(IMG_CACHE, { recursive: true, force: true }); await fsp.rm(HERO_DIR, { recursive: true, force: true }); heroCache = {}; await fsp.rm(HERO_FILE, { force: true }); return true; },
 };
@@ -4007,6 +4018,8 @@ for (const [ch, fn] of Object.entries(handlers)) {
   });
 }
 
+// a GPU trial nobody confirmed (a blank window can't be answered) goes back to Auto and restarts
+if (gpuTrial) setTimeout(() => { if (config.gpuKept || config.graphics !== 'gpu') return; log('gpu trial not confirmed, back to auto'); config.graphics = 'auto'; saveConfig(); relaunch(); }, GPU_TRIAL_MS);
 app.whenReady().then(() => {
   // readable by the page's canvas too (Theme from this game reads a cover's colours)
   protocol.handle('romimg', async (req) => { const r = await handleImage(req); try { r.headers.set('Access-Control-Allow-Origin', '*'); } catch {} return r; });

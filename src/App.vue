@@ -309,6 +309,7 @@ onMounted(async () => {
   // a dot on Settings and a list in Settings → Emulators, not a pop-up (0.9.3)
   setTimeout(() => { if (store.config.configured) call('issues:list').then((l) => (store.issues = l.length)).catch(() => {}); }, 8000);
   setTimeout(setupNotice, 3500);
+  gpuCheck();
   if (store.config.configured) call('server:status').then((c) => (store.connection = c)).catch(() => {});
   pushLayer(document.body, {
     back: () => { if (viewHandler('back') !== false) return; back(); },
@@ -332,6 +333,18 @@ onMounted(async () => {
 // connected for the first time (the RomM step just finished): emulators next
 watch(() => store.config?.configured, (v, was) => { if (v && !was && !store.config.setupDone && !store.welcoming) go('emu-setup', { first: true }); });
 // People who set up before 0.9 skipped Emulator setup: tell them about it once
+// GPU Always (0.9.29): the first start with it asks whether it looks right. No answer (a blank window)
+// and main goes back to Auto by itself after 25 s.
+async function gpuCheck() {
+  const g = await call('app:graphics').catch(() => null);
+  if (!g?.trial) return;
+  const v = await choose({ title: 'Is Cartridge Drawing Correctly?', message: 'Cartridge is using the GPU in Game Mode. If anything looks wrong, go back. With no answer it goes back to Auto by itself in a few seconds.', options: [
+    { label: 'Keep GPU Always', value: 'keep', icon: 'mdiCheck' },
+    { label: 'Go Back to Auto', value: 'auto', icon: 'mdiRestore' },
+  ] });
+  if (v === 'keep') { await call('app:gpuKeep', { keep: true }); store.config.gpuKept = true; toast('GPU Always kept', 'ok', 2500, 'mdiCheck'); }
+  else if (v === 'auto') call('app:gpuKeep', { keep: false });
+}
 async function setupNotice() {
   // 0.9.15: people who were set up before get the new welcome offered once (it includes the system scan)
   if (store.config?.configured && !store.config.welcomed && !store.config.ui.welcomeNotice && !store.modal && !store.welcoming) {

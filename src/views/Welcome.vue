@@ -39,15 +39,6 @@
         </template>
 
         <!-- 3 -->
-        <template v-else-if="step === 'lang'">
-          <h1>Language</h1>
-          <p class="w-lead">More languages are coming in Cartridge 1.0.</p>
-          <div class="w-box"><button class="lrow" data-focus :class="{ sel: true }" @click="next()"><Icon name="mdiTranslate" :size="24" /><div class="l-mid"><b>English</b></div><Icon name="mdiCheck" :size="20" /></button></div>
-          <div class="w-act">
-            <button class="btn" data-focus @click="prev"><Icon name="mdiArrowLeft" />Back</button>
-            <button class="btn primary" data-focus @click="next()">Continue<Icon name="mdiArrowRight" /></button>
-          </div>
-        </template>
 
         <!-- 4 -->
         <template v-else-if="step === 'pad'">
@@ -421,7 +412,7 @@ import EmuGet from '../components/EmuGet.vue';
 import RommLocal from '../components/RommLocal.vue';
 import { padInfo, detectPad, padKind } from '../pad.js';
 
-const STEPS = ['hello', 'name', 'lang', 'pad', 'steam', 'emus', 'romm', 'scan', 'extras', 'sync', 'self', 'done'];
+const STEPS = ['hello', 'name', 'pad', 'steam', 'emus', 'romm', 'scan', 'extras', 'sync', 'self', 'done'];
 const ROMM_GUIDE = 'https://docs.romm.app/latest/getting-started/quick-start/'; // RomM's setup guide (owner: not the docs home)
 const el = ref(null);
 const at = ref(0), dir = ref(1);

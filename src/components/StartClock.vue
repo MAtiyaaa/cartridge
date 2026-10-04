@@ -62,9 +62,11 @@ const STARS = Array.from({ length: 34 }, (_, i) => ({ i, x: rnd() * 400, y: rnd(
 .sc-clouds .c1 { animation: sc-drift 70s linear infinite alternate; }
 .sc-clouds .c2 { animation: sc-drift 90s linear infinite alternate-reverse; opacity: 0.7; }
 @keyframes sc-drift { from { transform: translateX(-24px); } to { transform: translateX(24px); } }
-:global(body.motion-reduce .sc-stars circle), :global(body.motion-reduce .sc-clouds g) { animation: none; }
-/* without the GPU nothing here moves on its own: a drifting cloud repaints the tile all the time */
-:global(body.light-fx .sc-stars circle), :global(body.light-fx .sc-clouds g) { animation: none; }
+:global(body.motion-reduce .sc-stars circle), :global(body.motion-reduce .sc-clouds g.c1), :global(body.motion-reduce .sc-clouds g.c2) { animation: none; }
+/* without the GPU nothing here moves on its own: a drifting cloud repaints the tile all the time.
+   0.9.29: `g.c1`/`g.c2`, as specific as the drift rules; the old `g` lost to them, so the clouds kept
+   drifting and Start used about half a CPU core while idle without the GPU */
+:global(body.light-fx .sc-stars circle), :global(body.light-fx .sc-clouds g.c1), :global(body.light-fx .sc-clouds g.c2) { animation: none; }
 /* words over the scene: the day at the top, the time sitting on the dark hills */
 .sc-text { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: space-between; padding: clamp(10px, 9cqh, 22px) clamp(12px, 7cqw, 22px); text-shadow: 0 1px 12px rgba(0, 0, 0, 0.35); }
 .sc-day { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 8px; font-size: clamp(11px, 10cqh, 16px); line-height: 1.25; }

@@ -50,7 +50,7 @@
                 <!-- 0.9.24 (owner: empty space when big): what each console's games take up on this device -->
                 <div v-if="byCon.length" class="st-store-cons">
                   <!-- 0.9.28 (owner): the console's small icon, its name only where it fits, and only the rows that fit -->
-                  <div v-for="c in byCon.slice(0, Math.max(1, Math.min(8, Math.floor((box(t).ph - 150) / 24))))" :key="c.name" class="st-store-con"><span class="st-sc-n"><PIcon :p="c.p" :size="16" /><span>{{ c.name }}</span></span><i><b :style="{ width: (c.size / byCon[0].size) * 100 + '%' }" /></i><em class="tnum">{{ bytes(c.size) }}</em></div>
+                  <div v-for="c in byCon.slice(0, Math.max(1, Math.min(8, Math.floor((box(t).ph - 150) / 24))))" :key="c.name" class="st-store-con"><span class="st-sc-n"><PIcon :p="c.p" :size="16" /><span class="st-sc-name">{{ c.name }}</span></span><i><b :style="{ width: (c.size / byCon[0].size) * 100 + '%' }" /></i><em class="tnum">{{ bytes(c.size) }}</em></div>
                 </div>
               </div>
               <div class="st-gauge" :class="{ low: freePct < 10 }">
@@ -844,19 +844,26 @@ let ovLayer = null;
 // a page's key follows its tiles, not its place, so a page that moves slides there instead of being drawn twice (0.9.28)
 const pgKey = (pg, i) => (pg.length ? pg.map((x) => x.id).sort().join('|') : 'empty-' + i);
 const ovRows = (pg) => Math.max(4, bottom(pg));
+// L1 and R1 pressed together (0.9.29, owner: "sometimes it works, sometimes it doesn't"): one opened the
+// overview and the other closed it at once. A press within OV_GUARD of opening or closing counts as the same one.
+const OV_GUARD = 250;
+let ovAt = 0;
 function openOv() {
+  if (performance.now() - ovAt < OV_GUARD) return;
+  ovAt = performance.now();
   if (ov.value) return closeOv();
   if (mode.value) setMode('');
   ov.value = { moving: null };
   nextTick(() => {
     ovLayer = pushLayer(ovEl.value, {
       back: () => (ov.value.moving != null ? (ov.value.moving = null) : closeOv()),
-      lt() {}, rt() {}, start: closeOv, select() {}, x() {}, y() {}, lb: closeOv, rb: closeOv,
+      lt() {}, rt() {}, start: closeOv, select() {}, x() {}, y() {}, lb: ovShoulder, rb: ovShoulder,
       left: () => (ov.value.moving != null ? ovMove(-1) : false), right: () => (ov.value.moving != null ? ovMove(1) : false),
     });
     focusFirst(ovEl.value, `[data-key="pg-${page.value}"]`);
   });
 }
+function ovShoulder() { if (performance.now() - ovAt >= OV_GUARD) { ovAt = performance.now(); closeOv(); } }
 function closeOv() {
   ovLayer?.pop(); ovLayer = null; ov.value = null;
   nextTick(() => focusKey(tiles.value[0] ? 'tile-' + tiles.value[0].id : 'st-add'));
@@ -1056,7 +1063,14 @@ watch(() => store.play, loadWeek);
 /* tiles arrive one after another, rising and settling */
 @keyframes st-in { from { opacity: 0; transform: translateY(18px) scale(0.97); } }
 :global(body.motion-reduce .st-face) { animation: none; }
-.st-tile:focus-visible .st-face, .pad-mode .st-tile:focus .st-face { box-shadow: var(--ring), 0 26px 50px -24px rgba(0, 0, 0, 0.85); transform: translateY(-3px); }
+/* focus (0.9.29, owner: choppy on handhelds): the ring and lift shadow sit on the tile's ::before and fade in
+   by opacity, and the face lifts on its own layer; animating the face's box-shadow repainted the whole
+   tile on every frame without the GPU. Same look, same timing. */
+.st-tile::before { content: ''; position: absolute; inset: 0; border-radius: inherit; box-shadow: var(--ring), 0 26px 50px -24px rgba(0, 0, 0, 0.85); opacity: 0; transform: translateY(0); transition: opacity 240ms ease, transform 380ms cubic-bezier(0.32, 0.72, 0, 1); pointer-events: none; }
+.st-tile:focus-visible::before, .pad-mode .st-tile:focus::before { opacity: 1; transform: translateY(-3px); }
+.editing .st-tile::before { display: none; } /* arranging keeps its own ring on the face */
+.st-tile:focus-visible .st-face, .pad-mode .st-tile:focus .st-face { transform: translateY(-3px); }
+.st-tile:focus-within .st-face, .st-tile:focus .st-face { will-change: transform; }
 /* a soft light passes over a tile when it's reached */
 .st-face::after { content: ''; position: absolute; inset: 0; z-index: 3; pointer-events: none; background: linear-gradient(var(--glint-a, 110deg), transparent 38%, rgba(255, 255, 255, 0.08) 50%, transparent 62%); transform: translateX(-110%); }
 /* the light that passes over a tile you reach comes from a slightly different angle and pace from tile to
@@ -1214,7 +1228,7 @@ watch(() => store.play, loadWeek);
 .st-blank:focus { box-shadow: var(--ring); color: var(--text); }
 
 /* rows of games: the first one in front, with its art behind the words; the rest fanned beside it */
-.st-row-art { position: absolute; inset: 0; z-index: -2; background-size: cover; background-position: center 30%; opacity: 0.5; transition: transform 700ms var(--ease-out), opacity 400ms ease; }
+.st-row-art { position: absolute; inset: 0; z-index: -2; background-size: cover; background-position: center 30%; opacity: 0.5; transition: transform 700ms var(--ease-out), opacity 400ms ease; will-change: transform; } /* 0.9.29: its own layer, so the focus zoom isn't a repaint per frame */
 .st-tile:focus .st-row-art { transform: scale(1.03); opacity: 0.6; }
 .st-row-fade { position: absolute; inset: 0; z-index: -1; background: linear-gradient(90deg, var(--s1) 22%, color-mix(in srgb, var(--s1) 70%, transparent) 48%, color-mix(in srgb, var(--s1) 35%, transparent)), linear-gradient(0deg, color-mix(in srgb, var(--s1) 70%, transparent), transparent 50%); }
 .st-row { flex: 1; min-height: 0; display: flex; gap: clamp(10px, 3cqw, 24px); }
@@ -1227,8 +1241,10 @@ watch(() => store.play, loadWeek);
 .st-fan-c { position: absolute; top: 0; height: 100cqh; width: auto; aspect-ratio: 3 / 4; object-fit: cover; border-radius: var(--r-md); background: var(--s2);
   left: calc(var(--i) * 37.5cqh); z-index: calc(20 - var(--i)); box-shadow: 0 10px 24px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.07);
   transform: scale(calc(1 - var(--i) * 0.035)); transform-origin: left center; filter: brightness(calc(1 - var(--i) * 0.07));
-  transition: transform 420ms var(--ease-out), left 420ms var(--ease-out); transition-delay: calc(var(--i) * 18ms); }
-.st-tile:focus .st-fan-c { left: calc(var(--i) * 42cqh); }
+  transition: transform 420ms var(--ease-out); transition-delay: calc(var(--i) * 18ms); }
+/* the covers spread on focus by transform, not `left` (0.9.29: moving `left` laid out and repainted the
+   tile on every frame; the same spread, now the compositor's work) */
+.st-tile:focus .st-fan-c { transform: translateX(calc(var(--i) * 4.5cqh)) scale(calc(1 - var(--i) * 0.035)); }
 .st-tile:focus .st-fan-c:first-child { transform: translateY(-2%); }
 /* a row moving to its next game (0.9.28): the art crossfades, the name slides in, the covers glide along */
 .st-row-art.st-xf-enter-active, .st-row-art.st-xf-leave-active { transition: opacity 900ms var(--ease-in-out, ease); }
@@ -1333,7 +1349,7 @@ watch(() => store.play, loadWeek);
 .st-store-con span { white-space: nowrap; overflow: hidden; text-overflow: clip; }
 .st-sc-n { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .st-sc-n :deep(.picon), .st-sc-n :deep(svg), .st-sc-n :deep(img) { flex: none; }
-@container (max-width: 560px) { .st-sc-n > span { display: none; } .st-store-con { grid-template-columns: auto 1fr auto; } } /* no room for names: icons only */
+@container (max-width: 560px) { .st-sc-name { display: none; } .st-store-con { grid-template-columns: auto 1fr auto; } } /* no room for names: icons only (0.9.29: only the name; PIcon is a span too and hid with it) */
 .st-store-con i { height: 5px; border-radius: 3px; background: rgba(255, 255, 255, 0.08); overflow: hidden; }
 .st-store-con b { display: block; height: 100%; border-radius: inherit; background: rgba(255, 255, 255, 0.55); }
 .st-store-con em { font-style: normal; color: var(--text); font-weight: 600; }
