@@ -67,6 +67,28 @@ test('a PS3 game that came as .pkg can only be added to Steam once installed in 
   assert.match(out, /Install it in RPCS3 first/);
 });
 
+// 0.9.16: a Vita game installed in Vita3K before Cartridge (no title ID in its name or files) is
+// found by the title in its param.sfo, in any of Vita3K's folders (here EmuDeck's storage)
+test('a Vita game already in Vita3K starts by its title ID, matched by name', () => {
+  const H = path.join(TMP, 'vita');
+  const app = path.join(H, 'Emulation/storage/Vita3K/ux0/app/PCSB00245/sce_sys');
+  fs.mkdirSync(app, { recursive: true }); fs.mkdirSync(H + '/cfg', { recursive: true }); fs.mkdirSync(H + '/roms/psvita/Persona', { recursive: true });
+  // a minimal param.sfo: one TITLE entry
+  const key = Buffer.from('TITLE\0'), val = Buffer.from('Persona 4 Golden\0');
+  const hdr = Buffer.alloc(0x14 + 0x10); hdr.write('\0PSF', 0, 'latin1'); hdr.writeUInt32LE(0x101, 4);
+  hdr.writeUInt32LE(0x14 + 0x10, 8); hdr.writeUInt32LE(0x14 + 0x10 + 8, 12); hdr.writeUInt32LE(1, 16);
+  hdr.writeUInt16LE(0, 0x14); hdr.writeUInt16LE(0x0204, 0x16); hdr.writeUInt32LE(val.length, 0x18); hdr.writeUInt32LE(val.length, 0x1c); hdr.writeUInt32LE(0, 0x20);
+  fs.writeFileSync(path.join(app, 'param.sfo'), Buffer.concat([hdr, key, Buffer.alloc(8 - key.length), val]));
+  const code = `
+    const sm = require(${JSON.stringify(path.join(ROOT, 'electron/steamManager.js'))})({ USER_DATA: ${JSON.stringify(H + '/cfg')}, log() {}, PLATFORM_MAP: {}, getConfig: () => ({}), saveConfig() {}, broadcast() {},
+      emulationRoots: () => [${JSON.stringify(path.join(H, 'Emulation'))}], getLibrary: () => null, installed: () => ({}), romById: () => null, isGamescope: () => false, artFor: () => ({}), MARKED: 'm', markedPath: () => null, installRecord: () => null });
+    const t = { exe: '/x/Vita3K', args: '-F -r {SERIAL}', kind: 'vitaid' };
+    console.log(JSON.stringify([sm._buildLaunch({ id: 9, name: 'Persona 4 Golden', fs_name: 'Persona' }, ${JSON.stringify(H + '/roms/psvita/Persona')}, t).args, sm._buildLaunch({ id: 10, name: 'Gravity Rush', fs_name: 'GR' }, ${JSON.stringify(H + '/roms/psvita/Persona')}, t).missing || null]));`;
+  const out = JSON.parse(execFileSync(process.execPath, ['-e', code], { env: { ...process.env, HOME: H, XDG_DATA_HOME: '' }, encoding: 'utf8' }).trim().split('\n').pop());
+  assert.strictEqual(out[0], '-F -r PCSB00245');
+  assert.match(out[1], /Install this game/);
+});
+
 // 0.9.3 K (K2): Flatpak Steam starts emulators outside its sandbox through flatpak-spawn --host
 test('Flatpak Steam: shortcuts go through flatpak-spawn --host with folder, env and wrappers', () => {
   const H = path.join(TMP, 'fpsteam');
@@ -116,4 +138,53 @@ test('Shortcut health: emulator moved, and the fix points at the one installed n
   assert.strictEqual(out.length, 1);
   assert.strictEqual(out[0][1][0][0], 'emulator');
   assert.match(out[0][1][0][1] || '', /pcsx2-v2\.2\.0/);
+});
+
+// 0.9.17: frame generation goes first in Launch options, after environment variables, before the one %command%
+test('frame generation: lsfg-vk or MAKO per game, console or all, placed before %command%', () => {
+  const H = path.join(TMP, 'fg');
+  fs.mkdirSync(H + '/cfg', { recursive: true }); fs.mkdirSync(H + '/.local/bin', { recursive: true });
+  fs.writeFileSync(H + '/lsfg', '#!/bin/sh\nexec "$@"\n', { mode: 0o755 });
+  fs.writeFileSync(H + '/.local/bin/mako-run', '#!/bin/sh\nexec "$@"\n', { mode: 0o755 });
+  const conf = { steam: { frameGen: { default: 'lsfg', consoles: { gc: 'mako' }, games: { 7: 'off' } } } };
+  const code = `
+    const sm = require(${JSON.stringify(path.join(ROOT, 'electron/steamManager.js'))})({ USER_DATA: ${JSON.stringify(H + '/cfg')}, log() {}, PLATFORM_MAP: {}, getConfig: () => (${JSON.stringify(conf)}), saveConfig() {}, broadcast() {},
+      emulationRoots: () => [], getLibrary: () => null, installed: () => ({}), romById: () => null, isGamescope: () => false, artFor: () => ({}), MARKED: 'm', markedPath: () => null });
+    const dol = { exe: '/apps/Dolphin.AppImage', pre: ['vblank_mode=0'], command: true, args: '-b -e "{ROM}"' };
+    const pcsx = { exe: '/apps/pcsx2.AppImage', pre: [], command: true, args: '-fullscreen "{ROM}"' };
+    const go = (t, romId, key) => { const w = sm._withFg(t, romId, key); return sm._launchFor(w, [...w.pre, '%command%', 'X'].join(' '), 'X').launch; };
+    console.log(JSON.stringify([go(dol, 1, 'gc'), go(pcsx, 2, 'ps2'), go(pcsx, 7, 'ps2')]));`;
+  const out = JSON.parse(execFileSync(process.execPath, ['-e', code], { env: { ...process.env, HOME: H }, encoding: 'utf8' }).trim().split('\n').pop());
+  assert.deepStrictEqual(out, [`vblank_mode=0 "${H}/.local/bin/mako-run" %command% X`, `"${H}/lsfg" %command% X`, 'X']);
+});
+
+test('shadPS4 version per game: the Qt launcher gets -e <version> instead of -d', () => {
+  const H = path.join(TMP, 'shadver');
+  const ver = path.join(H, '.local/share/shadPS4QtLauncher/versions/v0.17/Shadps4-sdl.AppImage');
+  fs.mkdirSync(path.dirname(ver), { recursive: true }); fs.writeFileSync(ver, ''); fs.mkdirSync(H + '/cfg', { recursive: true });
+  fs.writeFileSync(path.join(H, '.local/share/shadPS4QtLauncher/versions.json'), JSON.stringify([{ name: 'v0.17.0', path: ver, codename: 'x', type: 0 }, { name: 'gone', path: '/nope' }]));
+  const conf = { steam: { shadVersions: { 5: ver } } };
+  const code = `
+    const sm = require(${JSON.stringify(path.join(ROOT, 'electron/steamManager.js'))})({ USER_DATA: ${JSON.stringify(H + '/cfg')}, log() {}, PLATFORM_MAP: {}, getConfig: () => (${JSON.stringify(conf)}), saveConfig() {}, broadcast() {},
+      emulationRoots: () => [], getLibrary: () => null, installed: () => ({}), romById: () => null, isGamescope: () => false, artFor: () => ({}), MARKED: 'm', markedPath: () => null });
+    const t = { exe: '/apps/shadPS4QtLauncher-qt.AppImage', pre: [], command: true, args: '-d -g "{ROM}"' };
+    console.log(JSON.stringify([sm.shadVersions().map((v) => v.name), sm._withShadVersion(t, 5, 'ps4').args, sm._withShadVersion(t, 6, 'ps4').args]));`;
+  const out = JSON.parse(execFileSync(process.execPath, ['-e', code], { env: { ...process.env, HOME: H, XDG_DATA_HOME: '' }, encoding: 'utf8' }).trim().split('\n').pop());
+  assert.deepStrictEqual(out, [['v0.17.0'], `-e "${ver}" -g "{ROM}"`, '-d -g "{ROM}"']);
+});
+
+test('multi-disc games get a playlist in their folder, in disc order', () => {
+  const H = path.join(TMP, 'md');
+  const g = path.join(H, 'roms/psx/Final Fantasy VII');
+  fs.mkdirSync(g, { recursive: true }); fs.mkdirSync(H + '/cfg', { recursive: true });
+  for (const n of ['Final Fantasy VII (Disc 2).cue', 'Final Fantasy VII (Disc 2).bin', 'Final Fantasy VII (Disc 1).cue', 'Final Fantasy VII (Disc 1).bin', 'Final Fantasy VII (Disc 3).cue']) fs.writeFileSync(path.join(g, n), '');
+  const one = path.join(H, 'roms/psx/Single'); fs.mkdirSync(one, { recursive: true }); fs.writeFileSync(path.join(one, 'Single.cue'), '');
+  const code = `
+    const sm = require(${JSON.stringify(path.join(ROOT, 'electron/steamManager.js'))})({ USER_DATA: ${JSON.stringify(H + '/cfg')}, log() {}, PLATFORM_MAP: {}, getConfig: () => ({}), saveConfig() {}, broadcast() {},
+      emulationRoots: () => [], getLibrary: () => null, installed: () => ({}), romById: () => null, isGamescope: () => false, artFor: () => ({}), MARKED: 'm', markedPath: () => null });
+    console.log(JSON.stringify([sm._multiDisc(${JSON.stringify(g)}, 'psx'), sm._multiDisc(${JSON.stringify(one)}, 'psx')]));`;
+  const out = JSON.parse(execFileSync(process.execPath, ['-e', code], { env: { ...process.env, HOME: H }, encoding: 'utf8' }).trim().split('\n').pop());
+  assert.strictEqual(out[0], path.join(g, 'Final Fantasy VII.m3u'));
+  assert.strictEqual(fs.readFileSync(out[0], 'utf8'), 'Final Fantasy VII (Disc 1).cue\nFinal Fantasy VII (Disc 2).cue\nFinal Fantasy VII (Disc 3).cue\n');
+  assert.strictEqual(out[1], null);
 });

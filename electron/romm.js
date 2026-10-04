@@ -26,15 +26,18 @@ function userOf(u) {
 function developerOf(r) {
   r = obj(r);
   for (const b of [r.metadatum, r.igdb_metadata, r.ss_metadata, r.launchbox_metadata, r.moby_metadata, r.gamelist_metadata]) {
-    const d = arr(obj(b).developers).find((x) => typeof x === 'string' && x.trim());
-    if (d) return d.trim();
+    // co-developed games list both studios (Tokyo Jungle: Crispy's! and Japan Studio), at most two
+    const d = [...new Set(arr(obj(b).developers).filter((x) => typeof x === 'string' && x.trim()).map((x) => x.trim()))].slice(0, 2);
+    if (d.length) return d.join(', ');
   }
   return str(arr(obj(r.metadatum).companies)[0] || '');
 }
-// File names kept per game: enough for single files and multi-disc sets lying in a console folder. An
-// extracted game (PS4, PS5, Switch folders) has thousands, which made the library tens of MB and the
-// Android UI stall for a minute on every change; those games are found by folder name anyway.
-const FILES_KEPT = 40;
+// Android (this fork, 0.9.16): file names kept per game: enough for single files and multi-disc sets lying
+// in a console folder. An extracted game (PS4, PS5, Switch folders) has thousands, which made the library tens
+// of MB and the Android UI stall for a minute on every change; those games are found by folder name anyway.
+// The desktop keeps every file, as upstream (main.js calls keepFiles(40) on Android).
+let FILES_KEPT = Infinity;
+const keepFiles = (n) => { FILES_KEPT = n; };
 function slimRom(r) {
   r = obj(r);
   const md = obj(r.metadatum), ig = obj(r.igdb_metadata), hl = obj(r.hltb_metadata);
@@ -71,4 +74,4 @@ function rommTooOld(v) {
   return a < ROMM_MIN[0] || (a === ROMM_MIN[0] && b < ROMM_MIN[1]);
 }
 
-module.exports = { developerOf, slimRom, userOf, logoPath, hltbHours, rommTooOld, ROMM_MIN };
+module.exports = { keepFiles, developerOf, slimRom, userOf, logoPath, hltbHours, rommTooOld, ROMM_MIN };

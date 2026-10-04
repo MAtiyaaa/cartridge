@@ -19,10 +19,10 @@
 <script setup>
 import { onMounted, onBeforeUnmount, ref, nextTick } from 'vue';
 import { pushLayer } from '../nav.js';
-import { closeModal, call } from '../store.js';
+import { store, closeModal, call } from '../store.js';
 import Icon from './Icon.vue';
 
-// Plain text prompt. Typing comes from a real keyboard or the Steam keyboard (Steam + X).
+// Plain text prompt. Typing comes from a real keyboard or the Steam keyboard (opened for you in Game Mode since 0.9.17).
 const props = defineProps({
   title: { type: String, default: 'Enter text' },
   value: { type: String, default: '' },
@@ -47,6 +47,8 @@ onMounted(async () => {
   });
   await nextTick();
   inp.value?.focus();
+  // 0.9.17: in Game Mode with Steam's keyboard picked, Steam's keyboard comes up by itself (no Steam + X)
+  if (store.info?.gamescope) call('steam:keyboard').catch(() => {});
   inp.value?.select();
 });
 onBeforeUnmount(() => layer?.pop?.());

@@ -10,14 +10,17 @@
           <div v-else-if="mode !== 'all'" class="hicon"><Icon :name="headIcon" :size="30" /></div>
           <div style="min-width: 0">
             <div v-if="mode !== 'platform'" class="eyebrow">{{ eyebrow }}</div>
+            <!-- Android: the console's wordmark and a series' logo lead the header; the desktop keeps the plain title -->
+            <template v-if="IS_ANDROID">
             <div v-if="mode === 'platform'" class="eyebrow">{{ title }}</div>
             <GameLogo v-if="mode === 'collection' && collection?.series && store.config.ui.logos !== false" class="head-logo" :logo="logoOf(romById(collection.rom_ids[0]))" :name="title" :area="9000" :max-w="360" :max-h="56" />
             <h1 v-else :class="{ 'sys-mark': mode === 'platform' }"><ConsoleMark v-if="mode === 'platform'" :slug="platform.slug" :fs="platform.fs_slug" :label="title" /><template v-else>{{ title }}</template></h1>
+            </template>
+            <h1 v-else>{{ title }}</h1>
             <div class="muted row" style="gap: 8px; font-size: 13px">
               <span>{{ source.length }} games</span><span>·</span><span style="color: var(--green-l)">{{ installedCount }} on device</span>
-              <template v-if="mode === 'platform'"><span>·</span>
-                <span class="row" style="gap: 6px"><span class="dot" :class="platform.target?.exists ? 'ok' : ''" /><span class="mono" style="max-width: 340px">{{ platform.target?.path || 'No folder set' }}</span></span>
-              </template>
+              <!-- the folder path is no longer shown (owner, 0.9.21); only a missing folder is worth saying -->
+              <template v-if="mode === 'platform' && !platform.target?.exists"><span>·</span><span>No folder set</span></template>
             </div>
           </div>
           <Btn v-if="mode !== 'all' && !collection?.ordered" b="RB" />
@@ -105,6 +108,8 @@ import { addGames } from '../steam.js';
 import { IS_ANDROID } from '../platform.js';
 // Android: Steam only when Settings → Android → Steam & PC game apps is on
 const steamOn = computed(() => !IS_ANDROID || store.config?.android?.steamApps === true);
+// Android: Install to for many games at once (src/android/drives.js); the desktop passes nothing
+const installTo = async (count) => (import.meta.env.MODE === 'android' ? (await import('../android/drives.js')).pickDrive({ count }) : undefined);
 import { useView } from '../useView.js';
 import { ensureFocus } from '../nav.js';
 import Icon from '../components/Icon.vue';
@@ -313,7 +318,9 @@ async function bulk(what) {
     if (!todo.length) { toast('Those are all on this device already', 'info', 2200); return; }
     const size = todo.reduce((s, r) => s + (r.fs_size_bytes || 0), 0);
     if (!(await confirm(`Download ${todo.length} game${todo.length === 1 ? '' : 's'}?`, `${bytes(size)} total`, 'Download'))) return;
-    for (const r of todo) await download(r, { checkSpace: todo.length === 1 });
+    const root = await installTo(todo.length); // Android: which drive, asked once
+    if (root === null) return;
+    for (const r of todo) await download(r, { checkSpace: todo.length === 1, root });
   }
   if (what === 'collection' && !(await addToCollection(roms.map((r) => r.id)))) return;
   if (what === 'uncollect') {
@@ -369,7 +376,7 @@ async function getBios() {
   try {
     const r = await call('bios:download', { platformId: platform.value.id, slug: platform.value.slug });
     const n = r.files.filter((f) => !f.skipped).length;
-    toast(`BIOS · ${n} downloaded, ${r.files.length - n} already there`, 'ok', 3400, 'mdiChip');
+    toast(r.installed ? `Firmware installed in ${r.emu === 'rpcs3' ? 'RPCS3' : 'Vita3K'}` : `BIOS · ${n} downloaded, ${r.files.length - n} already there`, 'ok', 3400, 'mdiChip');
   } catch (e) { toast(e.message, 'error'); }
 }
 async function downloadAll() {
@@ -377,7 +384,9 @@ async function downloadAll() {
   const size = todo.reduce((s, r) => s + (r.fs_size_bytes || 0), 0);
   const space = mode.value === 'platform' ? await call('fs:space', platform.value.target?.path) : null;
   if (!(await confirm(`Download ${todo.length} games?`, `${bytes(size)} total${space ? `\n${bytes(space.free)} free on that drive` : ''}`, 'Download all'))) return;
-  for (const r of todo) await download(r, { checkSpace: false }); // the confirm above already showed the space
+  const root = await installTo(todo.length); // Android: which drive, asked once
+  if (root === null) return;
+  for (const r of todo) await download(r, { checkSpace: false, root }); // the confirm above already showed the space
 }
 
 onMounted(async () => {

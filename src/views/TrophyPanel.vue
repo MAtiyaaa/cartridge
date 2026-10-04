@@ -61,9 +61,9 @@
       </div>
       <div class="tp-games">
         <button v-for="g in games" :key="g.key" class="tp-game glass" data-focus :data-key="'tg-' + g.key" @click="open(g.key)" @focus="focusGame(g)">
-          <GameIcon :title="g.title" :rom-id="g.romId" :fallback="g.icon || (g.cover ? img(g.cover) : '')" :size="76" :grade="g.kind === 'trophy' ? 'G' : null" :class="{ 'tp-hid': g.hidden }" />
+          <GameIcon :title="g.code ? '' : g.title" :rom-id="g.romId" :fallback="g.icon || (g.cover ? img(g.cover) : '')" :size="76" :grade="g.kind === 'trophy' ? 'G' : null" :class="{ 'tp-hid': g.hidden }" />
           <div class="tp-g-body">
-            <GameLogo class="tp-g-logo" :logo="store.config.ui.logos !== false ? logoFor(g) : null" :name="g.title" cls="tp-g-title" :area="4200" :max-w="200" :max-h="38" />
+            <GameLogo class="tp-g-logo" :logo="store.config.ui.logos !== false && !g.code ? logoFor(g) : null" :name="g.title" cls="tp-g-title" :area="4200" :max-w="200" :max-h="38" />
             <div class="tp-g-sub"><span class="plat"><ConsoleMark :slug="SLUG[g.src]" :label="g.short" /></span><template v-if="g.last">{{ when(g.last) }}</template><template v-if="g.romId"> · <span class="inlib">In your library</span></template><template v-if="g.remoteOnly"> · <span class="dev">on {{ g.devices[0] || 'another device' }}</span></template></div>
             <div class="bar tp-bar"><i :style="{ width: pct(g) + '%' }" /></div>
             <div class="tp-g-prog">

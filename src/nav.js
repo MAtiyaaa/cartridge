@@ -5,6 +5,7 @@ import { reactive } from 'vue';
 import { sfx } from './sfx.js';
 
 export const input = reactive({ mode: 'pad', padName: '', kb: false }); // mode 'pad' | 'mouse'; kb: last used a keyboard (for button icons)
+const ANDROID = import.meta.env.MODE === 'android'; // Android-only behaviour below is dropped from the desktop build
 document.body.classList.add('pad-mode'); // the starting mode needs its class too (row snapping relies on it)
 // While a direction is held down, focus jumps several times a second. Smooth scrolling can't keep
 // up with that (each new animation restarts the last), so scroll instantly during a hold.
@@ -16,6 +17,12 @@ export function markRepeat() { lastRepeat = performance.now(); }
 // A short, snappy scroll (about 120 ms, easing out) instead of the browser's slow smooth scroll.
 // Presses in quick succession add up; while a direction is held it jumps instantly.
 const anims = new WeakMap();
+// A pressed with a controller shows the same squeeze a held mouse or finger gets (:active), 0.9.17
+function pressFx(el) {
+  if (!el?.classList) return;
+  el.classList.add('pressed');
+  setTimeout(() => el.classList.remove('pressed'), 110);
+}
 export function glideBy(sc, dx = 0, dy = 0) {
   if (!sc || (!dx && !dy)) return;
   const a = anims.get(sc);
@@ -34,10 +41,11 @@ export function glideBy(sc, dx = 0, dy = 0) {
   st.raf = requestAnimationFrame(step);
 }
 export const glideTo = (sc, top) => sc && glideBy(sc, 0, top - (anims.get(sc)?.ty ?? sc.scrollTop));
-// Scroll so the element sits where it should: the distance comes from where it is drawn right now, so it is
-// measured from the live scroll position. (glideBy adds to the running animation's end point, which counts
-// the distance still to go twice when presses come quickly and overshoots the row.)
+// Android: scroll so the element sits where it should, measured from the live scroll position. (glideBy adds
+// to the running animation's end point, which counts the distance still to go twice when presses come
+// quickly and overshoots the row.)
 function glideFit(sc, dx, dy) {
+  if (!ANDROID) return glideBy(sc, dx, dy);
   if (!sc || (!dx && !dy)) return;
   const a = anims.get(sc);
   if (a) { cancelAnimationFrame(a.raf); anims.delete(sc); }
@@ -66,7 +74,7 @@ function focusables(scope, withRects = false) {
   const out = [];
   for (const el of scope.querySelectorAll('[data-focus]')) {
     if (el.disabled) continue;
-    if (el.closest('[class*="-leave-active"]')) continue; // on its way out (view transitions): focus would be lost
+    if (ANDROID && el.closest('[class*="-leave-active"]')) continue; // on its way out (view transitions): focus would be lost
     const r = el.getBoundingClientRect();
     if (r.width > 0 && r.height > 0) out.push(withRects ? [el, r] : el);
   }
@@ -89,11 +97,11 @@ function inScope(el, scope) { return el && scope.contains(el) && el.hasAttribute
 // Moving up and down keeps to the column you started in (a short item in between doesn't pull you
 // sideways); moving left or right sets a new column.
 let colX = null, colFrom = null;
-// Where focus last was. If a list re-renders under it (new downloads, play times, a sync) the element
+// Android: where focus last was. If a list re-renders under it (new downloads, play times, a sync) the element
 // can vanish; the next press then carries on from the same item, or the nearest one, instead of jumping
 // back to the first item on the page.
 let lastSpot = null;
-document.addEventListener('focusin', (e) => {
+if (ANDROID) document.addEventListener('focusin', (e) => {
   const el = e.target;
   if (!el?.hasAttribute?.('data-focus')) return;
   const r = el.getBoundingClientRect();
@@ -118,8 +126,8 @@ function move(dir) {
   const layer = topLayer();
   const scope = layer?.el || document.body;
   const cur = document.activeElement;
-  // the focused button went away (it swapped for another, a list reloaded): back to the same item or the
-  // nearest one; failing that, stay in the part of the screen you were in (Settings' list: A4)
+  // the focused button went away (it swapped for another, a list reloaded): stay in the part of the
+  // screen you were in instead of jumping to the first item on the page (Settings' list: A4)
   if (!inScope(cur, scope)) { if (!recoverFocus(scope)) focusFirst(lastZone && document.contains(lastZone) && scope.contains(lastZone) ? lastZone : scope); return; }
   const c = cur.getBoundingClientRect();
   const cx = c.left + c.width / 2, cy = c.top + c.height / 2;
@@ -135,25 +143,22 @@ function move(dir) {
   // above can be scrolled behind a toolbar, which otherwise looked nearer (Library: A3).
   const sc = vertical ? cur.closest('[data-scroll]') : null;
   const inList = sc && zone?.contains(sc) && sc !== zone && focusables(sc, true).some(([el, r]) => el !== cur && (dir === 'up' ? r.bottom <= c.top + 4 : r.top >= c.bottom - 4));
-  const all = focusables(scope, true).filter(([el]) => el !== cur && (!zone || zone.contains(el)) && (!inList || sc.contains(el)));
-  // Left and right stay on the row you are in. Only when nothing else shares it (a lone button) may they
-  // reach for a neighbour on another row, so the end of a shelf doesn't jump to the shelf above or below.
-  const sameRow = (r) => Math.min(c.bottom, r.bottom) - Math.max(c.top, r.top) > Math.min(c.height, r.height) * 0.25;
-  const rowLock = !vertical && all.some(([, r]) => sameRow(r));
-  for (const [el, r] of all) {
-    if (rowLock && !sameRow(r)) continue;
-    if (vertical && sameRow(r)) continue; // up/down never move along the row (the lifted focused card sat a few px higher, so down on the last row went right)
-    if ((dir === 'left' || dir === 'right') && el.hasAttribute('data-nofirst') && !cur.hasAttribute('data-nofirst')) continue; // the end of a row never jumps up to the search box
-    const x = r.left + r.width / 2, y = r.top + r.height / 2;
-    let primary, secondary;
-    if (dir === 'right') { if (r.left < c.right - 4 && x <= cx + 1) continue; primary = x - cx; secondary = overlapGap(c.top, c.bottom, r.top, r.bottom); }
-    else if (dir === 'left') { if (r.right > c.left + 4 && x >= cx - 1) continue; primary = cx - x; secondary = overlapGap(c.top, c.bottom, r.top, r.bottom); }
-    else if (dir === 'down') { if (r.top < c.bottom - 4 && y <= cy + 1) continue; primary = y - cy; secondary = overlapGap(c.left, c.right, r.left, r.right); }
-    else { if (r.bottom > c.top + 4 && y >= cy - 1) continue; primary = cy - y; secondary = overlapGap(c.left, c.right, r.left, r.right); }
-    if (primary <= 0) continue;
-    let score = primary + secondary * 3 + (secondary > 0 ? 5000 : 0); // prefer aligned targets
-    if (vertical) score += Math.abs(x - wantX) * 0.35; // then the one nearest your column
-    if (score < bestScore) { bestScore = score; best = el; }
+  const cands = focusables(scope, true).filter(([el]) => el !== cur && !(zone && !zone.contains(el)) && !(inList && !sc.contains(el)));
+  if (vertical) best = pickRow(dir, cur, c, cands, wantX);
+  else {
+    // left and right stay in the row you're in (owner, 0.9.16): at its end nothing happens, never a
+    // jump to the row above or below
+    for (const [el, r] of cands) {
+      if (el.hasAttribute('data-nofirst') && !cur.hasAttribute('data-nofirst')) continue; // the end of a row never jumps up to the search box
+      if (overlapGap(c.top, c.bottom, r.top, r.bottom) > 0) continue;
+      const x = r.left + r.width / 2;
+      let primary;
+      if (dir === 'right') { if (r.left < c.right - 4 && x <= cx + 1) continue; primary = x - cx; }
+      else { if (r.right > c.left + 4 && x >= cx - 1) continue; primary = cx - x; }
+      if (primary <= 0) continue;
+      const score = primary + Math.abs((r.top + r.height / 2) - cy) * 0.5;
+      if (score < bestScore) { bestScore = score; best = el; }
+    }
   }
   if (best) {
     sfx.move();
@@ -166,6 +171,35 @@ function move(dir) {
     const sc = cur.closest('[data-scroll]');
     if (sc) glideBy(sc, 0, dir === 'down' ? 200 : -200);
   }
+}
+
+// Up and down (0.9.16, owner): always the very next row, never one further down because it happened
+// to line up better. Landing in a game row (a sideways shelf) goes to its first game; in another
+// row, to its first item (Ready to play, not More); within one grid of cards the column is kept.
+function pickRow(dir, cur, c, cands, wantX) {
+  const below = dir === 'down';
+  const pool = cands.filter(([, r]) => (below ? r.top >= c.bottom - 8 : r.bottom <= c.top + 8));
+  if (!pool.length) return null;
+  const edge = below ? Math.min(...pool.map(([, r]) => r.top)) : Math.max(...pool.map(([, r]) => r.bottom));
+  const ref = pool.find(([, r]) => (below ? r.top : r.bottom) === edge)[1];
+  const tol = Math.max(8, ref.height * 0.5);
+  const band = pool.filter(([, r]) => (below ? r.top < edge + tol : r.bottom > edge - tol));
+  // a sideways game row: its first game, and the row scrolled back to the start
+  const row = band[0][0].closest('[data-hscroll]');
+  if (row && band.every(([el]) => row.contains(el)) && row !== cur.closest('[data-hscroll]')) {
+    const first = focusables(row).find((el) => !el.disabled);
+    if (first) { if (row.scrollLeft > 0) glideBy(row, -row.scrollLeft, 0); return first; }
+  }
+  // the same grid of cards as where you are: straight up or down
+  const grid = cur.parentElement;
+  const inGrid = band.filter(([el]) => el.parentElement === grid);
+  if (inGrid.length && focusables(grid).length > inGrid.length) {
+    let best = null, d = Infinity;
+    for (const [el, r] of inGrid) { const dx = Math.abs(r.left + r.width / 2 - wantX); if (dx < d) { d = dx; best = el; } }
+    return best;
+  }
+  // anything else: the row's first item
+  return band.reduce((m, x) => (x[1].left < m[1].left - 2 ? x : m))[0];
 }
 
 function overlapGap(a1, a2, b1, b2) {
@@ -189,7 +223,8 @@ function scrollIntoViewSmart(el) {
   const s = sc.getBoundingClientRect();
   // nothing focusable above this one: show the top of the page too (a game's banner, a page header)
   const first = [...sc.querySelectorAll('[data-focus]')].find((x) => !x.disabled && x.offsetParent !== null);
-  if (first === el) { glideFit(sc, 0, -sc.scrollTop); return; }
+  // the first item, or anything in a page's header row ([data-top]): the whole header shows (0.9.16)
+  if (first === el || el.closest('[data-top]')) { if (ANDROID) glideFit(sc, 0, -sc.scrollTop); else glideTo(sc, 0); return; }
   const vpad = Math.min(120, s.height * 0.2);
   if (r.top < s.top + vpad) glideFit(sc, 0, r.top - s.top - vpad);
   else if (r.bottom > s.bottom - vpad) glideFit(sc, 0, r.bottom - s.bottom + vpad);
@@ -202,19 +237,22 @@ export function dispatch(action) {
   const h = layer?.handlers?.[action];
   if (action === 'accept') { sfx.accept(); rumble(true); }
   else if (action === 'back') sfx.back();
-  else if (['lb', 'rb'].includes(action)) sfx.tab();
+  else if (['lb', 'rb'].includes(action)) { sfx.tab(); rumble('tab'); }
+  else if (['lt', 'rt'].includes(action)) rumble('tab');
   if (h && h(document.activeElement) !== false) return;
+  // A held on something that has a held meaning (data-hold, 0.9.19: Start's tiles): it tells itself
+  if (action === 'hold') { document.activeElement?.dispatchEvent(new CustomEvent('cart-hold', { bubbles: true })); return; }
   if (['up', 'down', 'left', 'right'].includes(action)) return move(action);
   if (action === 'accept') {
     const el = document.activeElement;
-    if (layer && inScope(el, layer.el)) el.click();
+    if (layer && inScope(el, layer.el)) { pressFx(el); el.click(); }
     else focusFirst();
   }
 }
 
-// ---------------- tapping a button hint presses that button
-// Every hint ("Y Filter", "≡ Menu", "B Back") is drawn by Btn with data-b. A tap or click on one runs
-// the same action as the controller button, without switching to pad mode (no focus ring).
+// ---------------- Android: tapping a button hint presses that button
+// Every hint ("Y Filter", "≡ Menu", "B Back") is drawn by Btn with data-b. A tap on one runs the same
+// action as the controller button, without switching to pad mode (no focus ring).
 const HINT_ACTIONS = { A: 'accept', B: 'back', X: 'x', Y: 'y', LB: 'lb', RB: 'rb', LT: 'lt', RT: 'rt', START: 'start', SELECT: 'select' };
 export function tap(action) {
   lastInput = performance.now();
@@ -226,7 +264,7 @@ export function tap(action) {
   if (h && h(document.activeElement) !== false) return;
   if (action === 'accept') { const el = document.activeElement; if (layer && el?.hasAttribute?.('data-focus') && inScope(el, layer.el)) el.click(); }
 }
-document.addEventListener('click', (e) => {
+if (ANDROID) document.addEventListener('click', (e) => {
   const t = e.target instanceof Element ? e.target : null;
   if (!t) return;
   const glyph = t.closest('.pb[data-b]');
@@ -246,6 +284,11 @@ const KEYMAP = {
   q: 'lb', e: 'rb', x: 'x', y: 'y', '/': 'y', Tab: 'select', m: 'start',
   PageUp: 'lt', PageDown: 'rt',
 };
+// A on something with a held meaning ([data-hold]): a press opens it on release, a hold of 450 ms
+// does the held thing instead (0.9.19, owner: hold a Start tile to arrange the menu)
+const HOLD_MS = 450;
+const holdable = () => { const el = document.activeElement, l = topLayer(); return !!(el?.hasAttribute?.('data-hold') && l && inScope(el, l.el)); };
+let keyHold = null;
 window.addEventListener('keydown', (ev) => {
   const t = ev.target;
   const typing = t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA') && !t.readOnly;
@@ -253,9 +296,19 @@ window.addEventListener('keydown', (ev) => {
   const a = KEYMAP[ev.key];
   if (!a) return;
   ev.preventDefault();
+  if (a === 'accept' && (keyHold || (!ev.repeat && holdable()))) {
+    if (!keyHold) keyHold = { fired: false, t: setTimeout(() => { keyHold.fired = true; dispatch('hold'); }, HOLD_MS) };
+    return;
+  }
   if (ev.repeat) lastRepeat = performance.now();
   input.kb = true;
   dispatch(a);
+});
+window.addEventListener('keyup', (ev) => {
+  if (KEYMAP[ev.key] !== 'accept' || !keyHold) return;
+  clearTimeout(keyHold.t);
+  const fired = keyHold.fired; keyHold = null;
+  if (!fired) dispatch('accept');
 });
 // ---------------- pointer: touch vs mouse
 // 'auto' follows whatever was used last; 'touch' never shows a cursor; 'mouse' always does.
@@ -292,6 +345,12 @@ const DELAY = 220, RATE = 70, FAST = 40;
 
 function press(key, isDown, now) {
   const s = state[key] || (state[key] = { down: false, next: 0, n: 0 });
+  if (key === 'accept' && (s.hold || (isDown && !s.down && holdable()))) {
+    if (isDown && !s.down) { s.down = true; s.hold = now; s.held = false; }
+    else if (isDown && !s.held && now - s.hold >= HOLD_MS) { s.held = true; dispatch('hold'); }
+    else if (!isDown) { s.down = false; if (!s.held) dispatch('accept'); s.hold = 0; }
+    return;
+  }
   if (isDown && !s.down) { s.down = true; s.n = 0; s.next = now + DELAY; dispatch(key); }
   else if (isDown && s.down && REPEATABLE.has(key) && now >= s.next) { s.n++; s.next = now + (s.n > 6 ? FAST : RATE); lastRepeat = now; dispatch(key); }
   else if (!isDown) s.down = false;
@@ -299,10 +358,15 @@ function press(key, isDown, now) {
 // Triggers go by how far they are pulled, never the "pressed" flag: on Linux a trigger can read as
 // half pulled (0.5, "pressed") until it first moves, which made the first LT/RT press do nothing.
 // A trigger only counts once it has been seen at rest.
+// 0.9.21 (owner: LT/RT still did nothing at launch until another button was pressed): Chromium hides a
+// pad until its first press, so a trigger pulled first is seen pulled in the very first reading and was
+// never armed. A pad's first reading (within 400 ms of it appearing) counts as having been at rest.
 const armed = {}; // pad index + trigger -> seen at rest
+const firstSeen = {}; // pad index + id -> when it first showed up
 function trigger(gp, which, v) {
-  const k = gp.index + which;
-  if (v < 0.6) armed[k] = true;
+  const k = gp.index + which, p = gp.index + gp.id;
+  if (!firstSeen[p]) firstSeen[p] = performance.now();
+  if (v < 0.6 || performance.now() - firstSeen[p] < 400) armed[k] = true;
   return !!armed[k] && v > 0.6;
 }
 export const padLive = { pads: [] }; // for Settings → About → Controller test
@@ -312,14 +376,17 @@ const stickHeld = {}; // pad index -> direction -> held (stick hysteresis)
 const RUMBLE = { low: 0.12, medium: 0.25, high: 0.45 };
 let rumbleLevel = 'none', lastPad = -1;
 export function setRumble(v) { rumbleLevel = RUMBLE[v] ? v : 'none'; }
+// kind: false (moving), true (A), 'tab' (0.9.21, owner: haptics when switching between menus in the bars:
+// LB/RB and LT/RT): a short, firmer click on both motors, so a page change feels different from a step
 export function rumble(strong = false) {
   const m = RUMBLE[rumbleLevel];
   if (!m) return;
   // Android's WebView can't rumble a pad: the device's own motor (a handheld's) gives the buzz, longer for higher levels
-  if (import.meta.env.MODE === 'android') { try { navigator.vibrate?.(Math.round((strong ? 30 : 12) + m * 20)); } catch {} return; }
+  if (ANDROID) { try { navigator.vibrate?.(Math.round((strong ? 30 : 12) + m * 20)); } catch {} return; }
   if (lastPad < 0) return;
   const gp = navigator.getGamepads?.()[lastPad];
-  try { gp?.vibrationActuator?.playEffect('dual-rumble', { duration: strong ? 32 : 18, weakMagnitude: m, strongMagnitude: strong ? m * 0.6 : 0 })?.catch?.(() => {}); } catch {}
+  const fx = strong === 'tab' ? { duration: 26, weakMagnitude: Math.min(1, m * 1.2), strongMagnitude: m * 0.9 } : { duration: strong ? 32 : 18, weakMagnitude: m, strongMagnitude: strong ? m * 0.6 : 0 };
+  try { gp?.vibrationActuator?.playEffect('dual-rumble', fx)?.catch?.(() => {}); } catch {}
 }
 // the part of the screen focus was last in (a [data-zone]), for when the focused element goes away
 let lastZone = null;
@@ -406,7 +473,6 @@ window.addEventListener('pointerdown', (e) => {
   // real touches and pens: the browser scrolls natively
   if (e.pointerType === 'touch' || e.pointerType === 'pen') { drag = null; return; }
   if (e.button !== 0 || e.target.closest('input, textarea, [data-nodrag]')) { drag = null; return; }
-  if (e.pointerType === 'touch' && window.cart?.nativeTouch) { drag = null; return; } // Android: the WebView scrolls natively
   drag = { id: e.pointerId, x: e.clientX, y: e.clientY, lx: e.clientX, ly: e.clientY, axis: null, sc: null, target: e.target, hist: [] };
 }, { capture: true, passive: true });
 window.addEventListener('pointermove', (e) => {

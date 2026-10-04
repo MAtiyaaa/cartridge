@@ -1,8 +1,8 @@
 <template>
   <div class="set-view" ref="el">
-    <nav class="rail" data-scroll>
+    <nav class="rail" :data-scroll="IS_ANDROID ? '' : undefined">
       <div class="eyebrow" style="padding: 0 14px 10px">Settings</div>
-      <button v-for="s in sections" :key="s.id" class="rail-item" :class="{ on: sec === s.id }" data-focus :data-key="'sec-' + s.id" :data-autofocus="sec === s.id ? '' : undefined" @focus="sec = s.id" @click="pick(s.id)">
+      <button v-for="s in sections" :key="s.id" class="rail-item" :class="{ on: sec === s.id }" data-focus :data-key="'sec-' + s.id" :data-autofocus="sec === s.id ? '' : undefined" @focus="sec = s.id" @click="IS_ANDROID ? pick(s.id) : enter()">
         <Icon :name="s.icon" :size="20" />{{ s.label }}
       </button>
     </nav>
@@ -13,6 +13,12 @@
           <!-- one RomM tab (0.9.3 G1): connection, library and sync, upload -->
           <template v-if="sec === 'romm'">
             <h1>RomM</h1>
+            <!-- 0.9.17: using Cartridge without RomM: one press to connect -->
+            <div v-if="store.config.localOnly" class="card-s glass local-card">
+              <Icon name="mdiFolderPlayOutline" :size="28" />
+              <div class="l-mid"><b>Using Cartridge without RomM</b><span class="muted small">Only games already in your console folders show up, with no covers, details, collections or syncing. Connect a RomM server for all of it.</span></div>
+              <button class="btn primary" data-focus @click="go('setup')"><Icon name="mdiServerNetwork" />Connect to RomM</button>
+            </div>
             <div class="subh"><Icon name="mdiServerNetwork" :size="20" />Connection</div>
             <div class="card-s glass">
               <div class="kv"><span>Local</span><span class="mono">{{ srv.localUrl || '—' }}</span></div>
@@ -72,12 +78,23 @@
               <div style="min-width: 0"><div class="lbl2">BIOS folder</div><div class="mono">{{ store.config.biosPath || 'Not set' }}</div></div>
               <button class="btn small" data-focus @click="browseBios"><Icon name="mdiFolderOpen" :size="18" />Browse</button>
             </div>
+            <!-- Android: SD cards and USB drives, each with its own ROMs folder (Install to) -->
+            <AndroidDrives v-if="IS_ANDROID" />
             <StorageManager :key="storageKey" />
             <LibraryCheck />
           </template>
 
+          <!-- Sync: Syncthing, view only (its own tab in 0.9.21, owner) -->
+          <template v-else-if="sec === 'syncthing'">
+            <h1>Sync</h1>
+            <SyncCard />
+          </template>
+
           <template v-else-if="sec === 'emu'">
             <h1>Emulators</h1>
+            <!-- pages like Look & Feel (0.9.16, owner): LB/RB move between them -->
+            <div class="lookpages"><Btn b="LB" /><div class="seg"><button v-for="p in EMU_PAGES" :key="p.v" data-focus :data-key="'emup-' + p.v" :class="{ on: emuPage === p.v }" @click="setEmuPage(p.v)">{{ p.l }}<span v-if="p.v === 'addons' && ps3UpCount" class="count-dot">{{ ps3UpCount }}</span></button></div><Btn b="RB" /></div>
+            <template v-if="emuPage === 'overview'">
             <!-- Android: its own Issues (emulators, BIOS, packages to install) and each console's emulator -->
             <AndroidEmulators v-if="IS_ANDROID" />
             <template v-else>
@@ -96,19 +113,53 @@
               <button class="lrow" data-focus @click="go('emu-setup')"><Icon name="mdiRadar" :size="24" /><div class="l-mid"><b>Emulator setup</b><span class="l-sub">Find emulators wherever they are, pick one per console, check BIOS and access</span></div><Icon name="mdiChevronRight" :size="22" /></button>
               <button class="lrow" data-focus @click="go('steam-health')"><Icon name="mdiStethoscope" :size="24" /><div class="l-mid"><b>Shortcut health</b><span class="l-sub">Steam shortcuts that would fail, and fixes for them</span></div><Icon name="mdiChevronRight" :size="22" /></button>
             </div>
-            <template v-if="texEmus.length">
-              <div class="subh">Texture Packs</div>
-              <p class="muted small" style="margin-top: -6px">Where each emulator looks for texture packs, read from its own settings. A game's folder is in its More menu. Cartridge never changes these settings.</p>
-              <div class="stack">
-                <div v-for="e in texEmus" :key="e.root" class="lrow">
-                  <Icon name="mdiTextureBox" :size="24" />
-                  <div class="l-mid"><b>{{ e.name }}{{ e.flatpak ? ' (Flatpak)' : '' }}</b><span class="l-sub mono">{{ e.textures.replace(store.info.home, '~') }}</span><span v-if="!e.on" class="l-sub">{{ e.how }}</span></div>
-                  <span class="status" :class="e.on ? 'ok' : 'warn'"><Icon v-if="e.on" name="mdiCheck" :size="14" />{{ e.on ? 'Textures on' : 'Textures off' }}</span>
+            </template>
+            </template>
+            <template v-else-if="emuPage === 'emus'">
+              <!-- 0.9.21 (owner): Get Emulators and emulator updates in one list; installed ones show Up to date or their update -->
+              <p class="muted small" style="margin-top: -6px">Emulators for each console. The ones on this device show whether they're up to date: Flatpaks update from Flathub, AppImages from the emulator's own releases (the new file goes where the old one was, so Steam shortcuts keep working). EmuDeck's launchers update through EmuDeck.</p>
+              <EmuGet updates />
+            </template>
+            <template v-else-if="emuPage === 'addons'">
+              <!-- 0.9.21 (owner): game updates, patches and add-ons in one page; a game opens Game Add-ons with a tab for each -->
+              <p class="muted small" style="margin-top: -6px">Mods, texture packs, patches and game updates for the games on this device, from each emulator's own lists, GameBanana and the EmuCoreX catalog. The same as Game Add-ons in a game's More menu.</p>
+              <TextField v-model="gaFind" placeholder="Find a game" icon="mdiMagnify" mode="game" fkey="ga-find" />
+              <section v-for="grp in gaGroups" :key="grp.slug" class="con-sec">
+                <div class="con-head"><PIcon :p="grp.p" :size="34" /><b>{{ grp.name }}</b><span class="count">{{ grp.games.length }}</span><span v-if="grp.emu" class="con-emu"><EmuIcon :id="grp.id" :size="22" fallback="mdiPuzzleOutline" />{{ grp.emu }}</span></div>
+                <div class="stack">
+                  <button v-for="r in grp.games" :key="r.id" class="lrow" data-focus @click="openGameAddons(r)">
+                    <img v-if="coverSmall(r.id)" class="up-cover" :src="coverSmall(r.id)" loading="lazy" /><Icon v-else name="mdiPuzzleOutline" :size="24" />
+                    <div class="l-mid"><b>{{ r.name }}</b><span class="l-sub">{{ gaSub(r) }}</span></div>
+                    <span v-if="ps3Todo(r.id)" class="status warn"><Icon name="mdiUpdate" :size="14" />{{ ps3Todo(r.id) }} update{{ ps3Todo(r.id) === 1 ? '' : 's' }}</span>
+                    <span v-else-if="addonsHere[r.id]" class="status ok"><Icon name="mdiCheck" :size="14" />{{ addonsHere[r.id].some((x) => !x.mods) ? 'Texture pack' : 'Mods' }}</span>
+                    <Icon name="mdiChevronRight" :size="22" />
+                  </button>
                 </div>
+              </section>
+              <p v-if="!gaGroups.length" class="muted">{{ gaFind ? `No game here matches “${gaFind}”.` : 'No games on this device for consoles with add-ons, patches or game updates yet.' }}</p>
+              <template v-if="addonsMine.length">
+                <div class="subh">Installed by Cartridge</div>
+                <div class="stack">
+                  <button v-for="a in addonsMine" :key="a.key" class="lrow" data-focus @click="removeAddon(a)">
+                    <EmuIcon :id="a.emu" :size="24" fallback="mdiPuzzleOutline" />
+                    <div class="l-mid"><b>{{ a.name }}</b><span class="l-sub">{{ a.game }} · {{ a.emuName }} · {{ bytes(a.bytes) }}</span></div>
+                    <span class="l-end">Remove</span>
+                  </button>
+                </div>
+              </template>
+              <div class="subh">Emulator folders</div>
+              <p class="muted small" style="margin-top: -6px">Where each emulator looks for texture packs and mods, read from its own settings. Turn custom textures on here, or in the emulator.</p>
+              <div class="stack">
+                <button v-for="e in texEmus" :key="e.root" class="lrow" data-focus @click="flipTextures(e)">
+                  <EmuIcon :id="e.id" :size="24" fallback="mdiTextureBox" />
+                  <div class="l-mid"><b>{{ e.name }}{{ e.flatpak ? ' (Flatpak)' : '' }}</b><span class="l-sub mono">{{ e.textures.replace(store.info.home, '~') }}</span></div>
+                  <span v-if="e.mods" class="status">Mods</span><span v-else class="status" :class="e.on ? 'ok' : 'warn'"><Icon v-if="e.on" name="mdiCheck" :size="14" />{{ e.on ? 'Textures on' : 'Textures off' }}</span>
+                  <span class="l-end">{{ e.mods ? '' : !e.on ? 'Turn on' : e.mine ? 'Turn off' : '' }}</span>
+                </button>
               </div>
+            <p v-if="!texEmus.length" class="muted">None of the emulators that take texture packs or mods (PCSX2, DuckStation, Dolphin, PPSSPP, Azahar, Cemu, Eden, Citron, Yuzu, Ryujinx) are set up here yet.</p>
             </template>
-            </template>
-            <div class="subh">Console Folders</div>
+            <template v-else-if="emuPage === 'folders'">
             <div class="row" style="justify-content: space-between">
               <p class="muted small" style="margin: 0; max-width: 520px">Matched inside your ROMs folder using ES-DE folder names. Pick any system to point it somewhere else.</p>
               <div class="seg">
@@ -124,6 +175,7 @@
                 <span class="chip" :class="p.target?.source === 'custom' ? 'primary' : p.target?.exists ? 'green' : ''">{{ p.target?.source === 'custom' ? 'Custom' : p.target?.exists ? 'Found' : p.target?.path ? 'Will create' : 'Not set' }}</span>
               </button>
             </div>
+            </template>
           </template>
 
           <template v-else-if="sec === 'dl'">
@@ -136,7 +188,7 @@
 
           <template v-else-if="sec === 'ui'">
             <h1>Look &amp; Feel</h1>
-            <!-- five short pages (0.9.3 K, G4): LB/RB move between them; rarely used options under Advanced -->
+            <!-- four short pages (0.9.3 K, G4; Background folded into Theme in 0.9.21): LB/RB move between them; rarely used options under Advanced -->
             <div class="lookpages"><Btn b="LB" /><div class="seg"><button v-for="p in LOOK_PAGES" :key="p.v" data-focus :data-key="'look-' + p.v" :class="{ on: lookPage === p.v }" @click="setLookPage(p.v)">{{ p.l }}</button></div><Btn b="RB" /></div>
 
             <template v-if="lookPage === 'theme'">
@@ -156,6 +208,19 @@
               <button v-for="(t, k) in THEMES" :key="k" class="swatch" data-focus :class="{ on: (ui.theme || 'cartridge') === k }" :style="{ background: `linear-gradient(135deg, ${t.grad[0]}, ${t.grad[2]} 60%, ${t.grad[4]})` }" :title="t.label" @click="saveConfig({ ui: { theme: k, gameTheme: null } })"><i :style="{ background: t.accent[0] }" /><span>{{ t.label }}</span></button>
               <button class="swatch custom" data-focus :class="{ on: ui.theme === 'custom' }" :style="ui.customColor ? { background: `linear-gradient(135deg, ${customT.grad[0]}, ${customT.grad[2]} 60%, ${customT.grad[4]})` } : {}" @click="pickColor"><Icon name="mdiEyedropperVariant" :size="18" /><span>Custom</span></button>
             </div>
+            <!-- the background is part of the theme (owner, 0.9.21: one page, not two) -->
+            <div class="subh"><Icon name="mdiWallpaper" :size="20" />Background</div>
+            <!-- one row: what's on now, and a menu with every background (theme ones, consoles, other) -->
+            <button class="bgnow glass" data-focus @click="pickBg">
+              <span class="bgnow-ic"><Icon name="mdiWallpaper" :size="22" /></span>
+              <span class="bgnow-t"><b>{{ bgNow.l }}</b><small>{{ bgNow.sub }}</small></span>
+              <span class="bgnow-c">Change<Icon name="mdiChevronRight" :size="18" /></span>
+            </button>
+            <div v-if="ui.bgStyle === 'wallpaper'" class="row wrap" style="gap: 12px">
+              <button class="btn" data-focus @click="chooseWallpaper"><Icon name="mdiImageSearchOutline" :size="18" />{{ ui.wallpaper ? 'Change image' : 'Choose image' }}</button>
+              <div class="seg"><button v-for="d in dims" :key="d.v" data-focus :class="{ on: (ui.wallDim || 'medium') === d.v }" @click="saveConfig({ ui: { wallDim: d.v } })">{{ d.l }}</button></div>
+              <button v-if="ui.wallpaper" class="btn" data-focus @click="clearWallpaper"><Icon name="mdiClose" :size="18" />Remove</button>
+            </div>
             <button class="lrow adv-tg" data-focus @click="lookAdv = !lookAdv"><Icon name="mdiTuneVariant" :size="22" /><div class="l-mid"><b>Advanced</b></div><Icon :name="lookAdv ? 'mdiChevronUp' : 'mdiChevronDown'" :size="22" /></button>
             <template v-if="lookAdv">
             <div class="finetune">
@@ -170,21 +235,6 @@
 
             </template>
             <div class="row"><button class="btn" data-focus @click="resetLook"><Icon name="mdiRestore" />Reset Look &amp; Feel</button></div>
-            </template>
-            <template v-else-if="lookPage === 'bg'">
-            <div class="subh"><Icon name="mdiWallpaper" :size="20" />Background</div>
-            <!-- one row: what's on now, and a menu with every background (theme ones, consoles, other) -->
-            <button class="bgnow glass" data-focus @click="pickBg">
-              <span class="bgnow-ic"><Icon name="mdiWallpaper" :size="22" /></span>
-              <span class="bgnow-t"><b>{{ bgNow.l }}</b><small>{{ bgNow.sub }}</small></span>
-              <span class="bgnow-c">Change<Icon name="mdiChevronRight" :size="18" /></span>
-            </button>
-            <div v-if="ui.bgStyle === 'wallpaper'" class="row wrap" style="gap: 12px">
-              <button class="btn" data-focus @click="chooseWallpaper"><Icon name="mdiImageSearchOutline" :size="18" />{{ ui.wallpaper ? 'Change image' : 'Choose image' }}</button>
-              <div class="seg"><button v-for="d in dims" :key="d.v" data-focus :class="{ on: (ui.wallDim || 'medium') === d.v }" @click="saveConfig({ ui: { wallDim: d.v } })">{{ d.l }}</button></div>
-              <button v-if="ui.wallpaper" class="btn" data-focus @click="clearWallpaper"><Icon name="mdiClose" :size="18" />Remove</button>
-            </div>
-
             </template>
             <template v-else-if="lookPage === 'cards'">
             <div class="subh"><Icon name="mdiFormatFont" :size="20" />Text &amp; Size</div>
@@ -251,6 +301,8 @@
             <p class="muted small" style="margin-top: -6px">Auto uses the built-in keyboard in Game Mode and your real keyboard on the desktop. Steam leaves typing to the Steam keyboard (Steam + X).</p>
 
             <div class="subh"><Icon name="mdiDockTop" :size="20" />Top Bar</div>
+            <div class="row"><span class="lbl">Open on</span><div class="seg"><button v-for="t in tabsOn.filter((n) => n !== 'settings')" :key="t" data-focus :class="{ on: (ui.openOn || 'home') === t }" @click="saveConfig({ ui: { openOn: t } })">{{ TAB_DEFS[t].label }}</button></div></div>
+            <p class="muted small" style="margin-top: -6px">The menu Cartridge shows when it starts.</p>
             <p class="muted small" style="margin-top: -6px">Pick which tabs show at the top and their order. LT and RT move through them in this order. Settings always stays.</p>
             <div class="tabs-edit">
               <div v-for="(t, i) in tabRows" :key="t.name" class="tab-row" :class="{ off: !t.on }">
@@ -287,6 +339,13 @@
             </div>
             <p v-if="IS_ANDROID" class="muted small">New versions come from the GitHub Releases page. The APK downloads in the background, then Android asks you to confirm the install. Your settings and games stay as they are.</p>
             <p v-else class="muted small">New versions come from the GitHub Releases page. They download in the background and replace this AppImage in place, so your Steam shortcut and settings stay as they are.</p>
+            <ChangelogCard />
+            <!-- Roll back swaps the AppImage: desktop only -->
+            <template v-if="!IS_ANDROID">
+            <div class="subh">Roll back</div>
+            <p class="muted small" style="margin-top: -6px">Go back to an earlier version if this one gives you trouble. Your settings stay. Automatic updates pause until you press Check for updates.</p>
+            <div class="row"><button class="btn" data-focus :disabled="rollBusy" @click="rollBack"><Icon name="mdiHistory" :class="{ spin: rollBusy }" />{{ rollBusy ? 'Working…' : 'Choose an earlier version' }}</button></div>
+            </template>
           </template>
 
           <template v-else-if="sec === 'ra'">
@@ -312,11 +371,17 @@
                 <button class="btn" data-focus @click="tab('achievements')"><Icon name="mdiTrophyOutline" />Open Achievements</button>
                 <button class="btn" data-focus @click="raSignOut"><Icon name="mdiLogout" />Sign out</button>
               </div>
-              <!-- writes desktop emulators' own settings files (raLogin.js); Android emulators keep theirs in their own storage -->
-              <template v-if="!IS_ANDROID">
-              <div class="row"><button class="btn" data-focus :disabled="raBusy" @click="raEmus"><Icon name="mdiGamepadVariantOutline" />Sign In to Emulators</button></div>
-              <p class="muted small" style="margin-top: -6px">Signs PCSX2, DuckStation, Dolphin, PPSSPP and RetroArch in with your account. Shows what it changes first. Your password goes to RetroAchievements once and is never saved.</p>
-              </template>
+              <!-- 0.9.21 (owner: it kept saying "Sign in" after signing in): says who's signed in, opens a list.
+                   Desktop only: it writes desktop emulators' own settings files (raLogin.js) -->
+              <button v-if="!IS_ANDROID" class="lrow" data-focus :disabled="raBusy" @click="raEmus">
+                <Icon name="mdiGamepadVariantOutline" :size="24" />
+                <div class="l-mid"><b>Sign In to Emulators</b><span class="l-sub">PCSX2, DuckStation, Dolphin, PPSSPP, RetroArch and the rest, with your account. Your password goes to RetroAchievements once and is never saved.</span></div>
+                <span v-if="raTargets === null" class="status none">Checking</span>
+                <span v-else-if="!raTargets.length" class="status none">None set up</span>
+                <span v-else-if="raSignedCount === raTargets.length" class="status ok"><Icon name="mdiCheck" :size="14" />All signed in</span>
+                <span v-else class="status warn">{{ raSignedCount }} of {{ raTargets.length }} signed in</span>
+                <Icon name="mdiChevronRight" :size="22" />
+              </button>
               <Toggle :model-value="ui.raOnGames !== false" label="Achievements on game pages" desc="Show progress and badges on games that have RetroAchievements (PS3, PS4, Switch and other unsupported consoles never show them)" @update:model-value="(v) => saveConfig({ ui: { raOnGames: v } })" />
             </template>
 
@@ -434,14 +499,14 @@
 </template>
 
 <script setup>
-import { computed, defineAsyncComponent, nextTick, onMounted, ref, watch } from 'vue';
-import { store, call, go, tab, saveConfig, pickFolder, choose, confirm, toast, openModal, bytes, ago, resync, scanServer, allRoms, resetLogos, askText, activeTabs, TAB_DEFS, consoleName, MEDIA_DEFAULT } from '../store.js';
+import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { store, call, go, tab, saveConfig, pickFolder, choose, confirm, toast, openModal, bytes, ago, resync, scanServer, allRoms, romById, cover, resetLogos, askText, activeTabs, TAB_DEFS, consoleName, MEDIA_DEFAULT } from '../store.js';
+import PhoneRemote from './PhoneRemote.vue';
 import { useView } from '../useView.js';
 import { input, focusFirst, setPointerPref, setRumble, rumble } from '../nav.js';
 import { THEMES, SURFACES, TEXTS, FONTS, CARD_SHAPES, CARD_SIZES, DENSITIES, themeFrom, themeOf, paletteOf } from '../themes.js';
 import { BACKGROUNDS, RENDERERS, LEGACY_ART, bgPreview } from '../bgRenderers.js';
 import { setSoundEnabled, setSoundStyle, previewSound, SOUND_PACKS } from '../sfx.js';
-import PhoneRemote from './PhoneRemote.vue';
 import Icon from '../components/Icon.vue';
 import Logo from '../components/Logo.vue';
 import Toggle from '../components/Toggle.vue';
@@ -452,7 +517,11 @@ import Btn from '../components/Btn.vue';
 import SteamSettings from '../components/SteamSettings.vue';
 import StorageManager from '../components/StorageManager.vue';
 import LibraryCheck from '../components/LibraryCheck.vue';
+import SyncCard from '../components/SyncCard.vue';
 import RommUpload from '../components/RommUpload.vue';
+import EmuIcon from '../components/EmuIcon.vue';
+import EmuGet from '../components/EmuGet.vue';
+import ChangelogCard from '../components/ChangelogCard.vue';
 import ServerStatus from '../components/ServerStatus.vue';
 import ControllerTest from '../components/ControllerTest.vue';
 import ReportProblem from '../components/ReportProblem.vue';
@@ -462,6 +531,7 @@ import { padInfo } from '../pad.js';
 const IS_ANDROID = import.meta.env.MODE === 'android';
 const AndroidSettings = import.meta.env.MODE === 'android' ? defineAsyncComponent(() => import('../android/AndroidSettings.vue')) : null;
 const AndroidEmulators = import.meta.env.MODE === 'android' ? defineAsyncComponent(() => import('../android/AndroidEmulators.vue')) : null;
+const AndroidDrives = import.meta.env.MODE === 'android' ? defineAsyncComponent(() => import('../android/AndroidDrives.vue')) : null;
 
 const el = ref(null);
 const paneEl = ref(null);
@@ -472,6 +542,7 @@ const ALL_SECTIONS = [
   { id: 'storage', label: 'Storage', icon: 'mdiHarddisk' },
   { id: 'emu', label: 'Emulators', icon: 'mdiGamepadVariantOutline' },
   { id: 'dl', label: 'Downloads', icon: 'mdiTrayArrowDown' },
+  { id: 'syncthing', label: 'Sync', icon: 'mdiSync' },
   { id: 'ui', label: 'Look & Feel', icon: 'mdiPaletteOutline' },
   { id: 'ra', label: 'Achievements', icon: 'mdiTrophyOutline' },
   { id: 'steam', label: 'Steam', icon: 'mdiSteam' },
@@ -480,8 +551,9 @@ const ALL_SECTIONS = [
   { id: 'updates', label: 'Updates', icon: 'mdiUpdate' },
   { id: 'about', label: 'About', icon: 'mdiInformationOutline' },
 ];
-// Android: Steam shows only when Settings → Android → Steam & PC game apps is on
-const sections = computed(() => ALL_SECTIONS.filter((s) => (IS_ANDROID ? s.id !== 'steam' || store.config.android?.steamApps === true : s.id !== 'android')));
+// Android: no Sync (it reads the desktop's Syncthing); Steam only when Settings → Android → Steam & PC game apps is on
+const ANDROID_HIDDEN = ['syncthing'];
+const sections = computed(() => ALL_SECTIONS.filter((s) => (IS_ANDROID ? !ANDROID_HIDDEN.includes(s.id) && (s.id !== 'steam' || store.config.android?.steamApps === true) : s.id !== 'android')));
 const showAll = ref(false);
 const supported = ref([]);
 const space = ref(null);
@@ -504,7 +576,7 @@ const sgdbBusy = ref(false);
 // Fetch all logos: progress lives in the store (one listener for the whole app)
 const logoJob = computed(() => store.logoJob);
 async function fetchAll() {
-  if (!store.config.sgdbKey) toast('Without a SteamGridDB key only logos RomM has can be found. Add a key above for the rest.', 'info', 6000, 'mdiKeyVariant');
+  if (IS_ANDROID && !store.config.sgdbKey) toast('Without a SteamGridDB key only logos RomM has can be found. Add a key above for the rest.', 'info', 6000, 'mdiKeyVariant');
   store.logoJob = { done: 0, total: 0, found: 0 };
   call('logo:fetchAll').catch((e) => { store.logoJob = null; toast(e.message, 'error', 4000); });
 }
@@ -518,11 +590,25 @@ async function raSignIn() {
   catch (e) { toast(e.message, 'error', 5000); }
   raBusy.value = false;
 }
-// Emulator sign-in (F14): list what changes, ask the password once, never keep it
+// Emulator sign-in (F14): list what changes, ask the password once, never keep it. 0.9.21: who's signed
+// in shows on the row; the list lets you sign in all of them or just one
+const raTargets = ref(null);
+const isMe = (t) => !!t.user && t.user.toLowerCase() === String(store.config.ra?.user || '').toLowerCase();
+const raSignedCount = computed(() => (raTargets.value || []).filter(isMe).length);
+const loadRaTargets = () => call('ra:emuTargets').then((l) => { raTargets.value = l || []; }).catch(() => { raTargets.value = []; });
+watch(sec, (v) => { if (v === 'ra' && !IS_ANDROID && store.config.ra?.user) loadRaTargets(); }, { immediate: true });
 async function raEmus() {
-  const list = await call('ra:emuTargets').catch(() => []);
-  if (!list.length) return toast('No emulators with RetroAchievements set up yet. Open the emulator once, then try again.', 'info', 4200);
+  const all = await call('ra:emuTargets').catch(() => []);
+  raTargets.value = all;
+  if (!all.length) return toast('No emulators with RetroAchievements set up yet. Open the emulator once, then try again.', 'info', 4200);
   const user = store.config.ra.user;
+  const todoAll = all.filter((t) => !isMe(t));
+  const pick = await choose({ sheet: true, title: 'Sign In to Emulators', options: [
+    ...(todoAll.length ? [{ label: todoAll.length === all.length ? 'Sign In to All' : `Sign In to the Other ${todoAll.length}`, sub: todoAll.map((t) => t.name).join(', '), value: '*', icon: 'mdiAccountMultipleCheck' }] : []),
+    ...all.map((t) => ({ label: t.name + (t.flatpak ? ' (Flatpak)' : ''), sub: isMe(t) ? `Signed in as ${t.user}` : t.user ? `Signed in as ${t.user}, not ${user}` : 'Not signed in', value: t.id, icon: isMe(t) ? 'mdiCheckCircle' : 'mdiAccountOutline', raw: true })),
+  ] });
+  if (!pick) return;
+  const list = pick === '*' ? todoAll : all.filter((t) => t.id === pick);
   const lines = list.map((t) => `${t.name}${t.flatpak ? ' (Flatpak)' : ''}${t.user ? `, now signed in as ${t.user}` : ''}: ${t.files.join(', ')}`).join('\n');
   const ok = await confirm(`Sign in ${list.length} emulator${list.length === 1 ? '' : 's'} as ${user}`, `Cartridge turns achievements on and writes your login token here:\n${lines}\n\nClose these emulators first. Your password is sent to RetroAchievements once and never saved.`, 'Continue');
   if (!ok) return;
@@ -530,12 +616,13 @@ async function raEmus() {
   if (!password) return;
   raBusy.value = true;
   try {
-    const res = await call('ra:emuSignin', { user, password });
+    const res = await call('ra:emuSignin', { user, password, ids: list.map((t) => t.id) });
     const bad = res.filter((r) => !r.ok);
     if (!bad.length) toast(`Signed in: ${res.map((r) => r.name).join(', ')}`, 'ok', 3600, 'mdiTrophy');
     else toast(`${bad.map((r) => `${r.name}: ${r.error}`).join(' · ')}`, 'error', 6000);
   } catch (e) { toast(e.message, 'error', 4200); }
   raBusy.value = false;
+  loadRaTargets();
 }
 const rlBusy = ref(false);
 async function rommLocalUpdate() {
@@ -594,14 +681,31 @@ async function chooseWallpaper() {
 }
 // A (0.9.15): each console with enough covers in your library can be the background
 const artBgs = computed(() => (store.lib?.platforms || []).filter((p) => p.rom_count >= 6).map((p) => ({ v: 'art:' + p.slug, l: consoleName(p), sub: 'Your games, slowly panning', group: 'Art' })).sort((a, b) => a.l.localeCompare(b.l)));
-const allBgs = computed(() => { const i = BACKGROUNDS.findIndex((b) => b.group === 'Other'); return [...BACKGROUNDS.slice(0, i), ...artBgs.value, ...BACKGROUNDS.slice(i)]; });
+// your five most used consoles first (0.9.16): play time, then games on this device, each as its
+// own games panning (0.9.19: the console scenes were retired)
+const topConsoles = computed(() => {
+  const score = {};
+  for (const r of allRoms()) {
+    const pl = store.play[r.id], inst = !!store.installed[r.id];
+    if (!pl?.min && !inst) continue;
+    const s = (score[r.platform_slug] ||= { min: 0, inst: 0 });
+    s.min += pl?.min || 0; s.inst += inst ? 1 : 0;
+  }
+  return (store.lib?.platforms || []).filter((p) => score[p.slug]).sort((a, b) => score[b.slug].min - score[a.slug].min || score[b.slug].inst - score[a.slug].inst).slice(0, 5);
+});
+const allBgs = computed(() => {
+  const theme = BACKGROUNDS.filter((b) => b.group === 'Theme'), other = BACKGROUNDS.filter((b) => b.group === 'Other');
+  const top = topConsoles.value.map((p) => ({ v: 'art:' + p.slug, l: consoleName(p), sub: 'Your games, slowly panning', group: 'Top' }));
+  const used = new Set(top.map((b) => b.v));
+  return [...theme, ...top, ...artBgs.value.filter((b) => !used.has(b.v)), ...other];
+});
 const bgNow = computed(() => { const v = ui.value.bgStyle || 'solid'; const m = LEGACY_ART[v] ? 'art:' + LEGACY_ART[v] : v; return allBgs.value.find((b) => b.v === m) || BACKGROUNDS[0]; });
-const BG_ICON = { Theme: 'mdiWaves', Consoles: 'mdiGamepadVariantOutline', Art: 'mdiImageMultipleOutline', Other: 'mdiImageOutline' };
+const BG_ICON = { Theme: 'mdiWaves', Top: 'mdiStarOutline', Consoles: 'mdiGamepadVariantOutline', Art: 'mdiImageMultipleOutline', Other: 'mdiImageOutline' };
 async function pickBg() {
   let last = '';
   const pal = paletteOf(ui.value);
   // a picture of each animated one (0.9.3 L); still, artwork and wallpaper keep their icon
-  const options = allBgs.value.map((b) => { const o = { label: b.l, sub: b.sub, value: b.v, icon: BG_ICON[b.group], img: RENDERERS[b.v] ? bgPreview(b.v, pal) : '', selected: bgNow.value.v === b.v, raw: b.group === 'Art', heading: b.group !== last ? { Theme: 'Your theme colours', Consoles: 'Consoles', Art: 'Your games', Other: 'Other' }[b.group] : '' }; last = b.group; return o; });
+  const options = allBgs.value.map((b) => { const o = { label: b.l, sub: b.sub, value: b.v, icon: BG_ICON[b.group], img: RENDERERS[b.v] ? bgPreview(b.v, pal) : '', selected: bgNow.value.v === b.v, raw: b.group === 'Art' || (b.group === 'Top' && b.v.startsWith('art:')), heading: b.group !== last ? { Theme: 'Your theme colours', Top: 'Your most played consoles', Art: 'Your games', Other: 'Other' }[b.group] : '' }; last = b.group; return o; });
   const v = await choose({ title: 'Background', options });
   if (v) await setBg(v);
 }
@@ -714,13 +818,51 @@ const syncLine = computed(() => {
 const every = [{ v: 0, l: 'Off' }, { v: 30, l: '30 min' }, { v: 60, l: '1 h' }, { v: 180, l: '3 h' }];
 const folderList = computed(() => (store.libVersion, showAll.value ? supported.value : store.lib?.platforms || []));
 
-useView({ back: () => { if (!document.activeElement?.closest('.rail')) { focusFirst(el.value, `[data-key="sec-${sec.value}"]`); return; } return false; }, lb: () => stepLook(-1), rb: () => stepLook(1) },
+useView({ back: () => { if (!document.activeElement?.closest('.rail')) { focusFirst(el.value, `[data-key="sec-${sec.value}"]`); return; } return false; }, lb: () => (sec.value === 'emu' ? stepEmu(-1) : stepLook(-1)), rb: () => (sec.value === 'emu' ? stepEmu(1) : stepLook(1)) },
   [{ b: 'A', label: 'Select' }, { b: 'B', label: 'Back' }, { b: 'LT+RT', label: 'Tabs' }]);
 // Settings → Emulators → Issues
 const issues = ref(null);
 const ISSUE_ICON = { collections: 'mdiFolderSyncOutline', moved: 'mdiLinkVariantOff', game: 'mdiFileHidden', core: 'mdiPuzzleRemoveOutline', setup: 'mdiRadar', bios: 'mdiChip', romm: 'mdiServerOutline', fpsteam: 'mdiSteam' };
-async function loadIssues() { issues.value = await call('issues:list').catch(() => []); store.issues = issues.value.length; texEmus.value = await call('addons:emulators').catch(() => []); }
+async function loadIssues() { issues.value = await call('issues:list').catch(() => []); store.issues = issues.value.length; texEmus.value = (await call('addons:emulators').catch(() => null)) || []; }
 const texEmus = ref([]);
+// Add-ons page (0.9.17): installed games of consoles with add-ons, by console, and what Cartridge installed
+const ADDON_SLUGS = /^(ps2|psx|ngc|gamecube|wii|psp|3ds|n3ds|switch|wiiu)$/i;
+const addonGames = computed(() => {
+  const by = new Map();
+  for (const r of allRoms()) {
+    if (!store.installed[r.id] || !ADDON_SLUGS.test(r.platform_slug || '')) continue;
+    if (!by.has(r.platform_slug)) by.set(r.platform_slug, { slug: r.platform_slug, name: consoleName({ romId: r.id, slug: r.platform_slug }), roms: [] });
+    by.get(r.platform_slug).roms.push(r);
+  }
+  for (const g of by.values()) g.roms.sort((a, b) => a.name.localeCompare(b.name));
+  return [...by.values()].sort((a, b) => a.name.localeCompare(b.name));
+});
+const addonsMine = ref([]);
+const addonCount = (romId) => addonsMine.value.filter((a) => a.romId === romId).length;
+async function loadAddons() {
+  addonsMine.value = (await call('addons:installed').catch(() => null)) || [];
+  addonsHere.value = (await call('addons:present', { romIds: addonGames.value.flatMap((g) => g.roms.map((r) => r.id)) }).catch(() => null)) || {};
+}
+// what is already in each game's folder (0.9.19): a texture pack or mods, put in by Cartridge or not
+const addonsHere = ref({});
+const BY_TEXT = { cartridge: 'installed by Cartridge', other: 'added outside Cartridge', both: 'some installed by Cartridge' };
+function presentText(id) {
+  const f = addonsHere.value[id];
+  if (!f) return '';
+  return f.map((x) => `${x.mods ? 'Mods' : 'Texture pack'} in ${x.name}, ${BY_TEXT[x.by]}${!x.mods && !x.on ? ' (textures are off there)' : ''}`).join(' · ');
+}
+async function removeAddon(a) {
+  if (!(await confirm('Remove this add-on?', `${a.name} (${a.game})\n\nOnly the ${a.count} files Cartridge put in ${a.emuName}’s folder are deleted.`, 'Remove', true))) return;
+  try { await call('addons:remove', { key: a.key }); toast('Add-on removed', 'ok', 2500); } catch (e) { toast(e.message, 'error', 5000); }
+  loadAddons();
+}
+// custom textures on in the emulator itself (0.9.16); off again only where Cartridge turned them on
+async function flipTextures(e) {
+  if (e.mods) return toast(e.how, 'info', 5000);
+  if (e.on && !e.mine) return toast(`Custom textures were turned on in ${e.name}. Turn them off there if you want to.`, 'info', 4500);
+  try { await call('addons:setTextures', { root: e.root, on: !e.on }); toast(e.on ? `Custom textures off in ${e.name}` : `Custom textures on in ${e.name}`, 'ok', 3000, 'mdiTextureBox'); texEmus.value = await call('addons:emulators'); }
+  catch (err) { toast(err.message, 'error', 5000); }
+}
 async function fixIssue(i) {
   if (i.fix === 'health') return go('steam-health');
   if (i.fix === 'setup') return go('emu-setup');
@@ -742,7 +884,7 @@ watch(sec, (v) => { store.settingsSection = v; if (v === 'emu' && !IS_ANDROID) l
 
 
 function enter() { focusFirst(paneEl.value); }
-// A tap switches the section right away (touch never focuses the rail); a controller also moves into it
+// Android: a tap switches the section right away (touch never focuses the rail); a controller also moves into it
 function pick(id) { sec.value = id; if (input.mode !== 'touch') enter(); }
 async function setMode(mode) { await saveConfig({ server: { mode } }); reconnect(); }
 async function reconnect() {
@@ -804,7 +946,47 @@ async function loadAll() {
   supported.value = list.map((p) => ({ ...p, display_name: p.display_name || p.name })).sort((a, b) => a.display_name.localeCompare(b.display_name));
 }
 const mediaSizes = [{ v: 'compact', l: 'Compact' }, { v: 'spacious', l: 'Spacious' }, { v: 'large', l: 'Large' }];
-const LOOK_PAGES = [{ v: 'theme', l: 'Theme' }, { v: 'bg', l: 'Background' }, { v: 'cards', l: 'Text and Cards' }, { v: 'motion', l: 'Motion and Sound' }, { v: 'controls', l: 'Controls' }];
+// Emulators pages (0.9.16)
+// Android: its own overview (AndroidEmulators) and Console Folders; getting, updating and adding to desktop emulators is desktop only
+const EMU_PAGES = [{ v: 'overview', l: 'Overview' }, { v: 'emus', l: 'Emulators' }, { v: 'addons', l: 'Game Add-ons' }, { v: 'folders', l: 'Console Folders' }].filter((p) => !IS_ANDROID || p.v === 'overview' || p.v === 'folders');
+const emuPage = ref('overview');
+// installed games whose emulator has patches (0.9.16), by console then name
+const PATCH_EMU = [[/ps3/i, 'RPCS3', 'rpcs3'], [/ps4/i, 'shadPS4', 'shadps4'], [/\bps2\b/i, 'PCSX2', 'pcsx2'], [/\b(ngc|gamecube|gc|wii)\b/i, 'Dolphin', 'dolphin'], [/\bpsp\b/i, 'PPSSPP', 'ppsspp']];
+// Game Add-ons page (0.9.21): every installed game with add-ons, patches or game updates, by console, with a search
+const gaFind = ref('');
+const gaGroups = computed(() => {
+  const q = gaFind.value.trim().toLowerCase(), by = new Map();
+  for (const r of allRoms()) {
+    if (!store.installed[r.id] || (q && !r.name.toLowerCase().includes(q))) continue;
+    const s = `${r.platform_slug} ${r.platform_fs_slug}`, pe = PATCH_EMU.find(([re]) => re.test(s));
+    if (!pe && !ADDON_SLUGS.test(r.platform_slug || '')) continue;
+    if (!by.has(r.platform_slug)) {
+      // the emulator: the one with patches, else the one set up here that takes this console's add-ons
+      const te = !pe && texEmus.value.find((e) => (e.for || []).includes(r.platform_slug));
+      by.set(r.platform_slug, { slug: r.platform_slug, p: { slug: r.platform_slug, fs_slug: r.platform_fs_slug }, name: consoleName({ romId: r.id, slug: r.platform_slug }), emu: pe?.[1] || te?.name || '', id: pe?.[2] || te?.id || '', games: [] });
+    }
+    by.get(r.platform_slug).games.push(r);
+  }
+  for (const g of by.values()) g.games.sort((a, b) => a.name.localeCompare(b.name));
+  return [...by.values()].sort((a, b) => a.name.localeCompare(b.name));
+});
+const ps3Todo = (id) => (ps3Ups.value || []).find((g) => g.romId === id)?.todo.length || 0;
+function gaSub(r) {
+  const s = `${r.platform_slug} ${r.platform_fs_slug}`, pe = PATCH_EMU.find(([re]) => re.test(s));
+  const parts = [ADDON_SLUGS.test(r.platform_slug || '') && (/^(switch|wiiu)$/i.test(r.platform_slug) ? 'Mods' : 'Mods and texture packs'), pe && (pe[1] === 'PPSSPP' ? 'Cheats' : pe[1] === 'Dolphin' ? 'Patches and codes' : 'Patches'), /ps3/i.test(s) && 'Game updates'].filter(Boolean);
+  return presentText(r.id) || (addonCount(r.id) ? `${addonCount(r.id)} installed by Cartridge` : parts.join(' · '));
+}
+async function openGameAddons(r) { await openModal('gameaddons', { romId: r.id, name: r.name }); loadAddons(); loadPs3Updates(); }
+function setEmuPage(v) { emuPage.value = v; if (v === 'addons') { loadAddons(); if (ps3Ups.value === null) loadPs3Updates(); } }
+function stepEmu(d) {
+  const i = EMU_PAGES.findIndex((p) => p.v === emuPage.value), n = EMU_PAGES[(i + d + EMU_PAGES.length) % EMU_PAGES.length].v;
+  setEmuPage(n); nextTick(() => focusFirst(paneEl.value, `[data-key="emup-${n}"]`));
+}
+const ps3Ups = ref(null);
+const coverSmall = (romId) => { const r = romById(romId); return r ? cover(r) : ''; };
+const ps3UpCount = computed(() => (ps3Ups.value || []).filter((g) => g.todo.length).length);
+async function loadPs3Updates(fresh = false) { ps3Ups.value = await call('ps3up:list', { fresh }).catch(() => []); }
+const LOOK_PAGES = [{ v: 'theme', l: 'Theme' }, { v: 'cards', l: 'Text and Cards' }, { v: 'motion', l: 'Motion and Sound' }, { v: 'controls', l: 'Controls' }];
 const lookPage = ref('theme'), lookAdv = ref(false);
 function setLookPage(v) { lookPage.value = v; lookAdv.value = false; }
 function stepLook(d) {
@@ -832,6 +1014,20 @@ const updText = computed(() => {
   if (!store.update.supported && store.update.state === 'idle') return 'Updates work in the AppImage build.';
   return { checking: 'Checking GitHub for a new version…', downloading: `Downloading ${u.version} · ${u.percent || 0}%`, ready: `Version ${u.version} is downloaded and ready.`, current: 'You have the latest version.', error: `Could not check for updates: ${u.error || ''}` }[u.state] || 'Checks automatically when Cartridge starts.';
 });
+const rollBusy = ref(false);
+async function rollBack() {
+  rollBusy.value = true;
+  let list = [];
+  try { list = await call('update:releases'); } catch (e) { rollBusy.value = false; return toast(e.message, 'error', 5000); }
+  rollBusy.value = false;
+  const older = list.filter((x) => !x.current).slice(0, 12);
+  if (!older.length) return toast('No earlier versions were found.', 'info', 3000);
+  const tag = await choose({ sheet: true, title: 'Roll back to', options: older.map((x) => ({ label: x.name, sub: x.date ? new Date(x.date).toLocaleDateString() : x.tag, value: x.tag, icon: 'mdiHistory', raw: true })) });
+  if (!tag) return;
+  if (!(await confirm(`Roll back to ${tag.slice(1)}?`, 'Cartridge downloads that version, puts it in place of this one and restarts. Your settings and games stay.', 'Roll back'))) return;
+  rollBusy.value = true;
+  try { await call('update:rollback', { tag }); toast('Restarting…', 'ok', 3000, 'mdiHistory'); } catch (e) { toast(e.message, 'error', 6000); rollBusy.value = false; }
+}
 async function checkUpdates() { try { await call('update:check'); } catch (e) { toast(e.message, 'info', 4000); } }
 async function setPointer(v) { await saveConfig({ ui: { pointer: v } }); setPointerPref(v); }
 async function setGraphics(v) {
@@ -865,14 +1061,13 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.set-view { position: absolute; inset: 0; display: grid; grid-template-columns: 270px 1fr; grid-template-rows: minmax(0, 1fr); /* one row the height of the screen: the rail and pane scroll inside it (short screens like the AYN Thor cut the bottom off before) */ gap: 10px; padding: 16px 36px 0; animation: viewIn 0.16s ease-out; }
-.rail { display: flex; flex-direction: column; gap: 4px; padding-top: 10px; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding-bottom: 24px; }
-.rail > * { flex: none; }
+.set-view { position: absolute; inset: 0; display: grid; grid-template-columns: 270px 1fr; gap: 10px; padding: 16px 36px 0; animation: viewIn 0.16s ease-out; }
+.rail { display: flex; flex-direction: column; gap: 4px; padding-top: 10px; }
 .rail-item { display: flex; align-items: center; gap: 14px; padding: 13px 16px; border-radius: var(--r-md); color: var(--muted); font-weight: 500; transition: background 0.15s, color 0.15s; }
 /* the page follows the list as you move, so the current section only needs brighter text, no box */
 .rail-item.on { color: var(--text); }
 .rail-item:focus { background: var(--focus); color: var(--on-focus); box-shadow: none; }
-.pane { min-height: 0; min-width: 0; overflow-x: hidden; overflow-y: auto; padding: 6px 12px 60px 24px; }
+.pane { overflow-y: auto; padding: 6px 12px 60px 24px; }
 .pane-in { display: flex; flex-direction: column; gap: 16px; max-width: 860px; }
 .pane h1 { font-size: var(--t-2xl); font-weight: 700; margin: 4px 0 6px; }
 .card-s { padding: 18px 20px; display: flex; flex-direction: column; gap: 10px; }
@@ -952,8 +1147,12 @@ onMounted(() => {
 .tab-lbl { flex: 1; min-width: 0; }
 .tab-tg { min-width: 92px; justify-content: center; }
 .subh { display: flex; align-items: center; gap: 10px; font-family: var(--display); font-size: var(--t-lg); font-weight: 700; margin-top: 4px; }
-.lookpages { display: flex; align-items: center; gap: var(--s-2); flex-wrap: wrap; }
-.lookpages .seg { flex-wrap: wrap; }
+/* LB, the pages and RB always on one row (owner: RB fell to a second row on Emulators' seven pages);
+   the pages scroll sideways when they don't fit */
+.lookpages { display: flex; align-items: center; gap: var(--s-2); flex-wrap: nowrap; min-width: 0; }
+.lookpages > * { flex: none; }
+.lookpages .seg { flex: 0 1 auto; flex-wrap: nowrap; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+.lookpages .seg button { flex: none; white-space: nowrap; }
 .adv-tg { margin-top: var(--s-2); }
 .ra-mk { height: 20px; }
 .srcs { display: flex; flex-direction: column; gap: 10px; }
@@ -968,4 +1167,26 @@ onMounted(() => {
 .chip.missing { background: rgba(255, 255, 255, 0.08); color: var(--muted); }
 .chip.off { background: rgba(255, 90, 90, 0.14); color: #ffaaaa; }
 .logo-prog { flex: 1; display: flex; flex-direction: column; gap: 6px; max-width: 360px; }
+.up-row { position: relative; overflow: hidden; }
+/* the download along the row: a track and a fill that read on the row and on a selected one (0.9.21) */
+.up-row::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 4px; background: transparent; }
+.up-row.busy::after { background: rgba(255, 255, 255, 0.12); }
+.up-bar { position: absolute; left: 0; bottom: 0; z-index: 1; height: 4px; background: var(--text); border-radius: 0 2px 2px 0; transition: width var(--d-2, 240ms) ease, background 160ms; }
+.pad-mode .up-row:focus .up-bar, .up-row:focus-visible .up-bar { background: var(--on-focus); }
+.pad-mode .up-row.busy:focus::after, .up-row.busy:focus-visible::after { background: color-mix(in srgb, var(--on-focus) 15%, transparent); }
+.up-bar.live { animation: upLive 1.2s ease-in-out infinite; transform-origin: left; }
+@keyframes upLive { 0% { transform: scaleX(0.05); opacity: 0.4; } 50% { transform: scaleX(0.6); opacity: 0.9; } 100% { transform: scaleX(1); opacity: 0.2; } }
+.up-cover { width: 30px; height: 40px; object-fit: cover; border-radius: var(--r-sm); flex: none; }
+.ps3-head { display: flex; align-items: center; gap: var(--s-4); padding: var(--s-4); border-radius: var(--r-lg); background: linear-gradient(120deg, rgba(0, 59, 160, 0.35), rgba(0, 0, 0, 0) 70%), var(--s1); margin-bottom: var(--s-3); }
+/* title over its line of text (0.9.21, owner: they ran together on one line) */
+.ps3-head .l-mid { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.ps3-head b { font-family: var(--display); font-size: var(--t-lg); line-height: 1.2; }
+.ps3-head .l-sub { font-size: var(--t-sm); color: var(--muted); line-height: 1.4; max-width: 70ch; }
+.con-sec { margin-bottom: var(--s-4); }
+.con-head { display: flex; align-items: center; gap: var(--s-3); margin: var(--s-4) 0 var(--s-2); }
+.con-head b { font-size: var(--t-lg); font-family: var(--display); }
+.con-head .count { color: var(--muted); font-size: var(--t-sm); }
+.con-emu { margin-left: auto; display: inline-flex; align-items: center; gap: 8px; color: var(--muted); font-size: var(--t-sm); }
+.local-card { display: flex; align-items: center; gap: var(--s-4); margin-bottom: var(--s-4); }
+.local-card .l-mid { flex: 1; display: flex; flex-direction: column; gap: 4px; }
 </style>

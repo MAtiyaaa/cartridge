@@ -157,6 +157,27 @@ handle('android:size', ({ w, h }) => {
 });
 handle('android:resume', () => { electron.__android.window()?.emit('focus'); return true; });
 handle('android:roots', () => ({ volumes: volumes(), roots: scanRomRoots() }));
+// Drives games can be installed to (Install to, src/android/drives.js): internal storage and each SD card or USB
+// drive, with its free space and its ROMs folder: the main one on the drive that holds it, else the one picked
+// for that drive (config.android.driveRoots), else the one Cartridge would suggest there.
+handle('android:drives', async () => {
+  const cfg = await invoke('config:get');
+  const main = cfg?.romsRoot ? path.resolve(cfg.romsRoot) : '';
+  const picked = cfg?.android?.driveRoots || {};
+  const out = [];
+  for (const v of volumes()) {
+    let free = 0, total = 0;
+    try { const st = await fs.promises.statfs(v.path); free = st.bavail * st.bsize; total = st.blocks * st.bsize; } catch {}
+    const inside = (p) => p === v.path || p.startsWith(v.path + '/');
+    const roms = main && inside(main) ? main : picked[v.path] && isDir(picked[v.path]) ? picked[v.path] : '';
+    const guess = roms ? '' : scanRomRoots().find((r) => inside(r.path))?.path || '';
+    out.push({ mount: v.path, label: v.path === STORAGE ? 'Internal storage' : v.label, removable: v.path !== STORAGE, main: !!main && inside(main), roms, guess, free, total });
+  }
+  // two SD-card-like volumes get their id; one is just "SD card"
+  const ext = out.filter((d) => d.removable);
+  if (ext.length === 1) ext[0].label = 'SD card';
+  return out;
+});
 
 // ---------------------------------------------------------------- server (shared with desktop)
 // Loopback API for the two screens, and the phone remote on the network when it's turned on.

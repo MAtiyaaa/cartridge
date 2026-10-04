@@ -4,13 +4,14 @@
 import { ref, computed, watch } from 'vue';
 import { store, call } from './store.js';
 import { input } from './nav.js';
+import { IS_ANDROID } from './platform.js';
 
 const detected = ref('xbox');
 export const padInfo = ref(null);
 export const padKind = computed(() => {
   const pref = store.config?.ui?.buttons || 'auto';
   if (pref !== 'auto') return pref;
-  if (store.config?.android?.buttonLayout === 'nintendo') return 'nintendo'; // Settings → Android → Button layout
+  if (IS_ANDROID && store.config?.android?.buttonLayout === 'nintendo') return 'nintendo'; // Settings → Android → Button layout
   return detected.value;
 });
 function fromId(id) {
@@ -29,11 +30,11 @@ export async function detectPad() {
   const pads = navigator.getGamepads ? [...navigator.getGamepads()].filter(Boolean) : [];
   for (const p of pads) { const k = fromId(p.id); if (k) { detected.value = k; return; } }
   // Android: the controller names come from the system (input.padName), not from /proc
-  const k = fromId(input.padName);
+  const k = IS_ANDROID && fromId(input.padName);
   if (k) { detected.value = k; return; }
   detected.value = 'xbox';
 }
 window.addEventListener('gamepadconnected', () => setTimeout(detectPad, 400));
 window.addEventListener('gamepaddisconnected', () => setTimeout(detectPad, 400));
 setInterval(detectPad, 30000);
-watch(() => input.padName, () => detectPad());
+if (IS_ANDROID) watch(() => input.padName, () => detectPad());

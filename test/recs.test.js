@@ -32,7 +32,7 @@ test('Home: unplayed games like the ones you play most, naming the game', () => 
   const mins = { 1: 600 };
   const l = R.recommend(LIB, { minsOf: (r) => mins[r.id] || 0 });
   assert.strictEqual(l[0].rom.id, 2);
-  assert.strictEqual(l[0].why, 'Same series as Gran Turismo 4');
+  assert.strictEqual(l[0].why, ''); // 0.9.16: no reason line for a sequel
   assert.ok(l.every((x) => x.rom.id !== 1), 'never what you already played');
   assert.deepStrictEqual(R.recommend(LIB, {}), [], 'nothing played yet: no row');
 });

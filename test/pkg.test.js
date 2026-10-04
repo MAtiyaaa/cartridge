@@ -210,6 +210,7 @@ test('Vita: an install with no licence is reported, not called ready', async () 
   const exe = path.join(TMP, 'fake-vita3k-nolic');
   fs.writeFileSync(exe, `#!/bin/sh\nmkdir -p "${pref}/ux0/app/PCSE00123/sce_sys"\nprintf '\\0PSF TITLE_ID PCSE00123' > "${pref}/ux0/app/PCSE00123/sce_sys/param.sfo"\n`);
   fs.chmodSync(exe, 0o755);
+  // 0.9.19: a .vpk Cartridge can't read fully (here a stand-in param.sfo) still goes through Vita3K
   const item = await P.vitaContent(path.join(TMP, 'vita/vpk'));
   let out = await P.installVita({ cmd: { exe, args: [] }, prefs: [pref], item });
   assert.strictEqual(out[0].licenced, false);

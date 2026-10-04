@@ -3,10 +3,13 @@
     <Background v-if="store.config && !embedded" still />
 
     <main class="body">
-      <Transition name="cfade" mode="out-in">
+      <!-- The art behind a game or a console stays put outside the transition and crossfades picture to picture,
+           so moving between games and systems never fades through black; only the content animates -->
+      <div class="hero gv-hero" :style="{ '--p': gvP, '--sy': gvY }"><div class="fill fades" :class="{ gone: !gameShown }"><CrossArt class="fill" :src="gameShown ? heroSrc : ''" :blur="hero?.blur" /><div class="hero-shade" /></div></div>
+      <div class="gx-bg" :class="{ gone: !groupBg }"><CrossArt class="fill" :src="groupBg?.src || ''" :blur="groupBg?.blur" /></div>
+      <Transition name="cslide">
         <!-- Game -->
         <section v-if="tab === 'game' && rom" :key="'g' + rom.id" ref="gvEl" class="view gv" data-scroll :style="{ '--p': gvP, '--sy': gvY }" @scroll.passive="gvScroll">
-          <div class="hero gv-hero"><Art class="fill" :src="heroSrc" :blur="hero?.blur" /><div class="hero-shade" /></div>
           <div class="gv-head">
             <div class="gv-main">
               <div class="eyebrow row"><PIcon v-if="platform" :p="platform" :size="16" />{{ rom.platform_display_name || platform?.display_name }}</div>
@@ -47,7 +50,6 @@
              covers stand in the middle, the logo (console wordmark or series logo) or name sits below them, and
              Open is pinned where a game's Open is. -->
         <section v-else-if="tab === 'game' && group" :key="group.key" class="view gx">
-          <div class="gx-bg"><Art v-if="group.art" class="fill" :src="group.art.src" :blur="group.art.blur" /></div>
           <div class="gx-shade" />
           <div class="gx-fan">
             <Art v-for="(r, i) in group.covers" :key="r.id" class="gx-c" :src="r.src" :style="{ '--i': i - (group.covers.length - 1) / 2 }" @click="cmd({ open: true, romId: r.id })" />
@@ -175,6 +177,7 @@ import GameLogo from '../components/GameLogo.vue';
 import PIcon from '../components/PIcon.vue';
 import Logo from '../components/Logo.vue';
 import Art from './Art.vue';
+import CrossArt from './CrossArt.vue';
 import CompanionSettings from './CompanionSettings.vue';
 import Icon from '../components/Icon.vue';
 
@@ -276,6 +279,9 @@ const group = computed(() => {
 });
 watch(() => group.value?.key, () => (logoBad.value = false));
 const coverSrc = computed(() => rom.value && cover(rom.value, true));
+// what the persistent art layers behind the views show (see the template)
+const gameShown = computed(() => tab.value === 'game' && !!rom.value);
+const groupBg = computed(() => (tab.value === 'game' && !rom.value && group.value?.art) || null);
 // Scrolling the game view: the art drifts slower than the page and fades, the logo and box art ease back
 const gvEl = ref(null), gvY = ref(0), gvP = ref(0);
 let gvRaf = 0;
@@ -309,7 +315,7 @@ function statusText(d) {
 const busyDl = ref(false);
 async function startDl() {
   busyDl.value = true;
-  try { await download(rom.value); } catch {}
+  try { await download(rom.value, { ask: false }); } catch {} // the drive used last: the sheet would open on the main screen
   busyDl.value = false;
 }
 const libLine = computed(() => {
@@ -355,6 +361,11 @@ html, body { touch-action: pan-x pan-y; }
 .cfade-leave-active { transition: opacity 0.12s ease-in; }
 .cfade-enter-from { opacity: 0; transform: translateY(8px); }
 .cfade-leave-to { opacity: 0; }
+/* between games, consoles and tabs: the new content rises in over the old one fading out; no blank frame */
+.cslide-enter-active { transition: opacity 0.26s var(--ease), transform 0.32s var(--ease); z-index: 2; }
+.cslide-leave-active { transition: opacity 0.16s ease-in, transform 0.2s ease-in; z-index: 1; pointer-events: none; }
+.cslide-enter-from { opacity: 0; transform: translate3d(0, 12px, 0) scale(0.985); }
+.cslide-leave-to { opacity: 0; transform: translate3d(0, -6px, 0); }
 </style>
 <style scoped>
 .cmp { position: fixed; inset: 0; overflow: hidden; opacity: 0; transition: opacity 0.3s var(--ease); }
@@ -478,7 +489,8 @@ html, body { touch-action: pan-x pan-y; }
    dock. Scrolling moves the art slower than the page (parallax) and eases the logo and box art back. */
 .gv { overflow-x: hidden; padding-bottom: 80px; }
 .gv > * { flex-shrink: 0; } /* a fixed-height flex column shrank the games row (overflow-x lets it) to a sliver */ /* the dock is 72px tall with its gap; sticky offsets start inside this padding */
-.gv .gv-hero { transform: translate3d(0, calc(var(--sy, 0) * 0.45px), 0) scale(calc(1 + var(--p, 0) * 0.06)); opacity: calc(1 - var(--p, 0) * 0.55); transform-origin: 50% 0; will-change: transform, opacity; }
+/* outside the scrolling view since the art layers stopped fading with it: -0.55 is the old scroll (-1) plus parallax (0.45) */
+.gv-hero { transform: translate3d(0, calc(var(--sy, 0) * -0.55px), 0) scale(calc(1 + var(--p, 0) * 0.06)); opacity: calc(1 - var(--p, 0) * 0.55); transform-origin: 50% 0; will-change: transform, opacity; }
 .gv-head { position: relative; z-index: 1; display: flex; align-items: flex-end; gap: 16px; margin-top: 112px; }
 .gv-main { position: relative; z-index: 2; flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
 .gv-logo { transform: scale(calc(1 - var(--p, 0) * 0.1)); transform-origin: 0 100%; }
@@ -497,6 +509,9 @@ html, body { touch-action: pan-x pan-y; }
    Open is where a game's Open is (the same .gv-acts). Covers have fixed sizes (older WebViews). */
 .gx { overflow: hidden; padding-bottom: 80px; gap: 0; }
 .gx-bg { position: absolute; inset: 0; z-index: -2; }
+/* a layer coming in fades in at once and the one going waits a moment, so game to console overlaps instead of dipping */
+.fades, .gx-bg { transition: opacity 0.3s var(--ease); }
+.fades.gone, .gx-bg.gone { opacity: 0; transition-delay: 0.14s; }
 .gx-bg .fill { transform: scale(1.04); }
 .gx-shade { position: absolute; inset: 0; z-index: -1; background: linear-gradient(180deg, rgba(12, 13, 16, 0.35) 0%, rgba(12, 13, 16, 0.2) 30%, rgba(12, 13, 16, 0.78) 62%, var(--s0) 92%); }
 .gx-fan { flex: 1 1 auto; min-height: 150px; position: relative; display: flex; align-items: center; justify-content: center; }

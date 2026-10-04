@@ -64,7 +64,8 @@ watch(mode, (m) => document.body.classList.toggle('bg-console', !!baseOf(m)), { 
 // than drawing it full size (measured: about 30% of each frame while moving around).
 const cv = ref(null);
 let raf = 0, last = 0, ctx = null, frame = null, key = '';
-let clock = 0; // ms of animation drawn so far
+const t0 = performance.now();
+let clock = 0; // ms of animation drawn so far (Android)
 const ANDROID = import.meta.env.MODE === 'android';
 function scale() {
   const dpr = window.devicePixelRatio || 1;
@@ -95,12 +96,12 @@ function loop(t) {
   // picks up again a moment after you stop
   // (not on Android: it composites on the GPU, and pausing there read as the picture stalling on every tap)
   if (light.value && !ANDROID && t - lastInput < 900) return;
-  // The animation's own clock only moves while it draws: after a pause it carries on from where it
+  // Android: the animation's own clock only moves while it draws: after a pause it carries on from where it
   // stopped instead of jumping ahead (that jump looked like the background restarting on every press)
   clock += last ? Math.min(t - last, gap * 2) : 0;
   last = t;
   if (!setup()) return;
-  frame(clock / 1000);
+  frame(ANDROID ? clock / 1000 : (t - t0) / 1000);
 }
 function start() {
   cancelAnimationFrame(raf); last = 0; key = ''; frame = null;
@@ -120,6 +121,7 @@ document.addEventListener('visibilitychange', vis);
 const away = () => cancelAnimationFrame(raf);
 window.addEventListener('blur', away);
 window.addEventListener('focus', start);
+watch(() => store.away, (a) => (a ? cancelAnimationFrame(raf) : start()));
 onBeforeUnmount(() => { cancelAnimationFrame(raf); document.removeEventListener('visibilitychange', vis); window.removeEventListener('resize', onResize); window.removeEventListener('blur', away); window.removeEventListener('focus', start); });
 
 // ---------- your own wallpaper
