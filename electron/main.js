@@ -3193,7 +3193,20 @@ const handlers = {
     if (/\.(3ds|cci)$/i.test(file)) ids.titleId = A.n3dsTitleId(file);
     if (/\.cia$/i.test(file)) ids.titleId = A.ciaTitleId(file);
     if (slug === 'psx' && /\.(bin|img|iso|cue|chd|pbp)$/i.test(file)) ids.serial = A.psxSerial(file);
-    if (slug === 'switch') { const k = require('./bios').status('switch', { roots: emuRootsAll() }); const id = A.switchTitleId(file, k?.ok ? [path.dirname(k.where)] : []); if (id) { ids.switchId = id; ids.switchIdLower = id.toLowerCase(); } }
+    if (slug === 'switch') {
+      const k = require('./bios').status('switch', { roots: emuRootsAll() });
+      let id = A.switchTitleId(file, k?.ok ? [path.dirname(k.where)] : []);
+      // 0.9.24 (owner: many IDs still unread): dumps are named with their title ID ([0100...]); a game's base ID
+      // ends in 000, its update in 800, its DLC in 1xxx, so the base one is taken from any of them
+      if (!id) {
+        let names = [path.basename(where || ''), path.basename(file || '')];
+        try { if (fs.statSync(where).isDirectory()) names = names.concat(fs.readdirSync(where)); } catch {}
+        const all = names.map((n) => (/\b(01[0-9A-Fa-f]{14})\b/.exec(n) || [])[1]).filter(Boolean).map((x) => x.toUpperCase());
+        const base = all.find((x) => x.endsWith('000')) || all[0];
+        if (base) id = base.slice(0, 13) + '000';
+      }
+      if (id) { ids.switchId = id; ids.switchIdLower = id.toLowerCase(); }
+    }
     if (slug === 'switch') { const v = switchVersionOf(where && where !== MARKED ? where : ''); if (v) ids.version = v; }
     if (typeof out === 'function') out(ids);
     return A.forGame(slug, ids, A.emulators());
