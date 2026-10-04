@@ -119,7 +119,7 @@ function api(base, key, fetchImpl = fetch, ms = 6000) {
     if (!r.ok) throw new Error(`Syncthing answered ${r.status}.`);
     return (r.headers.get('content-type') || '').includes('json') ? r.json() : r.text();
   };
-  return { base, get: (p) => call(p), post: (p) => call(p, { method: 'POST' }) };
+  return { base, get: (p) => call(p), post: (p, body) => call(p, body ? { method: 'POST', body: JSON.stringify(body), headers: { 'Content-Type': 'application/json' } } : { method: 'POST' }) };
 }
 // everything about one Syncthing (this device's, or the main server): who it is, its devices, its folders
 async function overview(a) {
@@ -152,6 +152,27 @@ async function rescan(folder, { fetchImpl = fetch, home = HOME } = {}) {
   const l = await localApi(home, fetchImpl);
   await api(l.base, l.key, fetchImpl).post(`/rest/db/scan?folder=${encodeURIComponent(folder)}`);
   return true;
+}
+// 0.9.24 (owner: Syncthing in the welcome, pick the folder it syncs). Folders to offer: the emulation saves
+// folder when there is one (EmuDeck, ES-DE layout), and Syncthing's own default, ~/Sync.
+function suggest(home = HOME, extra = []) {
+  const out = [];
+  for (const d of [...extra, path.join(home, 'Emulation', 'saves')]) if (d && fs.existsSync(d) && !out.some((o) => o.path === d)) out.push({ path: d, label: 'Emulation saves', sub: 'Your emulators\u2019 saves, in your Emulation folder' });
+  out.push({ path: path.join(home, 'Sync'), label: 'Sync', sub: 'Syncthing\u2019s own default folder' });
+  return out;
+}
+// Shares one folder in this device's Syncthing (the only config change Cartridge makes, and only when asked).
+// A folder already shared at that path is left as it is.
+async function addFolder({ dir, label }, { fetchImpl = fetch, home = HOME } = {}) {
+  const l = await localApi(home, fetchImpl);
+  const a = api(l.base, l.key, fetchImpl);
+  const have = await a.get('/rest/config/folders');
+  const same = (have || []).find((f) => path.resolve(String(f.path || '').replace(/^~(?=\/)/, home)) === path.resolve(dir));
+  if (same) return { id: same.id, existed: true };
+  fs.mkdirSync(dir, { recursive: true });
+  const id = 'cartridge-' + Math.random().toString(36).slice(2, 7);
+  await a.post('/rest/config/folders', { id, label: label || path.basename(dir), path: dir, type: 'sendreceive' });
+  return { id, existed: false };
 }
 // Which games have saves or textures synced (smart search). Every synced folder's index is read from
 // Syncthing (rest/db/browse), and each file path is matched to games by serial or title ID (PS1/PS2/PSP,
@@ -202,4 +223,4 @@ async function gamesSynced(games, { fetchImpl = fetch, home = HOME, cap = 20000 
   }
   return { games: matchGames(games, folders), folders: folders.length, files: n };
 }
-module.exports = { setLocalKey, pick, find, status, browse, flatten, parseConfig, configFiles, saveHint, textureHint, local, server, rescan, gamesSynced, matchGames, serialsIn, norm };
+module.exports = { suggest, addFolder, FLATPAKS, setLocalKey, pick, find, status, browse, flatten, parseConfig, configFiles, saveHint, textureHint, local, server, rescan, gamesSynced, matchGames, serialsIn, norm };

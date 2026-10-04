@@ -2716,6 +2716,18 @@ const handlers08 = {
   },
   'sync:rescan': (folder) => require('./syncthing').rescan(folder),
   'sync:setKey': async ({ key }) => { const S = require('./syncthing'); S.setLocalKey(key); const st = await S.status(); if (!st.running) { S.setLocalKey(config.syncthing?.localKey || ''); throw new Error(st.why || 'Syncthing didn’t accept that key.'); } config.syncthing = { ...(config.syncthing || {}), localKey: String(key || '').trim() }; saveConfig(); return st; },
+  // Welcome → Syncthing (0.9.24): folders to offer, share one, or install Syncthing (SyncThingy from Flathub, user scope)
+  'sync:suggest': () => require('./syncthing').suggest(os.homedir(), config.romsRoot ? [path.join(path.dirname(config.romsRoot), 'saves')] : []),
+  'sync:addFolder': async ({ dir, label }) => { const r = await require('./syncthing').addFolder({ dir, label }); config.syncthing = { ...(config.syncthing || {}), folder: dir }; saveConfig(); return r; },
+  'sync:install': async () => {
+    const fp = require('./syncthing').FLATPAKS[0];
+    await require('./emuGet').getFlatpak(fp, (pct) => broadcast('sync-install', { pct }));
+    // started once so Syncthing makes its settings file and API key; SyncThingy keeps it running in the tray
+    try { const p = require('child_process').spawn('flatpak', ['run', fp], { detached: true, stdio: 'ignore' }); p.unref(); } catch {}
+    const S = require('./syncthing');
+    for (let i = 0; i < 30; i++) { await new Promise((r) => setTimeout(r, 1000)); const st = await S.status().catch(() => null); if (st?.running) return st; }
+    return S.status();
+  },
   'sync:games': async () => require('./syncthing').gamesSynced(syncGameList()),
   // dates for a game's timeline (the game page adds trophies and achievements it already has)
   'rom:timeline': ({ romId }) => {

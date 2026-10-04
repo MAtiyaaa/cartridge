@@ -19,3 +19,27 @@ test('files go to games by serial first, then the longest name, saves and textur
   assert.strictEqual(m[1], undefined); // "Sonic" is too short to match by name
   assert.strictEqual(Object.keys(m).length, 2);
 });
+
+test('a folder is shared once, through the key Syncthing accepts (0.9.24 welcome)', async () => {
+  const fs = require('fs'), os = require('os'), path = require('path');
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'st-'));
+  fs.mkdirSync(path.join(home, '.local/state/syncthing'), { recursive: true });
+  fs.writeFileSync(path.join(home, '.local/state/syncthing/config.xml'), '<configuration><gui><address>127.0.0.1:8384</address><apikey>k1</apikey></gui></configuration>');
+  fs.mkdirSync(path.join(home, 'Emulation/saves'), { recursive: true });
+  const posted = [];
+  const fetchImpl = async (url, o = {}) => {
+    const ok = o.headers?.['X-API-Key'] === 'k1';
+    const body = url.endsWith('/rest/config/folders') && !o.method ? posted : {};
+    if (o.method === 'POST') posted.push({ ...JSON.parse(o.body), path: JSON.parse(o.body).path });
+    return { ok, status: ok ? 200 : 403, headers: { get: () => 'application/json' }, json: async () => body, text: async () => '' };
+  };
+  assert.strictEqual(S.suggest(home)[0].path, path.join(home, 'Emulation/saves'));
+  const dir = path.join(home, 'Sync');
+  const a = await S.addFolder({ dir, label: 'Sync' }, { fetchImpl, home });
+  assert.strictEqual(a.existed, false);
+  assert.ok(fs.existsSync(dir));
+  const b = await S.addFolder({ dir }, { fetchImpl, home });
+  assert.strictEqual(b.existed, true);
+  assert.strictEqual(posted.length, 1);
+  fs.rmSync(home, { recursive: true, force: true });
+});
