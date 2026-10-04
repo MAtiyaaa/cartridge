@@ -244,27 +244,37 @@
             <Toggle :model-value="ui.cardTitles !== false" label="Game names under box art" desc="Turn off for a clean wall of covers" @update:model-value="(v) => saveConfig({ ui: { cardTitles: v } })" />
             <Toggle :model-value="ui.mediaBar !== false" label="Media bar" desc="Show artwork of the highlighted game at the top of Home" @update:model-value="(v) => saveConfig({ ui: { mediaBar: v } })" />
             <div v-if="ui.mediaBar !== false" class="row"><span class="lbl">Media bar size</span><div class="seg"><button v-for="m in mediaSizes" :key="m.v" data-focus :class="{ on: (ui.mediaSize || 'large') === m.v }" @click="saveConfig({ ui: { mediaSize: m.v } })">{{ m.l }}</button></div></div>
-            <Toggle :model-value="ui.logos !== false" label="Game logos" desc="Show the game's logo instead of its name on Home and game pages" @update:model-value="(v) => saveConfig({ ui: { logos: v } })" />
             <button class="lrow adv-tg" data-focus @click="lookAdv = !lookAdv"><Icon name="mdiTuneVariant" :size="22" /><div class="l-mid"><b>Advanced</b></div><Icon :name="lookAdv ? 'mdiChevronUp' : 'mdiChevronDown'" :size="22" /></button>
             <template v-if="lookAdv">
             <div class="row"><span class="lbl">Card corners</span><div class="seg"><button v-for="(v, k) in CARD_SHAPES" :key="k" data-focus :class="{ on: (ui.cardShape || 'rounded') === k }" @click="saveConfig({ ui: { cardShape: k } })">{{ v.label }}</button></div></div>
             <div class="row"><span class="lbl">Spacing</span><div class="seg"><button v-for="(v, k) in DENSITIES" :key="k" data-focus :class="{ on: (ui.density || 'normal') === k }" @click="saveConfig({ ui: { density: k } })">{{ v.label }}</button></div></div>
-            <template v-if="ui.logos !== false">
+            <Toggle :model-value="ui.hideEmpty" label="Hide empty systems" @update:model-value="(v) => saveConfig({ ui: { hideEmpty: v } })" />
+
+            </template>
+            </template>
+            <!-- Metadata (0.9.24, owner: its own tab): SteamGridDB, and fetching art ahead of time -->
+            <template v-else-if="lookPage === 'meta'">
+              <div class="subh">SteamGridDB</div>
+              <p class="muted small" style="margin-top: -6px">Logos come from your RomM server when it has them (ScreenScraper "logo" media). For everything else, add a free key from steamgriddb.com → Preferences → API. {{ store.config.sgdbKey ? 'Key saved.' : '' }}</p>
               <div class="row" style="align-items: flex-end; gap: 12px">
                 <TextField v-model="sgdbKey" label="SteamGridDB API key" placeholder="Paste your key" password icon="mdiKeyVariant" style="flex: 1" />
                 <button class="btn" data-focus :disabled="sgdbBusy" @click="saveSgdb"><Icon name="mdiCheck" :size="18" />{{ sgdbBusy ? 'Checking…' : 'Save key' }}</button>
               </div>
-              <div class="row" style="gap: 12px; align-items: center">
-                <button v-if="!logoJob" class="btn" data-focus @click="fetchAll"><Icon name="mdiDownloadMultiple" :size="18" />Fetch All Metadata</button>
-                <button v-else class="btn" data-focus @click="call('logo:stopAll')"><Icon name="mdiStop" :size="18" />Stop</button>
-                <div v-if="logoJob" class="logo-prog"><div class="bar live"><i :style="{ width: (logoJob.total ? (logoJob.done / logoJob.total) * 100 : 0) + '%' }" /></div><span class="muted small">{{ logoJob.done }} / {{ logoJob.total }} games · {{ logoJob.found }} logos</span></div>
-                <span v-else class="muted small">Gets every game's logo, sharpest background, cover and screenshot now, instead of as you browse.</span>
+              <div class="subh">Fetch Ahead of Time</div>
+              <p class="muted small" style="margin-top: -6px">Gets art now, instead of as you browse, so pages open with everything in place.</p>
+              <div v-if="logoJob" class="row" style="gap: 12px; align-items: center">
+                <div class="logo-prog"><div class="bar live"><i :style="{ width: (logoJob.total ? (logoJob.done / logoJob.total) * 100 : 0) + '%' }" /></div><span class="muted small">{{ logoJob.done }} / {{ logoJob.total }} games · {{ logoJob.found }} logos</span></div>
+                <button class="btn" data-focus @click="call('logo:stopAll')"><Icon name="mdiStop" :size="18" />Stop</button>
               </div>
-              <p class="muted small" style="margin-top: -6px">Logos come from your RomM server when it has them (ScreenScraper "logo" media). For everything else, add a free key from steamgriddb.com → Preferences → API. {{ store.config.sgdbKey ? 'Key saved.' : '' }}</p>
-            </template>
-            <Toggle :model-value="ui.hideEmpty" label="Hide empty systems" @update:model-value="(v) => saveConfig({ ui: { hideEmpty: v } })" />
-
-            </template>
+              <template v-else>
+                <button class="lrow" data-focus @click="fetchAll()"><Icon name="mdiDownloadMultiple" :size="22" /><span class="l-mid"><b>Fetch All Metadata</b><span class="l-sub">Logos, backgrounds, covers and screenshots for every game</span></span></button>
+                <button class="lrow" data-focus @click="fetchAll(['logos'])"><Icon name="mdiAlphaLBoxOutline" :size="22" /><span class="l-mid"><b>Fetch Logos</b><span class="l-sub">Each game’s logo, from RomM or SteamGridDB</span></span></button>
+                <button class="lrow" data-focus :disabled="!store.config.sgdbKey" @click="fetchAll(['heroes'])"><Icon name="mdiPanorama" :size="22" /><span class="l-mid"><b>Fetch Backgrounds</b><span class="l-sub">SteamGridDB’s heroes, the sharpest that fit your screen{{ store.config.sgdbKey ? '' : ' (needs a key)' }}</span></span></button>
+                <button class="lrow" data-focus @click="fetchAll(['covers'])"><Icon name="mdiImageMultipleOutline" :size="22" /><span class="l-mid"><b>Fetch Covers and Screenshots</b><span class="l-sub">From your RomM server, kept on this device</span></span></button>
+              </template>
+              <div class="subh">On Screen</div>
+              <Toggle :model-value="ui.logos !== false" label="Game logos" desc="Show the game's logo instead of its name on Home and game pages" @update:model-value="(v) => saveConfig({ ui: { logos: v } })" />
+              <p class="muted small">Steam’s own artwork for your games is in Settings → Steam → Refresh artwork.</p>
             </template>
             <template v-else-if="lookPage === 'motion'">
             <div class="subh"><Icon name="mdiAnimationPlayOutline" :size="20" />Motion &amp; Sound</div>
@@ -546,9 +556,9 @@ const sgdbKey = ref(store.config.sgdbKey || '');
 const sgdbBusy = ref(false);
 // Fetch all logos: progress lives in the store (one listener for the whole app)
 const logoJob = computed(() => store.logoJob);
-async function fetchAll() {
+async function fetchAll(kinds = null) {
   store.logoJob = { done: 0, total: 0, found: 0 };
-  call('logo:fetchAll').catch((e) => { store.logoJob = null; toast(e.message, 'error', 4000); });
+  call('logo:fetchAll', { kinds }).catch((e) => { store.logoJob = null; toast(e.message, 'error', 4000); });
 }
 // RetroAchievements account
 const raUser = ref(store.config.ra?.user || '');
@@ -968,7 +978,7 @@ const ps3Ups = ref(null);
 const coverSmall = (romId) => { const r = romById(romId); return r ? cover(r) : ''; };
 const ps3UpCount = computed(() => (ps3Ups.value || []).filter((g) => g.todo.length).length);
 async function loadPs3Updates(fresh = false) { ps3Ups.value = await call('ps3up:list', { fresh }).catch(() => []); }
-const LOOK_PAGES = [{ v: 'theme', l: 'Theme' }, { v: 'cards', l: 'Text and Cards' }, { v: 'motion', l: 'Motion and Sound' }, { v: 'controls', l: 'Controls' }];
+const LOOK_PAGES = [{ v: 'theme', l: 'Theme' }, { v: 'cards', l: 'Text and Cards' }, { v: 'meta', l: 'Metadata' }, { v: 'motion', l: 'Motion and Sound' }, { v: 'controls', l: 'Controls' }];
 const lookPage = ref('theme'), lookAdv = ref(false);
 function setLookPage(v) { lookPage.value = v; lookAdv.value = false; }
 function stepLook(d) {

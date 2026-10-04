@@ -1122,8 +1122,10 @@ async function prefetchImage(target) {
 }
 // Fetch all: prepare logos and the rest of the art for the whole library in the background, reporting progress.
 let fetchAll = null; // { done, total, found, stop }
-async function fetchAllLogos() {
+async function fetchAllLogos(kinds = null) {
   if (fetchAll) return { running: true };
+  // 0.9.24 Look & Feel → Metadata: everything, or only logos, heroes (backgrounds) or covers and screenshots
+  const want = (k) => !kinds || kinds.includes(k);
   const roms = library ? Object.values(library.roms).flat() : [];
   fetchAll = { done: 0, total: roms.length, found: 0, stop: false };
   const report = (state) => broadcast('logos-progress', { state, done: fetchAll.done, total: fetchAll.total, found: fetchAll.found });
@@ -1133,11 +1135,11 @@ async function fetchAllLogos() {
     for (const r of roms) {
       if (fetchAll.stop) break;
       const romm = r.logo || '';
-      try { if (await logoFor({ id: r.id, name: r.name, romm })) fetchAll.found++; } catch (e) { if (e.auth) { report('error'); throw e; } }
+      if (want('logos')) try { if (await logoFor({ id: r.id, name: r.name, romm })) fetchAll.found++; } catch (e) { if (e.auth) { report('error'); throw e; } }
       // 0.9.15, Fetch all metadata: the rest of each game's art too, so nothing loads while you browse:
       // its sharpest background (SteamGridDB, with a key), cover and first screenshot into the image cache
-      await sharpHero({ id: r.id, name: r.name }).catch(() => {});
-      for (const t of [r.path_cover_large || r.url_cover, r.shot]) if (t) await prefetchImage(t).catch(() => {});
+      if (want('heroes')) await sharpHero({ id: r.id, name: r.name }).catch(() => {});
+      if (want('covers')) for (const t of [r.path_cover_large || r.url_cover, r.shot]) if (t) await prefetchImage(t).catch(() => {});
       fetchAll.done++;
       if (Date.now() - last > 250) { last = Date.now(); report('running'); }
     }
@@ -2956,7 +2958,7 @@ const handlers = {
   'pad:detect': () => detectPad(),
   'icon:set': ({ key, url }) => { iconCache[String(key)] = { url, t: Date.now(), custom: true }; try { fs.writeFileSync(ICON_FILE, JSON.stringify(iconCache)); } catch {} return url; },
   'icon:reset': ({ key }) => { delete iconCache[String(key)]; try { fs.writeFileSync(ICON_FILE, JSON.stringify(iconCache)); } catch {} return true; },
-  'logo:fetchAll': () => fetchAllLogos(),
+  'logo:fetchAll': (o) => fetchAllLogos(o?.kinds || null),
   'logo:stopAll': () => { if (fetchAll) fetchAll.stop = true; return true; },
   'art:all': () => artOverrides,
   'art:sharpHero': (a) => sharpHero(a || {}),
