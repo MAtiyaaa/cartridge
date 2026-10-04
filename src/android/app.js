@@ -56,8 +56,16 @@ async function checkUpdate() {
 // { action, down } using the same action names as nav.js. Held directions repeat like nav.js.
 const REPEATABLE = new Set(['up', 'down', 'left', 'right', 'lt', 'rt']);
 const held = new Map(); // action -> repeat timer (null for buttons that do not repeat)
+// A on something with a held meaning ([data-hold], Start's tiles): a press opens it on release, a hold of
+// 450 ms does the held thing (arrange Start), as nav.js does for pads the WebView reads itself
+let aHold = null;
 function pad({ dispatch, markRepeat, input }, { action, down }) {
   input.kb = false;
+  if (action === 'accept' && (aHold || (down && document.activeElement?.hasAttribute?.('data-hold')))) {
+    if (down && !aHold) aHold = { fired: false, t: setTimeout(() => { aHold.fired = true; dispatch('hold'); }, 450) };
+    else if (!down && aHold) { clearTimeout(aHold.t); const fired = aHold.fired; aHold = null; if (!fired) dispatch('accept'); }
+    return;
+  }
   if (down && held.has(action)) return; // d-pads that report both keys and hat axes
   clearTimeout(held.get(action));
   held.delete(action);

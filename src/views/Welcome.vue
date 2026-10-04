@@ -207,7 +207,7 @@
               <li><b>No syncing</b> of trophies, play time or favourites with your other devices</li>
               <li><b>No RetroAchievements links</b> from RomM's game matches</li>
             </ul>
-            <p class="w-lead">Steam shortcuts, emulator setup, patches, add-ons and achievements on this device still work. You can connect RomM any time in Settings → RomM.</p>
+            <p class="w-lead">{{ IS_ANDROID ? 'Playing them with your emulators and RetroAchievements still work.' : 'Steam shortcuts, emulator setup, patches, add-ons and achievements on this device still work.' }} You can connect RomM any time in Settings → RomM.</p>
             <p class="muted small">Games folder: {{ store.config.romsRoot ? short(store.config.romsRoot) : 'not set yet' }}</p>
             <div class="w-act">
               <button class="btn" data-focus @click="romm = 'what'"><Icon name="mdiArrowLeft" />Back</button>

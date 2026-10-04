@@ -41,6 +41,8 @@
           </button>
         </div>
 
+        <!-- lsfg-vk and MAKO are Linux Vulkan layers: desktop only -->
+        <template v-if="!IS_ANDROID">
         <div class="subh"><Icon name="mdiAnimationPlay" :size="20" />Frame Generation</div>
         <div class="ss-emus">
           <button class="ss-emu" data-focus data-key="framegen" @click="go('frame-gen')">
@@ -49,6 +51,7 @@
             <Icon name="mdiChevronRight" :size="22" class="muted" />
           </button>
         </div>
+        </template>
 
         <div class="subh"><Icon name="mdiTuneVariant" :size="20" />Options</div>
         <Toggle :model-value="sc.preview !== false" label="Show what changes first" desc="See every Target, Start in and Launch options before Steam is touched" @update:model-value="(v) => setC({ preview: v })" />
@@ -72,6 +75,7 @@
 </template>
 
 <script setup>
+import { IS_ANDROID } from '../platform.js';
 import { computed, onMounted, ref, watch } from 'vue';
 import { store, call, confirm, toast, go, romById, choose } from '../store.js';
 import { steam, applyChanges, restartSteam } from '../steam.js';
