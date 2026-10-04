@@ -1,0 +1,55 @@
+// Per-game emulator settings (0.9.23): only the per-game file, only the keys changed, layered formats
+const test = require('node:test');
+const assert = require('node:assert');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
+const G = require('../electron/gameSettings');
+
+const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'gs-'));
+G.setRecsFile(path.join(TMP, 'game-settings.json'));
+
+test('PCSX2: a game file is made with just the changed keys, and goes away when they go back', () => {
+  const root = path.join(TMP, 'PCSX2');
+  fs.mkdirSync(path.join(root, 'inis'), { recursive: true });
+  fs.writeFileSync(path.join(root, 'inis/PCSX2.ini'), '[EmuCore/GS]\nupscale_multiplier = 2\nRenderer = 14\n');
+  const ctx = { emu: 'pcsx2', serial: 'SLUS-21287', crc: '9C712FF0', pcsx2: { root, gamesettings: path.join(root, 'gamesettings') } };
+  let d = G.describe(ctx);
+  assert.strictEqual(d.items.find((x) => x.id === 'EmuCore/GS.upscale_multiplier').base, '2');
+  d = G.apply(ctx, [{ id: 'EmuCore/GS.upscale_multiplier', value: '4' }, { id: 'EmuCore.EnableWideScreenPatches', value: 'true' }]);
+  const f = path.join(root, 'gamesettings/SLUS-21287_9C712FF0.ini');
+  assert.strictEqual(fs.readFileSync(f, 'utf8'), '[EmuCore/GS]\nupscale_multiplier = 4\n\n[EmuCore]\nEnableWideScreenPatches = true\n');
+  assert.strictEqual(d.items.find((x) => x.id === 'EmuCore/GS.upscale_multiplier').game, '4');
+  assert.throws(() => G.apply(ctx, [{ id: 'EmuCore/GS.upscale_multiplier', value: '99' }]), /isn’t one/);
+  G.apply(ctx, [{ id: 'EmuCore/GS.upscale_multiplier', value: null }, { id: 'EmuCore.EnableWideScreenPatches', value: null }]);
+  assert.ok(!fs.existsSync(f)); // Cartridge made it, nothing of yours left in it
+});
+
+test('a game file that was already there keeps everything else', () => {
+  const root = path.join(TMP, 'duck');
+  fs.mkdirSync(path.join(root, 'gamesettings'), { recursive: true });
+  const f = path.join(root, 'gamesettings/SCUS-94900.ini');
+  fs.writeFileSync(f, '[Main]\nEmulationSpeed = 2\n\n[GPU]\nResolutionScale = 2\n');
+  const ctx = { emu: 'duckstation', serial: 'SCUS-94900', duckRoot: root };
+  G.apply(ctx, [{ id: 'GPU.ResolutionScale', value: '4' }, { id: 'GPU.WidescreenHack', value: 'true' }]);
+  assert.strictEqual(fs.readFileSync(f, 'utf8'), '[Main]\nEmulationSpeed = 2\n\n[GPU]\nResolutionScale = 4\nWidescreenHack = true\n');
+  G.apply(ctx, [{ id: 'GPU.ResolutionScale', value: null }, { id: 'GPU.WidescreenHack', value: null }]);
+  assert.strictEqual(fs.readFileSync(f, 'utf8'), '[Main]\nEmulationSpeed = 2\n\n[GPU]\n'); // yours stays
+});
+
+test('RPCS3 YAML and shadPS4 JSON, Dolphin reads its base under its own section names', () => {
+  const r = path.join(TMP, 'rpcs3');
+  fs.mkdirSync(path.join(r, 'config'), { recursive: true });
+  fs.writeFileSync(path.join(r, 'config/config.yml'), 'Video:\n  Renderer: Vulkan\n  Resolution Scale: 150\n');
+  const ctx = { emu: 'rpcs3', serial: 'BLUS30443', rpcs3Root: r };
+  assert.strictEqual(G.describe(ctx).items.find((x) => x.id === 'Video.Resolution Scale').base, '150');
+  G.apply(ctx, [{ id: 'Video.Resolution Scale', value: '300' }, { id: 'Video.Write Color Buffers', value: 'true' }]);
+  assert.strictEqual(fs.readFileSync(path.join(r, 'config/custom_configs/config_BLUS30443.yml'), 'utf8'), 'Video:\n  Resolution Scale: 300\n  Write Color Buffers: true\n');
+  const s = path.join(TMP, 'shad');
+  G.apply({ emu: 'shadps4', serial: 'CUSA00900', shadUser: s }, [{ id: 'GPU.readbacks_mode', value: '1' }, { id: 'GPU.fsr_enabled', value: 'false' }]);
+  assert.deepStrictEqual(JSON.parse(fs.readFileSync(path.join(s, 'custom_configs/CUSA00900.json'), 'utf8')), { GPU: { readbacks_mode: 1, fsr_enabled: false } });
+  const u = path.join(TMP, 'dol'), c = path.join(TMP, 'dolcfg');
+  fs.mkdirSync(c, { recursive: true }); fs.writeFileSync(path.join(c, 'GFX.ini'), '[Settings]\nInternalResolution = 3\n');
+  const dctx = { emu: 'dolphin', serial: 'GZLE01', dolphin: { user: u, config: c } };
+  assert.strictEqual(G.describe(dctx).items.find((x) => x.id === 'Video_Settings.InternalResolution').base, '3');
+});

@@ -52,10 +52,12 @@ const was = reactive(Object.fromEntries(props.list.map((p) => [p.key, p.on])));
 // Dolphin's kinds of code, as its game properties shows them (patches, Action Replay, Gecko, graphics mods)
 const KINDS = [{ k: 'OnFrame', l: 'Patches' }, { k: 'ActionReplay', l: 'AR Codes' }, { k: 'Gecko', l: 'Gecko Codes' }, { k: 'GraphicMods', l: 'Graphics Mods' }];
 const EMPTY = { OnFrame: 'Dolphin has no patches for this game.', ActionReplay: 'No Action Replay codes for this game.', Gecko: 'No Gecko codes for this game.', GraphicMods: 'No graphics mods for this game. Mods go in Dolphin’s Load/GraphicMods folder.' };
-const tabs = computed(() => (props.list.some((p) => p.section) ? KINDS.map((t) => ({ ...t, on: props.list.filter((p) => p.section === t.k && want[p.key]).length })) : []));
+// 0.9.23: shadPS4's two patch lists (its own and GoldHEN's) are tabs too, named after the list
+const kinds = computed(() => (props.list.some((p) => KINDS.some((k) => k.k === p.section)) ? KINDS : [...new Set(props.list.map((p) => p.section).filter(Boolean))].map((k) => ({ k, l: k === 'shadPS4' ? 'shadPS4 Patches' : k }))));
+const tabs = computed(() => (props.list.some((p) => p.section) ? kinds.value.map((t) => ({ ...t, on: props.list.filter((p) => p.section === t.k && want[p.key]).length })) : []));
 const tab = ref((props.list.find((p) => p.section) || {}).section || 'OnFrame');
 const shown = computed(() => (tabs.value.length ? props.list.filter((p) => p.section === (props.embedded ? props.section : tab.value)) : props.list));
-const step = (d) => { const i = KINDS.findIndex((t) => t.k === tab.value); tab.value = KINDS[(i + d + KINDS.length) % KINDS.length].k; requestAnimationFrame(() => focusFirst(el.value.querySelector('.pt-list') || el.value)); };
+const step = (d) => { const K = kinds.value; const i = K.findIndex((t) => t.k === tab.value); tab.value = K[(i + d + K.length) % K.length].k; requestAnimationFrame(() => focusFirst(el.value.querySelector('.pt-list') || el.value)); };
 const changed = computed(() => props.list.some((p) => want[p.key] !== was[p.key]));
 const changes = () => props.list.filter((p) => want[p.key] !== was[p.key]).map((p) => ({ key: p.key, on: want[p.key] }));
 const busy = ref(false);

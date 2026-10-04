@@ -15,9 +15,12 @@ const REPOS = {
   pcsx2: { repo: 'PCSX2/pcsx2', asset: /linux.*appimage.*x64.*\.AppImage$|x64.*\.AppImage$/i, pre: true },
   duckstation: { repo: 'stenzek/duckstation', tag: 'latest', asset: /^DuckStation-x64\.AppImage$/i },
   rpcs3: { repo: 'RPCS3/rpcs3-binaries-linux', asset: /linux64\.AppImage$/i },
-  // 0.9.21: EmuDeck's Vita3K is the Linux zip build in ~/Applications/Vita3K (program, data/, lang/); it
-  // updates from that same zip, never by an AppImage written over the program (that broke its Steam shortcuts)
-  vita3k: { repo: 'Vita3K/Vita3K', tag: 'continuous', asset: /^Vita3K-x86_64\.AppImage$/i, folder: /^ubuntu-latest\.zip$|linux.*\.zip$/i },
+  // 0.9.23 (owner: "the Vita3K update bricked it"): Vita3K's Linux zip build is now a Qt6 program that
+  // needs Qt6 from the system (libQt6Widgets, Multimedia, Svg...), which SteamOS and Bazzite don't have,
+  // so writing it over a copy left Vita3K unable to start. Vita3K only updates from its AppImage, which
+  // carries its own Qt. EmuDeck installs exactly that, renamed to ~/Applications/Vita3K/Vita3K
+  // (emuDeckVita3K.sh), so the AppImage may go over a plain program there (overProgram).
+  vita3k: { repo: 'Vita3K/Vita3K', tag: 'continuous', asset: /^Vita3K-x86_64\.AppImage$/i, overProgram: true },
   azahar: { repo: 'azahar-emu/azahar', asset: /\.AppImage$/i },
   cemu: { repo: 'cemu-project/Cemu', asset: /x86_64\.AppImage$/i },
   xemu: { repo: 'xemu-project/xemu', asset: /x86_64\.AppImage$/i },
@@ -43,9 +46,21 @@ const REPOS = {
 // beside it, as the zip builds unpack; also one an older Cartridge wrote an AppImage over), or a plain program
 function installKind(file) {
   if (!file || /\.exe$/i.test(file)) return 'other';
+  // the file itself decides first (0.9.23): an AppImage stays an AppImage even with an older zip build's
+  // data/ and lang/ left beside it (EmuDeck now puts Vita3K's AppImage there as "Vita3K")
+  if (require('./detect').appImageType(file)) return 'appimage';
   const dir = path.dirname(file), here = (n) => { try { return fs.statSync(path.join(dir, n)).isDirectory(); } catch { return false; } };
   if (here('data') && (here('lang') || here('translations') || here('shaders-builtin'))) return 'folder';
-  return require('./detect').appImageType(file) ? 'appimage' : 'program';
+  return 'program';
+}
+// the system libraries a program needs and can't find (ldd's "not found"), e.g. a Qt6 build on SteamOS:
+// such a copy can't start, so its update is offered as a repair. Never for AppImages (they carry theirs).
+function missingLibs(file) {
+  try {
+    if (!file || /\.exe$/i.test(file) || require('./detect').appImageType(file)) return [];
+    const out = require('child_process').execFileSync('ldd', [file], { env: plainEnv(), timeout: 8000, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+    return [...out.matchAll(/^\s*(\S+)\s*=>\s*not found/gm)].map((m) => m[1]);
+  } catch { return []; }
 }
 // which release source a copy uses: Xenia Edge's AppImage has its own; a Windows build its own files
 const specFor = (id, file = '') => (id === 'xenia' && /edge/i.test(path.basename(file)) ? REPOS.xeniaedge : id === 'xenia' && /\.exe$/i.test(file) ? REPOS['xenia-win'] : REPOS[id]);
@@ -66,14 +81,28 @@ async function flatpakUpdates(ids) {
   }
   return out;
 }
-const flatpakUpdate = (id, where) => run('flatpak', ['update', where || '--user', '-y', '--noninteractive', id], 30 * 60e3);
+// 0.9.23 (owner: Flatpak updates take far longer than AppImages): --no-related skips the app's locale
+// and debug extensions, which flatpak otherwise refreshes with every update; the runtime the new version
+// needs still comes along. Progress is read from flatpak's own output and passed on.
+function flatpakUpdate(id, where, onLine = () => {}, extra = []) {
+  return new Promise((resolve, reject) => {
+    const p = require('child_process').spawn('flatpak', [extra.includes('install') ? 'install' : 'update', where || '--user', '-y', '--noninteractive', '--no-related', ...extra.filter((x) => x !== 'install'), ...(extra.includes('install') ? ['flathub'] : []), id], { env: plainEnv() });
+    let tail = '';
+    const t = setTimeout(() => { try { p.kill(); } catch {} }, 30 * 60e3);
+    const take = (d) => { const s = String(d); tail = (tail + s).slice(-2000); for (const l of s.split(/[\r\n]+/)) { const m = /(\d{1,3})%/.exec(l); if (m || /Updating|Installing|Downloading/i.test(l)) onLine({ pct: m ? Math.min(100, Number(m[1])) : null, text: l.trim().slice(0, 120) }); } };
+    p.stdout.on('data', take); p.stderr.on('data', take);
+    p.on('error', (e) => { clearTimeout(t); reject(e); });
+    p.on('exit', (code) => { clearTimeout(t); code === 0 ? resolve(true) : reject(new Error(tail.trim().split('\n').pop() || 'Flatpak couldn’t update it.')); });
+  });
+}
+const flatpakRemove = (id, where) => run('flatpak', ['uninstall', where || '--user', '-y', '--noninteractive', id], 10 * 60e3);
 
 // GitHub: the newest release's AppImage for one emulator (cached by the caller)
 // a Forgejo/Gitea server's newest release (the same shape GitHub's API gives)
-async function forgeRelease(host, repo, fetchImpl = require('./webFetch')) {
+async function forgeRelease(host, repo, fetchImpl = require('./webFetch'), pre = false) {
   const r = await fetchImpl(`${host}/api/v1/repos/${repo}/releases?limit=5`, { headers: { 'User-Agent': 'Cartridge', Accept: 'application/json' }, signal: AbortSignal.timeout(20000) });
   if (!r.ok) throw new Error(`${new URL(host).host} answered ${r.status}`);
-  const j = (await r.json()).find((x) => !x.draft && !x.prerelease) || null;
+  const j = (await r.json()).find((x) => !x.draft && (pre || !x.prerelease)) || null;
   return j && { tag: j.tag_name, date: j.published_at || j.created_at || '', assets: (j.assets || []).map((a) => ({ name: a.name, url: a.browser_download_url, size: a.size || 0 })) };
 }
 // several builds in one release (Eden: amd64, Steam Deck...): the one whose name shares most words with the copy you have
@@ -84,16 +113,31 @@ function pickAsset(assets, re, file) {
   const mine = words(path.basename(file));
   return [...ok].sort((a, b) => [...words(b.name)].filter((w) => mine.has(w)).length - [...words(a.name)].filter((w) => mine.has(w)).length)[0];
 }
-async function latestRelease(id, { fetchImpl, spec, file } = {}) {
-  let r = spec?.repo ? spec : specFor(id, file);
+// Release channels (0.9.23, owner: show whether a copy follows stable releases or pre-releases/nightlies,
+// and let it switch): 'stable' (the newest release that isn't a pre-release), 'pre' (the newest of any,
+// pre-releases included), 'rolling' (projects with one moving build, like Vita3K's "continuous": no choice).
+// Unless the user picked one, a copy keeps the channel Cartridge always used for it (the spec's).
+const CHANNEL_REPOS = { ryujinx: { pre: { repo: 'Ryubing/Canary-Releases', forge: [['https://git.ryujinx.app', 'Ryubing/Canary']] } } };
+function channelsOf(id, file = '') {
+  const r = specFor(id, file);
+  if (!r) return { def: null, options: [] };
+  if (r.tag) return { def: 'rolling', options: ['rolling'] };
+  return { def: r.pre ? 'pre' : 'stable', options: ['stable', 'pre'] };
+}
+function withChannel(r, id, channel) {
+  if (!r || !channel || r.tag || channel === 'rolling') return r;
+  const extra = CHANNEL_REPOS[id]?.[channel];
+  return { ...r, ...(extra || {}), pre: channel === 'pre' };
+}
+async function latestRelease(id, { fetchImpl, spec, file, channel } = {}) {
+  let r = spec?.repo ? spec : withChannel(specFor(id, file), id, channel);
   // the same kind of build as the copy you have: a folder build from its zip, never an AppImage over a program
-  if (r && !spec?.repo && file && !/\.exe$/i.test(file)) { const k = installKind(file); if (k === 'folder') r = r.folder ? { ...r, asset: r.folder, zipped: null, wholeFolder: true } : null; else if (k === 'program' && !r.zipped) r = null; }
-  if (!r) return null;
+  if (r && !spec?.repo && file && !/\.exe$/i.test(file)) { const k = installKind(file); if (k === 'folder') r = r.folder ? { ...r, asset: r.folder, zipped: null, wholeFolder: true } : r.overProgram ? r : null; else if (k === 'program' && !r.zipped && !r.overProgram) r = null; }
   if (!r) return null;
   // each source in turn (0.9.19): GitHub (its API, else its release pages when the API limit answers 403,
   // github.js) and the project's own Forgejo server; the first with a matching file wins
   const gh = () => require('./github').release(r.repo, { tag: r.tag, pre: r.pre, fetchImpl });
-  const forges = (r.forge || []).map(([host, repo]) => () => forgeRelease(host, repo, fetchImpl));
+  const forges = (r.forge || []).map(([host, repo]) => () => forgeRelease(host, repo, fetchImpl, !!r.pre));
   const tries = r.first === 'forge' ? [...forges, gh] : [gh, ...forges];
   let lastErr = null;
   for (const t of tries) {
@@ -150,6 +194,9 @@ async function replaceAppImage(file, rel, download) {
   if (rel.zipped) { const z = file + '.cartridge-zip'; try { await download(rel.url, z); if (rel.size && fs.statSync(z).size !== rel.size) throw new Error('The download was incomplete. Try again.'); if (/\.(tar\.gz|tgz)$/i.test(rel.name || rel.url)) await fileFromTar(z, tmp, rel.zipped); else await appImageFromZip(z, tmp, rel.zipped); } finally { fs.rmSync(z, { force: true }); } }
   else await download(rel.url, tmp);
   if (!rel.zipped && rel.size && fs.statSync(tmp).size !== rel.size) { fs.rmSync(tmp, { force: true }); throw new Error('The download was incomplete. Try again.'); }
+  // 0.9.23: never put something that can't start in place of a working copy: an AppImage must be one
+  // (not a web page or a cut-off file), any other program at least a Linux program
+  if (!looksRunnable(tmp, rel)) { fs.rmSync(tmp, { force: true }); throw new Error('What came down wasn’t a working program, so your copy was left as it was. Try again later.'); }
   fs.chmodSync(tmp, 0o755);
   fs.renameSync(file, old);
   try { fs.renameSync(tmp, file); } catch (e) { fs.renameSync(old, file); throw e; }
@@ -157,6 +204,12 @@ async function replaceAppImage(file, rel, download) {
   return true;
 }
 
+function looksRunnable(file, rel) {
+  const D = require('./detect');
+  if (/\.AppImage$/i.test(rel?.name || '')) return !!D.appImageType(file);
+  if (/\.exe/i.test(String(rel?.zipped || ''))) { try { const b = Buffer.alloc(2); const fd = fs.openSync(file, 'r'); fs.readSync(fd, b, 0, 2, 0); fs.closeSync(fd); return b.toString('latin1') === 'MZ'; } catch { return false; } }
+  return !!D.isElf(file);
+}
 // a folder build (0.9.21): the zip unpacked over the program's folder, every file at its place, the
 // program's own file name kept; a single top folder in the zip is stripped; the old program back on failure
 async function replaceFolder(file, rel, download) {
@@ -189,4 +242,4 @@ async function replaceFolder(file, rel, download) {
   return true;
 }
 
-module.exports = { installKind, replaceFolder, specFor, pickAsset, fileFromTar, forgeRelease, appImageFromZip, REPOS, verOf, cmpVer, flatpakUpdates, flatpakUpdate, latestRelease, isNewer, replaceAppImage };
+module.exports = { channelsOf, withChannel, flatpakRemove, installKind, missingLibs, looksRunnable, replaceFolder, specFor, pickAsset, fileFromTar, forgeRelease, appImageFromZip, REPOS, verOf, cmpVer, flatpakUpdates, flatpakUpdate, latestRelease, isNewer, replaceAppImage };

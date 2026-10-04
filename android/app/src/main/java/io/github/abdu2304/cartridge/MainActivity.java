@@ -136,6 +136,15 @@ public class MainActivity extends BridgeActivity {
         return super.dispatchKeyEvent(e);
     }
 
+    private float rightStickX(MotionEvent e) {
+        InputDevice d = e.getDevice();
+        if (d == null) return 0f;
+        boolean triggersApart = d.getMotionRange(MotionEvent.AXIS_LTRIGGER) != null || d.getMotionRange(MotionEvent.AXIS_BRAKE) != null;
+        if (triggersApart && d.getMotionRange(MotionEvent.AXIS_Z) != null) return e.getAxisValue(MotionEvent.AXIS_Z);
+        if (d.getMotionRange(MotionEvent.AXIS_RX) != null) return e.getAxisValue(MotionEvent.AXIS_RX);
+        return 0f;
+    }
+
     private void axis(CartridgeNativePlugin p, String action, boolean down) {
         Boolean was = axisState.get(action);
         if (was != null && was == down) return;
@@ -157,6 +166,12 @@ public class MainActivity extends BridgeActivity {
             axis(p, "down", y > 0.55f || hy > 0.5f);
             axis(p, "lt", lt > 0.5f);
             axis(p, "rt", rt > 0.5f);
+            // Right stick, left and right: Start's pages (abdu2304's 0.9.23 rsleft/rsright). Most pads put its X on
+            // AXIS_Z; only trust that when the triggers have axes of their own (older pads put a trigger on Z),
+            // else AXIS_RX.
+            float rx = rightStickX(e);
+            axis(p, "rsleft", rx < -0.55f);
+            axis(p, "rsright", rx > 0.55f);
             return true;
         }
         return super.dispatchGenericMotionEvent(e);

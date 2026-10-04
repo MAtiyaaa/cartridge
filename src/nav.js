@@ -190,9 +190,12 @@ function pickRow(dir, cur, c, cands, wantX) {
     const first = focusables(row).find((el) => !el.disabled);
     if (first) { if (row.scrollLeft > 0) glideBy(row, -row.scrollLeft, 0); return first; }
   }
-  // the same grid of cards as where you are: straight up or down
+  // the same grid of cards as where you are: straight up or down. [data-grid] (0.9.23) does it across
+  // separate rows too (the on-screen keyboard's rows, which went to each row's first key)
+  const kgrid = cur.closest('[data-grid]');
   const grid = cur.parentElement;
-  const inGrid = band.filter(([el]) => el.parentElement === grid);
+  const inGrid = kgrid ? band.filter(([el]) => kgrid.contains(el)) : band.filter(([el]) => el.parentElement === grid);
+  if (kgrid && inGrid.length) { let best = null, d = Infinity; for (const [el, r] of inGrid) { const dx = Math.abs(r.left + r.width / 2 - wantX); if (dx < d) { d = dx; best = el; } } return best; }
   if (inGrid.length && focusables(grid).length > inGrid.length) {
     let best = null, d = Infinity;
     for (const [el, r] of inGrid) { const dx = Math.abs(r.left + r.width / 2 - wantX); if (dx < d) { d = dx; best = el; } }
@@ -282,7 +285,7 @@ const KEYMAP = {
   ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right',
   Enter: 'accept', ' ': 'accept', Escape: 'back', Backspace: 'back',
   q: 'lb', e: 'rb', x: 'x', y: 'y', '/': 'y', Tab: 'select', m: 'start',
-  PageUp: 'lt', PageDown: 'rt',
+  PageUp: 'lt', PageDown: 'rt', ',': 'rsleft', '.': 'rsright', // , and . flick the right stick (Start's pages)
 };
 // A on something with a held meaning ([data-hold]): a press opens it on release, a hold of 450 ms
 // does the held thing instead (0.9.19, owner: hold a Start tile to arrange the menu)
@@ -323,14 +326,26 @@ function setMode(m) {
   b.toggle('touch-mode', m === 'touch');
   b.toggle('mouse-mode', m === 'mouse');
 }
+// Game Mode hands the screen's touches over as a mouse (0.9.23, owner: touch still showed a cursor). A
+// finger lands somewhere new: the pointer jumps there in one move, or presses without moving first,
+// where a real mouse glides up to what it clicks. Those count as touch, and so does the drag after them.
+let lastMove = { t: 0, x: -1, y: -1, jump: false }, fingerDown = false;
 window.addEventListener('pointerdown', (e) => {
-  if (e.pointerType === 'touch' || e.pointerType === 'pen') { lastTouch = performance.now(); if (pointerPref !== 'mouse') setMode('touch'); }
+  if (e.pointerType === 'touch' || e.pointerType === 'pen') { lastTouch = performance.now(); if (pointerPref !== 'mouse') setMode('touch'); return; }
+  const now = performance.now();
+  const far = lastMove.x < 0 || Math.hypot(e.clientX - lastMove.x, e.clientY - lastMove.y) > 24;
+  const finger = pointerPref !== 'mouse' && (input.mode === 'touch' || input.mode === 'pad') && (lastMove.jump || far || now - lastMove.t > 600);
+  if (finger) { fingerDown = true; lastTouch = now; setMode('touch'); }
   else if (pointerPref !== 'touch') setMode('mouse');
 }, { passive: true, capture: true });
+window.addEventListener('pointerup', (e) => { if (e.pointerType === 'mouse' && fingerDown) { fingerDown = false; lastTouch = performance.now(); } }, { passive: true, capture: true });
 window.addEventListener('mousemove', (e) => {
+  const now = performance.now(), d = Math.hypot(e.movementX, e.movementY);
+  lastMove = { t: now, x: e.clientX, y: e.clientY, jump: d > 40 && now - lastMove.t > 120 };
   if (pointerPref === 'touch') return;
-  if (performance.now() - lastTouch < 1000) return; // synthetic mouse events that follow a tap
+  if (fingerDown || now - lastTouch < 1000) return; // a finger dragging, or synthetic mouse events that follow a tap
   if (e.movementX === 0 && e.movementY === 0) return;
+  if (input.mode !== 'mouse' && d > 40) return; // the pointer warping to where a finger landed
   setMode('mouse');
 }, { passive: true });
 
@@ -339,7 +354,7 @@ window.addEventListener('mousemove', (e) => {
 // otherwise delay the press. Hold-to-repeat starts after 220 ms and speeds up the longer you hold.
 const BTN = { 0: 'accept', 1: 'back', 2: 'x', 3: 'y', 4: 'lb', 5: 'rb', 6: 'lt', 7: 'rt', 8: 'select', 9: 'start', 12: 'up', 13: 'down', 14: 'left', 15: 'right' };
 const REPEATABLE = new Set(['up', 'down', 'left', 'right', 'lt', 'rt']);
-const ACTIONS = [...new Set(Object.values(BTN))];
+const ACTIONS = [...new Set([...Object.values(BTN), 'rsleft', 'rsright'])]; // the right stick's flicks (0.9.23: Start's pages)
 const state = {}; // key -> { down, next, n }
 const DELAY = 220, RATE = 70, FAST = 40;
 
@@ -391,6 +406,7 @@ export function rumble(strong = false) {
 // the part of the screen focus was last in (a [data-zone]), for when the focused element goes away
 let lastZone = null;
 document.addEventListener('focusin', (e) => { lastZone = e.target.closest?.('[data-zone]') || null; }, true);
+const rsHeld = {};
 function poll() {
   const now = performance.now();
   const pads = navigator.getGamepads ? [...navigator.getGamepads()].filter(Boolean) : [];
@@ -415,6 +431,12 @@ function poll() {
     // Left stick (0.9.3 K, B1): only the stronger axis counts, so a slightly diagonal push never moves
     // two ways at once, and a direction lets go only below 0.35 after passing 0.55, so a stick
     // resting near the edge doesn't flicker into double moves.
+    // Right stick left and right (0.9.23, owner: Start's pages): a flick, past 0.7 and back under 0.4
+    const rx = gp.mapping === 'standard' ? gp.axes[2] ?? 0 : gp.axes.length >= 6 ? gp.axes[3] ?? 0 : 0;
+    const rh = rsHeld[gp.index] || (rsHeld[gp.index] = {});
+    rh.l = rx < -0.7 || (rh.l && rx < -0.4); rh.r = rx > 0.7 || (rh.r && rx > 0.4);
+    if (rh.l) merged.rsleft = true;
+    if (rh.r) merged.rsright = true;
     const [ax = 0, ay = 0] = gp.axes;
     const held = stickHeld[gp.index] || (stickHeld[gp.index] = {});
     const horiz = Math.abs(ax) >= Math.abs(ay);

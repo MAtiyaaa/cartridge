@@ -4,11 +4,14 @@
       <b>Arrange Start</b>
       <span class="muted">{{ barText }}</span>
       <div class="spacer" />
+      <button class="btn small" data-focus data-key="st-page-add" @click="addPage"><Icon name="mdiBookPlusOutline" :size="18" />Add Page</button>
+      <button v-if="pages.length > 1" class="btn small" data-focus data-key="st-page-del" @click="removePage"><Icon name="mdiBookRemoveOutline" :size="18" />Remove Page</button>
       <button class="btn small" data-focus data-key="st-reset" @click="resetLayout"><Icon name="mdiRestore" :size="18" />Reset</button>
       <button class="btn small primary" data-focus data-key="st-done" @click="stopEdit"><Icon name="mdiCheck" :size="18" />Done</button>
     </div>
-    <div class="st-scroll" data-scroll ref="scroller">
-      <div class="st-board" :style="{ height: boardH + 'px' }">
+    <div class="st-scroll" data-scroll ref="scroller" @pointerdown="swipeDown">
+      <Transition :name="'st-pg-' + pageDir" mode="out-in" @after-enter="afterPage">
+      <div class="st-board" :key="page" :style="{ height: boardH + 'px' }">
         <!-- arranging: the grid's empty cells show, and where the held tile will land -->
         <div v-if="editing" class="st-slots" aria-hidden="true"><i v-for="c in slots" :key="c.k" :style="c.s" /></div>
         <div v-if="ghost" class="st-ghost" :style="ghost" aria-hidden="true" />
@@ -83,29 +86,47 @@
             </div>
           </template>
 
-          <!-- Rows of covers: new, recently played, favourites, recommended -->
+          <!-- Rows of games (0.9.23, owner: redesign how games show in New, Recently played...): the first
+               game in front with its art, logo and a line about it; the next ones fanned out beside it -->
           <template v-else-if="COVER_ROWS[t.type]">
-            <div v-if="rowOf(t.type).length" class="st-ambient" :style="{ backgroundImage: bgUrl(cover(rowOf(t.type)[0])) }" />
-            <div class="st-label">{{ TILES[t.type].name }}</div>
             <template v-if="rowOf(t.type).length">
-              <div class="st-covers" :style="{ gridTemplateRows: `repeat(${coversFor(t).rows}, minmax(0, 1fr))` }">
-                <img v-for="(r, i) in rowOf(t.type).slice(0, coversFor(t).n)" :key="r.id" class="st-cover" :src="cover(r)" :style="{ '--i': i }" loading="lazy" alt="" />
+              <div class="st-row-art" :style="{ backgroundImage: bgUrl(artOf(rowOf(t.type)[0]) || cover(rowOf(t.type)[0], true)) }" />
+              <div class="st-row-fade" />
+              <div class="st-row" :class="{ tall: t.h > 1, narrow: t.w <= 2 }">
+                <div class="st-row-info">
+                  <div class="st-label">{{ TILES[t.type].name }}<span class="st-count">{{ rowOf(t.type).length }}</span></div>
+                  <div class="st-row-lead">
+                    <GameLogo :logo="store.config.ui.logos !== false ? logoOf(rowOf(t.type)[0]) : null" :name="rowOf(t.type)[0].name" cls="st-row-name" :area="Math.min(16000, box(t).pw * box(t).ph * 0.07)" :max-w="Math.min(300, box(t).pw * 0.36)" :max-h="Math.min(64, box(t).ph * 0.3)" />
+                    <span class="st-sub">{{ firstLine(t.type) }}</span>
+                  </div>
+                </div>
+                <div class="st-fan" :style="{ '--n': Math.min(fanN(t), rowOf(t.type).length) }">
+                  <img v-for="(r, i) in rowOf(t.type).slice(0, fanN(t))" :key="r.id" class="st-fan-c" :src="cover(r) || BLANK" :style="{ '--i': i }" loading="lazy" alt="" @error="noImg" />
+                </div>
               </div>
-              <div class="st-sub st-first">{{ firstLine(t.type) }}</div>
             </template>
-            <div v-else class="st-empty small"><span>{{ COVER_ROWS[t.type].empty }}</span></div>
+            <template v-else>
+              <div class="st-label">{{ TILES[t.type].name }}</div>
+              <div class="st-empty small"><span>{{ COVER_ROWS[t.type].empty }}</span></div>
+            </template>
           </template>
 
-          <!-- Latest trophies and achievements: as many as the tile holds -->
+          <!-- Trophies (0.9.23, owner: a full rework; pin one console's): the newest unlock large, the
+               ones before it as a strip of badges, and how many came this week -->
           <template v-else-if="t.type === 'trophies'">
-            <div class="st-label">Latest trophies</div>
-            <div v-if="ach.length" class="st-ach" :style="{ gridTemplateColumns: `repeat(${achFor(t).cols}, minmax(0, 1fr))` }">
-              <div v-for="(a, i) in ach.slice(0, achFor(t).n)" :key="a.key" class="st-ach-row" :style="{ '--i': i }">
-                <img v-if="a.badge" :src="a.badge" class="st-ach-img" alt="" /><span v-else class="st-ach-img"><Grade :g="a.grade" :size="24" /></span>
-                <span class="st-ach-t"><b>{{ a.title }}</b><span>{{ a.game }}<template v-if="a.t"> · {{ agoShort(a.t) }}</template></span></span>
+            <div class="st-label">{{ t.console ? t.console + ' Trophies' : 'Latest Trophies' }}<span v-if="achOf(t).week" class="st-count">{{ achOf(t).week }} this week</span></div>
+            <template v-if="achOf(t).list.length">
+              <div class="st-tro">
+                <div class="st-tro-main">
+                  <span class="st-tro-badge"><img v-if="achOf(t).list[0].badge" :src="achOf(t).list[0].badge" alt="" /><Grade v-else :g="achOf(t).list[0].grade" :size="30" /></span>
+                  <span class="st-tro-t"><b>{{ achOf(t).list[0].title }}</b><span>{{ achOf(t).list[0].game }}<template v-if="achOf(t).list[0].t"> · {{ agoShort(achOf(t).list[0].t) }}</template></span></span>
+                </div>
+                <div v-if="achOf(t).list.length > 1" class="st-tro-strip">
+                  <span v-for="(a, i) in achOf(t).list.slice(1, 1 + stripN(t))" :key="a.key" class="st-tro-mini" :style="{ '--i': i }" :title="a.title"><img v-if="a.badge" :src="a.badge" alt="" /><Grade v-else :g="a.grade" :size="16" /></span>
+                </div>
               </div>
-            </div>
-            <div v-else class="st-empty small"><span>Unlocks from your emulators and RetroAchievements show here</span></div>
+            </template>
+            <div v-else class="st-empty small"><span>{{ t.console ? `No ${t.console} unlocks yet` : 'Unlocks from your emulators and RetroAchievements show here' }}</span></div>
           </template>
 
           <!-- Downloads -->
@@ -120,8 +141,44 @@
           </template>
 
           <!-- Surprise me -->
+          <!-- 0.9.23 (owner: redesign Surprise me): three games fanned like cards; reaching the tile deals
+               again, and A opens the one in front -->
           <template v-else-if="t.type === 'surprise'">
-            <div class="st-center"><Icon name="mdiDiceMultipleOutline" :size="40" class="st-dice" /><b>Surprise me</b></div>
+            <div class="st-deal" :key="dealt">
+              <img v-for="(r, i) in deck" :key="r.id" class="st-deal-c" :src="cover(r) || BLANK" :style="{ '--i': i }" alt="" @error="noImg" />
+            </div>
+            <div class="st-deal-t"><Icon name="mdiDiceMultipleOutline" :size="18" class="st-dice" /><b>Surprise Me</b><span v-if="deck[0] && box(t).pw > 260" class="st-sub">{{ deck[0].name }}</span></div>
+          </template>
+
+          <!-- 0.9.23 new widgets: your library in numbers, a game for today, a picture, your own HTML -->
+          <template v-else-if="t.type === 'stats'">
+            <div class="st-label">Your Library</div>
+            <div class="st-stats">
+              <div><b class="tnum">{{ stats.games }}</b><span>Games</span></div>
+              <div><b class="tnum">{{ stats.hours }}</b><span>Hours Played</span></div>
+              <div><b class="tnum">{{ stats.device }}</b><span>On This Device</span></div>
+              <div><b class="tnum">{{ stats.consoles }}</b><span>Consoles</span></div>
+            </div>
+          </template>
+          <template v-else-if="t.type === 'daily'">
+            <template v-if="daily">
+              <div class="st-art" :style="{ backgroundImage: bgUrl(t.h > t.w ? cover(daily, true) : artOf(daily) || cover(daily, true)) }" />
+              <div class="st-scrim" />
+              <div class="st-label on-art">Game of the Day</div>
+              <div class="st-pin">
+                <GameLogo :logo="store.config.ui.logos !== false ? logoOf(daily) : null" :name="daily.name" cls="st-pin-name" :area="Math.min(22000, box(t).pw * box(t).ph * 0.12)" :max-w="box(t).pw * 0.8" :max-h="Math.min(110, box(t).ph * 0.32)" />
+                <span>{{ daily.platform_display_name }}{{ store.installed[daily.id] ? ' · On this device' : '' }}</span>
+              </div>
+            </template>
+            <div v-else class="st-empty small"><span>Your games show here, one a day</span></div>
+          </template>
+          <template v-else-if="t.type === 'image'">
+            <img v-if="t.src" class="st-img" :src="t.src" alt="" />
+            <div v-else class="st-empty small"><Icon name="mdiImagePlus" :size="28" /><span>Choose a picture in Arrange</span></div>
+          </template>
+          <template v-else-if="t.type === 'html'">
+            <iframe v-if="t.src" class="st-html" :src="t.src" sandbox="allow-scripts" tabindex="-1" loading="lazy" title="Your widget" />
+            <div v-else class="st-empty small"><Icon name="mdiCodeTags" :size="28" /><span>Add your HTML in Arrange</span></div>
           </template>
 
           <!-- One game, pinned -->
@@ -129,7 +186,11 @@
             <template v-if="romById(t.romId)">
               <div class="st-art" :style="{ backgroundImage: bgUrl(t.h > t.w ? cover(romById(t.romId), true) : artOf(romById(t.romId))) }" />
               <div class="st-scrim" />
-              <div class="st-pin"><b>{{ romById(t.romId).name }}</b><span>{{ romById(t.romId).platform_display_name }}</span></div>
+              <!-- 0.9.23 (owner): its logo, not its name in text -->
+              <div class="st-pin">
+                <GameLogo :logo="store.config.ui.logos !== false ? logoOf(romById(t.romId)) : null" :name="romById(t.romId).name" cls="st-pin-name" :area="Math.min(22000, box(t).pw * box(t).ph * 0.12)" :max-w="box(t).pw * 0.8" :max-h="Math.min(110, box(t).ph * 0.32)" />
+                <span>{{ romById(t.romId).platform_display_name }}</span>
+              </div>
             </template>
             <div v-else class="st-empty small"><span>This game isn't in your library any more</span></div>
           </template>
@@ -146,12 +207,24 @@
             <span v-if="focusedId === t.id || drag?.id === t.id || sizing?.id === t.id" class="st-size tnum">{{ t.w }} × {{ t.h }}</span>
             <span v-for="e in EDGES" :key="e" class="st-handle" :class="['h-' + e, { on: mode === 'size' && focusedId === t.id && corner.includes(e) && e.length === 2 }]" data-nodrag @pointerdown.stop="hDown(t, e, $event)" />
             <span class="st-ctl" data-nodrag>
+              <span v-if="CONFIG[t.type]" class="st-ctl-b" title="Change" @click.stop="configure(t)" @pointerdown.stop><Icon name="mdiPencil" :size="16" /></span>
               <span class="st-ctl-b" title="Remove" @click.stop="removeTile(t)" @pointerdown.stop><Icon name="mdiClose" :size="16" /></span>
             </span>
           </template>
         </button>
-        <button v-if="editing" key="add" class="st-tile st-add" :style="addStyle" data-focus data-key="st-add" @click="addTile"><Icon name="mdiPlus" :size="26" /><b>Add a tile</b></button>
+        <!-- 0.9.23 (owner: rework the add button): a quiet slot that says what it adds -->
+        <button v-if="editing" key="add" class="st-tile st-add" :style="addStyle" data-focus data-key="st-add" @click="addTile">
+          <span class="st-add-plus"><Icon name="mdiPlus" :size="22" /></span>
+          <span class="st-add-t"><b>Add a Widget</b><span>Games, clocks, pictures and your own</span></span>
+        </button>
+        <button v-if="!tiles.length && !editing" class="st-blank" data-focus data-key="st-blank" @click="startEdit()"><Icon name="mdiViewGridPlusOutline" :size="34" /><b>An Empty Page</b><span>Select to add widgets to it</span></button>
       </div>
+      </Transition>
+    </div>
+    <!-- pages (0.9.23, owner: more than one page, switched with the right stick) -->
+    <div v-if="pages.length > 1 || editing" class="st-pages" aria-hidden="true">
+      <Btn v-if="pages.length > 1 && input.mode === 'pad'" b="RS" class="st-rs" />
+      <i v-for="(pg, i) in pages" :key="i" :class="{ on: i === page }" @click="goPage(i)" />
     </div>
   </div>
 </template>
@@ -165,7 +238,7 @@
 // (the D-pad moves a corner, LB/RB pick the corner), Y removes, B is done. Touch and mouse: drag a tile
 // to move it, drag an edge or a corner to resize. Saved in config.ui.start.
 import { computed, ref, reactive, onMounted, onBeforeUnmount, nextTick, watch } from 'vue';
-import { store, heroArt, call, go, tab, img, cover, logoOf, allRoms, visible, visiblePlatforms, romById, isNew, collections, setBg, backdropOf, wantSharp, bytes, saveConfig, choose, playtimeText, loadPlay, toast } from '../store.js';
+import { store, heroArt, call, go, tab, img, cover, logoOf, allRoms, visible, visiblePlatforms, romById, isNew, collections, setBg, backdropOf, wantSharp, bytes, saveConfig, choose, confirm, askText, pickFolder, playtimeText, loadPlay, toast } from '../store.js';
 import { useView } from '../useView.js';
 import { recommend } from '../recs.js';
 import { ensureFocus, input } from '../nav.js';
@@ -176,7 +249,7 @@ import Grade from '../components/Grade.vue';
 import GameLogo from '../components/GameLogo.vue';
 import ConsoleCard from '../components/ConsoleCard.vue';
 import StartClock from '../components/StartClock.vue';
-import { TILES, DEFAULT, valid, COLS, MAX_H, pack, settle, bottom } from '../startTiles.js';
+import { TILES, GROUPS, MANY, DEFAULT, valid, COLS, MAX_H, pack, settle, bottom } from '../startTiles.js';
 
 const ROWS = 4; // rows that fill the screen; more scroll
 const COVER_ROWS = {
@@ -185,10 +258,15 @@ const COVER_ROWS = {
   favs: { empty: 'Mark games as favourites in RomM or on their page' },
   recs: { empty: 'Play a few games and Cartridge suggests more' },
 };
-const saved = (store.config.ui.start?.tiles || []).filter(valid);
-const tiles = ref(saved.length ? pack(saved.map((t) => ({ ...t }))) : DEFAULT());
+// Pages (0.9.23, owner: more than one page, switched with the right stick). The first page stays in
+// ui.start.tiles (pinning from a game's page adds there), the others in ui.start.more.
+const savedPages = [store.config.ui.start?.tiles || [], ...(store.config.ui.start?.more || [])].map((l) => (Array.isArray(l) ? l : []).filter(valid));
+const pages = ref(savedPages.map((l, i) => (l.length ? pack(l.map((t) => ({ ...t }))) : i === 0 ? DEFAULT() : [])));
+const page = ref(Math.max(0, Math.min(store.startPage || 0, pages.value.length - 1)));
+const tiles = computed({ get: () => pages.value[page.value] || [], set: (v) => { pages.value[page.value] = v; } });
 let saveT = 0;
-function save() { clearTimeout(saveT); saveT = setTimeout(() => saveConfig({ ui: { start: { tiles: tiles.value.map(({ id, type, x, y, w, h, romId, platformId }) => ({ id, type, x, y, w, h, ...(romId ? { romId } : {}), ...(platformId ? { platformId } : {}) })) } } }), 400); }
+const ser = (list) => list.map(({ id, type, x, y, w, h, romId, platformId, src, console: con }) => ({ id, type, x, y, w, h, ...(romId ? { romId } : {}), ...(platformId ? { platformId } : {}), ...(src ? { src } : {}), ...(con ? { console: con } : {}) }));
+function save() { clearTimeout(saveT); saveT = setTimeout(() => saveConfig({ ui: { start: { tiles: ser(pages.value[0] || []), more: pages.value.slice(1).map(ser) } } }), 400); }
 
 const el = ref(null), scroller = ref(null);
 const editing = ref(false), focusedId = ref(null);
@@ -197,7 +275,10 @@ const corner = ref('se'); // which corner the D-pad moves while resizing
 const CORNERS = ['se', 'sw', 'nw', 'ne'];
 const EDGES = ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw'];
 const leaving = ref(null);
-const isArt = (t) => t.type === 'continue' ? !!cur.value : t.type === 'game';
+const isArt = (t) => t.type === 'continue' ? !!cur.value : t.type === 'game' || (t.type === 'daily' && !!daily.value) || (t.type === 'image' && !!t.src);
+// a cover that can't be loaded shows the card's own colour instead of a broken picture
+const BLANK = 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==';
+const noImg = (e) => { if (e.target.src !== BLANK) e.target.src = BLANK; };
 const bgUrl = (u) => (u ? `url("${String(u).replace(/"/g, '%22')}")` : 'none');
 const artOf = (r) => heroArt(r)?.src || ''; // SteamGridDB's hero only, no RomM picture first (0.9.21)
 const platformById = (id) => store.lib?.platforms.find((p) => p.id === id) || null;
@@ -237,7 +318,13 @@ const ghost = computed(() => {
 function cardsFor(t) { const { pw, ph } = box(t); const cols = Math.max(1, Math.round(pw / 250)), rws = Math.max(1, Math.round((ph - 34) / 130)); return { cols, rows: rws, n: Math.min(24, cols * rws), compact: ph / rws < 110 }; }
 const cardsGrid = (t) => { const c = cardsFor(t); return { gridTemplateColumns: `repeat(${c.cols}, minmax(0, 1fr))`, gridTemplateRows: `repeat(${c.rows}, minmax(0, 1fr))` }; };
 function coversFor(t) { const { pw, ph } = box(t); const area = Math.max(40, ph - 74), rws = Math.max(1, Math.round(area / 190)), coverW = (area / rws) * 0.75 + 10; return { rows: rws, n: Math.min(40, rws * Math.ceil(pw / coverW) + rws) }; }
-function achFor(t) { const { pw, ph } = box(t); const cols = Math.max(1, Math.floor(pw / 260)), rws = Math.max(1, Math.floor((ph - 40) / 60)); return { cols, n: Math.min(18, cols * rws) }; }
+// how many covers fan out in a row of games: each shows half of itself past the one before
+function fanN(t) {
+  const { pw, ph } = box(t), pad = Math.min(22, ph * 0.09);
+  const h = t.h > 1 ? ph * 0.55 : ph - pad * 2, cw = h * 0.75, fw = t.w <= 2 ? pw - pad * 2 : pw * 0.58;
+  return Math.max(1, Math.min(9, Math.floor((fw - cw) / (cw * 0.5)) + 1));
+}
+const stripN = (t) => Math.max(0, Math.min(12, Math.floor((box(t).pw - 36) / 40)));
 
 // ---- data
 const played = ref({});
@@ -266,8 +353,11 @@ const rowOf = (type) => rows.value[type] || [];
 function firstLine(type) {
   const r = rowOf(type)[0];
   if (!r) return '';
-  if (type === 'recs') return `Try ${r.name}`;
-  return r.name;
+  // the line under the first game's logo says something about it, not its name again (0.9.23)
+  if (type === 'recent') return whenText(r);
+  if (type === 'fresh' && r.created_at) { const d = Math.round((Date.now() - Date.parse(r.created_at)) / 864e5); return `${r.platform_display_name} · added ${d < 1 ? 'today' : d === 1 ? 'yesterday' : d + ' days ago'}`; }
+  if (type === 'recs') return `Try it next · ${r.platform_display_name}`;
+  return r.platform_display_name || '';
 }
 const consoles = computed(() => {
   const mins = {}, inst = {};
@@ -320,12 +410,39 @@ const raDate = (d) => { const t = new Date(String(d).replace(' ', 'T') + (/[zZ]|
 async function loadAch() {
   const out = [];
   await Promise.all([
-    store.config.ra?.user ? call('ra:overview').then((o) => { for (const a of o.recent || []) out.push({ key: 'ra' + a.id + a.date, t: raDate(a.date), badge: img(a.badge), title: a.title, game: a.game, open: () => go('ra-game', { gameId: a.gameId }) }); }).catch(() => {}) : null,
-    call('trophies:overview').then((o) => { for (const x of o.recent || []) out.push({ key: 'tr' + x.key + x.id, t: x.time || 0, badge: x.icon, grade: x.grade, title: x.name, game: x.game, open: () => go('trophy-game', { tkey: x.key }) }); }).catch(() => {}),
+    store.config.ra?.user ? call('ra:overview').then((o) => { for (const a of o.recent || []) out.push({ key: 'ra' + a.id + a.date, t: raDate(a.date), badge: img(a.badge), title: a.title, game: a.game, console: a.console || '', open: () => go('ra-game', { gameId: a.gameId }) }); }).catch(() => {}) : null,
+    call('trophies:overview').then((o) => { for (const x of o.recent || []) out.push({ key: 'tr' + x.key + x.id, t: x.time || 0, badge: x.icon, grade: x.grade, title: x.name, game: x.game, console: x.short || '', open: () => go('trophy-game', { tkey: x.key }) }); }).catch(() => {}),
   ]);
-  ach.value = out.sort((a, b) => b.t - a.t).slice(0, 6);
+  ach.value = out.sort((a, b) => b.t - a.t).slice(0, 60);
+}
+// one tile's trophies: all, or one console's (0.9.23, owner: pin achievements per console)
+function achOf(t) {
+  const list = t.console ? ach.value.filter((a) => a.console === t.console) : ach.value;
+  const wk = Date.now() - 7 * 864e5;
+  return { list, week: list.filter((a) => a.t > wk).length };
 }
 const agoShort = (t) => { const m = Math.round((Date.now() - t) / 6e4); return m < 60 ? `${Math.max(1, m)} min ago` : m < 1440 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} d ago`; };
+// Surprise me: three games dealt like cards, dealt again each time you reach the tile
+const deck = ref([]), dealt = ref(0);
+function deal() {
+  const pool = roms.value; if (!pool.length) { deck.value = []; return; }
+  const pick = new Set(), n = Math.min(3, pool.length);
+  for (let i = 0; pick.size < n && i < 50; i++) pick.add(pool[Math.floor(Math.random() * pool.length)]);
+  deck.value = [...pick]; dealt.value++;
+}
+watch(() => roms.value.length, (n, was) => { if (n && !was) deal(); }, { immediate: true });
+// Game of the day: the same game all day, a new one tomorrow (games with a cover first)
+const daily = computed(() => {
+  const withArt = roms.value.filter((r) => r.path_cover_small || r.path_cover_large || r.url_cover), list = withArt.length ? withArt : roms.value;
+  if (!list.length) return null;
+  const d = new Date(), h = Math.imul(d.getFullYear() * 400 + d.getMonth() * 32 + d.getDate(), 2654435761) >>> 0;
+  return list[h % list.length];
+});
+const stats = computed(() => ({
+  games: roms.value.length, consoles: visiblePlatforms().length,
+  device: roms.value.filter((r) => store.installed[r.id]).length,
+  hours: Math.round(Object.values(store.play || {}).reduce((n, p) => n + (p?.min || 0), 0) / 60),
+}));
 // downloads
 const activeDl = computed(() => store.downloads.filter((d) => d.status === 'downloading' || d.status === 'queued'));
 const dlPct = computed(() => { const t = activeDl.value.reduce((s, d) => s + (d.total || 0), 0), r = activeDl.value.reduce((s, d) => s + (d.received || 0), 0); return t ? Math.floor((r / t) * 100) : 0; });
@@ -345,9 +462,12 @@ function openTile(t, ev) {
   }
   if (T === 'storage') { store.settingsSection = 'storage'; return go('settings'); }
   if (T === 'consoles') return tab('consoles');
-  if (T === 'trophies') return ach.value[0] ? ach.value[0].open() : tab('achievements');
+  if (T === 'trophies') { const a = achOf(t).list[0]; return a ? a.open() : tab('achievements'); }
   if (T === 'downloads') return tab('downloads');
-  if (T === 'surprise') { const pool = roms.value; const r = pool[Math.floor(Math.random() * pool.length)]; if (r) go('game', { romId: r.id }); return; }
+  if (T === 'surprise') { const r = deck.value[0]; if (r) go('game', { romId: r.id }); return; }
+  if (T === 'daily') return daily.value && go('game', { romId: daily.value.id });
+  if (T === 'stats') return tab('library');
+  if (T === 'image' || T === 'html') return;
   if (T === 'game') return romById(t.romId) && go('game', { romId: t.romId });
   if (T === 'console') return platformById(t.platformId) && go('platform', { platformId: t.platformId });
   if (COVER_ROWS[T]) {
@@ -360,12 +480,23 @@ function openTile(t, ev) {
 // the backdrop follows the tile you're on: its game's art, or the last played game's
 function focusTile(t) {
   focusedId.value = t.id;
-  const r = t.type === 'game' ? romById(t.romId) : t.type === 'continue' ? cur.value : COVER_ROWS[t.type] ? rowOf(t.type)[0] : null;
+  if (t.type === 'surprise' && !editing.value) deal();
+  const r = t.type === 'game' ? romById(t.romId) : t.type === 'continue' ? cur.value : t.type === 'daily' ? daily.value : t.type === 'surprise' ? deck.value[0] : COVER_ROWS[t.type] ? rowOf(t.type)[0] : null;
   if (r) { setBg(backdropOf(r)); wantSharp(r); } else if (cur.value) setBg(backdropOf(cur.value));
   store.hints = hints();
 }
 
 // ---- arranging
+// 0.9.23 (owner: moving a tile past another and back pushed tiles away and ruined the layout): while a
+// tile is held, moved or resized, every other tile is laid out again from where it was when you picked
+// it up, so taking a tile back where it was puts everything back as it was.
+let base = null;
+function snap() { base = new Map(tiles.value.map((t) => [t.id, { x: t.x, y: t.y, w: t.w, h: t.h }])); }
+function relayout(fixedId) {
+  if (!base) snap();
+  for (const t of tiles.value) if (t.id !== fixedId && base.has(t.id)) Object.assign(t, base.get(t.id));
+  settle(tiles.value, fixedId);
+}
 const barText = computed(() => mode.value === 'move' ? 'Move it with the D-pad. A puts it down.'
   : mode.value === 'size' ? 'The D-pad moves the lit corner. LB and RB pick another corner. A when done.'
   : input.mode === 'pad' ? 'A picks a tile up · X resizes · Y removes' : 'Drag a tile to move it, drag its edges to resize');
@@ -374,32 +505,35 @@ function startEdit(t) {
   editing.value = true; mode.value = '';
   sfx.accept?.();
   store.hints = hints();
-  if (t) nextTick(() => focusKey('tile-' + t.id));
+  nextTick(() => focusKey(t ? 'tile-' + t.id : 'st-add'));
 }
 function stopEdit() {
-  editing.value = false; mode.value = ''; settle(tiles.value); save();
+  editing.value = false; mode.value = ''; base = null; settle(tiles.value); save();
   store.hints = hints();
   nextTick(() => ensureFocus(el.value));
 }
-function setMode(m) { mode.value = mode.value === m ? '' : m; if (mode.value === 'size') corner.value = 'se'; settle(tiles.value); save(); store.hints = hints(); sfx.accept?.(); }
+function setMode(m) { mode.value = mode.value === m ? '' : m; if (mode.value === 'size') corner.value = 'se'; base = null; settle(tiles.value); if (mode.value) snap(); save(); store.hints = hints(); sfx.accept?.(); }
 function removeTile(t) {
   const i = tiles.value.indexOf(t);
   leaving.value = t.id; mode.value = '';
   setTimeout(() => {
     tiles.value = tiles.value.filter((x) => x.id !== t.id); leaving.value = null;
+    if (t.type === 'image' && t.src) call('start:imageRemove', { url: t.src }).catch(() => {});
+    if (t.type === 'html') call('start:html', { id: t.id, html: null }).catch(() => {});
     settle(tiles.value); save();
     toast(`${TILES[t.type].name} removed`, 'info', 2000, 'mdiClose');
     nextTick(() => { const next = tiles.value[Math.min(i, tiles.value.length - 1)]; focusKey(next ? 'tile-' + next.id : 'st-add'); });
   }, 200);
 }
 async function resetLayout() {
-  tiles.value = DEFAULT(); mode.value = ''; save();
+  tiles.value = page.value === 0 ? DEFAULT() : []; mode.value = ''; base = null; save();
   nextTick(() => focusKey('tile-continue'));
 }
+const SUBS = { game: 'Pin one game', console: 'Pin one console', trophies: 'All, or one console’s', image: 'A picture or GIF from this device', html: 'Paste HTML, or start from a note or a countdown', daily: 'A new game from your library every day', stats: 'Games, consoles and hours in numbers' };
 async function addTile() {
   const have = new Set(tiles.value.map((t) => t.type));
-  const opts = Object.entries(TILES).filter(([k]) => k === 'game' || k === 'console' || !have.has(k)).map(([k, v]) => ({ label: v.name, value: k, icon: v.icon, sub: k === 'game' ? 'Pin one game' : k === 'console' ? 'Pin one console' : '' }));
-  const type = await choose({ sheet: true, title: 'Add a tile', options: opts });
+  const opts = GROUPS.flatMap(([heading, keys]) => keys.filter((k) => MANY.has(k) || !have.has(k)).map((k, i) => ({ heading: i === 0 ? heading : undefined, label: TILES[k].name, value: k, icon: TILES[k].icon, sub: SUBS[k] || '' })));
+  const type = await choose({ sheet: true, title: 'Add a Widget', options: opts });
   if (!type) return nextTick(() => focusKey('st-add'));
   const [w, h] = TILES[type].size;
   const t = { id: type + '-' + Date.now().toString(36), type, w, h, x: 0, y: bottom(tiles.value) };
@@ -412,9 +546,85 @@ async function addTile() {
     const id = await choose({ sheet: true, title: 'Pin a console', options: consoles.value.map((p) => ({ label: p.display_name, value: p.id, sub: `${p.rom_count} games`, raw: true })) });
     if (!id) return nextTick(() => focusKey('st-add'));
     t.platformId = id;
-  }
+  } else if (CONFIG[type] && !(await configure(t))) return nextTick(() => focusKey('st-add'));
   tiles.value.push(t); settle(tiles.value); save();
   nextTick(() => { focusKey('tile-' + t.id); keepInView(t.id); });
+}
+// widgets you set up: a picture, your own HTML, or which console's trophies. Returns false when left.
+const HTML_NOTE = (text) => `<div style="height:100%;display:flex;align-items:center;padding:6% 8%;box-sizing:border-box;font:600 clamp(14px,9vh,40px)/1.25 Inter,system-ui,sans-serif;letter-spacing:-.01em">${text.replace(/[<&]/g, (c) => (c === '<' ? '&lt;' : '&amp;'))}</div>`;
+const HTML_COUNT = (title, date) => `<div style="height:100%;display:flex;flex-direction:column;justify-content:center;padding:6% 8%;box-sizing:border-box;font-family:Inter,system-ui,sans-serif"><div style="font-size:clamp(11px,8vh,16px);opacity:.7;font-weight:600">${title.replace(/[<&]/g, (c) => (c === '<' ? '&lt;' : '&amp;'))}</div><div id="n" style="font-size:clamp(22px,34vh,96px);font-weight:800;letter-spacing:-.03em;line-height:1"></div></div><script>const t=new Date(${JSON.stringify(date)}+'T00:00:00');function u(){const d=Math.ceil((t-new Date())/864e5);document.getElementById('n').textContent=d>1?d+' days':d===1?'Tomorrow':d===0?'Today':Math.abs(d)+' days ago'}u();setInterval(u,6e4)<\/script>`;
+const CONFIG = {
+  async image(t) {
+    const file = await pickFolder({ title: 'Choose a picture', subtitle: 'PNG, JPG, WebP, AVIF or GIF', start: store.info?.home, files: ['png', 'jpg', 'jpeg', 'webp', 'gif', 'avif'] });
+    if (!file) return false;
+    try { const old = t.src; t.src = await call('start:image', { file }); if (old) call('start:imageRemove', { url: old }).catch(() => {}); return true; }
+    catch (e) { toast(e.message, 'error', 5000); return false; }
+  },
+  async html(t) {
+    const kind = await choose({ sheet: true, title: 'Your Own Widget', message: 'It runs on its own, apart from Cartridge, and can’t reach your library or settings.', options: [
+      { label: 'Write or Paste HTML', value: 'html', icon: 'mdiCodeTags', sub: 'Any HTML, CSS and JavaScript' },
+      { label: 'A Note', value: 'note', icon: 'mdiNoteTextOutline', sub: 'A line of text' },
+      { label: 'A Countdown', value: 'count', icon: 'mdiTimerSand', sub: 'Days left until a date' },
+    ] });
+    if (!kind) return false;
+    let html = null;
+    if (kind === 'html') html = await askText({ title: 'Your HTML', value: (await call('start:htmlGet', { id: t.id }).catch(() => '')) || '', placeholder: '<h1>Hello</h1>' });
+    else if (kind === 'note') { const v = await askText({ title: 'Your note', placeholder: 'Finish Okami this month' }); html = v ? HTML_NOTE(v) : null; }
+    else {
+      const title = await askText({ title: 'Counting down to', placeholder: 'Holiday' }); if (title == null) return false;
+      const date = await askText({ title: 'The date (year-month-day)', placeholder: '2026-12-24' });
+      if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date.trim())) { if (date != null) toast('Write the date as year-month-day, like 2026-12-24', 'error', 4000); return false; }
+      html = HTML_COUNT(title || 'Countdown', date.trim());
+    }
+    if (!html) return false;
+    try { t.src = await call('start:html', { id: t.id, html }); return true; } catch (e) { toast(e.message, 'error', 5000); return false; }
+  },
+  async trophies(t) {
+    const names = [...new Set(ach.value.map((a) => a.console).filter(Boolean))].sort();
+    const v = await choose({ sheet: true, title: 'Which Trophies', options: [{ label: 'All Consoles', value: '__all', icon: 'mdiTrophyOutline', selected: !t.console }, ...names.map((n) => ({ label: n, value: n, raw: true, selected: t.console === n }))] });
+    if (!v) return false;
+    if (v === '__all') delete t.console; else t.console = v;
+    return true;
+  },
+};
+async function configure(t) {
+  const ok = await CONFIG[t.type]?.(t);
+  if (ok && tiles.value.includes(t)) save();
+  nextTick(() => focusKey('tile-' + t.id));
+  return ok;
+}
+// ---- pages
+const pageDir = ref('next');
+function goPage(i) {
+  if (i === page.value || i < 0 || i >= pages.value.length) return;
+  if (mode.value) setMode('');
+  pageDir.value = i > page.value ? 'next' : 'prev';
+  page.value = i; store.startPage = i;
+  sfx.tab?.();
+}
+function afterPage() { const f = el.value?.querySelector(editing.value && !tiles.value.length ? '[data-key="st-add"]' : '.st-board [data-focus]'); f?.focus({ preventScroll: true }); if (f) focusTile(tiles.value.find((t) => t.id === f.dataset.id) || {}); }
+function addPage() { pages.value.push([]); save(); goPage(pages.value.length - 1); }
+async function removePage() {
+  if (pages.value.length < 2) return;
+  if (tiles.value.length && !(await confirm('Remove this page?', `Its ${tiles.value.length} ${tiles.value.length === 1 ? 'widget goes' : 'widgets go'} with it.`, 'Remove', true))) return nextTick(() => focusKey('st-page-del'));
+  const i = page.value;
+  pageDir.value = 'prev';
+  pages.value.splice(i, 1);
+  page.value = Math.max(0, i - 1); store.startPage = page.value; save();
+}
+// a sideways swipe on touch turns the page
+let sw = null;
+function swipeDown(e) {
+  if (editing.value || pages.value.length < 2) return;
+  sw = { x: e.clientX, y: e.clientY, t: performance.now() };
+  window.addEventListener('pointerup', swipeUp, { once: true });
+}
+function swipeUp(e) {
+  if (!sw) return;
+  const dx = e.clientX - sw.x, dy = e.clientY - sw.y, quick = performance.now() - sw.t < 700; sw = null;
+  if (!quick || Math.abs(dx) < 90 || Math.abs(dy) > Math.abs(dx) * 0.5) return;
+  clearTimeout(pressT); suppressClick = true; setTimeout(() => (suppressClick = false), 80);
+  goPage(page.value + (dx < 0 ? 1 : -1));
 }
 // D-pad while a tile is picked up: it trades places with the tile that way, or moves one cell into empty space
 function moveTile(dir) {
@@ -430,9 +640,11 @@ function moveTile(dir) {
     if (p < -4 || p > geo.gap + 4 || across <= 0) continue; // only a tile right next to it
     if (p - across < score) { score = p - across; other = tiles.value.find((x) => x.id === n.dataset.id); }
   }
-  if (other) { const ox = other.x, oy = other.y; other.x = t.x; other.y = t.y; t.x = ox; t.y = oy; }
+  if (!base) snap();
+  // trading places: the other tile's resting place becomes where this one was
+  if (other) { const ox = other.x, oy = other.y; base.set(other.id, { ...base.get(other.id), x: t.x, y: t.y }); t.x = ox; t.y = oy; }
   else { t.x = Math.max(0, Math.min(COLS - t.w, t.x + dx)); t.y = Math.max(0, t.y + dy); }
-  settle(tiles.value, t.id); save();
+  relayout(t.id); save();
   sfx.move?.();
   nextTick(() => keepInView(t.id));
 }
@@ -450,7 +662,7 @@ function sizeTile(dir) {
     else { const ny = Math.max(0, Math.min(t.y + t.h - 1, t.y + d)); const nh = t.h + t.y - ny; if (nh <= MAX_H) { t.h = nh; t.y = ny; } }
   }
   if (`${t.x},${t.y},${t.w},${t.h}` === before) { sfx.error?.(); return; }
-  settle(tiles.value, t.id); save();
+  relayout(t.id); save();
   sfx.move?.();
   nextTick(() => keepInView(t.id));
 }
@@ -475,16 +687,16 @@ function pDown(t, e) {
   }
   const r0 = px(t), st0 = scroller.value.scrollTop;
   const move = (ev) => {
-    if (!drag.value) { if (Math.hypot(ev.clientX - sx, ev.clientY - sy) < 8) return; drag.value = { id: t.id, vx: r0.x, vy: r0.y }; mode.value = ''; }
+    if (!drag.value) { if (Math.hypot(ev.clientX - sx, ev.clientY - sy) < 8) return; drag.value = { id: t.id, vx: r0.x, vy: r0.y }; mode.value = ''; snap(); }
     const vx = r0.x + ev.clientX - sx, vy = r0.y + ev.clientY - sy + scroller.value.scrollTop - st0;
     drag.value = { id: t.id, vx, vy };
     const nx = Math.max(0, Math.min(COLS - t.w, Math.round(vx / (geo.cw + geo.gap)))), ny = Math.max(0, Math.round(vy / (geo.ch + geo.gap)));
-    if (nx !== t.x || ny !== t.y) { t.x = nx; t.y = ny; settle(tiles.value, t.id); }
+    if (nx !== t.x || ny !== t.y) { t.x = nx; t.y = ny; relayout(t.id); }
     edgeScroll(ev.clientY);
   };
   const up = () => {
     window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); window.removeEventListener('pointercancel', up);
-    if (drag.value) { suppressClick = true; setTimeout(() => (suppressClick = false), 60); drag.value = null; settle(tiles.value); save(); }
+    if (drag.value) { suppressClick = true; setTimeout(() => (suppressClick = false), 60); drag.value = null; base = null; settle(tiles.value); save(); }
   };
   window.addEventListener('pointermove', move, { passive: true }); window.addEventListener('pointerup', up); window.addEventListener('pointercancel', up);
 }
@@ -492,7 +704,7 @@ function hDown(t, edge, e) {
   if (e.button && e.button !== 0) return;
   e.preventDefault();
   const sx = e.clientX, sy = e.clientY, g0 = { x: t.x, y: t.y, w: t.w, h: t.h };
-  sizing.value = { id: t.id }; mode.value = '';
+  sizing.value = { id: t.id }; mode.value = ''; snap();
   const move = (ev) => {
     const dc = Math.round((ev.clientX - sx) / (geo.cw + geo.gap)), dr = Math.round((ev.clientY - sy) / (geo.ch + geo.gap));
     let { x, y, w, h } = g0;
@@ -500,12 +712,12 @@ function hDown(t, edge, e) {
     if (edge.includes('w')) { x = Math.max(0, Math.min(g0.x + g0.w - 1, g0.x + dc)); w = g0.w + g0.x - x; }
     if (edge.includes('s')) h = Math.max(1, Math.min(MAX_H, g0.h + dr));
     if (edge.includes('n')) { y = Math.max(0, Math.max(g0.y + g0.h - MAX_H, Math.min(g0.y + g0.h - 1, g0.y + dr))); h = g0.h + g0.y - y; }
-    if (x !== t.x || y !== t.y || w !== t.w || h !== t.h) { Object.assign(t, { x, y, w, h }); settle(tiles.value, t.id); sfx.move?.(); }
+    if (x !== t.x || y !== t.y || w !== t.w || h !== t.h) { Object.assign(t, { x, y, w, h }); relayout(t.id); sfx.move?.(); }
     edgeScroll(ev.clientY);
   };
   const up = () => {
     window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); window.removeEventListener('pointercancel', up);
-    sizing.value = null; suppressClick = true; setTimeout(() => (suppressClick = false), 60); settle(tiles.value); save();
+    sizing.value = null; base = null; suppressClick = true; setTimeout(() => (suppressClick = false), 60); settle(tiles.value); save();
   };
   window.addEventListener('pointermove', move, { passive: true }); window.addEventListener('pointerup', up); window.addEventListener('pointercancel', up);
 }
@@ -514,8 +726,8 @@ function hDown(t, edge, e) {
 const hints = () => editing.value
   ? (mode.value === 'move' ? [{ b: 'A', label: 'Put down' }, { b: 'B', label: 'Put down' }]
     : mode.value === 'size' ? [{ b: 'LB+RB', label: 'Corner' }, { b: 'A', label: 'Done' }, { b: 'B', label: 'Done' }]
-    : [{ b: 'A', label: 'Pick up' }, { b: 'X', label: 'Resize' }, { b: 'Y', label: 'Remove' }, { b: 'B', label: 'Done' }])
-  : [{ b: 'A', label: 'Open, hold to arrange' }, ...(focusedId.value === 'continue' && playing.value.length > 1 ? [{ b: 'LB+RB', label: 'Game' }] : []), { b: 'Y', label: 'Search' }];
+    : [{ b: 'A', label: 'Pick up' }, { b: 'X', label: 'Resize' }, ...(CONFIG[focusedTile()?.type] ? [{ b: 'SELECT', label: 'Change' }] : []), { b: 'Y', label: 'Remove' }, { b: 'RS', label: 'Pages' }, { b: 'B', label: 'Done' }])
+  : [{ b: 'A', label: 'Open' }, { b: 'A', label: 'Hold: Arrange' }, ...(pages.value.length > 1 ? [{ b: 'RS', label: 'Pages' }] : []), ...(focusedId.value === 'continue' && playing.value.length > 1 ? [{ b: 'LB+RB', label: 'Game' }] : []), { b: 'Y', label: 'Search' }];
 const focusedTile = () => tiles.value.find((t) => t.id === document.activeElement?.dataset?.id);
 const dirH = (dir) => () => {
   if (!editing.value || !focusedTile()) return false;
@@ -538,6 +750,8 @@ useView({
   back: () => { if (!editing.value) return false; if (mode.value) setMode(''); else stopEdit(); return true; },
   lb: () => { if (mode.value === 'size') return stepCorner(-1), true; if (focusedTile()?.type === 'continue' && playing.value.length > 1) stepGame(-1); },
   rb: () => { if (mode.value === 'size') return stepCorner(1), true; if (focusedTile()?.type === 'continue' && playing.value.length > 1) stepGame(1); },
+  rsleft: () => goPage(page.value - 1), rsright: () => goPage(page.value + 1),
+  select: () => { const t = focusedTile(); if (!editing.value || !t || !CONFIG[t.type]) return false; configure(t); return true; },
 }, hints);
 
 let clockT = 0, spaceT = 0, ro = null;
@@ -623,8 +837,13 @@ watch(() => store.play, loadWeek);
 .st-handle.on::after { background: var(--focus); box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.25), 0 2px 10px rgba(0, 0, 0, 0.6); transform: scale(1.5); animation: st-pulse 1.4s ease-in-out infinite; }
 @keyframes st-pulse { 50% { transform: scale(1.15); } }
 :global(body.light-fx .st-handle.on::after) { animation: none; }
-.st-add { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.16) !important; color: var(--muted); }
-.st-add:focus { color: var(--text); box-shadow: var(--ring) !important; }
+.st-add { display: flex; align-items: center; justify-content: center; gap: 14px; padding: 0 18px; border-radius: var(--r-lg); color: var(--muted); background: rgba(255, 255, 255, 0.025); box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, 0.14) !important; transition: background 160ms ease, color 160ms ease; }
+.st-add-plus { width: 40px; height: 40px; flex: none; border-radius: 50%; display: grid; place-items: center; background: rgba(255, 255, 255, 0.08); color: var(--text); transition: transform 240ms var(--ease-out), background 160ms ease; }
+.st-add-t { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.st-add-t b { color: var(--text); font-family: var(--display); font-size: var(--t-md); }
+.st-add-t span { font-size: var(--t-xs); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.st-add:focus { color: var(--text); background: rgba(255, 255, 255, 0.06); box-shadow: var(--ring) !important; }
+.st-add:focus .st-add-plus { background: var(--focus); color: var(--on-focus); transform: rotate(90deg); }
 
 /* the parts every tile shares; sizes follow the tile (container units) */
 .st-label { font-size: clamp(11px, min(10cqh, 6cqw), 15px); font-weight: 600; color: var(--muted); letter-spacing: -0.005em; position: relative; z-index: 1; flex: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -662,6 +881,104 @@ watch(() => store.play, loadWeek);
 .st-pin { margin-top: auto; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .st-pin b { font-family: var(--display); font-weight: 700; font-size: clamp(13px, min(12cqh, 8cqw), 22px); line-height: 1.15; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .st-pin span { font-size: var(--t-xs); color: rgba(255, 255, 255, 0.75); }
+.st-pin :deep(.game-logo) { margin: 0 0 6px; filter: drop-shadow(0 4px 14px rgba(0, 0, 0, 0.55)); }
+.st-pin :deep(.st-pin-name) { margin: 0 0 2px; font-family: var(--display); font-stretch: var(--display-stretch); font-weight: 800; font-size: clamp(14px, min(13cqh, 9cqw), 30px); line-height: 1.08; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+
+/* ---- 0.9.23 Start overhaul (owner: more and better widgets, styled like the clock, a calm Tailwind-like
+   feel inside the design language). Every info widget gets its own quiet light from one corner and a
+   hairline edge, so the board reads as a set of objects rather than flat boxes. */
+.t-week .st-face, .t-storage .st-face, .t-downloads .st-face, .t-trophies .st-face, .t-stats .st-face, .t-surprise .st-face, .t-consoles .st-face, .t-html .st-face {
+  background: radial-gradient(120% 100% at 100% 0%, var(--glow, rgba(255, 255, 255, 0.06)), transparent 62%), linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent 40%), var(--s1);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.07); }
+.t-week { --glow: rgba(120, 150, 255, 0.16); }
+.t-storage { --glow: rgba(80, 210, 190, 0.14); }
+.t-downloads { --glow: rgba(90, 170, 255, 0.16); }
+.t-trophies { --glow: rgba(255, 196, 80, 0.16); }
+.t-stats { --glow: rgba(186, 140, 255, 0.16); }
+.t-surprise { --glow: rgba(255, 120, 190, 0.16); }
+.st-count { margin-left: 8px; padding: 1px 7px; border-radius: 999px; background: rgba(255, 255, 255, 0.08); color: var(--muted); font-size: 0.85em; font-weight: 600; }
+
+/* pages: the board slides a little and settles, its tiles arriving as they do on opening */
+.st-pg-next-leave-active, .st-pg-prev-leave-active { transition: opacity 140ms ease-out, transform 140ms ease-out; }
+.st-pg-next-leave-to { opacity: 0; transform: translateX(-3%); }
+.st-pg-prev-leave-to { opacity: 0; transform: translateX(3%); }
+.st-pg-next-enter-active, .st-pg-prev-enter-active { transition: opacity 360ms var(--ease-out), transform 420ms var(--ease-out); }
+.st-pg-next-enter-from { opacity: 0; transform: translateX(4%); }
+.st-pg-prev-enter-from { opacity: 0; transform: translateX(-4%); }
+:global(body.motion-reduce .st-board) { transition: none !important; transform: none !important; }
+.st-pages { position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 999px; background: rgba(10, 11, 14, 0.55); z-index: 3; }
+.st-pages i { width: 7px; height: 7px; border-radius: 4px; background: rgba(255, 255, 255, 0.35); cursor: pointer; transition: width var(--d-med) var(--ease-out), background var(--d-med); }
+.st-pages i.on { width: 22px; background: #fff; }
+.st-rs { margin-right: 4px; }
+.st-blank { position: absolute; left: 0; right: 0; top: 0; height: min(320px, 60vh); margin: auto; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; border-radius: var(--r-lg); color: var(--muted); text-align: center; box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.08); }
+.st-blank b { color: var(--text); font-family: var(--display); font-size: var(--t-lg); }
+.st-blank:focus { box-shadow: var(--ring); color: var(--text); }
+
+/* rows of games: the first one in front, with its art behind the words; the rest fanned beside it */
+.st-row-art { position: absolute; inset: 0; z-index: -2; background-size: cover; background-position: center 30%; opacity: 0.5; transition: transform 700ms var(--ease-out), opacity 400ms ease; }
+.st-tile:focus .st-row-art { transform: scale(1.03); opacity: 0.6; }
+.st-row-fade { position: absolute; inset: 0; z-index: -1; background: linear-gradient(90deg, var(--s1) 22%, color-mix(in srgb, var(--s1) 70%, transparent) 48%, color-mix(in srgb, var(--s1) 35%, transparent)), linear-gradient(0deg, color-mix(in srgb, var(--s1) 70%, transparent), transparent 50%); }
+.st-row { flex: 1; min-height: 0; display: flex; gap: clamp(10px, 3cqw, 24px); }
+.st-row-info { flex: 0 0 38%; min-width: 0; display: flex; flex-direction: column; }
+.st-row-lead { margin-top: auto; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-width: 0; }
+.st-row-lead :deep(.game-logo) { margin: 0 0 2px; filter: drop-shadow(0 3px 10px rgba(0, 0, 0, 0.5)); }
+.st-row-lead :deep(.st-row-name) { margin: 0; font-family: var(--display); font-stretch: var(--display-stretch); font-weight: 800; font-size: clamp(14px, min(15cqh, 6cqw), 28px); line-height: 1.08; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.st-row-lead .st-sub { margin-top: 0; max-width: 100%; }
+.st-fan { position: relative; flex: 1; min-width: 0; container-type: size; }
+.st-fan-c { position: absolute; top: 0; height: 100cqh; width: auto; aspect-ratio: 3 / 4; object-fit: cover; border-radius: var(--r-md); background: var(--s2);
+  left: calc(var(--i) * 37.5cqh); z-index: calc(20 - var(--i)); box-shadow: 0 10px 24px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.07);
+  transform: scale(calc(1 - var(--i) * 0.035)); transform-origin: left center; filter: brightness(calc(1 - var(--i) * 0.07));
+  transition: transform 420ms var(--ease-out), left 420ms var(--ease-out); transition-delay: calc(var(--i) * 18ms); }
+.st-tile:focus .st-fan-c { left: calc(var(--i) * 42cqh); }
+.st-tile:focus .st-fan-c:first-child { transform: translateY(-2%); }
+.st-row.narrow .st-row-info { display: none; }
+.st-row.narrow { flex-direction: column; }
+.st-row.tall { flex-direction: column-reverse; }
+.st-row.tall .st-row-info { flex: none; }
+.st-row.tall .st-fan { flex: 1; }
+@container (max-height: 120px) { .st-row-lead .st-sub { display: none; } }
+
+/* trophies: the newest large, the ones before it as small badges */
+.st-tro { flex: 1; min-height: 0; display: flex; flex-direction: column; justify-content: flex-end; gap: clamp(6px, 6cqh, 14px); margin-top: 6px; }
+.st-tro-main { display: flex; align-items: center; gap: 12px; min-width: 0; animation: st-in 520ms var(--ease-out) both 120ms; }
+.st-tro-badge { width: clamp(36px, 34cqh, 64px); aspect-ratio: 1; flex: none; border-radius: var(--r-md); overflow: hidden; display: grid; place-items: center; background: var(--s2); box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 210, 120, 0.28); }
+.st-tro-badge img { width: 100%; height: 100%; object-fit: cover; }
+.st-tro-t { display: flex; flex-direction: column; min-width: 0; }
+.st-tro-t b { font-family: var(--display); font-weight: 700; font-size: clamp(12px, 12cqh, 18px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.st-tro-t span { font-size: var(--t-xs); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.st-tro-strip { display: flex; gap: 6px; overflow: hidden; }
+.st-tro-mini { width: 34px; height: 34px; flex: none; border-radius: var(--r-sm); overflow: hidden; display: grid; place-items: center; background: var(--s2); opacity: calc(1 - var(--i) * 0.06); animation: st-in 420ms var(--ease-out) both; animation-delay: calc(var(--i) * 30ms + 200ms); }
+.st-tro-mini img { width: 100%; height: 100%; object-fit: cover; }
+@container (max-height: 84px) { .st-tro-strip { display: none; } }
+@container (max-width: 200px) { .st-tro-t { display: none; } .st-tro-main { justify-content: center; flex: 1; } .st-tro-badge { width: min(64cqw, 60cqh); } }
+:global(body.motion-reduce .st-tro-main), :global(body.motion-reduce .st-tro-mini) { animation: none; }
+
+/* Surprise me: three cards fanned, dealt again each time */
+.st-deal { position: absolute; right: 8%; top: 12%; bottom: 12%; width: 50%; container-type: size; }
+.st-deal-c { position: absolute; top: 0; right: 0; height: 100cqh; aspect-ratio: 3 / 4; object-fit: cover; border-radius: var(--r-md); background: var(--s2); box-shadow: 0 10px 26px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.08);
+  z-index: calc(5 - var(--i)); transform-origin: 50% 110%; animation: st-deal 560ms var(--ease-out) both; animation-delay: calc(var(--i) * 70ms); transform: rotate(calc(var(--i) * -9deg)) translateX(calc(var(--i) * -16%)); }
+@keyframes st-deal { from { opacity: 0; transform: translateY(18%) rotate(0deg) scale(0.92); } }
+.st-deal-t { margin-top: auto; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; position: relative; z-index: 6; max-width: 48%; }
+.st-deal-t b { font-family: var(--display); font-weight: 700; font-size: clamp(13px, 13cqh, 20px); }
+.st-deal-t .st-sub { margin-top: 0; max-width: 100%; }
+@container (max-width: 200px) { .st-deal { left: 12%; right: 12%; width: auto; top: 8%; bottom: 30%; } .st-deal-c { right: 20%; } .st-deal-t { max-width: none; } }
+:global(body.motion-reduce .st-deal-c) { animation: none; }
+
+/* your library in numbers */
+.st-stats { flex: 1; min-height: 0; margin-top: 8px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); align-items: end; gap: 10px; }
+.st-stats > div { display: flex; flex-direction: column; min-width: 0; }
+.st-stats b { font-family: var(--display); font-stretch: var(--display-stretch); font-weight: 800; font-size: clamp(18px, min(26cqh, 9cqw), 56px); line-height: 1; letter-spacing: -0.02em; }
+.st-stats span { margin-top: 6px; font-size: clamp(10px, 8cqh, 13px); color: var(--muted); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@container (max-width: 420px) { .st-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); align-content: end; } }
+@container (max-width: 420px) and (max-height: 150px) { .st-stats > div:nth-child(n+3) { display: none; } }
+@container (max-width: 200px) and (max-height: 200px) { .st-stats { grid-template-columns: 1fr; } .st-stats > div:not(:first-child) { display: none; } .st-stats b { font-size: clamp(22px, 34cqh, 64px); } }
+
+/* a picture, and your own widget */
+.t-image .st-face { padding: 0; background: var(--s2); }
+.st-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.t-html .st-face { padding: 0; }
+.st-html { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: transparent; pointer-events: none; }
+.editing .st-html { opacity: 0.85; }
 .t-clock .st-face { padding: 0; background: #0e1736; }
 
 /* storage: wide, the number and a gauge side by side; tall, the gauge on top; small, only the gauge */
@@ -693,7 +1010,8 @@ watch(() => store.play, loadWeek);
 @keyframes st-rise { from { transform: scaleY(0); } }
 :global(body.motion-reduce .st-bar i) { animation: none; }
 @container (aspect-ratio < 1.5) { .st-week { flex-direction: column; gap: var(--s-2); } .st-week-text { max-width: none; } .st-week-text .st-num { margin-top: 6px; } }
-@container (max-height: 120px) and (max-width: 220px) { .st-bars { display: none; } .st-week-text { max-width: none; flex: 1; } }
+/* 0.9.23 (owner: the bars at 1x1 too): a small tile keeps the bars and the total, without the words */
+@container (max-height: 160px) and (max-width: 240px) { .st-week { flex-direction: column; gap: 4px; } .st-week-text { max-width: none; flex: none; } .st-week-text .st-label, .st-week-text .st-sub { display: none; } .st-week-text .st-num { margin-top: 0; } .st-week .st-big { font-size: clamp(16px, 20cqh, 28px); } .st-bars { padding-top: 4px; gap: 3px; } .st-bar span, .st-bar em { display: none; } }
 
 /* consoles: the same cards as the Consoles page */
 .st-cards { flex: 1; min-height: 0; margin-top: 10px; display: grid; gap: clamp(6px, 2cqw, 12px); }

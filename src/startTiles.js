@@ -22,10 +22,23 @@ export const TILES = {
   surprise: { name: 'Surprise me', icon: 'mdiDiceMultipleOutline', size: [2, 1] },
   game: { name: 'A game', icon: 'mdiGamepadVariantOutline', size: [2, 2] },
   console: { name: 'A console', icon: 'mdiGamepadSquareOutline', size: [2, 1] },
+  // 0.9.23 (owner: more and better widgets, custom HTML and pictures)
+  stats: { name: 'Your library', icon: 'mdiChartBoxOutline', size: [2, 1] },
+  daily: { name: 'Game of the day', icon: 'mdiWhiteBalanceSunny', size: [2, 2] },
+  image: { name: 'A picture', icon: 'mdiImageOutline', size: [2, 2] },
+  html: { name: 'Your own widget', icon: 'mdiCodeTags', size: [2, 1] },
 };
+// the add-a-widget sheet, grouped; these can be added more than once (each with its own game, console,
+// picture, page or trophies of one console)
+export const GROUPS = [
+  ['Play', ['continue', 'recent', 'fresh', 'favs', 'recs', 'surprise', 'daily', 'game', 'console', 'consoles']],
+  ['At a Glance', ['clock', 'week', 'stats', 'storage', 'downloads', 'trophies']],
+  ['Make Your Own', ['image', 'html']],
+];
+export const MANY = new Set(['game', 'console', 'image', 'html', 'trophies']);
 
 // Android: no This week (its play time comes from Steam on the desktop); Recommended for you in its place
-if (IS_ANDROID) delete TILES.week;
+if (IS_ANDROID) { delete TILES.week; for (const g of GROUPS) g[1] = g[1].filter((k) => TILES[k]); }
 const DEF = [['continue', 4, 2], ['clock', 2, 1], ['storage', 2, 1], IS_ANDROID ? ['recs', 4, 1] : ['week', 4, 1], ['consoles', 4, 1], ['fresh', 4, 1], ['recent', 4, 1], ['trophies', 4, 1]];
 export const DEFAULT = () => pack(DEF.map(([type, w, h]) => ({ id: type, type, w, h })));
 
