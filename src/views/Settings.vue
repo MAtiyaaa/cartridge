@@ -101,6 +101,7 @@
               </button>
             </div>
             <div class="stack">
+              <button class="lrow" data-focus @click="openModal('installer')"><Icon name="mdiPackageDown" :size="24" /><div class="l-mid"><b>Cartridge Installer</b><span class="l-sub">An Emulation folder on the drive you pick, then the emulators you tick, set up like EmuDeck</span></div><Icon name="mdiChevronRight" :size="22" class="muted" /></button>
               <button class="lrow" data-focus @click="go('emu-setup')"><Icon name="mdiRadar" :size="24" /><div class="l-mid"><b>Emulator setup</b><span class="l-sub">Find emulators wherever they are, pick one per console, check BIOS and access</span></div><Icon name="mdiChevronRight" :size="22" /></button>
               <button class="lrow" data-focus @click="go('steam-health')"><Icon name="mdiStethoscope" :size="24" /><div class="l-mid"><b>Shortcut health</b><span class="l-sub">Steam shortcuts that would fail, and fixes for them</span></div><Icon name="mdiChevronRight" :size="22" /></button>
             </div>

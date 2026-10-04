@@ -71,6 +71,7 @@
   <EmuPaths v-if="store.modal?.type === 'emupaths'" v-bind="store.modal.props" />
   <AddonDetail v-if="store.modal?.type === 'addondetail'" v-bind="store.modal.props" />
   <Licenses v-if="store.modal?.type === 'licenses'" />
+  <Installer v-if="store.modal?.type === 'installer'" />
   <GameSettings v-if="store.modal?.type === 'gamesettings'" :key="'gs' + store.modal.props.romId" v-bind="store.modal.props" />
   <IdleScreen v-if="store.config?.configured" />
 
@@ -122,6 +123,7 @@ import WhatsNew from './components/WhatsNew.vue';
 import EmuPaths from './components/EmuPaths.vue';
 import AddonDetail from './components/AddonDetail.vue';
 import Licenses from './components/Licenses.vue';
+import Installer from './components/Installer.vue';
 import ShadVersions from './components/ShadVersions.vue';
 import GameSettings from './components/GameSettings.vue';
 import IdleScreen from './components/IdleScreen.vue';

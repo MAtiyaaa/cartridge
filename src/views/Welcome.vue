@@ -93,9 +93,9 @@
 
         <!-- 6 -->
         <template v-else-if="step === 'emus'">
-          <!-- 0.9.17: pick your own, by console (also in Settings → Emulators → Get Emulators) -->
+          <!-- 0.9.17: pick your own, by console; 0.9.24 the Cartridge Installer (also in Settings → Emulators) -->
           <template v-if="picking">
-            <h1>Download Emulators</h1>
+            <h1>Cartridge Installer</h1>
             <div class="w-box"><EmuGet flow /></div>
             <div class="w-act">
               <button class="btn" data-focus @click="picking = false"><Icon name="mdiArrowLeft" />Back</button>
@@ -109,7 +109,7 @@
             <p class="w-lead">Cartridge uses the emulators it set up. The system scan in a moment finds every other one too.</p>
             <div class="w-act">
               <button class="btn" data-focus @click="prev"><Icon name="mdiArrowLeft" />Back</button>
-              <button class="btn" data-focus @click="picking = true"><Icon name="mdiDownload" />Download more emulators</button>
+              <button class="btn" data-focus @click="picking = true"><Icon name="mdiPackageDown" />Cartridge Installer</button>
               <button class="btn primary" data-focus @click="next()">Continue<Icon name="mdiArrowRight" /></button>
             </div>
           </template>
@@ -145,8 +145,8 @@
                 <div class="l-mid"><b>RetroDECK</b><span class="l-sub">Installed from Flathub with a progress bar (works in Game Mode), then opened for its own setup.</span></div>
               </button>
               <button class="lrow" data-focus @click="picking = true">
-                <Icon name="mdiFormatListChecks" :size="26" />
-                <div class="l-mid"><b>Download emulators</b><span class="l-sub">Pick a drive, then the emulators you want, console by console. Each comes from its own releases and installs in the background.</span></div>
+                <Icon name="mdiPackageDown" :size="26" />
+                <div class="l-mid"><b>Cartridge Installer</b><span class="l-sub">Cartridge sets it up for you: an Emulation folder on the drive you pick, then the emulators you tick, each from its own releases, with saves and textures linked in like EmuDeck.</span></div>
               </button>
               <button class="lrow" data-focus @click="next()">
                 <Icon name="mdiHandBackRight" :size="26" />

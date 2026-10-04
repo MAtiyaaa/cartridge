@@ -1947,7 +1947,7 @@ async function pumpEmuGet() {
   q.state = 'run'; broadcast('emuget-state', emuGetQ);
   const off = (m) => { if (m.key === q.key && m.id === q.id && m.pct != null) { q.pct = m.pct; broadcast('emuget-state', emuGetQ); } };
   emuGetListeners.add(off);
-  try { const r = await handlers['emuget:install']({ key: q.key, id: q.id }); q.state = 'done'; q.where = r?.path || r?.fp || ''; q.relinked = r?.relinked || 0; }
+  try { const r = await handlers['emuget:install']({ key: q.key, id: q.id }); q.state = 'done'; q.where = r?.path || r?.fp || ''; q.relinked = r?.relinked || 0; q.links = r?.links || 0; }
   catch (e) { q.state = 'error'; q.error = e.message; }
   emuGetListeners.delete(off);
   broadcast('emuget-state', emuGetQ);
@@ -3412,7 +3412,7 @@ const handlers = {
   'emuget:emudeck': () => { const e = readEmuDeckSettings(); return e.emulationPath && isDir(e.emulationPath) ? { root: e.emulationPath, roms: e.romsPath || path.join(e.emulationPath, 'roms'), bios: e.biosPath || path.join(e.emulationPath, 'bios'), apps: path.join(os.homedir(), 'Applications') } : null; },
   'emuget:useEmuDeck': () => {
     const e = handlers['emuget:emudeck'](); if (!e) throw new Error('EmuDeck’s setup wasn’t found.');
-    config.romsRoot ||= e.roms; config.biosPath ||= e.bios; config.emuDir = e.apps;
+    config.romsRoot ||= e.roms; config.biosPath ||= e.bios; config.emuDir = e.apps; config.emulationRoot ||= e.root;
     saveConfig(); require('./emuGet').setAppsDir(config.emuDir);
     if (library) { broadcast('library', publicLibrary()); computeInstalled(); }
     return e;
@@ -3421,8 +3421,10 @@ const handlers = {
   'emuget:prepare': ({ base }) => {
     if (!base || !isDir(base)) throw new Error('That drive isn’t there.');
     const root = path.join(base, 'Emulation'), G = require('./emuGet');
-    for (const d of [...G.ESDE.map((c) => path.join(root, 'roms', c)), path.join(root, 'bios'), path.join(root, 'emulators')]) fs.mkdirSync(d, { recursive: true });
-    config.romsRoot = path.join(root, 'roms'); config.biosPath ||= path.join(root, 'bios'); config.emuDir = path.join(root, 'emulators');
+    // 0.9.24 (Cartridge Installer, owner: like EmuDeck): saves and storage beside roms and bios, AppImages in
+    // ~/Applications where EmuDeck keeps them (on any drive the Emulation folder is on)
+    for (const d of [...G.ESDE.map((c) => path.join(root, 'roms', c)), path.join(root, 'bios'), path.join(root, 'saves'), path.join(root, 'storage')]) fs.mkdirSync(d, { recursive: true });
+    config.romsRoot = path.join(root, 'roms'); config.biosPath ||= path.join(root, 'bios'); config.emuDir = path.join(os.homedir(), 'Applications'); config.emulationRoot = root;
     saveConfig(); G.setAppsDir(config.emuDir);
     if (library) { broadcast('library', publicLibrary()); computeInstalled(); }
     log('emulation folder made', root);
@@ -3454,6 +3456,8 @@ const handlers = {
       }
       log('emulator downloaded', id, r.path || r.fp);
       send({ pct: 100, done: true });
+      // its saves and storage linked into the Emulation folder (esdeLinks.js: links only, nothing moved)
+      if (config.emulationRoot && isDir(config.emulationRoot)) { try { r.links = require('./esdeLinks').make(id, { root: config.emulationRoot, home: os.homedir(), kind: r.fp ? 'flatpak' : 'appimage' }); } catch {} }
       // 0.9.24 (owner: deleted and installed again, it should say where and fix its launch options): scan,
       // then point every Steam shortcut whose emulator went missing at the new copy
       r.relinked = 0;

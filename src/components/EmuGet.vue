@@ -1,8 +1,12 @@
 <template>
   <div class="eg">
+    <!-- Cartridge Installer (0.9.24, owner: feel like an installer): where, what, installing, done -->
+    <div v-if="flow" class="eg-steps">
+      <span v-for="(t, i) in STEP_NAMES" :key="t" class="eg-step" :class="{ on: stepAt === i, past: stepAt > i }"><i>{{ stepAt > i ? '✓' : i + 1 }}</i>{{ t }}</span>
+    </div>
     <!-- 1: where emulators live (the welcome, or when no Emulation folder was made yet) -->
     <template v-if="phase === 'where'">
-      <div class="eg-intro"><b>Where should your emulators live?</b><span class="muted">Cartridge makes an Emulation folder there, laid out like ES-DE: roms (a folder per console), bios and emulators.</span></div>
+      <div class="eg-intro"><b>Where should your emulators live?</b><span class="muted">Cartridge makes an Emulation folder there, laid out like ES-DE and EmuDeck: roms (a folder per console), bios, saves and storage.</span></div>
       <div v-if="!drives" class="muted small"><Icon name="mdiSync" :size="16" class="spin" /> Looking at your drives…</div>
       <div v-else class="eg-drives">
         <button v-for="d in drives" :key="d.path" class="eg-drive" data-focus :disabled="busy" @click="pickDrive(d)">
@@ -15,7 +19,47 @@
       </div>
     </template>
 
-    <!-- 2: every console's emulators -->
+    <!-- 2 (installer): tick the emulators to install; the first of each console without one is ticked -->
+    <template v-else-if="phase === 'pick'">
+      <div class="eg-bar">
+        <div class="eg-sum"><b>{{ picked.length ? `${picked.length} to install` : 'Pick emulators' }}</b><span class="muted small">AppImages go in {{ short(store.config.emuDir) || '~/Applications' }}, where EmuDeck keeps them. Flatpaks install for your user.</span></div>
+        <button class="btn" data-focus @click="phase = 'where'; loadDrives(false)"><Icon name="mdiArrowLeft" :size="18" />Location</button>
+        <button class="btn primary" data-focus :disabled="!picked.length" @click="install"><Icon name="mdiDownload" :size="18" />Install {{ picked.length || '' }}</button>
+      </div>
+      <div v-if="!list" class="muted small"><Icon name="mdiSync" :size="16" class="spin" /> Looking at what's installed…</div>
+      <div v-else class="eg-grid">
+        <section v-for="c in list" :key="c.key" class="eg-con">
+          <div class="eg-head"><PIcon v-if="SLUG[c.key]" :p="{ slug: SLUG[c.key], fs_slug: SLUG[c.key] }" :size="30" /><Icon v-else name="mdiGamepadSquareOutline" :size="28" /><b>{{ c.name }}</b></div>
+          <button v-for="e in c.emus" :key="c.key + e.id" class="eg-emu" :class="{ have: e.installed }" data-focus @click="togglePick(c, e)">
+            <EmuIcon :id="e.id" :size="34" fallback="mdiGamepadVariantOutline" />
+            <span class="eg-mid"><b>{{ e.label }}</b><span class="muted small">{{ e.from }}</span></span>
+            <span v-if="e.installed" class="status ok"><Icon name="mdiCheck" :size="14" />Installed</span>
+            <span v-else class="eg-tick" :class="{ on: picks.has(c.key + '|' + e.id) }"><Icon v-if="picks.has(c.key + '|' + e.id)" name="mdiCheck" :size="18" /></span>
+          </button>
+        </section>
+      </div>
+    </template>
+
+    <!-- 3 (installer): one row per emulator with its own bar, in the background order -->
+    <template v-else-if="phase === 'install' || phase === 'done'">
+      <div class="eg-bar">
+        <div class="eg-sum"><b>{{ phase === 'done' ? (failed.length ? `${doneJobs.length - failed.length} of ${doneJobs.length} installed` : 'All installed') : `Installing ${Math.min(doneJobs.length + 1, jobs.length)} of ${jobs.length}` }}</b><span class="muted small">{{ phase === 'done' ? doneNote : 'You can keep using Cartridge: installs carry on in the background.' }}</span></div>
+        <button v-if="phase === 'done'" class="btn" data-focus @click="phase = 'pick'; load()"><Icon name="mdiPlus" :size="18" />Install More</button>
+      </div>
+      <div class="eg-jobs">
+        <div v-for="j in jobs" :key="j.key + j.id" class="eg-emu eg-job" data-focus tabindex="0">
+          <EmuIcon :id="j.id" :size="34" fallback="mdiGamepadVariantOutline" />
+          <span class="eg-mid"><b>{{ j.label }}</b><span class="muted small">{{ jobNote(j) }}</span></span>
+          <span v-if="j.s?.state === 'done'" class="status ok"><Icon name="mdiCheck" :size="14" />Installed</span>
+          <span v-else-if="j.s?.state === 'error'" class="status warn">Didn’t install</span>
+          <span v-else-if="j.s?.state === 'run'" class="status">{{ j.s.pct != null ? j.s.pct + '%' : 'Starting' }}</span>
+          <span v-else class="status">Waiting</span>
+          <i v-if="j.s?.state === 'run'" class="eg-bar-fill" :class="{ live: j.s.pct == null }" :style="{ width: (j.s.pct ?? 100) + '%' }" />
+        </div>
+      </div>
+    </template>
+
+    <!-- every console's emulators (Settings → Emulators: updates and installs in one list) -->
     <template v-else>
       <div class="eg-bar">
         <div class="eg-sum"><b>{{ haveCount }} of {{ allCount }}</b><span class="muted small">emulators on this device{{ store.config.emuDir ? ' · new ones go in ' + short(store.config.emuDir) : '' }}</span></div>
@@ -66,7 +110,7 @@
 // Get emulators (0.9.17, owner: a sleek page, every console's emulators, downloads in the background,
 // Download all; first where they live, as an ES-DE style Emulation folder on the drive you pick).
 // Used by the welcome (flow) and Settings → Emulators → Get Emulators.
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { store, call, toast, bytes, confirm, choose, openModal } from '../store.js';
 import { focusFirst } from '../nav.js';
 import Icon from './Icon.vue';
@@ -74,6 +118,7 @@ import EmuIcon from './EmuIcon.vue';
 import PIcon from './PIcon.vue';
 
 const props = defineProps({ flow: Boolean, updates: Boolean });
+defineEmits(['done']);
 // 0.9.21 (owner: merge Get Emulators and the emulators' updates): in Settings each installed emulator also
 // says whether it's up to date, and picking one with an update installs it (same channels as before)
 const ups = ref(null), upBusy = ref(false), upRun = ref(''), upPct = ref(null);
@@ -124,7 +169,32 @@ async function manage(u) {
   }
 }
 const SLUG = { psx: 'psx', ps2: 'ps2', ps3: 'ps3', ps4: 'ps4', psp: 'psp', psvita: 'psvita', gc: 'ngc', wiiu: 'wiiu', switch: 'switch', n3ds: '3ds', nds: 'nds', gba: 'gba', n64: 'n64', xbox: 'xbox', dreamcast: 'dc', xbox360: 'xbox360', saturn: 'saturn', arcade: 'arcade' };
-const phase = ref(props.flow && !store.config.emuDir ? 'where' : 'list');
+const phase = ref(props.flow ? (store.config.emuDir ? 'pick' : 'where') : 'list');
+// the installer's steps and what was ticked (0.9.24)
+const STEP_NAMES = ['Location', 'Emulators', 'Installing', 'Done'];
+const stepAt = computed(() => ({ where: 0, pick: 1, install: 2, done: 3 })[phase.value] ?? 1);
+const picks = ref(new Set()), jobKeys = ref([]);
+const picked = computed(() => [...picks.value]);
+function togglePick(c, e) {
+  if (e.installed) return toast(`${e.label} is already on this device.`, 'info', 2500);
+  const k = c.key + '|' + e.id, n = new Set(picks.value);
+  if (n.has(k)) n.delete(k); else n.add(k);
+  picks.value = n;
+}
+function preselect() { picks.value = new Set((list.value || []).filter((c) => !c.emus.some((e) => e.installed)).map((c) => c.key + '|' + c.emus[0].id)); }
+const jobs = computed(() => jobKeys.value.map((k) => { const [key, id] = k.split('|'); const x = all.value.find((y) => y.c.key === key && y.e.id === id); return { key, id, label: x?.e.label || id, s: q.value.filter((y) => y.key === key && y.id === id).pop() }; }));
+const doneJobs = computed(() => jobs.value.filter((j) => /done|error/.test(j.s?.state || '')));
+const failed = computed(() => jobs.value.filter((j) => j.s?.state === 'error'));
+const linked = computed(() => jobs.value.reduce((n, j) => n + (j.s?.links || 0), 0));
+const doneNote = computed(() => [linked.value ? `Saves and textures are linked in ${short(store.config.emulationRoot)}/saves and storage` : '', 'Steam shortcuts use them from now on'].filter(Boolean).join('. ') + '.');
+const jobNote = (j) => j.s?.state === 'error' ? j.s.error || 'Try again later' : j.s?.state === 'done' ? [short(j.s.where), j.s.relinked ? `${j.s.relinked} Steam shortcut${j.s.relinked === 1 ? '' : 's'} fixed` : ''].filter(Boolean).join(' · ') : '';
+async function install() {
+  const items = picked.value.map((k) => { const [key, id] = k.split('|'); return { key, id }; });
+  jobKeys.value = picked.value; picks.value = new Set(); phase.value = 'install';
+  q.value = await call('emuget:queue', { items }).catch((err) => { toast(err.message, 'error'); return q.value; });
+  await nextTick(); focusFirst(document.querySelector('.eg'), '.eg-job');
+}
+watch(() => doneJobs.value.length, (n) => { if (phase.value === 'install' && jobs.value.length && n === jobs.value.length) phase.value = 'done'; });
 const drives = ref(null), list = ref(null), q = ref([]), busy = ref(false);
 const el = ref(null);
 const short = (p) => String(p || '').replace(store.info?.home || '\0', '~');
@@ -139,16 +209,16 @@ const running = computed(() => q.value.find((x) => x.state === 'run'));
 const waiting = computed(() => q.value.filter((x) => x.state === 'wait').length);
 const runningName = computed(() => all.value.find((x) => x.c.key === running.value?.key && x.e.id === running.value?.id)?.e.label || '');
 
-async function loadDrives() {
+async function loadDrives(auto = true) {
   // EmuDeck found: use its folders and say so, instead of asking for a drive (0.9.24)
-  const ed = await call('emuget:emudeck').catch(() => null);
-  if (ed) { try { await call('emuget:useEmuDeck'); store.config = await call('config:get'); toast(`Using EmuDeck’s setup in ${short(ed.root)}: new emulators go beside its own`, 'ok', 4500, 'mdiCheck'); phase.value = 'list'; await load(); return; } catch {} }
+  const ed = auto && (await call('emuget:emudeck').catch(() => null));
+  if (ed) { try { await call('emuget:useEmuDeck'); store.config = await call('config:get'); toast(`Using EmuDeck’s setup in ${short(ed.root)}: new emulators go beside its own`, 'ok', 4500, 'mdiCheck'); phase.value = props.flow ? 'pick' : 'list'; await load(); return; } catch {} }
   drives.value = await call('emuget:drives').catch(() => []);
 }
-async function load() { list.value = await call('emuget:list').catch(() => []); q.value = await call('emuget:state').catch(() => []); }
+async function load() { list.value = await call('emuget:list').catch(() => []); q.value = await call('emuget:state').catch(() => []); if (phase.value === 'pick' && !picks.value.size) preselect(); }
 async function pickDrive(d) {
   busy.value = true;
-  try { const r = await call('emuget:prepare', { base: d.path }); store.config = await call('config:get'); toast(`Made ${short(r.root)}`, 'ok', 3000, 'mdiFolderPlus'); phase.value = 'list'; await load(); await nextTick(); focusFirst(document.querySelector('.eg'), '.eg-bar .btn'); }
+  try { const r = await call('emuget:prepare', { base: d.path }); store.config = await call('config:get'); toast(`Made ${short(r.root)}`, 'ok', 3000, 'mdiFolderPlus'); phase.value = props.flow ? 'pick' : 'list'; await load(); await nextTick(); focusFirst(document.querySelector('.eg'), '.eg-bar .btn.primary'); }
   catch (e) { toast(e.message, 'error', 5000); }
   busy.value = false;
 }
@@ -172,7 +242,7 @@ onMounted(async () => {
     const done = s.filter((x) => x.state === 'done' || x.state === 'error').length;
     if (done !== lastDone) {
       // say where it went, and how many Steam shortcuts now point at it (0.9.24)
-      if (done > lastDone) for (const x of s.filter((y) => y.state === 'done' && y.where && !told.has(y.key + y.id))) { told.add(x.key + x.id); toast(`Installed to ${String(x.where).replace(store.info?.home || '\0', '~')}${x.relinked ? ` · ${x.relinked} Steam shortcut${x.relinked === 1 ? '' : 's'} now use it` : ''}`, 'ok', 6000, 'mdiCheck'); }
+      if (done > lastDone && !props.flow) for (const x of s.filter((y) => y.state === 'done' && y.where && !told.has(y.key + y.id))) { told.add(x.key + x.id); toast(`Installed to ${String(x.where).replace(store.info?.home || '\0', '~')}${x.relinked ? ` · ${x.relinked} Steam shortcut${x.relinked === 1 ? '' : 's'} now use it` : ''}`, 'ok', 6000, 'mdiCheck'); }
       lastDone = done; load();
     }
   });
@@ -189,6 +259,18 @@ defineExpose({ load });
 .eg { display: flex; flex-direction: column; gap: var(--s-4); text-align: left; }
 .small { font-size: var(--t-sm); }
 .mono { font-family: ui-monospace, monospace; word-break: break-all; }
+.eg-steps { display: flex; gap: var(--s-2); flex-wrap: wrap; justify-content: center; }
+.eg-step { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px 6px 6px; border-radius: 999px; background: var(--s1); color: var(--muted); font-size: var(--t-sm); }
+.eg-step i { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-style: normal; font-weight: 700; font-size: var(--t-xs); background: var(--s2); }
+.eg-step.on { color: var(--text); background: var(--s2); }
+.eg-step.on i { background: var(--focus); color: var(--on-focus); }
+.eg-step.past i { background: rgba(87, 211, 100, 0.25); color: #8fe39a; }
+.eg-tick { width: 26px; height: 26px; border-radius: 8px; display: grid; place-items: center; border: 2px solid rgba(255, 255, 255, 0.28); flex: none; }
+.eg-tick.on { background: currentColor; border-color: currentColor; }
+.eg-tick.on :deep(svg) { color: #0b0d12; }
+.eg-emu:focus .eg-tick { border-color: rgba(0, 0, 0, 0.35); }
+.eg-emu:focus .eg-tick.on :deep(svg) { color: var(--focus); }
+.eg-jobs { display: flex; flex-direction: column; gap: 6px; }
 .eg-intro { display: flex; flex-direction: column; gap: 6px; text-align: center; }
 .eg-intro b { font-size: var(--t-lg); }
 .eg-drives { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: var(--s-3); }
