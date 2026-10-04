@@ -946,8 +946,9 @@ async function loadAll() {
 }
 const mediaSizes = [{ v: 'compact', l: 'Compact' }, { v: 'spacious', l: 'Spacious' }, { v: 'large', l: 'Large' }];
 // Emulators pages (0.9.16)
-const EMU_PAGES = [{ v: 'overview', l: 'Overview' }, { v: 'emus', l: 'Emulators' }, { v: 'addons', l: 'Game Add-ons' }, { v: 'folders', l: 'Console Folders' }];
-const emuPage = ref('overview');
+// 0.9.28 (owner: the flow felt confusing): what you have first, then add-ons, then setup and health checks, then folders
+const EMU_PAGES = [{ v: 'emus', l: 'Emulators' }, { v: 'addons', l: 'Game Add-ons' }, { v: 'overview', l: 'Setup and Health' }, { v: 'folders', l: 'Console Folders' }];
+const emuPage = ref(store.issues ? 'overview' : 'emus'); // problems waiting: open where they're listed
 // installed games whose emulator has patches (0.9.16), by console then name
 const PATCH_EMU = [[/ps3/i, 'RPCS3', 'rpcs3'], [/ps4/i, 'shadPS4', 'shadps4'], [/\bps2\b/i, 'PCSX2', 'pcsx2'], [/\b(ngc|gamecube|gc|wii)\b/i, 'Dolphin', 'dolphin'], [/\bpsp\b/i, 'PPSSPP', 'ppsspp']];
 // Game Add-ons page (0.9.21): every installed game with add-ons, patches or game updates, by console, with a search

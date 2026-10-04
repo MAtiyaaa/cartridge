@@ -73,7 +73,7 @@
 // picked above: PS2 texture packs from the EmuCoreX catalog, other consoles' mods from GameBanana.
 import { computed, onMounted, onBeforeUnmount, ref } from 'vue';
 import { pushLayer, focusFirst } from '../nav.js';
-import { store, call, closeModal, toast, bytes, confirm, pickFolder, openModal } from '../store.js';
+import { store, call, closeModal, toast, bytes, confirm, pickFolder, openModal, tab } from '../store.js';
 import Icon from './Icon.vue';
 
 // embedded (0.9.21): one tab of Game Add-ons (GameAddons.vue); kind 'tex' is the texture pack catalog
@@ -125,8 +125,11 @@ async function act(p) {
 async function install(p, f) {
   if (!emu.value) return toast('No emulator for this game is set up here.', 'info');
   run.value = { state: 'start' };
+  // 0.9.28 (owner): Install goes to Downloads, where the pack shows with its game, downloading then unpacking
+  const job = call('addons:install', { romId: props.romId, emuRoot: emu.value.emuRoot, pack: JSON.parse(JSON.stringify(p)), file: f ? JSON.parse(JSON.stringify(f)) : null });
+  closeModal(null); tab('downloads');
   try {
-    const r = await call('addons:install', { romId: props.romId, emuRoot: emu.value.emuRoot, pack: JSON.parse(JSON.stringify(p)), file: f ? JSON.parse(JSON.stringify(f)) : null });
+    const r = await job;
     toast(`Installed in ${emu.value.name}: ${r.files.toLocaleString()} files${r.patches ? ', in its patches (turn it on in the game’s Patches)' : r.graphicMods ? ', in its Graphics Mods (turn it on in the game’s Graphics Mods)' : r.autoOn ? '. Custom textures are on now.' : r.textures ? '. Turn custom textures on to see them.' : ''}`, 'ok', 5000, 'mdiPuzzleOutline');
     open.value = null;
   } catch (e) { if (!/abort/i.test(e.message)) toast(e.message, 'error', 6000); }

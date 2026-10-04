@@ -3564,7 +3564,18 @@ const handlers = {
       .map((e) => { const st = e.path && (() => { try { return fs.statSync(e.path); } catch { return null; } })(); const got = (cache.installed || {})[e.path]; return got && st && got.size === st.size ? { ...e, version: got.version } : e; });
     const fp = await U.flatpakUpdates(list.filter((e) => e.kind === 'flatpak').map((e) => e.fp)).catch(() => ({}));
     const out = [];
+    // emulators and forks installed from a GitHub link (0.9.28, owner: update them from the same place): their own
+    // project's releases, never the emulator they're a fork of; listed even when the scan doesn't know them
+    const customs = (config.customEmus || []).filter((x) => x.path && fs.existsSync(x.path));
+    for (const x of customs) if (!list.some((e) => e.path === x.path)) list.push({ id: x.of || 'custom', label: x.repo.split('/')[1], kind: 'appimage', path: x.path });
     for (const e of list) {
+      const custom = customs.find((x) => x.path === e.path);
+      if (custom) {
+        const ck = 'gh:' + custom.repo; let c = cache[ck];
+        if (fresh || !c || Date.now() - c.t > 6 * 3600e3) { try { const r = await require('./github').release(custom.repo); c = cache[ck] = { t: Date.now(), tag: r?.tag || null }; } catch (err) { c = { t: c?.t || 0, tag: c?.tag || null, error: err.message }; } }
+        out.push({ ...e, label: custom.repo.split('/')[1], version: custom.tag, custom: { repo: custom.repo }, update: c?.tag && c.tag !== custom.tag ? { version: c.tag, tag: c.tag } : null, latest: c?.tag ? { version: c.tag } : null, error: c?.error || null, channel: null, channels: [], page: `https://github.com/${custom.repo}/releases` });
+        continue;
+      }
       if (e.kind === 'flatpak') { out.push({ ...e, update: fp[e.fp] ? { version: fp[e.fp].version } : null, where: fp[e.fp]?.where, channel: 'flathub', channels: [] }); continue; }
       const ch = U.channelsOf(e.id, e.path), channel = ((config.emuChannels || {})[e.id]) || ch.def;
       // 0.9.21: the release source follows the copy (Xenia Edge, Xenia's Windows build, Eden's variants)
@@ -3588,6 +3599,9 @@ const handlers = {
   'emuup:run': async ({ id, kind, fp, where, path: file, force }) => {
     const U = require('./emuUpdates');
     if (require('./raLogin').running().has(String(id).split('@')[0])) throw new Error('Close the emulator first.');
+    // from a GitHub link: its own project's newest release, set up the same way again (0.9.28)
+    const custom = (config.customEmus || []).find((x) => x.path === file);
+    if (custom) { const r = await handlers['emuget:custom']({ link: custom.repo, as: custom.as, of: custom.of, key: custom.key }); log('emulator from a link updated', custom.repo, r.tag); return true; }
     if (kind === 'flatpak') {
       broadcast('emu-update', { path: fp, state: 'downloading', pct: null });
       await U.flatpakUpdate(fp, where, (m) => broadcast('emu-update', { path: fp, state: 'downloading', pct: m.pct, text: m.text }), force ? ['install', '--reinstall'] : []);
