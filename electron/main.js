@@ -3202,8 +3202,8 @@ const handlers = {
         let names = [path.basename(where || ''), path.basename(file || '')];
         try { if (fs.statSync(where).isDirectory()) names = names.concat(fs.readdirSync(where)); } catch {}
         const all = names.map((n) => (/\b(01[0-9A-Fa-f]{14})\b/.exec(n) || [])[1]).filter(Boolean).map((x) => x.toUpperCase());
-        const base = all.find((x) => x.endsWith('000')) || all[0];
-        if (base) id = base.slice(0, 13) + '000';
+        const base = all[0];
+        if (base) id = (BigInt('0x' + base) & ~0x1FFFn).toString(16).toUpperCase().padStart(16, '0'); // update (x800) and DLC (+0x1000) share the base's high bits
       }
       if (id) { ids.switchId = id; ids.switchIdLower = id.toLowerCase(); }
     }
