@@ -47,6 +47,10 @@
                 <div class="st-label">Free space</div>
                 <div class="st-num"><span class="st-big tnum">{{ space ? sizeNum(space.free) : '–' }}</span><span class="st-unit">{{ space ? sizeUnit(space.free) : '' }}</span></div>
                 <div class="st-sub">{{ space ? `of ${bytes(space.total)}` : 'Looking…' }}</div>
+                <!-- 0.9.24 (owner: empty space when big): what each console's games take up on this device -->
+                <div v-if="byCon.length" class="st-store-cons">
+                  <div v-for="c in byCon.slice(0, 6)" :key="c.name" class="st-store-con"><span>{{ c.name }}</span><i><b :style="{ width: (c.size / byCon[0].size) * 100 + '%' }" /></i><em class="tnum">{{ bytes(c.size) }}</em></div>
+                </div>
               </div>
               <div class="st-gauge" :class="{ low: freePct < 10 }">
                 <svg viewBox="0 0 100 100" aria-hidden="true"><line v-for="k in GAUGE" :key="k.i" :x1="k.x1" :y1="k.y1" :x2="k.x2" :y2="k.y2" :class="{ on: space && k.i < freePct / 100 * GAUGE.length }" :style="{ '--i': k.i }" /></svg>
@@ -116,13 +120,16 @@
           <template v-else-if="t.type === 'trophies'">
             <div class="st-label">{{ t.console ? t.console + ' Trophies' : 'Latest Trophies' }}<span v-if="achOf(t).week" class="st-count">{{ achOf(t).week }} this week</span></div>
             <template v-if="achOf(t).list.length">
-              <div class="st-tro">
-                <div class="st-tro-main">
-                  <span class="st-tro-badge"><img v-if="achOf(t).list[0].badge" :src="achOf(t).list[0].badge" alt="" /><Grade v-else :g="achOf(t).list[0].grade" :size="30" /></span>
-                  <span class="st-tro-t"><b>{{ achOf(t).list[0].title }}</b><span>{{ achOf(t).list[0].game }}<template v-if="achOf(t).list[0].t"> · {{ agoShort(achOf(t).list[0].t) }}</template></span></span>
+              <!-- 0.9.24 (owner: too much empty space when big): as many unlocks as the tile holds, in columns when wide -->
+              <div class="st-tro" :class="{ one: troFor(t).n === 1 }">
+                <div class="st-tro-list" :style="{ gridTemplateColumns: `repeat(${troFor(t).cols}, minmax(0, 1fr))` }">
+                  <div v-for="(a, i) in achOf(t).list.slice(0, troFor(t).n)" :key="a.key" class="st-tro-main" :style="{ '--i': i }">
+                    <span class="st-tro-badge"><img v-if="a.badge" :src="a.badge" alt="" /><Grade v-else :g="a.grade" :size="26" /></span>
+                    <span class="st-tro-t"><b>{{ a.title }}</b><span>{{ a.game }}<template v-if="a.t"> · {{ agoShort(a.t) }}</template></span></span>
+                  </div>
                 </div>
-                <div v-if="achOf(t).list.length > 1" class="st-tro-strip">
-                  <span v-for="(a, i) in achOf(t).list.slice(1, 1 + stripN(t))" :key="a.key" class="st-tro-mini" :style="{ '--i': i }" :title="a.title"><img v-if="a.badge" :src="a.badge" alt="" /><Grade v-else :g="a.grade" :size="16" /></span>
+                <div v-if="achOf(t).list.length > troFor(t).n" class="st-tro-strip">
+                  <span v-for="(a, i) in achOf(t).list.slice(troFor(t).n, troFor(t).n + stripN(t))" :key="a.key" class="st-tro-mini" :style="{ '--i': i }" :title="a.title"><img v-if="a.badge" :src="a.badge" alt="" /><Grade v-else :g="a.grade" :size="16" /></span>
                 </div>
               </div>
             </template>
@@ -223,7 +230,6 @@
     </div>
     <!-- pages (0.9.23, owner: more than one page, switched with the right stick) -->
     <div v-if="pages.length > 1 || editing" class="st-pages" aria-hidden="true">
-      <Btn v-if="pages.length > 1 && input.mode === 'pad'" b="RS" class="st-rs" />
       <i v-for="(pg, i) in pages" :key="i" :class="{ on: i === page }" @click="goPage(i)" />
     </div>
   </div>
@@ -324,6 +330,12 @@ function fanN(t) {
   const h = t.h > 1 ? ph * 0.55 : ph - pad * 2, cw = h * 0.75, fw = t.w <= 2 ? pw - pad * 2 : pw * 0.58;
   return Math.max(1, Math.min(9, Math.floor((fw - cw) / (cw * 0.5)) + 1));
 }
+// trophies: rows of about 60 px and columns of about 300 px, leaving room for the label and the badge strip
+function troFor(t) {
+  const { pw, ph } = box(t), pad = Math.min(22, ph * 0.09), h = ph - pad * 2 - 26 - (ph > 200 ? 46 : 0);
+  const cols = Math.max(1, Math.min(4, Math.floor(pw / 300))), rows = Math.max(1, Math.floor(h / 62));
+  return { cols, rows, n: Math.max(1, cols * rows) };
+}
 const stripN = (t) => Math.max(0, Math.min(12, Math.floor((box(t).pw - 36) / 40)));
 
 // ---- data
@@ -383,6 +395,11 @@ const space = ref(null);
 const loadSpace = () => call('fs:space', store.config.romsRoot || store.info?.home || '/').then((s) => { space.value = s; }).catch(() => {});
 const sizeNum = (b) => { const s = bytes(b).split(' '); return s[0]; };
 const sizeUnit = (b) => { const s = bytes(b).split(' '); return s[1] || ''; };
+const byCon = computed(() => {
+  const m = {};
+  for (const r of roms.value) if (store.installed[r.id]) { const k = r.platform_display_name || r.platform_slug; m[k] = (m[k] || 0) + (r.fs_size_bytes || 0); }
+  return Object.entries(m).map(([name, size]) => ({ name, size })).filter((c) => c.size > 0).sort((a, b) => b.size - a.size);
+});
 const freePct = computed(() => space.value?.total ? (space.value.free / space.value.total) * 100 : 0);
 // the gauge: 36 ticks round a 270 degree arc, open at the bottom
 const GAUGE = Array.from({ length: 36 }, (_, i) => {
@@ -772,6 +789,7 @@ watch(() => store.play, loadWeek);
 <style scoped>
 .start { position: absolute; inset: 0; display: flex; flex-direction: column; animation: viewIn var(--d-slow) var(--ease); }
 .st-scroll { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; padding: var(--s-4) var(--s-7) var(--s-6); }
+.start:has(.st-pages) .st-scroll { padding-bottom: var(--s-3); }
 @media (max-width: 1400px) { .st-scroll { padding-left: 36px; padding-right: 36px; } }
 /* the board: tiles placed in pixels from their cell (startLayout.js), so moves and resizes glide */
 .st-board { position: relative; transition: height 460ms cubic-bezier(0.32, 0.72, 0, 1); }
@@ -906,10 +924,9 @@ watch(() => store.play, loadWeek);
 .st-pg-next-enter-from { opacity: 0; transform: translateX(4%); }
 .st-pg-prev-enter-from { opacity: 0; transform: translateX(-4%); }
 :global(body.motion-reduce .st-board) { transition: none !important; transform: none !important; }
-.st-pages { position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 999px; background: rgba(10, 11, 14, 0.55); z-index: 3; }
+.st-pages { flex: none; align-self: center; display: flex; align-items: center; gap: 8px; padding: 6px 0 10px; } /* its own row under the board: never over a tile (0.9.24) */
 .st-pages i { width: 7px; height: 7px; border-radius: 4px; background: rgba(255, 255, 255, 0.35); cursor: pointer; transition: width var(--d-med) var(--ease-out), background var(--d-med); }
 .st-pages i.on { width: 22px; background: #fff; }
-.st-rs { margin-right: 4px; }
 .st-blank { position: absolute; left: 0; right: 0; top: 0; height: min(320px, 60vh); margin: auto; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; border-radius: var(--r-lg); color: var(--muted); text-align: center; box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.08); }
 .st-blank b { color: var(--text); font-family: var(--display); font-size: var(--t-lg); }
 .st-blank:focus { box-shadow: var(--ring); color: var(--text); }
@@ -939,18 +956,21 @@ watch(() => store.play, loadWeek);
 @container (max-height: 120px) { .st-row-lead .st-sub { display: none; } }
 
 /* trophies: the newest large, the ones before it as small badges */
-.st-tro { flex: 1; min-height: 0; display: flex; flex-direction: column; justify-content: flex-end; gap: clamp(6px, 6cqh, 14px); margin-top: 6px; }
-.st-tro-main { display: flex; align-items: center; gap: 12px; min-width: 0; animation: st-in 520ms var(--ease-out) both 120ms; }
-.st-tro-badge { width: clamp(36px, 34cqh, 64px); aspect-ratio: 1; flex: none; border-radius: var(--r-md); overflow: hidden; display: grid; place-items: center; background: var(--s2); box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 210, 120, 0.28); }
+.st-tro { flex: 1; min-height: 0; display: flex; flex-direction: column; justify-content: flex-end; gap: clamp(6px, 4cqh, 14px); margin-top: 6px; }
+.st-tro-list { display: grid; gap: 10px 18px; align-content: end; }
+.st-tro-main { display: flex; align-items: center; gap: 12px; min-width: 0; animation: st-in 520ms var(--ease-out) both; animation-delay: calc(var(--i) * 35ms + 120ms); }
+.st-tro-badge { width: 48px; aspect-ratio: 1; flex: none; border-radius: var(--r-md); overflow: hidden; display: grid; place-items: center; background: var(--s2); box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 210, 120, 0.28); }
+.st-tro.one .st-tro-badge { width: clamp(36px, 34cqh, 64px); }
 .st-tro-badge img { width: 100%; height: 100%; object-fit: cover; }
 .st-tro-t { display: flex; flex-direction: column; min-width: 0; }
-.st-tro-t b { font-family: var(--display); font-weight: 700; font-size: clamp(12px, 12cqh, 18px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.st-tro-t b { font-family: var(--display); font-weight: 700; font-size: clamp(12px, 3.4cqh, 18px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.st-tro.one .st-tro-t b { font-size: clamp(12px, 12cqh, 18px); }
 .st-tro-t span { font-size: var(--t-xs); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .st-tro-strip { display: flex; gap: 6px; overflow: hidden; }
 .st-tro-mini { width: 34px; height: 34px; flex: none; border-radius: var(--r-sm); overflow: hidden; display: grid; place-items: center; background: var(--s2); opacity: calc(1 - var(--i) * 0.06); animation: st-in 420ms var(--ease-out) both; animation-delay: calc(var(--i) * 30ms + 200ms); }
 .st-tro-mini img { width: 100%; height: 100%; object-fit: cover; }
 @container (max-height: 84px) { .st-tro-strip { display: none; } }
-@container (max-width: 200px) { .st-tro-t { display: none; } .st-tro-main { justify-content: center; flex: 1; } .st-tro-badge { width: min(64cqw, 60cqh); } }
+@container (max-width: 200px) { .st-tro-t { display: none; } .st-tro-main:not(:first-child) { display: none; } .st-tro-main { justify-content: center; flex: 1; } .st-tro-badge { width: min(64cqw, 60cqh); } }
 :global(body.motion-reduce .st-tro-main), :global(body.motion-reduce .st-tro-mini) { animation: none; }
 
 /* Surprise me: three cards fanned, dealt again each time */
@@ -992,8 +1012,17 @@ watch(() => store.play, loadWeek);
 .st-gauge > span { font-family: var(--display); font-weight: 700; font-size: clamp(13px, 22cqw, 40px); letter-spacing: -0.02em; }
 .st-gauge small { font-size: 0.62em; color: var(--muted); margin-left: 1px; }
 :global(body.motion-reduce .st-gauge line) { transition: none; }
-@container (aspect-ratio < 1.2) { .st-store { flex-direction: column-reverse; } .st-gauge { height: auto; width: 100%; max-width: none; aspect-ratio: auto; flex: 1; min-height: 0; container-type: size; } .st-gauge > span { font-size: clamp(13px, min(20cqw, 20cqh), 40px); } .st-store-text .st-num { margin-top: 0; } .st-store-text { flex: none; } }
+/* tall: the gauge large in the middle, the numbers and each console's share under it (0.9.24) */
+@container (aspect-ratio < 1.2) { .st-store { flex-direction: column-reverse; justify-content: flex-end; } .st-gauge { height: auto; width: min(100%, 60cqh); max-width: none; aspect-ratio: 1; flex: none; margin: auto; container-type: inline-size; } .st-gauge > span { font-size: clamp(14px, 20cqw, 44px); } .st-store-text .st-num { margin-top: 0; } .st-store-text { flex: none; } }
 @container (max-width: 190px) and (max-height: 190px) { .st-store-text { display: none; } .st-gauge { max-width: none; width: 100%; height: 100%; } }
+.st-store-cons { display: none; flex-direction: column; gap: 7px; margin-top: 14px; }
+.st-store-con { display: grid; grid-template-columns: minmax(0, 1fr) 2fr auto; align-items: center; gap: 10px; font-size: var(--t-xs); color: var(--muted); }
+.st-store-con span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.st-store-con i { height: 5px; border-radius: 3px; background: rgba(255, 255, 255, 0.08); overflow: hidden; }
+.st-store-con b { display: block; height: 100%; border-radius: inherit; background: rgba(255, 255, 255, 0.55); }
+.st-store-con em { font-style: normal; color: var(--text); font-weight: 600; }
+@container (min-height: 300px) { .st-store-cons { display: flex; } }
+@container (min-width: 520px) and (min-height: 200px) { .st-store-cons { display: flex; } .st-store-text .st-num { margin-top: 0; } .st-store-text { justify-content: center; } }
 
 /* this week: wide, the total beside the bars; tall, the bars under it; small, the total only */
 .st-week { flex: 1; min-height: 0; display: flex; align-items: stretch; gap: var(--s-5); }
@@ -1003,7 +1032,7 @@ watch(() => store.play, loadWeek);
 .st-col { flex: 1; min-height: 0; width: 100%; position: relative; }
 .st-bar i { position: absolute; left: 0; right: 0; bottom: 0; border-radius: 6px; background: linear-gradient(to top, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.24)); transform-origin: bottom; animation: st-rise 760ms cubic-bezier(0.22, 1, 0.36, 1) both; animation-delay: calc(var(--i) * 55ms + 180ms); transition: height 500ms var(--ease); }
 .st-bar.today i { background: linear-gradient(to top, rgba(255, 255, 255, 0.78), #fff); }
-.st-bar.none i { left: calc(50% - 3px); width: 6px; height: 6px; border-radius: 50%; background: rgba(255, 255, 255, 0.16); }
+.st-bar.none i { height: 7%; min-height: 4px; background: rgba(255, 255, 255, 0.1); } /* a day without play is a low bar, so the chart reads as one (0.9.24) */
 .st-bar em { position: absolute; left: 50%; transform: translate(-50%, -6px); font-style: normal; font-size: 11px; font-weight: 700; color: var(--text); white-space: nowrap; font-variant-numeric: tabular-nums; }
 .st-bar span { font-size: 11px; font-weight: 600; color: var(--dim); }
 .st-bar.today span { color: var(--text); }
@@ -1011,7 +1040,7 @@ watch(() => store.play, loadWeek);
 :global(body.motion-reduce .st-bar i) { animation: none; }
 @container (aspect-ratio < 1.5) { .st-week { flex-direction: column; gap: var(--s-2); } .st-week-text { max-width: none; } .st-week-text .st-num { margin-top: 6px; } }
 /* 0.9.23 (owner: the bars at 1x1 too): a small tile keeps the bars and the total, without the words */
-@container (max-height: 160px) and (max-width: 240px) { .st-week { flex-direction: column; gap: 4px; } .st-week-text { max-width: none; flex: none; } .st-week-text .st-label, .st-week-text .st-sub { display: none; } .st-week-text .st-num { margin-top: 0; } .st-week .st-big { font-size: clamp(16px, 20cqh, 28px); } .st-bars { padding-top: 4px; gap: 3px; } .st-bar span, .st-bar em { display: none; } }
+@container (max-height: 160px) and (max-width: 240px) { .st-week { flex-direction: column; gap: 4px; } .st-week-text { max-width: none; flex: none; } .st-week-text .st-label, .st-week-text .st-sub { display: none; } .st-week-text .st-num { margin-top: 0; } .st-week .st-big { font-size: clamp(20px, 24cqh, 40px); } .st-bars { padding-top: 4px; gap: 3px; } .st-bar span, .st-bar em { display: none; } }
 
 /* consoles: the same cards as the Consoles page */
 .st-cards { flex: 1; min-height: 0; margin-top: 10px; display: grid; gap: clamp(6px, 2cqw, 12px); }

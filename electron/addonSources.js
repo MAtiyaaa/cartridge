@@ -109,9 +109,62 @@ const FEATURED = [
   { con: 'gc', ids: ['GVJ'], title: 'Viewtiful Joe HD', author: 'Dolphin community (rapka’s list)', page: 'https://github.com/rapka/dolphin-textures/blob/master/PACKS.md' },
   { con: 'gc', ids: ['GRS'], title: 'Soulcalibur II HD', author: 'Dolphin community (rapka’s list)', page: 'https://github.com/rapka/dolphin-textures/blob/master/PACKS.md' },
 ];
-function featuredFor(ids = {}) {
-  const g = String(ids.gameId || '').toUpperCase().slice(0, 3);
-  return g ? FEATURED.filter((f) => f.ids.includes(g)).map((f, i) => ({ source: 'page', id: 'f:' + f.ids[0] + i, name: f.title, authors: [f.author], page: f.page })) : [];
+// HenrikoMagnifico's packs (0.9.23 GameCube; 0.9.24, owner: add his whole list): these pages, checked by
+// search, plus whatever his texture-packs page lists when Cartridge can reach it (read live, cached a week).
+// Matched by game ID where known, else by the game's name. Consoles: GameCube, Wii and 3DS.
+const HENRIKO = [
+  ['wind-waker-4k', 'The Legend of Zelda: The Wind Waker 4K', ['gc'], ['GZL']],
+  ['zelda-twilight-princess-4k', 'The Legend of Zelda: Twilight Princess 4K', ['gc', 'wii'], ['GZ2', 'RZD']],
+  ['zelda-skyward-sword-4k-wii-edition', 'The Legend of Zelda: Skyward Sword 4K (Wii Edition)', ['wii'], ['SOU']],
+  ['super-mario-sunshine-4k', 'Super Mario Sunshine 4K', ['gc'], ['GMS']],
+  ['luigis-mansion-4k', 'Luigi’s Mansion 4K', ['gc'], ['GLM']],
+  ['pikmin-4k', 'Pikmin 4K', ['gc', 'wii'], ['GPI', 'R9I']],
+  ['pikmin-2-4k-texture-pack', 'Pikmin 2 4K', ['gc', 'wii'], ['GPV', 'R92']],
+  ['wii-sports-4k', 'Wii Sports 4K', ['wii'], ['RSP']],
+  ['zelda-ocarina-of-time-3d-4k', 'The Legend of Zelda: Ocarina of Time 3D 4K', ['3ds'], []],
+  ['zelda-majoras-mask-3d-4k', 'The Legend of Zelda: Majora’s Mask 3D 4K', ['3ds'], []],
+  ['zelda-a-link-between-worlds-4k', 'The Legend of Zelda: A Link Between Worlds 4K', ['3ds'], []],
+  ['super-mario-3d-land-hd', 'Super Mario 3D Land 4K', ['3ds'], []],
+].map(([slug, title, cons, ids]) => ({ slug, title, cons, ids, page: 'https://www.henrikomagnifico.com/' + slug }));
+const CON_OF = { ngc: 'gc', gamecube: 'gc', gc: 'gc', wii: 'wii', n3ds: '3ds', '3ds': '3ds', 'new-nintendo-3ds': '3ds' };
+const NAME_STOP = new Set(['the', 'legend', 'of', 'zelda', 'a', 'and', '4k', 'hd', 'texture', 'pack', 'wii', 'edition', 'gamecube', 'gc', 'remastered']);
+const words = (s) => String(s || '').toLowerCase().replace(/[’']/g, '').replace(/&/g, ' and ').split(/[^a-z0-9]+/).filter(Boolean);
+// does this pack's title name this game? every word of the pack's title (beyond the common ones) is in the game's name
+function namesGame(packTitle, gameName) {
+  const g = new Set(words(gameName)), need = words(packTitle).filter((w) => !NAME_STOP.has(w));
+  return need.length > 0 && need.every((w) => g.has(w)) && (/3d\b/i.test(packTitle) === /3d\b/i.test(gameName));
+}
+// the texture-packs page: links to his pack pages, with their titles
+function parseHenriko(html) {
+  const out = [], seen = new Set();
+  for (const m of String(html).matchAll(/<a\b[^>]*href="(?:https?:\/\/(?:www\.)?henrikomagnifico\.com)?\/([a-z0-9-]+)\/?"[^>]*>([\s\S]*?)<\/a>/gi)) {
+    const slug = m[1].toLowerCase();
+    if (seen.has(slug) || !/(4k|hd|texture)/.test(slug)) continue;
+    const text = m[2].replace(/<[^>]+>/g, ' ').replace(/&amp;/g, '&').replace(/&#39;|&rsquo;/g, '’').replace(/\s+/g, ' ').trim();
+    seen.add(slug);
+    out.push({ slug, title: text && text.length < 90 ? text : slug.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()), page: 'https://www.henrikomagnifico.com/' + slug });
+  }
+  return out;
+}
+let henrikoLive = null;
+async function henrikoCatalog({ cacheFile, fetchImpl = require('./webFetch') } = {}) {
+  if (henrikoLive) return henrikoLive;
+  const fs = require('fs');
+  try { const c = JSON.parse(fs.readFileSync(cacheFile, 'utf8')); if (Date.now() - c.t < 7 * 864e5) return (henrikoLive = c.list); } catch {}
+  try {
+    const r = await fetchImpl('https://www.henrikomagnifico.com/texture-packs', { headers: { 'User-Agent': 'Mozilla/5.0 Cartridge' }, signal: AbortSignal.timeout(12000) });
+    if (r.ok) { const list = parseHenriko(await r.text()); if (list.length) { try { fs.writeFileSync(cacheFile, JSON.stringify({ t: Date.now(), list })); } catch {} return (henrikoLive = list); } }
+  } catch {}
+  return [];
+}
+function featuredFor(ids = {}, live = []) {
+  const g = String(ids.gameId || '').toUpperCase().slice(0, 3), con = CON_OF[String(ids.slug || '').toLowerCase()] || (g ? 'gc' : '');
+  const out = [];
+  const add = (id, name, author, page) => { if (!out.some((x) => x.page === page)) out.push({ source: 'page', id, name, authors: [author], page }); };
+  for (const h of HENRIKO) if ((g && h.ids.includes(g)) || ((!con || h.cons.includes(con)) && ids.name && namesGame(h.title, ids.name))) add('h:' + h.slug, h.title, 'HenrikoMagnifico', h.page);
+  for (const h of live) if (ids.name && namesGame(h.title, ids.name) && (!con || con !== '3ds' || /3d/i.test(h.title) || /3d/i.test(ids.name))) add('h:' + h.slug, h.title, 'HenrikoMagnifico', h.page);
+  if (g) FEATURED.filter((f) => f.ids.includes(g) && !/henriko/i.test(f.author)).forEach((f, i) => add('f:' + f.ids[0] + i, f.title, f.author, f.page));
+  return out;
 }
 
-module.exports = { FEATURED, featuredFor, PS2_CATALOG, parsePs2Catalog, ps2Catalog, ps2For, gbGame, gbMods, gbFiles, parseGbMods, parseGbFiles, key, titleForms };
+module.exports = { FEATURED, HENRIKO, featuredFor, parseHenriko, henrikoCatalog, namesGame, PS2_CATALOG, parsePs2Catalog, ps2Catalog, ps2For, gbGame, gbMods, gbFiles, parseGbMods, parseGbFiles, key, titleForms };

@@ -3194,7 +3194,15 @@ const handlers = {
     const installed = Object.entries(addonRecs()).filter(([, r]) => r.romId === rom.id).map(([key, r]) => ({ key, ...r, files: undefined, count: r.files.length }));
     const out = { emus, installed, packs: [], source: null, error: '', featured: [] };
     // 0.9.23: hand-picked texture packs from their creators' pages (Dolphin by game ID)
-    try { if (/^(ngc|gamecube|gc)$/i.test(rom.platform_slug)) { const gid = handlers['addons:gameIds']({ romId }).gameId; out.featured = require('./addonSources').featuredFor({ gameId: gid }); } } catch {}
+    // featured texture packs: GameCube by game ID, and HenrikoMagnifico's GameCube, Wii and 3DS packs by ID or name (0.9.24)
+    try {
+      if (/^(ngc|gamecube|gc|wii|n3ds|3ds)$/i.test(rom.platform_slug)) {
+        const S = require('./addonSources');
+        const gid = /^(ngc|gamecube|gc|wii)$/i.test(rom.platform_slug) ? handlers['addons:gameIds']({ romId }).gameId : '';
+        const live = await S.henrikoCatalog({ cacheFile: path.join(USER_DATA, 'addons-henriko.json') }).catch(() => []);
+        out.featured = S.featuredFor({ gameId: gid, name: rom.name, slug: rom.platform_slug }, live);
+      }
+    } catch {}
     try { if (rom.platform_slug === 'switch') out.version = handlers['addons:gameIds']({ romId }).version || null; } catch {}
     const S = require('./addonSources');
     try {

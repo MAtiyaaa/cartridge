@@ -1,7 +1,7 @@
 <template>
   <!-- the same card as the Consoles page (SysTile), drawn inside another control, so not a button -->
   <div class="systile static" :style="tileStyle">
-    <div class="sys-clip"><div class="glyph"><PIcon :p="p" :size="150" /></div></div>
+    <div class="sys-clip"><div class="glyph" :class="{ wide }"><PIcon :p="p" :size="150" :aspect="wide ? 1.5 : 1" @shape="(r) => (wide = r > 1.3)" /></div></div>
     <div class="sys-top">
       <img v-if="logo && !logoFail" class="sys-logo" :src="logo" :alt="p.display_name" :style="logoSize" @error="logoFail = true" />
       <div v-else class="nm">{{ p.display_name }}</div>
@@ -21,6 +21,7 @@ import { MAKERS, makerOf } from '../makers.js';
 import { consoleColors } from '../consoleColors.js';
 import { opticalOf } from '../consoleOptical.js';
 import PIcon from './PIcon.vue';
+const wide = ref(false); // a wide drawing (Switch with its Joy-Cons) gets a wide box, so it isn't small (0.9.24)
 const props = defineProps({ p: Object, compact: Boolean });
 const maker = computed(() => MAKERS[makerOf(props.p)] || null);
 const meta = computed(() => [maker.value ? '' : props.p.family_name, props.p.generation ? `Gen ${props.p.generation}` : ''].filter(Boolean).slice(0, 1).join(''));

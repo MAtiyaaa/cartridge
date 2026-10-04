@@ -246,6 +246,7 @@ body.surface-glass .glass { background: var(--glass-bg); border: 1px solid var(-
 /* the picture keeps clear of the rounded corners even when the card is focused (owner, 0.9.21: they were cut off) */
 .systile .glyph { position: absolute; right: 16px; top: 16px; height: calc(100% - 32px); aspect-ratio: 1; opacity: 0.55; filter: saturate(0.6) brightness(1.1) drop-shadow(0 10px 18px rgba(0, 0, 0, 0.45));
   -webkit-mask-image: linear-gradient(90deg, transparent, #000 45%); mask-image: linear-gradient(90deg, transparent, #000 45%); transition: opacity 0.3s, transform 0.4s var(--ease); }
+.systile .glyph.wide { aspect-ratio: 1.5; }
 .systile .glyph > * { width: 100% !important; height: 100% !important; object-fit: contain; } /* PIcon sets a fixed inline size */
 .systile .ico { width: 44px; height: 44px; }
 .systile .ico img { width: 100%; height: 100%; object-fit: contain; }
