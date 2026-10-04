@@ -455,3 +455,7 @@ body.light-fx .coll .art, body.light-fx .coll .mosaic { transition-property: tra
 
 /* Game Mode with another app in front (0.9.21): nothing animates, so nothing repaints behind the game */
 body.away *, body.away *::before, body.away *::after { animation-play-state: paused !important; }
+
+/* hold A on a row whose text trails off (data-expand, 0.9.29): it opens as a card with all of it; B folds it */
+[data-expand].expanded { position: relative; z-index: 3; height: auto !important; max-height: none !important; align-items: flex-start; background: var(--s2); box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.08); transition: box-shadow var(--d-med) var(--ease-out); }
+[data-expand].expanded * { white-space: normal !important; overflow: visible !important; text-overflow: clip !important; -webkit-line-clamp: unset !important; max-height: none !important; overflow-wrap: anywhere; }

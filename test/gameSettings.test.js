@@ -48,6 +48,13 @@ test('RPCS3 YAML and shadPS4 JSON, Dolphin reads its base under its own section 
   const s = path.join(TMP, 'shad');
   G.apply({ emu: 'shadps4', serial: 'CUSA00900', shadUser: s }, [{ id: 'GPU.readbacks_mode', value: '1' }, { id: 'GPU.fsr_enabled', value: 'false' }]);
   assert.deepStrictEqual(JSON.parse(fs.readFileSync(path.join(s, 'custom_configs/CUSA00900.json'), 'utf8')), { GPU: { readbacks_mode: 1, fsr_enabled: false } });
+  // typed numbers (0.9.29): any value in shadPS4's range, decimals only where it takes them
+  G.apply({ emu: 'shadps4', serial: 'CUSA00900', shadUser: s }, [{ id: 'GPU.vblank_frequency', value: '75' }, { id: 'General.trophy_notification_duration', value: '2.5' }]);
+  const j = JSON.parse(fs.readFileSync(path.join(s, 'custom_configs/CUSA00900.json'), 'utf8'));
+  assert.strictEqual(j.GPU.vblank_frequency, 75);
+  assert.strictEqual(j.General.trophy_notification_duration, 2.5);
+  assert.throws(() => G.apply({ emu: 'shadps4', serial: 'CUSA00900', shadUser: s }, [{ id: 'GPU.vblank_frequency', value: '9999' }]), /10 to 480/);
+  assert.throws(() => G.apply({ emu: 'shadps4', serial: 'CUSA00900', shadUser: s }, [{ id: 'GPU.window_width', value: '1280.5' }]), /320 to 7680/);
   const u = path.join(TMP, 'dol'), c = path.join(TMP, 'dolcfg');
   fs.mkdirSync(c, { recursive: true }); fs.writeFileSync(path.join(c, 'GFX.ini'), '[Settings]\nInternalResolution = 3\n');
   const dctx = { emu: 'dolphin', serial: 'GZLE01', dolphin: { user: u, config: c } };

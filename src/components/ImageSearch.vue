@@ -33,7 +33,7 @@ async function load() {
   try {
     const got = await call('start:search', { q: props.q, kind: props.kind, page });
     list.value = [...(list.value || []), ...got.filter((r) => !(list.value || []).some((x) => x.url === r.url))];
-    more.value = got.length >= 20;
+    more.value = got.length >= (props.kind === 'gif' ? 8 : 20); // GIFs too small to use are left out of each page of 20
   } catch (e) { err.value = /allowlist|ENOTFOUND|fetch failed/i.test(e.message) ? 'Couldn’t reach the search. Check the connection and try again.' : e.message; }
 }
 async function loadMore() { page++; await load(); }
@@ -47,9 +47,11 @@ onBeforeUnmount(() => layer?.pop());
 .isr { width: min(1200px, 96vw); height: min(88vh, 960px); display: flex; flex-direction: column; gap: var(--s-3); }
 .isr-head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--s-3); }
 .isr-head h2 { margin: 2px 0 0; font-size: var(--t-xl); }
-.isr-grid { flex: 1; min-height: 0; overflow-y: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; padding: 6px; align-content: start; }
-.isr-item { position: relative; aspect-ratio: 16 / 10; border-radius: var(--r-md); overflow: hidden; border: 0; padding: 0; background: var(--s2); color: inherit; }
-.isr-item img { width: 100%; height: 100%; object-fit: cover; display: block; }
+/* 0.9.29 (owner: results stacked on top of each other): every cell has a set height and the picture is laid
+   inside it, so a wide or tall picture never pushes into the next row */
+.isr-grid { flex: 1; min-height: 0; overflow-y: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); grid-auto-rows: clamp(120px, 12vw, 200px); gap: 12px; padding: 6px; align-content: start; }
+.isr-item { position: relative; height: 100%; min-height: 0; border-radius: var(--r-md); overflow: hidden; border: 0; padding: 0; background: var(--s2); color: inherit; contain: paint; }
+.isr-item img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
 .isr-item:focus { outline: none; box-shadow: var(--ring); transform: scale(1.03); }
 .isr-size { position: absolute; right: 6px; bottom: 6px; padding: 2px 7px; border-radius: 999px; background: rgba(0, 0, 0, 0.6); font-size: var(--t-xs); }
 .isr-more { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; font-weight: 600; }

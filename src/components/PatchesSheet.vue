@@ -15,7 +15,7 @@
       <div v-else-if="!shown.length" class="muted" style="padding: 12px 2px">{{ EMPTY[tab] || 'Nothing here for this game.' }}</div>
       <div v-else class="pt-list" data-scroll>
         <template v-for="p in shown" :key="p.key">
-        <button class="pt-row" :class="{ on: want[p.key], locked: p.by === 'emulator' }" data-focus @click="flip(p)">
+        <button class="pt-row" :class="{ on: want[p.key], locked: p.by === 'emulator' }" data-focus data-expand @click="flip(p)">
           <span class="box"><Icon v-if="want[p.key]" name="mdiCheck" :size="18" /></span>
           <span class="pt-mid">
             <b>{{ p.description }}</b>

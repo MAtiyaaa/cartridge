@@ -137,6 +137,63 @@ if (!process.env.CARTRIDGE_SMOKE && !process.env.CARTRIDGE_MULTI) {
 // app is in front in the root window's GAMESCOPE_FOCUSED_APP; Steam gives a shortcut it starts its id
 // in SteamGameId (the app id in the top 32 bits). When another app is in front, the UI stops reading
 // the pad (event 'background'). Without xprop or those ids nothing changes.
+// 0.9.29 (owner: after a game started from Cartridge closes, the controller does nothing until the screen is
+// tapped): Chromium only hands the page gamepad input while its document has focus. One focus call right as
+// gamescope switches back can land before the window is really in front, so it's asked again over a few
+// seconds (blur first, so the focus is a change Chromium acts on) until the page says it has focus. Logged,
+// so a device report shows which step worked.
+function refocus() {
+  let n = 0;
+  const step = async () => {
+    if (!win || win.isDestroyed() || gameFocus.away) return;
+    try { if (!win.isVisible()) win.showInactive(); if (n > 1) win.blur(); win.focus(); win.webContents.focus(); } catch {}
+    let has = false; try { has = await win.webContents.executeJavaScript('document.hasFocus()'); } catch {}
+    if (has) { if (n) log('back in front, focused after try', n + 1); return; }
+    if (++n < 6) setTimeout(step, [150, 400, 800, 1500, 2500][n - 1]);
+    else log('back in front, the page still has no focus after 6 tries');
+  };
+  setTimeout(step, 0); // after the caller has noted that the game is gone (gameFocus.away)
+}
+// The game Cartridge asked Steam to start (0.9.29): found by its file in a running process's command line
+// (every emulator is given the game's path, or its folder), then watched until it ends. When it does,
+// Cartridge comes back to the front with the pad working (nav.js gameEnded), in Game Mode and on the desktop.
+let runT = null;
+function watchGameRun(romId) {
+  clearInterval(runT);
+  const where = installedMap[romId];
+  if (!where || where === MARKED) return;
+  const r = romIndexMain().get(romId) || {};
+  // RPCS3 and Vita3K start installed games by serial, not by file
+  let serial = ''; try { serial = /ps3/i.test(`${r.platform_slug} ${r.platform_fs_slug}`) ? ps3Serial(romId, where) || '' : installs[romId]?.serial || ''; } catch {}
+  const needles = [...new Set([where, mainFile(where)].filter(Boolean).map((p) => path.basename(p)).concat(serial ? [serial] : []))].filter((n) => n.length > 3);
+  const running = () => {
+    for (const d of fs.readdirSync('/proc')) {
+      if (!/^\d+$/.test(d) || Number(d) === process.pid) continue;
+      let c = ''; try { c = fs.readFileSync(`/proc/${d}/cmdline`, 'utf8'); } catch { continue; }
+      if (needles.some((n) => c.includes(n)) && !/\bcartridge\b|electron/i.test(c.split('\0')[0])) return true;
+    }
+    return false;
+  };
+  let seen = false, started = Date.now();
+  broadcast('game-run', { state: 'starting', romId });
+  runT = setInterval(() => {
+    let on = false; try { on = running(); } catch {}
+    if (on && !seen) { seen = true; log('game running', romId); }
+    if (!on && !seen && Date.now() - started > 180000) { clearInterval(runT); return; } // never seen: give up after 3 min
+    if (!on && seen) {
+      clearInterval(runT); log('game ended', romId);
+      broadcast('game-run', { state: 'ended', romId });
+      bringBack();
+    }
+  }, 2000);
+}
+// back in front after a game: in Game Mode gamescope decides (refocus asks until the page has focus); on the
+// desktop a window manager may refuse a plain focus, so the window is lifted above the rest for a moment
+function bringBack() {
+  if (!win || win.isDestroyed()) return;
+  if (!isGamescope()) { try { if (win.isMinimized()) win.restore(); win.show(); win.setAlwaysOnTop(true); win.moveTop(); win.focus(); setTimeout(() => { try { win.setAlwaysOnTop(false); } catch {} }, 600); } catch {} }
+  refocus();
+}
 function watchGamescopeFocus() {
   const gid = process.env.SteamGameId || process.env.STEAM_GAME_ID || '';
   if (!isGamescope() || !/^\d+$/.test(gid)) return;
@@ -154,7 +211,7 @@ function watchGamescopeFocus() {
         last = away; broadcast('background', { away });
         // back in front after a game (0.9.24, owner: controls dead after closing a game): the window came back
         // without focus (showInactive), and the page only reads the pad while focused
-        if (!away && win && !win.isDestroyed()) { try { if (!win.isVisible()) win.showInactive(); win.focus(); win.webContents.focus(); } catch {} }
+        if (!away && win && !win.isDestroyed()) refocus();
       }
       gameFocus.away = away && m[1] !== '769'; if (gameFocus.away) gameFocus.otherAt = Date.now(); // 769 is Steam's own menu, where Exit game for Cartridge is
       // F11: a game Steam just started has no window yet, so gamescope shows the one it has (ours).
@@ -247,8 +304,15 @@ function biggestDisplay() {
 }
 const display = biggestDisplay();
 const bigScreen = display.w >= 2560 || display.h >= 1440 || process.env.CARTRIDGE_BIG === '1';
-const forceSoftware = ((inGamescope || fromSteam) && !bigScreen) || process.argv.includes('--disable-gpu') || process.env.CARTRIDGE_SAFE_GPU === '1';
+const autoSoftware = (inGamescope || fromSteam) && !bigScreen;
+// 'gpu' (0.9.29, owner: "choppy on my ROG Ally"): the user's own choice to use the GPU where Auto keeps
+// software (Game Mode on handheld-size screens). Auto is unchanged. Game Mode on big screens already runs
+// the GPU, so it works there; a trial that isn't confirmed within GPU_TRIAL_MS goes back to Auto by itself.
+const gpuChosen = config.graphics === 'gpu';
+const forceSoftware = (autoSoftware && !gpuChosen) || process.argv.includes('--disable-gpu') || process.env.CARTRIDGE_SAFE_GPU === '1';
 const useGpu = !forceSoftware && config.graphics !== 'software';
+const gpuTrial = useGpu && autoSoftware && gpuChosen && !config.gpuKept;
+const GPU_TRIAL_MS = 25000;
 const startedAt = Date.now();
 if (!useGpu) app.disableHardwareAcceleration();
 log('start', app.getVersion(), 'gpu=' + (useGpu ? 'hardware' : 'software'), 'session=' + (process.env.XDG_SESSION_TYPE || '?'), 'desktop=' + (process.env.XDG_CURRENT_DESKTOP || '?'), 'appimage=' + (process.env.APPIMAGE || 'no'), 'display=' + (display.w ? display.w + 'x' + display.h : '?'), 'gamescope=' + inGamescope, 'steam=' + fromSteam, 'overlay=' + /gameoverlayrenderer/.test(process.env.LD_PRELOAD || ''), 'wl=' + (process.env.WAYLAND_DISPLAY || '-'), 'x=' + (process.env.DISPLAY || '-'), 'gs=' + (process.env.GAMESCOPE_WAYLAND_DISPLAY || '-'));
@@ -2058,6 +2122,68 @@ function syncGameList() {
     return { id: r.id, name: r.name || '', ids, discIds };
   });
 }
+// ---- Saves on this device (0.9.29, The Syncthing Update): electron/saves.js finds them, this matches them
+// to the library with every ID Cartridge can read from the game itself (cached per file and size)
+const saveIdCache = new Map();
+function saveIdsOf(r, where) {
+  const file = mainFile(where), slugs = `${r.platform_slug} ${r.platform_fs_slug}`;
+  let st; try { st = fs.statSync(file || where); } catch { return []; }
+  const k = (file || where) + ':' + st.size;
+  if (saveIdCache.has(k)) return saveIdCache.get(k);
+  const ids = [];
+  try {
+    if (/\bswitch\b/i.test(slugs) && file) { const A = require('./addons'); A.setKeyRoots([config.emulationRoot]); const id = A.switchTitleId(file); if (id) ids.push(id); }
+    else if (/ps3/i.test(slugs)) { const id = ps3Serial(r.id, where); if (id) ids.push(id); }
+    else if (/\bpsx\b/i.test(slugs) && file) { const id = require('./addons').psxSerial(file); if (id) ids.push(id); }
+    else if (/\bpsp\b/i.test(slugs) && file) { const id = ppssppPatchState(r.id, r)?.serial; if (id) ids.push(id); }
+  } catch {}
+  saveIdCache.set(k, ids);
+  return ids;
+}
+function savesGameList() {
+  return syncGameList().map((g) => {
+    const r = romIndexMain().get(g.id), where = installedMap[g.id];
+    return where && where !== MARKED && r ? { ...g, ids: [...g.ids, ...saveIdsOf(r, where)] } : g;
+  });
+}
+let savesCache = null;
+// emulator data folders Cartridge knows beyond the usual places: portable shadPS4 builds (user/ beside them), Vita3K's storage
+function saveExtras() {
+  const extra = {};
+  try { for (const v of require('./shadVersions').installed()) if (v.path) (extra.shadps4 ||= []).push(path.dirname(v.path)); } catch {}
+  try { const exe = steamMgr.vita3kCommand?.()?.exe; for (const d of pkgInst.vita3kFsPaths(exe)) (extra.vita3k ||= []).push(d); } catch {}
+  return extra;
+}
+// a joined device takes the main device's save folders as they're offered (0.9.29)
+let joinT = null;
+function watchJoin() {
+  clearInterval(joinT);
+  if (config.syncthing?.role !== 'member') return;
+  const tick = async () => {
+    try { const r = await require('./syncthing').acceptFolders(require('./saves').syncRoots({ extra: saveExtras() })); if (r.added.length) { log('syncthing: took save folders', r.added.join(' ')); savesCache = null; broadcast('syncsaves', r); } } catch {}
+  };
+  tick(); joinT = setInterval(tick, 30000);
+}
+async function savesList(fresh) {
+  if (!fresh && savesCache && Date.now() - savesCache.at < 30000) return savesCache.list;
+  const S = require('./saves');
+  const list = S.match(S.scan({ extra: saveExtras() }), savesGameList());
+  // games that keep their save beside the game file (melonDS, mGBA and other emulators' default)
+  for (const [id, where] of Object.entries(installedMap)) {
+    if (!where || where === MARKED) continue;
+    const file = mainFile(where); if (!file) continue;
+    const stem = file.replace(/\.[^./]+$/, '');
+    for (const ext of ['.sav', '.srm', '.dsv']) { try { const st = fs.statSync(stem + ext); list.push({ emu: 'beside', emuName: 'Beside the game', kind: 'save', path: stem + ext, keys: {}, romIds: [Number(id)], size: st.size, at: st.mtimeMs, files: 1 }); } catch {} }
+  }
+  // which saves Syncthing already keeps in step (a save folder inside one of its folders)
+  try {
+    const l = await require('./syncthing').local();
+    const synced = (l?.folders || []).map((f) => ({ path: (f.path || '').replace(/^~(?=\/)/, os.homedir()), label: f.label || f.id, id: f.id })).filter((f) => f.path);
+    for (const s of list) { const f = synced.find((x) => s.path === x.path || s.path.startsWith(x.path.replace(/\/$/, '') + '/') || x.path.startsWith(s.path + '/')); if (f) s.synced = { id: f.id, label: f.label, path: f.path, ours: f.id.startsWith('cartridge-saves-') }; }
+  } catch {}
+  savesCache = { at: Date.now(), list };
+  return list;
+}
 function patchState(romId) {
   const r = romIndexMain().get(Number(romId));
   const slugs = `${r?.platform_slug} ${r?.platform_fs_slug}`;
@@ -2136,6 +2262,28 @@ function gameSettingsCtx(romId) {
   if (st.emu === 'ppsspp') return { emu: 'ppsspp', serial: st.serial, ppsspp: st.dir };
   if (st.emu === 'shadps4') return { emu: 'shadps4', serial: st.serial, shadUser: st.dir };
   return { emu: st.emu, why: 'Cartridge can’t change this emulator’s per-game settings yet.' };
+}
+// Cemu's community graphic packs, fetched like Cemu's own download (cemuPacks.downloadCommunity), weekly
+async function freshCemuPacks(romId) {
+  const st = patchState(romId);
+  if (st.emu !== 'cemu' || !st.dir?.root) return '';
+  try {
+    const r = await require('./cemuPacks').downloadCommunity(st.dir.root, { fetchImpl: (...a) => webFetch(...a), unzip: unzipTo });
+    if (r.updated) log('cemu graphic packs downloaded', r.version);
+    return '';
+  } catch (e) { log('cemu graphic packs download failed:', e.message); return fs.existsSync(path.join(st.dir.root, 'graphicPacks')) ? '' : 'Cemu\'s graphic packs couldn\'t be downloaded: ' + e.message; }
+}
+// a zip unpacked into a folder, no entry outside it (yauzl)
+async function unzipTo(zip, dir) {
+  const { list, close } = await require('./addonInstall').openArchive(zip, path.join(os.tmpdir(), 'cartridge-unz-' + Date.now()));
+  try {
+    for (const e of list) {
+      const out = path.resolve(dir, e.rel);
+      if (!out.startsWith(path.resolve(dir) + path.sep) || e.size > 128 * 1024 * 1024) continue; // like Cemu: no ../, nothing huge
+      fs.mkdirSync(path.dirname(out), { recursive: true });
+      await new Promise(async (ok, bad) => { try { const rs = await e.read(); const ws = fs.createWriteStream(out); rs.pipe(ws); ws.on('finish', ok); ws.on('error', bad); rs.on('error', bad); } catch (er) { bad(er); } });
+    }
+  } finally { try { close?.(); } catch {} }
 }
 // shadPS4's two patch lists, fetched like its launcher's Download Patches when missing or a week old (0.9.23)
 async function freshShadPatches(romId) {
@@ -2359,7 +2507,9 @@ function createWindow() {
 const trophySvc = require('./trophyService')({
   USER_DATA, api, broadcast: (c, d) => broadcast(c, d), log, loadJson,
   getConfig: () => config, saveConfig: () => saveConfig(), getLibrary: () => library,
+  codeName: (src, code) => require('./titleNames').nameFor(src, code),
 });
+require('./titleNames').setup({ dir: USER_DATA, fetchImpl: (...a) => webFetch(...a) });
 // ---------------------------------------------------------------- Steam ROM manager
 function coverCrop(buf, W, H) {
   const { nativeImage } = require('electron');
@@ -2706,17 +2856,46 @@ const handlers08 = {
   // Syncthing, first look (0.9.19): read only, what it syncs and with whom
   'sync:status': () => { const S = require('./syncthing'); if (config.syncthing?.localKey) S.setLocalKey(config.syncthing.localKey); return S.status(); },
   // each file says which game it belongs to, when Cartridge can tell (0.9.24, owner: smart, not just a list)
-  'sync:browse': async (folder) => {
-    const S = require('./syncthing'), b = await S.browse(folder);
+  'sync:browse': async (arg) => {
+    const folder = typeof arg === 'string' ? arg : arg?.id, onServer = typeof arg === 'object' && !!arg?.server;
+    const S = require('./syncthing'), b = await S.browse(folder, { server: onServer ? config.syncthing?.server || null : null });
     try {
       const games = syncGameList(), names = new Map(games.map((g) => [g.id, g.name]));
-      // each file matched on its own, so it carries its game's name
-      for (const f of b.files) { const one = S.matchGames(games, [{ id: folder, label: folder, path: '', files: [f] }]); const gid = Object.keys(one)[0]; if (gid) { f.game = names.get(Number(gid)) || ''; f.romId = Number(gid); f.kind = one[gid].textures.length ? 'Textures' : 'Save'; } }
+      // each file matched on its own, so it carries its game's name; the folder's real path and name decide textures or saves
+      for (const f of b.files) { const one = S.matchGames(games, [{ id: folder, label: b.label, path: b.path + '/' + b.label, files: [f] }]); const gid = Object.keys(one)[0]; if (gid) { f.game = names.get(Number(gid)) || ''; f.romId = Number(gid); f.kind = one[gid].textures.length ? 'Textures' : 'Save'; } }
     } catch {}
     return b;
   },
   // 0.9.23 Syncthing page: this device in full, the main server (config.syncthing.server), games with synced files
   'sync:local': () => require('./syncthing').local(),
+  // The Syncthing Update (0.9.29): this device as the main one (only on a blank Syncthing), pairing, joining
+  'syncsaves:state': async () => {
+    const S = require('./syncthing');
+    let st = null, error = null; try { st = await S.saveSync(); } catch (e) { error = e.message; }
+    return { ...(st || {}), error, role: config.syncthing?.role || '', mainId: config.syncthing?.mainId || '', roots: require('./saves').syncRoots({ extra: saveExtras() }) };
+  },
+  'syncsaves:makeMain': async () => {
+    const roots = require('./saves').syncRoots({ extra: saveExtras() });
+    const r = await require('./syncthing').makeMain(roots, { mine: config.syncthing?.role === 'main' });
+    config.syncthing = { ...(config.syncthing || {}), role: 'main', mainId: '' }; saveConfig(); savesCache = null;
+    log('syncthing: main device, save folders', r.made.join(' ') || 'none new');
+    return r;
+  },
+  'syncsaves:addDevice': async ({ id, name }) => { if (config.syncthing?.role !== 'main') throw new Error('Make this device the main one first.'); await require('./syncthing').addDevice({ id, name }); return true; },
+  'syncsaves:join': async ({ id, name }) => {
+    const S = require('./syncthing'), st = await S.saveSync();
+    if (!st.blank && config.syncthing?.role !== 'member') throw new Error('This Syncthing is already set up with other devices or folders, so Cartridge leaves it as it is.');
+    await S.addDevice({ id, name: name || 'Main device', introducer: true });
+    config.syncthing = { ...(config.syncthing || {}), role: 'member', mainId: String(id).trim().toUpperCase() }; saveConfig();
+    watchJoin();
+    return true;
+  },
+  'syncsaves:twoWay': async ({ id }) => { await require('./syncthing').setType(id, 'sendreceive'); return true; },
+  'syncsaves:versions': ({ id }) => require('./syncthing').versions(id),
+  'syncsaves:restore': ({ id, files }) => { log('syncthing: restore', id, Object.keys(files || {}).join(' ')); savesCache = null; return require('./syncthing').restore(id, files); },
+  // every save on this device with the game it belongs to (0.9.29); read only
+  'saves:list': ({ fresh } = {}) => savesList(fresh),
+  'saves:forRom': async ({ romId }) => (await savesList()).filter((s) => (s.romIds || []).includes(Number(romId))),
   'sync:server': () => require('./syncthing').server(config.syncthing?.server || {}),
   'sync:setServer': async (srv) => {
     if (srv && srv.address) await require('./syncthing').server(srv); // only saved once it answers
@@ -2862,7 +3041,12 @@ const handlers09 = {
   'steam:setGameTemplate': ({ romId, template }) => steamMgr.setGameTemplate(romId, template),
   'steam:refreshGame': ({ romId }) => steamMgr.refreshGame(romId),
   // shadPS4 version per game (0.9.17): the Qt launcher's versions, and this game's pick
-  'steam:shadVersions': ({ romId }) => { let last = null; if ((config.steam || {}).shadProof) try { last = require('./shadVersions').lastRun(os.homedir(), emuRootsAll().map((r) => path.join(r, 'storage', 'shadps4'))); } catch {} return { list: steamMgr.shadVersions(), current: ((config.steam || {}).shadVersions || {})[romId] || null, last }; },
+  'steam:shadVersions': ({ romId }) => {
+    let last = null;
+    if ((config.steam || {}).shadProof) { noteShadRun(); const r = loadJson(SHAD_RUNS_FILE, []); last = r.find((x) => x.romId === Number(romId)) || null; } // this game's own last run (0.9.29)
+    return { list: steamMgr.shadVersions(), current: ((config.steam || {}).shadVersions || {})[romId] || null, last };
+  },
+  'shadv:runs': () => { noteShadRun(); return loadJson(SHAD_RUNS_FILE, []); },
   'steam:setShadVersion': ({ romId, path: p }) => { const m = ((config.steam ||= {}).shadVersions ||= {}); if (p) m[romId] = p; else delete m[romId]; saveConfig(); return true; },
   // frame generation (0.9.17): what's installed, the picks, and Cartridge's games in Steam with theirs
   'steam:frameGen': () => {
@@ -2951,7 +3135,7 @@ const handlers = {
     const wf = require('./webFetch'), term = String(q || '').trim().slice(0, 80);
     if (!term) return [];
     if (kind === 'gif') {
-      const r = await wf(`https://api.openverse.org/v1/images/?q=${encodeURIComponent(term)}&extension=gif&page_size=30&page=${page}`, { headers: { 'User-Agent': 'Cartridge' }, signal: AbortSignal.timeout(15000) });
+      const r = await wf(`https://api.openverse.org/v1/images/?q=${encodeURIComponent(term)}&extension=gif&page_size=20&page=${page}`, { headers: { 'User-Agent': 'Cartridge' }, signal: AbortSignal.timeout(15000) });
       if (!r.ok) throw new Error(`Openverse answered ${r.status}`);
       const j = await r.json();
       return (j.results || []).filter((x) => x.url && (x.width || 0) >= 320).sort((a, b) => (b.width || 0) - (a.width || 0)).map((x) => ({ url: x.url, thumb: x.thumbnail || x.url, w: x.width || 0, h: x.height || 0, by: x.creator || '', license: (x.license || '').toUpperCase() }));
@@ -3712,7 +3896,7 @@ const handlers = {
       log('emulator opened', id || '', fp || file);
       if (isGamescope()) {
         broadcast('background', { away: true });
-        p.once('exit', () => { broadcast('background', { away: false }); try { if (win && !win.isDestroyed()) { if (!win.isVisible()) win.showInactive(); win.focus(); win.webContents.focus(); } } catch {} });
+        p.once('exit', () => { broadcast('background', { away: false }); refocus(); });
       }
       p.unref();
       resolve(true);
@@ -3746,7 +3930,7 @@ const handlers = {
   'ps3up:install': ({ romId }) => ps3InstallUpdates(Number(romId)),
   'ps3up:cancel': () => { ps3upRun?.ac.abort(); return true; },
   'patches:list': async ({ romId }) => {
-    const dlErr = (await freshRpcs3Patches(romId)) || (await freshShadPatches(romId));
+    const dlErr = (await freshRpcs3Patches(romId)) || (await freshShadPatches(romId)) || (await freshCemuPacks(romId));
     const st = patchState(romId), E = EMU_PATCH[st.emu];
     if (!st.dir || !E) return { emu: st.emu, emuName: E?.name || '', serial: st.serial, why: [st.why, dlErr].filter(Boolean).join(' '), list: [] };
     if (st.emu === 'ppsspp') { try { const r = await cheatsMod.ppssppDownloadDb(st.dir); if (r.updated) log('ppsspp cheat.db downloaded', r.url); } catch (e) { log('ppsspp cheat.db download failed:', e.message); } }
@@ -3941,7 +4125,7 @@ const handlers = {
   'steam:report': () => steamMgr.startupReport(),
   'steam:last': () => steamMgr.lastStatus(),
   'steam:forRom': ({ romId }) => steamMgr.forRom(Number(romId)),
-  'steam:play': ({ romId }) => steamMgr.play(Number(romId)),
+  'steam:play': async ({ romId }) => { const r = await steamMgr.play(Number(romId)); watchGameRun(Number(romId)); return r; },
   'steam:addToCollections': ({ romId, names }) => steamMgr.addRomToCollections(Number(romId), names || []),
   // HowLongToBeat times when RomM has none: name plus release year, cached in hltb.json
   'hltb:lookup': ({ name, year }) => hltbSvc.forGame({ name: String(name || ''), year: Number(year) || null }),
@@ -3995,7 +4179,11 @@ const handlers = {
     return file;
   },
   'app:relaunch': () => relaunch(),
-  'app:graphics': () => ({ mode: useGpu ? 'hardware' : 'software', setting: config.graphics, status: app.getGPUFeatureStatus?.() }),
+  'app:graphics': () => ({ mode: useGpu ? 'hardware' : 'software', setting: config.graphics, status: app.getGPUFeatureStatus?.(), trial: gpuTrial && !config.gpuKept, auto: autoSoftware ? 'software' : 'gpu' }),
+  'app:gpuKeep': ({ keep }) => {
+    if (keep) { config.gpuKept = true; saveConfig(); log('gpu trial kept'); return true; }
+    config.graphics = 'auto'; config.gpuKept = false; saveConfig(); log('gpu trial declined, back to auto'); relaunch(); return false;
+  },
   'app:fullscreen': () => win.setFullScreen(!win.isFullScreen()),
   'app:clearCache': async () => { await fsp.rm(IMG_CACHE, { recursive: true, force: true }); await fsp.rm(HERO_DIR, { recursive: true, force: true }); heroCache = {}; await fsp.rm(HERO_FILE, { force: true }); return true; },
 };
@@ -4007,6 +4195,25 @@ for (const [ch, fn] of Object.entries(handlers)) {
   });
 }
 
+setTimeout(() => { try { watchJoin(); } catch {} }, 15000);
+// shadPS4's Recently Launched (0.9.29, owner): shadPS4 keeps one log that each run replaces, so each run is
+// noted here (shad-runs.json, newest first, 50 kept) while "show which version ran a game" is on. Read only.
+const SHAD_RUNS_FILE = path.join(USER_DATA, 'shad-runs.json');
+function noteShadRun() {
+  if (!(config.steam || {}).shadProof) return;
+  let last; try { last = require('./shadVersions').lastRun(os.homedir(), emuRootsAll().map((r) => path.join(r, 'storage', 'shadps4'))); } catch { return; }
+  if (!last?.at) return;
+  const runs = loadJson(SHAD_RUNS_FILE, []);
+  if (runs.some((x) => x.at === last.at && x.file === last.file)) return;
+  const ps4 = [...romIndexMain().values()].filter((r) => /ps4/i.test(`${r.platform_slug} ${r.platform_fs_slug}`));
+  const rom = last.serial ? ps4.find((r) => [r.fs_name, ...(r.files || []).map((f) => f.file_name), installedMap[r.id] && installedMap[r.id] !== MARKED ? installedMap[r.id] : ''].join(' ').toUpperCase().includes(last.serial)) : null;
+  runs.unshift({ at: last.at, file: last.file, version: last.version, nightly: !!last.nightly, serial: last.serial || '', romId: rom?.id || null, name: rom?.name || '' });
+  saveJson(SHAD_RUNS_FILE, runs.slice(0, 50));
+  broadcast('shad-runs', {});
+}
+setInterval(() => { try { noteShadRun(); } catch {} }, 60000);
+// a GPU trial nobody confirmed (a blank window can't be answered) goes back to Auto and restarts
+if (gpuTrial) setTimeout(() => { if (config.gpuKept || config.graphics !== 'gpu') return; log('gpu trial not confirmed, back to auto'); config.graphics = 'auto'; saveConfig(); relaunch(); }, GPU_TRIAL_MS);
 app.whenReady().then(() => {
   // readable by the page's canvas too (Theme from this game reads a cover's colours)
   protocol.handle('romimg', async (req) => { const r = await handleImage(req); try { r.headers.set('Access-Control-Allow-Origin', '*'); } catch {} return r; });

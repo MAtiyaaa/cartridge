@@ -62,8 +62,11 @@ const SCHEMA = {
     { id: 'GPU.readbacks_mode', tab: 'Graphics', label: 'GPU readbacks', sub: 'Some games need them; slower', options: [['0', 'Off'], ['1', 'Relaxed'], ['2', 'Precise']], json: 'int' },
     { id: 'GPU.fsr_enabled', tab: 'Graphics', label: 'FSR upscaling', ...B('true', 'false'), json: 'bool' },
     { id: 'GPU.rcas_enabled', tab: 'Graphics', label: 'RCAS sharpening', ...B('true', 'false'), json: 'bool' },
-    { id: 'GPU.rcas_attenuation', tab: 'Graphics', label: 'Sharpening strength', sub: 'Lower is sharper', options: [['0', 'Strongest'], ['250', 'Normal'], ['500', 'Softer'], ['1000', 'Softest']], json: 'int' },
-    { id: 'GPU.vblank_frequency', tab: 'Graphics', label: 'VBlank frequency', sub: 'Game speed; 60 is normal', options: [['60', '60 Hz'], ['120', '120 Hz'], ['30', '30 Hz']], json: 'int' },
+    { id: 'GPU.rcas_attenuation', tab: 'Graphics', label: 'Sharpening strength', sub: 'Lower is sharper', options: [['0', 'Strongest'], ['250', 'Normal'], ['500', 'Softer'], ['1000', 'Softest']], json: 'int', num: { min: 0, max: 3000 } },
+    { id: 'GPU.vblank_frequency', tab: 'Graphics', label: 'VBlank frequency', sub: 'Game speed; 60 is normal', options: [['60', '60 Hz'], ['120', '120 Hz'], ['30', '30 Hz']], json: 'int', num: { min: 10, max: 480, unit: 'Hz' } },
+    // 0.9.29 (owner: the settings shadPS4 takes as a number, typed in): window_width/height are per-game overrides
+    { id: 'GPU.window_width', tab: 'Graphics', label: 'Window width', sub: 'Pixels', options: [['1280', '1280'], ['1920', '1920'], ['2560', '2560'], ['3840', '3840']], json: 'int', num: { min: 320, max: 7680, unit: 'px' } },
+    { id: 'GPU.window_height', tab: 'Graphics', label: 'Window height', sub: 'Pixels', options: [['720', '720'], ['800', '800'], ['1080', '1080'], ['1440', '1440'], ['2160', '2160']], json: 'int', num: { min: 240, max: 4320, unit: 'px' } },
     { id: 'GPU.present_mode', tab: 'Graphics', label: 'Presentation', sub: 'Mailbox is smooth, FIFO is vsync, Immediate tears', options: ['Mailbox', 'Fifo', 'Immediate'] },
     { id: 'GPU.hdr_allowed', tab: 'Graphics', label: 'HDR', ...B('true', 'false'), json: 'bool' },
     { id: 'GPU.copy_gpu_buffers', tab: 'Advanced', label: 'Copy GPU buffers', sub: 'Fixes some games, slower', ...B('true', 'false'), json: 'bool' },
@@ -74,7 +77,10 @@ const SCHEMA = {
     { id: 'Vulkan.pipeline_cache_enabled', tab: 'Advanced', label: 'Pipeline cache', sub: 'Less stutter after the first run', ...B('true', 'false'), json: 'bool' },
     { id: 'General.neo_mode', tab: 'System', label: 'PS4 Pro mode', sub: 'Games that support the Pro look better, and need more', ...B('true', 'false'), json: 'bool' },
     { id: 'General.dev_kit_mode', tab: 'System', label: 'Dev kit mode', sub: 'More memory; for games that run out', ...B('true', 'false'), json: 'bool' },
-    { id: 'General.extra_dmem_in_mbytes', tab: 'System', label: 'Extra memory', options: [['0', 'None'], ['512', '512 MB'], ['1024', '1 GB'], ['2048', '2 GB']], json: 'int' },
+    { id: 'General.extra_dmem_in_mbytes', tab: 'System', label: 'Extra memory', options: [['0', 'None'], ['512', '512 MB'], ['1024', '1 GB'], ['2048', '2 GB']], json: 'int', num: { min: 0, max: 16384, unit: 'MB' } },
+    { id: 'General.extra_fmem_in_mbytes', tab: 'System', label: 'Extra flexible memory', options: [['0', 'None'], ['256', '256 MB'], ['512', '512 MB']], json: 'int', num: { min: 0, max: 4096, unit: 'MB' } },
+    { id: 'General.volume_slider', tab: 'System', label: 'Volume', options: [['100', '100%'], ['75', '75%'], ['50', '50%'], ['25', '25%']], json: 'int', num: { min: 0, max: 100, unit: '%' } },
+    { id: 'General.trophy_notification_duration', tab: 'System', label: 'Trophy pop-up time', sub: 'Seconds', options: [['6', '6 s'], ['3', '3 s'], ['10', '10 s']], json: 'num', num: { min: 1, max: 30, unit: 's', decimals: true } },
     { id: 'General.show_fps_counter', tab: 'System', label: 'FPS counter', ...B('true', 'false'), json: 'bool' },
     { id: 'General.trophy_popup_disabled', tab: 'System', label: 'Hide trophy pop-ups', ...B('true', 'false'), json: 'bool' },
   ] },
@@ -155,7 +161,7 @@ function describe(ctx) {
     let base;
     for (const t of bases) { base = getIn(F.kind, t, F.dolphin ? DOLPHIN_BASE[sec] || sec : sec, key); if (base !== undefined) break; }
     const opts = it.type === 'bool' ? [[it.on, 'On'], [it.off, 'Off']] : it.options.map((o) => (Array.isArray(o) ? o : [o, o]));
-    return { id: it.id, tab: it.tab || (/^(Video|EmuCore\/GS|GPU|Graphics|Video_\w+)$/.test(sec) ? 'Graphics' : 'System'), label: it.label, sub: it.sub || '', options: opts.map(([v, l]) => ({ value: v, label: l })), game: game ?? null, base: base ?? null, type: it.type || 'choice' };
+    return { id: it.id, tab: it.tab || (/^(Video|EmuCore\/GS|GPU|Graphics|Video_\w+)$/.test(sec) ? 'Graphics' : 'System'), label: it.label, sub: it.sub || '', options: opts.map(([v, l]) => ({ value: v, label: l })), game: game ?? null, base: base ?? null, type: it.type || 'choice', num: it.num || null };
   });
   return { emu: ctx.emu, name: S.name, file: F.file, exists: own != null, items };
 }
@@ -180,14 +186,16 @@ function apply(ctx, changes) {
     if (!it) continue;
     const [sec, key] = split(it.id);
     let value = c.value == null ? undefined : String(c.value);
-    if (value !== undefined && it.type !== 'bool' && !(it.options || []).some((o) => String(Array.isArray(o) ? o[0] : o) === value)) throw new Error(`${it.label}: that value isn’t one Cartridge offers.`);
+    // a typed number (0.9.29): any value in the emulator's own range
+    const typed = it.num && value !== undefined && /^-?\d+(\.\d+)?$/.test(value) && (it.num.decimals || !value.includes('.')) && Number(value) >= it.num.min && Number(value) <= it.num.max;
+    if (value !== undefined && it.type !== 'bool' && !typed && !(it.options || []).some((o) => String(Array.isArray(o) ? o[0] : o) === value)) throw new Error(it.num ? `${it.label}: a number from ${it.num.min} to ${it.num.max}.` : `${it.label}: that value isn’t one Cartridge offers.`);
     if (value !== undefined && it.type === 'bool' && value !== it.on && value !== it.off) throw new Error(`${it.label}: on or off only.`);
     if (F.copyBase && value === undefined && rec.copied) { // PPSSPP: back to your normal setting's value
       const b = F.base[0] && getIn('ini', read(F.base[0]), sec, key);
       value = b;
     }
     if (F.kind === 'yml') text = ymlPut(text, sec, key, value);
-    else if (F.kind === 'json') { let j = {}; try { j = JSON.parse(text || '{}'); } catch {} if (value === undefined) { if (j[sec]) { delete j[sec][key]; if (!Object.keys(j[sec]).length) delete j[sec]; } } else (j[sec] ||= {})[key] = it.json === 'bool' ? value === 'true' : it.json === 'int' ? Number(value) : value; text = JSON.stringify(j, null, 4); }
+    else if (F.kind === 'json') { let j = {}; try { j = JSON.parse(text || '{}'); } catch {} if (value === undefined) { if (j[sec]) { delete j[sec][key]; if (!Object.keys(j[sec]).length) delete j[sec]; } } else (j[sec] ||= {})[key] = it.json === 'bool' ? value === 'true' : it.json === 'int' || it.json === 'num' ? Number(value) : value; text = JSON.stringify(j, null, 4); }
     else text = iniPut(text, sec, key, value);
     rec.keys = c.value == null ? rec.keys.filter((k) => k !== it.id) : [...new Set([...rec.keys, it.id])];
   }

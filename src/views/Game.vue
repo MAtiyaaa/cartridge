@@ -552,6 +552,23 @@ async function pickGameEmu() {
 
 // More options: custom artwork from SteamGridDB, plus handy extras
 let steamInfo = null;
+// Syncthing's older versions of one save (0.9.29): grouped by when they were replaced; restoring puts that
+// version back through Syncthing (its own versioning), the only time Cartridge asks for a save to change
+async function olderVersions(x) {
+  let all = {};
+  try { all = (await call('syncsaves:versions', { id: x.synced.id })) || {}; } catch (e) { toast(e.message, 'error', 5000); return; }
+  const rel = x.path.slice(x.synced.path.replace(/\/$/, '').length + 1);
+  const mine = Object.entries(all).filter(([f]) => !rel || f === rel || f.startsWith(rel + '/'));
+  const times = new Map();
+  for (const [f, vs] of mine) for (const v of vs) { const t = times.get(v.versionTime) || { at: Date.parse(v.versionTime), files: {} }; t.files[f] = v.versionTime; times.set(v.versionTime, t); }
+  const opts = [...times.values()].sort((a, b) => b.at - a.at).map((t) => ({ label: new Date(t.at).toLocaleString(), sub: `${Object.keys(t.files).length} ${Object.keys(t.files).length === 1 ? 'file' : 'files'} · replaced ${ago(t.at)}`, value: t.at, icon: 'mdiHistory', raw: true }));
+  if (!opts.length) { toast('No older versions of this save yet', 'info', 3000, 'mdiHistory'); return; }
+  const at = await choose({ title: 'Older Versions', message: 'The save as it was before another device replaced it.', options: opts });
+  const t = [...times.values()].find((y) => y.at === at);
+  if (!t) return;
+  if (!(await confirm('Put this version back?', 'Close the emulator first. The save it replaces is kept as an older version too, so this can be undone.', 'Restore'))) return;
+  try { const r = await call('syncsaves:restore', { id: x.synced.id, files: t.files }); const errs = Object.keys(r || {}).length; toast(errs ? `${errs} files couldn't be restored` : 'Restored', errs ? 'error' : 'ok', 3500, 'mdiHistory'); } catch (e) { toast(e.message, 'error', 5000); }
+}
 async function more() {
   const has = artFor(props.romId);
   const u = cached.value?.user;
@@ -596,20 +613,16 @@ async function more() {
   if (trophySystem.value) play.push({ label: tro.value ? 'Change linked trophies' : 'Link to trophies', sub: 'Pick which emulator trophy set belongs to this game', value: 'trophies', icon: 'mdiLinkVariant' });
   const slugs = `${base.value?.platform_slug} ${base.value?.platform_fs_slug}`;
   const pe = /ps3/i.test(slugs) ? 'RPCS3' : /ps4/i.test(slugs) ? 'shadPS4' : /\bps2\b/i.test(slugs) ? 'PCSX2' : /\b(ngc|gamecube|gc|wii)\b/i.test(slugs) ? 'Dolphin' : /\bpsp\b/i.test(slugs) ? 'PPSSPP' : null;
-  // PS3 game updates from Sony's list (0.9.16); never holds the menu up for long
-  if (installedPath.value && !marked.value && /ps3/i.test(slugs)) {
-    const up = await Promise.race([call('ps3up:game', { romId: Number(props.romId) }).catch(() => null), new Promise((r) => setTimeout(() => r(null), 1500))]);
-    // 0.9.21 (owner: game updates on the game's own page, not only in Settings): always offered; when
-    // Sony's list is slow to answer, picking it checks and then installs
-    if (up?.todo?.length) play.push({ label: `Install game update ${up.todo[up.todo.length - 1].version}`, sub: `${up.todo.length} update${up.todo.length === 1 ? '' : 's'} from Sony · ${bytes(up.size)} · now ${up.have || 'unknown'}`, value: 'ps3up', icon: 'mdiPackageUp' });
-    else play.push({ label: 'Game updates', sub: up ? (up.error ? 'Couldn’t check Sony’s update list' : `Up to date${up.have ? ' · version ' + up.have : ''}`) : 'Check Sony’s update list for this game', value: 'ps3check', icon: 'mdiPackageUp' });
-  }
+  // PS3 game updates are a tab in Add-ons (0.9.29, owner: no second place for them)
   // 0.9.23 (owner: edit a game's emulator settings from Cartridge)
   if (installedPath.value && !marked.value && (pe || /\bpsx\b/i.test(slugs))) play.push({ label: 'Game settings', sub: `${pe || 'DuckStation'}’s settings for this game only`, value: 'gamesettings', icon: 'mdiTune' });
   // patches and cheats are in Game Add-ons (0.9.24, owner: no separate row for them here)
   // 0.9.28 (owner: PS4 patches had gone from here): PS3 and PS4 too; Game Add-ons shows only the tabs the console has
   if (installedPath.value && !marked.value && /\b(ps2|ps3|ps4|psx|ngc|gamecube|gc|wii|psp|3ds|n3ds|switch|wiiu)\b/i.test(slugs)) play.push({ label: 'Add-ons', value: 'textures', icon: 'mdiPuzzleOutline',
     sub: /ps4/i.test(slugs) ? 'Patches from shadPS4 and GoldHEN' : /ps3/i.test(slugs) ? 'Patches and game updates' : /\bps2\b/i.test(slugs) ? 'Texture packs and patches' : /\bpsp\b/i.test(slugs) ? 'Mods and cheats' : 'Mods, packs and patches, and what’s installed' });
+  // 0.9.29 (The Syncthing Update): this game's saves on this device, found by the save's own ID
+  const sv = await Promise.race([call('saves:forRom', { romId: Number(props.romId) }).catch(() => []), new Promise((r) => setTimeout(() => r(null), 1500))]);
+  if (sv?.length) play.push({ label: 'Saves on This Device', sub: `${sv.length} ${sv.length === 1 ? 'save' : 'saves'} · ${sv.some((x) => x.synced) ? 'synced with Syncthing' : 'not synced'} · changed ${ago(Math.max(...sv.map((x) => x.at || 0)))}`, value: 'saves', icon: 'mdiContentSaveOutline' });
   if (installedPath.value) play.push({ label: 'Show file location', value: 'path', icon: 'mdiFolderOutline' });
   const top = [
     { label: fav.value ? 'Remove from favourites' : 'Add to favourites', sub: 'Saved in RomM', value: 'fav', icon: fav.value ? 'mdiHeartOff' : 'mdiHeartOutline' },
@@ -670,6 +683,17 @@ async function more() {
   if (v === 'mark' || v === 'unmark') { await setMark(v === 'mark'); return; }
   if (v === 'trophies') { await linkTrophies(); return; }
   if (v === 'path') { toast(installedPath.value, 'info', 5000, 'mdiFolder'); return; }
+  if (v === 'saves') {
+    const list = sv || [];
+    const p = await choose({ title: 'Saves on This Device', message: 'Read only: Cartridge never changes a save. A to copy where it is.', options: list.map((x) => ({ label: x.emuName + (x.shared ? ' · Memory Card' : ''), sub: `${bytes(x.size || 0)} · changed ${ago(x.at)} · ${x.synced ? 'synced in ' + x.synced.label : 'not synced'}${x.conflicts ? ` · ${x.conflicts} conflict ${x.conflicts === 1 ? 'copy' : 'copies'} from two devices` : ''}`, value: x.path, icon: x.synced ? 'mdiSync' : 'mdiContentSaveOutline', raw: true })) });
+    const x = list.find((y) => y.path === p);
+    if (!x) return;
+    // a save in one of Cartridge's synced folders can go back to an older version Syncthing kept (0.9.29)
+    const what = x.synced?.ours ? await choose({ title: x.emuName, options: [{ label: 'Older Versions', sub: 'Kept by Syncthing for 30 days when another device replaced it', value: 'old', icon: 'mdiHistory' }, { label: 'Copy Location', value: 'copy', icon: 'mdiContentCopy' }] }) : 'copy';
+    if (what === 'copy') { try { await call('clip:write', { text: p }); toast('Location copied', 'ok', 2200, 'mdiContentCopy'); } catch (e) { toast(e.message, 'error'); } }
+    if (what === 'old') await olderVersions(x);
+    return;
+  }
   if (v === 'pkg') { await installPkg(); return; }
   if (v === 'patches') { await openModal('gameaddons', { romId: Number(props.romId), name: base.value.name, tab: 'patches' }); return; }
   if (v === 'redownload') { await redownload(); return; }

@@ -4,12 +4,12 @@
       <SyncthingLogo :size="56" />
       <div class="st-hero-txt">
         <h1>Syncthing</h1>
-        <p class="muted small">Keeps folders the same on all your devices. Cartridge reads what your Syncthing shares and never opens, copies or changes a synced file.</p>
+        <p class="muted small">Keeps your saves the same on all your devices. Cartridge finds every game's saves and reads what Syncthing shares; it only sets Syncthing up when you make this your main device, and never edits a save itself.</p>
       </div>
     </div>
 
     <div class="st-tabs-row"><Btn b="LB" /><div class="seg st-tabs">
-      <button v-for="t in TABS" :key="t.v" data-focus :data-key="'st-' + t.v" :class="{ on: view === t.v }" @click="setView(t.v)">{{ t.l }}</button>
+      <button v-for="t in TABS_ALL" :key="t.v" data-focus :data-key="'st-' + t.v" :class="{ on: view === t.v }" @click="setView(t.v)">{{ t.l }}</button>
     </div><Btn b="RB" /></div>
 
     <!-- This Device -->
@@ -25,6 +25,7 @@
         <p v-if="!s.installed" class="muted small">On SteamOS and Bazzite, install “SyncThingy” or “Syncthing Tray” from the Discover store, or the syncthing package on other systems. Cartridge finds it by itself.</p>
       </div>
       <template v-else>
+        <SaveSync />
         <div class="st-card st-me">
           <div class="st-stats">
             <div><b>{{ online(L?.devices) }}<small>/{{ (L?.devices || s.devices).length }}</small></b><span>Devices Online</span></div>
@@ -78,7 +79,7 @@
                   <button class="btn" data-focus @click="rescan(f)"><Icon name="mdiRefresh" />Rescan</button>
                 </div>
                 <div v-for="x in list.files" :key="x.path" class="file" data-focus tabindex="0">
-                  <span class="mono"><b v-if="x.game" class="file-game" :class="{ tex: x.kind === 'Textures' }">{{ x.game }} · {{ x.kind }}</b>{{ x.path }}</span><span class="muted">{{ bytes(x.size) }}</span><span class="muted">{{ ago(x.at) }}</span>
+                  <span class="mono"><b v-if="x.game || x.kind === 'Textures'" class="file-game" :class="{ tex: x.kind === 'Textures' }">{{ x.game ? x.game + ' · ' : '' }}{{ x.kind }}</b>{{ x.path }}</span><span class="muted">{{ bytes(x.size) }}</span><span class="muted">{{ ago(x.at) }}</span>
                 </div>
                 <div v-if="list.total > list.files.length" class="muted small">And {{ list.total - list.files.length }} more.</div>
               </template>
@@ -130,12 +131,27 @@
             </div>
           </div>
           <div class="sec-title">Its Folders</div>
-          <div v-for="f in R.folders" :key="f.id" class="lrow" data-focus tabindex="0">
-            <Icon :name="f.saves ? 'mdiContentSaveOutline' : f.textures ? 'mdiTextureBox' : 'mdiFolderOutline'" :size="22" />
-            <div class="l-mid"><b>{{ f.label }}</b><span class="l-sub">Shared with {{ f.devices }} {{ f.devices === 1 ? 'device' : 'devices' }}{{ f.saves ? ` · ${f.saves} saves` : f.textures ? ' · textures' : '' }}</span></div>
-            <span v-if="f.paused" class="status">Paused</span>
-            <span v-else-if="f.done != null" class="status" :class="f.done >= 100 ? 'ok' : 'warn'">{{ f.done >= 100 ? 'Up to Date' : f.done + '%' }}</span>
-          </div>
+          <!-- 0.9.29 (owner): its folders open like This Device's, each file with its game and whether it's textures or a save -->
+          <template v-for="f in R.folders" :key="f.id">
+            <button class="lrow" data-focus :data-key="'sv-' + f.id" @click="toggle(f, true)">
+              <Icon :name="f.saves ? 'mdiContentSaveOutline' : f.textures ? 'mdiTextureBox' : 'mdiFolderOutline'" :size="22" />
+              <div class="l-mid"><b>{{ f.label }}</b><span class="l-sub">Shared with {{ f.devices }} {{ f.devices === 1 ? 'device' : 'devices' }}{{ f.saves ? ` · ${f.saves} saves` : f.textures ? ' · textures' : '' }}</span></div>
+              <span v-if="f.paused" class="status">Paused</span>
+              <span v-else-if="f.done != null" class="status" :class="f.done >= 100 ? 'ok' : 'warn'">{{ f.done >= 100 ? 'Up to Date' : f.done + '%' }}</span>
+              <Icon :name="open === 'srv:' + f.id ? 'mdiChevronUp' : 'mdiChevronDown'" :size="22" />
+            </button>
+            <div v-if="open === 'srv:' + f.id" class="files">
+              <div v-if="!list" class="muted small"><Icon name="mdiSync" :size="14" class="spin" /> Reading its list…</div>
+              <div v-else-if="list.error" class="muted small">{{ list.error }}</div>
+              <template v-else>
+                <div class="muted small files-head">{{ list.total }} files · {{ bytes(list.size) }}<template v-if="list.last"> · last change {{ ago(list.last.at) }}</template></div>
+                <div v-for="x in list.files" :key="x.path" class="file" data-focus tabindex="0">
+                  <span class="mono"><b v-if="x.game || x.kind === 'Textures'" class="file-game" :class="{ tex: x.kind === 'Textures' }">{{ x.game ? x.game + ' · ' : '' }}{{ x.kind }}</b>{{ x.path }}</span><span class="muted">{{ bytes(x.size) }}</span><span class="muted">{{ ago(x.at) }}</span>
+                </div>
+                <div v-if="list.total > list.files.length" class="muted small">And {{ list.total - list.files.length }} more.</div>
+              </template>
+            </div>
+          </template>
           <div class="row" style="justify-content: flex-end">
             <button class="btn" data-focus @click="loadServer"><Icon name="mdiRefresh" />Refresh</button>
             <button class="btn" data-focus @click="edit">Change</button>
@@ -145,27 +161,36 @@
       </template>
     </template>
 
-    <!-- Games -->
+    <!-- Games (0.9.29, owner: first): every game with a save on this device, matched by the save's own ID, with
+         what Syncthing keeps in step; synced folders' games too -->
     <template v-else>
-      <p class="muted small" style="margin: 0">Games with saves or textures in your synced folders, found by their serial or title ID, or by name.</p>
+      <p class="muted small" style="margin: 0">Every save on this device, matched to its game by the save's own serial or title ID, and whether Syncthing keeps it in step. Cartridge only reads them.</p>
       <TextField v-model="q" placeholder="Find a game" icon="mdiMagnify" mode="game" fkey="st-find" />
-      <div v-if="!G" class="muted small"><Icon name="mdiSync" :size="14" class="spin" /> Looking through your synced folders…</div>
-      <div v-else-if="G.error" class="muted small">{{ G.error }}</div>
+      <div v-if="!SV" class="muted small"><Icon name="mdiSync" :size="14" class="spin" /> Looking for saves…</div>
       <template v-else>
-        <div class="muted small">{{ found.length }} {{ found.length === 1 ? 'game' : 'games' }} · {{ G.files }} synced files in {{ G.folders }} {{ G.folders === 1 ? 'folder' : 'folders' }}</div>
-        <div v-if="!shown.length" class="muted small">{{ q ? `Nothing synced for “${q}”.` : 'No game’s files were found in your synced folders yet.' }}</div>
+        <div class="muted small">{{ found.length }} {{ found.length === 1 ? 'game' : 'games' }} · {{ SV.length }} {{ SV.length === 1 ? 'save' : 'saves' }} on this device<template v-if="G && !G.error"> · {{ G.files }} synced files</template></div>
+        <div v-if="!shown.length" class="muted small">{{ q ? `Nothing for “${q}”.` : 'No saves were found for your games yet. Play a game once and they show here.' }}</div>
         <button v-for="g in shown" :key="g.id" class="lrow st-game" data-focus @click="go('game', { romId: g.id })">
           <img v-if="g.art" class="st-cover" :src="g.art" loading="lazy" />
           <span v-else class="st-cover" />
           <span class="l-mid">
             <b>{{ g.name }}</b>
             <span class="st-chips">
-              <span v-for="x in g.saves" :key="'s' + x.folder" class="chip"><Icon name="mdiContentSaveOutline" :size="14" />{{ x.label }} · {{ x.files }} {{ x.files === 1 ? 'file' : 'files' }} · {{ ago(x.at) }}</span>
+              <span v-for="x in g.local" :key="'l' + x.path" class="chip" :class="{ ok: x.synced }"><Icon :name="x.synced ? 'mdiSync' : 'mdiContentSaveOutline'" :size="14" />{{ x.emuName }} · {{ bytes(x.size || 0) }} · {{ ago(x.at) }}{{ x.synced ? ' · Synced' : '' }}{{ x.conflicts ? ` · ${x.conflicts} conflict ${x.conflicts === 1 ? 'copy' : 'copies'}` : '' }}</span>
+              <span v-for="x in g.saves" :key="'s' + x.folder" class="chip"><Icon name="mdiCloudSyncOutline" :size="14" />{{ x.label }} · {{ x.files }} {{ x.files === 1 ? 'file' : 'files' }} · {{ ago(x.at) }}</span>
               <span v-for="x in g.textures" :key="'t' + x.folder" class="chip tex"><Icon name="mdiTextureBox" :size="14" />{{ x.label }} · {{ bytes(x.size) }}</span>
             </span>
           </span>
-          <span class="l-end"><span class="status">{{ g.platform }}</span></span>
+          <span class="l-end"><span class="status" :class="{ ok: g.local.some((x) => x.synced) || g.saves.length }">{{ g.local.some((x) => x.synced) || g.saves.length ? 'Synced' : g.platform }}</span></span>
         </button>
+        <template v-if="loose.length && !q">
+          <div class="sec-title">Saves Not Matched to a Game <span class="count">{{ loose.length }}</span></div>
+          <div v-for="x in loose.slice(0, 40)" :key="x.path" class="lrow" data-focus tabindex="0">
+            <Icon :name="x.shared ? 'mdiSdCard' : 'mdiContentSaveOutline'" :size="22" />
+            <span class="l-mid"><b>{{ x.label || x.keys?.title || x.keys?.serial || x.keys?.switch || x.keys?.name || 'Save' }}</b><span class="l-sub">{{ x.emuName }} · {{ bytes(x.size || 0) }} · {{ ago(x.at) }}{{ x.shared ? ' · a memory card for several games' : '' }}</span></span>
+            <span v-if="x.synced" class="status ok">Synced</span>
+          </div>
+        </template>
       </template>
     </template>
   </div>
@@ -178,24 +203,34 @@ import { store, call, ago, bytes, toast, go, confirm, romById, cover } from '../
 import Icon from './Icon.vue';
 import TextField from './TextField.vue';
 import SyncthingLogo from './SyncthingLogo.vue';
+import SaveSync from './SaveSync.vue';
 import Btn from './Btn.vue';
-const TABS = [{ v: 'here', l: 'This Device' }, { v: 'server', l: 'Main Server' }, { v: 'games', l: 'Games' }];
-const s = ref(null), L = ref(null), open = ref(''), list = ref(null), view = ref('here');
+// 0.9.29 (owner): Games first, then Main Server, then This Device; when this device is the main server
+// (set up by Cartridge, config.syncthing.role 'main') the two are one tab
+const isMain = computed(() => store.config.syncthing?.role === 'main');
+const TABS_ALL = computed(() => (isMain.value ? [{ v: 'games', l: 'Games' }, { v: 'here', l: 'This Device · Main Server' }] : [{ v: 'games', l: 'Games' }, { v: 'server', l: 'Main Server' }, { v: 'here', l: 'This Device' }]));
+const s = ref(null), L = ref(null), open = ref(''), list = ref(null), view = ref('games'), SV = ref(null);
 const R = ref(null), G = ref(null), q = ref(''), addr = ref(''), key = ref(''), busy = ref(false), editing = ref(false), pasteKey = ref('');
 const srvCfg = computed(() => store.config.syncthing?.server || null);
 const short = (p) => String(p || '').replace(store.info?.home || '\0', '~');
 const online = (l) => (l || []).filter((d) => d.online).length;
 const upToDate = computed(() => (L.value?.folders || s.value?.folders || []).filter((f) => f.done >= 100).length);
 const dur = (sec) => { const h = Math.floor(sec / 3600), d = Math.floor(h / 24); return d ? `${d} ${d === 1 ? 'day' : 'days'}` : h ? `${h} h` : `${Math.max(1, Math.round(sec / 60))} min` };
-const found = computed(() => Object.entries(G.value?.games || {}).map(([id, v]) => {
-  const r = romById(Number(id));
-  return r ? { id: r.id, name: r.name, platform: r.platform_display_name || '', art: cover(r), ...v, at: Math.max(0, ...v.saves.map((x) => x.at), ...v.textures.map((x) => x.at)) } : null;
-}).filter(Boolean).sort((a, b) => b.at - a.at));
+// saves on this device (saves:list) and files in synced folders (sync:games), one row per game
+const found = computed(() => {
+  const by = new Map();
+  const row = (id) => { if (!by.has(id)) { const r = romById(id); if (!r) return null; by.set(id, { id: r.id, name: r.name, platform: r.platform_display_name || '', art: cover(r), local: [], saves: [], textures: [], at: 0 }); } return by.get(id); };
+  for (const x of SV.value || []) for (const id of x.romIds || []) { const g = row(id); if (g) { g.local.push(x); g.at = Math.max(g.at, x.at || 0); } }
+  for (const [id, v] of Object.entries(G.value?.games || {})) { const g = row(Number(id)); if (g) { g.saves.push(...v.saves); g.textures.push(...v.textures); g.at = Math.max(g.at, ...v.saves.map((x) => x.at), ...v.textures.map((x) => x.at)); } }
+  return [...by.values()].sort((a, b) => b.at - a.at);
+});
+const loose = computed(() => (SV.value || []).filter((x) => !(x.romIds || []).length).sort((a, b) => (b.at || 0) - (a.at || 0)));
 const shown = computed(() => { const k = q.value.trim().toLowerCase(); return k ? found.value.filter((g) => g.name.toLowerCase().includes(k) || g.platform.toLowerCase().includes(k)) : found.value; });
 
 onMounted(async () => {
+  loadGames();
   s.value = (await call('sync:status').catch(() => null)) || { installed: false, running: false, why: 'Couldn’t check.' };
-  if (s.value.running) L.value = await call('sync:local').catch(() => null);
+  if (s.value.running) { L.value = await call('sync:local').catch(() => null); loadSynced(); }
 });
 async function useKey() {
   busy.value = true;
@@ -204,18 +239,17 @@ async function useKey() {
   busy.value = false;
 }
 // L1/R1 move between This Device, Main Server and Games (0.9.24, owner)
-function step(d) { const i = TABS.findIndex((t) => t.v === view.value); setView(TABS[(i + d + TABS.length) % TABS.length].v); }
+function step(d) { const T = TABS_ALL.value, i = T.findIndex((t) => t.v === view.value); setView(T[(i + d + T.length) % T.length].v); }
 defineExpose({ step });
 function setView(v) {
   view.value = v;
   if (v === 'server' && srvCfg.value && !R.value) loadServer();
-  if (v === 'games' && !G.value) loadGames();
+  if (v === 'games' && !SV.value) loadGames();
 }
 async function loadServer() { R.value = null; R.value = await call('sync:server').catch((e) => ({ error: e.message })); }
-async function loadGames() {
-  if (!s.value?.running) { G.value = { error: 'Syncthing isn’t running on this device, so its folders can’t be read.' }; return; }
-  G.value = await call('sync:games').catch((e) => ({ error: e.message }));
-}
+async function loadGames() { SV.value = await call('saves:list').catch(() => []); }
+// files in synced folders, only while Syncthing runs here
+async function loadSynced() { G.value = await call('sync:games').catch((e) => ({ error: e.message })); }
 function edit() { addr.value = srvCfg.value?.address || ''; key.value = srvCfg.value?.apikey || ''; editing.value = true; }
 async function saveServer() {
   busy.value = true;
@@ -228,10 +262,12 @@ async function forget() {
   await call('sync:setServer', null).catch(() => {});
   store.config.syncthing = { ...(store.config.syncthing || {}), server: null }; R.value = null; addr.value = key.value = '';
 }
-async function toggle(f) {
-  if (open.value === f.id) { open.value = ''; return; }
-  open.value = f.id; list.value = null;
-  list.value = await call('sync:browse', f.id).catch((e) => ({ error: e.message }));
+async function toggle(f, server = false) {
+  const k = (server ? 'srv:' : '') + f.id;
+  if (open.value === k) { open.value = ''; return; }
+  open.value = k; list.value = null;
+  const r = await call('sync:browse', server ? { id: f.id, server: true } : f.id).catch((e) => ({ error: e.message }));
+  if (open.value === k) list.value = r;
 }
 async function rescan(f) {
   try { await call('sync:rescan', f.id); toast('Syncthing is rescanning it', 'ok', 2200, 'mdiRefresh'); } catch (e) { toast(e.message, 'error'); }
@@ -285,5 +321,6 @@ async function toggleService() {
 .st-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
 .chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: var(--r-sm); background: var(--s2); font-size: var(--t-xs); color: var(--muted); }
 .chip.tex { color: #b9c7ff; }
+.chip.ok { color: #9be8b4; }
 .pad-mode .st-game:focus .chip, .st-game:focus-visible .chip { background: rgba(0, 0, 0, 0.12); color: var(--on-focus-dim); }
 </style>

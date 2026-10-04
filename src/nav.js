@@ -209,6 +209,15 @@ export function dispatch(action, { keepMode = false } = {}) {
   else if (action === 'back') sfx.back();
   else if (['lb', 'rb'].includes(action)) { sfx.tab(); rumble('tab'); }
   else if (['lt', 'rt'].includes(action)) rumble('tab');
+  // hold A to read it all, B to fold it back (0.9.29, owner: patch names and descriptions that trail off):
+  // anything marked data-expand opens as a card with its whole text
+  if (action === 'back' && layer) { const open = layer.el.querySelector('.expanded[data-expand]'); if (open) { open.classList.remove('expanded'); open.focus({ preventScroll: true }); return; } }
+  if (action === 'hold' && document.activeElement?.hasAttribute?.('data-expand') && !document.activeElement.hasAttribute('data-hold')) {
+    const el = document.activeElement;
+    for (const o of (layer?.el || document).querySelectorAll('.expanded[data-expand]')) if (o !== el) o.classList.remove('expanded');
+    el.classList.toggle('expanded'); rumble(true);
+    return;
+  }
   if (h && h(document.activeElement) !== false) return;
   // A held on something that has a held meaning (data-hold, 0.9.19: Start's tiles): it tells itself
   if (action === 'hold') { document.activeElement?.dispatchEvent(new CustomEvent('cart-hold', { bubbles: true })); return; }
@@ -230,7 +239,7 @@ const KEYMAP = {
 // A on something with a held meaning ([data-hold]): a press opens it on release, a hold of 450 ms
 // does the held thing instead (0.9.19, owner: hold a Start tile to arrange the menu)
 const HOLD_MS = 450;
-const holdable = () => { const el = document.activeElement, l = topLayer(); return !!(el?.hasAttribute?.('data-hold') && l && inScope(el, l.el)); };
+const holdable = () => { const el = document.activeElement, l = topLayer(); return !!((el?.hasAttribute?.('data-hold') || el?.hasAttribute?.('data-expand')) && l && inScope(el, l.el)); };
 let keyHold = null;
 window.addEventListener('keydown', (ev) => {
   const t = ev.target;
@@ -391,9 +400,16 @@ function poll() {
 (function loop() { poll(); setTimeout(loop, inFront() ? 8 : 250); })();
 // Game Mode: Steam's menu is in front while Cartridge keeps its window focus (main.js watchGamescopeFocus)
 export function setBackground(v) { inBackground = !!v; gsKnown = true; }
+// Outside Game Mode (0.9.29, owner: "on a PC with a controller, after the game closes the controls don't work"):
+// the pad is read only while the window has focus, and after a game Steam keeps it. Main watches the game it
+// started and says when it ended; from then the pad works even before the window gets its focus back, until
+// Cartridge loses a focus it had (you switched to something else) or another game starts.
+let returned = false;
+export function gameEnded(v) { returned = !!v; }
+window.addEventListener('blur', () => { returned = false; });
 // In Game Mode gamescope says when Cartridge is in front, which is truer than window focus: after a game
 // the window can be in front without focus, and the pad went dead (0.9.24)
-function inFront() { return gsKnown ? !inBackground : document.hasFocus() && !inBackground; }
+function inFront() { return gsKnown ? !inBackground : (document.hasFocus() || returned) && !inBackground; }
 
 export function ensureFocus(root) {
   if (!root) return;

@@ -141,6 +141,8 @@ function pfsEntries(fd, base) { // PFS0 (nsp) or HFS0 (xci partitions): [{ name,
 // searched, as yuzu and its forks read it (common/fs/path_util, core/crypto/key_manager: <data>/keys),
 // Ryujinx (<config>/system) and hactool (~/.switch), plus the folders the caller knows (Cartridge's BIOS)
 let headerKey = null; // from prod.keys, once found
+let extraRoots = []; // emulation folders Cartridge knows (config.emulationRoot), set by main
+const setKeyRoots = (l) => { extraRoots = (l || []).filter(Boolean); headerKey = null; };
 function keyDirs(home = os.homedir(), env = process.env) {
   const cfg = env.XDG_CONFIG_HOME || path.join(home, '.config'), data = env.XDG_DATA_HOME || path.join(home, '.local/share');
   const v = (id, ...p) => path.join(home, '.var/app', id, ...p);
@@ -148,6 +150,12 @@ function keyDirs(home = os.homedir(), env = process.env) {
   for (const n of ['eden', 'citron', 'yuzu', 'sudachi', 'suyu', 'torzu']) out.push(path.join(data, n, 'keys'), path.join(cfg, n, 'keys'));
   for (const [id, n] of [['dev.eden_emu.eden', 'eden'], ['org.citron_emu.citron', 'citron'], ['org.yuzu_emu.yuzu', 'yuzu'], ['org.sudachi_emu.sudachi', 'sudachi']]) out.push(v(id, 'data', n, 'keys'));
   out.push(path.join(cfg, 'Ryujinx/system'), v('io.github.ryubing.Ryujinx', 'config/Ryujinx/system'), v('org.ryujinx.Ryujinx', 'config/Ryujinx/system'), path.join(home, '.switch'));
+  // 0.9.29 (owner: "Eden finds the IDs of any format"): every place a keys file lives, as Eden's path_util.cpp
+  // looks (portable user/keys beside the program, legacy yuzu-family folders above) plus EmuDeck's and
+  // RetroDECK's BIOS folders, where people put prod.keys for their emulators to pick up
+  for (const r of [path.join(home, 'Emulation'), ...extraRoots]) for (const n of ['bios/keys', 'bios/switch/keys', 'bios/yuzu/keys', 'bios/eden/keys', 'bios/citron/keys', 'bios/switch', 'bios']) out.push(path.join(r, n));
+  out.push(path.join(home, 'retrodeck/bios/switch/keys'), path.join(home, 'retrodeck/bios/switch'), path.join(home, 'Applications/user/keys'));
+  for (const d of [path.join(home, 'Applications'), path.join(home, 'Emulation/tools')]) { try { for (const n of fs.readdirSync(d)) out.push(path.join(d, n, 'user/keys')); } catch {} }
   return out;
 }
 function switchHeaderKey(dirs) {
@@ -186,7 +194,8 @@ function switchTitleId(file, keyDirs = []) {
     const key = !id && ncas.length ? switchHeaderKey(keyDirs) : null;
     if (key) {
       // the game's Program NCA (type 0); else whatever title the rest name (a Meta NCA, type 1)
-      const heads = ncas.slice(0, 40).map((e) => { try { return ncaHeader(fd, e.offset, key); } catch { return null; } }).filter(Boolean);
+      // every NCA, like Eden's submission_package.cpp (0.9.29: was the first 40; big NSPs list updates first)
+      const heads = ncas.map((e) => { try { return ncaHeader(fd, e.offset, key); } catch { return null; } }).filter(Boolean);
       id = (heads.find((x) => x.type === 0 && /000$/.test(x.titleId)) || heads.find((x) => x.type === 0) || heads.find((x) => x.type === 1) || {}).titleId || null;
     }
   } catch {} finally { if (fd != null) try { fs.closeSync(fd); } catch {} }
@@ -231,4 +240,4 @@ function setTextures(e, on) {
   return true;
 }
 
-module.exports = { emulators, forGame, gcWiiId, n3dsTitleId, psxSerial, ciaTitleId, switchTitleId, pfsEntries, iniGet, setTextures, TEX_KEY };
+module.exports = { emulators, forGame, gcWiiId, n3dsTitleId, psxSerial, ciaTitleId, switchTitleId, setKeyRoots, keyDirs, pfsEntries, iniGet, setTextures, TEX_KEY };

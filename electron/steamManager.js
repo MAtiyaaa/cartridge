@@ -1573,10 +1573,27 @@ module.exports = function createSteamManager(ctx) {
     return [...seen.values()];
   }
   // The user's collections, each matched to a console with the name Cartridge would give it
+  // 0.9.29 (owner: renamed collections came back as "Rename", consoles without a collection yet weren't shown, counts
+  // stayed at 0): renames Steam hasn't written to its file yet are shown as done (pendingRenames, dropped once the
+  // file has them), and every console in the library is listed with the collection its games go into and how
+  // many of its games are in Steam (the file's count, else the shortcuts Cartridge added there)
   function collectionsReview() {
     const env = environment();
     if (!env.account) throw new Error('Steam was not found.');
-    return { list: SC.analyse(readCollections(env.account), libraryPlatforms()), integrated: !!cfg().collectionsIntegrated, kept: cfg().collectionNames || {} };
+    const c = cfg(), pending = c.pendingRenames || {};
+    const cols = readCollections(env.account);
+    for (const col of cols) { if (pending[col.id] && col.name === pending[col.id]) delete pending[col.id]; else if (pending[col.id]) { col.was = col.name; col.name = pending[col.id]; } }
+    for (const id of Object.keys(pending)) if (!cols.some((x) => x.id === id)) delete pending[id];
+    const plats = libraryPlatforms();
+    const counts = {};
+    for (const r of Object.values(reg)) for (const n of r.collections || []) counts[n] = (counts[n] || 0) + 1;
+    const consoles = plats.map((p) => {
+      const name = SC.nameFor(p.key, p.name, c.collectionNames);
+      const col = cols.find((x) => x.name === name);
+      const games = Object.values(reg).filter((r) => r.console === p.key).length;
+      return { key: p.key, name, exists: !!col, count: Math.max(col ? col.added.length : 0, counts[name] || 0), games };
+    }).sort((a, b) => a.name.localeCompare(b.name));
+    return { list: SC.analyse(cols, plats).map((x) => ({ ...x, pending: !!cols.find((y) => y.id === x.id)?.was })), consoles, integrated: !!c.collectionsIntegrated, kept: c.collectionNames || {} };
   }
   // renames: [{ id, from, to, key }]; keep: [{ key, name }] (collections left as they are, still used for that console)
   async function collectionsApply({ renames = [], keep = [] } = {}) {
@@ -1594,6 +1611,9 @@ module.exports = function createSteamManager(ctx) {
     c.collectionsIntegrated = true;
     ctx.saveConfig(); saveReg();
     if (!renames.length) return { count: 0 };
+    c.pendingRenames ||= {};
+    for (const r of renames) c.pendingRenames[r.id] = r.to; // shown as done until Steam's file says so
+    ctx.saveConfig();
     const left = {};
     if (await live.available(env.account.root).catch(() => false)) {
       for (const r of renames) { const ok = await live.renameCollection(r.id, r.to).catch((e) => { log('steam live rename collection', e.message); return false; }); if (!ok) left[r.id] = r.to; }

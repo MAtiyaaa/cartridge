@@ -50,7 +50,7 @@
                 <!-- 0.9.24 (owner: empty space when big): what each console's games take up on this device -->
                 <div v-if="byCon.length" class="st-store-cons">
                   <!-- 0.9.28 (owner): the console's small icon, its name only where it fits, and only the rows that fit -->
-                  <div v-for="c in byCon.slice(0, Math.max(1, Math.min(8, Math.floor((box(t).ph - 150) / 24))))" :key="c.name" class="st-store-con"><span class="st-sc-n"><PIcon :p="c.p" :size="16" /><span>{{ c.name }}</span></span><i><b :style="{ width: (c.size / byCon[0].size) * 100 + '%' }" /></i><em class="tnum">{{ bytes(c.size) }}</em></div>
+                  <div v-for="c in byCon.slice(0, Math.max(1, Math.min(8, Math.floor((box(t).ph - 150) / 24))))" :key="c.name" class="st-store-con"><span class="st-sc-n"><PIcon :p="c.p" :size="16" /><span class="st-sc-name">{{ c.name }}</span></span><i><b :style="{ width: (c.size / byCon[0].size) * 100 + '%' }" /></i><em class="tnum">{{ bytes(c.size) }}</em></div>
                 </div>
               </div>
               <div class="st-gauge" :class="{ low: freePct < 10 }">
@@ -99,13 +99,13 @@
               <div class="st-row-fade" />
               <div class="st-row" :class="{ tall: t.h > 1, narrow: t.w <= 2 }">
                 <div class="st-row-info">
-                  <div class="st-label">{{ rowName(t) }}<span class="st-count">{{ (sel[t.id] || 0) + 1 }} / {{ listOf(t).length }}</span></div>
-                  <Transition name="st-lead" mode="out-in">
+                  <div class="st-label"><span class="st-lname">{{ rowName(t) }}</span><span class="st-count">{{ (sel[t.id] || 0) + 1 }} / {{ listOf(t).length }}</span></div>
+                  <div class="st-lead-wrap"><Transition name="st-lead">
                     <div :key="rowView(t)[0].id" class="st-row-lead">
                       <GameLogo :logo="store.config.ui.logos !== false ? logoOf(rowView(t)[0]) : null" :name="rowView(t)[0].name" cls="st-row-name" :area="Math.min(16000, box(t).pw * box(t).ph * 0.07)" :max-w="Math.min(300, box(t).pw * 0.36)" :max-h="Math.min(64, box(t).ph * 0.3)" />
                       <span class="st-sub">{{ firstLine(t.type, rowView(t)[0]) }}</span>
                     </div>
-                  </Transition>
+                  </Transition></div>
                 </div>
                 <TransitionGroup tag="div" name="st-fan" class="st-fan" :style="{ '--n': Math.min(fanN(t), rowView(t).length) }">
                   <img v-for="(r, i) in rowView(t).slice(0, fanN(t))" :key="r.id" class="st-fan-c" :src="cover(r) || BLANK" :style="{ '--i': i }" loading="lazy" alt="" @error="noImg" />
@@ -121,7 +121,7 @@
           <!-- Trophies (0.9.23, owner: a full rework; pin one console's): the newest unlock large, the
                ones before it as a strip of badges, and how many came this week -->
           <template v-else-if="t.type === 'trophies'">
-            <div class="st-label">{{ t.console ? t.console + ' Trophies' : 'Latest Trophies' }}<span v-if="achOf(t).week" class="st-count">{{ achOf(t).week }} this week</span></div>
+            <div class="st-label"><span class="st-lname">{{ t.console ? consoleFull(t.console) + ' Trophies' : 'Latest Trophies' }}</span><span v-if="achOf(t).week" class="st-count">{{ achOf(t).week }} this week</span></div>
             <template v-if="achOf(t).list.length">
               <!-- 0.9.24 (owner: too much empty space when big): as many unlocks as the tile holds, in columns when wide -->
               <div class="st-tro" :class="{ one: troFor(t).n === 1, feat: troFor(t).feat }">
@@ -143,7 +143,7 @@
                 </div>
               </div>
             </template>
-            <div v-else class="st-empty small"><span>{{ t.console ? `No ${t.console} unlocks yet` : 'Unlocks from your emulators and RetroAchievements show here' }}</span></div>
+            <div v-else class="st-empty small"><span>{{ t.console ? 'No trophies for this system yet' : 'Unlocks from your emulators and RetroAchievements show here' }}</span></div>
           </template>
 
           <!-- Downloads -->
@@ -193,14 +193,16 @@
           </template>
           <!-- An Emulator (0.9.28): A opens it -->
           <template v-else-if="t.type === 'emulator'">
-            <div v-if="t.emu" class="st-emu">
-              <EmuIcon :id="t.emu.id" :size="Math.round(Math.min(96, box(t).ph * 0.5))" fallback="mdiGamepadVariantOutline" />
+            <!-- 0.9.29 (owner: the 1x1 card wasn't scaled): small tiles stack the icon over the name, with the update
+                 state as a dot; bigger ones keep the row with version and status -->
+            <div v-if="t.emu" class="st-emu" :class="{ small: emuSmall(t) }">
+              <span class="st-emu-ic"><EmuIcon :id="t.emu.id" :size="emuIcon(t)" fallback="mdiGamepadVariantOutline" /></span>
               <div class="st-emu-t">
                 <b>{{ t.emu.label }}</b>
-                <span>{{ emuOf(t)?.version ? 'Version ' + emuOf(t).version : t.emu.kind === 'flatpak' ? 'Flatpak' : '' }}</span>
-                <span v-if="emuOf(t)?.update" class="status warn">Update ready</span>
-                <span v-else-if="emuOf(t)" class="status ok">Up to date</span>
+                <span v-if="!emuSmall(t)">{{ emuOf(t)?.version ? 'Version ' + emuOf(t).version : t.emu.kind === 'flatpak' ? 'Flatpak' : '' }}</span>
+                <template v-if="!emuSmall(t)"><span v-if="emuOf(t)?.update" class="status warn">Update ready</span><span v-else-if="emuOf(t)" class="status ok">Up to date</span></template>
               </div>
+              <span v-if="emuSmall(t) && emuOf(t)" class="st-emu-dot" :class="emuOf(t).update ? 'warn' : 'ok'" :title="emuOf(t).update ? 'Update ready' : 'Up to date'" />
             </div>
             <div v-else class="st-empty small"><span>Pick an emulator in Arrange (Select)</span></div>
           </template>
@@ -286,10 +288,13 @@
       <TransitionGroup tag="div" name="st-ovm" class="st-ov-list">
         <button v-for="(pg, i) in pages" :key="pgKey(pg, i)" class="st-ov-page" :class="{ on: i === page, moving: ov.moving === i, dim: ov.moving != null && ov.moving !== i }" data-focus :data-key="'pg-' + i" @click="ovPick(i)">
           <span class="st-ov-map">
-            <i v-for="x in pg" :key="x.id" :class="{ pic: !!ovThumb(x).pic }" :style="{ left: (x.x / COLS) * 100 + '%', top: (x.y / ovRows(pg)) * 100 + '%', width: (x.w / COLS) * 100 + '%', height: (x.h / ovRows(pg)) * 100 + '%', backgroundImage: ovThumb(x).pic ? `url('${ovThumb(x).pic}')` : undefined }">
+            <!-- 0.9.29 (owner: "it doesn't show the whole actual widgets"): a still copy of the page itself, taken when
+                 the overview opens or the page was last left; a page not seen yet keeps the map below -->
+            <span v-if="snapOf(pg)" class="st-ov-snap" inert :style="{ width: snapOf(pg).w + 'px', height: snapOf(pg).h + 'px', transform: `scale(${ovW / snapOf(pg).w})` }" v-html="snapOf(pg).html" />
+            <template v-else><i v-for="x in pg" :key="x.id" :class="{ pic: !!ovThumb(x).pic }" :style="{ left: (x.x / COLS) * 100 + '%', top: (x.y / ovRows(pg)) * 100 + '%', width: (x.w / COLS) * 100 + '%', height: (x.h / ovRows(pg)) * 100 + '%', backgroundImage: ovThumb(x).pic ? `url('${ovThumb(x).pic}')` : undefined }">
               <span v-if="x.type === 'clock'" class="st-ov-clock">{{ clockShort }}</span>
               <span v-else-if="!ovThumb(x).pic" class="st-ov-tag"><Icon :name="ovThumb(x).icon" :size="14" /><em>{{ ovThumb(x).name }}</em></span>
-            </i>
+            </i></template>
           </span>
           <span class="st-ov-n">Page {{ i + 1 }}<em>{{ pg.length }} {{ pg.length === 1 ? 'widget' : 'widgets' }}</em></span>
           <span v-if="ov.moving === i" class="st-ov-carry"><Icon name="mdiArrowLeftRight" :size="16" />Moving</span>
@@ -491,26 +496,29 @@ function stepTile(t, d) {
   const n = COVER_ROWS[t.type] ? listOf(t).length : t.type === 'trophies' ? achOf(t).list.length : 0;
   if (t.type === 'surprise') { deal(); sfx.move?.(); focusTile(t); return true; }
   if (n < 2) return false;
-  sel[t.id] = ((sel[t.id] || 0) + d + n) % n; stepped[t.id] = Date.now(); sfx.move?.(); focusTile(t); return true;
+  sel[t.id] = ((sel[t.id] || 0) + d + n) % n; stepped[t.id] = Date.now(); due[t.id] = Date.now() + ROLL_HOLD; sfx.move?.(); focusTile(t); return true;
 }
 // Rows of games move on to their next game by themselves (0.9.28, owner: "as if I'm pressing R1", slowly and
 // not jarring). One row at a time every ROLL_TICK, each row at most every ROLL_MS, so the screen never
 // changes in several places at once. A row you stepped through yourself waits ROLL_HOLD before moving again.
 // Still while arranging, while another app is in front, in a pop-up, or with reduced motion.
 const ROLL_MS = 20000, ROLL_TICK = 6000, ROLL_HOLD = 45000;
-const stepped = {};
-let rollAt = Date.now() + ROLL_MS - ROLL_TICK, rollNext = 0; // the first one moves ROLL_MS after Start opens
+// 0.9.29 (owner: "sometimes it happens, sometimes it doesn't"): each row has its own next time (rows took turns
+// from a list that changed under them, so one could wait for minutes); pauses only push the times back
+const due = {}, stepped = {};
+const startedAt = Date.now();
+let rollAt = 0;
 function roll() {
-  if (store.away || editing.value || drag.value || sizing.value || store.modal || document.hidden || ov.value) return;
+  if (store.away || editing.value || drag.value || sizing.value || store.modal || document.hidden || ov.value) { rollAt = Date.now(); return; }
   if (store.route.name !== 'start' || document.body.classList.contains('motion-reduce')) return;
   const now = Date.now();
   if (now - rollAt < ROLL_TICK) return;
-  const list = tiles.value.filter((t) => COVER_ROWS[t.type] && listOf(t).length > 1 && now - (stepped[t.id] || 0) > Math.max(ROLL_HOLD * !!stepped[t.id], ROLL_MS));
-  if (!list.length) return;
-  const t = list[rollNext++ % list.length];
-  const n = listOf(t).length;
-  sel[t.id] = ((sel[t.id] || 0) + 1) % n;
-  stepped[t.id] = now - (ROLL_HOLD - ROLL_MS); // the next roll of this row is ROLL_MS away, not ROLL_HOLD
+  const rows = tiles.value.filter((t) => COVER_ROWS[t.type] && listOf(t).length > 1);
+  rows.forEach((t, i) => { if (!due[t.id]) due[t.id] = Math.max(startedAt + ROLL_MS, now) + i * ROLL_TICK; }); // first moves staggered
+  const t = rows.filter((x) => now >= due[x.id]).sort((a, b) => due[a.id] - due[b.id])[0];
+  if (!t) return;
+  sel[t.id] = ((sel[t.id] || 0) + 1) % listOf(t).length;
+  due[t.id] = now + ROLL_MS;
   rollAt = now;
 }
 function firstLine(type, r = rowOf(type)[0]) {
@@ -526,6 +534,8 @@ const consoles = computed(() => {
   for (const r of roms.value) { mins[r.platform_id] = (mins[r.platform_id] || 0) + (store.play[r.id]?.min || 0); if (store.installed[r.id]) inst[r.platform_id] = (inst[r.platform_id] || 0) + 1; }
   return [...visiblePlatforms()].sort((a, b) => (mins[b.id] || 0) - (mins[a.id] || 0) || (inst[b.id] || 0) - (inst[a.id] || 0) || b.rom_count - a.rom_count);
 });
+// menus list consoles A to Z (0.9.29, owner); the tiles keep the most played first
+const consolesAZ = computed(() => [...consoles.value].sort((a, b) => a.display_name.localeCompare(b.display_name)));
 
 // clock
 const now = reactive({ time: '', ampm: '', date: '', day: '', dayLine: '', hour: 12 });
@@ -578,13 +588,19 @@ async function loadAch() {
   const out = [];
   await Promise.all([
     store.config.ra?.user ? call('ra:overview').then((o) => { for (const a of o.recent || []) out.push({ key: 'ra' + a.id + a.date, t: raDate(a.date), badge: img(a.badge), title: a.title, desc: a.description || '', game: a.game, console: a.console || '', open: () => go('ra-game', { gameId: a.gameId }) }); }).catch(() => {}) : null,
-    call('trophies:overview').then((o) => { for (const x of o.recent || []) out.push({ key: 'tr' + x.key + x.id, t: x.time || 0, badge: x.icon, grade: x.grade, title: x.name, desc: x.detail || x.desc || '', game: x.game, console: x.short || '', open: () => go('trophy-game', { tkey: x.key }) }); }).catch(() => {}),
+    call('trophies:overview').then((o) => { for (const x of o.recent || []) out.push({ key: 'tr' + x.key + x.id, t: x.time || 0, badge: x.icon, grade: x.grade, title: x.name, desc: x.detail || x.desc || '', game: x.game, console: consoleFull(x.short || ''), open: () => go('trophy-game', { tkey: x.key }) }); }).catch(() => {}),
   ]);
   ach.value = out.sort((a, b) => b.t - a.t).slice(0, 60);
 }
 // one tile's trophies: all, or one console's (0.9.23, owner: pin achievements per console)
+// full console names (0.9.29, owner: "PS3" should read PlayStation 3); old saved tiles used the short ones
+const FULL = { PS3: 'PlayStation 3', PS4: 'PlayStation 4', Vita: 'PlayStation Vita', X360: 'Xbox 360' };
+const consoleFull = (c) => FULL[c] || c;
+// RetroAchievements names consoles its own way ("SNES/Super Famicom"): any of its parts matching counts
+const conKey = (c) => String(c || '').toLowerCase().replace(/[^a-z0-9/]+/g, '');
+const sameConsole = (a, b) => { const x = conKey(consoleFull(a)), y = conKey(consoleFull(b)); return !!x && !!y && (x === y || x.split('/').includes(y) || y.split('/').includes(x)); };
 function achOf(t) {
-  const list = t.console ? ach.value.filter((a) => a.console === t.console) : ach.value;
+  const list = t.console ? ach.value.filter((a) => sameConsole(a.console, t.console)) : ach.value;
   const wk = Date.now() - 7 * 864e5;
   return { list, week: list.filter((a) => a.t > wk).length };
 }
@@ -711,7 +727,7 @@ async function pickGame() {
   for (;;) {
     const from = await choose({ sheet: true, title: 'Pin a Game', options: [
       ...(playing.value.length ? [{ heading: 'Recently Played', label: 'Recently Played', value: '__recent', icon: 'mdiHistory', sub: `${Math.min(30, playing.value.length)} games` }] : []),
-      ...consoles.value.map((p, i) => ({ heading: i === 0 ? 'Consoles' : undefined, label: p.display_name, value: p.id, sub: `${p.rom_count} games`, raw: true })),
+      ...consolesAZ.value.map((p, i) => ({ heading: i === 0 ? 'Consoles' : undefined, label: p.display_name, value: p.id, sub: `${p.rom_count} games`, raw: true })),
     ] });
     if (!from) return null;
     const list = from === '__recent' ? playing.value.slice(0, 30) : roms.value.filter((r) => r.platform_id === from).sort((a, b) => a.name.localeCompare(b.name));
@@ -733,7 +749,7 @@ async function addTile() {
     if (!id) return nextTick(() => focusKey('st-add'));
     t.romId = id;
   } else if (type === 'console') {
-    const id = await choose({ sheet: true, title: 'Pin a console', options: consoles.value.map((p) => ({ label: p.display_name, value: p.id, sub: `${p.rom_count} games`, raw: true })) });
+    const id = await choose({ sheet: true, title: 'Pin a console', options: consolesAZ.value.map((p) => ({ label: p.display_name, value: p.id, sub: `${p.rom_count} games`, raw: true })) });
     if (!id) return nextTick(() => focusKey('st-add'));
     t.platformId = id;
   } else if (CONFIG[type] && !(await configure(t))) return nextTick(() => focusKey('st-add'));
@@ -792,6 +808,7 @@ const CONFIG = {
   async emulator(t) {
     const list = (await call('emuup:list', {}).catch(() => [])).filter((u) => u.kind !== 'windows');
     if (!list.length) { toast('No emulators found on this device yet', 'info', 3500); return false; }
+    list.sort((a, b) => a.label.localeCompare(b.label));
     const v = await choose({ sheet: true, title: 'Which Emulator', options: list.map((u, i) => ({ label: u.label, value: String(i), sub: [u.version ? 'Version ' + u.version : '', u.kind === 'flatpak' ? 'Flatpak' : ''].filter(Boolean).join(' · '), raw: true })) });
     if (v == null) return false;
     const u = list[Number(v)];
@@ -800,7 +817,10 @@ const CONFIG = {
   },
   async cstats(t) { return pickConsole(t); },
   async trophies(t) {
-    const names = [...new Set(ach.value.map((a) => a.console).filter(Boolean))].sort();
+    // every system with achievements: the trophy consoles, your library's consoles RetroAchievements covers, and any
+    // with unlocks; ones without any yet are fine (the tile says so), A to Z (0.9.29, owner)
+    const ra = store.config.ra?.user ? await Promise.all((store.lib?.platforms || []).map((p) => call('ra:supported', { slug: p.slug, fs_slug: p.fs_slug }).then((ok) => (ok ? p.display_name : null)).catch(() => null))) : [];
+    const names = [...new Set([...Object.values(FULL), ...ra.filter(Boolean), ...ach.value.map((a) => a.console).filter(Boolean)])].sort((a, b) => a.localeCompare(b));
     const v = await choose({ sheet: true, title: 'Which Trophies', options: [{ label: 'All Consoles', value: '__all', icon: 'mdiTrophyOutline', selected: !t.console }, ...names.map((n) => ({ label: n, value: n, raw: true, selected: t.console === n }))] });
     if (!v) return false;
     if (v === '__all') delete t.console; else t.console = v;
@@ -808,7 +828,7 @@ const CONFIG = {
   },
 };
 async function pickConsole(t) {
-  const id = await choose({ sheet: true, title: 'Which Console', options: consoles.value.map((p) => ({ label: p.display_name, value: p.id, sub: `${p.rom_count} games`, raw: true, selected: t.platformId === p.id })) });
+  const id = await choose({ sheet: true, title: 'Which Console', options: consolesAZ.value.map((p) => ({ label: p.display_name, value: p.id, sub: `${p.rom_count} games`, raw: true, selected: t.platformId === p.id })) });
   if (!id) return false;
   t.platformId = id; delete sel[t.id];
   return true;
@@ -821,8 +841,25 @@ async function configure(t) {
 }
 // ---- pages
 const pageDir = ref('next');
+// still copies of pages for the overview (0.9.29): the board's own elements, cloned without focus targets,
+// handles or animations, kept per page layout (a moved or resized tile makes a new copy necessary)
+const snaps = reactive(new Map()), ovW = ref(300);
+const pageSig = (pg) => pg.map((x) => `${x.id}:${x.x},${x.y},${x.w},${x.h}:${x.src || x.platformId || x.romId || ''}`).sort().join('|');
+const snapOf = (pg) => snaps.get(pageSig(pg)) || null;
+function snapPage() {
+  const b = el.value?.querySelector('.st-board'), pg = pages.value[page.value];
+  if (!b || !pg?.length) return;
+  const c = b.cloneNode(true);
+  c.querySelectorAll('.st-handle, .st-slot, .st-ghost, .st-slots').forEach((n) => n.remove());
+  c.querySelectorAll('[data-focus], [tabindex], [data-key], [data-hold]').forEach((n) => { n.removeAttribute('data-focus'); n.removeAttribute('tabindex'); n.removeAttribute('data-key'); n.removeAttribute('data-hold'); });
+  c.style.height = '';
+  snaps.set(pageSig(pg), { html: c.outerHTML, w: b.offsetWidth, h: Math.max(b.offsetHeight, 1) });
+}
+const emuSmall = (t) => box(t).pw < 300 || box(t).ph < 150;
+const emuIcon = (t) => Math.round(Math.max(28, Math.min(96, emuSmall(t) ? Math.min(box(t).pw, box(t).ph) * 0.42 : box(t).ph * 0.5)));
 function goPage(i) {
   if (i === page.value || i < 0 || i >= pages.value.length) return;
+  snapPage();
   if (mode.value) setMode('');
   pageDir.value = i > page.value ? 'next' : 'prev';
   page.value = i; store.startPage = i;
@@ -844,19 +881,28 @@ let ovLayer = null;
 // a page's key follows its tiles, not its place, so a page that moves slides there instead of being drawn twice (0.9.28)
 const pgKey = (pg, i) => (pg.length ? pg.map((x) => x.id).sort().join('|') : 'empty-' + i);
 const ovRows = (pg) => Math.max(4, bottom(pg));
+// L1 and R1 pressed together (0.9.29, owner: "sometimes it works, sometimes it doesn't"): one opened the
+// overview and the other closed it at once. A press within OV_GUARD of opening or closing counts as the same one.
+const OV_GUARD = 250;
+let ovAt = 0;
 function openOv() {
+  if (performance.now() - ovAt < OV_GUARD) return;
+  ovAt = performance.now();
   if (ov.value) return closeOv();
   if (mode.value) setMode('');
+  snapPage();
   ov.value = { moving: null };
   nextTick(() => {
+    const m = ovEl.value?.querySelector('.st-ov-map'); if (m) ovW.value = m.clientWidth;
     ovLayer = pushLayer(ovEl.value, {
       back: () => (ov.value.moving != null ? (ov.value.moving = null) : closeOv()),
-      lt() {}, rt() {}, start: closeOv, select() {}, x() {}, y() {}, lb: closeOv, rb: closeOv,
+      lt() {}, rt() {}, start: closeOv, select() {}, x() {}, y() {}, lb: ovShoulder, rb: ovShoulder,
       left: () => (ov.value.moving != null ? ovMove(-1) : false), right: () => (ov.value.moving != null ? ovMove(1) : false),
     });
     focusFirst(ovEl.value, `[data-key="pg-${page.value}"]`);
   });
 }
+function ovShoulder() { if (performance.now() - ovAt >= OV_GUARD) { ovAt = performance.now(); closeOv(); } }
 function closeOv() {
   ovLayer?.pop(); ovLayer = null; ov.value = null;
   nextTick(() => focusKey(tiles.value[0] ? 'tile-' + tiles.value[0].id : 'st-add'));
@@ -1056,7 +1102,14 @@ watch(() => store.play, loadWeek);
 /* tiles arrive one after another, rising and settling */
 @keyframes st-in { from { opacity: 0; transform: translateY(18px) scale(0.97); } }
 :global(body.motion-reduce .st-face) { animation: none; }
-.st-tile:focus-visible .st-face, .pad-mode .st-tile:focus .st-face { box-shadow: var(--ring), 0 26px 50px -24px rgba(0, 0, 0, 0.85); transform: translateY(-3px); }
+/* focus (0.9.29, owner: choppy on handhelds): the ring and lift shadow sit on the tile's ::before and fade in
+   by opacity, and the face lifts on its own layer; animating the face's box-shadow repainted the whole
+   tile on every frame without the GPU. Same look, same timing. */
+.st-tile::before { content: ''; position: absolute; inset: 0; border-radius: inherit; box-shadow: var(--ring), 0 26px 50px -24px rgba(0, 0, 0, 0.85); opacity: 0; transform: translateY(0); transition: opacity 240ms ease, transform 380ms cubic-bezier(0.32, 0.72, 0, 1); pointer-events: none; }
+.st-tile:focus-visible::before, .pad-mode .st-tile:focus::before { opacity: 1; transform: translateY(-3px); }
+.editing .st-tile::before { display: none; } /* arranging keeps its own ring on the face */
+.st-tile:focus-visible .st-face, .pad-mode .st-tile:focus .st-face { transform: translateY(-3px); }
+.st-tile:focus-within .st-face, .st-tile:focus .st-face { will-change: transform; }
 /* a soft light passes over a tile when it's reached */
 .st-face::after { content: ''; position: absolute; inset: 0; z-index: 3; pointer-events: none; background: linear-gradient(var(--glint-a, 110deg), transparent 38%, rgba(255, 255, 255, 0.08) 50%, transparent 62%); transform: translateX(-110%); }
 /* the light that passes over a tile you reach comes from a slightly different angle and pace from tile to
@@ -1176,7 +1229,10 @@ watch(() => store.play, loadWeek);
 .t-trophies { --glow: rgba(255, 196, 80, 0.16); }
 .t-stats { --glow: rgba(186, 140, 255, 0.16); }
 .t-surprise { --glow: rgba(255, 120, 190, 0.16); }
-.st-count { margin-left: 8px; padding: 1px 7px; border-radius: 999px; background: rgba(255, 255, 255, 0.08); color: var(--muted); font-size: 0.85em; font-weight: 600; }
+.st-count { margin-left: 8px; padding: 1px 7px; border-radius: 999px; background: rgba(255, 255, 255, 0.08); color: var(--muted); font-size: 0.85em; font-weight: 600; flex: none; white-space: nowrap; }
+/* 0.9.29 (owner: "1 / …" cut off): the name gives way, never the count */
+.st-label:has(.st-lname) { display: flex; align-items: center; min-width: 0; text-overflow: clip; }
+.st-lname { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* pages: the board slides a little and settles, its tiles arriving as they do on opening */
 .st-pg-next-leave-active, .st-pg-prev-leave-active { transition: opacity 140ms ease-out, transform 140ms ease-out; }
@@ -1197,6 +1253,9 @@ watch(() => store.play, loadWeek);
 .st-ov-map { position: relative; aspect-ratio: 16 / 9; border-radius: var(--r-md); background: rgba(255, 255, 255, 0.03); overflow: hidden; }
 .st-ov-map i { position: absolute; box-sizing: border-box; border: 2px solid transparent; background: rgba(255, 255, 255, 0.12); border-radius: 6px; background-clip: padding-box; background-size: cover; background-position: center 30%; overflow: hidden; display: flex; align-items: flex-end; padding: 4px; }
 .st-ov-map i.pic { background-color: #111; }
+.st-ov-snap { position: absolute; left: 0; top: 0; transform-origin: 0 0; pointer-events: none; }
+.st-ov-snap :deep(*) { animation: none !important; transition: none !important; }
+.st-ov-snap :deep(.st-board) { position: relative; inset: auto; }
 .st-ov-tag { display: flex; align-items: center; gap: 4px; min-width: 0; color: rgba(255, 255, 255, 0.8); font-size: 10px; font-weight: 600; }
 .st-ov-tag em { font-style: normal; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .st-ov-clock { align-self: center; margin: auto; font-family: var(--display); font-weight: 800; font-size: clamp(12px, 1.4vw, 22px); color: #fff; }
@@ -1214,7 +1273,7 @@ watch(() => store.play, loadWeek);
 .st-blank:focus { box-shadow: var(--ring); color: var(--text); }
 
 /* rows of games: the first one in front, with its art behind the words; the rest fanned beside it */
-.st-row-art { position: absolute; inset: 0; z-index: -2; background-size: cover; background-position: center 30%; opacity: 0.5; transition: transform 700ms var(--ease-out), opacity 400ms ease; }
+.st-row-art { position: absolute; inset: 0; z-index: -2; background-size: cover; background-position: center 30%; opacity: 0.5; transition: transform 700ms var(--ease-out), opacity 400ms ease; will-change: transform; } /* 0.9.29: its own layer, so the focus zoom isn't a repaint per frame */
 .st-tile:focus .st-row-art { transform: scale(1.03); opacity: 0.6; }
 .st-row-fade { position: absolute; inset: 0; z-index: -1; background: linear-gradient(90deg, var(--s1) 22%, color-mix(in srgb, var(--s1) 70%, transparent) 48%, color-mix(in srgb, var(--s1) 35%, transparent)), linear-gradient(0deg, color-mix(in srgb, var(--s1) 70%, transparent), transparent 50%); }
 .st-row { flex: 1; min-height: 0; display: flex; gap: clamp(10px, 3cqw, 24px); }
@@ -1227,16 +1286,21 @@ watch(() => store.play, loadWeek);
 .st-fan-c { position: absolute; top: 0; height: 100cqh; width: auto; aspect-ratio: 3 / 4; object-fit: cover; border-radius: var(--r-md); background: var(--s2);
   left: calc(var(--i) * 37.5cqh); z-index: calc(20 - var(--i)); box-shadow: 0 10px 24px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.07);
   transform: scale(calc(1 - var(--i) * 0.035)); transform-origin: left center; filter: brightness(calc(1 - var(--i) * 0.07));
-  transition: transform 420ms var(--ease-out), left 420ms var(--ease-out); transition-delay: calc(var(--i) * 18ms); }
-.st-tile:focus .st-fan-c { left: calc(var(--i) * 42cqh); }
+  transition: transform 420ms var(--ease-out); transition-delay: calc(var(--i) * 18ms); }
+/* the covers spread on focus by transform, not `left` (0.9.29: moving `left` laid out and repainted the
+   tile on every frame; the same spread, now the compositor's work) */
+.st-tile:focus .st-fan-c { transform: translateX(calc(var(--i) * 4.5cqh)) scale(calc(1 - var(--i) * 0.035)); }
 .st-tile:focus .st-fan-c:first-child { transform: translateY(-2%); }
 /* a row moving to its next game (0.9.28): the art crossfades, the name slides in, the covers glide along */
 .st-row-art.st-xf-enter-active, .st-row-art.st-xf-leave-active { transition: opacity 900ms var(--ease-in-out, ease); }
 .st-row-art.st-xf-enter-from, .st-row-art.st-xf-leave-to { opacity: 0; }
-.st-lead-leave-active { transition: opacity 220ms ease, transform 220ms ease; }
-.st-lead-enter-active { transition: opacity 420ms var(--ease-out), transform 420ms var(--ease-out); }
-.st-lead-leave-to { opacity: 0; transform: translateX(-10px); }
-.st-lead-enter-from { opacity: 0; transform: translateX(14px); }
+/* the old name and the new one share the spot and cross over (no empty moment between them) */
+.st-lead-wrap { margin-top: auto; display: grid; min-width: 0; }
+.st-lead-wrap > .st-row-lead { grid-area: 1 / 1; margin-top: 0; justify-content: flex-end; }
+.st-lead-leave-active { transition: opacity 360ms ease, transform 520ms var(--ease-out); }
+.st-lead-enter-active { transition: opacity 520ms ease 120ms, transform 640ms var(--ease-out) 60ms; }
+.st-lead-leave-to { opacity: 0; transform: translateX(-12px); }
+.st-lead-enter-from { opacity: 0; transform: translateX(16px); }
 .st-fan-c.st-fan-leave-active { transition: opacity 380ms ease, transform 420ms var(--ease-out); z-index: 21; }
 .st-fan-c.st-fan-leave-to { opacity: 0; transform: translateX(-18%) scale(0.96); }
 .st-fan-c.st-fan-enter-active { transition: opacity 520ms ease 180ms; }
@@ -1270,7 +1334,13 @@ watch(() => store.play, loadWeek);
 .st-tro-feat b { font-family: var(--display); font-weight: 800; font-size: clamp(16px, 7cqh, 28px); line-height: 1.1; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .st-tro-fd { color: var(--text); opacity: 0.8; font-size: var(--t-sm); line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .st-tro-fg { color: var(--muted); font-size: var(--t-xs); }
-.st-emu { flex: 1; min-height: 0; display: flex; align-items: center; gap: clamp(10px, 4cqw, 22px); }
+.st-emu { position: relative; flex: 1; min-height: 0; display: flex; align-items: center; gap: clamp(10px, 4cqw, 22px); }
+.st-emu-ic { flex: none; display: grid; place-items: center; padding: clamp(6px, 4cqmin, 14px); border-radius: 50%; background: radial-gradient(closest-side, rgba(255, 255, 255, 0.10), transparent); }
+.st-emu.small { flex-direction: column; justify-content: center; text-align: center; gap: clamp(4px, 4cqh, 10px); }
+.st-emu.small .st-emu-t { align-items: center; max-width: 100%; }
+.st-emu.small .st-emu-t b { font-size: clamp(12px, 11cqmin, 18px); max-width: 100%; }
+.st-emu-dot { position: absolute; top: 0; right: 0; width: 10px; height: 10px; border-radius: 50%; background: #5bd28a; box-shadow: 0 0 0 3px color-mix(in srgb, var(--s1) 80%, transparent); }
+.st-emu-dot.warn { background: #f5c542; }
 .st-emu-t { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .st-emu-t b { font-family: var(--display); font-weight: 800; font-size: clamp(15px, 14cqh, 28px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .st-emu-t > span:not(.status) { color: var(--muted); font-size: var(--t-xs); }
@@ -1309,6 +1379,12 @@ watch(() => store.play, loadWeek);
 /* a picture, and your own widget */
 .t-image .st-face { padding: 0; background: var(--s2); }
 .st-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+/* 0.9.29 (owner: a picture that isn't just still, soft and gentle): it drifts and zooms very slowly, 40 s each
+   way. Without the GPU an endless animation keeps the CPU busy, so there it only leans in a little on focus. */
+.st-img { animation: st-drift 40s ease-in-out infinite alternate; transform-origin: 60% 40%; will-change: transform; }
+@keyframes st-drift { from { transform: scale(1.02) translate(0, 0); } to { transform: scale(1.09) translate(-1.5%, 1%); } }
+:global(body.light-fx .st-img), :global(body.motion-reduce .st-img) { animation: none; will-change: auto; transition: transform 1.6s var(--ease-out); }
+:global(body.light-fx .st-tile:focus .st-img) { transform: scale(1.04); }
 .t-html .st-face { padding: 0; }
 .st-html { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: transparent; pointer-events: none; }
 .editing .st-html { opacity: 0.85; }
@@ -1333,7 +1409,7 @@ watch(() => store.play, loadWeek);
 .st-store-con span { white-space: nowrap; overflow: hidden; text-overflow: clip; }
 .st-sc-n { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .st-sc-n :deep(.picon), .st-sc-n :deep(svg), .st-sc-n :deep(img) { flex: none; }
-@container (max-width: 560px) { .st-sc-n > span { display: none; } .st-store-con { grid-template-columns: auto 1fr auto; } } /* no room for names: icons only */
+@container (max-width: 560px) { .st-sc-name { display: none; } .st-store-con { grid-template-columns: auto 1fr auto; } } /* no room for names: icons only (0.9.29: only the name; PIcon is a span too and hid with it) */
 .st-store-con i { height: 5px; border-radius: 3px; background: rgba(255, 255, 255, 0.08); overflow: hidden; }
 .st-store-con b { display: block; height: 100%; border-radius: inherit; background: rgba(255, 255, 255, 0.55); }
 .st-store-con em { font-style: normal; color: var(--text); font-weight: 600; }

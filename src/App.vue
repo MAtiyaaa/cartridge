@@ -30,7 +30,12 @@
       </label>
       <div class="sys">
         <div v-if="syncBusy" class="item sync-pill"><Icon name="mdiSync" :size="16" class="spin" />{{ syncLabel }}</div>
-        <div v-if="steam.progress" class="item sync-pill"><Icon name="mdiSteam" :size="16" />{{ steamProgressLabel(steam.progress) }}</div>
+        <!-- 0.9.29 (owner): adding to Steam is a ring filling round the Steam logo, one fixed size, so nothing in the
+             bar moves (the wide "Steam artwork 18/43" pill pushed the search into the Dock); no track, the arc grows -->
+        <div v-if="steam.progress" class="item steam-ring" :class="{ wait: steamPct == null }" :title="steamProgressLabel(steam.progress)" :aria-label="steamProgressLabel(steam.progress)">
+          <svg viewBox="0 0 36 36"><circle class="sr-arc" cx="18" cy="18" r="15.5" pathLength="100" :stroke-dasharray="`${steamPct ?? 22} 100`" /></svg>
+          <Icon name="mdiSteam" :size="17" class="sr-logo" />
+        </div>
         <div v-if="activeDl.length" class="item">
           <svg width="22" height="22" viewBox="0 0 36 36" class="ring"><circle cx="18" cy="18" r="15" fill="none" stroke="rgba(255,255,255,.12)" stroke-width="4" /><circle cx="18" cy="18" r="15" fill="none" stroke="url(#rg)" stroke-width="4" stroke-linecap="round" :stroke-dasharray="`${dlPct * 0.943} 100`" transform="rotate(-90 18 18)" /><defs><linearGradient id="rg"><stop offset="0" style="stop-color: var(--primary-l)" /><stop offset="1" style="stop-color: var(--peach)" /></linearGradient></defs></svg>
           {{ dlPct }}%
@@ -96,7 +101,7 @@
 <script setup>
 import { computed, onMounted, onBeforeUnmount, ref, watch, nextTick, defineAsyncComponent } from 'vue';
 import { store, loadConfig, loadLibrary, loadArt, back, tab, go, call, toast, choose, saveConfig, builtinKb, askText, GRADE, activeTabs, TAB_DEFS } from './store.js';
-import { pushLayer, focusFirst, input } from './nav.js';
+import { pushLayer, focusFirst, input, gameEnded } from './nav.js';
 import { setSoundEnabled, setSoundStyle, sfx } from './sfx.js';
 import { applyTheme, CARD_SIZES } from './themes.js';
 import { setPointerPref, setRumble, setBackground } from './nav.js';
@@ -157,6 +162,7 @@ import FrameGen from './views/FrameGen.vue';
 const views = { start: Start, achievements: Achievements, 'ra-game': RaGame, 'trophy-game': TrophyGame, home: Home, library: Gallery, consoles: Consoles, platform: Gallery, collection: Gallery, genre: Gallery, genres: Genres, collections: Collections, game: Game, downloads: Downloads, settings: Settings, search: Search, 'steam-console': SteamConsole, 'steam-missing': SteamMissing, 'emu-setup': EmuSetup, 'steam-health': ShortcutHealth, 'frame-gen': FrameGen };
 // the tabs you picked in Look & Feel → Top bar, in your order
 const tabs = computed(() => activeTabs().map((name) => ({ name, ...TAB_DEFS[name] })));
+const steamPct = computed(() => { const p = steam.progress; return p?.total ? Math.max(4, Math.min(100, ((p.done + 1) / p.total) * 100)) : null; });
 const mainEl = ref(null);
 const searchEl = ref(null);
 // Search box in the top bar: typing jumps to the Search view and filters live
@@ -292,6 +298,7 @@ onMounted(async () => {
   window.cart.on('open-game', openGame);
   // another app in front in Game Mode (0.9.21, owner: still laggy in the background): gamescope never
   // hides or blurs the window, so stop the pad, the animated background and every CSS animation here
+  window.cart.on('game-run', (g) => gameEnded(g?.state === 'ended'));
   window.cart.on('background', (b) => { setBackground(b?.away); store.away = !!b?.away; document.body.classList.toggle('away', !!b?.away); });
   window.cart.on('addon-progress', (m) => {
     if (!m?.key) return;
@@ -309,6 +316,7 @@ onMounted(async () => {
   // a dot on Settings and a list in Settings → Emulators, not a pop-up (0.9.3)
   setTimeout(() => { if (store.config.configured) call('issues:list').then((l) => (store.issues = l.length)).catch(() => {}); }, 8000);
   setTimeout(setupNotice, 3500);
+  gpuCheck();
   if (store.config.configured) call('server:status').then((c) => (store.connection = c)).catch(() => {});
   pushLayer(document.body, {
     back: () => { if (viewHandler('back') !== false) return; back(); },
@@ -332,6 +340,18 @@ onMounted(async () => {
 // connected for the first time (the RomM step just finished): emulators next
 watch(() => store.config?.configured, (v, was) => { if (v && !was && !store.config.setupDone && !store.welcoming) go('emu-setup', { first: true }); });
 // People who set up before 0.9 skipped Emulator setup: tell them about it once
+// GPU Always (0.9.29): the first start with it asks whether it looks right. No answer (a blank window)
+// and main goes back to Auto by itself after 25 s.
+async function gpuCheck() {
+  const g = await call('app:graphics').catch(() => null);
+  if (!g?.trial) return;
+  const v = await choose({ title: 'Is Cartridge Drawing Correctly?', message: 'Cartridge is using the GPU in Game Mode. If anything looks wrong, go back. With no answer it goes back to Auto by itself in a few seconds.', options: [
+    { label: 'Keep GPU Always', value: 'keep', icon: 'mdiCheck' },
+    { label: 'Go Back to Auto', value: 'auto', icon: 'mdiRestore' },
+  ] });
+  if (v === 'keep') { await call('app:gpuKeep', { keep: true }); store.config.gpuKept = true; toast('GPU Always kept', 'ok', 2500, 'mdiCheck'); }
+  else if (v === 'auto') call('app:gpuKeep', { keep: false });
+}
 async function setupNotice() {
   // 0.9.15: people who were set up before get the new welcome offered once (it includes the system scan)
   if (store.config?.configured && !store.config.welcomed && !store.config.ui.welcomeNotice && !store.modal && !store.welcoming) {
@@ -434,5 +454,11 @@ watch(viewKey, async () => {
 .pop-enter-active, .pop-leave-active { transition: opacity 0.3s, transform 0.35s var(--ease); }
 .pop-enter-from { opacity: 0; transform: translateX(40px); }
 .pop-leave-to { opacity: 0; transform: translateY(-12px); }
+.steam-ring { position: relative; flex: none; width: 30px; height: 30px; padding: 0; display: grid; place-items: center; }
+.steam-ring svg { position: absolute; inset: 0; width: 100%; height: 100%; transform: rotate(-90deg); }
+.sr-arc { fill: none; stroke: var(--text); stroke-width: 3; stroke-linecap: round; transition: stroke-dasharray 600ms var(--ease-out); }
+.steam-ring.wait svg { animation: sr-spin 1.4s linear infinite; }
+@keyframes sr-spin { to { transform: rotate(270deg); } }
+.sr-logo { opacity: 0.9; }
 .sync-pill { padding: 5px 12px; border-radius: 999px; background: rgba(var(--primary-rgb), 0.18); color: var(--primary-t); }
 </style>
