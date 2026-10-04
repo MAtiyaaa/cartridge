@@ -3,7 +3,7 @@
     <nav class="rail">
       <div class="eyebrow" style="padding: 0 14px 10px">Settings</div>
       <button v-for="s in sections" :key="s.id" class="rail-item" :class="{ on: sec === s.id }" data-focus :data-key="'sec-' + s.id" :data-autofocus="sec === s.id ? '' : undefined" @focus="sec = s.id" @click="enter">
-        <SyncthingLogo v-if="s.id === 'syncthing'" :size="20" /><Icon v-else :name="s.icon" :size="20" />{{ s.label }}
+        <SyncthingLogo v-if="s.id === 'syncthing'" :size="20" mono class="rail-st" /><Icon v-else :name="s.icon" :size="20" />{{ s.label }}
       </button>
     </nav>
     <section class="pane" data-scroll data-zone ref="paneEl">
@@ -81,7 +81,7 @@
 
           <!-- Syncthing (its own tab in 0.9.21; renamed with its logo in 0.9.23, owner) -->
           <template v-else-if="sec === 'syncthing'">
-            <SyncCard />
+            <SyncCard ref="syncRef" />
           </template>
 
           <template v-else-if="sec === 'emu'">
@@ -509,7 +509,7 @@ import ReportProblem from '../components/ReportProblem.vue';
 import { padInfo } from '../pad.js';
 
 const el = ref(null);
-const paneEl = ref(null);
+const paneEl = ref(null), syncRef = ref(null);
 const OLD_SEC = { folders: 'emu', conn: 'romm', sync: 'romm' }; // sections merged in 0.9.3
 const sec = ref(OLD_SEC[store.settingsSection] || store.settingsSection || 'romm');
 const sections = [
@@ -798,7 +798,7 @@ function paneLeft() {
   if (more) return false;
   focusFirst(el.value, `[data-key="sec-${sec.value}"]`);
 }
-useView({ right: railRight, left: paneLeft, back: () => { if (!document.activeElement?.closest('.rail')) { focusFirst(el.value, `[data-key="sec-${sec.value}"]`); return; } return false; }, lb: () => (sec.value === 'emu' ? stepEmu(-1) : stepLook(-1)), rb: () => (sec.value === 'emu' ? stepEmu(1) : stepLook(1)) },
+useView({ right: railRight, left: paneLeft, back: () => { if (!document.activeElement?.closest('.rail')) { focusFirst(el.value, `[data-key="sec-${sec.value}"]`); return; } return false; }, lb: () => (sec.value === 'emu' ? stepEmu(-1) : sec.value === 'syncthing' ? syncRef.value?.step(-1) : stepLook(-1)), rb: () => (sec.value === 'emu' ? stepEmu(1) : sec.value === 'syncthing' ? syncRef.value?.step(1) : stepLook(1)) },
   [{ b: 'A', label: 'Select' }, { b: 'B', label: 'Back' }, { b: 'LT+RT', label: 'Tabs' }]);
 // Settings → Emulators → Issues
 const issues = ref(null);
@@ -1055,6 +1055,7 @@ onMounted(() => {
 .ga-con.on { background: var(--sel); }
 .ga-con:focus-visible, .pad-mode .ga-con:focus { background: var(--focus); color: var(--on-focus); }
 .pad-mode .ga-con:focus em { color: var(--on-focus-dim); }
+.rail-st { color: inherit !important; }
 .pane-in { display: flex; flex-direction: column; gap: 16px; max-width: 860px; }
 .pane h1 { font-size: var(--t-2xl); font-weight: 700; margin: 4px 0 6px; }
 .card-s { padding: 18px 20px; display: flex; flex-direction: column; gap: 10px; }

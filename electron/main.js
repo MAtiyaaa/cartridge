@@ -2038,6 +2038,15 @@ function ppssppPatchState(romId, r) {
   if (!dir) return { emu: 'ppsspp', serial: id, why: 'PPSSPP’s settings weren’t found on this device. Open PPSSPP once, then come back.' };
   return { emu: 'ppsspp', serial: id, version: '', dir, title: r?.name || '' };
 }
+// every game with what Syncthing's files can be matched by: its name, serials and title IDs in its file names
+function syncGameList() {
+  const S = require('./syncthing');
+  return [...romIndexMain().values()].map((r) => {
+    const where = installedMap[r.id];
+    const ids = [...S.serialsIn([r.fs_name, ...(r.files || []).map((f) => f.file_name), where && where !== MARKED ? path.basename(where) : ''].join(' '))];
+    return { id: r.id, name: r.name || '', ids };
+  });
+}
 function patchState(romId) {
   const r = romIndexMain().get(Number(romId));
   const slugs = `${r?.platform_slug} ${r?.platform_fs_slug}`;
@@ -2684,8 +2693,17 @@ const handlers08 = {
   'play:device': ({ name }) => renameDevice(name),
   'play:week': () => playWeek(),
   // Syncthing, first look (0.9.19): read only, what it syncs and with whom
-  'sync:status': () => require('./syncthing').status(),
-  'sync:browse': (folder) => require('./syncthing').browse(folder),
+  'sync:status': () => { const S = require('./syncthing'); if (config.syncthing?.localKey) S.setLocalKey(config.syncthing.localKey); return S.status(); },
+  // each file says which game it belongs to, when Cartridge can tell (0.9.24, owner: smart, not just a list)
+  'sync:browse': async (folder) => {
+    const S = require('./syncthing'), b = await S.browse(folder);
+    try {
+      const games = syncGameList(), names = new Map(games.map((g) => [g.id, g.name]));
+      // each file matched on its own, so it carries its game's name
+      for (const f of b.files) { const one = S.matchGames(games, [{ id: folder, label: folder, path: '', files: [f] }]); const gid = Object.keys(one)[0]; if (gid) { f.game = names.get(Number(gid)) || ''; f.romId = Number(gid); f.kind = one[gid].textures.length ? 'Textures' : 'Save'; } }
+    } catch {}
+    return b;
+  },
   // 0.9.23 Syncthing page: this device in full, the main server (config.syncthing.server), games with synced files
   'sync:local': () => require('./syncthing').local(),
   'sync:server': () => require('./syncthing').server(config.syncthing?.server || {}),
@@ -2695,15 +2713,8 @@ const handlers08 = {
     saveConfig(); return true;
   },
   'sync:rescan': (folder) => require('./syncthing').rescan(folder),
-  'sync:games': async () => {
-    const S = require('./syncthing');
-    const games = [...romIndexMain().values()].map((r) => {
-      const where = installedMap[r.id];
-      const ids = [...S.serialsIn([r.fs_name, ...(r.files || []).map((f) => f.file_name), where && where !== MARKED ? path.basename(where) : ''].join(' '))];
-      return { id: r.id, name: r.name || '', ids };
-    });
-    return S.gamesSynced(games);
-  },
+  'sync:setKey': async ({ key }) => { const S = require('./syncthing'); S.setLocalKey(key); const st = await S.status(); if (!st.running) { S.setLocalKey(config.syncthing?.localKey || ''); throw new Error(st.why || 'Syncthing didn’t accept that key.'); } config.syncthing = { ...(config.syncthing || {}), localKey: String(key || '').trim() }; saveConfig(); return st; },
+  'sync:games': async () => require('./syncthing').gamesSynced(syncGameList()),
   // dates for a game's timeline (the game page adds trophies and achievements it already has)
   'rom:timeline': ({ romId }) => {
     const r = romIndexMain().get(romId);
