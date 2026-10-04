@@ -1,7 +1,7 @@
 {
   "name": "cartridge",
   "productName": "Cartridge",
-  "version": "0.9.21",
+  "version": "0.9.22",
   "description": "Controller-first RomM client for SteamOS, Bazzite and Android",
   "main": "electron/main.js",
   "author": "abdu2304",
@@ -52,7 +52,7 @@
       }
     ],
     "releaseInfo": {
-      "releaseName": "Cartridge 0.9.21 · Catching Up",
+      "releaseName": "Cartridge 0.9.22 · Your Pages",
       "releaseNotesFile": "RELEASE_NOTES.md"
     }
   },
