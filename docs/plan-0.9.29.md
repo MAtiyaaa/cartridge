@@ -205,6 +205,30 @@ Same look and the same animations, made cheaper. Measure first, then change.
 3. **Keep:** every animation, the timing tokens (`--d-*`, `--ease-*`), light effects and the look. Only how they are drawn changes.
 4. **Done when** a focus move on Home, Start and a game page costs well under one frame (16 ms) in the software-rendering trace at 1280x800, and the owner says it feels fluid on the handheld.
 
+## 10. Controls dead after a game started from Cartridge closes (owner, 4 Oct)
+Owner: a game opened from Cartridge goes through Steam. When it's closed, the controller does nothing in Cartridge until the screen is tapped.
+
+What Cartridge does now (main.js `watchGamescopeFocus`, 0.9.24): when gamescope says Cartridge is in front again it broadcasts `background` false, then `win.focus()` and `webContents.focus()`. A tap fixes it, so the window or input focus is still elsewhere: gamescope, Steam Input or Chromium.
+
+Plan:
+1. **Find which one, with logs from the device.** The log lines when the game closes (gamescope's focused app, Cartridge's own focus state, whether the pad poll in nav.js sees button changes), plus the Controller Test page right after a game closes (About), which shows whether presses arrive at all.
+2. **Fixes by cause:**
+   - **Gamescope input focus:** read gamescope's source (steamcompmgr.cpp: `STEAM_INPUT_FOCUS`, `STEAM_GAME`, the focus rules) and give Cartridge's window what a tap gives it.
+   - **Chromium:** re-focus the page with a short retry (focus, blur and focus, `xdotool windowactivate --sync` when present) until `document.hasFocus()` is true.
+   - **Steam Input** still mapped to the closed game: with live Steam (Decky's CEF port), ask Steam to focus Cartridge's own app.
+3. **Never** send fake taps or touches. Test on the Deck in Game Mode: start a game from Cartridge, close it from Steam's menu, and press buttons in Cartridge right away.
+
+## 11. shadPS4: "Recently Launched" on the PlayStation 4 page (owner, 4 Oct)
+Owner: closed a PS4 game and couldn't see which shadPS4 version ran it.
+
+Why: the version is only on the game page (More → Emulator → shadPS4 version, a sub line), and shadPS4 keeps one log that each run replaces (`shadVersions.lastRun` reads it), so Cartridge only ever knows the very last run, for whichever game it was.
+
+Plan:
+- **Record each run:** when a PS4 game ends (Cartridge comes back to the front, or the log changes), read `shad_log.txt` once and add `{ serial, romId, version, nightly, at }` to `shad-runs.json`. Keep the last 50, never edit shadPS4's files.
+- **Settings → Steam → PlayStation 4:** a "Recently Launched" box under the "shadPS4: show which version ran a game" switch. It shows the last few: game cover and name, version, when. Tapping it opens the full list.
+- **Only while the switch is on.** Off hides the box and stops recording; the records stay.
+- The game page line reads this game's own last run from the records, not just the newest log.
+
 ---
 
 ## 7. Order of work, when the owner says build
@@ -216,6 +240,7 @@ Same look and the same animations, made cheaper. Measure first, then change.
 6. Push behaviour (2.5) once the owner decides.
 7. Trophy names (4) and Switch title IDs (5).
 7b. Start page overview fixes (8) and handheld smoothness (9).
+7c. Controls after a game closes (10, device logs first) and shadPS4 Recently Launched (11).
 8. Notes, CLAUDE.md, launch check, release.
 
 **Owner must test on devices:** two devices (Deck plus desktop), a blank Syncthing on one, joining from the other. Then the same with an existing Syncthing setup, confirming nothing in it changed. Use at least Eden, RPCS3, PCSX2 and RetroArch saves.
