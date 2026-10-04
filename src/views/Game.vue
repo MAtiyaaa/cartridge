@@ -155,7 +155,7 @@
 
 <script setup>
 import { similarTo } from '../recs.js';
-import { addGame, removeGame, applyChanges, pickEmulator, pickCollections } from '../steam.js';
+import { addGame, removeGame, applyChanges, pickEmulator, pickCollections, pickFrameGen } from '../steam.js';
 import { computed, onMounted, onBeforeUnmount, ref, nextTick, watch } from 'vue';
 import { store, heroArt, call, img, go, cover, bytes, year, rating, toast, confirm, download, downloadFor, romById, platformById, isNew, setBg, logoOf, resetLogos, artFor, choose, openModal, allRoms, visible, isFavourite, addToCollection, playOf, playtimeText, ago, loadPlay, askText, saveConfig, backdropOf, wantSharp } from '../store.js';
 import { pinToStart } from '../startTiles.js';
@@ -573,6 +573,8 @@ async function more() {
       else if (st.inSteam) {
         steam.push({ label: 'Add to a Steam collection', sub: st.lastCollections?.length ? `Last time: ${st.lastCollections.join(', ')}` : 'One of yours, or a new one', value: 'steamcol', icon: 'mdiBookmarkPlusOutline' });
         steam.push({ label: 'Remove from Steam', sub: st.ours ? 'Only the shortcut, not the game' : 'Added outside Cartridge', value: 'steamrm', icon: 'mdiSteam' });
+        // 0.9.28 (owner: frame generation from the game's own menu)
+        steam.push({ label: 'Frame Generation', sub: 'lsfg-vk or mako-run for this game', value: 'framegen', icon: 'mdiAnimationPlay' });
       } else steam.push({ label: 'Add to Steam', sub: 'Launches with your emulator setup', value: 'steamadd', icon: 'mdiSteam' });
       const ge = await call('steam:gameEmu', { romId: Number(props.romId) }).catch(() => null);
       play.push({ label: 'Emulator for this game', sub: ge?.current ? 'Its own pick' : 'Same as its console', value: 'gameemu', icon: 'mdiGamepadVariantOutline' });
@@ -605,7 +607,9 @@ async function more() {
   // 0.9.23 (owner: edit a game's emulator settings from Cartridge)
   if (installedPath.value && !marked.value && (pe || /\bpsx\b/i.test(slugs))) play.push({ label: 'Game settings', sub: `${pe || 'DuckStation'}’s settings for this game only`, value: 'gamesettings', icon: 'mdiTune' });
   // patches and cheats are in Game Add-ons (0.9.24, owner: no separate row for them here)
-  if (installedPath.value && !marked.value && /\b(ps2|psx|ngc|gamecube|wii|psp|3ds|n3ds|switch|wiiu)\b/i.test(slugs)) play.push({ label: 'Add-ons', sub: /\bps2\b/i.test(slugs) ? 'Texture packs to download, and what’s installed' : 'Mods and packs to download, and what’s installed', value: 'textures', icon: 'mdiPuzzleOutline' });
+  // 0.9.28 (owner: PS4 patches had gone from here): PS3 and PS4 too; Game Add-ons shows only the tabs the console has
+  if (installedPath.value && !marked.value && /\b(ps2|ps3|ps4|psx|ngc|gamecube|gc|wii|psp|3ds|n3ds|switch|wiiu)\b/i.test(slugs)) play.push({ label: 'Add-ons', value: 'textures', icon: 'mdiPuzzleOutline',
+    sub: /ps4/i.test(slugs) ? 'Patches from shadPS4 and GoldHEN' : /ps3/i.test(slugs) ? 'Patches and game updates' : /\bps2\b/i.test(slugs) ? 'Texture packs and patches' : /\bpsp\b/i.test(slugs) ? 'Mods and cheats' : 'Mods, packs and patches, and what’s installed' });
   if (installedPath.value) play.push({ label: 'Show file location', value: 'path', icon: 'mdiFolderOutline' });
   const top = [
     { label: fav.value ? 'Remove from favourites' : 'Add to favourites', sub: 'Saved in RomM', value: 'fav', icon: fav.value ? 'mdiHeartOff' : 'mdiHeartOutline' },
@@ -682,13 +686,14 @@ async function more() {
     return;
   }
   if (v === 'delete') { await remove(); return; }
+  if (v === 'framegen') return pickFrameGen(Number(props.romId));
   if (v === 'steamcol') {
     const names = await pickCollections(steamInfo.console, steamInfo.lastCollections, true);
     if (!names?.length) return;
     try { await call('steam:addToCollections', { romId: Number(props.romId), names }); toast(`Added to ${names.join(', ')}`, 'ok', 3000, 'mdiSteam'); } catch (e) { toast(e.message, 'error', 6000); }
     return;
   }
-  if (v === 'textures') { await openModal('gameaddons', { romId: Number(props.romId), name: base.value.name, tab: /\bps2\b/i.test(base.value.platform_slug || '') ? 'tex' : 'mods' }); return; }
+  if (v === 'textures') { const sl = `${base.value.platform_slug} ${base.value.platform_fs_slug}`; await openModal('gameaddons', { romId: Number(props.romId), name: base.value.name, tab: /ps3|ps4/i.test(sl) ? 'patches' : /\bps2\b/i.test(sl) ? 'tex' : 'mods' }); return; }
   if (v === 'refresh') { try { detail.value = await call('api:get', { path: `/api/roms/${props.romId}` }); resetLogos(props.romId); toast('Details refreshed', 'ok', 2000, 'mdiRefresh'); } catch (e) { toast(e.message, 'error'); } return; }
   if (v === 'reset') { store.art = { ...store.art }; delete store.art[props.romId]; await call('art:reset', { id: props.romId }); resetLogos(props.romId); toast('Artwork reset', 'ok', 2000, 'mdiRestore'); return; }
   if (!store.config.sgdbKey) { toast('Add a SteamGridDB API key in Settings → Look & feel first', 'error', 4500); return; }

@@ -87,8 +87,9 @@ async function status({ fetchImpl = fetch, home = HOME } = {}) {
 // what's inside one synced folder, newest first (0.9.21, owner: a Sync tab that shows saves, view only).
 // Syncthing's own index (rest/db/browse) is read, never the files; nothing is opened, copied or changed.
 function flatten(tree, base = '', out = []) {
-  if (Array.isArray(tree)) { for (const e of tree) { const p = base ? base + '/' + e.name : e.name; if (e.type === 'FILE_INFO_TYPE_DIRECTORY' || e.children) flatten(e.children || [], p, out); else out.push({ path: p, size: e.size || 0, at: Date.parse(e.modTime) || 0 }); } return out; }
-  for (const [name, v] of Object.entries(tree || {})) { const p = base ? base + '/' + name : name; if (Array.isArray(v)) out.push({ path: p, at: Date.parse(v[0]) || 0, size: v[1] || 0 }); else flatten(v, p, out); }
+  // a folder at the depth asked for comes back empty: kept as an entry, its name still names the game (0.9.28)
+  if (Array.isArray(tree)) { for (const e of tree) { const p = base ? base + '/' + e.name : e.name; if (e.type === 'FILE_INFO_TYPE_DIRECTORY' || e.children) { if (e.children?.length) flatten(e.children, p, out); else out.push({ path: p + '/', size: 0, at: Date.parse(e.modTime) || 0, dir: true }); } else out.push({ path: p, size: e.size || 0, at: Date.parse(e.modTime) || 0 }); } return out; }
+  for (const [name, v] of Object.entries(tree || {})) { const p = base ? base + '/' + name : name; if (Array.isArray(v)) out.push({ path: p, at: Date.parse(v[0]) || 0, size: v[1] || 0 }); else if (v && Object.keys(v).length) flatten(v, p, out); else out.push({ path: p + '/', size: 0, at: 0, dir: true }); }
   return out;
 }
 async function browse(folder, { fetchImpl = fetch, home = HOME, limit = 40 } = {}) {
@@ -179,7 +180,7 @@ async function addFolder({ dir, label }, { fetchImpl = fetch, home = HOME } = {}
 // PS3, PS4, Vita, Switch, GameCube/Wii) or by name: the whole name, or one of 8+ letters inside a folder or file
 // name, so "Sonic" isn't taken for "Sonic Heroes".
 const norm = (s) => String(s || '').toLowerCase().replace(/&/g, 'and').replace(/[^a-z0-9]+/g, '');
-const SERIAL_RE = /\b([A-Z]{4})[-_. ]?(\d{3})\.?(\d{2})\b|\b(CUSA|PPSA|PCS[A-Z])[-_]?(\d{5})\b|\b(0100[0-9A-F]{12})\b/gi;
+const SERIAL_RE = /\b([A-Z]{4})[-_. ]?(\d{3})\.?(\d{2})\b|\b(CUSA|PPSA|PCS[A-Z])[-_]?(\d{5})\b|\b(0100[0-9A-F]{12}|0004[0-9A-F]{12})\b/gi; // 0.9.28: 3DS title IDs (0004…) too
 function serialsIn(text) {
   const out = new Set();
   for (const m of String(text || '').matchAll(SERIAL_RE)) out.add(m[6] ? m[6].toUpperCase() : m[4] ? (m[4] + m[5]).toUpperCase() : (m[1] + m[2] + m[3]).toUpperCase());
@@ -187,9 +188,10 @@ function serialsIn(text) {
 }
 // games: [{ id, name, ids: [serial or title id...] }] -> { [id]: { saves: [{ folder, files, at }], textures: [...] } }
 function matchGames(games, folders) {
-  const byId = new Map(), byName = [];
+  const byId = new Map(), byName = [], byExact = new Map();
   for (const g of games) {
     for (const s of g.ids || []) if (s) byId.set(String(s).toUpperCase().replace(/[-_.]/g, ''), g.id);
+    for (const s of g.discIds || []) { byExact.set(s.toUpperCase(), g.id); if (s.length === 6) byExact.set(s.slice(0, 3).toUpperCase(), g.id); }
     const k = norm(g.name.replace(/\s*[([].*$/, ''));
     if (k.length >= 5) byName.push([k, g.id]);
   }
@@ -205,21 +207,32 @@ function matchGames(games, folders) {
     const kind = textureHint(folder.path + '/' + f.path) ? 'textures' : 'saves';
     let gid = null;
     for (const s of serialsIn(f.path)) { if (byId.has(s)) { gid = byId.get(s); break; } }
+    // a folder named exactly after a game's ID (Dolphin's GALE01 or GAL texture folders, 0.9.28)
+    if (gid == null) for (const seg of f.path.split('/')) { const u = seg.toUpperCase(); if (byExact.has(u)) { gid = byExact.get(u); break; } }
     if (gid == null) { const parts = f.path.split('/').map((p) => norm(p.replace(/\.[^.]+$/, ''))); for (const [k, id] of byName) { if (parts.some((p) => p === k || (k.length >= 8 && p.includes(k)))) { gid = id; break; } } }
     if (gid != null) add(gid, kind, folder, f);
   }
   return out;
 }
-async function gamesSynced(games, { fetchImpl = fetch, home = HOME, cap = 20000 } = {}) {
-  const l = await localApi(home, fetchImpl), a = api(l.base, l.key, fetchImpl, 15000);
-  const conf = await a.get('/rest/config/folders');
-  const folders = [];
+// 0.9.28 (owner: only a few games showed from the main server): this device's folders and the main server's
+// (when one is set), each read up to its own limit (one huge texture folder used to use up a shared limit and
+// hide every folder after it); texture folders only as deep as their game folders, saves deeper.
+async function gamesSynced(games, { fetchImpl = fetch, home = HOME, cap = 40000, server: srv = null } = {}) {
+  const sources = [];
+  try { const l = await localApi(home, fetchImpl); sources.push(api(l.base, l.key, fetchImpl, 20000)); } catch (e) { if (!srv) throw e; }
+  if (srv?.address && srv?.apikey) sources.push(api(srv.address, srv.apikey, fetchImpl, 20000));
+  const folders = [], seen = new Set();
   let n = 0;
-  for (const x of conf) {
-    if (n > cap) break;
-    let files = []; try { files = flatten(await a.get(`/rest/db/browse?folder=${encodeURIComponent(x.id)}&levels=8`)).filter((f) => !/(^|\/)\.st(folder|ignore|versions)/.test(f.path)); } catch {}
-    n += files.length;
-    folders.push({ id: x.id, label: x.label || x.id, path: String(x.path || ''), files: files.slice(0, cap) });
+  for (const a of sources) {
+    let conf = []; try { conf = await a.get('/rest/config/folders'); } catch { continue; }
+    for (const x of conf) {
+      if (seen.has(x.id)) continue; // the same folder shared on both: read once
+      seen.add(x.id);
+      const tex = !!textureHint(String(x.path || '') + '/' + (x.label || ''));
+      let files = []; try { files = flatten(await a.get(`/rest/db/browse?folder=${encodeURIComponent(x.id)}&levels=${tex ? 4 : 14}`)).filter((f) => !/(^|\/)\.st(folder|ignore|versions)/.test(f.path)); } catch {}
+      n += files.length;
+      folders.push({ id: x.id, label: x.label || x.id, path: String(x.path || ''), files: files.slice(0, cap) });
+    }
   }
   return { games: matchGames(games, folders), folders: folders.length, files: n };
 }

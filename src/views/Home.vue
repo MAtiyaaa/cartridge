@@ -319,10 +319,12 @@ onMounted(async () => { await nextTick(); ensureFocus(el.value); });
 </script>
 
 <style scoped>
-.home { position: absolute; inset: 0; display: grid; grid-template-rows: minmax(300px, var(--hero-h, 46%)) 1fr; animation: viewIn var(--d-med) var(--ease); }
+.home { position: absolute; inset: 0; display: grid; grid-template-rows: minmax(min-content, var(--hero-h, 46%)) 1fr; /* 0.9.28: grows to fit the logo and text, never runs off the top */ animation: viewIn var(--d-med) var(--ease); }
 .first-sync { grid-row: 1 / -1; align-content: center; }
 .first-sync h2 { font-size: var(--t-xl); color: var(--text); }
-.hero { position: relative; padding: var(--s-5) var(--s-7) var(--s-4); display: flex; align-items: flex-end; min-height: 0; }
+.hero { position: relative; padding: var(--s-5) var(--s-7) var(--s-4); display: flex; align-items: flex-end; min-height: 300px; }
+/* with the Dock at the bottom or the side, nothing sits above the header: room under the screen's top edge */
+:global(body:not(.bar-top) .home .hero) { padding-top: var(--s-7); }
 /* the art runs on under the first row and fades out there, so it has no bottom edge (0.9.3 K, F2) */
 .hero :deep(.media) { bottom: -14vh; }
 .hero-in { position: relative; z-index: 1; max-width: 760px; display: flex; flex-direction: column; gap: var(--s-3); }
@@ -334,6 +336,8 @@ onMounted(async () => { await nextTick(); ensureFocus(el.value); });
 .shelf-wrap { margin-bottom: var(--s-4); }
 .shelf { padding: 22px var(--s-7) 18px; margin: -12px calc(-1 * var(--s-7)) 0; scroll-padding: 0 var(--s-7); }
 @media (max-width: 1400px) { .hero { padding-left: 36px; padding-right: 36px; } .hero-leave-active { left: 36px; } .shelves { padding-left: 36px; padding-right: 36px; } .shelf { padding-left: 36px; padding-right: 36px; margin-left: -36px; margin-right: -36px; scroll-padding: 0 36px; } }
+/* rows far below aren't laid out or painted until they come near (0.9.28: smoother on handhelds) */
+.shelves > .shelf-wrap:nth-child(n+3) { content-visibility: auto; contain-intrinsic-size: auto 360px; }
 .hero-enter-active { transition: opacity 0.14s ease-out; }
 .hero-leave-active { transition: opacity 0.1s ease-in; position: absolute; }
 .hero-enter-from, .hero-leave-to { opacity: 0; }

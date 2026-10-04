@@ -32,10 +32,10 @@
           <div v-if="con.template.from && con.template.how !== 'yours'" class="muted small">{{ con.template.how === 'learned' ? 'Copied from your Steam shortcut for ' + con.template.from : 'Found: ' + con.template.from }}</div>
         </template>
         <div v-else class="muted">No emulator found for this console. Press More → Edit to set one.</div>
+        <!-- 0.9.27 (owner): on the PlayStation 4 page, not Steam's main page. Off by default. Inside the emulator
+             panel since 0.9.28: loose between the panel and the games it ran into the games heading on a handheld -->
+        <Toggle v-if="ckey === 'ps4'" class="sc-opt" :model-value="!!store.config.steam?.shadProof" label="shadPS4: show which version ran a game" desc="Reads shadPS4's own log after a game runs and shows the version that actually started it on the game page" @update:model-value="setShadProof" />
       </section>
-
-      <!-- 0.9.27 (owner): on the PlayStation 4 page, not Steam's main page. Off by default -->
-      <Toggle v-if="ckey === 'ps4'" :model-value="!!store.config.steam?.shadProof" label="shadPS4: show which version ran a game" desc="Reads shadPS4's own log after a game runs and shows the version that actually started it on the game page" @update:model-value="setShadProof" />
 
       <div v-if="con.outdated && !steam.queue.total" class="ss-queue">
         <Icon name="mdiUpdate" :size="22" />
@@ -230,6 +230,8 @@ onMounted(async () => { await load(); await nextTick(); ensureFocus(el.value); }
 .emu-row { align-items: center; }
 .lo b { font-weight: 400; min-width: 0; word-break: break-all; }
 .small { font-size: var(--t-xs); }
+.sc-opt { margin-top: var(--s-2); flex: none; }
+.sc-opt > div { min-width: 0; }
 .ss-queue { display: flex; align-items: center; gap: 14px; padding: 14px 18px; border-radius: var(--r-md); background: rgba(var(--primary-rgb), 0.2); border: 1px solid rgba(var(--primary-l-rgb), 0.5); margin-bottom: 18px; }
 .ss-q-t { display: flex; flex-direction: column; flex: 1; min-width: 0; }
 .ss-q-t small { color: var(--muted); font-size: var(--t-xs); }

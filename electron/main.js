@@ -2043,12 +2043,19 @@ function ppssppPatchState(romId, r) {
   return { emu: 'ppsspp', serial: id, version: '', dir, title: r?.name || '' };
 }
 // every game with what Syncthing's files can be matched by: its name, serials and title IDs in its file names
+const syncIdCache = new Map();
 function syncGameList() {
   const S = require('./syncthing');
   return [...romIndexMain().values()].map((r) => {
     const where = installedMap[r.id];
     const ids = [...S.serialsIn([r.fs_name, ...(r.files || []).map((f) => f.file_name), where && where !== MARKED ? path.basename(where) : ''].join(' '))];
-    return { id: r.id, name: r.name || '', ids };
+    // 0.9.28: disc IDs read from the game itself, for folders named after them (Dolphin's GALE01, Azahar's title IDs)
+    const discIds = [];
+    if (where && where !== MARKED && /\.(iso|gcm|rvz|wia|wbfs|ciso|gcz|3ds|cci|cia|cxi)$/i.test(where)) {
+      if (!syncIdCache.has(where)) { let id = null; try { id = /\.(3ds|cci|cia|cxi)$/i.test(where) ? require('./addons').n3dsTitleId(where) : cheatsMod.gcWiiId(where); } catch {} syncIdCache.set(where, id); }
+      if (syncIdCache.get(where)) discIds.push(String(syncIdCache.get(where)));
+    }
+    return { id: r.id, name: r.name || '', ids, discIds };
   });
 }
 function patchState(romId) {
@@ -2183,7 +2190,7 @@ const EMU_PATCH = {
   dolphin: { name: 'Dolphin', list: async (st, mine) => cheatsMod.dolphinList(st.dir, st.serial, cheatsMod.dolphinSysText(cheatsMod.dolphinSys(st.dir.flatpak), st.serial, st.dir.flatpak ? [] : steamMgr.appImagesFor('gc', /dolphin/i), require('./detect').readAppImageFile), mine, await cheatsMod.geckoDownload(st.serial, { cacheDir: path.join(USER_DATA, 'gecko-codes') })), set: (st, todo, mine) => { notRunning('dolphin', 'Dolphin'); return cheatsMod.dolphinSet(st.dir, st.serial, todo, mine); } },
   ppsspp: { name: 'PPSSPP', list: (st, mine) => cheatsMod.ppssppList(st.dir, st.serial, mine), set: (st, todo, mine) => { notRunning('ppsspp', 'PPSSPP'); return cheatsMod.ppssppSet(st.dir, st.serial, todo, mine, st.title); } },
   // Wii U: Cemu's graphic packs; turned on with each category's default preset, as Cemu does
-  cemu: { name: 'Cemu', list: (st, mine) => require('./cemuPacks').list({ root: st.dir.root, settings: st.dir.settings, titleIds: st.ids, name: st.title }, mine), set: (st, todo, mine) => { notRunning('cemu', 'Cemu'); const C = require('./cemuPacks'); const all = C.list({ root: st.dir.root, settings: st.dir.settings, titleIds: st.ids, name: st.title }, mine); C.set({ settings: st.dir.settings }, todo.map((t) => { const p = all.find((x) => x.key === t.key); return { ...t, presets: Object.fromEntries(Object.entries(p?.presets || {}).map(([k, v]) => [k, p.chosen[k] || v[0]])) }; }), mine); return mine; } },
+  cemu: { name: 'Cemu', list: (st, mine) => require('./cemuPacks').list({ root: st.dir.root, settings: st.dir.settings, titleIds: st.ids, name: st.title }, mine), set: (st, todo, mine) => { notRunning('cemu', 'Cemu'); const C = require('./cemuPacks'); const all = C.list({ root: st.dir.root, settings: st.dir.settings, titleIds: st.ids, name: st.title }, mine); C.set({ settings: st.dir.settings }, todo.map((t) => { const p = all.find((x) => x.key === t.key); return { ...t, presets: Object.fromEntries(Object.entries(p?.presets || {}).map(([k, v]) => [k, (t.want && v.includes(t.want[k]) ? t.want[k] : null) || p.chosen[k] || v[0]])) }; }), mine); return mine; } },
   pcsx2: { name: 'PCSX2', list: (st, mine) => patchesMod.pcsx2List(st.dir, st.game, patchesMod.pcsx2ZipBuffer(patchesMod.pcsx2ZipSources(os.homedir(), steamMgr.appImagesFor('ps2', /pcsx2/i)), require('./detect').readAppImageFile), mine), set: (st, todo, mine) => patchesMod.pcsx2Set(st.dir, st.game, todo, mine) },
 };
 // D2: a Vita game through Vita3K (.pkg with its zRIF installs with no window; a .vpk or .zip
@@ -2730,7 +2737,27 @@ const handlers08 = {
     for (let i = 0; i < 30; i++) { await new Promise((r) => setTimeout(r, 1000)); const st = await S.status().catch(() => null); if (st?.running) return st; }
     return S.status();
   },
-  'sync:games': async () => require('./syncthing').gamesSynced(syncGameList()),
+  // Syncthing in Game Mode (0.9.28, owner: it only synced on the desktop): a systemd user service runs it in both
+  // modes. The installed program, else SyncThingy's own syncthing through Flatpak. Nothing needs a password.
+  'sync:service': async ({ enable = true } = {}) => {
+    const unit = path.join(os.homedir(), '.config/systemd/user/cartridge-syncthing.service');
+    const sh = (args) => new Promise((res) => require('child_process').execFile('systemctl', ['--user', ...args], { timeout: 20000 }, (e, out) => res({ ok: !e, out: String(out || '') })));
+    if (!enable) { await sh(['disable', '--now', 'cartridge-syncthing.service']); fs.rmSync(unit, { force: true }); await sh(['daemon-reload']); return { on: false }; }
+    const S = require('./syncthing'), f = S.find();
+    let exec = null;
+    if (f.program) exec = 'syncthing --no-browser --no-restart';
+    else if (f.flatpak) exec = `/usr/bin/flatpak run --command=syncthing ${f.flatpak} --no-browser --no-restart`;
+    if (!exec) throw new Error('Syncthing isn’t installed on this device.');
+    fs.mkdirSync(path.dirname(unit), { recursive: true });
+    fs.writeFileSync(unit, `[Unit]\nDescription=Syncthing, kept running by Cartridge (Game Mode and desktop)\nAfter=network-online.target\n\n[Service]\nExecStart=${exec}\nRestart=on-failure\nRestartSec=30\n\n[Install]\nWantedBy=default.target\n`);
+    await sh(['daemon-reload']);
+    const r = await sh(['enable', '--now', 'cartridge-syncthing.service']);
+    if (!r.ok) throw new Error('The service didn’t start. Syncthing may already be running another way, which is fine.');
+    log('syncthing service on', exec);
+    return { on: true };
+  },
+  'sync:serviceState': async () => ({ on: fs.existsSync(path.join(os.homedir(), '.config/systemd/user/cartridge-syncthing.service')) }),
+  'sync:games': async () => require('./syncthing').gamesSynced(syncGameList(), { server: config.syncthing?.server || null }),
   // dates for a game's timeline (the game page adds trophies and achievements it already has)
   'rom:timeline': ({ romId }) => {
     const r = romIndexMain().get(romId);
@@ -2915,6 +2942,36 @@ const handlers = {
     const name = Date.now().toString(36) + ext;
     await fsp.mkdir(path.join(USER_DATA, 'start-images'), { recursive: true });
     await fsp.copyFile(file, path.join(USER_DATA, 'start-images', name));
+    return 'romimg://img/?st=' + encodeURIComponent(name);
+  },
+  // Search pictures for a picture widget (0.9.28, owner: find a 4K wallpaper or a GIF without leaving Cartridge).
+  // Wallhaven's open API (safe-for-work only, at least 3840x2160) for pictures, Openverse (openly licensed,
+  // GIFs only, the largest first) for moving ones. Neither needs an account or a key.
+  'start:search': async ({ q, kind = 'image', page = 1 }) => {
+    const wf = require('./webFetch'), term = String(q || '').trim().slice(0, 80);
+    if (!term) return [];
+    if (kind === 'gif') {
+      const r = await wf(`https://api.openverse.org/v1/images/?q=${encodeURIComponent(term)}&extension=gif&page_size=30&page=${page}`, { headers: { 'User-Agent': 'Cartridge' }, signal: AbortSignal.timeout(15000) });
+      if (!r.ok) throw new Error(`Openverse answered ${r.status}`);
+      const j = await r.json();
+      return (j.results || []).filter((x) => x.url && (x.width || 0) >= 320).sort((a, b) => (b.width || 0) - (a.width || 0)).map((x) => ({ url: x.url, thumb: x.thumbnail || x.url, w: x.width || 0, h: x.height || 0, by: x.creator || '', license: (x.license || '').toUpperCase() }));
+    }
+    const r = await wf(`https://wallhaven.cc/api/v1/search?q=${encodeURIComponent(term)}&categories=111&purity=100&atleast=3840x2160&sorting=relevance&page=${page}`, { headers: { 'User-Agent': 'Cartridge' }, signal: AbortSignal.timeout(15000) });
+    if (!r.ok) throw new Error(`Wallhaven answered ${r.status}`);
+    const j = await r.json();
+    return (j.data || []).map((x) => ({ url: x.path, thumb: x.thumbs?.large || x.thumbs?.original || x.path, w: x.dimension_x || 0, h: x.dimension_y || 0, by: '', license: '' }));
+  },
+  // a picked search result, kept like a picture from this device
+  'start:imageUrl': async ({ url }) => {
+    if (!/^https:\/\//.test(String(url || ''))) throw new Error('That picture can’t be fetched');
+    const ext = (path.extname(new URL(url).pathname).toLowerCase().match(/^\.(png|jpe?g|webp|gif|avif)$/) || ['.jpg'])[0];
+    const name = Date.now().toString(36) + ext;
+    await fsp.mkdir(path.join(USER_DATA, 'start-images'), { recursive: true });
+    const r = await require('./webFetch')(url, { headers: { 'User-Agent': 'Cartridge' }, signal: AbortSignal.timeout(60000) });
+    if (!r.ok) throw new Error(`The picture didn’t download (${r.status})`);
+    const buf = Buffer.from(await r.arrayBuffer());
+    if (buf.length > 40 * 1024 * 1024) throw new Error('That picture is too big (over 40 MB)');
+    await fsp.writeFile(path.join(USER_DATA, 'start-images', name), buf);
     return 'romimg://img/?st=' + encodeURIComponent(name);
   },
   // Start's own widgets (0.9.23, owner: custom HTML widgets): the page is kept as a file and shown in a
@@ -3534,7 +3591,18 @@ const handlers = {
       .map((e) => { const st = e.path && (() => { try { return fs.statSync(e.path); } catch { return null; } })(); const got = (cache.installed || {})[e.path]; return got && st && got.size === st.size ? { ...e, version: got.version } : e; });
     const fp = await U.flatpakUpdates(list.filter((e) => e.kind === 'flatpak').map((e) => e.fp)).catch(() => ({}));
     const out = [];
+    // emulators and forks installed from a GitHub link (0.9.28, owner: update them from the same place): their own
+    // project's releases, never the emulator they're a fork of; listed even when the scan doesn't know them
+    const customs = (config.customEmus || []).filter((x) => x.path && fs.existsSync(x.path));
+    for (const x of customs) if (!list.some((e) => e.path === x.path)) list.push({ id: x.of || 'custom', label: x.repo.split('/')[1], kind: 'appimage', path: x.path });
     for (const e of list) {
+      const custom = customs.find((x) => x.path === e.path);
+      if (custom) {
+        const ck = 'gh:' + custom.repo; let c = cache[ck];
+        if (fresh || !c || Date.now() - c.t > 6 * 3600e3) { try { const r = await require('./github').release(custom.repo); c = cache[ck] = { t: Date.now(), tag: r?.tag || null }; } catch (err) { c = { t: c?.t || 0, tag: c?.tag || null, error: err.message }; } }
+        out.push({ ...e, label: custom.repo.split('/')[1], version: custom.tag, custom: { repo: custom.repo }, update: c?.tag && c.tag !== custom.tag ? { version: c.tag, tag: c.tag } : null, latest: c?.tag ? { version: c.tag } : null, error: c?.error || null, channel: null, channels: [], page: `https://github.com/${custom.repo}/releases` });
+        continue;
+      }
       if (e.kind === 'flatpak') { out.push({ ...e, update: fp[e.fp] ? { version: fp[e.fp].version } : null, where: fp[e.fp]?.where, channel: 'flathub', channels: [] }); continue; }
       const ch = U.channelsOf(e.id, e.path), channel = ((config.emuChannels || {})[e.id]) || ch.def;
       // 0.9.21: the release source follows the copy (Xenia Edge, Xenia's Windows build, Eden's variants)
@@ -3558,6 +3626,9 @@ const handlers = {
   'emuup:run': async ({ id, kind, fp, where, path: file, force }) => {
     const U = require('./emuUpdates');
     if (require('./raLogin').running().has(String(id).split('@')[0])) throw new Error('Close the emulator first.');
+    // from a GitHub link: its own project's newest release, set up the same way again (0.9.28)
+    const custom = (config.customEmus || []).find((x) => x.path === file);
+    if (custom) { const r = await handlers['emuget:custom']({ link: custom.repo, as: custom.as, of: custom.of, key: custom.key }); log('emulator from a link updated', custom.repo, r.tag); return true; }
     if (kind === 'flatpak') {
       broadcast('emu-update', { path: fp, state: 'downloading', pct: null });
       await U.flatpakUpdate(fp, where, (m) => broadcast('emu-update', { path: fp, state: 'downloading', pct: m.pct, text: m.text }), force ? ['install', '--reinstall'] : []);
@@ -3691,8 +3762,9 @@ const handlers = {
     const byKey = new Map(list.map((p) => [p.key, p]));
     const todo = (changes || []).map((c) => {
       const p = byKey.get(c.key);
-      if (!p || p.on === !!c.on || (p.by === 'emulator' && !c.on)) return null; // unchanged, or not Cartridge's to turn off
-      return { ...p, on: !!c.on };
+      const presetsChanged = !!(p && c.on && c.presets && p.presets) && JSON.stringify(Object.fromEntries(Object.keys(p.presets).map((k) => [k, p.chosen?.[k] || p.presets[k][0]]))) !== JSON.stringify(Object.fromEntries(Object.keys(p.presets).map((k) => [k, c.presets[k] || p.chosen?.[k] || p.presets[k][0]])));
+      if (!p || ((p.on === !!c.on && !presetsChanged) || (p.by === 'emulator' && !c.on))) return null; // unchanged, or not Cartridge's to turn off
+      return { ...p, on: !!c.on, ...(c.presets ? { want: c.presets } : {}) }; // want: a pack's choices (Cemu presets, 0.9.28)
     }).filter(Boolean);
     patchMine[st.emu] = E.set(st, todo, patchMine[st.emu] || {});
     saveJson(PATCHES_FILE, patchMine);

@@ -240,10 +240,13 @@
             <p class="muted small" style="margin-top: -6px">{{ scaleNote }}</p>
 
 
-            <div class="subh">Top Bar</div>
-            <div class="row"><span class="lbl">Placement</span><div class="seg"><button v-for="m in BAR_POS" :key="m.v" data-focus :class="{ on: (ui.barPos || 'top') === m.v }" @click="saveConfig({ ui: { barPos: m.v } })">{{ m.l }}</button></div></div>
-            <div class="row"><span class="lbl">Tabs</span><div class="seg"><button v-for="m in BAR_ALIGN" :key="m.v" data-focus :class="{ on: (ui.barAlign || 'start') === m.v }" @click="saveConfig({ ui: { barAlign: m.v } })">{{ m.l }}</button></div></div>
-            <div class="row"><span class="lbl">Style</span><div class="seg"><button v-for="m in BAR_STYLE" :key="m.v" data-focus :class="{ on: (ui.barStyle || 'plain') === m.v }" @click="saveConfig({ ui: { barStyle: m.v } })">{{ m.l }}</button></div></div>
+            <!-- 0.9.28 (owner): "top bar" is no longer always at the top, so it's the Dock -->
+            <div class="subh">Dock</div>
+            <div class="row"><span class="lbl">Placement</span><div class="seg"><button v-for="m in BAR_POS" :key="m.v" data-focus :class="{ on: (ui.barPos || 'bottom') === m.v }" @click="saveConfig({ ui: { barPos: m.v } })">{{ m.l }}</button></div></div>
+            <div class="row"><span class="lbl">Tabs</span><div class="seg"><button v-for="m in BAR_ALIGN" :key="m.v" data-focus :class="{ on: (ui.barAlign || 'center') === m.v }" @click="saveConfig({ ui: { barAlign: m.v } })">{{ m.l }}</button></div></div>
+            <div class="row"><span class="lbl">Style</span><div class="seg"><button v-for="m in BAR_STYLE" :key="m.v" data-focus :class="{ on: (ui.barStyle || 'pill') === m.v }" @click="saveConfig({ ui: { barStyle: m.v } })">{{ m.l }}</button></div></div>
+            <div v-if="(ui.barStyle || 'pill') === 'pill'" class="row"><span class="lbl">Colour</span><div class="seg"><button v-for="m in DOCK_COLOR" :key="m.v" data-focus :class="{ on: (ui.dockColor || '') === m.v }" @click="saveConfig({ ui: { dockColor: m.v } })">{{ m.l }}</button></div></div>
+            <Toggle :model-value="ui.hints === true" label="Button hints" desc="A strip along the bottom with what each button does on this page (A Open, Y Search…)" @update:model-value="(v) => saveConfig({ ui: { hints: v } })" />
             <div class="subh"><Icon name="mdiViewGridOutline" :size="20" />Games &amp; Cards</div>
             <div class="row"><span class="lbl">Box art size</span><div class="seg"><button v-for="(v, k) in CARD_SIZES" :key="k" data-focus :class="{ on: (ui.gridSize || 'md') === k }" @click="saveConfig({ ui: { gridSize: k } })">{{ v.label }}</button></div></div>
             <Toggle :model-value="ui.cardTitles !== false" label="Game names under box art" desc="Turn off for a clean wall of covers" @update:model-value="(v) => saveConfig({ ui: { cardTitles: v } })" />
@@ -943,8 +946,9 @@ async function loadAll() {
 }
 const mediaSizes = [{ v: 'compact', l: 'Compact' }, { v: 'spacious', l: 'Spacious' }, { v: 'large', l: 'Large' }];
 // Emulators pages (0.9.16)
-const EMU_PAGES = [{ v: 'overview', l: 'Overview' }, { v: 'emus', l: 'Emulators' }, { v: 'addons', l: 'Game Add-ons' }, { v: 'folders', l: 'Console Folders' }];
-const emuPage = ref('overview');
+// 0.9.28 (owner: the flow felt confusing): what you have first, then add-ons, then setup and health checks, then folders
+const EMU_PAGES = [{ v: 'emus', l: 'Emulators' }, { v: 'addons', l: 'Game Add-ons' }, { v: 'overview', l: 'Setup and Health' }, { v: 'folders', l: 'Console Folders' }];
+const emuPage = ref(store.issues ? 'overview' : 'emus'); // problems waiting: open where they're listed
 // installed games whose emulator has patches (0.9.16), by console then name
 const PATCH_EMU = [[/ps3/i, 'RPCS3', 'rpcs3'], [/ps4/i, 'shadPS4', 'shadps4'], [/\bps2\b/i, 'PCSX2', 'pcsx2'], [/\b(ngc|gamecube|gc|wii)\b/i, 'Dolphin', 'dolphin'], [/\bpsp\b/i, 'PPSSPP', 'ppsspp']];
 // Game Add-ons page (0.9.21): every installed game with add-ons, patches or game updates, by console, with a search
@@ -987,6 +991,7 @@ const ps3UpCount = computed(() => (ps3Ups.value || []).filter((g) => g.todo.leng
 async function loadPs3Updates(fresh = false) { ps3Ups.value = await call('ps3up:list', { fresh }).catch(() => []); }
 const TOUCH_SCROLL = [{ v: 'own', l: 'Cartridge’s' }, { v: 'browser', l: 'The Browser’s' }];
 const BAR_POS = [{ v: 'top', l: 'Top' }, { v: 'bottom', l: 'Bottom' }, { v: 'left', l: 'Left' }];
+const DOCK_COLOR = [{ v: '', l: 'Glass' }, { v: 'white', l: 'White' }, { v: 'black', l: 'Black' }, { v: 'accent', l: 'Accent' }];
 const BAR_ALIGN = [{ v: 'start', l: 'Aligned' }, { v: 'center', l: 'Centred' }];
 const BAR_STYLE = [{ v: 'plain', l: 'Plain' }, { v: 'pill', l: 'Floating Pill' }, { v: 'circle', l: 'Circles' }];
 const LOOK_PAGES = [{ v: 'theme', l: 'Theme' }, { v: 'cards', l: 'Text and Cards' }, { v: 'meta', l: 'Metadata' }, { v: 'motion', l: 'Motion and Sound' }, { v: 'controls', l: 'Controls' }];
@@ -1071,11 +1076,11 @@ onMounted(() => {
 .rail-item.on { color: var(--text); }
 .rail-item:focus { background: var(--focus); color: var(--on-focus); box-shadow: none; }
 .pane { overflow-y: auto; padding: 6px 12px 60px 24px; }
-.ga-cons { display: flex; gap: 8px; overflow-x: auto; padding: 4px 2px 8px; }
+.ga-cons { display: flex; gap: 8px; overflow-x: auto; padding: 8px 6px 10px; margin: 0 -6px; scrollbar-width: none; } /* room for a selected chip (0.9.28: it was cut off) */
 .ga-con { flex: none; display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 999px; background: var(--s1); box-shadow: var(--weight-edge); font-weight: 600; font-size: var(--t-sm); }
 .ga-con em { font-style: normal; color: var(--muted); font-weight: 500; }
 .ga-con.on { background: var(--sel); }
-.ga-con:focus-visible, .pad-mode .ga-con:focus { background: var(--focus); color: var(--on-focus); }
+.ga-con:focus-visible, .pad-mode .ga-con:focus { background: var(--focus); color: var(--on-focus); box-shadow: none; outline: none; } /* the standard highlight: white fill, dark text, no ring */
 .pad-mode .ga-con:focus em { color: var(--on-focus-dim); }
 .rail-st { color: inherit !important; }
 .pane-in { display: flex; flex-direction: column; gap: 16px; max-width: 860px; }

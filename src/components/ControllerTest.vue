@@ -19,7 +19,7 @@
     </template>
     <div class="muted small">Last touch or click came as: <b>{{ pointer || 'nothing yet' }}</b></div>
     <!-- 0.9.26 (the touch update): what the screen sends and who scrolled, so a device report says where touch breaks -->
-    <div class="muted small">Touch check: {{ ti.touch }} touches, {{ ti.mouse }} mouse presses, {{ ti.touchEvents }} touch events · scrolled by the browser {{ ti.native }}, by Cartridge {{ ti.ours }} · gestures {{ ti.gestures }}<template v-if="ti.last"> · last: <b>{{ ti.last }}</b></template></div>
+    <div class="muted small">Touch check: {{ ti.touch }} touches, {{ ti.mouse }} mouse presses, {{ ti.touchEvents }} touch events, {{ ti.moves }} moves · scrolled by the browser {{ ti.native }}, by Cartridge {{ ti.ours }} · gestures {{ ti.gestures }}<template v-if="ti.last"> · last: <b>{{ ti.last }}</b></template></div>
   </div>
 </template>
 

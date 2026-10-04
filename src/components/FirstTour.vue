@@ -27,6 +27,7 @@ const START = [
   { keys: ['A'], title: 'Make It Yours', text: 'Hold A on any widget to arrange Start: move widgets, resize them, add new ones, pictures and your own HTML.' },
   { keys: ['LB', 'RB'], title: 'Step Through', text: 'On a widget with several games, like Recently Played, the bumpers move between them.' },
   { keys: ['RS'], title: 'Pages', text: 'Add more pages in Arrange. Flick the right stick, or swipe, to move between them.' },
+  { keys: ['LB', 'RB'], title: 'All Your Pages', text: 'While arranging, a bumper shows every page at once. Pick one up with A and move it left or right to reorder them.' },
 ];
 const BASE = [
   { keys: ['LT', 'RT'], title: 'Tabs', text: 'The triggers move between Home, Library, Consoles and the rest of the top bar. The bumpers switch sections inside a page.' },
@@ -34,8 +35,8 @@ const BASE = [
   { keys: ['START', 'SELECT'], title: 'Anywhere', text: 'Start opens the Quick Menu. Select jumps to your downloads.' },
   { keys: [], title: 'Into Steam', text: 'Downloaded games go into Steam from their page (More, Add to Steam) or all at once from Settings → Steam. They start with the emulator Setup picked for their console.' },
 ];
-const props = defineProps({ start: Boolean });
-const STEPS = props.start ? [...START, ...BASE] : BASE;
+const props = defineProps({ start: Boolean, only: Boolean });
+const STEPS = props.only ? START : props.start ? [...START, ...BASE] : BASE;
 const i = ref(0);
 const s = computed(() => STEPS[i.value]);
 const el = ref(null);

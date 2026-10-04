@@ -16,6 +16,7 @@
           </div>
           <div class="row" style="gap: 10px; margin-top: 6px">
             <button v-if="g.romId" class="btn primary" data-focus @click="go('game', { romId: g.romId })"><Icon name="mdiGamepadVariantOutline" />Open in library</button>
+            <button class="btn icon-btn" data-focus @click="more"><Icon name="mdiDotsHorizontal" :size="22" /><span>More</span></button>
             <div class="seg">
               <button v-for="f in filters" :key="f.v" data-focus :class="{ on: filter === f.v }" @click="filter = f.v">{{ f.l }}</button>
             </div>
@@ -45,7 +46,7 @@
 
 <script setup>
 import { computed, onMounted, ref } from 'vue';
-import { call, img, go, setBg } from '../store.js';
+import { call, img, go, setBg, choose, store } from '../store.js';
 import { useView } from '../useView.js';
 import { focusFirst } from '../nav.js';
 import Icon from '../components/Icon.vue';
@@ -73,8 +74,23 @@ async function load(force = false) {
   try { g.value = await call('ra:game', { gameId: props.gameId, force }); if (g.value.ingame || g.value.boxart) setBg({ src: img(g.value.ingame || g.value.boxart), blur: !g.value.ingame }); }
   catch (e) { error.value = e.message; }
 }
-useView({ x: () => load(true), y: () => { const i = filters.findIndex((f) => f.v === filter.value); filter.value = filters[(i + 1) % filters.length].v; } },
-  [{ b: 'X', label: 'Refresh' }, { b: 'Y', label: 'Filter' }, { b: 'B', label: 'Back' }]);
+// 0.9.28 (owner): More starts with Go to Game Page; a game not matched to the library searches for it
+function toGame() {
+  if (g.value?.romId) return go('game', { romId: g.value.romId });
+  store.lastSearch = String(g.value?.title || '').replace(/[™®©]/g, '').replace(/\s*[\[(|~].*$/, '').trim();
+  go('search');
+}
+async function more() {
+  if (!g.value) return;
+  const v = await choose({ title: g.value.title, options: [
+    { label: 'Go to Game Page', sub: g.value.romId ? '' : 'Searches your library for it', value: 'game', icon: 'mdiGamepadVariantOutline' },
+    { label: 'Refresh', sub: 'Reads it again from RetroAchievements', value: 'refresh', icon: 'mdiRefresh' },
+  ] });
+  if (v === 'game') toGame();
+  else if (v === 'refresh') load(true);
+}
+useView({ x: () => { const i = filters.findIndex((f) => f.v === filter.value); filter.value = filters[(i + 1) % filters.length].v; }, y: more },
+  [{ b: 'X', label: 'Filter' }, { b: 'Y', label: 'More' }, { b: 'B', label: 'Back' }]);
 onMounted(async () => { await load(); focusFirst(el.value); });
 </script>
 

@@ -404,6 +404,17 @@ export function ensureFocus(root) {
 }
 export function jump(dir, n = 4) { for (let i = 0; i < n; i++) move(dir); }
 
+// 0.9.28 (owner's photos: Home shifted off the left edge, rows clipped at the sides): scrollIntoView also scrolls
+// boxes that clip (overflow hidden), which are never meant to move, so a focused card dragged a whole page sideways.
+// Any such box that moves is put straight back.
+document.addEventListener('scroll', (e) => {
+  const t = e.target;
+  if (!(t instanceof Element) || (!t.scrollLeft && !t.scrollTop)) return;
+  const cs = getComputedStyle(t);
+  if (t.scrollLeft && (cs.overflowX === 'hidden' || cs.overflowX === 'clip')) t.scrollLeft = 0;
+  if (t.scrollTop && (cs.overflowY === 'hidden' || cs.overflowY === 'clip')) t.scrollTop = 0;
+}, { capture: true, passive: true });
+
 // ---------------- touch and drag scrolling
 // 0.9.26, the touch update (owner: "touch never worked, only taps"). Touches reach Cartridge in one of
 // three ways depending on the system: as real touches the browser scrolls itself, as real touches it
@@ -414,7 +425,7 @@ export function jump(dir, n = 4) { for (let i = 0; i < n; i++) move(dir); }
 // the click that ends it, so a swipe never opens a game. Gestures: swipe in from the left edge = Back,
 // swipe along the top bar = next or previous tab.
 export const lastPointer = { type: '' }; // for the controller test
-export const touchInfo = { touch: 0, pen: 0, mouse: 0, touchEvents: 0, native: 0, ours: 0, gestures: 0, last: '' }; // Settings → About → Touch check
+export const touchInfo = { touch: 0, pen: 0, mouse: 0, touchEvents: 0, moves: 0, native: 0, ours: 0, gestures: 0, last: '' }; // Settings → About → Touch check
 window.cartTouch = touchInfo; // readable from the dev tools when checking a device
 const DRAG_START = 10, TOUCH_START = 18, EDGE = 28;
 const nativeTouch = () => document.documentElement.classList.contains('touch-native');
@@ -457,10 +468,15 @@ window.addEventListener('pointerdown', (e) => {
   };
   nativeAt = 0;
 }, { capture: true, passive: true });
-window.addEventListener('pointermove', (e) => {
-  if (!drag || e.pointerId !== drag.id) return;
-  const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
-  if (drag.gesture) { drag.lx = e.clientX; drag.ly = e.clientY; return; }
+// 0.9.28 (owner: "touch still only swipes on Start"): Start's page swipe only compares where the finger went
+// down and came up, so on that device the moves in between never reached the engine (none arrive, or they come
+// under another pointer, a touch, or a mouse with the button held). Moves are taken from all of those now, and
+// a swipe with no moves at all still scrolls when the finger lifts (swipeJump).
+function feed(x, y) {
+  if (!drag) return;
+  touchInfo.moves++;
+  const dx = x - drag.x, dy = y - drag.y;
+  if (drag.gesture) { drag.lx = x; drag.ly = y; return; }
   if (!drag.axis) {
     const need = drag.touch && nativeTouch() ? TOUCH_START : DRAG_START; // the browser's own scrolling gets its slop first
     if (Math.abs(dx) < need && Math.abs(dy) < need) return;
@@ -476,14 +492,19 @@ window.addEventListener('pointermove', (e) => {
     // catch up with the finger: everything it moved before the drag was recognised
     pend += drag.axis === 'x' ? drag.x - drag.lx : drag.y - drag.ly;
   }
-  const m = drag.axis === 'x' ? drag.lx - e.clientX : drag.ly - e.clientY;
-  drag.lx = e.clientX; drag.ly = e.clientY;
+  if (drag.jump) { drag.lx = x; drag.ly = y; return; } // a move-less swipe: swipeJump glides it
+  const m = drag.axis === 'x' ? drag.lx - x : drag.ly - y;
+  drag.lx = x; drag.ly = y;
+  if (!m) return;
   pend += m;
   if (!pendRaf) pendRaf = requestAnimationFrame(flush);
   const now = performance.now();
   drag.hist.push([now, m]);
   while (drag.hist.length && now - drag.hist[0][0] > 100) drag.hist.shift();
-}, { capture: true, passive: true });
+}
+window.addEventListener('pointermove', (e) => { if (drag && (e.pointerId === drag.id || e.pointerType === 'touch' || e.buttons & 1)) feed(e.clientX, e.clientY); }, { capture: true, passive: true });
+window.addEventListener('touchmove', (e) => { const t = e.touches[0]; if (t && drag) feed(t.clientX, t.clientY); }, { capture: true, passive: true });
+window.addEventListener('mousemove', (e) => { if (drag && e.buttons & 1) feed(e.clientX, e.clientY); }, { capture: true, passive: true });
 function finishGesture(d) {
   const dx = d.lx - d.x, dy = d.ly - d.y, quick = performance.now() - d.t0 < 900;
   if (d.gesture === 'edge' && dx > 80 && Math.abs(dy) < dx * 0.6 && quick) { eatClick(); touchInfo.gestures++; touchInfo.last = 'swipe from the edge: Back'; dispatch('back', { keepMode: true }); }
@@ -498,11 +519,18 @@ function followTouches(d) {
   window.addEventListener('touchcancel', end, { capture: true, passive: true });
 }
 function endDrag(e) {
-  if (!drag || e.pointerId !== drag.id) return;
+  if (!drag) return; // any pointer's up ends it: on some systems the moves and the up come under another pointer
+  drag.jump = !drag.axis && !drag.gesture && !drag.hist.length; // nothing moved it yet
+  if (drag.jump) pend = 0;
+  if (e.type === 'touchend') { const t = e.changedTouches?.[0]; if (t) feed(t.clientX, t.clientY); }
+  else feed(e.clientX, e.clientY); // the last position, in case no move came before it
+  if (drag?.jump) pend = 0;
+  if (!drag) return; // nothing there to scroll
   flush();
   const d = drag; drag = null;
   if (d.gesture) return finishGesture(d);
   if (!d.axis) return;
+  if (d.jump) return swipeJump(d); // no moves arrived: scroll by the whole swipe now
   document.body.classList.remove('dragging');
   eatClick();
   // momentum like a phone: starts at your finger's speed and eases out over about a second
@@ -520,6 +548,17 @@ function endDrag(e) {
   glide = requestAnimationFrame(step);
 }
 window.addEventListener('pointerup', endDrag, { capture: true, passive: true });
+window.addEventListener('touchend', endDrag, { capture: true, passive: true });
+window.addEventListener('mouseup', endDrag, { capture: true, passive: true });
+// a swipe whose moves never arrived: glide the scroller by what the finger covered, plus some momentum
+function swipeJump(d) {
+  document.body.classList.remove('dragging');
+  eatClick();
+  const dist = d.axis === 'x' ? d.x - d.lx : d.y - d.ly, ms = Math.max(60, performance.now() - d.t0);
+  const total = dist + Math.max(-1200, Math.min(1200, (dist / ms) * 280));
+  touchInfo.last = 'swipe without moves, scrolled when the finger lifted';
+  glideBy(d.sc, d.axis === 'x' ? total : 0, d.axis === 'y' ? total : 0);
+}
 // the browser took the touch over for its own scrolling: it scrolls, the engine steps back
 window.addEventListener('pointercancel', (e) => {
   if (!drag || e.pointerId !== drag.id) return;

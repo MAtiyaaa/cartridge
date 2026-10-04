@@ -95,14 +95,16 @@ function loop(t) {
 function start() {
   cancelAnimationFrame(raf); last = 0; key = ''; frame = null;
   if (!rendererOf(mode.value)) return;
-  if (reduce.value) { nextTick(() => { if (setup()) frame(12); }); return; } // one still frame
+  // one still frame: reduced motion, and (0.9.28, owner: choppy on handhelds) light effects, where repainting a
+  // full-screen canvas without the GPU took frames from the interface
+  if (reduce.value || light.value) { nextTick(() => { if (setup()) frame(12); }); return; }
   raf = requestAnimationFrame(loop);
 }
 const restart = async () => { cancelAnimationFrame(raf); await nextTick(); start(); };
 watch([mode, reduce, light, () => store.config?.ui?.theme, () => store.config?.ui?.customColor, () => store.config?.ui?.surface, () => JSON.stringify(store.config?.ui?.colors || {})], restart, { immediate: true });
 // art backgrounds pick up the library once it's loaded or changes
 watch(() => store.libVersion, () => { artCache.clear(); if (mode.value.startsWith('art:')) restart(); });
-const onResize = () => { if (reduce.value) restart(); };
+const onResize = () => { if (reduce.value || light.value) restart(); };
 window.addEventListener('resize', onResize);
 const vis = () => (document.hidden ? cancelAnimationFrame(raf) : start());
 document.addEventListener('visibilitychange', vis);

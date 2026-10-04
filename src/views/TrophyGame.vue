@@ -104,8 +104,8 @@ async function linkGame() {
 }
 async function more() {
   const key = iconKey(g.value?.romId, g.value?.title);
-  const opts = [{ label: 'Change icon', sub: 'SteamGridDB', value: 'icon', icon: 'mdiImageEditOutline' }, { label: 'Reset icon', sub: 'Back to the automatic pick', value: 'reset', icon: 'mdiRestore' }];
-  if (g.value?.romId) opts.push({ label: 'Open in library', value: 'lib', icon: 'mdiGamepadVariantOutline' });
+  // 0.9.28 (owner): Go to Game Page first; an unlinked game picks its library game, then goes there
+  const opts = [{ label: 'Go to Game Page', sub: g.value?.romId ? '' : 'Pick the game in your library first', value: 'lib', icon: 'mdiGamepadVariantOutline' }, { label: 'Change icon', sub: 'SteamGridDB', value: 'icon', icon: 'mdiImageEditOutline' }, { label: 'Reset icon', sub: 'Back to the automatic pick', value: 'reset', icon: 'mdiRestore' }];
   opts.push({ label: g.value?.romId ? 'Link to another game' : 'Link to a game', sub: 'The game in your library these trophies belong to', value: 'link', icon: 'mdiLinkVariant' });
   const hid = (store.config.trophies?.hidden || []).includes(g.value.key);
   opts.push(hid ? { label: 'Unhide', sub: 'Counts in your trophies, gamerscore and latest unlocks again', value: 'unhide', icon: 'mdiEyeOutline' } : { label: 'Hide', sub: 'Leaves your totals and latest unlocks. Settings → Achievements brings it back', value: 'hide', icon: 'mdiEyeOffOutline' });
@@ -116,7 +116,7 @@ async function more() {
     toast(v === 'hide' ? 'Hidden. Settings → Achievements → Hidden Games brings it back.' : 'Counts in your totals again', 'ok', 3000, v === 'hide' ? 'mdiEyeOffOutline' : 'mdiEyeOutline');
     return;
   }
-  if (v === 'lib') { go('game', { romId: g.value.romId }); return; }
+  if (v === 'lib') { if (!g.value.romId) await linkGame(); if (g.value?.romId) go('game', { romId: g.value.romId }); return; }
   if (v === 'link') { await linkGame(); return; }
   if (v === 'reset') { await call('icon:reset', { key }); iconChanged(key); toast('Icon reset', 'ok', 2000, 'mdiRestore'); return; }
   if (v !== 'icon') return;

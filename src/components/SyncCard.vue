@@ -40,6 +40,12 @@
             <span class="l-mid"><b>Device ID</b><span class="l-sub mono">{{ L.me }}</span></span>
             <span class="l-end"><Icon name="mdiContentCopy" :size="18" /></span>
           </button>
+          <!-- 0.9.28 (owner: syncing stopped in Game Mode): a user service keeps Syncthing running in both modes -->
+          <button class="lrow" data-focus :disabled="busy" @click="toggleService">
+            <Icon name="mdiGamepadVariantOutline" :size="22" />
+            <span class="l-mid"><b>Keep Running in Game Mode</b><span class="l-sub">Starts Syncthing with your session, so saves sync in Game Mode as well as on the desktop</span></span>
+            <span class="l-end"><span class="status" :class="{ ok: svcOn }">{{ svcOn ? 'On' : 'Off' }}</span></span>
+          </button>
         </div>
 
         <template v-if="(L?.devices || s.devices).length">
@@ -231,6 +237,15 @@ async function rescan(f) {
   try { await call('sync:rescan', f.id); toast('Syncthing is rescanning it', 'ok', 2200, 'mdiRefresh'); } catch (e) { toast(e.message, 'error'); }
 }
 async function copy(text, msg) { try { await call('clip:write', { text }); toast(msg, 'ok', 2200, 'mdiContentCopy'); } catch (e) { toast(e.message, 'error'); } }
+
+const svcOn = ref(false);
+call('sync:serviceState').then((r) => { svcOn.value = !!r?.on; }).catch(() => {});
+async function toggleService() {
+  busy.value = true;
+  try { const r = await call('sync:service', { enable: !svcOn.value }); svcOn.value = r.on; toast(r.on ? 'Syncthing now runs in Game Mode too' : 'Syncthing only runs the way you start it', 'ok', 3000, 'mdiSync'); }
+  catch (e) { toast(e.message, 'error', 6000); }
+  busy.value = false;
+}
 </script>
 <style scoped>
 .st { display: flex; flex-direction: column; gap: var(--s-3); }

@@ -44,12 +44,13 @@
           <template v-else-if="t.type === 'storage'">
             <div class="st-store">
               <div class="st-store-text">
-                <div class="st-label">Free space</div>
+                <div class="st-label">Free Space</div>
                 <div class="st-num"><span class="st-big tnum">{{ space ? sizeNum(space.free) : '–' }}</span><span class="st-unit">{{ space ? sizeUnit(space.free) : '' }}</span></div>
                 <div class="st-sub">{{ space ? `of ${bytes(space.total)}` : 'Looking…' }}</div>
                 <!-- 0.9.24 (owner: empty space when big): what each console's games take up on this device -->
                 <div v-if="byCon.length" class="st-store-cons">
-                  <div v-for="c in byCon.slice(0, 6)" :key="c.name" class="st-store-con"><span>{{ c.name }}</span><i><b :style="{ width: (c.size / byCon[0].size) * 100 + '%' }" /></i><em class="tnum">{{ bytes(c.size) }}</em></div>
+                  <!-- 0.9.28 (owner): the console's small icon, its name only where it fits, and only the rows that fit -->
+                  <div v-for="c in byCon.slice(0, Math.max(1, Math.min(8, Math.floor((box(t).ph - 150) / 24))))" :key="c.name" class="st-store-con"><span class="st-sc-n"><PIcon :p="c.p" :size="16" /><span>{{ c.name }}</span></span><i><b :style="{ width: (c.size / byCon[0].size) * 100 + '%' }" /></i><em class="tnum">{{ bytes(c.size) }}</em></div>
                 </div>
               </div>
               <div class="st-gauge" :class="{ low: freePct < 10 }">
@@ -63,7 +64,7 @@
           <template v-else-if="t.type === 'week'">
             <div class="st-week">
               <div class="st-week-text">
-                <div class="st-label">Played this week</div>
+                <div class="st-label">Played This Week</div>
                 <div class="st-num">
                   <template v-if="weekMin >= 60"><span class="st-big tnum">{{ Math.floor(weekMin / 60) }}</span><span class="st-unit">h</span><template v-if="weekMin % 60"><span class="st-big tnum">{{ weekMin % 60 }}</span><span class="st-unit">m</span></template></template>
                   <template v-else><span class="st-big tnum">{{ weekMin }}</span><span class="st-unit">min</span></template>
@@ -94,19 +95,21 @@
                game in front with its art, logo and a line about it; the next ones fanned out beside it -->
           <template v-else-if="COVER_ROWS[t.type]">
             <template v-if="listOf(t).length">
-              <div class="st-row-art" :style="{ backgroundImage: bgUrl(artOf(rowView(t)[0]) || cover(rowView(t)[0], true)) }" />
+              <Transition name="st-xf"><div :key="rowView(t)[0].id" class="st-row-art" :style="{ backgroundImage: bgUrl(artOf(rowView(t)[0]) || cover(rowView(t)[0], true)) }" /></Transition>
               <div class="st-row-fade" />
               <div class="st-row" :class="{ tall: t.h > 1, narrow: t.w <= 2 }">
                 <div class="st-row-info">
                   <div class="st-label">{{ rowName(t) }}<span class="st-count">{{ (sel[t.id] || 0) + 1 }} / {{ listOf(t).length }}</span></div>
-                  <div class="st-row-lead">
-                    <GameLogo :logo="store.config.ui.logos !== false ? logoOf(rowView(t)[0]) : null" :name="rowView(t)[0].name" cls="st-row-name" :area="Math.min(16000, box(t).pw * box(t).ph * 0.07)" :max-w="Math.min(300, box(t).pw * 0.36)" :max-h="Math.min(64, box(t).ph * 0.3)" />
-                    <span class="st-sub">{{ firstLine(t.type, rowView(t)[0]) }}</span>
-                  </div>
+                  <Transition name="st-lead" mode="out-in">
+                    <div :key="rowView(t)[0].id" class="st-row-lead">
+                      <GameLogo :logo="store.config.ui.logos !== false ? logoOf(rowView(t)[0]) : null" :name="rowView(t)[0].name" cls="st-row-name" :area="Math.min(16000, box(t).pw * box(t).ph * 0.07)" :max-w="Math.min(300, box(t).pw * 0.36)" :max-h="Math.min(64, box(t).ph * 0.3)" />
+                      <span class="st-sub">{{ firstLine(t.type, rowView(t)[0]) }}</span>
+                    </div>
+                  </Transition>
                 </div>
-                <div class="st-fan" :style="{ '--n': Math.min(fanN(t), rowView(t).length) }">
+                <TransitionGroup tag="div" name="st-fan" class="st-fan" :style="{ '--n': Math.min(fanN(t), rowView(t).length) }">
                   <img v-for="(r, i) in rowView(t).slice(0, fanN(t))" :key="r.id" class="st-fan-c" :src="cover(r) || BLANK" :style="{ '--i': i }" loading="lazy" alt="" @error="noImg" />
-                </div>
+                </TransitionGroup>
               </div>
             </template>
             <template v-else>
@@ -121,9 +124,16 @@
             <div class="st-label">{{ t.console ? t.console + ' Trophies' : 'Latest Trophies' }}<span v-if="achOf(t).week" class="st-count">{{ achOf(t).week }} this week</span></div>
             <template v-if="achOf(t).list.length">
               <!-- 0.9.24 (owner: too much empty space when big): as many unlocks as the tile holds, in columns when wide -->
-              <div class="st-tro" :class="{ one: troFor(t).n === 1 }">
+              <div class="st-tro" :class="{ one: troFor(t).n === 1, feat: troFor(t).feat }">
+                <!-- 0.9.28 (owner: big trophy tiles were mostly empty): the newest unlock as a feature card, the rest beside it -->
+                <div v-if="troFor(t).feat" class="st-tro-feat">
+                  <span class="st-tro-fbadge"><img v-if="achView(t)[0].badge" :src="achView(t)[0].badge" alt="" /><Grade v-else :g="achView(t)[0].grade" :size="54" /></span>
+                  <b>{{ achView(t)[0].title }}</b>
+                  <span v-if="achView(t)[0].desc" class="st-tro-fd">{{ achView(t)[0].desc }}</span>
+                  <span class="st-tro-fg">{{ achView(t)[0].game }}<template v-if="achView(t)[0].t"> · {{ agoShort(achView(t)[0].t) }}</template></span>
+                </div>
                 <div class="st-tro-list" :style="{ gridTemplateColumns: `repeat(${troFor(t).cols}, minmax(0, 1fr))` }">
-                  <div v-for="(a, i) in achView(t).slice(0, troFor(t).n)" :key="a.key" class="st-tro-main" :style="{ '--i': i }">
+                  <div v-for="(a, i) in achView(t).slice(troFor(t).feat ? 1 : 0, troFor(t).n + (troFor(t).feat ? 1 : 0))" :key="a.key" class="st-tro-main" :style="{ '--i': i }">
                     <span class="st-tro-badge"><img v-if="a.badge" :src="a.badge" alt="" /><Grade v-else :g="a.grade" :size="26" /></span>
                     <span class="st-tro-t"><b>{{ a.title }}</b><span>{{ a.game }}<template v-if="a.t"> · {{ agoShort(a.t) }}</template></span></span>
                   </div>
@@ -160,6 +170,7 @@
           <!-- 0.9.23 new widgets: your library in numbers, a game for today, a picture, your own HTML -->
           <template v-else-if="t.type === 'stats'">
             <div class="st-label">Your Library</div>
+            <div v-if="t.h >= 2" class="st-band"><img v-for="r in bandOf(t)" :key="r.id" :src="cover(r, true)" alt="" loading="lazy" /></div>
             <div class="st-stats">
               <div><b class="tnum">{{ stats.games }}</b><span>Games</span></div>
               <div><b class="tnum">{{ stats.hours }}</b><span>Hours Played</span></div>
@@ -167,9 +178,36 @@
               <div><b class="tnum">{{ stats.consoles }}</b><span>Consoles</span></div>
             </div>
           </template>
+          <!-- Console Spotlight (0.9.28): a console's games take turns, with their art -->
+          <template v-else-if="t.type === 'spotlight'">
+            <template v-if="spotOf(t)">
+              <Transition name="st-spot"><div :key="spotOf(t).id" class="st-art" :style="{ backgroundImage: bgUrl(t.h > t.w ? cover(spotOf(t), true) : artOf(spotOf(t)) || cover(spotOf(t), true)) }" /></Transition>
+              <div class="st-scrim" />
+              <div class="st-label on-art">{{ platformById(t.platformId)?.display_name }} Spotlight</div>
+              <div class="st-pin">
+                <GameLogo :key="spotOf(t).id" :logo="store.config.ui.logos !== false ? logoOf(spotOf(t)) : null" :name="spotOf(t).name" cls="st-pin-name" :area="Math.min(22000, box(t).pw * box(t).ph * 0.12)" :max-w="box(t).pw * 0.7" :max-h="Math.min(110, box(t).ph * 0.32)" />
+                <span class="st-mark">{{ store.play[spotOf(t).id]?.min ? playtimeText(store.play[spotOf(t).id].min) + ' played' : store.installed[spotOf(t).id] ? 'On this device' : '' }}</span>
+              </div>
+            </template>
+            <div v-else class="st-empty small"><span>No games for this console yet</span></div>
+          </template>
+          <!-- An Emulator (0.9.28): A opens it -->
+          <template v-else-if="t.type === 'emulator'">
+            <div v-if="t.emu" class="st-emu">
+              <EmuIcon :id="t.emu.id" :size="Math.round(Math.min(96, box(t).ph * 0.5))" fallback="mdiGamepadVariantOutline" />
+              <div class="st-emu-t">
+                <b>{{ t.emu.label }}</b>
+                <span>{{ emuOf(t)?.version ? 'Version ' + emuOf(t).version : t.emu.kind === 'flatpak' ? 'Flatpak' : '' }}</span>
+                <span v-if="emuOf(t)?.update" class="status warn">Update ready</span>
+                <span v-else-if="emuOf(t)" class="status ok">Up to date</span>
+              </div>
+            </div>
+            <div v-else class="st-empty small"><span>Pick an emulator in Arrange (Select)</span></div>
+          </template>
           <template v-else-if="t.type === 'cstats'">
             <template v-if="platformById(t.platformId)">
               <div class="st-cs-mark"><ConsoleMark :slug="platformById(t.platformId).slug" :label="platformById(t.platformId).display_name" /></div>
+              <div v-if="t.h >= 2" class="st-band"><img v-for="r in bandOf(t)" :key="r.id" :src="cover(r, true)" alt="" loading="lazy" /></div>
               <div class="st-stats">
                 <div><b class="tnum">{{ cstats(t).games }}</b><span>Games</span></div>
                 <div><b class="tnum">{{ cstats(t).hours }}</b><span>Hours Played</span></div>
@@ -240,15 +278,23 @@
       </div>
       </Transition>
     </div>
-    <!-- the pages at a glance (0.9.24, owner: LT/RT in Arrange): A picks a page up, left and right move it -->
+    <!-- the pages at a glance (0.9.24; 0.9.28: L1/R1 in Arrange): A picks a page up, left and right move it -->
     <div v-if="ov" class="st-ov" ref="ovEl">
       <div class="st-ov-head"><b>Pages</b><span class="muted">{{ ov.moving != null ? 'Left and right move it. A puts it down.' : 'A picks a page up to move it. B goes back to arranging.' }}</span></div>
-      <div class="st-ov-list">
-        <button v-for="(pg, i) in pages" :key="pgKey(pg, i)" class="st-ov-page" :class="{ on: i === page, moving: ov.moving === i }" data-focus :data-key="'pg-' + i" @click="ovPick(i)">
-          <span class="st-ov-map"><i v-for="x in pg" :key="x.id" :style="{ left: (x.x / COLS) * 100 + '%', top: (x.y / ovRows(pg)) * 100 + '%', width: (x.w / COLS) * 100 + '%', height: (x.h / ovRows(pg)) * 100 + '%' }" /></span>
+      <!-- 0.9.28 (owner): each page in miniature with its real tiles (covers, the clock, pictures, names), and the page
+           you carry lifts while the others slide out of its way -->
+      <TransitionGroup tag="div" name="st-ovm" class="st-ov-list">
+        <button v-for="(pg, i) in pages" :key="pgKey(pg, i)" class="st-ov-page" :class="{ on: i === page, moving: ov.moving === i, dim: ov.moving != null && ov.moving !== i }" data-focus :data-key="'pg-' + i" @click="ovPick(i)">
+          <span class="st-ov-map">
+            <i v-for="x in pg" :key="x.id" :class="{ pic: !!ovThumb(x).pic }" :style="{ left: (x.x / COLS) * 100 + '%', top: (x.y / ovRows(pg)) * 100 + '%', width: (x.w / COLS) * 100 + '%', height: (x.h / ovRows(pg)) * 100 + '%', backgroundImage: ovThumb(x).pic ? `url('${ovThumb(x).pic}')` : undefined }">
+              <span v-if="x.type === 'clock'" class="st-ov-clock">{{ clockShort }}</span>
+              <span v-else-if="!ovThumb(x).pic" class="st-ov-tag"><Icon :name="ovThumb(x).icon" :size="14" /><em>{{ ovThumb(x).name }}</em></span>
+            </i>
+          </span>
           <span class="st-ov-n">Page {{ i + 1 }}<em>{{ pg.length }} {{ pg.length === 1 ? 'widget' : 'widgets' }}</em></span>
+          <span v-if="ov.moving === i" class="st-ov-carry"><Icon name="mdiArrowLeftRight" :size="16" />Moving</span>
         </button>
-      </div>
+      </TransitionGroup>
     </div>
     <!-- pages (0.9.23, owner: more than one page, switched with the right stick) -->
     <div v-if="pages.length > 1 || editing" class="st-pages" aria-hidden="true">
@@ -266,7 +312,7 @@
 // (the D-pad moves a corner, LB/RB pick the corner), Y removes, B is done. Touch and mouse: drag a tile
 // to move it, drag an edge or a corner to resize. Saved in config.ui.start.
 import { computed, ref, reactive, onMounted, onBeforeUnmount, nextTick, watch } from 'vue';
-import { store, heroArt, call, go, tab, img, cover, logoOf, allRoms, visible, visiblePlatforms, romById, isNew, collections, setBg, backdropOf, wantSharp, bytes, saveConfig, choose, confirm, askText, pickFolder, playtimeText, loadPlay, toast } from '../store.js';
+import { store, heroArt, call, go, tab, openModal, img, cover, logoOf, allRoms, visible, visiblePlatforms, romById, isNew, collections, setBg, backdropOf, wantSharp, bytes, saveConfig, choose, confirm, askText, pickFolder, playtimeText, loadPlay, toast } from '../store.js';
 import { useView } from '../useView.js';
 import { recommend } from '../recs.js';
 import { ensureFocus, input, pushLayer, focusFirst, rumble } from '../nav.js';
@@ -276,6 +322,8 @@ import Btn from '../components/Btn.vue';
 import Grade from '../components/Grade.vue';
 import GameLogo from '../components/GameLogo.vue';
 import ConsoleCard from '../components/ConsoleCard.vue';
+import EmuIcon from '../components/EmuIcon.vue';
+import PIcon from '../components/PIcon.vue';
 import ConsoleMark from '../components/ConsoleMark.vue';
 import StartClock from '../components/StartClock.vue';
 import { TILES, GROUPS, MANY, DEFAULT, valid, COLS, MAX_H, pack, settle, bottom } from '../startTiles.js';
@@ -301,12 +349,14 @@ function save() { clearTimeout(saveT); saveT = setTimeout(() => saveConfig({ ui:
 
 const el = ref(null), scroller = ref(null);
 const editing = ref(false), focusedId = ref(null);
+// arranging needs its buttons spelled out, even with the hints strip off (0.9.28)
+watch(editing, (v) => { store.forceHints = v; });
 const mode = ref(''); // while arranging with a controller: '' | 'move' (picked up) | 'size'
 const corner = ref('se'); // which corner the D-pad moves while resizing
 const CORNERS = ['se', 'sw', 'nw', 'ne'];
 const EDGES = ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw'];
 const leaving = ref(null);
-const isArt = (t) => t.type === 'continue' ? !!cur.value : t.type === 'game' || (t.type === 'daily' && !!daily.value) || (t.type === 'image' && !!t.src);
+const isArt = (t) => t.type === 'continue' ? !!cur.value : (t.type === 'spotlight' && !!spotOf(t)) || t.type === 'game' || (t.type === 'daily' && !!daily.value) || (t.type === 'image' && !!t.src);
 // a cover that can't be loaded shows the card's own colour instead of a broken picture
 const BLANK = 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==';
 const noImg = (e) => { if (e.target.src !== BLANK) e.target.src = BLANK; };
@@ -370,8 +420,23 @@ function fanN(t) {
 // trophies: rows of about 60 px and columns of about 300 px, leaving room for the label and the badge strip
 function troFor(t) {
   const { pw, ph } = box(t), pad = Math.min(22, ph * 0.09), h = ph - pad * 2 - 26 - (ph > 200 ? 46 : 0);
-  const cols = Math.max(1, Math.min(4, Math.floor(pw / 300))), rows = Math.max(1, Math.floor(h / 62));
-  return { cols, rows, n: Math.max(1, cols * rows) };
+  // big tiles (0.9.28): a feature card takes the left 40%, the list fills the rest
+  const feat = pw >= 560 && ph >= 230 && achOf(t).list.length > 1, lw = feat ? pw * 0.56 : pw;
+  const cols = Math.max(1, Math.min(4, Math.floor(lw / 300))), rows = Math.max(1, Math.floor(h / 62));
+  return { cols, rows, n: Math.max(1, cols * rows), feat };
+}
+// Console Spotlight (0.9.28): the console's games take turns, a new one every 12 seconds
+const spotTick = ref(0);
+const spotOf = (t) => { const l = conList(t.platformId); return l.length ? l[(spotTick.value + (t.id.length % 7)) % l.length] : null; };
+// An Emulator (0.9.28): its version and whether an update is out, from Settings → Emulators' list
+const emuInfo = ref({});
+call('emuup:list', {}).then((l) => { const m = {}; for (const u of l || []) m[u.path || u.fp] = u; emuInfo.value = m; }).catch(() => {});
+const emuOf = (t) => (t.emu ? emuInfo.value[t.emu.path || t.emu.fp] || null : null);
+// a row of covers in tall library tiles (0.9.28, owner: empty space): the console's or library's games, played first
+function bandOf(t) {
+  const list = (t.type === 'cstats' ? conList(t.platformId) : [...playing.value, ...rowOf('fresh')]).filter((r) => cover(r, true));
+  const n = Math.max(2, Math.min(12, Math.floor(box(t).pw / 120)));
+  return [...new Map(list.map((r) => [r.id, r])).values()].slice(0, n);
 }
 const stripN = (t) => Math.max(0, Math.min(12, Math.floor((box(t).pw - 36) / 40)));
 
@@ -403,6 +468,22 @@ const rowOf = (type) => rows.value[type] || [];
 const sel = reactive({});
 const conList = (pid) => roms.value.filter((r) => r.platform_id === pid).sort((a, b) => (lastPlay(b) - lastPlay(a)) || a.name.localeCompare(b.name));
 const listOf = (t) => (t.type === 'cgames' ? conList(t.platformId) : rowOf(t.type));
+// the page overview's picture of a tile: a game's cover where the tile shows games, a picture tile's picture,
+// else its icon and name (0.9.28)
+function ovThumb(x) {
+  const T = TILES[x.type] || {};
+  let r = null, pic = '';
+  try {
+    if (x.type === 'game') r = romById(x.romId);
+    else if (x.type === 'continue') r = playing.value[0];
+    else if (x.type === 'daily') r = daily.value;
+    else if (COVER_ROWS[x.type] || x.type === 'cgames') r = listOf(x)[0];
+    if (r) pic = cover(r, true) || '';
+    if (x.type === 'image' && x.src) pic = x.src;
+  } catch {}
+  return { pic, icon: T.icon || 'mdiViewDashboardOutline', name: x.type === 'cgames' ? rowName(x) : T.name || '' };
+}
+const clockShort = computed(() => now.time);
 const rowName = (t) => (t.type === 'cgames' ? `${platformById(t.platformId)?.display_name || 'Console'} Games` : TILES[t.type].name);
 const rowView = (t) => listOf(t).slice(sel[t.id] || 0);
 const achView = (t) => achOf(t).list.slice(sel[t.id] || 0);
@@ -410,7 +491,27 @@ function stepTile(t, d) {
   const n = COVER_ROWS[t.type] ? listOf(t).length : t.type === 'trophies' ? achOf(t).list.length : 0;
   if (t.type === 'surprise') { deal(); sfx.move?.(); focusTile(t); return true; }
   if (n < 2) return false;
-  sel[t.id] = ((sel[t.id] || 0) + d + n) % n; sfx.move?.(); focusTile(t); return true;
+  sel[t.id] = ((sel[t.id] || 0) + d + n) % n; stepped[t.id] = Date.now(); sfx.move?.(); focusTile(t); return true;
+}
+// Rows of games move on to their next game by themselves (0.9.28, owner: "as if I'm pressing R1", slowly and
+// not jarring). One row at a time every ROLL_TICK, each row at most every ROLL_MS, so the screen never
+// changes in several places at once. A row you stepped through yourself waits ROLL_HOLD before moving again.
+// Still while arranging, while another app is in front, in a pop-up, or with reduced motion.
+const ROLL_MS = 20000, ROLL_TICK = 6000, ROLL_HOLD = 45000;
+const stepped = {};
+let rollAt = Date.now() + ROLL_MS - ROLL_TICK, rollNext = 0; // the first one moves ROLL_MS after Start opens
+function roll() {
+  if (store.away || editing.value || drag.value || sizing.value || store.modal || document.hidden || ov.value) return;
+  if (store.route.name !== 'start' || document.body.classList.contains('motion-reduce')) return;
+  const now = Date.now();
+  if (now - rollAt < ROLL_TICK) return;
+  const list = tiles.value.filter((t) => COVER_ROWS[t.type] && listOf(t).length > 1 && now - (stepped[t.id] || 0) > Math.max(ROLL_HOLD * !!stepped[t.id], ROLL_MS));
+  if (!list.length) return;
+  const t = list[rollNext++ % list.length];
+  const n = listOf(t).length;
+  sel[t.id] = ((sel[t.id] || 0) + 1) % n;
+  stepped[t.id] = now - (ROLL_HOLD - ROLL_MS); // the next roll of this row is ROLL_MS away, not ROLL_HOLD
+  rollAt = now;
 }
 function firstLine(type, r = rowOf(type)[0]) {
   if (!r) return '';
@@ -446,8 +547,8 @@ const sizeNum = (b) => { const s = bytes(b).split(' '); return s[0]; };
 const sizeUnit = (b) => { const s = bytes(b).split(' '); return s[1] || ''; };
 const byCon = computed(() => {
   const m = {};
-  for (const r of roms.value) if (store.installed[r.id]) { const k = r.platform_display_name || r.platform_slug; m[k] = (m[k] || 0) + (r.fs_size_bytes || 0); }
-  return Object.entries(m).map(([name, size]) => ({ name, size })).filter((c) => c.size > 0).sort((a, b) => b.size - a.size);
+  for (const r of roms.value) if (store.installed[r.id]) { const k = r.platform_display_name || r.platform_slug; m[k] ||= { name: k, size: 0, p: { slug: r.platform_slug, fs_slug: r.platform_fs_slug } }; m[k].size += r.fs_size_bytes || 0; }
+  return Object.values(m).filter((c) => c.size > 0).sort((a, b) => b.size - a.size);
 });
 const freePct = computed(() => space.value?.total ? (space.value.free / space.value.total) * 100 : 0);
 // the gauge: 36 ticks round a 270 degree arc, open at the bottom
@@ -476,8 +577,8 @@ const raDate = (d) => { const t = new Date(String(d).replace(' ', 'T') + (/[zZ]|
 async function loadAch() {
   const out = [];
   await Promise.all([
-    store.config.ra?.user ? call('ra:overview').then((o) => { for (const a of o.recent || []) out.push({ key: 'ra' + a.id + a.date, t: raDate(a.date), badge: img(a.badge), title: a.title, game: a.game, console: a.console || '', open: () => go('ra-game', { gameId: a.gameId }) }); }).catch(() => {}) : null,
-    call('trophies:overview').then((o) => { for (const x of o.recent || []) out.push({ key: 'tr' + x.key + x.id, t: x.time || 0, badge: x.icon, grade: x.grade, title: x.name, game: x.game, console: x.short || '', open: () => go('trophy-game', { tkey: x.key }) }); }).catch(() => {}),
+    store.config.ra?.user ? call('ra:overview').then((o) => { for (const a of o.recent || []) out.push({ key: 'ra' + a.id + a.date, t: raDate(a.date), badge: img(a.badge), title: a.title, desc: a.description || '', game: a.game, console: a.console || '', open: () => go('ra-game', { gameId: a.gameId }) }); }).catch(() => {}) : null,
+    call('trophies:overview').then((o) => { for (const x of o.recent || []) out.push({ key: 'tr' + x.key + x.id, t: x.time || 0, badge: x.icon, grade: x.grade, title: x.name, desc: x.detail || x.desc || '', game: x.game, console: x.short || '', open: () => go('trophy-game', { tkey: x.key }) }); }).catch(() => {}),
   ]);
   ach.value = out.sort((a, b) => b.t - a.t).slice(0, 60);
 }
@@ -529,7 +630,7 @@ function openTile(t, ev) {
   if (T === 'week') {
     const most = roms.value.filter((r) => store.play[r.id]?.min).sort((a, b) => store.play[b.id].min - store.play[a.id].min);
     if (!most.length) return;
-    store.homeLists = { ...(store.homeLists || {}), 'start-most': { id: 'start-most', name: 'Most played', icon: 'mdiChartBar', rom_ids: most.map((r) => r.id), auto: true, ordered: true, description: 'From Start' } };
+    store.homeLists = { ...(store.homeLists || {}), 'start-most': { id: 'start-most', name: 'Most Played', icon: 'mdiChartBar', rom_ids: most.map((r) => r.id), auto: true, ordered: true, description: 'From Start' } };
     return go('collection', { collectionId: 'start-most' });
   }
   if (T === 'storage') { store.settingsSection = 'storage'; return go('settings'); }
@@ -540,6 +641,8 @@ function openTile(t, ev) {
   if (T === 'daily') return daily.value && go('game', { romId: daily.value.id });
   if (T === 'stats') return tab('library');
   if (T === 'cstats') return platformById(t.platformId) && go('platform', { platformId: t.platformId });
+  if (T === 'spotlight') { const r = spotOf(t); return r && go('game', { romId: r.id }); }
+  if (T === 'emulator') { if (!t.emu) return; call('emuget:open', t.emu).then(() => toast(`${t.emu.label} is opening`, 'ok', 2500, 'mdiOpenInApp'), (e) => toast(e.message, 'error', 5000)); return; }
   if (T === 'image' || T === 'html') return;
   if (T === 'game') return romById(t.romId) && go('game', { romId: t.romId });
   if (T === 'console') return platformById(t.platformId) && go('platform', { platformId: t.platformId });
@@ -616,11 +719,11 @@ async function pickGame() {
     if (id !== '__back') return id;
   }
 }
-const SUBS = { game: 'Pin one game', console: 'Pin one console', trophies: 'All, or one console’s', image: 'A picture or GIF from this device', html: 'Paste HTML, or start from a note or a countdown', daily: 'A new game from your library every day', stats: 'Games, consoles and hours in numbers' };
+const SUBS = { game: 'Pin one game', console: 'Pin one console', trophies: 'All, or one console’s', image: 'Search 4K wallpapers or GIFs, or use your own', spotlight: 'One console’s games taking turns, with their art', emulator: 'Open an emulator straight from Start', cgames: 'One console’s games in a row', cstats: 'One console in numbers', html: 'Paste HTML, or start from a note or a countdown', daily: 'A new game from your library every day', stats: 'Games, consoles and hours in numbers' };
 async function addTile() {
   const have = new Set(tiles.value.map((t) => t.type));
-  const opts = GROUPS.flatMap(([heading, keys]) => keys.filter((k) => MANY.has(k) || !have.has(k)).map((k, i) => ({ heading: i === 0 ? heading : undefined, label: TILES[k].name, value: k, icon: TILES[k].icon, sub: SUBS[k] || '' })));
-  const type = await choose({ sheet: true, title: 'Add a Widget', options: opts });
+  const tabsOf = GROUPS.map(([label, keys]) => ({ label, options: keys.filter((k) => MANY.has(k) || !have.has(k)).map((k) => ({ label: TILES[k].name, value: k, icon: TILES[k].icon, sub: SUBS[k] || '' })) })).filter((g) => g.options.length);
+  const type = await choose({ title: 'Add a Widget', tabs: tabsOf });
   if (!type) return nextTick(() => focusKey('st-add'));
   const [w, h] = TILES[type].size;
   const t = { id: type + '-' + Date.now().toString(36), type, w, h, x: 0, y: bottom(tiles.value) };
@@ -642,10 +745,27 @@ const HTML_NOTE = (text) => `<div style="height:100%;display:flex;align-items:ce
 const HTML_COUNT = (title, date) => `<div style="height:100%;display:flex;flex-direction:column;justify-content:center;padding:6% 8%;box-sizing:border-box;font-family:Inter,system-ui,sans-serif"><div style="font-size:clamp(11px,8vh,16px);opacity:.7;font-weight:600">${title.replace(/[<&]/g, (c) => (c === '<' ? '&lt;' : '&amp;'))}</div><div id="n" style="font-size:clamp(22px,34vh,96px);font-weight:800;letter-spacing:-.03em;line-height:1"></div></div><script>const t=new Date(${JSON.stringify(date)}+'T00:00:00');function u(){const d=Math.ceil((t-new Date())/864e5);document.getElementById('n').textContent=d>1?d+' days':d===1?'Tomorrow':d===0?'Today':Math.abs(d)+' days ago'}u();setInterval(u,6e4)<\/script>`;
 const CONFIG = {
   async image(t) {
-    const file = await pickFolder({ title: 'Choose a picture', subtitle: 'PNG, JPG, WebP, AVIF or GIF', start: store.info?.home, files: ['png', 'jpg', 'jpeg', 'webp', 'gif', 'avif'] });
-    if (!file) return false;
-    try { const old = t.src; t.src = await call('start:image', { file }); if (old) call('start:imageRemove', { url: old }).catch(() => {}); return true; }
-    catch (e) { toast(e.message, 'error', 5000); return false; }
+    // 0.9.28 (owner): search 4K wallpapers or GIFs right here, or pick a file
+    const src = await choose({ sheet: true, title: 'A Picture', options: [
+      { label: 'Search 4K Wallpapers', value: 'image', icon: 'mdiImageSearchOutline', sub: 'From Wallhaven, safe for work, 3840 by 2160 or bigger' },
+      { label: 'Search GIFs', value: 'gif', icon: 'mdiFilmstrip', sub: 'Moving pictures from Openverse, openly licensed, the biggest first' },
+      { label: 'From This Device', value: 'file', icon: 'mdiFolderImage', sub: 'PNG, JPG, WebP, AVIF or GIF' },
+    ] });
+    if (!src) return false;
+    let url = null;
+    if (src === 'file') {
+      const file = await pickFolder({ title: 'Choose a picture', subtitle: 'PNG, JPG, WebP, AVIF or GIF', start: store.info?.home, files: ['png', 'jpg', 'jpeg', 'webp', 'gif', 'avif'] });
+      if (!file) return false;
+      try { url = await call('start:image', { file }); } catch (e) { toast(e.message, 'error', 5000); return false; }
+    } else {
+      const q = await askText({ title: src === 'gif' ? 'Search GIFs' : 'Search 4K Wallpapers', placeholder: src === 'gif' ? 'Pixel art rain' : 'Hyrule at night' });
+      if (!q) return false;
+      const pick = await openModal('imgsearch', { q, kind: src });
+      if (!pick) return false;
+      try { toast('Getting the picture…', 'info', 2500, 'mdiDownload'); url = await call('start:imageUrl', { url: pick }); } catch (e) { toast(e.message, 'error', 5000); return false; }
+    }
+    const old = t.src; t.src = url; if (old) call('start:imageRemove', { url: old }).catch(() => {});
+    return true;
   },
   async html(t) {
     const kind = await choose({ sheet: true, title: 'Your Own Widget', message: 'It runs on its own, apart from Cartridge, and can’t reach your library or settings.', options: [
@@ -667,6 +787,17 @@ const CONFIG = {
     try { t.src = await call('start:html', { id: t.id, html }); return true; } catch (e) { toast(e.message, 'error', 5000); return false; }
   },
   async cgames(t) { return pickConsole(t); },
+  async spotlight(t) { return pickConsole(t); },
+  // an emulator found on this device, opened from Start (0.9.28)
+  async emulator(t) {
+    const list = (await call('emuup:list', {}).catch(() => [])).filter((u) => u.kind !== 'windows');
+    if (!list.length) { toast('No emulators found on this device yet', 'info', 3500); return false; }
+    const v = await choose({ sheet: true, title: 'Which Emulator', options: list.map((u, i) => ({ label: u.label, value: String(i), sub: [u.version ? 'Version ' + u.version : '', u.kind === 'flatpak' ? 'Flatpak' : ''].filter(Boolean).join(' · '), raw: true })) });
+    if (v == null) return false;
+    const u = list[Number(v)];
+    t.emu = { id: u.id, label: u.label, kind: u.kind, fp: u.fp || null, path: u.path || null };
+    return true;
+  },
   async cstats(t) { return pickConsole(t); },
   async trophies(t) {
     const names = [...new Set(ach.value.map((a) => a.console).filter(Boolean))].sort();
@@ -710,7 +841,8 @@ async function removePage() {
 // the pages overview
 const ov = ref(null), ovEl = ref(null);
 let ovLayer = null;
-const pgKey = (pg, i) => (pg[0]?.id || 'empty') + ':' + pg.length + ':' + i;
+// a page's key follows its tiles, not its place, so a page that moves slides there instead of being drawn twice (0.9.28)
+const pgKey = (pg, i) => (pg.length ? pg.map((x) => x.id).sort().join('|') : 'empty-' + i);
 const ovRows = (pg) => Math.max(4, bottom(pg));
 function openOv() {
   if (ov.value) return closeOv();
@@ -719,7 +851,7 @@ function openOv() {
   nextTick(() => {
     ovLayer = pushLayer(ovEl.value, {
       back: () => (ov.value.moving != null ? (ov.value.moving = null) : closeOv()),
-      lt: closeOv, rt: closeOv, start: closeOv, select() {}, x() {}, y() {}, lb() {}, rb() {},
+      lt() {}, rt() {}, start: closeOv, select() {}, x() {}, y() {}, lb: closeOv, rb: closeOv,
       left: () => (ov.value.moving != null ? ovMove(-1) : false), right: () => (ov.value.moving != null ? ovMove(1) : false),
     });
     focusFirst(ovEl.value, `[data-key="pg-${page.value}"]`);
@@ -854,9 +986,9 @@ function hDown(t, edge, e) {
 
 // ---- controller
 const hints = () => editing.value
-  ? (mode.value === 'move' ? [{ b: 'A', label: 'Put down' }, { b: 'B', label: 'Put down' }]
+  ? (mode.value === 'move' ? [{ b: 'A', label: 'Put Down' }, { b: 'B', label: 'Put Down' }]
     : mode.value === 'size' ? [{ b: 'LB+RB', label: 'Corner' }, { b: 'A', label: 'Done' }, { b: 'B', label: 'Done' }]
-    : [{ b: 'A', label: 'Pick up' }, { b: 'X', label: 'Resize' }, ...(CONFIG[focusedTile()?.type] ? [{ b: 'SELECT', label: 'Change' }] : []), { b: 'Y', label: 'Remove' }, { b: 'RS', label: 'Pages' }, { b: 'LT+RT', label: 'All Pages' }, { b: 'B', label: 'Done' }])
+    : [{ b: 'A', label: 'Pick Up' }, { b: 'X', label: 'Resize' }, ...(CONFIG[focusedTile()?.type] ? [{ b: 'SELECT', label: 'Change' }] : []), { b: 'Y', label: 'Remove' }, { b: 'RS', label: 'Pages' }, { b: 'LB+RB', label: 'All Pages' }, { b: 'B', label: 'Done' }])
   : [{ b: 'A', label: 'Open' }, { b: 'A', label: 'Hold: Arrange' }, ...(pages.value.length > 1 ? [{ b: 'RS', label: 'Pages' }] : []), ...((focusedId.value === 'continue' && playing.value.length > 1) || STEPS.has(tiles.value.find((x) => x.id === focusedId.value)?.type) ? [{ b: 'LB+RB', label: focusedId.value && tiles.value.find((x) => x.id === focusedId.value)?.type === 'trophies' ? 'Unlock' : 'Game' }] : []), { b: 'Y', label: 'Search' }];
 const focusedTile = () => tiles.value.find((t) => t.id === document.activeElement?.dataset?.id);
 const dirH = (dir) => () => {
@@ -878,16 +1010,22 @@ useView({
   x: () => { const t = focusedTile(); if (editing.value && t) { setMode('size'); return true; } return false; },
   y: () => { if (!editing.value) return false; const t = focusedTile(); if (t) removeTile(t); return true; },
   back: () => { if (!editing.value) return false; if (mode.value) setMode(''); else stopEdit(); return true; },
-  lb: () => { if (mode.value === 'size') return stepCorner(-1), true; const t = focusedTile(); if (t?.type === 'continue' && playing.value.length > 1) stepGame(-1); else if (t && !editing.value) stepTile(t, -1); },
-  rb: () => { if (mode.value === 'size') return stepCorner(1), true; const t = focusedTile(); if (t?.type === 'continue' && playing.value.length > 1) stepGame(1); else if (t && !editing.value) stepTile(t, 1); },
+  // arranging (0.9.28, owner): L1/R1 opens the pages overview; in resize mode it still picks the corner
+  lb: () => { if (mode.value === 'size') return stepCorner(-1), true; if (editing.value) return openOv(), true; const t = focusedTile(); if (t?.type === 'continue' && playing.value.length > 1) stepGame(-1); else if (t && !editing.value) stepTile(t, -1); },
+  rb: () => { if (mode.value === 'size') return stepCorner(1), true; if (editing.value) return openOv(), true; const t = focusedTile(); if (t?.type === 'continue' && playing.value.length > 1) stepGame(1); else if (t && !editing.value) stepTile(t, 1); },
   rsleft: () => goPage(page.value - 1), rsright: () => goPage(page.value + 1),
-  lt: () => (editing.value ? (openOv(), true) : false), rt: () => (editing.value ? (openOv(), true) : false),
+  lt: () => (editing.value ? true : false), rt: () => (editing.value ? true : false), // arranging: the tabs stay put
   select: () => { const t = focusedTile(); if (!editing.value || !t || !CONFIG[t.type]) return false; configure(t); return true; },
 }, hints);
 
 let clockT = 0, spaceT = 0, ro = null;
+let spotT = 0, rollT = 0;
 onMounted(async () => {
   clockT = setInterval(tick, 5000);
+  spotT = setInterval(() => { if (!store.away) spotTick.value++; }, 12000);
+  rollT = setInterval(roll, 1000);
+  // 0.9.28 (owner: hints are hidden now, so first-timers get Start's tips once, in a short tour)
+  if (store.config.ui.toured && !store.config.ui.startTips) setTimeout(async () => { if (store.modal || store.route.name !== 'start') return; saveConfig({ ui: { startTips: 1 } }); await openModal('tour', { start: true, only: true }); }, 900);
   loadSpace(); spaceT = setInterval(loadSpace, 60000);
   loadWeek(); loadAch();
   measure();
@@ -895,7 +1033,7 @@ onMounted(async () => {
   await nextTick();
   ensureFocus(el.value);
 });
-onBeforeUnmount(() => { clearInterval(clockT); clearInterval(spaceT); clearTimeout(pressT); ro?.disconnect(); if (editing.value) { settle(tiles.value); save(); } });
+onBeforeUnmount(() => { store.forceHints = false; clearInterval(clockT); clearInterval(spotT); clearInterval(rollT); clearInterval(spaceT); clearTimeout(pressT); ro?.disconnect(); if (editing.value) { settle(tiles.value); save(); } });
 watch(() => store.trophyVer, loadAch);
 watch(() => store.play, loadWeek);
 </script>
@@ -1057,7 +1195,15 @@ watch(() => store.play, loadWeek);
 .st-ov-page:focus { box-shadow: var(--ring); }
 .st-ov-page.moving { transform: translateY(-8px) scale(1.04); box-shadow: var(--ring), 0 24px 50px rgba(0, 0, 0, 0.55); }
 .st-ov-map { position: relative; aspect-ratio: 16 / 9; border-radius: var(--r-md); background: rgba(255, 255, 255, 0.03); overflow: hidden; }
-.st-ov-map i { position: absolute; box-sizing: border-box; border: 2px solid transparent; background: rgba(255, 255, 255, 0.16); border-radius: 4px; background-clip: padding-box; }
+.st-ov-map i { position: absolute; box-sizing: border-box; border: 2px solid transparent; background: rgba(255, 255, 255, 0.12); border-radius: 6px; background-clip: padding-box; background-size: cover; background-position: center 30%; overflow: hidden; display: flex; align-items: flex-end; padding: 4px; }
+.st-ov-map i.pic { background-color: #111; }
+.st-ov-tag { display: flex; align-items: center; gap: 4px; min-width: 0; color: rgba(255, 255, 255, 0.8); font-size: 10px; font-weight: 600; }
+.st-ov-tag em { font-style: normal; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.st-ov-clock { align-self: center; margin: auto; font-family: var(--display); font-weight: 800; font-size: clamp(12px, 1.4vw, 22px); color: #fff; }
+.st-ov-page { position: relative; transition: transform 260ms var(--ease-out), box-shadow 260ms var(--ease-out), opacity 200ms ease; }
+.st-ov-page.dim { opacity: 0.55; }
+.st-ov-carry { position: absolute; top: -12px; left: 50%; transform: translateX(-50%); display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; background: var(--focus); color: var(--on-focus); font-size: var(--t-xs); font-weight: 700; box-shadow: 0 6px 16px rgba(0, 0, 0, 0.45); }
+.st-ovm-move { transition: transform 300ms cubic-bezier(0.32, 0.72, 0, 1); }
 .st-ov-n { display: flex; justify-content: space-between; font-weight: 700; font-family: var(--display); }
 .st-ov-n em { font-style: normal; font-weight: 500; color: var(--muted); font-family: var(--body); font-size: var(--t-sm); }
 .st-pages { flex: none; align-self: center; display: flex; align-items: center; gap: 8px; padding: 6px 0 10px; } /* its own row under the board: never over a tile (0.9.24) */
@@ -1072,7 +1218,7 @@ watch(() => store.play, loadWeek);
 .st-tile:focus .st-row-art { transform: scale(1.03); opacity: 0.6; }
 .st-row-fade { position: absolute; inset: 0; z-index: -1; background: linear-gradient(90deg, var(--s1) 22%, color-mix(in srgb, var(--s1) 70%, transparent) 48%, color-mix(in srgb, var(--s1) 35%, transparent)), linear-gradient(0deg, color-mix(in srgb, var(--s1) 70%, transparent), transparent 50%); }
 .st-row { flex: 1; min-height: 0; display: flex; gap: clamp(10px, 3cqw, 24px); }
-.st-row-info { flex: 0 0 38%; min-width: 0; display: flex; flex-direction: column; }
+.st-row-info { flex: 0 0 38%; min-width: 0; display: flex; flex-direction: column; gap: clamp(8px, 5cqh, 22px); } /* 0.9.28: the row's name never sits on the game's logo */
 .st-row-lead { margin-top: auto; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-width: 0; }
 .st-row-lead :deep(.game-logo) { margin: 0 0 2px; filter: drop-shadow(0 3px 10px rgba(0, 0, 0, 0.5)); }
 .st-row-lead :deep(.st-row-name) { margin: 0; font-family: var(--display); font-stretch: var(--display-stretch); font-weight: 800; font-size: clamp(14px, min(15cqh, 6cqw), 28px); line-height: 1.08; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
@@ -1084,6 +1230,18 @@ watch(() => store.play, loadWeek);
   transition: transform 420ms var(--ease-out), left 420ms var(--ease-out); transition-delay: calc(var(--i) * 18ms); }
 .st-tile:focus .st-fan-c { left: calc(var(--i) * 42cqh); }
 .st-tile:focus .st-fan-c:first-child { transform: translateY(-2%); }
+/* a row moving to its next game (0.9.28): the art crossfades, the name slides in, the covers glide along */
+.st-row-art.st-xf-enter-active, .st-row-art.st-xf-leave-active { transition: opacity 900ms var(--ease-in-out, ease); }
+.st-row-art.st-xf-enter-from, .st-row-art.st-xf-leave-to { opacity: 0; }
+.st-lead-leave-active { transition: opacity 220ms ease, transform 220ms ease; }
+.st-lead-enter-active { transition: opacity 420ms var(--ease-out), transform 420ms var(--ease-out); }
+.st-lead-leave-to { opacity: 0; transform: translateX(-10px); }
+.st-lead-enter-from { opacity: 0; transform: translateX(14px); }
+.st-fan-c.st-fan-leave-active { transition: opacity 380ms ease, transform 420ms var(--ease-out); z-index: 21; }
+.st-fan-c.st-fan-leave-to { opacity: 0; transform: translateX(-18%) scale(0.96); }
+.st-fan-c.st-fan-enter-active { transition: opacity 520ms ease 180ms; }
+.st-fan-c.st-fan-enter-from { opacity: 0; }
+:global(body.motion-reduce .st-tile *) { transition-duration: 0s !important; }
 .st-row.narrow .st-row-info { display: none; }
 .st-row.narrow { flex-direction: column; }
 .st-row.tall { flex-direction: column-reverse; }
@@ -1103,6 +1261,25 @@ watch(() => store.play, loadWeek);
 .st-tro.one .st-tro-t b { font-size: clamp(12px, 12cqh, 18px); }
 .st-tro-t span { font-size: var(--t-xs); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .st-tro-strip { display: flex; gap: 6px; overflow: hidden; }
+.st-tro.feat { flex-direction: row; align-items: stretch; justify-content: flex-start; gap: clamp(14px, 3cqw, 28px); }
+.st-tro.feat .st-tro-list { flex: 1; align-content: center; }
+.st-tro.feat .st-tro-strip { display: none; }
+.st-tro-feat { flex: 0 0 40%; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 6px; padding: clamp(12px, 4cqh, 22px); border-radius: var(--r-lg); background: radial-gradient(120% 90% at 20% 10%, rgba(255, 210, 120, 0.12), transparent 60%), rgba(255, 255, 255, 0.04); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06); animation: st-in 520ms var(--ease-out) both; }
+.st-tro-fbadge { width: clamp(56px, 30cqh, 96px); aspect-ratio: 1; border-radius: var(--r-lg); overflow: hidden; display: grid; place-items: center; background: var(--s2); box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 210, 120, 0.25); margin-bottom: 6px; }
+.st-tro-fbadge img { width: 100%; height: 100%; object-fit: cover; }
+.st-tro-feat b { font-family: var(--display); font-weight: 800; font-size: clamp(16px, 7cqh, 28px); line-height: 1.1; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.st-tro-fd { color: var(--text); opacity: 0.8; font-size: var(--t-sm); line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.st-tro-fg { color: var(--muted); font-size: var(--t-xs); }
+.st-emu { flex: 1; min-height: 0; display: flex; align-items: center; gap: clamp(10px, 4cqw, 22px); }
+.st-emu-t { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.st-emu-t b { font-family: var(--display); font-weight: 800; font-size: clamp(15px, 14cqh, 28px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.st-emu-t > span:not(.status) { color: var(--muted); font-size: var(--t-xs); }
+.st-emu-t .status { align-self: flex-start; }
+.st-spot-enter-active, .st-spot-leave-active { transition: opacity 900ms ease; }
+.st-spot-enter-from, .st-spot-leave-to { opacity: 0; }
+.st-band { flex: 1; min-height: 0; display: flex; gap: 10px; align-items: center; margin: 10px 0 4px; overflow: hidden; mask-image: linear-gradient(90deg, #000 80%, transparent); }
+.st-band img { height: min(100%, 220px); aspect-ratio: 2 / 3; object-fit: cover; border-radius: var(--r-md); box-shadow: var(--weight-edge), var(--weight); animation: st-in 520ms var(--ease-out) both; }
+.st-band:empty { display: none; }
 .st-tro-mini { width: 34px; height: 34px; flex: none; border-radius: var(--r-sm); overflow: hidden; display: grid; place-items: center; background: var(--s2); opacity: calc(1 - var(--i) * 0.06); animation: st-in 420ms var(--ease-out) both; animation-delay: calc(var(--i) * 30ms + 200ms); }
 .st-tro-mini img { width: 100%; height: 100%; object-fit: cover; }
 @container (max-height: 84px) { .st-tro-strip { display: none; } }
@@ -1153,7 +1330,10 @@ watch(() => store.play, loadWeek);
 @container (max-width: 190px) and (max-height: 190px) { .st-store-text { display: none; } .st-gauge { max-width: none; width: 100%; height: 100%; } }
 .st-store-cons { display: none; flex-direction: column; gap: 7px; margin-top: 14px; }
 .st-store-con { display: grid; grid-template-columns: minmax(0, 1fr) 2fr auto; align-items: center; gap: 10px; font-size: var(--t-xs); color: var(--muted); }
-.st-store-con span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.st-store-con span { white-space: nowrap; overflow: hidden; text-overflow: clip; }
+.st-sc-n { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.st-sc-n :deep(.picon), .st-sc-n :deep(svg), .st-sc-n :deep(img) { flex: none; }
+@container (max-width: 560px) { .st-sc-n > span { display: none; } .st-store-con { grid-template-columns: auto 1fr auto; } } /* no room for names: icons only */
 .st-store-con i { height: 5px; border-radius: 3px; background: rgba(255, 255, 255, 0.08); overflow: hidden; }
 .st-store-con b { display: block; height: 100%; border-radius: inherit; background: rgba(255, 255, 255, 0.55); }
 .st-store-con em { font-style: normal; color: var(--text); font-weight: 600; }
