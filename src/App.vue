@@ -96,7 +96,7 @@
 <script setup>
 import { computed, onMounted, onBeforeUnmount, ref, watch, nextTick, defineAsyncComponent } from 'vue';
 import { store, loadConfig, loadLibrary, loadArt, back, tab, go, call, toast, choose, saveConfig, builtinKb, askText, GRADE, activeTabs, TAB_DEFS } from './store.js';
-import { pushLayer, focusFirst, input } from './nav.js';
+import { pushLayer, focusFirst, input, gameEnded } from './nav.js';
 import { setSoundEnabled, setSoundStyle, sfx } from './sfx.js';
 import { applyTheme, CARD_SIZES } from './themes.js';
 import { setPointerPref, setRumble, setBackground } from './nav.js';
@@ -292,6 +292,7 @@ onMounted(async () => {
   window.cart.on('open-game', openGame);
   // another app in front in Game Mode (0.9.21, owner: still laggy in the background): gamescope never
   // hides or blurs the window, so stop the pad, the animated background and every CSS animation here
+  window.cart.on('game-run', (g) => gameEnded(g?.state === 'ended'));
   window.cart.on('background', (b) => { setBackground(b?.away); store.away = !!b?.away; document.body.classList.toggle('away', !!b?.away); });
   window.cart.on('addon-progress', (m) => {
     if (!m?.key) return;

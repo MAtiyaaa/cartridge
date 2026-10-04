@@ -154,6 +154,46 @@ function refocus() {
   };
   setTimeout(step, 0); // after the caller has noted that the game is gone (gameFocus.away)
 }
+// The game Cartridge asked Steam to start (0.9.29): found by its file in a running process's command line
+// (every emulator is given the game's path, or its folder), then watched until it ends. When it does,
+// Cartridge comes back to the front with the pad working (nav.js gameEnded), in Game Mode and on the desktop.
+let runT = null;
+function watchGameRun(romId) {
+  clearInterval(runT);
+  const where = installedMap[romId];
+  if (!where || where === MARKED) return;
+  const r = romIndexMain().get(romId) || {};
+  // RPCS3 and Vita3K start installed games by serial, not by file
+  let serial = ''; try { serial = /ps3/i.test(`${r.platform_slug} ${r.platform_fs_slug}`) ? ps3Serial(romId, where) || '' : installs[romId]?.serial || ''; } catch {}
+  const needles = [...new Set([where, mainFile(where)].filter(Boolean).map((p) => path.basename(p)).concat(serial ? [serial] : []))].filter((n) => n.length > 3);
+  const running = () => {
+    for (const d of fs.readdirSync('/proc')) {
+      if (!/^\d+$/.test(d) || Number(d) === process.pid) continue;
+      let c = ''; try { c = fs.readFileSync(`/proc/${d}/cmdline`, 'utf8'); } catch { continue; }
+      if (needles.some((n) => c.includes(n)) && !/\bcartridge\b|electron/i.test(c.split('\0')[0])) return true;
+    }
+    return false;
+  };
+  let seen = false, started = Date.now();
+  broadcast('game-run', { state: 'starting', romId });
+  runT = setInterval(() => {
+    let on = false; try { on = running(); } catch {}
+    if (on && !seen) { seen = true; log('game running', romId); }
+    if (!on && !seen && Date.now() - started > 180000) { clearInterval(runT); return; } // never seen: give up after 3 min
+    if (!on && seen) {
+      clearInterval(runT); log('game ended', romId);
+      broadcast('game-run', { state: 'ended', romId });
+      bringBack();
+    }
+  }, 2000);
+}
+// back in front after a game: in Game Mode gamescope decides (refocus asks until the page has focus); on the
+// desktop a window manager may refuse a plain focus, so the window is lifted above the rest for a moment
+function bringBack() {
+  if (!win || win.isDestroyed()) return;
+  if (!isGamescope()) { try { if (win.isMinimized()) win.restore(); win.show(); win.setAlwaysOnTop(true); win.moveTop(); win.focus(); setTimeout(() => { try { win.setAlwaysOnTop(false); } catch {} }, 600); } catch {} }
+  refocus();
+}
 function watchGamescopeFocus() {
   const gid = process.env.SteamGameId || process.env.STEAM_GAME_ID || '';
   if (!isGamescope() || !/^\d+$/.test(gid)) return;
@@ -4062,7 +4102,7 @@ const handlers = {
   'steam:report': () => steamMgr.startupReport(),
   'steam:last': () => steamMgr.lastStatus(),
   'steam:forRom': ({ romId }) => steamMgr.forRom(Number(romId)),
-  'steam:play': ({ romId }) => steamMgr.play(Number(romId)),
+  'steam:play': async ({ romId }) => { const r = await steamMgr.play(Number(romId)); watchGameRun(Number(romId)); return r; },
   'steam:addToCollections': ({ romId, names }) => steamMgr.addRomToCollections(Number(romId), names || []),
   // HowLongToBeat times when RomM has none: name plus release year, cached in hltb.json
   'hltb:lookup': ({ name, year }) => hltbSvc.forGame({ name: String(name || ''), year: Number(year) || null }),

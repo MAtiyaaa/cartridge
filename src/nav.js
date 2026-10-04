@@ -391,9 +391,16 @@ function poll() {
 (function loop() { poll(); setTimeout(loop, inFront() ? 8 : 250); })();
 // Game Mode: Steam's menu is in front while Cartridge keeps its window focus (main.js watchGamescopeFocus)
 export function setBackground(v) { inBackground = !!v; gsKnown = true; }
+// Outside Game Mode (0.9.29, owner: "on a PC with a controller, after the game closes the controls don't work"):
+// the pad is read only while the window has focus, and after a game Steam keeps it. Main watches the game it
+// started and says when it ended; from then the pad works even before the window gets its focus back, until
+// Cartridge loses a focus it had (you switched to something else) or another game starts.
+let returned = false;
+export function gameEnded(v) { returned = !!v; }
+window.addEventListener('blur', () => { returned = false; });
 // In Game Mode gamescope says when Cartridge is in front, which is truer than window focus: after a game
 // the window can be in front without focus, and the pad went dead (0.9.24)
-function inFront() { return gsKnown ? !inBackground : document.hasFocus() && !inBackground; }
+function inFront() { return gsKnown ? !inBackground : (document.hasFocus() || returned) && !inBackground; }
 
 export function ensureFocus(root) {
   if (!root) return;
