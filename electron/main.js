@@ -853,8 +853,10 @@ async function handleImage(request) {
   if (!target) return new Response('bad', { status: 400 });
   const key = crypto.createHash('sha1').update(target).digest('hex');
   const file = path.join(IMG_CACHE, key);
+  // RomM's Sony controllers carry its parody marks ("ROMMY"): Sony's own wordmark and logo go in (0.9.31)
+  const sony = require('./sonyArt'), sonySlug = sony.isSonyArt(target), mark = (b) => (sonySlug ? sony.fix(sonySlug, b) : b);
   try {
-    const buf = await fsp.readFile(file);
+    const buf = mark(await fsp.readFile(file));
     const type = (await fsp.readFile(file + '.type', 'utf8').catch(() => '')) || 'image/jpeg';
     return new Response(buf, { headers: { 'Content-Type': type, 'Cache-Control': 'max-age=31536000' } });
   } catch {}
@@ -868,7 +870,7 @@ async function handleImage(request) {
     const buf = Buffer.from(await r.arrayBuffer());
     const type = r.headers.get('content-type') || 'image/jpeg';
     fsp.mkdir(IMG_CACHE, { recursive: true }).then(() => Promise.all([fsp.writeFile(file, buf), fsp.writeFile(file + '.type', type)])).catch(() => {});
-    return new Response(buf, { headers: { 'Content-Type': type } });
+    return new Response(mark(buf), { headers: { 'Content-Type': type } });
   } catch {
     return new Response('err', { status: 502 });
   }
