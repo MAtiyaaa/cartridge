@@ -273,6 +273,11 @@ onMounted(async () => {
   // Game Mode (0.9.24, owner: touch still showed a cursor): the screen's touches arrive as a mouse there and
   // nobody uses a mouse in Game Mode, so Auto means Touch: no cursor, and drags scroll
   setPointerPref(store.config.ui.pointer || (store.info?.gamescope ? 'touch' : 'auto'));
+  // 0.9.28 (owner: Home flashed before Start): the opening page is picked before the library loads, not after
+  {
+    const ui0 = store.config.ui, first = ui0.openOn || 'start';
+    if (store.route.name === 'home') store.route = { name: activeTabs().includes(first) || (first === 'start' && !ui0.startAdded) ? first : activeTabs()[0], params: {} };
+  }
   await loadLibrary();
   loadArt();
   // 0.9.19: Start joins the top bar once for people who had picked their own tabs
@@ -280,7 +285,7 @@ onMounted(async () => {
   if (!ui.startAdded) { const t = Array.isArray(ui.tabs) && ui.tabs.length ? (ui.tabs.includes('start') ? ui.tabs : ['start', ...ui.tabs]) : undefined; saveConfig({ ui: { startAdded: Date.now(), ...(t ? { tabs: t } : {}) } }); }
   // the menu Cartridge opens on (Look & Feel → Open on, 0.9.19); one taken off the top bar: the first tab
   const openOn = ui.openOn || 'start'; // 0.9.23 (owner): Start by default
-  if (store.route.name === 'home') tab(activeTabs().includes(openOn) ? openOn : activeTabs()[0]);
+  if (store.route.name === 'home' && openOn !== 'home') tab(activeTabs().includes(openOn) ? openOn : activeTabs()[0]);
   // opened from a Steam shortcut whose game is gone (--game <id>), or a second launch handing over
   const openGame = (id) => { if (id && store.lib) { store.quickMenu = false; go('game', { romId: Number(id) }); } };
   call('app:startGame').then(openGame).catch(() => {});

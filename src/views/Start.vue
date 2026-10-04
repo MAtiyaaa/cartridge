@@ -49,7 +49,8 @@
                 <div class="st-sub">{{ space ? `of ${bytes(space.total)}` : 'Looking…' }}</div>
                 <!-- 0.9.24 (owner: empty space when big): what each console's games take up on this device -->
                 <div v-if="byCon.length" class="st-store-cons">
-                  <div v-for="c in byCon.slice(0, 6)" :key="c.name" class="st-store-con"><span>{{ c.name }}</span><i><b :style="{ width: (c.size / byCon[0].size) * 100 + '%' }" /></i><em class="tnum">{{ bytes(c.size) }}</em></div>
+                  <!-- 0.9.28 (owner): the console's small icon, its name only where it fits, and only the rows that fit -->
+                  <div v-for="c in byCon.slice(0, Math.max(1, Math.min(8, Math.floor((box(t).ph - 150) / 24))))" :key="c.name" class="st-store-con"><span class="st-sc-n"><PIcon :p="c.p" :size="16" /><span>{{ c.name }}</span></span><i><b :style="{ width: (c.size / byCon[0].size) * 100 + '%' }" /></i><em class="tnum">{{ bytes(c.size) }}</em></div>
                 </div>
               </div>
               <div class="st-gauge" :class="{ low: freePct < 10 }">
@@ -320,6 +321,7 @@ import Grade from '../components/Grade.vue';
 import GameLogo from '../components/GameLogo.vue';
 import ConsoleCard from '../components/ConsoleCard.vue';
 import EmuIcon from '../components/EmuIcon.vue';
+import PIcon from '../components/PIcon.vue';
 import ConsoleMark from '../components/ConsoleMark.vue';
 import StartClock from '../components/StartClock.vue';
 import { TILES, GROUPS, MANY, DEFAULT, valid, COLS, MAX_H, pack, settle, bottom } from '../startTiles.js';
@@ -523,8 +525,8 @@ const sizeNum = (b) => { const s = bytes(b).split(' '); return s[0]; };
 const sizeUnit = (b) => { const s = bytes(b).split(' '); return s[1] || ''; };
 const byCon = computed(() => {
   const m = {};
-  for (const r of roms.value) if (store.installed[r.id]) { const k = r.platform_display_name || r.platform_slug; m[k] = (m[k] || 0) + (r.fs_size_bytes || 0); }
-  return Object.entries(m).map(([name, size]) => ({ name, size })).filter((c) => c.size > 0).sort((a, b) => b.size - a.size);
+  for (const r of roms.value) if (store.installed[r.id]) { const k = r.platform_display_name || r.platform_slug; m[k] ||= { name: k, size: 0, p: { slug: r.platform_slug, fs_slug: r.platform_fs_slug } }; m[k].size += r.fs_size_bytes || 0; }
+  return Object.values(m).filter((c) => c.size > 0).sort((a, b) => b.size - a.size);
 });
 const freePct = computed(() => space.value?.total ? (space.value.free / space.value.total) * 100 : 0);
 // the gauge: 36 ticks round a 270 degree arc, open at the bottom
@@ -1293,7 +1295,10 @@ watch(() => store.play, loadWeek);
 @container (max-width: 190px) and (max-height: 190px) { .st-store-text { display: none; } .st-gauge { max-width: none; width: 100%; height: 100%; } }
 .st-store-cons { display: none; flex-direction: column; gap: 7px; margin-top: 14px; }
 .st-store-con { display: grid; grid-template-columns: minmax(0, 1fr) 2fr auto; align-items: center; gap: 10px; font-size: var(--t-xs); color: var(--muted); }
-.st-store-con span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.st-store-con span { white-space: nowrap; overflow: hidden; text-overflow: clip; }
+.st-sc-n { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.st-sc-n :deep(.picon), .st-sc-n :deep(svg), .st-sc-n :deep(img) { flex: none; }
+@container (max-width: 560px) { .st-sc-n > span { display: none; } .st-store-con { grid-template-columns: auto 1fr auto; } } /* no room for names: icons only */
 .st-store-con i { height: 5px; border-radius: 3px; background: rgba(255, 255, 255, 0.08); overflow: hidden; }
 .st-store-con b { display: block; height: 100%; border-radius: inherit; background: rgba(255, 255, 255, 0.55); }
 .st-store-con em { font-style: normal; color: var(--text); font-weight: 600; }

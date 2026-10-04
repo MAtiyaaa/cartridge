@@ -88,6 +88,8 @@ img { -webkit-user-drag: none; }
 .bg-stage .layer { position: absolute; inset: -60px; background-size: cover; background-position: center 30%; opacity: 0; transition: opacity 0.9s var(--ease), transform 12s linear; filter: saturate(1.15); }
 .bg-stage .layer.on { opacity: 1; transform: scale(1.06); }
 .bg-stage .layer.blur { filter: blur(26px) saturate(1.3) brightness(0.8); }
+/* without the GPU a 26px blur over the whole screen is redrawn on every change: a lighter one (0.9.28) */
+body.light-fx .bg-stage .layer.blur { filter: blur(10px) brightness(0.72); }
 .bg-stage .shade { position: absolute; inset: 0; background:
   linear-gradient(90deg, rgba(6, 7, 11, 0.94) 0%, rgba(6, 7, 11, 0.72) 42%, rgba(6, 7, 11, 0.45) 100%),
   linear-gradient(0deg, rgba(6, 7, 11, 1) 6%, rgba(6, 7, 11, 0.2) 55%, rgba(6, 7, 11, 0.55) 100%); }

@@ -6,6 +6,23 @@ The branch for 0.9.3 work is `claude/relaxed-fermat-30pigp`. Pull it before star
 
 ---
 
+## 4 Oct 2026 · 0.9.28 The Dock
+
+Owner asked for this as 0.9.27; 0.9.27 (collection names) had already been published, so it ships as 0.9.28. Owner's list (with photos): Dock at the bottom clipping pages and the media bar, Dreamcast logo clipped, page overview as real pages with movement, Recently Played spacing, Emulators flow, console chip clipping, edge clipping in rows; Title Case, touch only working on Start, choppy on handhelds, widget spacing, Syncthing server files, onboarding Back trapped in the installer and smart focus, Syncthing in Game Mode (Decky plugin), Cemu pack choices, GitHub fork updates, Home flash before Start, clock speeding up when the bar moves, storage widget names, hints off by default, Dock colour, bottom as default, widget rework with console widgets and picture/GIF search, Start tips, L1/R1 for pages, add-on downloads on Downloads.
+
+Done: all of it except the two below (details in CLAUDE.md 0.9.28). Causes found:
+- Touch: Start's page swipe compared only down and up points, so on that device moves never reached the engine; it now takes moves from every event type and scrolls move-less swipes on release.
+- Sideways pages: scrollIntoView scrolled overflow-hidden boxes (Home, rows); they are reset now.
+- Syncthing: one shared 20,000-file limit and only this device's folders.
+
+Not done, said plainly: the clock speeding up after moving the bar could not be reproduced here (its position stayed still across bar changes); owner to say which clock and where. The Decky Syncthing plugin isn't installed (Decky's plugins folder is root's, so it needs a password); a systemd user service keeps Syncthing running in Game Mode instead. The Wallhaven and Openverse searches couldn't be reached from the build container (host allowlist), so they are written to their documented APIs and untested.
+
+Checked here: npm test (135), vite build, launch check, Playwright on the mock RomM: touch paths (real touch, down/up only, other-pointer moves, mouse drag, edge swipe, top bar swipe, tap), Dock at the bottom at 1920x1080 and 1280x800, page overview moving a page, big widgets, new widgets.
+
+Owner to test on the device: touch scrolling everywhere (Settings → About → Touch check if not), the Dock on the TV and handheld, the page overview, picture search, Cemu resolution pack choice, frame generation from a game's More, a GitHub-link emulator update, Syncthing in Game Mode, the Games tab with a main server, handheld smoothness.
+
+---
+
 ## 4 Oct 2026 · 0.9.27 Collection Names
 
 Owner: Steam console collections should be maker then console (Nintendo Wii, Sony PlayStation 3 and 4, Sega Dreamcast, Microsoft Xbox), and the shadPS4 version toggle belongs on the PlayStation 4 page, not Steam's main page (photo). Done. Checked here: npm test (new name tests), the Collections review on the fake Steam ("PlayStation" now proposes "Sony PlayStation"), vite build, launch check. Owner to test on the device: Settings → Steam → Collections renames, a new download going into the existing collection, the toggle on the PlayStation 4 page.
