@@ -169,6 +169,8 @@ async function manage(u) {
   if (!u) return;
   const ch = u.channels || [];
   const opts = [
+    // 0.9.25 (owner): start the emulator itself, for its own settings
+    ...(u.kind !== 'windows' && !u.broken ? [{ label: 'Open', sub: `Start ${u.label} on its own, for its own settings`, value: 'open', icon: 'mdiOpenInApp' }] : []),
     ...(u.broken ? [{ label: 'Repair', sub: 'It can’t start on this system', value: 'repair', icon: 'mdiWrench' }] : u.update ? [{ label: 'Update', sub: `${u.version || 'This copy'} → ${u.update.version || u.update.tag || 'newest'}`, value: 'update', icon: 'mdiUpdate' }] : []),
     ...(u.kind === 'flatpak' || u.latest ? [{ label: 'Download Again', sub: u.kind === 'flatpak' ? 'Reinstall from Flathub' : `The newest ${CH[u.channel] ? CH[u.channel].toLowerCase().replace(/s$/, '') : 'build'}`, value: 'again', icon: 'mdiDownload' }] : []),
     ...(ch.length > 1 ? ch.map((c) => ({ heading: c === ch[0] ? 'Updates Follow' : undefined, label: CH[c], sub: c === 'pre' ? 'Nightlies and test builds' : 'Releases the project calls finished', value: 'ch:' + c, icon: c === 'pre' ? 'mdiFlask' : 'mdiCheckDecagram', selected: u.channel === c })) : []),
@@ -180,6 +182,7 @@ async function manage(u) {
   ];
   const v = await choose({ title: u.label, message: [u.version ? 'Version ' + u.version : '', CH[u.channel] || (u.kind === 'flatpak' ? 'Flatpak from Flathub' : ''), u.path ? short(u.path) : ''].filter(Boolean).join(' · '), options: opts, sheet: true });
   if (!v) return;
+  if (v === 'open') { try { await call('emuget:open', { id: u.id, kind: u.kind, fp: u.fp, path: u.path }); toast(`${u.label} is opening`, 'ok', 2500, 'mdiOpenInApp'); } catch (err) { toast(err.message, 'error', 6000); } return; }
   if (v === 'repair' || v === 'update') return runUpdate(u);
   if (v === 'again') return runUpdate(u, true);
   if (v.startsWith('ch:')) { await call('emuup:setChannel', { id: u.id, channel: v.slice(3) }); toast(`${u.label} follows ${CH[v.slice(3)].toLowerCase()} now`, 'ok', 3000); return loadUps(true); }
