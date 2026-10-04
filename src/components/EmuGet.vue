@@ -100,6 +100,29 @@
             <i v-if="upRun === (u.path || u.fp)" class="eg-bar-fill" :class="{ live: upPct == null }" :style="{ width: (upPct ?? 100) + '%' }" />
           </button>
         </section>
+        <!-- From a GitHub link (0.9.24, owner): the last card; any project's AppImage, set up as a fork or for a console -->
+        <section v-if="updates" class="eg-con eg-gh" :class="{ open: gh.open }">
+          <button v-if="!gh.open" class="eg-emu" data-focus @click="gh.open = true">
+            <Icon name="mdiGithub" :size="34" />
+            <span class="eg-mid"><b>From a GitHub Link</b><span class="muted small">A fork or another emulator: paste its GitHub link</span></span>
+            <Icon name="mdiPlus" :size="22" />
+          </button>
+          <template v-else>
+            <div class="eg-head"><Icon name="mdiGithub" :size="28" /><b>From a GitHub Link</b></div>
+            <TextField v-model="gh.link" label="GitHub link" placeholder="github.com/owner/project" icon="mdiLink" />
+            <div class="seg"><button data-focus :class="{ on: gh.as === 'fork' }" @click="gh.as = 'fork'">A Fork Of</button><button data-focus :class="{ on: gh.as === 'console' }" @click="gh.as = 'console'">For a Console</button></div>
+            <div class="eg-chips">
+              <template v-if="gh.as === 'fork'"><button v-for="x in forkTargets" :key="x.id" class="eg-chip" data-focus :class="{ on: gh.of === x.id }" @click="gh.of = x.id">{{ x.label }}</button></template>
+              <template v-else><button v-for="c in list || []" :key="c.key" class="eg-chip" data-focus :class="{ on: gh.key === c.key }" @click="gh.key = c.key">{{ c.name }}</button></template>
+            </div>
+            <p class="muted small" style="margin: 0">{{ gh.as === 'fork' ? 'It starts games the way the emulator it comes from does, and shows as that emulator’s fork when you pick emulators for a console.' : 'It becomes that console’s emulator for new Steam shortcuts. If Cartridge doesn’t know it, games are given to it as a file path.' }} The newest Linux AppImage from its releases goes in {{ short(store.config.emuDir) || '~/Applications' }}.</p>
+            <div v-if="gh.busy" class="eg-ghbar"><i :class="{ live: gh.pct == null }" :style="{ width: (gh.pct ?? 100) + '%' }" /></div>
+            <div class="row" style="gap: 10px; justify-content: flex-end">
+              <button class="btn" data-focus :disabled="gh.busy" @click="gh.open = false">Cancel</button>
+              <button class="btn primary" data-focus :disabled="gh.busy || !gh.link || (gh.as === 'fork' ? !gh.of : !gh.key)" @click="installLink"><Icon name="mdiDownload" />{{ gh.busy ? (gh.pct != null ? gh.pct + '%' : 'Downloading…') : 'Install' }}</button>
+            </div>
+          </template>
+        </section>
       </div>
       <p class="muted small">Each comes from the emulator's own releases: its AppImage from GitHub, or its Flatpak from Flathub. Downloads keep going in the background while you use Cartridge.</p>
     </template>
@@ -116,6 +139,7 @@ import { focusFirst } from '../nav.js';
 import Icon from './Icon.vue';
 import EmuIcon from './EmuIcon.vue';
 import PIcon from './PIcon.vue';
+import TextField from './TextField.vue';
 
 const props = defineProps({ flow: Boolean, updates: Boolean });
 defineEmits(['done']);
@@ -167,6 +191,22 @@ async function manage(u) {
     try { await call('emuget:remove', { id: u.id, kind: u.kind, fp: u.fp, where: u.where, path: u.path }); toast(`${u.label} was deleted`, 'ok', 3000, 'mdiDeleteOutline'); } catch (err) { toast(err.message, 'error', 6000); }
     await load(); await loadUps();
   }
+}
+// From a GitHub link (0.9.24)
+const gh = ref({ open: false, link: '', as: 'fork', of: '', key: '', busy: false, pct: null });
+const forkTargets = computed(() => uniq.value.map((x) => ({ id: x.e.id, label: x.e.label })).filter((x) => x.id !== 'retroarch'));
+async function installLink() {
+  const g = gh.value;
+  g.busy = true; g.pct = null;
+  const off = window.cart.on('emuget-custom', (m) => { g.pct = m.pct; });
+  try {
+    const r = await call('emuget:custom', { link: g.link.trim(), as: g.as, of: g.of, key: g.key });
+    const what = g.as === 'fork' ? `as a fork of ${forkTargets.value.find((x) => x.id === g.of)?.label}: pick it on a console’s page` : `for ${(list.value || []).find((c) => c.key === g.key)?.name}`;
+    toast(`${r.name} ${r.tag} is in ${short(r.path.replace(/\/[^/]+$/, ''))}, set up ${what}`, 'ok', 7000, 'mdiGithub');
+    gh.value = { open: false, link: '', as: 'fork', of: '', key: '', busy: false, pct: null };
+    await load(); await loadUps(true);
+  } catch (e) { toast(e.message, 'error', 7000); g.busy = false; }
+  off?.();
 }
 const SLUG = { psx: 'psx', ps2: 'ps2', ps3: 'ps3', ps4: 'ps4', psp: 'psp', psvita: 'psvita', gc: 'ngc', wiiu: 'wiiu', switch: 'switch', n3ds: '3ds', nds: 'nds', gba: 'gba', n64: 'n64', xbox: 'xbox', dreamcast: 'dc', xbox360: 'xbox360', saturn: 'saturn', arcade: 'arcade' };
 const phase = ref(props.flow ? (store.config.emuDir ? 'pick' : 'where') : 'list');
@@ -277,6 +317,14 @@ defineExpose({ load });
 .eg-emu:focus .eg-tick { border-color: rgba(0, 0, 0, 0.35); }
 .eg-emu:focus .eg-tick.on :deep(svg) { color: var(--focus); }
 .eg-jobs { display: flex; flex-direction: column; gap: 6px; }
+.eg-gh.open { grid-column: 1 / -1; gap: var(--s-3); }
+.eg-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.eg-chip { padding: 8px 14px; border-radius: 999px; border: 0; background: var(--s2); color: inherit; font: inherit; font-size: var(--t-sm); }
+.eg-chip.on { background: var(--sel); }
+.eg-chip:focus { background: var(--focus); color: var(--on-focus); outline: none; }
+.eg-ghbar { height: 6px; border-radius: 3px; background: rgba(255, 255, 255, 0.12); overflow: hidden; }
+.eg-ghbar i { display: block; height: 100%; background: currentColor; transition: width 0.3s ease; }
+.eg-ghbar i.live { animation: egLive 1.2s ease-in-out infinite; transform-origin: left; }
 .eg-intro { display: flex; flex-direction: column; gap: 6px; text-align: center; }
 .eg-intro b { font-size: var(--t-lg); }
 .eg-drives { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: var(--s-3); }

@@ -16,6 +16,7 @@ Done: all of it (details in CLAUDE.md 0.9.24). Notes:
 - Steam collection rename live uses Steam's collection object (`m_strName`, or `SetName` when a build has it) and reads the name back; if it didn't stick, the helper renames it in the cloud-storage file while Steam is closed. Never run against a real Steam client yet.
 - Multi-drive: planning only, `docs/plan-multidrive.md`.
 - Owner, after the first push: the installer's folders and links only on a fresh setup (nothing found), so existing setups aren't touched; RS on Start round like a thumbstick.
+- Owner, later: emulators and forks from a GitHub link (last card on the Emulators page); the shadPS4 version line behind a Settings → Steam toggle, off by default.
 - CI: every push since emuPaths' test failed: it moved folders to /mnt/..., which `setPath` creates; fine as root here, EACCES on CI. Now inside the test's temp home.
 
 Answered: RPCS3 patches already follow the installed game version. Gemini's GTK4 idea isn't possible in Electron. HenrikoMagnifico's site can't be reached from the build container; the app reads it live on the device (7-day cache) with a built-in list as fallback.

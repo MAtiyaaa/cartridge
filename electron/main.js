@@ -2833,7 +2833,7 @@ const handlers09 = {
   'steam:setGameTemplate': ({ romId, template }) => steamMgr.setGameTemplate(romId, template),
   'steam:refreshGame': ({ romId }) => steamMgr.refreshGame(romId),
   // shadPS4 version per game (0.9.17): the Qt launcher's versions, and this game's pick
-  'steam:shadVersions': ({ romId }) => { let last = null; try { last = require('./shadVersions').lastRun(os.homedir(), emuRootsAll().map((r) => path.join(r, 'storage', 'shadps4'))); } catch {} return { list: steamMgr.shadVersions(), current: ((config.steam || {}).shadVersions || {})[romId] || null, last }; },
+  'steam:shadVersions': ({ romId }) => { let last = null; if ((config.steam || {}).shadProof) try { last = require('./shadVersions').lastRun(os.homedir(), emuRootsAll().map((r) => path.join(r, 'storage', 'shadps4'))); } catch {} return { list: steamMgr.shadVersions(), current: ((config.steam || {}).shadVersions || {})[romId] || null, last }; },
   'steam:setShadVersion': ({ romId, path: p }) => { const m = ((config.steam ||= {}).shadVersions ||= {}); if (p) m[romId] = p; else delete m[romId]; saveConfig(); return true; },
   // frame generation (0.9.17): what's installed, the picks, and Cartridge's games in Steam with theirs
   'steam:frameGen': () => {
@@ -3485,6 +3485,40 @@ const handlers = {
       return r;
     } catch (err) { send({ error: err.message }); throw err; }
     finally { emuGetRun = null; }
+  },
+  // From a GitHub link (0.9.24): the project's newest Linux AppImage into the emulators folder, then set
+  // up as a fork of an emulator Cartridge knows, or for a console. Recorded in config.customEmus.
+  'emuget:custom': async ({ link, as, of, key }) => {
+    const C = require('./customEmu'), repo = C.repoOf(link);
+    if (!repo) throw new Error('That isn’t a GitHub project link. It looks like github.com/owner/project.');
+    if (as === 'fork' && !require('./emulators').EMU[of]) throw new Error('Pick the emulator it’s a fork of.');
+    if (as === 'console' && !key) throw new Error('Pick the console it’s for.');
+    if (emuGetRun) throw new Error('Another emulator is downloading. Wait for it to finish.');
+    const rel = await require('./github').release(repo).catch((e) => { throw new Error(`GitHub: ${e.message}`); });
+    if (!rel) throw new Error('That project has no releases on GitHub.');
+    const asset = C.pickAsset(rel.assets);
+    if (!asset) throw new Error('Its newest release has no Linux AppImage. Only AppImages can be installed from a link.');
+    const dir = config.emuDir || path.join(os.homedir(), 'Applications'), dest = path.join(dir, C.fileName(repo, asset));
+    const mine = (config.customEmus || []).find((x) => x.path === dest);
+    if (fs.existsSync(dest) && !mine) throw new Error(`${path.basename(dest)} is already in ${dir.replace(os.homedir(), '~')}. Cartridge leaves it as it is.`);
+    fs.mkdirSync(dir, { recursive: true });
+    const tmp = dest + '.cartridge-new';
+    emuGetRun = { abort: new AbortController() };
+    try {
+      let got = 0, last = 0;
+      await downloadTo(asset.url, tmp, emuGetRun, (n) => { got += n; const now = Date.now(); if (now - last > 400) { last = now; broadcast('emuget-custom', { pct: asset.size ? Math.min(99, Math.floor((got / asset.size) * 100)) : null }); } }, { plain: true });
+      if (!require('./emuUpdates').looksRunnable(tmp, asset.name)) throw new Error('What came down wasn’t a working AppImage.');
+      fs.chmodSync(tmp, 0o755); fs.renameSync(tmp, dest);
+    } catch (e) { fs.rmSync(tmp, { force: true }); throw e; } finally { emuGetRun = null; }
+    const name = repo.split('/')[1];
+    let setup;
+    if (as === 'fork') { steamMgr.markFork(dest, of, name); setup = 'fork'; }
+    else { setup = steamMgr.useFile(key, dest); if (setup?.needs) setup = steamMgr.useFile(key, dest, { args: '"{ROM}"' }); setup = 'console'; }
+    config.customEmus = [...(config.customEmus || []).filter((x) => x.path !== dest), { repo, path: dest, as, of: as === 'fork' ? of : null, key: as === 'console' ? key : null, tag: rel.tag, at: Date.now() }];
+    saveConfig();
+    try { await steamMgr.scanEmulators(); } catch {}
+    log('emulator from a link', repo, rel.tag, dest, setup);
+    return { path: dest, tag: rel.tag, name, setup };
   },
   'emuget:cancel': () => { emuGetRun?.abort.abort(); return true; },
   // emulator updates (0.9.16): each installed copy, its version and whether a newer one is out

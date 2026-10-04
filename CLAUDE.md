@@ -294,6 +294,7 @@ LT/RT switch top tabs. LB/RB only switch sections inside a page. A select, B bac
 - Game settings: tabs (`describe` items carry `tab`), shadPS4 keys from `emulator_settings.h`, Steam tab with per-game frame generation; `steam:setFrameGen` refreshes shortcuts.
 - Controls: `watchGamescopeFocus` focuses the window when back in front, Auto pointer = touch in gamescope, cursor hidden in pad mode, Keyboard double LT = Caps, nav.js right to a pop-up's footer button, `NO_NET` offline message, `steamManager.applySoon` after auto add.
 - Look: top bar `ui.barPos/barAlign/barStyle` (body classes `bar-bottom`, `bar-left`, `bar-center`, `bar-pill`, `bar-circle`), Look & Feel Metadata page (`fetchAllLogos(kinds)`), `WhatsNew.vue`, `Licenses.vue`, Keyboard `from` (grows from search), bigger idle logos.
+- From a GitHub link: `electron/customEmu.js` (`repoOf`, `pickAsset` x86_64 AppImage, `fileName`; tested), `emuget:custom` (download to `config.emuDir`, `looksRunnable`, then `markFork` or `useFile`, never over a file it didn't put there, `config.customEmus`), EmuGet `gh` card (inline, not a modal, so the keyboard modal works). shadPS4 last-run line only with `steam.shadProof` (off by default).
 - Plan only: `docs/plan-multidrive.md` (games on several drives, emulator game-list folders, what can't be split).
 
 ## Releases (full steps: HANDOFF D8)
