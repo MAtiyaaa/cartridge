@@ -12,7 +12,7 @@
       <Transition name="cap" mode="out-in">
         <div v-if="cur" :key="cur.k" class="idle-cap">
           <!-- the game's logo and the console's wordmark, words only when there's no logo (0.9.3 F4) -->
-          <GameLogo :logo="store.config?.ui?.logos !== false ? logoOf(cur.rom) : null" :name="cur.name" cls="n" :area="36000" :max-w="460" :max-h="150" />
+          <GameLogo :logo="store.config?.ui?.logos !== false ? logoOf(cur.rom) : null" :name="cur.name" cls="n" :area="78000" :max-w="720" :max-h="240" />
           <div class="p"><ConsoleMark :slug="cur.rom.platform_slug" :label="cur.platform" /></div>
         </div>
       </Transition>
@@ -115,9 +115,9 @@ defineExpose({ sleep, wake });
 .idle-clock { position: absolute; left: 56px; bottom: 52px; color: #fff; text-shadow: 0 4px 24px rgba(0, 0, 0, 0.6); }
 .idle-clock .t { font-family: var(--display); font-size: 96px; font-weight: 700; line-height: 1; letter-spacing: -0.03em; }
 .idle-clock .d { font-size: var(--t-lg); font-weight: 500; opacity: 0.85; margin-top: 8px; }
-.idle-cap { position: absolute; right: 56px; bottom: 56px; display: flex; flex-direction: column; align-items: flex-end; gap: 14px; text-align: right; color: #fff; max-width: 40vw; text-shadow: 0 3px 18px rgba(0, 0, 0, 0.7); }
+.idle-cap { position: absolute; right: 56px; bottom: 56px; display: flex; flex-direction: column; align-items: flex-end; gap: 14px; text-align: right; color: #fff; max-width: 48vw; text-shadow: 0 3px 18px rgba(0, 0, 0, 0.7); }
 .idle-cap :deep(.game-logo) { filter: drop-shadow(0 6px 24px rgba(0, 0, 0, 0.6)); }
-.idle-cap .p { font-size: var(--t-lg); }
+.idle-cap .p { font-size: calc(var(--t-xl) * 1.6); } /* game logo and console wordmark bigger (0.9.24, owner) */
 .idle-cap .n { font-family: var(--display); font-size: var(--t-xl); font-weight: 700; margin: 0; }
 .idle-cap .p { opacity: 0.85; font-weight: 600; }
 .idle-hint { position: absolute; top: 34px; right: 44px; display: flex; align-items: center; gap: 10px; color: rgba(255, 255, 255, 0.55); font-size: var(--t-sm); font-weight: 500; }

@@ -70,6 +70,7 @@
   <WhatsNew v-if="store.modal?.type === 'whatsnew'" v-bind="store.modal.props" />
   <EmuPaths v-if="store.modal?.type === 'emupaths'" v-bind="store.modal.props" />
   <AddonDetail v-if="store.modal?.type === 'addondetail'" v-bind="store.modal.props" />
+  <Licenses v-if="store.modal?.type === 'licenses'" />
   <GameSettings v-if="store.modal?.type === 'gamesettings'" :key="'gs' + store.modal.props.romId" v-bind="store.modal.props" />
   <IdleScreen v-if="store.config?.configured" />
 
@@ -120,6 +121,7 @@ import GameAddons from './components/GameAddons.vue';
 import WhatsNew from './components/WhatsNew.vue';
 import EmuPaths from './components/EmuPaths.vue';
 import AddonDetail from './components/AddonDetail.vue';
+import Licenses from './components/Licenses.vue';
 import ShadVersions from './components/ShadVersions.vue';
 import GameSettings from './components/GameSettings.vue';
 import IdleScreen from './components/IdleScreen.vue';
@@ -160,7 +162,8 @@ function onSearch(e) {
 }
 async function searchOsk() {
   if (!builtinKb()) return;
-  const v = await askText({ title: 'Search games', value: store.lastSearch, placeholder: 'Game name', mode: 'game' });
+  const r = searchEl.value?.getBoundingClientRect(); // the keyboard grows out of the search box (0.9.24)
+  const v = await askText({ title: 'Search games', value: store.lastSearch, placeholder: 'Game name', mode: 'game', from: r ? { x: r.left + r.width / 2, y: r.top + r.height / 2 } : null });
   if (v == null) return;
   store.lastSearch = v;
   if (v.trim() && store.route.name !== 'search') go('search');
