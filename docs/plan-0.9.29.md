@@ -185,6 +185,28 @@ Cartridge's `switchTitleId` (`electron/addons.js`) already decrypts NCA headers.
 
 ---
 
+## 8. Start: arranging pages (owner, 4 Oct: "extremely laggy, sometimes it works, sometimes it doesn't")
+- **L1 and R1 pressed together:** found the cause, not fixed. In Arrange, L1 or R1 opens the page overview (`openOv` in Start.vue), and inside the overview L1 and R1 close it (`lb: closeOv, rb: closeOv`). Pressing both together opens it on one and closes it on the other, so it looks random. Fix: both buttons pressed within about 150 ms count as one press, and closing is B (or the same button again after a short guard). The owner's way of opening it (L1+R1 together) becomes the documented one, with L1 or R1 alone still working.
+- **The overview isn't accurate:** `ovThumb` draws one cover or icon per tile, not the page as it looks. Fix: each page in the overview is a scaled-down copy of the real page, the same tiles at their real positions and sizes with their real faces (clock, covers, pictures, widgets), drawn once when the overview opens. Live parts (clock, rolling rows) stay still in the copy.
+- **Laggy:** opening the overview builds every page at once with TransitionGroup moves. Fix: the copies are drawn once and cached, moving a page only moves its box (transform), and the overview opens without waiting on the page underneath.
+- Test on a handheld at 1280x800 without the GPU (Game Mode's software rendering), with 4 pages full of widgets.
+
+## 9. Smoothness on handhelds (owner, 4 Oct: "still very choppy, especially the hover animation; same animations, just lighter")
+Same look and the same animations, made cheaper. Measure first, then change.
+1. **Measure the way the handheld runs:** Cartridge in Game Mode on a small screen uses software rendering (rendering rules in main.js, not changed). Record Chromium performance traces in the container with `--disable-gpu` at 1280x800 while moving focus across Home, Start and a game page. Find what each focus move costs (style, layout, paint, composite) and which layers repaint.
+2. **Likely costs to check against the traces:**
+   - The card focus (hover) animation: transform plus box-shadow and ring. Animating `box-shadow` and `filter` repaints every frame without the GPU. Draw the shadow and ring once on a pseudo-element and animate only its `opacity` and the card's `transform`.
+   - `filter: brightness()` on the fanned covers and `mask-image` fades on Start: precompute them as overlays.
+   - Transitions on `left` (`.st-fan-c`) trigger layout each frame: move them with `transform` instead.
+   - `backdrop-filter` blur on glass surfaces and the Dock: one blurred layer, or a still blurred copy, when without the GPU.
+   - Too many layers from `will-change` on many elements at once: keep it only on what is moving.
+   - Focus handling in nav.js on each move (getBoundingClientRect for every candidate): cache rects per frame.
+   - Background canvas and the media bar redrawing behind a moving card.
+3. **Keep:** every animation, the timing tokens (`--d-*`, `--ease-*`), light effects and the look. Only how they are drawn changes.
+4. **Done when** a focus move on Home, Start and a game page costs well under one frame (16 ms) in the software-rendering trace at 1280x800, and the owner says it feels fluid on the handheld.
+
+---
+
 ## 7. Order of work, when the owner says build
 1. `saves.js` discovery and matching, with tests per emulator (read only), plus the game page Saves row and Settings → Syncthing → Saves.
 2. Situation detection, and the onboarding Syncthing step rewritten for the three situations (2.2), with the warning text for existing setups. Language step removed.
@@ -193,6 +215,7 @@ Cartridge's `switchTitleId` (`electron/addons.js`) already decrypts NCA headers.
 5. Versions and conflicts screens.
 6. Push behaviour (2.5) once the owner decides.
 7. Trophy names (4) and Switch title IDs (5).
+7b. Start page overview fixes (8) and handheld smoothness (9).
 8. Notes, CLAUDE.md, launch check, release.
 
 **Owner must test on devices:** two devices (Deck plus desktop), a blank Syncthing on one, joining from the other. Then the same with an existing Syncthing setup, confirming nothing in it changed. Use at least Eden, RPCS3, PCSX2 and RetroArch saves.
