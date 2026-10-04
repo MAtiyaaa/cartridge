@@ -3219,28 +3219,37 @@ const handlers = {
     const fp = await U.flatpakUpdates(list.filter((e) => e.kind === 'flatpak').map((e) => e.fp)).catch(() => ({}));
     const out = [];
     for (const e of list) {
-      if (e.kind === 'flatpak') { out.push({ ...e, update: fp[e.fp] ? { version: fp[e.fp].version } : null, where: fp[e.fp]?.where }); continue; }
+      if (e.kind === 'flatpak') { out.push({ ...e, update: fp[e.fp] ? { version: fp[e.fp].version } : null, where: fp[e.fp]?.where, channel: 'flathub', channels: [] }); continue; }
+      const ch = U.channelsOf(e.id, e.path), channel = ((config.emuChannels || {})[e.id]) || ch.def;
       // 0.9.21: the release source follows the copy (Xenia Edge, Xenia's Windows build, Eden's variants)
       // a plain program (not an AppImage, not a folder build Cartridge can update) is never overwritten (0.9.21)
       const kind = e.kind === 'appimage' || e.kind === 'folder' ? U.installKind(e.path) : null, base = U.specFor(e.id, e.path);
-      const spec = kind === 'folder' ? (base?.folder ? base : null) : kind === 'program' && !base?.zipped ? null : base;
-      const ck = e.id + ':' + path.basename(e.path || '') + (kind === 'folder' ? ':folder' : '');
+      const spec = kind === 'folder' ? (base?.folder || base?.overProgram ? base : null) : kind === 'program' && !base?.zipped && !base?.overProgram ? null : base;
+      // 0.9.23: a copy that can't start (system libraries missing, e.g. Vita3K's Qt6 zip build on SteamOS)
+      // is offered its update as a repair, newer or not
+      const broken = kind === 'program' || kind === 'folder' ? U.missingLibs(e.path) : [];
+      const ck = e.id + ':' + path.basename(e.path || '') + (kind === 'folder' ? ':folder' : '') + ':' + (channel || '');
       let c = cache[ck];
-      if (spec && (fresh || !c || Date.now() - c.t > 6 * 3600e3)) {
-        try { c = cache[ck] = { t: Date.now(), rel: await U.latestRelease(e.id, { file: e.path }) }; } catch (err) { c = { t: c?.t || 0, rel: c?.rel || null, error: err.message }; }
+      if (spec && (fresh || broken.length || !c || Date.now() - c.t > 6 * 3600e3)) {
+        try { c = cache[ck] = { t: Date.now(), rel: await U.latestRelease(e.id, { file: e.path, channel }) }; } catch (err) { c = { t: c?.t || 0, rel: c?.rel || null, error: err.message }; }
       }
-      out.push({ ...e, build: kind, update: c?.rel && U.isNewer(c.rel, e) ? c.rel : null, error: c?.error || null, noSource: !spec });
+      out.push({ ...e, build: kind, broken: broken.length ? broken : null, update: c?.rel && (broken.length || U.isNewer(c.rel, e)) ? c.rel : null, latest: c?.rel || null, error: c?.error || null, noSource: !spec, channel, channels: spec ? ch.options : [], page: spec?.repo ? `https://github.com/${spec.repo}/releases` : null });
     }
     saveJson(file, cache);
     return out;
   },
-  'emuup:run': async ({ id, kind, fp, where, path: file }) => {
+  // force (0.9.23): Download again, the newest of its channel even when it's the same version
+  'emuup:run': async ({ id, kind, fp, where, path: file, force }) => {
     const U = require('./emuUpdates');
     if (require('./raLogin').running().has(String(id).split('@')[0])) throw new Error('Close the emulator first.');
-    if (kind === 'flatpak') { await U.flatpakUpdate(fp, where); log('emulator updated (flatpak)', fp); return true; }
+    if (kind === 'flatpak') {
+      broadcast('emu-update', { path: fp, state: 'downloading', pct: null });
+      await U.flatpakUpdate(fp, where, (m) => broadcast('emu-update', { path: fp, state: 'downloading', pct: m.pct, text: m.text }), force ? ['install', '--reinstall'] : []);
+      log('emulator updated (flatpak)', fp, force ? '(reinstalled)' : ''); broadcast('emu-update', { path: fp, state: 'done' }); return true;
+    }
     const own = steamMgr.installedEmulators().find((e) => (e.kind === 'appimage' || e.kind === 'folder' || e.kind === 'windows') && e.path === file);
     if (!own) throw new Error('That emulator wasn’t found.');
-    const rel = await U.latestRelease(own.id, { file });
+    const rel = await U.latestRelease(own.id, { file, channel: (config.emuChannels || {})[own.id] });
     if (!rel) throw new Error('No newer AppImage was found for it.');
     broadcast('emu-update', { path: file, state: 'downloading', pct: 0 });
     let got = 0;
@@ -3251,6 +3260,59 @@ const handlers = {
     broadcast('emu-update', { path: file, state: 'done' });
     try { steamMgr.scanEmulators?.(); } catch {}
     return { version: rel.version || rel.tag };
+  },
+  // shadPS4 versions (0.9.23): installed ones, which games use each, and shadPS4's releases to add
+  'shadv:list': async ({ online } = {}) => {
+    const SV = require('./shadVersions'), mine = (config.steam || {}).shadVersions || {};
+    const idx = romIndexMain();
+    const games = Object.entries(mine).map(([id, p]) => ({ romId: Number(id), name: idx.get(Number(id))?.name || `Game ${id}`, path: p }));
+    const list = SV.installed().map((v) => ({ ...v, games: games.filter((g) => g.path === v.path) }));
+    let avail = null, error = null;
+    if (online) { try { avail = await SV.available(); } catch (e) { error = e.message; } }
+    return { list, available: avail, error, folder: SV.settings().versionPath, defaultGames: [...idx.values()].filter((r) => /^ps4$/i.test(r.platform_slug || '') && installedMap[r.id] && installedMap[r.id] !== MARKED && !mine[r.id]).length };
+  },
+  'shadv:install': async ({ tag }) => {
+    const SV = require('./shadVersions');
+    const rel = (await SV.available()).find((r) => r.tag === tag);
+    if (!rel) throw new Error('That release isn’t on shadPS4’s GitHub any more.');
+    const z = path.join(os.tmpdir(), `cartridge-shadps4-${Date.now()}.zip`);
+    let got = 0;
+    try {
+      await downloadTo(rel.asset.url, z, { abort: new AbortController() }, (n) => { got += n; broadcast('shadv-progress', { tag, pct: rel.asset.size ? Math.round((got / rel.asset.size) * 100) : null }); }, { plain: true });
+      const v = await SV.addRelease(rel, z);
+      log('shadPS4 version added', v.name, v.path);
+      return v;
+    } finally { fs.rmSync(z, { force: true }); broadcast('shadv-progress', { tag, done: true }); }
+  },
+  'shadv:remove': ({ name }) => {
+    const SV = require('./shadVersions'), v = SV.installed().find((x) => x.name === name);
+    const users = Object.entries((config.steam || {}).shadVersions || {}).filter(([, p]) => v && p === v.path);
+    SV.remove(name);
+    if (users.length) { for (const [id] of users) delete config.steam.shadVersions[id]; saveConfig(); }
+    return { games: users.length };
+  },
+  // 0.9.23 (owner: show stable or pre-release, and switch): the channel an emulator's updates follow
+  'emuup:setChannel': ({ id, channel }) => { (config.emuChannels ||= {})[id] = channel; saveConfig(); return true; },
+  // 0.9.23 (owner: delete emulators from Cartridge): a Flatpak through flatpak uninstall; an AppImage or
+  // program file is deleted; a folder build's folder only when nothing of the user's lives in it (a
+  // portable/ or user/ folder means saves and settings, so then only the program goes). EmuDeck's own
+  // launcher scripts are EmuDeck's to remove. Steam shortcuts that used it show up in Shortcut health.
+  'emuget:remove': async ({ id, kind, fp, where, path: file }) => {
+    const U = require('./emuUpdates');
+    if (require('./raLogin').running().has(String(id).split('@')[0])) throw new Error('Close the emulator first.');
+    if (kind === 'flatpak') { await U.flatpakRemove(fp, where); log('emulator removed (flatpak)', fp); try { steamMgr.scanEmulators?.(); } catch {} return true; }
+    const own = steamMgr.installedEmulators().find((e) => e.path === file);
+    if (!own || !file) throw new Error('That emulator wasn’t found.');
+    if (/\.sh$/i.test(file)) throw new Error('This one is EmuDeck’s launcher: remove the emulator from EmuDeck.');
+    const dir = path.dirname(file), home = os.homedir();
+    const keep = ['portable', 'user', 'config', 'content', 'storage', 'saves'].some((n) => fs.existsSync(path.join(dir, n)));
+    const folderOk = own.kind === 'folder' && !keep && dir !== home && !/^(Applications|Emulation|Desktop|Downloads|bin)$/i.test(path.basename(dir)) && path.resolve(dir).startsWith(path.resolve(home) + path.sep);
+    if (folderOk) fs.rmSync(dir, { recursive: true, force: true }); else fs.rmSync(file, { force: true });
+    log('emulator removed', id, folderOk ? dir : file);
+    const cf = path.join(USER_DATA, 'emulator-releases.json'), cache = loadJson(cf, {});
+    if (cache.installed) { delete cache.installed[file]; saveJson(cf, cache); }
+    try { steamMgr.scanEmulators?.(); } catch {}
+    return { removed: folderOk ? dir : file };
   },
   // PS3 game updates (0.9.16): every installed PS3 game with a newer update, or one game
   'ps3up:list': async ({ fresh } = {}) => {

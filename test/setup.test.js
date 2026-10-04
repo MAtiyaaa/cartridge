@@ -103,13 +103,26 @@ test('Emulator updates: versions compared, the right AppImage picked, swapped in
   assert.ok(EU.isNewer(p, { version: '2.3.0' }));
   assert.ok(!EU.isNewer(p, { version: '2.4.10' }));
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'eu-')), f = path.join(dir, 'pcsx2.AppImage');
-  fs.writeFileSync(f, 'old!');
-  await EU.replaceAppImage(f, p, async (url, dest) => fs.writeFileSync(dest, 'new!'));
-  assert.strictEqual(fs.readFileSync(f, 'utf8'), 'new!');
+  // a fake AppImage: ELF magic, then 'AI' and type 2 at byte 8
+  const ai = (tag) => Buffer.concat([Buffer.from([0x7f, 0x45, 0x4c, 0x46, 2, 1, 1, 0, 0x41, 0x49, 2]), Buffer.from(tag)]);
+  fs.writeFileSync(f, ai('old!'));
+  await EU.replaceAppImage(f, { ...p, size: 0 }, async (url, dest) => fs.writeFileSync(dest, ai('new!')));
+  assert.ok(fs.readFileSync(f).includes('new!'));
   assert.ok(!fs.existsSync(f + '.cartridge-old'));
   assert.ok(fs.statSync(f).mode & 0o100);
   await assert.rejects(EU.replaceAppImage(f, { ...p, size: 99 }, async (url, dest) => fs.writeFileSync(dest, 'x')), /incomplete/);
-  assert.strictEqual(fs.readFileSync(f, 'utf8'), 'new!'); // untouched after a bad download
+  assert.ok(fs.readFileSync(f).includes('new!')); // untouched after a bad download
+  // 0.9.23: a web page (or anything that isn't an AppImage) never replaces a working copy
+  await assert.rejects(EU.replaceAppImage(f, { ...p, size: 0 }, async (url, dest) => fs.writeFileSync(dest, '<!doctype html><title>Rate limited</title>')), /wasn’t a working program/);
+  assert.ok(fs.readFileSync(f).includes('new!'));
+  // an AppImage stays an AppImage even with an old zip build's data/ and lang/ beside it (Vita3K, EmuDeck)
+  const v = fs.mkdtempSync(path.join(os.tmpdir(), 'v3k-')), vf = path.join(v, 'Vita3K');
+  fs.mkdirSync(path.join(v, 'data')); fs.mkdirSync(path.join(v, 'lang')); fs.writeFileSync(vf, ai('vita'));
+  assert.strictEqual(EU.installKind(vf), 'appimage');
+  assert.deepStrictEqual(EU.missingLibs(vf), []);
+  fs.writeFileSync(vf, Buffer.from([0x7f, 0x45, 0x4c, 0x46, 2, 1, 1, 0])); // a plain program (the Qt zip build)
+  assert.strictEqual(EU.installKind(vf), 'folder');
+  assert.ok(!EU.REPOS.vita3k.folder && EU.REPOS.vita3k.overProgram); // Vita3K only ever updates from its AppImage
 });
 
 test('Add-ons: Switch and Wii U mod folders; PS1, CIA and Switch IDs read from the files (0.9.16)', () => {

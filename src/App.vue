@@ -66,6 +66,7 @@
   <PatchesSheet v-if="store.modal?.type === 'patches'" v-bind="store.modal.props" />
   <AddonsSheet v-if="store.modal?.type === 'addons'" :key="'addons' + store.modal.props.romId" v-bind="store.modal.props" />
   <GameAddons v-if="store.modal?.type === 'gameaddons'" :key="'ga' + store.modal.props.romId" v-bind="store.modal.props" />
+  <ShadVersions v-if="store.modal?.type === 'shadversions'" v-bind="store.modal.props" />
   <IdleScreen v-if="store.config?.configured" />
 
   <div class="pops">
@@ -112,6 +113,7 @@ const ManualViewer = defineAsyncComponent(() => import('./components/ManualViewe
 import PatchesSheet from './components/PatchesSheet.vue';
 import AddonsSheet from './components/AddonsSheet.vue';
 import GameAddons from './components/GameAddons.vue';
+import ShadVersions from './components/ShadVersions.vue';
 import IdleScreen from './components/IdleScreen.vue';
 import SteamCollections from './components/SteamCollections.vue';
 import SteamPreview from './components/SteamPreview.vue';
