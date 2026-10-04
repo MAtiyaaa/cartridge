@@ -1311,7 +1311,21 @@ module.exports = function createSteamManager(ctx) {
   function setMode(key, mode) { const c = cfg(); c.modes ||= {}; c.modes[key] = mode; ctx.saveConfig(); return true; }
 
   // after a download / delete (when the automatic options are on)
-  function onDownloaded(romId) { if (cfg().autoAdd) { queueAdd([{ romId, collections: (cfg().lastCollections || {})[consoleOfRom(romId)] || [] }]); return true; } return false; }
+  function onDownloaded(romId) { if (cfg().autoAdd) { queueAdd([{ romId, collections: (cfg().lastCollections || {})[consoleOfRom(romId)] || [] }]); applySoon(); return true; } return false; }
+  // 0.9.24 (owner: with auto add on, no trip to Settings → Steam → Apply): when Steam can be changed while it
+  // runs, the queue is applied right away (a few seconds after the last download, so several go in together).
+  // Without that, Steam has to close first, so it waits for you as before.
+  let applyT = null;
+  function applySoon() {
+    clearTimeout(applyT);
+    applyT = setTimeout(async () => {
+      try {
+        const env = environment();
+        if (!env.account || !(await live.available(env.account.root).catch(() => false))) return;
+        await apply({ restart: false }); ctx.broadcast('steam-auto', { action: 'applied' }); log('auto add applied live');
+      } catch (e) { log('auto apply', e.message); }
+    }, 4000);
+  }
   function onDeleted(romId) {
     if (!cfg().autoRemove) return false;
     const ids = Object.entries(reg).filter(([, r]) => r.romId === romId).map(([id]) => Number(id));
