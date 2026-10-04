@@ -56,12 +56,27 @@ const SCHEMA = {
     { id: 'Graphics.AnisotropyLevel', label: 'Anisotropic filtering', options: [['0', 'Off'], ['1', '2x'], ['2', '4x'], ['3', '8x'], ['4', '16x']] },
     { id: 'Graphics.TexScalingLevel', label: 'Texture upscaling', options: [['1', 'Off'], ['2', '2x'], ['3', '3x'], ['4', '4x'], ['5', '5x']] },
   ] },
+  // shadPS4 (0.9.24, owner: advanced options too, in tabs): every key from core/emulator_settings.h, groups
+  // GPU, Vulkan and General as its per-game JSON has them (ApplyGroupOverrides)
   shadps4: { name: 'shadPS4', items: [
-    { id: 'GPU.readbacks_mode', label: 'GPU readbacks', sub: 'Some games need them; slower', options: [['0', 'Off'], ['1', 'Relaxed'], ['2', 'Precise']], json: 'int' },
-    { id: 'GPU.fsr_enabled', label: 'FSR upscaling', ...B('true', 'false'), json: 'bool' },
-    { id: 'GPU.rcas_enabled', label: 'RCAS sharpening', ...B('true', 'false'), json: 'bool' },
-    { id: 'GPU.copy_gpu_buffers', label: 'Copy GPU buffers', sub: 'Fixes some games, slower', ...B('true', 'false'), json: 'bool' },
-    { id: 'GPU.vblank_frequency', label: 'VBlank frequency', sub: 'Game speed; 60 is normal', options: [['60', '60 Hz'], ['120', '120 Hz'], ['30', '30 Hz']], json: 'int' },
+    { id: 'GPU.readbacks_mode', tab: 'Graphics', label: 'GPU readbacks', sub: 'Some games need them; slower', options: [['0', 'Off'], ['1', 'Relaxed'], ['2', 'Precise']], json: 'int' },
+    { id: 'GPU.fsr_enabled', tab: 'Graphics', label: 'FSR upscaling', ...B('true', 'false'), json: 'bool' },
+    { id: 'GPU.rcas_enabled', tab: 'Graphics', label: 'RCAS sharpening', ...B('true', 'false'), json: 'bool' },
+    { id: 'GPU.rcas_attenuation', tab: 'Graphics', label: 'Sharpening strength', sub: 'Lower is sharper', options: [['0', 'Strongest'], ['250', 'Normal'], ['500', 'Softer'], ['1000', 'Softest']], json: 'int' },
+    { id: 'GPU.vblank_frequency', tab: 'Graphics', label: 'VBlank frequency', sub: 'Game speed; 60 is normal', options: [['60', '60 Hz'], ['120', '120 Hz'], ['30', '30 Hz']], json: 'int' },
+    { id: 'GPU.present_mode', tab: 'Graphics', label: 'Presentation', sub: 'Mailbox is smooth, FIFO is vsync, Immediate tears', options: ['Mailbox', 'Fifo', 'Immediate'] },
+    { id: 'GPU.hdr_allowed', tab: 'Graphics', label: 'HDR', ...B('true', 'false'), json: 'bool' },
+    { id: 'GPU.copy_gpu_buffers', tab: 'Advanced', label: 'Copy GPU buffers', sub: 'Fixes some games, slower', ...B('true', 'false'), json: 'bool' },
+    { id: 'GPU.readback_linear_images_enabled', tab: 'Advanced', label: 'Readback linear images', sub: 'For games with broken effects', ...B('true', 'false'), json: 'bool' },
+    { id: 'GPU.direct_memory_access_enabled', tab: 'Advanced', label: 'Direct memory access', sub: 'Needed by a few games', ...B('true', 'false'), json: 'bool' },
+    { id: 'GPU.patch_shaders', tab: 'Advanced', label: 'Patch shaders', ...B('true', 'false'), json: 'bool' },
+    { id: 'GPU.inline_fetch_shader', tab: 'Advanced', label: 'Inline fetch shader', ...B('true', 'false'), json: 'bool' },
+    { id: 'Vulkan.pipeline_cache_enabled', tab: 'Advanced', label: 'Pipeline cache', sub: 'Less stutter after the first run', ...B('true', 'false'), json: 'bool' },
+    { id: 'General.neo_mode', tab: 'System', label: 'PS4 Pro mode', sub: 'Games that support the Pro look better, and need more', ...B('true', 'false'), json: 'bool' },
+    { id: 'General.dev_kit_mode', tab: 'System', label: 'Dev kit mode', sub: 'More memory; for games that run out', ...B('true', 'false'), json: 'bool' },
+    { id: 'General.extra_dmem_in_mbytes', tab: 'System', label: 'Extra memory', options: [['0', 'None'], ['512', '512 MB'], ['1024', '1 GB'], ['2048', '2 GB']], json: 'int' },
+    { id: 'General.show_fps_counter', tab: 'System', label: 'FPS counter', ...B('true', 'false'), json: 'bool' },
+    { id: 'General.trophy_popup_disabled', tab: 'System', label: 'Hide trophy pop-ups', ...B('true', 'false'), json: 'bool' },
   ] },
 };
 const split = (id) => { const i = id.lastIndexOf('.'); return [id.slice(0, i), id.slice(i + 1)]; };
@@ -140,7 +155,7 @@ function describe(ctx) {
     let base;
     for (const t of bases) { base = getIn(F.kind, t, F.dolphin ? DOLPHIN_BASE[sec] || sec : sec, key); if (base !== undefined) break; }
     const opts = it.type === 'bool' ? [[it.on, 'On'], [it.off, 'Off']] : it.options.map((o) => (Array.isArray(o) ? o : [o, o]));
-    return { id: it.id, label: it.label, sub: it.sub || '', options: opts.map(([v, l]) => ({ value: v, label: l })), game: game ?? null, base: base ?? null, type: it.type || 'choice' };
+    return { id: it.id, tab: it.tab || (/^(Video|EmuCore\/GS|GPU|Graphics|Video_\w+)$/.test(sec) ? 'Graphics' : 'System'), label: it.label, sub: it.sub || '', options: opts.map(([v, l]) => ({ value: v, label: l })), game: game ?? null, base: base ?? null, type: it.type || 'choice' };
   });
   return { emu: ctx.emu, name: S.name, file: F.file, exists: own != null, items };
 }

@@ -2813,6 +2813,14 @@ const handlers09 = {
     if (scope === 'default') conf.default = v || 'off';
     else { const m = (conf[scope === 'console' ? 'consoles' : 'games'] ||= {}); if (v) m[id] = v; else delete m[id]; }
     saveConfig();
+    // 0.9.24 (owner): the Steam shortcuts follow at once, no Update on the console page needed
+    (async () => {
+      try {
+        if (scope === 'game') await steamMgr.refreshGame(Number(id));
+        else for (const k of scope === 'console' ? [id] : steamMgr.overview().consoles.filter((c) => c.inSteam).map((c) => c.key)) await steamMgr.refresh(k);
+        broadcast('steam-changed', { frameGen: true });
+      } catch (e) { log('frame gen refresh', e.message); }
+    })();
     return conf;
   },
   // 0.9.3: everything waiting for you, in one list (Settings → Emulators) instead of start-up pop-ups

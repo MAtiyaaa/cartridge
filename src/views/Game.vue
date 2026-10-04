@@ -604,7 +604,7 @@ async function more() {
   }
   // 0.9.23 (owner: edit a game's emulator settings from Cartridge)
   if (installedPath.value && !marked.value && (pe || /\bpsx\b/i.test(slugs))) play.push({ label: 'Game settings', sub: `${pe || 'DuckStation'}’s settings for this game only`, value: 'gamesettings', icon: 'mdiTune' });
-  if (installedPath.value && !marked.value && pe) play.push({ label: pe === 'PPSSPP' ? 'Cheats' : pe === 'Dolphin' ? 'Patches and cheats' : 'Patches', sub: `From ${pe}’s ${pe === 'PPSSPP' ? 'cheat' : 'patch'} list, saved in ${pe}`, value: 'patches', icon: 'mdiPuzzleOutline' });
+  // patches and cheats are in Game Add-ons (0.9.24, owner: no separate row for them here)
   if (installedPath.value && !marked.value && /\b(ps2|psx|ngc|gamecube|wii|psp|3ds|n3ds|switch|wiiu)\b/i.test(slugs)) play.push({ label: 'Add-ons', sub: /\bps2\b/i.test(slugs) ? 'Texture packs to download, and what’s installed' : 'Mods and packs to download, and what’s installed', value: 'textures', icon: 'mdiPuzzleOutline' });
   if (installedPath.value) play.push({ label: 'Show file location', value: 'path', icon: 'mdiFolderOutline' });
   const top = [
