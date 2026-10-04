@@ -613,14 +613,7 @@ async function more() {
   if (trophySystem.value) play.push({ label: tro.value ? 'Change linked trophies' : 'Link to trophies', sub: 'Pick which emulator trophy set belongs to this game', value: 'trophies', icon: 'mdiLinkVariant' });
   const slugs = `${base.value?.platform_slug} ${base.value?.platform_fs_slug}`;
   const pe = /ps3/i.test(slugs) ? 'RPCS3' : /ps4/i.test(slugs) ? 'shadPS4' : /\bps2\b/i.test(slugs) ? 'PCSX2' : /\b(ngc|gamecube|gc|wii)\b/i.test(slugs) ? 'Dolphin' : /\bpsp\b/i.test(slugs) ? 'PPSSPP' : null;
-  // PS3 game updates from Sony's list (0.9.16); never holds the menu up for long
-  if (installedPath.value && !marked.value && /ps3/i.test(slugs)) {
-    const up = await Promise.race([call('ps3up:game', { romId: Number(props.romId) }).catch(() => null), new Promise((r) => setTimeout(() => r(null), 1500))]);
-    // 0.9.21 (owner: game updates on the game's own page, not only in Settings): always offered; when
-    // Sony's list is slow to answer, picking it checks and then installs
-    if (up?.todo?.length) play.push({ label: `Install game update ${up.todo[up.todo.length - 1].version}`, sub: `${up.todo.length} update${up.todo.length === 1 ? '' : 's'} from Sony · ${bytes(up.size)} · now ${up.have || 'unknown'}`, value: 'ps3up', icon: 'mdiPackageUp' });
-    else play.push({ label: 'Game updates', sub: up ? (up.error ? 'Couldn’t check Sony’s update list' : `Up to date${up.have ? ' · version ' + up.have : ''}`) : 'Check Sony’s update list for this game', value: 'ps3check', icon: 'mdiPackageUp' });
-  }
+  // PS3 game updates are a tab in Add-ons (0.9.29, owner: no second place for them)
   // 0.9.23 (owner: edit a game's emulator settings from Cartridge)
   if (installedPath.value && !marked.value && (pe || /\bpsx\b/i.test(slugs))) play.push({ label: 'Game settings', sub: `${pe || 'DuckStation'}’s settings for this game only`, value: 'gamesettings', icon: 'mdiTune' });
   // patches and cheats are in Game Add-ons (0.9.24, owner: no separate row for them here)

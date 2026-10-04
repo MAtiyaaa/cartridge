@@ -2263,6 +2263,28 @@ function gameSettingsCtx(romId) {
   if (st.emu === 'shadps4') return { emu: 'shadps4', serial: st.serial, shadUser: st.dir };
   return { emu: st.emu, why: 'Cartridge can’t change this emulator’s per-game settings yet.' };
 }
+// Cemu's community graphic packs, fetched like Cemu's own download (cemuPacks.downloadCommunity), weekly
+async function freshCemuPacks(romId) {
+  const st = patchState(romId);
+  if (st.emu !== 'cemu' || !st.dir?.root) return '';
+  try {
+    const r = await require('./cemuPacks').downloadCommunity(st.dir.root, { fetchImpl: (...a) => webFetch(...a), unzip: unzipTo });
+    if (r.updated) log('cemu graphic packs downloaded', r.version);
+    return '';
+  } catch (e) { log('cemu graphic packs download failed:', e.message); return fs.existsSync(path.join(st.dir.root, 'graphicPacks')) ? '' : 'Cemu\'s graphic packs couldn\'t be downloaded: ' + e.message; }
+}
+// a zip unpacked into a folder, no entry outside it (yauzl)
+async function unzipTo(zip, dir) {
+  const { list, close } = await require('./addonInstall').openArchive(zip, path.join(os.tmpdir(), 'cartridge-unz-' + Date.now()));
+  try {
+    for (const e of list) {
+      const out = path.resolve(dir, e.rel);
+      if (!out.startsWith(path.resolve(dir) + path.sep) || e.size > 128 * 1024 * 1024) continue; // like Cemu: no ../, nothing huge
+      fs.mkdirSync(path.dirname(out), { recursive: true });
+      await new Promise(async (ok, bad) => { try { const rs = await e.read(); const ws = fs.createWriteStream(out); rs.pipe(ws); ws.on('finish', ok); ws.on('error', bad); rs.on('error', bad); } catch (er) { bad(er); } });
+    }
+  } finally { try { close?.(); } catch {} }
+}
 // shadPS4's two patch lists, fetched like its launcher's Download Patches when missing or a week old (0.9.23)
 async function freshShadPatches(romId) {
   const r = romIndexMain().get(Number(romId));
@@ -2834,12 +2856,13 @@ const handlers08 = {
   // Syncthing, first look (0.9.19): read only, what it syncs and with whom
   'sync:status': () => { const S = require('./syncthing'); if (config.syncthing?.localKey) S.setLocalKey(config.syncthing.localKey); return S.status(); },
   // each file says which game it belongs to, when Cartridge can tell (0.9.24, owner: smart, not just a list)
-  'sync:browse': async (folder) => {
-    const S = require('./syncthing'), b = await S.browse(folder);
+  'sync:browse': async (arg) => {
+    const folder = typeof arg === 'string' ? arg : arg?.id, onServer = typeof arg === 'object' && !!arg?.server;
+    const S = require('./syncthing'), b = await S.browse(folder, { server: onServer ? config.syncthing?.server || null : null });
     try {
       const games = syncGameList(), names = new Map(games.map((g) => [g.id, g.name]));
-      // each file matched on its own, so it carries its game's name
-      for (const f of b.files) { const one = S.matchGames(games, [{ id: folder, label: folder, path: '', files: [f] }]); const gid = Object.keys(one)[0]; if (gid) { f.game = names.get(Number(gid)) || ''; f.romId = Number(gid); f.kind = one[gid].textures.length ? 'Textures' : 'Save'; } }
+      // each file matched on its own, so it carries its game's name; the folder's real path and name decide textures or saves
+      for (const f of b.files) { const one = S.matchGames(games, [{ id: folder, label: b.label, path: b.path + '/' + b.label, files: [f] }]); const gid = Object.keys(one)[0]; if (gid) { f.game = names.get(Number(gid)) || ''; f.romId = Number(gid); f.kind = one[gid].textures.length ? 'Textures' : 'Save'; } }
     } catch {}
     return b;
   },
@@ -3907,7 +3930,7 @@ const handlers = {
   'ps3up:install': ({ romId }) => ps3InstallUpdates(Number(romId)),
   'ps3up:cancel': () => { ps3upRun?.ac.abort(); return true; },
   'patches:list': async ({ romId }) => {
-    const dlErr = (await freshRpcs3Patches(romId)) || (await freshShadPatches(romId));
+    const dlErr = (await freshRpcs3Patches(romId)) || (await freshShadPatches(romId)) || (await freshCemuPacks(romId));
     const st = patchState(romId), E = EMU_PATCH[st.emu];
     if (!st.dir || !E) return { emu: st.emu, emuName: E?.name || '', serial: st.serial, why: [st.why, dlErr].filter(Boolean).join(' '), list: [] };
     if (st.emu === 'ppsspp') { try { const r = await cheatsMod.ppssppDownloadDb(st.dir); if (r.updated) log('ppsspp cheat.db downloaded', r.url); } catch (e) { log('ppsspp cheat.db download failed:', e.message); } }

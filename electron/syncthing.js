@@ -92,13 +92,20 @@ function flatten(tree, base = '', out = []) {
   for (const [name, v] of Object.entries(tree || {})) { const p = base ? base + '/' + name : name; if (Array.isArray(v)) out.push({ path: p, at: Date.parse(v[0]) || 0, size: v[1] || 0 }); else if (v && Object.keys(v).length) flatten(v, p, out); else out.push({ path: p + '/', size: 0, at: 0, dir: true }); }
   return out;
 }
-async function browse(folder, { fetchImpl = fetch, home = HOME, limit = 40 } = {}) {
-  const l = await localApi(home, fetchImpl), base = l.base, H = { 'X-API-Key': l.key };
-  const get = async (p) => { const r = await fetchImpl(base + p, { headers: H, signal: AbortSignal.timeout(6000) }); if (!r.ok) throw new Error(`Syncthing answered ${r.status}`); return r.json(); };
-  const files = flatten(await get(`/rest/db/browse?folder=${encodeURIComponent(folder)}&levels=6`)).filter((x) => !/(^|\/)\.st(folder|ignore|versions)/.test(x.path));
-  let last = null; try { const st = await get('/rest/stats/folder'); last = st?.[folder]?.lastFile || null; } catch {}
-  files.sort((a, b) => b.at - a.at);
-  return { total: files.length, size: files.reduce((n, x) => n + x.size, 0), files: files.slice(0, limit), last: last?.filename ? { path: last.filename, at: Date.parse(last.at) || 0, deleted: !!last.deleted } : null };
+async function browse(folder, { fetchImpl = fetch, home = HOME, limit = 40, server: srv = null } = {}) {
+  // 0.9.29: the main server's folders too (owner: open PSP textures on the main server like on this device)
+  let a;
+  if (srv) a = api(srv.address, srv.apikey, fetchImpl, 8000);
+  else { const l = await localApi(home, fetchImpl); a = api(l.base, l.key, fetchImpl, 8000); }
+  const conf = await a.get(`/rest/config/folders/${encodeURIComponent(folder)}`).catch(() => ({}));
+  const fpath = String(conf.path || ''), label = conf.label || folder;
+  const files = flatten(await a.get(`/rest/db/browse?folder=${encodeURIComponent(folder)}&levels=6`)).filter((x) => !/(^|\/)\.st(folder|ignore|versions)/.test(x.path));
+  let last = null; try { const st = await a.get('/rest/stats/folder'); last = st?.[folder]?.lastFile || null; } catch {}
+  files.sort((x, y) => y.at - x.at);
+  // textures or saves, from the folder's path and name as well as the file's (a "GameCube Textures" folder is textures)
+  const texFolder = !!textureHint(fpath + '/' + label);
+  for (const f of files) f.kind = texFolder || textureHint(f.path) ? 'Textures' : 'Save';
+  return { id: folder, label, path: fpath, textures: texFolder, total: files.length, size: files.reduce((n, x) => n + x.size, 0), files: files.slice(0, limit), last: last?.filename ? { path: last.filename, at: Date.parse(last.at) || 0, deleted: !!last.deleted } : null };
 }
 
 // ---- 0.9.23 (owner: a proper Syncthing integration, a main server, which games have saves and textures synced)

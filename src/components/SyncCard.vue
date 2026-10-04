@@ -79,7 +79,7 @@
                   <button class="btn" data-focus @click="rescan(f)"><Icon name="mdiRefresh" />Rescan</button>
                 </div>
                 <div v-for="x in list.files" :key="x.path" class="file" data-focus tabindex="0">
-                  <span class="mono"><b v-if="x.game" class="file-game" :class="{ tex: x.kind === 'Textures' }">{{ x.game }} · {{ x.kind }}</b>{{ x.path }}</span><span class="muted">{{ bytes(x.size) }}</span><span class="muted">{{ ago(x.at) }}</span>
+                  <span class="mono"><b v-if="x.game || x.kind === 'Textures'" class="file-game" :class="{ tex: x.kind === 'Textures' }">{{ x.game ? x.game + ' · ' : '' }}{{ x.kind }}</b>{{ x.path }}</span><span class="muted">{{ bytes(x.size) }}</span><span class="muted">{{ ago(x.at) }}</span>
                 </div>
                 <div v-if="list.total > list.files.length" class="muted small">And {{ list.total - list.files.length }} more.</div>
               </template>
@@ -131,12 +131,27 @@
             </div>
           </div>
           <div class="sec-title">Its Folders</div>
-          <div v-for="f in R.folders" :key="f.id" class="lrow" data-focus tabindex="0">
-            <Icon :name="f.saves ? 'mdiContentSaveOutline' : f.textures ? 'mdiTextureBox' : 'mdiFolderOutline'" :size="22" />
-            <div class="l-mid"><b>{{ f.label }}</b><span class="l-sub">Shared with {{ f.devices }} {{ f.devices === 1 ? 'device' : 'devices' }}{{ f.saves ? ` · ${f.saves} saves` : f.textures ? ' · textures' : '' }}</span></div>
-            <span v-if="f.paused" class="status">Paused</span>
-            <span v-else-if="f.done != null" class="status" :class="f.done >= 100 ? 'ok' : 'warn'">{{ f.done >= 100 ? 'Up to Date' : f.done + '%' }}</span>
-          </div>
+          <!-- 0.9.29 (owner): its folders open like This Device's, each file with its game and whether it's textures or a save -->
+          <template v-for="f in R.folders" :key="f.id">
+            <button class="lrow" data-focus :data-key="'sv-' + f.id" @click="toggle(f, true)">
+              <Icon :name="f.saves ? 'mdiContentSaveOutline' : f.textures ? 'mdiTextureBox' : 'mdiFolderOutline'" :size="22" />
+              <div class="l-mid"><b>{{ f.label }}</b><span class="l-sub">Shared with {{ f.devices }} {{ f.devices === 1 ? 'device' : 'devices' }}{{ f.saves ? ` · ${f.saves} saves` : f.textures ? ' · textures' : '' }}</span></div>
+              <span v-if="f.paused" class="status">Paused</span>
+              <span v-else-if="f.done != null" class="status" :class="f.done >= 100 ? 'ok' : 'warn'">{{ f.done >= 100 ? 'Up to Date' : f.done + '%' }}</span>
+              <Icon :name="open === 'srv:' + f.id ? 'mdiChevronUp' : 'mdiChevronDown'" :size="22" />
+            </button>
+            <div v-if="open === 'srv:' + f.id" class="files">
+              <div v-if="!list" class="muted small"><Icon name="mdiSync" :size="14" class="spin" /> Reading its list…</div>
+              <div v-else-if="list.error" class="muted small">{{ list.error }}</div>
+              <template v-else>
+                <div class="muted small files-head">{{ list.total }} files · {{ bytes(list.size) }}<template v-if="list.last"> · last change {{ ago(list.last.at) }}</template></div>
+                <div v-for="x in list.files" :key="x.path" class="file" data-focus tabindex="0">
+                  <span class="mono"><b v-if="x.game || x.kind === 'Textures'" class="file-game" :class="{ tex: x.kind === 'Textures' }">{{ x.game ? x.game + ' · ' : '' }}{{ x.kind }}</b>{{ x.path }}</span><span class="muted">{{ bytes(x.size) }}</span><span class="muted">{{ ago(x.at) }}</span>
+                </div>
+                <div v-if="list.total > list.files.length" class="muted small">And {{ list.total - list.files.length }} more.</div>
+              </template>
+            </div>
+          </template>
           <div class="row" style="justify-content: flex-end">
             <button class="btn" data-focus @click="loadServer"><Icon name="mdiRefresh" />Refresh</button>
             <button class="btn" data-focus @click="edit">Change</button>
@@ -247,10 +262,12 @@ async function forget() {
   await call('sync:setServer', null).catch(() => {});
   store.config.syncthing = { ...(store.config.syncthing || {}), server: null }; R.value = null; addr.value = key.value = '';
 }
-async function toggle(f) {
-  if (open.value === f.id) { open.value = ''; return; }
-  open.value = f.id; list.value = null;
-  list.value = await call('sync:browse', f.id).catch((e) => ({ error: e.message }));
+async function toggle(f, server = false) {
+  const k = (server ? 'srv:' : '') + f.id;
+  if (open.value === k) { open.value = ''; return; }
+  open.value = k; list.value = null;
+  const r = await call('sync:browse', server ? { id: f.id, server: true } : f.id).catch((e) => ({ error: e.message }));
+  if (open.value === k) list.value = r;
 }
 async function rescan(f) {
   try { await call('sync:rescan', f.id); toast('Syncthing is rescanning it', 'ok', 2200, 'mdiRefresh'); } catch (e) { toast(e.message, 'error'); }

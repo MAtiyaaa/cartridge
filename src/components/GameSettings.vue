@@ -21,7 +21,7 @@
           <span class="l-end"><span class="status" :class="{ ok: fg.own }">{{ fg.own ? FGL[fg.own] : 'Default' }}</span></span>
         </button>
         <div v-if="tab === 'Steam' && !fg" class="lrow" data-focus tabindex="0"><span class="l-mid"><b>Frame Generation</b><span class="l-sub">{{ fgWhy || 'Looking…' }}</span></span></div>
-        <button v-for="it in shown" :key="it.id" class="lrow" data-focus :disabled="busy" @click="pick(it)">
+        <button v-for="it in shown" :key="it.id" class="lrow" data-focus data-expand :disabled="busy" @click="pick(it)">
           <span class="l-mid"><b>{{ it.label }}</b><span class="l-sub">{{ it.sub || (it.game != null ? 'This game’s own' : `${d.name}’s own${it.base != null ? ': ' + labelOf(it, it.base) : ''}`) }}</span></span>
           <span class="l-end"><span class="status" :class="{ ok: it.game != null }">{{ it.game != null ? labelOf(it, it.game) : 'Default' }}</span></span>
         </button>
@@ -40,7 +40,7 @@
 // (electron/gameSettings.js); each pick is saved straight away.
 import { computed, onMounted, onBeforeUnmount, ref, nextTick, watch } from 'vue';
 import { pushLayer, focusFirst } from '../nav.js';
-import { store, call, closeModal, toast, choose, romById, cover } from '../store.js';
+import { store, call, closeModal, toast, choose, romById, cover, askText } from '../store.js';
 import Icon from './Icon.vue';
 import Btn from './Btn.vue';
 import { frameGenFor } from '../steam.js';
@@ -85,10 +85,17 @@ async function pick(it) {
   const v = await choose({ title: it.label, message: it.sub || '', sheet: true, options: [
     { label: `${d.value.name}’s own`, sub: it.base != null ? `Now ${labelOf(it, it.base)}` : 'Follows your normal settings', value: '__base', icon: 'mdiArrowULeftTop', selected: cur == null, raw: true },
     ...it.options.map((o) => ({ label: o.label, value: o.value, selected: cur != null && String(cur) === String(o.value), raw: true })),
+    ...(it.num ? [{ label: 'Type a Number', sub: `${it.num.min} to ${it.num.max}${it.num.unit ? ' ' + it.num.unit : ''}${cur != null && !it.options.some((o) => String(o.value) === String(cur)) ? ' · now ' + cur : ''}`, value: '__num', icon: 'mdiNumeric', raw: true }] : []),
   ] });
+  // a number of your own (0.9.29): the keyboard first, then this window again
+  let value = v;
+  if (v === '__num') {
+    const t = await askText({ title: it.label, value: cur != null ? String(cur) : '', placeholder: `${it.num.min} to ${it.num.max}` });
+    value = t != null && String(t).trim() ? String(t).trim() : null;
+  }
   reopen();
-  if (v == null) return;
-  await save([{ id: it.id, value: v === '__base' ? null : v }]);
+  if (value == null) return;
+  await save([{ id: it.id, value: value === '__base' ? null : value }]);
 }
 async function save(changes) {
   busy.value = true;

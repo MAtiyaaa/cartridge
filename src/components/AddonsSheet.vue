@@ -19,7 +19,7 @@
 
         <template v-if="mine.length">
           <div class="ad-h">Installed by Cartridge</div>
-          <button v-for="r in mine" :key="r.key" class="ad-row" data-focus @click="remove(r)">
+          <button v-for="r in mine" :key="r.key" class="ad-row" data-focus data-expand @click="remove(r)">
             <Icon name="mdiCheckCircle" :size="22" />
             <span class="ad-mid"><b>{{ r.name }}</b><span class="ad-sub">{{ [r.emuName, bytes(r.bytes), r.count + ' files'].join(' · ') }}</span></span>
             <span class="ad-end">Remove</span>
@@ -28,7 +28,7 @@
 
         <template v-if="featured.length && wants('tex')">
           <div class="ad-h">Featured packs</div>
-          <button v-for="f in featured" :key="f.id" class="ad-row" data-focus @click="openPage(f)">
+          <button v-for="f in featured" :key="f.id" class="ad-row" data-focus data-expand @click="openPage(f)">
             <Icon name="mdiStarFourPointsOutline" :size="22" />
             <span class="ad-mid"><b>{{ f.name }}</b><span class="ad-sub">by {{ f.authors[0] }} · download it from its page, then Install a Download below</span></span>
             <span class="ad-end">Open Page</span>
@@ -38,7 +38,7 @@
         <div v-if="d.error && (kind !== 'tex' || d.source === 'ps2')" class="muted small">{{ d.error }}</div>
         <div v-else-if="!packs.length" class="muted small">{{ !d.emus?.length ? 'No emulator for this console is set up here.' : kind === 'tex' ? (d.source === 'ps2' ? 'No texture packs for this game in the catalog yet.' : 'There’s no texture pack catalog for this console yet. A pack you put in the folder above is used once custom textures are on.') : 'No mods for this game on GameBanana.' }}</div>
         <template v-for="p in packs" :key="p.source + p.id">
-          <button class="ad-row" data-focus :disabled="!!run" @click="act(p)">
+          <button class="ad-row" data-focus data-expand :disabled="!!run" @click="act(p)">
             <img v-if="p.preview || p.previews?.[0]" class="ad-img" :src="p.preview || p.previews[0]" loading="lazy" />
             <Icon v-else name="mdiPuzzleOutline" :size="22" />
             <span class="ad-mid"><b>{{ p.name }}</b><span class="ad-sub">{{ subOf(p) }}</span></span>
@@ -47,7 +47,7 @@
           <template v-if="open === p.id">
             <div v-if="!files" class="muted small ad-files"><Icon name="mdiSync" :size="14" class="spin" /> Loading files…</div>
             <div v-else-if="!files.length" class="muted small ad-files">No zip, 7z or rar files in this mod.</div>
-            <button v-for="f in files" :key="f.id" class="ad-row ad-file" data-focus :disabled="!!run" @click="install(p, f)">
+            <button v-for="f in files" :key="f.id" class="ad-row ad-file" data-focus data-expand :disabled="!!run" @click="install(p, f)">
               <Icon name="mdiFileDownloadOutline" :size="20" />
               <span class="ad-mid"><b>{{ f.name }}</b><span class="ad-sub">{{ [bytes(f.size), f.description].filter(Boolean).join(' · ') }}</span></span>
               <span class="ad-end">Install</span>

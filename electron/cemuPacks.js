@@ -57,7 +57,10 @@ function list(c, mine = {}) {
     const r = parseRules(read(f)); const d = r.def;
     const tids = String(d.titleids || '').split(',').map((x) => x.trim().toUpperCase()).filter(Boolean);
     const p = String(d.path || '').split('/').filter(Boolean);
-    const match = tids.some((t) => ids.has(t)) || (!ids.size && nameKey.length >= 4 && p[0] && norm(p[0]) === nameKey);
+    // no title ID (a .wua Cemu hasn't listed yet): the pack's game folder by name, also when one name holds the
+    // other ("Breath of the Wild" packs for "The Legend of Zelda Breath of the Wild")
+    const pk = norm(p[0] || '');
+    const match = tids.some((t) => ids.has(t)) || (!ids.size && nameKey.length >= 4 && pk && (pk === nameKey || (pk.length >= 8 && nameKey.includes(pk)) || (nameKey.length >= 8 && pk.includes(nameKey))));
     if (!match) continue;
     const rel = path.relative(c.root, f).split(path.sep).join('/');
     const e = on[rel];
@@ -104,4 +107,32 @@ function titleIds(gamePath, cemuConfigDir) {
   for (const id of [...out]) out.add('00050000' + id.slice(8));
   return [...out];
 }
-module.exports = { parseRules, findRules, entries, list, set, titleIds };
+// Cemu's community graphic packs (0.9.29, owner: "Cemu patches still aren't appearing"): fetched the way Cemu's own
+// Download Community Graphic Packs does (gui/wxgui/DownloadGraphicPacksWindow.cpp): the newest release of
+// cemu-project/cemu_graphic_packs, its first asset (a zip) unpacked into graphicPacks/downloadedGraphicPacks, the
+// release name in version.txt there, so Cemu sees them as current. Only that folder, the one Cemu manages itself.
+const PACKS_REPO = 'https://api.github.com/repos/cemu-project/cemu_graphic_packs/releases/latest';
+async function downloadCommunity(root, { fetchImpl, unzip, force = false } = {}) {
+  const dir = path.join(root, 'graphicPacks', 'downloadedGraphicPacks'), vf = path.join(dir, 'version.txt');
+  const have = (read(vf) || '').split(/\r?\n/)[0].trim();
+  let st = null; try { st = fs.statSync(vf); } catch {}
+  if (!force && have && st && Date.now() - st.mtimeMs < 7 * 864e5) return { updated: false, version: have };
+  const r = await fetchImpl(PACKS_REPO, { headers: { 'User-Agent': 'Cartridge', Accept: 'application/vnd.github+json' }, signal: AbortSignal.timeout(20000) });
+  if (!r.ok) throw new Error(`GitHub answered ${r.status} for Cemu's graphic packs.`);
+  const j = await r.json(), name = String(j.name || j.tag_name || '').trim(), url = j.assets?.[0]?.browser_download_url;
+  if (!name || !url) throw new Error('Cemu\'s graphic pack release had nothing to download.');
+  if (name === have && !force) { try { fs.utimesSync(vf, new Date(), new Date()); } catch {} return { updated: false, version: have }; }
+  const z = await fetchImpl(url, { signal: AbortSignal.timeout(120000) });
+  if (!z.ok) throw new Error(`GitHub answered ${z.status} for the graphic packs download.`);
+  const tmp = path.join(require('os').tmpdir(), `cartridge-cemu-packs-${Date.now()}.zip`);
+  fs.writeFileSync(tmp, Buffer.from(await z.arrayBuffer()));
+  try {
+    // like Cemu: what was in downloadedGraphicPacks goes, then the release is unpacked there
+    try { for (const n of fs.readdirSync(dir)) fs.rmSync(path.join(dir, n), { recursive: true, force: true }); } catch {}
+    fs.mkdirSync(dir, { recursive: true });
+    await unzip(tmp, dir);
+    fs.writeFileSync(vf, name);
+  } finally { try { fs.rmSync(tmp, { force: true }); } catch {} }
+  return { updated: true, version: name };
+}
+module.exports = { parseRules, findRules, entries, list, set, titleIds, downloadCommunity };

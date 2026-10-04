@@ -127,3 +127,23 @@ test('pairing: a device ID is checked, gets every Cartridge folder; joining take
   await assert.rejects(S.setType('mine', 'sendreceive', { fetchImpl, home }), /its own/);
   fs.rmSync(home, { recursive: true, force: true });
 });
+
+test('browsing a folder says textures or saves from the folder itself, on the main server too (0.9.29)', async () => {
+  const S = require('../electron/syncthing');
+  const seen = [];
+  const fetchImpl = async (url) => {
+    seen.push(url);
+    const u = new URL(url), ok = (o) => ({ ok: true, status: 200, headers: { get: () => 'application/json' }, json: async () => o });
+    if (u.pathname === '/rest/config/folders/gc-tex') return ok({ id: 'gc-tex', label: 'GameCube Textures', path: '/srv/sync/gc' });
+    if (u.pathname === '/rest/db/browse') return ok([{ name: 'GMSE01', type: 'FILE_INFO_TYPE_DIRECTORY', children: [{ name: 'tex1_64x64_abc.png', size: 10, modTime: '2026-10-01T00:00:00Z' }] }]);
+    return ok({});
+  };
+  const b = await S.browse('gc-tex', { fetchImpl, server: { address: 'nas:8384', apikey: 'k' } });
+  assert.ok(seen.every((u) => u.startsWith('http://nas:8384/'))); // the main server, not this device
+  assert.strictEqual(b.label, 'GameCube Textures');
+  assert.deepStrictEqual(b.files.map((f) => f.kind), ['Textures']);
+  // and the game it belongs to is matched with that folder's name, so it says Textures, not Save
+  const m = S.matchGames([{ id: 9, name: 'Super Mario Sunshine', ids: [], discIds: ['GMSE01'] }], [{ id: 'gc-tex', label: b.label, path: b.path + '/' + b.label, files: b.files }]);
+  assert.strictEqual(m[9].textures.length, 1);
+  assert.strictEqual(m[9].saves.length, 0);
+});
