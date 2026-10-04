@@ -121,9 +121,16 @@
             <div class="st-label">{{ t.console ? t.console + ' Trophies' : 'Latest Trophies' }}<span v-if="achOf(t).week" class="st-count">{{ achOf(t).week }} this week</span></div>
             <template v-if="achOf(t).list.length">
               <!-- 0.9.24 (owner: too much empty space when big): as many unlocks as the tile holds, in columns when wide -->
-              <div class="st-tro" :class="{ one: troFor(t).n === 1 }">
+              <div class="st-tro" :class="{ one: troFor(t).n === 1, feat: troFor(t).feat }">
+                <!-- 0.9.28 (owner: big trophy tiles were mostly empty): the newest unlock as a feature card, the rest beside it -->
+                <div v-if="troFor(t).feat" class="st-tro-feat">
+                  <span class="st-tro-fbadge"><img v-if="achView(t)[0].badge" :src="achView(t)[0].badge" alt="" /><Grade v-else :g="achView(t)[0].grade" :size="54" /></span>
+                  <b>{{ achView(t)[0].title }}</b>
+                  <span v-if="achView(t)[0].desc" class="st-tro-fd">{{ achView(t)[0].desc }}</span>
+                  <span class="st-tro-fg">{{ achView(t)[0].game }}<template v-if="achView(t)[0].t"> · {{ agoShort(achView(t)[0].t) }}</template></span>
+                </div>
                 <div class="st-tro-list" :style="{ gridTemplateColumns: `repeat(${troFor(t).cols}, minmax(0, 1fr))` }">
-                  <div v-for="(a, i) in achView(t).slice(0, troFor(t).n)" :key="a.key" class="st-tro-main" :style="{ '--i': i }">
+                  <div v-for="(a, i) in achView(t).slice(troFor(t).feat ? 1 : 0, troFor(t).n + (troFor(t).feat ? 1 : 0))" :key="a.key" class="st-tro-main" :style="{ '--i': i }">
                     <span class="st-tro-badge"><img v-if="a.badge" :src="a.badge" alt="" /><Grade v-else :g="a.grade" :size="26" /></span>
                     <span class="st-tro-t"><b>{{ a.title }}</b><span>{{ a.game }}<template v-if="a.t"> · {{ agoShort(a.t) }}</template></span></span>
                   </div>
@@ -160,6 +167,7 @@
           <!-- 0.9.23 new widgets: your library in numbers, a game for today, a picture, your own HTML -->
           <template v-else-if="t.type === 'stats'">
             <div class="st-label">Your Library</div>
+            <div v-if="t.h >= 2" class="st-band"><img v-for="r in bandOf(t)" :key="r.id" :src="cover(r, true)" alt="" loading="lazy" /></div>
             <div class="st-stats">
               <div><b class="tnum">{{ stats.games }}</b><span>Games</span></div>
               <div><b class="tnum">{{ stats.hours }}</b><span>Hours Played</span></div>
@@ -167,9 +175,36 @@
               <div><b class="tnum">{{ stats.consoles }}</b><span>Consoles</span></div>
             </div>
           </template>
+          <!-- Console Spotlight (0.9.28): a console's games take turns, with their art -->
+          <template v-else-if="t.type === 'spotlight'">
+            <template v-if="spotOf(t)">
+              <Transition name="st-spot"><div :key="spotOf(t).id" class="st-art" :style="{ backgroundImage: bgUrl(t.h > t.w ? cover(spotOf(t), true) : artOf(spotOf(t)) || cover(spotOf(t), true)) }" /></Transition>
+              <div class="st-scrim" />
+              <div class="st-label on-art">{{ platformById(t.platformId)?.display_name }} Spotlight</div>
+              <div class="st-pin">
+                <GameLogo :key="spotOf(t).id" :logo="store.config.ui.logos !== false ? logoOf(spotOf(t)) : null" :name="spotOf(t).name" cls="st-pin-name" :area="Math.min(22000, box(t).pw * box(t).ph * 0.12)" :max-w="box(t).pw * 0.7" :max-h="Math.min(110, box(t).ph * 0.32)" />
+                <span class="st-mark">{{ store.play[spotOf(t).id]?.min ? playtimeText(store.play[spotOf(t).id].min) + ' played' : store.installed[spotOf(t).id] ? 'On this device' : '' }}</span>
+              </div>
+            </template>
+            <div v-else class="st-empty small"><span>No games for this console yet</span></div>
+          </template>
+          <!-- An Emulator (0.9.28): A opens it -->
+          <template v-else-if="t.type === 'emulator'">
+            <div v-if="t.emu" class="st-emu">
+              <EmuIcon :id="t.emu.id" :size="Math.round(Math.min(96, box(t).ph * 0.5))" fallback="mdiGamepadVariantOutline" />
+              <div class="st-emu-t">
+                <b>{{ t.emu.label }}</b>
+                <span>{{ emuOf(t)?.version ? 'Version ' + emuOf(t).version : t.emu.kind === 'flatpak' ? 'Flatpak' : '' }}</span>
+                <span v-if="emuOf(t)?.update" class="status warn">Update ready</span>
+                <span v-else-if="emuOf(t)" class="status ok">Up to date</span>
+              </div>
+            </div>
+            <div v-else class="st-empty small"><span>Pick an emulator in Arrange (Select)</span></div>
+          </template>
           <template v-else-if="t.type === 'cstats'">
             <template v-if="platformById(t.platformId)">
               <div class="st-cs-mark"><ConsoleMark :slug="platformById(t.platformId).slug" :label="platformById(t.platformId).display_name" /></div>
+              <div v-if="t.h >= 2" class="st-band"><img v-for="r in bandOf(t)" :key="r.id" :src="cover(r, true)" alt="" loading="lazy" /></div>
               <div class="st-stats">
                 <div><b class="tnum">{{ cstats(t).games }}</b><span>Games</span></div>
                 <div><b class="tnum">{{ cstats(t).hours }}</b><span>Hours Played</span></div>
@@ -284,6 +319,7 @@ import Btn from '../components/Btn.vue';
 import Grade from '../components/Grade.vue';
 import GameLogo from '../components/GameLogo.vue';
 import ConsoleCard from '../components/ConsoleCard.vue';
+import EmuIcon from '../components/EmuIcon.vue';
 import ConsoleMark from '../components/ConsoleMark.vue';
 import StartClock from '../components/StartClock.vue';
 import { TILES, GROUPS, MANY, DEFAULT, valid, COLS, MAX_H, pack, settle, bottom } from '../startTiles.js';
@@ -316,7 +352,7 @@ const corner = ref('se'); // which corner the D-pad moves while resizing
 const CORNERS = ['se', 'sw', 'nw', 'ne'];
 const EDGES = ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw'];
 const leaving = ref(null);
-const isArt = (t) => t.type === 'continue' ? !!cur.value : t.type === 'game' || (t.type === 'daily' && !!daily.value) || (t.type === 'image' && !!t.src);
+const isArt = (t) => t.type === 'continue' ? !!cur.value : (t.type === 'spotlight' && !!spotOf(t)) || t.type === 'game' || (t.type === 'daily' && !!daily.value) || (t.type === 'image' && !!t.src);
 // a cover that can't be loaded shows the card's own colour instead of a broken picture
 const BLANK = 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==';
 const noImg = (e) => { if (e.target.src !== BLANK) e.target.src = BLANK; };
@@ -380,8 +416,23 @@ function fanN(t) {
 // trophies: rows of about 60 px and columns of about 300 px, leaving room for the label and the badge strip
 function troFor(t) {
   const { pw, ph } = box(t), pad = Math.min(22, ph * 0.09), h = ph - pad * 2 - 26 - (ph > 200 ? 46 : 0);
-  const cols = Math.max(1, Math.min(4, Math.floor(pw / 300))), rows = Math.max(1, Math.floor(h / 62));
-  return { cols, rows, n: Math.max(1, cols * rows) };
+  // big tiles (0.9.28): a feature card takes the left 40%, the list fills the rest
+  const feat = pw >= 560 && ph >= 230 && achOf(t).list.length > 1, lw = feat ? pw * 0.56 : pw;
+  const cols = Math.max(1, Math.min(4, Math.floor(lw / 300))), rows = Math.max(1, Math.floor(h / 62));
+  return { cols, rows, n: Math.max(1, cols * rows), feat };
+}
+// Console Spotlight (0.9.28): the console's games take turns, a new one every 12 seconds
+const spotTick = ref(0);
+const spotOf = (t) => { const l = conList(t.platformId); return l.length ? l[(spotTick.value + (t.id.length % 7)) % l.length] : null; };
+// An Emulator (0.9.28): its version and whether an update is out, from Settings → Emulators' list
+const emuInfo = ref({});
+call('emuup:list', {}).then((l) => { const m = {}; for (const u of l || []) m[u.path || u.fp] = u; emuInfo.value = m; }).catch(() => {});
+const emuOf = (t) => (t.emu ? emuInfo.value[t.emu.path || t.emu.fp] || null : null);
+// a row of covers in tall library tiles (0.9.28, owner: empty space): the console's or library's games, played first
+function bandOf(t) {
+  const list = (t.type === 'cstats' ? conList(t.platformId) : [...playing.value, ...rowOf('fresh')]).filter((r) => cover(r, true));
+  const n = Math.max(2, Math.min(12, Math.floor(box(t).pw / 120)));
+  return [...new Map(list.map((r) => [r.id, r])).values()].slice(0, n);
 }
 const stripN = (t) => Math.max(0, Math.min(12, Math.floor((box(t).pw - 36) / 40)));
 
@@ -502,8 +553,8 @@ const raDate = (d) => { const t = new Date(String(d).replace(' ', 'T') + (/[zZ]|
 async function loadAch() {
   const out = [];
   await Promise.all([
-    store.config.ra?.user ? call('ra:overview').then((o) => { for (const a of o.recent || []) out.push({ key: 'ra' + a.id + a.date, t: raDate(a.date), badge: img(a.badge), title: a.title, game: a.game, console: a.console || '', open: () => go('ra-game', { gameId: a.gameId }) }); }).catch(() => {}) : null,
-    call('trophies:overview').then((o) => { for (const x of o.recent || []) out.push({ key: 'tr' + x.key + x.id, t: x.time || 0, badge: x.icon, grade: x.grade, title: x.name, game: x.game, console: x.short || '', open: () => go('trophy-game', { tkey: x.key }) }); }).catch(() => {}),
+    store.config.ra?.user ? call('ra:overview').then((o) => { for (const a of o.recent || []) out.push({ key: 'ra' + a.id + a.date, t: raDate(a.date), badge: img(a.badge), title: a.title, desc: a.description || '', game: a.game, console: a.console || '', open: () => go('ra-game', { gameId: a.gameId }) }); }).catch(() => {}) : null,
+    call('trophies:overview').then((o) => { for (const x of o.recent || []) out.push({ key: 'tr' + x.key + x.id, t: x.time || 0, badge: x.icon, grade: x.grade, title: x.name, desc: x.detail || x.desc || '', game: x.game, console: x.short || '', open: () => go('trophy-game', { tkey: x.key }) }); }).catch(() => {}),
   ]);
   ach.value = out.sort((a, b) => b.t - a.t).slice(0, 60);
 }
@@ -566,6 +617,8 @@ function openTile(t, ev) {
   if (T === 'daily') return daily.value && go('game', { romId: daily.value.id });
   if (T === 'stats') return tab('library');
   if (T === 'cstats') return platformById(t.platformId) && go('platform', { platformId: t.platformId });
+  if (T === 'spotlight') { const r = spotOf(t); return r && go('game', { romId: r.id }); }
+  if (T === 'emulator') { if (!t.emu) return; call('emuget:open', t.emu).then(() => toast(`${t.emu.label} is opening`, 'ok', 2500, 'mdiOpenInApp'), (e) => toast(e.message, 'error', 5000)); return; }
   if (T === 'image' || T === 'html') return;
   if (T === 'game') return romById(t.romId) && go('game', { romId: t.romId });
   if (T === 'console') return platformById(t.platformId) && go('platform', { platformId: t.platformId });
@@ -642,11 +695,11 @@ async function pickGame() {
     if (id !== '__back') return id;
   }
 }
-const SUBS = { game: 'Pin one game', console: 'Pin one console', trophies: 'All, or one console’s', image: 'A picture or GIF from this device', html: 'Paste HTML, or start from a note or a countdown', daily: 'A new game from your library every day', stats: 'Games, consoles and hours in numbers' };
+const SUBS = { game: 'Pin one game', console: 'Pin one console', trophies: 'All, or one console’s', image: 'Search 4K wallpapers or GIFs, or use your own', spotlight: 'One console’s games taking turns, with their art', emulator: 'Open an emulator straight from Start', cgames: 'One console’s games in a row', cstats: 'One console in numbers', html: 'Paste HTML, or start from a note or a countdown', daily: 'A new game from your library every day', stats: 'Games, consoles and hours in numbers' };
 async function addTile() {
   const have = new Set(tiles.value.map((t) => t.type));
-  const opts = GROUPS.flatMap(([heading, keys]) => keys.filter((k) => MANY.has(k) || !have.has(k)).map((k, i) => ({ heading: i === 0 ? heading : undefined, label: TILES[k].name, value: k, icon: TILES[k].icon, sub: SUBS[k] || '' })));
-  const type = await choose({ sheet: true, title: 'Add a Widget', options: opts });
+  const tabsOf = GROUPS.map(([label, keys]) => ({ label, options: keys.filter((k) => MANY.has(k) || !have.has(k)).map((k) => ({ label: TILES[k].name, value: k, icon: TILES[k].icon, sub: SUBS[k] || '' })) })).filter((g) => g.options.length);
+  const type = await choose({ title: 'Add a Widget', tabs: tabsOf });
   if (!type) return nextTick(() => focusKey('st-add'));
   const [w, h] = TILES[type].size;
   const t = { id: type + '-' + Date.now().toString(36), type, w, h, x: 0, y: bottom(tiles.value) };
@@ -668,10 +721,27 @@ const HTML_NOTE = (text) => `<div style="height:100%;display:flex;align-items:ce
 const HTML_COUNT = (title, date) => `<div style="height:100%;display:flex;flex-direction:column;justify-content:center;padding:6% 8%;box-sizing:border-box;font-family:Inter,system-ui,sans-serif"><div style="font-size:clamp(11px,8vh,16px);opacity:.7;font-weight:600">${title.replace(/[<&]/g, (c) => (c === '<' ? '&lt;' : '&amp;'))}</div><div id="n" style="font-size:clamp(22px,34vh,96px);font-weight:800;letter-spacing:-.03em;line-height:1"></div></div><script>const t=new Date(${JSON.stringify(date)}+'T00:00:00');function u(){const d=Math.ceil((t-new Date())/864e5);document.getElementById('n').textContent=d>1?d+' days':d===1?'Tomorrow':d===0?'Today':Math.abs(d)+' days ago'}u();setInterval(u,6e4)<\/script>`;
 const CONFIG = {
   async image(t) {
-    const file = await pickFolder({ title: 'Choose a picture', subtitle: 'PNG, JPG, WebP, AVIF or GIF', start: store.info?.home, files: ['png', 'jpg', 'jpeg', 'webp', 'gif', 'avif'] });
-    if (!file) return false;
-    try { const old = t.src; t.src = await call('start:image', { file }); if (old) call('start:imageRemove', { url: old }).catch(() => {}); return true; }
-    catch (e) { toast(e.message, 'error', 5000); return false; }
+    // 0.9.28 (owner): search 4K wallpapers or GIFs right here, or pick a file
+    const src = await choose({ sheet: true, title: 'A Picture', options: [
+      { label: 'Search 4K Wallpapers', value: 'image', icon: 'mdiImageSearchOutline', sub: 'From Wallhaven, safe for work, 3840 by 2160 or bigger' },
+      { label: 'Search GIFs', value: 'gif', icon: 'mdiFilmstrip', sub: 'Moving pictures from Openverse, openly licensed, the biggest first' },
+      { label: 'From This Device', value: 'file', icon: 'mdiFolderImage', sub: 'PNG, JPG, WebP, AVIF or GIF' },
+    ] });
+    if (!src) return false;
+    let url = null;
+    if (src === 'file') {
+      const file = await pickFolder({ title: 'Choose a picture', subtitle: 'PNG, JPG, WebP, AVIF or GIF', start: store.info?.home, files: ['png', 'jpg', 'jpeg', 'webp', 'gif', 'avif'] });
+      if (!file) return false;
+      try { url = await call('start:image', { file }); } catch (e) { toast(e.message, 'error', 5000); return false; }
+    } else {
+      const q = await askText({ title: src === 'gif' ? 'Search GIFs' : 'Search 4K Wallpapers', placeholder: src === 'gif' ? 'Pixel art rain' : 'Hyrule at night' });
+      if (!q) return false;
+      const pick = await openModal('imgsearch', { q, kind: src });
+      if (!pick) return false;
+      try { toast('Getting the picture…', 'info', 2500, 'mdiDownload'); url = await call('start:imageUrl', { url: pick }); } catch (e) { toast(e.message, 'error', 5000); return false; }
+    }
+    const old = t.src; t.src = url; if (old) call('start:imageRemove', { url: old }).catch(() => {});
+    return true;
   },
   async html(t) {
     const kind = await choose({ sheet: true, title: 'Your Own Widget', message: 'It runs on its own, apart from Cartridge, and can’t reach your library or settings.', options: [
@@ -693,6 +763,17 @@ const CONFIG = {
     try { t.src = await call('start:html', { id: t.id, html }); return true; } catch (e) { toast(e.message, 'error', 5000); return false; }
   },
   async cgames(t) { return pickConsole(t); },
+  async spotlight(t) { return pickConsole(t); },
+  // an emulator found on this device, opened from Start (0.9.28)
+  async emulator(t) {
+    const list = (await call('emuup:list', {}).catch(() => [])).filter((u) => u.kind !== 'windows');
+    if (!list.length) { toast('No emulators found on this device yet', 'info', 3500); return false; }
+    const v = await choose({ sheet: true, title: 'Which Emulator', options: list.map((u, i) => ({ label: u.label, value: String(i), sub: [u.version ? 'Version ' + u.version : '', u.kind === 'flatpak' ? 'Flatpak' : ''].filter(Boolean).join(' · '), raw: true })) });
+    if (v == null) return false;
+    const u = list[Number(v)];
+    t.emu = { id: u.id, label: u.label, kind: u.kind, fp: u.fp || null, path: u.path || null };
+    return true;
+  },
   async cstats(t) { return pickConsole(t); },
   async trophies(t) {
     const names = [...new Set(ach.value.map((a) => a.console).filter(Boolean))].sort();
@@ -914,8 +995,10 @@ useView({
 }, hints);
 
 let clockT = 0, spaceT = 0, ro = null;
+let spotT = 0;
 onMounted(async () => {
   clockT = setInterval(tick, 5000);
+  spotT = setInterval(() => { if (!store.away) spotTick.value++; }, 12000);
   // 0.9.28 (owner: hints are hidden now, so first-timers get Start's tips once, in a short tour)
   if (store.config.ui.toured && !store.config.ui.startTips) setTimeout(async () => { if (store.modal || store.route.name !== 'start') return; saveConfig({ ui: { startTips: 1 } }); await openModal('tour', { start: true, only: true }); }, 900);
   loadSpace(); spaceT = setInterval(loadSpace, 60000);
@@ -925,7 +1008,7 @@ onMounted(async () => {
   await nextTick();
   ensureFocus(el.value);
 });
-onBeforeUnmount(() => { store.forceHints = false; clearInterval(clockT); clearInterval(spaceT); clearTimeout(pressT); ro?.disconnect(); if (editing.value) { settle(tiles.value); save(); } });
+onBeforeUnmount(() => { store.forceHints = false; clearInterval(clockT); clearInterval(spotT); clearInterval(spaceT); clearTimeout(pressT); ro?.disconnect(); if (editing.value) { settle(tiles.value); save(); } });
 watch(() => store.trophyVer, loadAch);
 watch(() => store.play, loadWeek);
 </script>
@@ -1141,6 +1224,25 @@ watch(() => store.play, loadWeek);
 .st-tro.one .st-tro-t b { font-size: clamp(12px, 12cqh, 18px); }
 .st-tro-t span { font-size: var(--t-xs); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .st-tro-strip { display: flex; gap: 6px; overflow: hidden; }
+.st-tro.feat { flex-direction: row; align-items: stretch; justify-content: flex-start; gap: clamp(14px, 3cqw, 28px); }
+.st-tro.feat .st-tro-list { flex: 1; align-content: center; }
+.st-tro.feat .st-tro-strip { display: none; }
+.st-tro-feat { flex: 0 0 40%; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 6px; padding: clamp(12px, 4cqh, 22px); border-radius: var(--r-lg); background: radial-gradient(120% 90% at 20% 10%, rgba(255, 210, 120, 0.12), transparent 60%), rgba(255, 255, 255, 0.04); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06); animation: st-in 520ms var(--ease-out) both; }
+.st-tro-fbadge { width: clamp(56px, 30cqh, 96px); aspect-ratio: 1; border-radius: var(--r-lg); overflow: hidden; display: grid; place-items: center; background: var(--s2); box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 210, 120, 0.25); margin-bottom: 6px; }
+.st-tro-fbadge img { width: 100%; height: 100%; object-fit: cover; }
+.st-tro-feat b { font-family: var(--display); font-weight: 800; font-size: clamp(16px, 7cqh, 28px); line-height: 1.1; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.st-tro-fd { color: var(--text); opacity: 0.8; font-size: var(--t-sm); line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.st-tro-fg { color: var(--muted); font-size: var(--t-xs); }
+.st-emu { flex: 1; min-height: 0; display: flex; align-items: center; gap: clamp(10px, 4cqw, 22px); }
+.st-emu-t { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.st-emu-t b { font-family: var(--display); font-weight: 800; font-size: clamp(15px, 14cqh, 28px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.st-emu-t > span:not(.status) { color: var(--muted); font-size: var(--t-xs); }
+.st-emu-t .status { align-self: flex-start; }
+.st-spot-enter-active, .st-spot-leave-active { transition: opacity 900ms ease; }
+.st-spot-enter-from, .st-spot-leave-to { opacity: 0; }
+.st-band { flex: 1; min-height: 0; display: flex; gap: 10px; align-items: center; margin: 10px 0 4px; overflow: hidden; mask-image: linear-gradient(90deg, #000 80%, transparent); }
+.st-band img { height: min(100%, 220px); aspect-ratio: 2 / 3; object-fit: cover; border-radius: var(--r-md); box-shadow: var(--weight-edge), var(--weight); animation: st-in 520ms var(--ease-out) both; }
+.st-band:empty { display: none; }
 .st-tro-mini { width: 34px; height: 34px; flex: none; border-radius: var(--r-sm); overflow: hidden; display: grid; place-items: center; background: var(--s2); opacity: calc(1 - var(--i) * 0.06); animation: st-in 420ms var(--ease-out) both; animation-delay: calc(var(--i) * 30ms + 200ms); }
 .st-tro-mini img { width: 100%; height: 100%; object-fit: cover; }
 @container (max-height: 84px) { .st-tro-strip { display: none; } }

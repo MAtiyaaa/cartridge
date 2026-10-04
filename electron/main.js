@@ -2917,6 +2917,36 @@ const handlers = {
     await fsp.copyFile(file, path.join(USER_DATA, 'start-images', name));
     return 'romimg://img/?st=' + encodeURIComponent(name);
   },
+  // Search pictures for a picture widget (0.9.28, owner: find a 4K wallpaper or a GIF without leaving Cartridge).
+  // Wallhaven's open API (safe-for-work only, at least 3840x2160) for pictures, Openverse (openly licensed,
+  // GIFs only, the largest first) for moving ones. Neither needs an account or a key.
+  'start:search': async ({ q, kind = 'image', page = 1 }) => {
+    const wf = require('./webFetch'), term = String(q || '').trim().slice(0, 80);
+    if (!term) return [];
+    if (kind === 'gif') {
+      const r = await wf(`https://api.openverse.org/v1/images/?q=${encodeURIComponent(term)}&extension=gif&page_size=30&page=${page}`, { headers: { 'User-Agent': 'Cartridge' }, signal: AbortSignal.timeout(15000) });
+      if (!r.ok) throw new Error(`Openverse answered ${r.status}`);
+      const j = await r.json();
+      return (j.results || []).filter((x) => x.url && (x.width || 0) >= 320).sort((a, b) => (b.width || 0) - (a.width || 0)).map((x) => ({ url: x.url, thumb: x.thumbnail || x.url, w: x.width || 0, h: x.height || 0, by: x.creator || '', license: (x.license || '').toUpperCase() }));
+    }
+    const r = await wf(`https://wallhaven.cc/api/v1/search?q=${encodeURIComponent(term)}&categories=111&purity=100&atleast=3840x2160&sorting=relevance&page=${page}`, { headers: { 'User-Agent': 'Cartridge' }, signal: AbortSignal.timeout(15000) });
+    if (!r.ok) throw new Error(`Wallhaven answered ${r.status}`);
+    const j = await r.json();
+    return (j.data || []).map((x) => ({ url: x.path, thumb: x.thumbs?.large || x.thumbs?.original || x.path, w: x.dimension_x || 0, h: x.dimension_y || 0, by: '', license: '' }));
+  },
+  // a picked search result, kept like a picture from this device
+  'start:imageUrl': async ({ url }) => {
+    if (!/^https:\/\//.test(String(url || ''))) throw new Error('That picture can’t be fetched');
+    const ext = (path.extname(new URL(url).pathname).toLowerCase().match(/^\.(png|jpe?g|webp|gif|avif)$/) || ['.jpg'])[0];
+    const name = Date.now().toString(36) + ext;
+    await fsp.mkdir(path.join(USER_DATA, 'start-images'), { recursive: true });
+    const r = await require('./webFetch')(url, { headers: { 'User-Agent': 'Cartridge' }, signal: AbortSignal.timeout(60000) });
+    if (!r.ok) throw new Error(`The picture didn’t download (${r.status})`);
+    const buf = Buffer.from(await r.arrayBuffer());
+    if (buf.length > 40 * 1024 * 1024) throw new Error('That picture is too big (over 40 MB)');
+    await fsp.writeFile(path.join(USER_DATA, 'start-images', name), buf);
+    return 'romimg://img/?st=' + encodeURIComponent(name);
+  },
   // Start's own widgets (0.9.23, owner: custom HTML widgets): the page is kept as a file and shown in a
   // sandboxed frame (no access to Cartridge, its own blank origin), served as romimg://img/?wh=<id>
   'start:html': ({ id, html }) => {
