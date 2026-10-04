@@ -444,7 +444,7 @@
                 </div>
               </div>
             </div>
-            <SteamSettings />
+            <SteamSettings ref="steamRef" />
             <template v-if="selfAdded">
             <div class="subh" style="margin-top: 10px">Cartridge</div>
             <div class="about glass">
@@ -524,7 +524,7 @@ import ReportProblem from '../components/ReportProblem.vue';
 import { padInfo } from '../pad.js';
 
 const el = ref(null);
-const paneEl = ref(null), syncRef = ref(null);
+const paneEl = ref(null), syncRef = ref(null), steamRef = ref(null);
 const OLD_SEC = { folders: 'emu', conn: 'romm', sync: 'romm' }; // sections merged in 0.9.3
 const sec = ref(OLD_SEC[store.settingsSection] || store.settingsSection || 'romm');
 const sections = [
@@ -813,7 +813,7 @@ function paneLeft() {
   if (more) return false;
   focusFirst(el.value, `[data-key="sec-${sec.value}"]`);
 }
-useView({ right: railRight, left: paneLeft, back: () => { if (!document.activeElement?.closest('.rail')) { focusFirst(el.value, `[data-key="sec-${sec.value}"]`); return; } return false; }, lb: () => (sec.value === 'emu' ? stepEmu(-1) : sec.value === 'syncthing' ? syncRef.value?.step(-1) : stepLook(-1)), rb: () => (sec.value === 'emu' ? stepEmu(1) : sec.value === 'syncthing' ? syncRef.value?.step(1) : stepLook(1)) },
+useView({ right: railRight, left: paneLeft, back: () => { if (!document.activeElement?.closest('.rail')) { focusFirst(el.value, `[data-key="sec-${sec.value}"]`); return; } return false; }, lb: () => (sec.value === 'emu' ? stepEmu(-1) : sec.value === 'syncthing' ? syncRef.value?.step(-1) : sec.value === 'steam' ? steamRef.value?.step(-1) : stepLook(-1)), rb: () => (sec.value === 'emu' ? stepEmu(1) : sec.value === 'syncthing' ? syncRef.value?.step(1) : sec.value === 'steam' ? steamRef.value?.step(1) : stepLook(1)) },
   [{ b: 'A', label: 'Select' }, { b: 'B', label: 'Back' }, { b: 'LT+RT', label: 'Tabs' }]);
 // Settings → Emulators → Issues
 const issues = ref(null);

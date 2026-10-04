@@ -17,6 +17,7 @@ const crypto = require('crypto');
 const { spawn, execFileSync } = require('child_process');
 const { parseVdf, shortcutId, steamRunning } = require('./steamArt');
 const frameGen = require('./frameGen');
+const SC = require('./steamCollections');
 
 const HOME = os.homedir();
 const exists = (p) => { try { fs.accessSync(p); return true; } catch { return false; } };
@@ -1004,7 +1005,7 @@ module.exports = function createSteamManager(ctx) {
         proton: /\.exe$/i.test(t.exe) ? (cfg().proton || 'proton_experimental') : null,
         // 0.9: console collections on: also the Steam collection named after its console. Only
         // Steam's own collections: Cartridge (RomM) collections are never copied into Steam.
-        collections: [...new Set([...(a.collections || []), ...(cfg().consoleCollections ? [g.platform.display_name] : [])])],
+        collections: [...new Set([...(a.collections || []), ...(cfg().consoleCollections ? [colName(g)] : [])])],
       });
     }
     const removing = queue.remove.map((id) => ({ appid: id, name: reg[id]?.name || scs.find((s) => s.appid === id)?.name || String(id) }));
@@ -1536,7 +1537,7 @@ module.exports = function createSteamManager(ctx) {
     for (const [id, r] of Object.entries(reg)) {
       const g = byRom.get(r.romId);
       if (!g || !(have.has(Number(id) >>> 0) || r.live)) continue;
-      const name = g.platform.display_name;
+      const name = colName(g);
       if ((r.collections || []).includes(name)) continue;
       (collections[name] ||= []).push(Number(id) >>> 0);
       r.collections = [...(r.collections || []), name];
@@ -1551,6 +1552,45 @@ module.exports = function createSteamManager(ctx) {
     const stamp = new Date().toISOString().replace(/[:.]/g, '-');
     runHelper('last', { id: stamp, stamp, add: [], remove: [], collections, restart: true, gamescope: !!ctx.isGamescope(), flatpakSteam: !!env.account.flatpak, shortcutsFile: files(env.account).shortcuts, cloudFile: files(env.account).cloud, backupDir: BACKUP_DIR, logFile: path.join(USER_DATA, 'steam-apply.log') });
     return { count: n, steamWillRestart: steamRunning() };
+  }
+  // ---------------------------------------------------------------- collections review (0.9.24)
+  // A console's Steam collection: the name the user kept in the review, else RomM's (Cartridge's) name
+  const colName = (g) => SC.nameFor(g.key, g.platform.display_name, cfg().collectionNames);
+  function libraryPlatforms() {
+    const seen = new Map();
+    for (const p of ctx.getLibrary()?.platforms || []) { const key = keyOf(p.slug, p.fs_slug); if (!seen.has(key)) seen.set(key, { key, name: p.display_name || p.name }); }
+    return [...seen.values()];
+  }
+  // The user's collections, each matched to a console with the name Cartridge would give it
+  function collectionsReview() {
+    const env = environment();
+    if (!env.account) throw new Error('Steam was not found.');
+    return { list: SC.analyse(readCollections(env.account), libraryPlatforms()), integrated: !!cfg().collectionsIntegrated, kept: cfg().collectionNames || {} };
+  }
+  // renames: [{ id, from, to, key }]; keep: [{ key, name }] (collections left as they are, still used for that console)
+  async function collectionsApply({ renames = [], keep = [] } = {}) {
+    const env = environment();
+    if (!env.account) throw new Error('Steam was not found.');
+    const c = cfg();
+    c.collectionNames ||= {};
+    for (const k of keep) if (k.key && k.name) c.collectionNames[k.key] = k.name;
+    for (const r of renames) delete c.collectionNames[r.key];
+    // games Cartridge put in a renamed collection follow it (verifyCollections compares names)
+    const swap = Object.fromEntries(renames.map((r) => [r.from, r.to]));
+    const fix = (list) => (list || []).map((n) => swap[n] || n);
+    for (const r of Object.values(reg)) if (r.collections) r.collections = fix(r.collections);
+    for (const k of Object.keys(c.lastCollections || {})) c.lastCollections[k] = fix(c.lastCollections[k]);
+    c.collectionsIntegrated = true;
+    ctx.saveConfig(); saveReg();
+    if (!renames.length) return { count: 0 };
+    const left = {};
+    if (await live.available(env.account.root).catch(() => false)) {
+      for (const r of renames) { const ok = await live.renameCollection(r.id, r.to).catch((e) => { log('steam live rename collection', e.message); return false; }); if (!ok) left[r.id] = r.to; }
+      if (!Object.keys(left).length) return { count: renames.length, live: true };
+    } else for (const r of renames) left[r.id] = r.to;
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    runHelper('last', { id: stamp, stamp, add: [], remove: [], rename: left, restart: true, gamescope: !!ctx.isGamescope(), flatpakSteam: !!env.account.flatpak, shortcutsFile: files(env.account).shortcuts, cloudFile: files(env.account).cloud, backupDir: BACKUP_DIR, logFile: path.join(USER_DATA, 'steam-apply.log') });
+    return { count: renames.length, steamWillRestart: steamRunning() };
   }
   // A plain-text summary for bug reports: what was found and chosen, with personal details taken out
   function setupReport() {
@@ -1671,7 +1711,7 @@ module.exports = function createSteamManager(ctx) {
     liveInfo: async () => { const env = environment(); if (!env.account) return { on: false, flag: false }; return { on: await live.available(env.account.root), flag: live.flagOn(env.account.root) }; },
     liveEnable: () => { const env = environment(); if (!env.account) throw new Error('Steam was not found.'); fs.writeFileSync(path.join(env.account.root, live.FLAG), ''); return true; },
     installedEmulators, addRomToCollections, onDownloaded, onDeleted, lastStatus, writeScript, startupReport, forRom, fixCollections, played, playtime, steamRoots, refreshArt,
-    play, scanEmulators, rpcs3Command, vita3kCommand, setupOverview, confirm, markFork, useFile, health, healthFix, movedEmulators, setupReport, syncConsoleCollections, preflight: (key) => preflight(key, templateFor(key)),
+    play, scanEmulators, rpcs3Command, vita3kCommand, setupOverview, confirm, markFork, useFile, health, healthFix, movedEmulators, setupReport, syncConsoleCollections, collectionsReview, collectionsApply, preflight: (key) => preflight(key, templateFor(key)),
     candidatesFor: (key) => az(candidates(key).map((c) => ({ id: c.id, label: c.label, sub: shortPath(c.t.how === 'flatpak' ? c.t.from : c.t.exe), fork: !!c.fork }))),
     // one game's own Target, Start in and Launch options (console page, 0.9.15); null goes back
     setGameTemplate: (romId, t) => { const c = cfg(); c.gameTemplates ||= {}; if (t) c.gameTemplates[romId] = parseTemplate(t); else delete c.gameTemplates[romId]; ctx.saveConfig(); return true; },
