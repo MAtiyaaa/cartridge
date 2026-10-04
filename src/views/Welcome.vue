@@ -11,7 +11,7 @@
       <button v-if="at > 0 && !only" class="w-back" data-focus aria-label="Back" @click="handlers.back()"><Icon name="mdiArrowLeft" :size="22" /></button>
       <Logo :size="34" />
       <div class="w-dots"><template v-if="!only"><i v-for="(s, i) in STEPS" :key="s" :class="{ on: i === at, done: i < at }" /></template></div>
-      <button class="btn small" data-focus @click="leave"><Icon name="mdiClose" :size="18" />{{ only ? 'Close' : replay ? 'Leave' : 'Skip setup' }}</button>
+      <button class="btn small" data-focus @click="leave"><Icon name="mdiClose" :size="18" />{{ only ? 'Close' : replay ? 'Leave' : 'Skip Setup' }}</button>
     </div>
 
     <!-- every step is one centred card over the background (owner, 0.9.16) -->
@@ -28,7 +28,7 @@
 
         <!-- 2 -->
         <template v-else-if="step === 'name'">
-          <h1>What should we call you?</h1>
+          <h1>What Should We Call You?</h1>
           <p class="w-lead">For a hello when Cartridge starts, and to name this device in RomM.</p>
           <div class="w-box"><TextField v-model="name" label="Your name" placeholder="Sam" icon="mdiAccount" /></div>
           <p v-if="name.trim()" class="muted small">This device will be called <b>{{ deviceName }}</b>. You can change it in Settings → About.</p>
@@ -52,7 +52,7 @@
         <!-- 4 -->
         <template v-else-if="step === 'pad'">
           <!-- 0.9.17: what's actually in use (the controller Linux sees, or keyboard, touch, mouse), and its button labels -->
-          <h1>Your controls</h1>
+          <h1>Your Controls</h1>
           <div class="w-pad" :class="{ ok: padOk }">
             <Icon :name="padOk ? 'mdiCheckCircle' : using === 'pad' ? USING_ICON[padKind] || USING_ICON.pad : USING_ICON[using]" :size="72" />
             <b>{{ padOk ? 'Your controller works' : usingText }}</b>
@@ -71,7 +71,7 @@
 
         <!-- 5 -->
         <template v-else-if="step === 'steam'">
-          <h1>Instant Steam changes</h1>
+          <h1>Instant Steam Changes</h1>
           <template v-if="!st.steam"><p class="w-lead">Steam wasn't found on this device. Games can go into Steam later, once it's installed and signed in.</p></template>
           <template v-else-if="st.live.flag || liveDone">
             <div class="w-good"><Icon name="mdiCheckCircle" :size="28" /><span>Instant Steam changes are on</span></div>
@@ -95,7 +95,7 @@
         <template v-else-if="step === 'emus'">
           <!-- 0.9.17: pick your own, by console (also in Settings → Emulators → Get Emulators) -->
           <template v-if="picking">
-            <h1>Download emulators</h1>
+            <h1>Download Emulators</h1>
             <div class="w-box"><EmuGet flow /></div>
             <div class="w-act">
               <button class="btn" data-focus @click="picking = false"><Icon name="mdiArrowLeft" />Back</button>
@@ -114,7 +114,7 @@
             </div>
           </template>
           <template v-else>
-            <h1>Get your emulators</h1>
+            <h1>Get Your Emulators</h1>
             <p class="w-lead">Cartridge starts games with the emulators on this device. If you don't have any yet, one of these sets them up for you.</p>
             <div v-if="getting" class="w-box glass w-prog">
               <b>{{ getting === 'emudeck' ? 'Downloading EmuDeck' : getting === 'flatpak' ? 'Installing Flatpak' : 'Installing RetroDECK' }}</b>
@@ -163,7 +163,7 @@
         <!-- 7 -->
         <template v-else-if="step === 'romm'">
           <template v-if="romm === 'signin'">
-            <h1>Sign in to RomM</h1>
+            <h1>Sign In to RomM</h1>
             <Setup embedded @done="next()" @back="romm = ''" />
           </template>
           <template v-else-if="romm === 'local'">
@@ -179,7 +179,7 @@
             </div>
           </template>
           <template v-else-if="romm === 'what'">
-            <h1>What is RomM?</h1>
+            <h1>What Is RomM?</h1>
             <p class="w-lead">RomM is a free server for your game collection. It keeps your games in one place, finds their covers and details, and lets Cartridge, your browser and other devices download them. Cartridge is built around it and works best with one.</p>
             <div class="w-box stack">
               <button class="lrow" data-focus @click="romm = 'local'">
@@ -216,7 +216,7 @@
             </div>
           </template>
           <template v-else-if="romm === 'other'">
-            <h1>RomM on another computer</h1>
+            <h1>RomM on Another Computer</h1>
             <div class="w-qr glass">
               <div class="qr-img" v-html="guideQr" />
               <div class="stack">
@@ -232,7 +232,7 @@
             </div>
           </template>
           <template v-else>
-            <h1>Do you have a RomM server?</h1>
+            <h1>Do You Have a RomM Server?</h1>
             <p class="w-lead">Your games, covers and progress come from RomM.</p>
             <div class="w-act w-act-c">
               <button class="btn" data-focus @click="prev"><Icon name="mdiArrowLeft" />Back</button>
@@ -267,7 +267,7 @@
 
         <!-- 9 -->
         <template v-else-if="step === 'extras'">
-          <h1>Optional extras</h1>
+          <h1>Optional Extras</h1>
           <p class="w-lead">Both can be added later in Settings.</p>
           <div class="w-box stack">
             <div class="subh">SteamGridDB</div>
@@ -286,7 +286,7 @@
           </div>
           <div class="w-act">
             <button class="btn" data-focus @click="prev"><Icon name="mdiArrowLeft" />Back</button>
-            <button class="btn primary" data-focus :disabled="busy" @click="saveExtras">{{ sgdb || (raUser && raKey) ? 'Save and continue' : 'Skip' }}<Icon name="mdiArrowRight" /></button>
+            <button class="btn primary" data-focus :disabled="busy" @click="saveExtras">{{ sgdb || (raUser && raKey) || store.config.sgdbKey || store.config.ra?.user ? 'Next' : 'Skip' }}<Icon name="mdiArrowRight" /></button>
           </div>
         </template>
 
@@ -314,7 +314,7 @@
         <!-- 11 -->
         <template v-else-if="step === 'done'">
           <div class="w-good w-done"><Icon name="mdiCheckCircle" :size="72" /></div>
-          <h1 class="w-big">{{ name.trim() ? `You're all set, ${name.trim()}` : "You're all set" }}</h1>
+          <h1 class="w-big">{{ name.trim() ? `You're All Set, ${name.trim()}` : "You're All Set" }}</h1>
           <p class="w-lead">{{ store.config.configured ? 'Your library is on its way.' : 'Connect to RomM when you\'re ready and your library comes in.' }}</p>
           <div class="w-act"><button class="btn primary xl" data-focus @click="finish">Start<Icon name="mdiArrowRight" /></button></div>
         </template>

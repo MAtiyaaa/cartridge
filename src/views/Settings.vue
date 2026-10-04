@@ -782,7 +782,18 @@ const syncLine = computed(() => {
 const every = [{ v: 0, l: 'Off' }, { v: 30, l: '30 min' }, { v: 60, l: '1 h' }, { v: 180, l: '3 h' }];
 const folderList = computed(() => (store.libVersion, showAll.value ? supported.value : store.lib?.platforms || []));
 
-useView({ back: () => { if (!document.activeElement?.closest('.rail')) { focusFirst(el.value, `[data-key="sec-${sec.value}"]`); return; } return false; }, lb: () => (sec.value === 'emu' ? stepEmu(-1) : stepLook(-1)), rb: () => (sec.value === 'emu' ? stepEmu(1) : stepLook(1)) },
+// D-pad (0.9.23, owner): right from the list of sections goes to the first item on the right; left at the
+// left edge of the right side goes back to its section in the list (not the top of the list)
+function railRight() { if (!document.activeElement?.closest('.rail')) return false; enter(); }
+function paneLeft() {
+  const cur = document.activeElement;
+  if (!cur?.closest('.pane') || !paneEl.value) return false;
+  const c = cur.getBoundingClientRect();
+  const more = [...paneEl.value.querySelectorAll('[data-focus]')].some((e) => { if (e === cur || e.disabled) return false; const r = e.getBoundingClientRect(); return r.width > 0 && r.right <= c.left + 4 && r.bottom > c.top && r.top < c.bottom; });
+  if (more) return false;
+  focusFirst(el.value, `[data-key="sec-${sec.value}"]`);
+}
+useView({ right: railRight, left: paneLeft, back: () => { if (!document.activeElement?.closest('.rail')) { focusFirst(el.value, `[data-key="sec-${sec.value}"]`); return; } return false; }, lb: () => (sec.value === 'emu' ? stepEmu(-1) : stepLook(-1)), rb: () => (sec.value === 'emu' ? stepEmu(1) : stepLook(1)) },
   [{ b: 'A', label: 'Select' }, { b: 'B', label: 'Back' }, { b: 'LT+RT', label: 'Tabs' }]);
 // Settings → Emulators → Issues
 const issues = ref(null);

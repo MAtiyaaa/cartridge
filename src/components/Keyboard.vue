@@ -1,6 +1,6 @@
 <template>
   <div class="scrim" ref="el">
-    <div class="dialog kb" :class="{ sleek: store.welcoming }">
+    <div class="dialog kb" :class="{ sleek: store.welcoming }" data-grid>
       <h2>{{ title }}</h2>
       <div class="kb-display" :class="{ empty: !text }">
         <template v-if="text"><span>{{ shown.slice(0, pos) }}</span><i class="caret" /><span>{{ shown.slice(pos) }}</span></template><template v-else><i class="caret" /><span class="ph">{{ placeholder }}</span></template>

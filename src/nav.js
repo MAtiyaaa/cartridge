@@ -151,9 +151,12 @@ function pickRow(dir, cur, c, cands, wantX) {
     const first = focusables(row).find((el) => !el.disabled);
     if (first) { if (row.scrollLeft > 0) glideBy(row, -row.scrollLeft, 0); return first; }
   }
-  // the same grid of cards as where you are: straight up or down
+  // the same grid of cards as where you are: straight up or down. [data-grid] (0.9.23) does it across
+  // separate rows too (the on-screen keyboard's rows, which went to each row's first key)
+  const kgrid = cur.closest('[data-grid]');
   const grid = cur.parentElement;
-  const inGrid = band.filter(([el]) => el.parentElement === grid);
+  const inGrid = kgrid ? band.filter(([el]) => kgrid.contains(el)) : band.filter(([el]) => el.parentElement === grid);
+  if (kgrid && inGrid.length) { let best = null, d = Infinity; for (const [el, r] of inGrid) { const dx = Math.abs(r.left + r.width / 2 - wantX); if (dx < d) { d = dx; best = el; } } return best; }
   if (inGrid.length && focusables(grid).length > inGrid.length) {
     let best = null, d = Infinity;
     for (const [el, r] of inGrid) { const dx = Math.abs(r.left + r.width / 2 - wantX); if (dx < d) { d = dx; best = el; } }
@@ -256,14 +259,26 @@ function setMode(m) {
   b.toggle('touch-mode', m === 'touch');
   b.toggle('mouse-mode', m === 'mouse');
 }
+// Game Mode hands the screen's touches over as a mouse (0.9.23, owner: touch still showed a cursor). A
+// finger lands somewhere new: the pointer jumps there in one move, or presses without moving first,
+// where a real mouse glides up to what it clicks. Those count as touch, and so does the drag after them.
+let lastMove = { t: 0, x: -1, y: -1, jump: false }, fingerDown = false;
 window.addEventListener('pointerdown', (e) => {
-  if (e.pointerType === 'touch' || e.pointerType === 'pen') { lastTouch = performance.now(); if (pointerPref !== 'mouse') setMode('touch'); }
+  if (e.pointerType === 'touch' || e.pointerType === 'pen') { lastTouch = performance.now(); if (pointerPref !== 'mouse') setMode('touch'); return; }
+  const now = performance.now();
+  const far = lastMove.x < 0 || Math.hypot(e.clientX - lastMove.x, e.clientY - lastMove.y) > 24;
+  const finger = pointerPref !== 'mouse' && (input.mode === 'touch' || input.mode === 'pad') && (lastMove.jump || far || now - lastMove.t > 600);
+  if (finger) { fingerDown = true; lastTouch = now; setMode('touch'); }
   else if (pointerPref !== 'touch') setMode('mouse');
 }, { passive: true, capture: true });
+window.addEventListener('pointerup', (e) => { if (e.pointerType === 'mouse' && fingerDown) { fingerDown = false; lastTouch = performance.now(); } }, { passive: true, capture: true });
 window.addEventListener('mousemove', (e) => {
+  const now = performance.now(), d = Math.hypot(e.movementX, e.movementY);
+  lastMove = { t: now, x: e.clientX, y: e.clientY, jump: d > 40 && now - lastMove.t > 120 };
   if (pointerPref === 'touch') return;
-  if (performance.now() - lastTouch < 1000) return; // synthetic mouse events that follow a tap
+  if (fingerDown || now - lastTouch < 1000) return; // a finger dragging, or synthetic mouse events that follow a tap
   if (e.movementX === 0 && e.movementY === 0) return;
+  if (input.mode !== 'mouse' && d > 40) return; // the pointer warping to where a finger landed
   setMode('mouse');
 }, { passive: true });
 
