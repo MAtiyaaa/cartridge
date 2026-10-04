@@ -95,19 +95,21 @@
                game in front with its art, logo and a line about it; the next ones fanned out beside it -->
           <template v-else-if="COVER_ROWS[t.type]">
             <template v-if="listOf(t).length">
-              <div class="st-row-art" :style="{ backgroundImage: bgUrl(artOf(rowView(t)[0]) || cover(rowView(t)[0], true)) }" />
+              <Transition name="st-xf"><div :key="rowView(t)[0].id" class="st-row-art" :style="{ backgroundImage: bgUrl(artOf(rowView(t)[0]) || cover(rowView(t)[0], true)) }" /></Transition>
               <div class="st-row-fade" />
               <div class="st-row" :class="{ tall: t.h > 1, narrow: t.w <= 2 }">
                 <div class="st-row-info">
                   <div class="st-label">{{ rowName(t) }}<span class="st-count">{{ (sel[t.id] || 0) + 1 }} / {{ listOf(t).length }}</span></div>
-                  <div class="st-row-lead">
-                    <GameLogo :logo="store.config.ui.logos !== false ? logoOf(rowView(t)[0]) : null" :name="rowView(t)[0].name" cls="st-row-name" :area="Math.min(16000, box(t).pw * box(t).ph * 0.07)" :max-w="Math.min(300, box(t).pw * 0.36)" :max-h="Math.min(64, box(t).ph * 0.3)" />
-                    <span class="st-sub">{{ firstLine(t.type, rowView(t)[0]) }}</span>
-                  </div>
+                  <Transition name="st-lead" mode="out-in">
+                    <div :key="rowView(t)[0].id" class="st-row-lead">
+                      <GameLogo :logo="store.config.ui.logos !== false ? logoOf(rowView(t)[0]) : null" :name="rowView(t)[0].name" cls="st-row-name" :area="Math.min(16000, box(t).pw * box(t).ph * 0.07)" :max-w="Math.min(300, box(t).pw * 0.36)" :max-h="Math.min(64, box(t).ph * 0.3)" />
+                      <span class="st-sub">{{ firstLine(t.type, rowView(t)[0]) }}</span>
+                    </div>
+                  </Transition>
                 </div>
-                <div class="st-fan" :style="{ '--n': Math.min(fanN(t), rowView(t).length) }">
+                <TransitionGroup tag="div" name="st-fan" class="st-fan" :style="{ '--n': Math.min(fanN(t), rowView(t).length) }">
                   <img v-for="(r, i) in rowView(t).slice(0, fanN(t))" :key="r.id" class="st-fan-c" :src="cover(r) || BLANK" :style="{ '--i': i }" loading="lazy" alt="" @error="noImg" />
-                </div>
+                </TransitionGroup>
               </div>
             </template>
             <template v-else>
@@ -489,7 +491,27 @@ function stepTile(t, d) {
   const n = COVER_ROWS[t.type] ? listOf(t).length : t.type === 'trophies' ? achOf(t).list.length : 0;
   if (t.type === 'surprise') { deal(); sfx.move?.(); focusTile(t); return true; }
   if (n < 2) return false;
-  sel[t.id] = ((sel[t.id] || 0) + d + n) % n; sfx.move?.(); focusTile(t); return true;
+  sel[t.id] = ((sel[t.id] || 0) + d + n) % n; stepped[t.id] = Date.now(); sfx.move?.(); focusTile(t); return true;
+}
+// Rows of games move on to their next game by themselves (0.9.28, owner: "as if I'm pressing R1", slowly and
+// not jarring). One row at a time every ROLL_TICK, each row at most every ROLL_MS, so the screen never
+// changes in several places at once. A row you stepped through yourself waits ROLL_HOLD before moving again.
+// Still while arranging, while another app is in front, in a pop-up, or with reduced motion.
+const ROLL_MS = 20000, ROLL_TICK = 6000, ROLL_HOLD = 45000;
+const stepped = {};
+let rollAt = Date.now() + ROLL_MS - ROLL_TICK, rollNext = 0; // the first one moves ROLL_MS after Start opens
+function roll() {
+  if (store.away || editing.value || drag.value || sizing.value || store.modal || document.hidden || ov.value) return;
+  if (store.route.name !== 'start' || document.body.classList.contains('motion-reduce')) return;
+  const now = Date.now();
+  if (now - rollAt < ROLL_TICK) return;
+  const list = tiles.value.filter((t) => COVER_ROWS[t.type] && listOf(t).length > 1 && now - (stepped[t.id] || 0) > Math.max(ROLL_HOLD * !!stepped[t.id], ROLL_MS));
+  if (!list.length) return;
+  const t = list[rollNext++ % list.length];
+  const n = listOf(t).length;
+  sel[t.id] = ((sel[t.id] || 0) + 1) % n;
+  stepped[t.id] = now - (ROLL_HOLD - ROLL_MS); // the next roll of this row is ROLL_MS away, not ROLL_HOLD
+  rollAt = now;
 }
 function firstLine(type, r = rowOf(type)[0]) {
   if (!r) return '';
@@ -997,10 +1019,11 @@ useView({
 }, hints);
 
 let clockT = 0, spaceT = 0, ro = null;
-let spotT = 0;
+let spotT = 0, rollT = 0;
 onMounted(async () => {
   clockT = setInterval(tick, 5000);
   spotT = setInterval(() => { if (!store.away) spotTick.value++; }, 12000);
+  rollT = setInterval(roll, 1000);
   // 0.9.28 (owner: hints are hidden now, so first-timers get Start's tips once, in a short tour)
   if (store.config.ui.toured && !store.config.ui.startTips) setTimeout(async () => { if (store.modal || store.route.name !== 'start') return; saveConfig({ ui: { startTips: 1 } }); await openModal('tour', { start: true, only: true }); }, 900);
   loadSpace(); spaceT = setInterval(loadSpace, 60000);
@@ -1010,7 +1033,7 @@ onMounted(async () => {
   await nextTick();
   ensureFocus(el.value);
 });
-onBeforeUnmount(() => { store.forceHints = false; clearInterval(clockT); clearInterval(spotT); clearInterval(spaceT); clearTimeout(pressT); ro?.disconnect(); if (editing.value) { settle(tiles.value); save(); } });
+onBeforeUnmount(() => { store.forceHints = false; clearInterval(clockT); clearInterval(spotT); clearInterval(rollT); clearInterval(spaceT); clearTimeout(pressT); ro?.disconnect(); if (editing.value) { settle(tiles.value); save(); } });
 watch(() => store.trophyVer, loadAch);
 watch(() => store.play, loadWeek);
 </script>
@@ -1207,6 +1230,18 @@ watch(() => store.play, loadWeek);
   transition: transform 420ms var(--ease-out), left 420ms var(--ease-out); transition-delay: calc(var(--i) * 18ms); }
 .st-tile:focus .st-fan-c { left: calc(var(--i) * 42cqh); }
 .st-tile:focus .st-fan-c:first-child { transform: translateY(-2%); }
+/* a row moving to its next game (0.9.28): the art crossfades, the name slides in, the covers glide along */
+.st-row-art.st-xf-enter-active, .st-row-art.st-xf-leave-active { transition: opacity 900ms var(--ease-in-out, ease); }
+.st-row-art.st-xf-enter-from, .st-row-art.st-xf-leave-to { opacity: 0; }
+.st-lead-leave-active { transition: opacity 220ms ease, transform 220ms ease; }
+.st-lead-enter-active { transition: opacity 420ms var(--ease-out), transform 420ms var(--ease-out); }
+.st-lead-leave-to { opacity: 0; transform: translateX(-10px); }
+.st-lead-enter-from { opacity: 0; transform: translateX(14px); }
+.st-fan-c.st-fan-leave-active { transition: opacity 380ms ease, transform 420ms var(--ease-out); z-index: 21; }
+.st-fan-c.st-fan-leave-to { opacity: 0; transform: translateX(-18%) scale(0.96); }
+.st-fan-c.st-fan-enter-active { transition: opacity 520ms ease 180ms; }
+.st-fan-c.st-fan-enter-from { opacity: 0; }
+:global(body.motion-reduce .st-tile *) { transition-duration: 0s !important; }
 .st-row.narrow .st-row-info { display: none; }
 .st-row.narrow { flex-direction: column; }
 .st-row.tall { flex-direction: column-reverse; }

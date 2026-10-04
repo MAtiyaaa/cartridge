@@ -376,12 +376,21 @@ module.exports = function createTrophyService(ctx) {
       }
       // games played only on other devices: ROMs with notes on trophy consoles
       const localRoms = new Set([...games.values()].map(autoLink).filter(Boolean));
-      const withNotes = ORDER.flatMap((id) => romsFor(id)).filter((r) => r.has_notes && !localRoms.has(r.id)).slice(0, 80);
+      // consoles with a game known here only by its code are read first, so the 80 cover them
+      const coded = new Set([...games.values()].filter((g) => isCode(g.title)).map((g) => g.src));
+      const withNotes = [...ORDER.filter((id) => coded.has(id)), ...ORDER.filter((id) => !coded.has(id))].flatMap((id) => romsFor(id)).filter((r) => r.has_notes && !localRoms.has(r.id)).slice(0, 80);
       for (const r of withNotes) {
         const all = await notesAll(r.id);
         for (const n of all.filter((x) => x.data.cartridge === 'trophies' && x.title === NOTE_TITLE)) {
           const k = `${n.data.src}:${n.data.set}`;
-          if (!T.SOURCES[n.data.src] || games.has(k)) continue;
+          if (!T.SOURCES[n.data.src]) continue;
+          // 0.9.28: a game this device has only as a code (a PS4 game that isn't installed here, so shadPS4 left
+          // NPWR06616_00) takes the name and the library link from the device that wrote the note
+          if (games.has(k)) {
+            if (!isCode(games.get(k).title) || remote.has(k) && !isCode(remote.get(k).data?.title)) continue;
+            if (isCode(n.data.title)) continue;
+            T.rememberTitle(n.data.set, n.data.title);
+          }
           const icons = cfg().syncIcons === false ? {} : unpackIcons(n.data.set, all.filter((x) => x.data.cartridge === 'trophy-icons' && x.data.set === n.data.set));
           remote.set(k, { romId: r.id, noteId: n.id, data: n.data, icons }); pulled++;
         }

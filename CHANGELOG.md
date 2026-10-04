@@ -5,6 +5,8 @@ Every Cartridge release, newest first. Each GitHub release only lists its own ch
 ## Cartridge 0.9.28 · The Dock
 
 ### New
+- **Rows of games move along by themselves:** Recently Played, New in Your Library, Favourites, Recommended and a console's games on Start show their next game every 20 seconds or so, one row at a time, with the art fading across and the covers gliding along. A row you step through with L1/R1 waits a while before moving again, and nothing moves while you arrange, in a pop-up or with reduced motion.
+- **Go to Game Page** is the first option in More on a game's achievements or trophies (RetroAchievements, trophies and gamerscore). A trophy list not linked to a library game asks which game it is first; an achievements list not found in your library searches for it.
 - **The Dock:** the bar of tabs now sits at the bottom, centred, as a floating pill, with its own strip so pages are never cut off under it. Move it to the top or left, align it, and pick Glass, White, Black or Accent in Look & Feel → Text and Cards → Dock.
 - **Button hints are hidden** unless you turn them on (Look & Feel → Text and Cards → Button hints). They still show while you arrange Start.
 - **Start's page overview shows your real pages:** each tile's cover, the clock, your pictures and widget names. The page you pick up lifts with a "Moving" badge and the others slide out of its way. Open it with L1/R1 while arranging.
@@ -25,6 +27,7 @@ Every Cartridge release, newest first. Each GitHub release only lists its own ch
 - **Title Case** for every widget name and heading on Start.
 
 ### Fixed
+- **Unnamed PS4 games:** a PS4 game that isn't installed on this device (only its trophy code, like NPWR06616_00) now takes its name and library game from the device that has it installed, through the trophy notes it already writes to RomM. The name is remembered on this device afterwards.
 - **Touch:** swipes now scroll even on systems that send no movement between the finger going down and up, or send it under another pointer. Before, only Start's page swipe worked there.
 - **Pages slid sideways** when a card near the edge was highlighted, which cut off Home and clipped rows on game pages and in achievements.
 - **Home's header ran off the top** of the screen with the Dock at the bottom.

@@ -670,4 +670,4 @@ function signature(dirs) {
   return s;
 }
 
-module.exports = { readTrp, shadTrophyKey, setTrpCacheDir, APP_DIRS, emulationRoots, registerIcon: iconToken, shadKeyState, watchPaths, SOURCES, DETECT, validate, scan, readSource, signature, iconPath, setIconCacheDir, readTropusrPS3, readTropusrVita, parseTrophyXml, parseGpd, readXdbf };
+module.exports = { rememberTitle, readTrp, shadTrophyKey, setTrpCacheDir, APP_DIRS, emulationRoots, registerIcon: iconToken, shadKeyState, watchPaths, SOURCES, DETECT, validate, scan, readSource, signature, iconPath, setIconCacheDir, readTropusrPS3, readTropusrVita, parseTrophyXml, parseGpd, readXdbf };
