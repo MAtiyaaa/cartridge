@@ -2797,7 +2797,7 @@ const handlers09 = {
   'steam:setGameTemplate': ({ romId, template }) => steamMgr.setGameTemplate(romId, template),
   'steam:refreshGame': ({ romId }) => steamMgr.refreshGame(romId),
   // shadPS4 version per game (0.9.17): the Qt launcher's versions, and this game's pick
-  'steam:shadVersions': ({ romId }) => { let last = null; try { last = require('./shadVersions').lastRun(os.homedir(), emulationRoots().map((r) => path.join(r, 'storage', 'shadps4'))); } catch {} return { list: steamMgr.shadVersions(), current: ((config.steam || {}).shadVersions || {})[romId] || null, last }; },
+  'steam:shadVersions': ({ romId }) => { let last = null; try { last = require('./shadVersions').lastRun(os.homedir(), emuRootsAll().map((r) => path.join(r, 'storage', 'shadps4'))); } catch {} return { list: steamMgr.shadVersions(), current: ((config.steam || {}).shadVersions || {})[romId] || null, last }; },
   'steam:setShadVersion': ({ romId, path: p }) => { const m = ((config.steam ||= {}).shadVersions ||= {}); if (p) m[romId] = p; else delete m[romId]; saveConfig(); return true; },
   // frame generation (0.9.17): what's installed, the picks, and Cartridge's games in Steam with theirs
   'steam:frameGen': () => {
