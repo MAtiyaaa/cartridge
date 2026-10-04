@@ -2654,6 +2654,24 @@ const handlers08 = {
   // Syncthing, first look (0.9.19): read only, what it syncs and with whom
   'sync:status': () => require('./syncthing').status(),
   'sync:browse': (folder) => require('./syncthing').browse(folder),
+  // 0.9.23 Syncthing page: this device in full, the main server (config.syncthing.server), games with synced files
+  'sync:local': () => require('./syncthing').local(),
+  'sync:server': () => require('./syncthing').server(config.syncthing?.server || {}),
+  'sync:setServer': async (srv) => {
+    if (srv && srv.address) await require('./syncthing').server(srv); // only saved once it answers
+    config.syncthing = { ...(config.syncthing || {}), server: srv && srv.address ? { address: String(srv.address).trim(), apikey: String(srv.apikey || '').trim() } : null };
+    saveConfig(); return true;
+  },
+  'sync:rescan': (folder) => require('./syncthing').rescan(folder),
+  'sync:games': async () => {
+    const S = require('./syncthing');
+    const games = [...romIndexMain().values()].map((r) => {
+      const where = installedMap[r.id];
+      const ids = [...S.serialsIn([r.fs_name, ...(r.files || []).map((f) => f.file_name), where && where !== MARKED ? path.basename(where) : ''].join(' '))];
+      return { id: r.id, name: r.name || '', ids };
+    });
+    return S.gamesSynced(games);
+  },
   // dates for a game's timeline (the game page adds trophies and achievements it already has)
   'rom:timeline': ({ romId }) => {
     const r = romIndexMain().get(romId);

@@ -3,7 +3,7 @@
     <nav class="rail">
       <div class="eyebrow" style="padding: 0 14px 10px">Settings</div>
       <button v-for="s in sections" :key="s.id" class="rail-item" :class="{ on: sec === s.id }" data-focus :data-key="'sec-' + s.id" :data-autofocus="sec === s.id ? '' : undefined" @focus="sec = s.id" @click="enter">
-        <Icon :name="s.icon" :size="20" />{{ s.label }}
+        <SyncthingLogo v-if="s.id === 'syncthing'" :size="20" /><Icon v-else :name="s.icon" :size="20" />{{ s.label }}
       </button>
     </nav>
     <section class="pane" data-scroll data-zone ref="paneEl">
@@ -79,9 +79,8 @@
             <LibraryCheck />
           </template>
 
-          <!-- Sync: Syncthing, view only (its own tab in 0.9.21, owner) -->
+          <!-- Syncthing (its own tab in 0.9.21; renamed with its logo in 0.9.23, owner) -->
           <template v-else-if="sec === 'syncthing'">
-            <h1>Sync</h1>
             <SyncCard />
           </template>
 
@@ -494,6 +493,7 @@ import SteamSettings from '../components/SteamSettings.vue';
 import StorageManager from '../components/StorageManager.vue';
 import LibraryCheck from '../components/LibraryCheck.vue';
 import SyncCard from '../components/SyncCard.vue';
+import SyncthingLogo from '../components/SyncthingLogo.vue';
 import RommUpload from '../components/RommUpload.vue';
 import EmuIcon from '../components/EmuIcon.vue';
 import EmuGet from '../components/EmuGet.vue';
@@ -512,7 +512,7 @@ const sections = [
   { id: 'storage', label: 'Storage', icon: 'mdiHarddisk' },
   { id: 'emu', label: 'Emulators', icon: 'mdiGamepadVariantOutline' },
   { id: 'dl', label: 'Downloads', icon: 'mdiTrayArrowDown' },
-  { id: 'syncthing', label: 'Sync', icon: 'mdiSync' },
+  { id: 'syncthing', label: 'Syncthing', icon: 'mdiSync' },
   { id: 'ui', label: 'Look & Feel', icon: 'mdiPaletteOutline' },
   { id: 'ra', label: 'Achievements', icon: 'mdiTrophyOutline' },
   { id: 'steam', label: 'Steam', icon: 'mdiSteam' },
