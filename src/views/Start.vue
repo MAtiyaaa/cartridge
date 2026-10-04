@@ -47,6 +47,10 @@
                 <div class="st-label">Free space</div>
                 <div class="st-num"><span class="st-big tnum">{{ space ? sizeNum(space.free) : '–' }}</span><span class="st-unit">{{ space ? sizeUnit(space.free) : '' }}</span></div>
                 <div class="st-sub">{{ space ? `of ${bytes(space.total)}` : 'Looking…' }}</div>
+                <!-- 0.9.24 (owner: empty space when big): what each console's games take up on this device -->
+                <div v-if="byCon.length" class="st-store-cons">
+                  <div v-for="c in byCon.slice(0, 6)" :key="c.name" class="st-store-con"><span>{{ c.name }}</span><i><b :style="{ width: (c.size / byCon[0].size) * 100 + '%' }" /></i><em class="tnum">{{ bytes(c.size) }}</em></div>
+                </div>
               </div>
               <div class="st-gauge" :class="{ low: freePct < 10 }">
                 <svg viewBox="0 0 100 100" aria-hidden="true"><line v-for="k in GAUGE" :key="k.i" :x1="k.x1" :y1="k.y1" :x2="k.x2" :y2="k.y2" :class="{ on: space && k.i < freePct / 100 * GAUGE.length }" :style="{ '--i': k.i }" /></svg>
@@ -89,24 +93,24 @@
           <!-- Rows of games (0.9.23, owner: redesign how games show in New, Recently played...): the first
                game in front with its art, logo and a line about it; the next ones fanned out beside it -->
           <template v-else-if="COVER_ROWS[t.type]">
-            <template v-if="rowOf(t.type).length">
-              <div class="st-row-art" :style="{ backgroundImage: bgUrl(artOf(rowOf(t.type)[0]) || cover(rowOf(t.type)[0], true)) }" />
+            <template v-if="listOf(t).length">
+              <div class="st-row-art" :style="{ backgroundImage: bgUrl(artOf(rowView(t)[0]) || cover(rowView(t)[0], true)) }" />
               <div class="st-row-fade" />
               <div class="st-row" :class="{ tall: t.h > 1, narrow: t.w <= 2 }">
                 <div class="st-row-info">
-                  <div class="st-label">{{ TILES[t.type].name }}<span class="st-count">{{ rowOf(t.type).length }}</span></div>
+                  <div class="st-label">{{ rowName(t) }}<span class="st-count">{{ (sel[t.id] || 0) + 1 }} / {{ listOf(t).length }}</span></div>
                   <div class="st-row-lead">
-                    <GameLogo :logo="store.config.ui.logos !== false ? logoOf(rowOf(t.type)[0]) : null" :name="rowOf(t.type)[0].name" cls="st-row-name" :area="Math.min(16000, box(t).pw * box(t).ph * 0.07)" :max-w="Math.min(300, box(t).pw * 0.36)" :max-h="Math.min(64, box(t).ph * 0.3)" />
-                    <span class="st-sub">{{ firstLine(t.type) }}</span>
+                    <GameLogo :logo="store.config.ui.logos !== false ? logoOf(rowView(t)[0]) : null" :name="rowView(t)[0].name" cls="st-row-name" :area="Math.min(16000, box(t).pw * box(t).ph * 0.07)" :max-w="Math.min(300, box(t).pw * 0.36)" :max-h="Math.min(64, box(t).ph * 0.3)" />
+                    <span class="st-sub">{{ firstLine(t.type, rowView(t)[0]) }}</span>
                   </div>
                 </div>
-                <div class="st-fan" :style="{ '--n': Math.min(fanN(t), rowOf(t.type).length) }">
-                  <img v-for="(r, i) in rowOf(t.type).slice(0, fanN(t))" :key="r.id" class="st-fan-c" :src="cover(r) || BLANK" :style="{ '--i': i }" loading="lazy" alt="" @error="noImg" />
+                <div class="st-fan" :style="{ '--n': Math.min(fanN(t), rowView(t).length) }">
+                  <img v-for="(r, i) in rowView(t).slice(0, fanN(t))" :key="r.id" class="st-fan-c" :src="cover(r) || BLANK" :style="{ '--i': i }" loading="lazy" alt="" @error="noImg" />
                 </div>
               </div>
             </template>
             <template v-else>
-              <div class="st-label">{{ TILES[t.type].name }}</div>
+              <div class="st-label">{{ rowName(t) }}</div>
               <div class="st-empty small"><span>{{ COVER_ROWS[t.type].empty }}</span></div>
             </template>
           </template>
@@ -116,13 +120,16 @@
           <template v-else-if="t.type === 'trophies'">
             <div class="st-label">{{ t.console ? t.console + ' Trophies' : 'Latest Trophies' }}<span v-if="achOf(t).week" class="st-count">{{ achOf(t).week }} this week</span></div>
             <template v-if="achOf(t).list.length">
-              <div class="st-tro">
-                <div class="st-tro-main">
-                  <span class="st-tro-badge"><img v-if="achOf(t).list[0].badge" :src="achOf(t).list[0].badge" alt="" /><Grade v-else :g="achOf(t).list[0].grade" :size="30" /></span>
-                  <span class="st-tro-t"><b>{{ achOf(t).list[0].title }}</b><span>{{ achOf(t).list[0].game }}<template v-if="achOf(t).list[0].t"> · {{ agoShort(achOf(t).list[0].t) }}</template></span></span>
+              <!-- 0.9.24 (owner: too much empty space when big): as many unlocks as the tile holds, in columns when wide -->
+              <div class="st-tro" :class="{ one: troFor(t).n === 1 }">
+                <div class="st-tro-list" :style="{ gridTemplateColumns: `repeat(${troFor(t).cols}, minmax(0, 1fr))` }">
+                  <div v-for="(a, i) in achView(t).slice(0, troFor(t).n)" :key="a.key" class="st-tro-main" :style="{ '--i': i }">
+                    <span class="st-tro-badge"><img v-if="a.badge" :src="a.badge" alt="" /><Grade v-else :g="a.grade" :size="26" /></span>
+                    <span class="st-tro-t"><b>{{ a.title }}</b><span>{{ a.game }}<template v-if="a.t"> · {{ agoShort(a.t) }}</template></span></span>
+                  </div>
                 </div>
-                <div v-if="achOf(t).list.length > 1" class="st-tro-strip">
-                  <span v-for="(a, i) in achOf(t).list.slice(1, 1 + stripN(t))" :key="a.key" class="st-tro-mini" :style="{ '--i': i }" :title="a.title"><img v-if="a.badge" :src="a.badge" alt="" /><Grade v-else :g="a.grade" :size="16" /></span>
+                <div v-if="achOf(t).list.length > troFor(t).n" class="st-tro-strip">
+                  <span v-for="(a, i) in achView(t).slice(troFor(t).n, troFor(t).n + stripN(t))" :key="a.key" class="st-tro-mini" :style="{ '--i': i }" :title="a.title"><img v-if="a.badge" :src="a.badge" alt="" /><Grade v-else :g="a.grade" :size="16" /></span>
                 </div>
               </div>
             </template>
@@ -160,6 +167,18 @@
               <div><b class="tnum">{{ stats.consoles }}</b><span>Consoles</span></div>
             </div>
           </template>
+          <template v-else-if="t.type === 'cstats'">
+            <template v-if="platformById(t.platformId)">
+              <div class="st-cs-mark"><ConsoleMark :slug="platformById(t.platformId).slug" :label="platformById(t.platformId).display_name" /></div>
+              <div class="st-stats">
+                <div><b class="tnum">{{ cstats(t).games }}</b><span>Games</span></div>
+                <div><b class="tnum">{{ cstats(t).hours }}</b><span>Hours Played</span></div>
+                <div><b class="tnum">{{ cstats(t).device }}</b><span>On This Device</span></div>
+                <div><b class="tnum">{{ cstats(t).unlocks }}</b><span>Unlocks</span></div>
+              </div>
+            </template>
+            <div v-else class="st-empty small"><span>This console isn't in your library any more</span></div>
+          </template>
           <template v-else-if="t.type === 'daily'">
             <template v-if="daily">
               <div class="st-art" :style="{ backgroundImage: bgUrl(t.h > t.w ? cover(daily, true) : artOf(daily) || cover(daily, true)) }" />
@@ -167,7 +186,7 @@
               <div class="st-label on-art">Game of the Day</div>
               <div class="st-pin">
                 <GameLogo :logo="store.config.ui.logos !== false ? logoOf(daily) : null" :name="daily.name" cls="st-pin-name" :area="Math.min(22000, box(t).pw * box(t).ph * 0.12)" :max-w="box(t).pw * 0.8" :max-h="Math.min(110, box(t).ph * 0.32)" />
-                <span>{{ daily.platform_display_name }}{{ store.installed[daily.id] ? ' · On this device' : '' }}</span>
+                <span class="st-mark"><ConsoleMark :slug="daily.platform_slug" :label="daily.platform_display_name" />{{ store.installed[daily.id] ? ' · On this device' : '' }}</span>
               </div>
             </template>
             <div v-else class="st-empty small"><span>Your games show here, one a day</span></div>
@@ -189,7 +208,7 @@
               <!-- 0.9.23 (owner): its logo, not its name in text -->
               <div class="st-pin">
                 <GameLogo :logo="store.config.ui.logos !== false ? logoOf(romById(t.romId)) : null" :name="romById(t.romId).name" cls="st-pin-name" :area="Math.min(22000, box(t).pw * box(t).ph * 0.12)" :max-w="box(t).pw * 0.8" :max-h="Math.min(110, box(t).ph * 0.32)" />
-                <span>{{ romById(t.romId).platform_display_name }}</span>
+                <span class="st-mark"><ConsoleMark :slug="romById(t.romId).platform_slug" :label="romById(t.romId).platform_display_name" /></span>
               </div>
             </template>
             <div v-else class="st-empty small"><span>This game isn't in your library any more</span></div>
@@ -221,9 +240,18 @@
       </div>
       </Transition>
     </div>
+    <!-- the pages at a glance (0.9.24, owner: LT/RT in Arrange): A picks a page up, left and right move it -->
+    <div v-if="ov" class="st-ov" ref="ovEl">
+      <div class="st-ov-head"><b>Pages</b><span class="muted">{{ ov.moving != null ? 'Left and right move it. A puts it down.' : 'A picks a page up to move it. B goes back to arranging.' }}</span></div>
+      <div class="st-ov-list">
+        <button v-for="(pg, i) in pages" :key="pgKey(pg, i)" class="st-ov-page" :class="{ on: i === page, moving: ov.moving === i }" data-focus :data-key="'pg-' + i" @click="ovPick(i)">
+          <span class="st-ov-map"><i v-for="x in pg" :key="x.id" :style="{ left: (x.x / COLS) * 100 + '%', top: (x.y / ovRows(pg)) * 100 + '%', width: (x.w / COLS) * 100 + '%', height: (x.h / ovRows(pg)) * 100 + '%' }" /></span>
+          <span class="st-ov-n">Page {{ i + 1 }}<em>{{ pg.length }} {{ pg.length === 1 ? 'widget' : 'widgets' }}</em></span>
+        </button>
+      </div>
+    </div>
     <!-- pages (0.9.23, owner: more than one page, switched with the right stick) -->
     <div v-if="pages.length > 1 || editing" class="st-pages" aria-hidden="true">
-      <Btn v-if="pages.length > 1 && input.mode === 'pad'" b="RS" class="st-rs" />
       <i v-for="(pg, i) in pages" :key="i" :class="{ on: i === page }" @click="goPage(i)" />
     </div>
   </div>
@@ -241,22 +269,25 @@ import { computed, ref, reactive, onMounted, onBeforeUnmount, nextTick, watch } 
 import { store, heroArt, call, go, tab, img, cover, logoOf, allRoms, visible, visiblePlatforms, romById, isNew, collections, setBg, backdropOf, wantSharp, bytes, saveConfig, choose, confirm, askText, pickFolder, playtimeText, loadPlay, toast } from '../store.js';
 import { useView } from '../useView.js';
 import { recommend } from '../recs.js';
-import { ensureFocus, input } from '../nav.js';
+import { ensureFocus, input, pushLayer, focusFirst, rumble } from '../nav.js';
 import { sfx } from '../sfx.js';
 import Icon from '../components/Icon.vue';
 import Btn from '../components/Btn.vue';
 import Grade from '../components/Grade.vue';
 import GameLogo from '../components/GameLogo.vue';
 import ConsoleCard from '../components/ConsoleCard.vue';
+import ConsoleMark from '../components/ConsoleMark.vue';
 import StartClock from '../components/StartClock.vue';
 import { TILES, GROUPS, MANY, DEFAULT, valid, COLS, MAX_H, pack, settle, bottom } from '../startTiles.js';
 
 const ROWS = 4; // rows that fill the screen; more scroll
+const STEPS = new Set(['fresh', 'recent', 'favs', 'recs', 'cgames', 'trophies', 'surprise']);
 const COVER_ROWS = {
   fresh: { empty: 'Games added to RomM show here' },
   recent: { empty: 'Games you play show here' },
   favs: { empty: 'Mark games as favourites in RomM or on their page' },
   recs: { empty: 'Play a few games and Cartridge suggests more' },
+  cgames: { empty: 'No games for this console yet' },
 };
 // Pages (0.9.23, owner: more than one page, switched with the right stick). The first page stays in
 // ui.start.tiles (pinning from a game's page adds there), the others in ui.start.more.
@@ -315,14 +346,32 @@ const ghost = computed(() => {
   const r = px(t); return { width: r.w + 'px', height: r.h + 'px', transform: `translate(${r.x}px, ${r.y}px)` };
 });
 // how much fits in a tile of this size
-function cardsFor(t) { const { pw, ph } = box(t); const cols = Math.max(1, Math.round(pw / 250)), rws = Math.max(1, Math.round((ph - 34) / 130)); return { cols, rows: rws, n: Math.min(24, cols * rws), compact: ph / rws < 110 }; }
-const cardsGrid = (t) => { const c = cardsFor(t); return { gridTemplateColumns: `repeat(${c.cols}, minmax(0, 1fr))`, gridTemplateRows: `repeat(${c.rows}, minmax(0, 1fr))` }; };
+// console cards stay near square however the tile is shaped (0.9.24, owner: several consoles looked
+// stretched); the grid that gives the biggest cards for the consoles there are wins
+function cardsFor(t) {
+  const { pw, ph } = box(t), gap = 10, h = ph - 40, want = Math.max(1, consoles.value.length);
+  let best = { cols: 1, rows: 1, n: 1, size: 0 };
+  for (let rws = 1; rws <= 4; rws++) {
+    const ch = (h - gap * (rws - 1)) / rws; if (ch < 70) break;
+    const cols = Math.max(1, Math.floor((pw - 40 + gap) / (ch * 1.25 + gap)));
+    const n = Math.min(want, cols * rws), cw = Math.min(ch * 1.25, (pw - 40 - gap * (cols - 1)) / cols), size = n * Math.min(cw, ch * 1.25) * ch;
+    if (size > best.size) best = { cols, rows: Math.ceil(n / cols), n, size, cw: Math.floor(cw) };
+  }
+  return { cols: best.cols, rows: best.rows, n: Math.min(24, best.n), cw: best.cw, compact: h / best.rows < 110 };
+}
+const cardsGrid = (t) => { const c = cardsFor(t); return { gridTemplateColumns: `repeat(${c.cols}, ${c.cw ? c.cw + 'px' : 'minmax(0, 1fr)'})`, gridTemplateRows: `repeat(${c.rows}, minmax(0, 1fr))` }; };
 function coversFor(t) { const { pw, ph } = box(t); const area = Math.max(40, ph - 74), rws = Math.max(1, Math.round(area / 190)), coverW = (area / rws) * 0.75 + 10; return { rows: rws, n: Math.min(40, rws * Math.ceil(pw / coverW) + rws) }; }
 // how many covers fan out in a row of games: each shows half of itself past the one before
 function fanN(t) {
   const { pw, ph } = box(t), pad = Math.min(22, ph * 0.09);
   const h = t.h > 1 ? ph * 0.55 : ph - pad * 2, cw = h * 0.75, fw = t.w <= 2 ? pw - pad * 2 : pw * 0.58;
   return Math.max(1, Math.min(9, Math.floor((fw - cw) / (cw * 0.5)) + 1));
+}
+// trophies: rows of about 60 px and columns of about 300 px, leaving room for the label and the badge strip
+function troFor(t) {
+  const { pw, ph } = box(t), pad = Math.min(22, ph * 0.09), h = ph - pad * 2 - 26 - (ph > 200 ? 46 : 0);
+  const cols = Math.max(1, Math.min(4, Math.floor(pw / 300))), rows = Math.max(1, Math.floor(h / 62));
+  return { cols, rows, n: Math.max(1, cols * rows) };
 }
 const stripN = (t) => Math.max(0, Math.min(12, Math.floor((box(t).pw - 36) / 40)));
 
@@ -350,8 +399,20 @@ const rows = computed(() => ({
   recs: recommend(roms.value, { minsOf: (r) => store.play[r.id]?.min || 0, lastPlay }).map((x) => x.rom),
 }));
 const rowOf = (type) => rows.value[type] || [];
-function firstLine(type) {
-  const r = rowOf(type)[0];
+// L1/R1 on a widget with several games or unlocks steps through them (0.9.24, owner: like Continue playing)
+const sel = reactive({});
+const conList = (pid) => roms.value.filter((r) => r.platform_id === pid).sort((a, b) => (lastPlay(b) - lastPlay(a)) || a.name.localeCompare(b.name));
+const listOf = (t) => (t.type === 'cgames' ? conList(t.platformId) : rowOf(t.type));
+const rowName = (t) => (t.type === 'cgames' ? `${platformById(t.platformId)?.display_name || 'Console'} Games` : TILES[t.type].name);
+const rowView = (t) => listOf(t).slice(sel[t.id] || 0);
+const achView = (t) => achOf(t).list.slice(sel[t.id] || 0);
+function stepTile(t, d) {
+  const n = COVER_ROWS[t.type] ? listOf(t).length : t.type === 'trophies' ? achOf(t).list.length : 0;
+  if (t.type === 'surprise') { deal(); sfx.move?.(); focusTile(t); return true; }
+  if (n < 2) return false;
+  sel[t.id] = ((sel[t.id] || 0) + d + n) % n; sfx.move?.(); focusTile(t); return true;
+}
+function firstLine(type, r = rowOf(type)[0]) {
   if (!r) return '';
   // the line under the first game's logo says something about it, not its name again (0.9.23)
   if (type === 'recent') return whenText(r);
@@ -383,6 +444,11 @@ const space = ref(null);
 const loadSpace = () => call('fs:space', store.config.romsRoot || store.info?.home || '/').then((s) => { space.value = s; }).catch(() => {});
 const sizeNum = (b) => { const s = bytes(b).split(' '); return s[0]; };
 const sizeUnit = (b) => { const s = bytes(b).split(' '); return s[1] || ''; };
+const byCon = computed(() => {
+  const m = {};
+  for (const r of roms.value) if (store.installed[r.id]) { const k = r.platform_display_name || r.platform_slug; m[k] = (m[k] || 0) + (r.fs_size_bytes || 0); }
+  return Object.entries(m).map(([name, size]) => ({ name, size })).filter((c) => c.size > 0).sort((a, b) => b.size - a.size);
+});
 const freePct = computed(() => space.value?.total ? (space.value.free / space.value.total) * 100 : 0);
 // the gauge: 36 ticks round a 270 degree arc, open at the bottom
 const GAUGE = Array.from({ length: 36 }, (_, i) => {
@@ -438,6 +504,12 @@ const daily = computed(() => {
   const d = new Date(), h = Math.imul(d.getFullYear() * 400 + d.getMonth() * 32 + d.getDate(), 2654435761) >>> 0;
   return list[h % list.length];
 });
+function cstats(t) {
+  const p = platformById(t.platformId), list = roms.value.filter((r) => r.platform_id === t.platformId);
+  const names = new Set(list.map((r) => r.name.toLowerCase()));
+  return { games: list.length, device: list.filter((r) => store.installed[r.id]).length, hours: Math.round(list.reduce((n, r) => n + (store.play[r.id]?.min || 0), 0) / 60),
+    unlocks: ach.value.filter((a) => names.has(String(a.game || '').toLowerCase()) || (p && a.console && p.display_name.toLowerCase().includes(String(a.console).toLowerCase()))).length };
+}
 const stats = computed(() => ({
   games: roms.value.length, consoles: visiblePlatforms().length,
   device: roms.value.filter((r) => store.installed[r.id]).length,
@@ -462,18 +534,20 @@ function openTile(t, ev) {
   }
   if (T === 'storage') { store.settingsSection = 'storage'; return go('settings'); }
   if (T === 'consoles') return tab('consoles');
-  if (T === 'trophies') { const a = achOf(t).list[0]; return a ? a.open() : tab('achievements'); }
+  if (T === 'trophies') { const a = achView(t)[0]; return a ? a.open() : tab('achievements'); }
   if (T === 'downloads') return tab('downloads');
   if (T === 'surprise') { const r = deck.value[0]; if (r) go('game', { romId: r.id }); return; }
   if (T === 'daily') return daily.value && go('game', { romId: daily.value.id });
   if (T === 'stats') return tab('library');
+  if (T === 'cstats') return platformById(t.platformId) && go('platform', { platformId: t.platformId });
   if (T === 'image' || T === 'html') return;
   if (T === 'game') return romById(t.romId) && go('game', { romId: t.romId });
   if (T === 'console') return platformById(t.platformId) && go('platform', { platformId: t.platformId });
+  if (COVER_ROWS[T] && sel[t.id]) return go('game', { romId: rowView(t)[0].id }); // stepped to a game: that one
   if (COVER_ROWS[T]) {
-    const list = rowOf(T);
+    const list = listOf(t);
     if (!list.length) return;
-    store.homeLists = { ...(store.homeLists || {}), ['start-' + T]: { id: 'start-' + T, name: TILES[T].name, icon: TILES[T].icon, rom_ids: list.map((r) => r.id), auto: true, ordered: true, description: 'From Start' } };
+    store.homeLists = { ...(store.homeLists || {}), ['start-' + T]: { id: 'start-' + T, name: rowName(t), icon: TILES[T].icon, rom_ids: list.map((r) => r.id), auto: true, ordered: true, description: 'From Start' } };
     go('collection', { collectionId: 'start-' + T });
   }
 }
@@ -481,7 +555,7 @@ function openTile(t, ev) {
 function focusTile(t) {
   focusedId.value = t.id;
   if (t.type === 'surprise' && !editing.value) deal();
-  const r = t.type === 'game' ? romById(t.romId) : t.type === 'continue' ? cur.value : t.type === 'daily' ? daily.value : t.type === 'surprise' ? deck.value[0] : COVER_ROWS[t.type] ? rowOf(t.type)[0] : null;
+  const r = t.type === 'game' ? romById(t.romId) : t.type === 'continue' ? cur.value : t.type === 'daily' ? daily.value : t.type === 'surprise' ? deck.value[0] : COVER_ROWS[t.type] ? rowView(t)[0] : null;
   if (r) { setBg(backdropOf(r)); wantSharp(r); } else if (cur.value) setBg(backdropOf(cur.value));
   store.hints = hints();
 }
@@ -508,6 +582,7 @@ function startEdit(t) {
   nextTick(() => focusKey(t ? 'tile-' + t.id : 'st-add'));
 }
 function stopEdit() {
+  if (ov.value) closeOv();
   editing.value = false; mode.value = ''; base = null; settle(tiles.value); save();
   store.hints = hints();
   nextTick(() => ensureFocus(el.value));
@@ -529,6 +604,18 @@ async function resetLayout() {
   tiles.value = page.value === 0 ? DEFAULT() : []; mode.value = ''; base = null; save();
   nextTick(() => focusKey('tile-continue'));
 }
+async function pickGame() {
+  for (;;) {
+    const from = await choose({ sheet: true, title: 'Pin a Game', options: [
+      ...(playing.value.length ? [{ heading: 'Recently Played', label: 'Recently Played', value: '__recent', icon: 'mdiHistory', sub: `${Math.min(30, playing.value.length)} games` }] : []),
+      ...consoles.value.map((p, i) => ({ heading: i === 0 ? 'Consoles' : undefined, label: p.display_name, value: p.id, sub: `${p.rom_count} games`, raw: true })),
+    ] });
+    if (!from) return null;
+    const list = from === '__recent' ? playing.value.slice(0, 30) : roms.value.filter((r) => r.platform_id === from).sort((a, b) => a.name.localeCompare(b.name));
+    const id = await choose({ sheet: true, title: from === '__recent' ? 'Recently Played' : platformById(from)?.display_name || 'Games', options: [{ label: 'Back', value: '__back', icon: 'mdiArrowLeft' }, ...list.map((r) => ({ label: r.name, value: r.id, img: cover(r), sub: from === '__recent' ? r.platform_display_name : '', raw: true }))] });
+    if (id !== '__back') return id;
+  }
+}
 const SUBS = { game: 'Pin one game', console: 'Pin one console', trophies: 'All, or one console’s', image: 'A picture or GIF from this device', html: 'Paste HTML, or start from a note or a countdown', daily: 'A new game from your library every day', stats: 'Games, consoles and hours in numbers' };
 async function addTile() {
   const have = new Set(tiles.value.map((t) => t.type));
@@ -538,8 +625,8 @@ async function addTile() {
   const [w, h] = TILES[type].size;
   const t = { id: type + '-' + Date.now().toString(36), type, w, h, x: 0, y: bottom(tiles.value) };
   if (type === 'game') {
-    const pool = [...playing.value.slice(0, 12), ...rows.value.favs.slice(0, 12), ...rows.value.fresh.slice(0, 12)].filter((r, i, a) => a.findIndex((x) => x.id === r.id) === i).slice(0, 30);
-    const id = await choose({ sheet: true, title: 'Pin a game', options: pool.map((r) => ({ label: r.name, value: r.id, img: cover(r), sub: r.platform_display_name, raw: true })) });
+    // 0.9.24 (owner): Recently Played first, then each console; a console lists its games A to Z
+    const id = await pickGame();
     if (!id) return nextTick(() => focusKey('st-add'));
     t.romId = id;
   } else if (type === 'console') {
@@ -579,6 +666,8 @@ const CONFIG = {
     if (!html) return false;
     try { t.src = await call('start:html', { id: t.id, html }); return true; } catch (e) { toast(e.message, 'error', 5000); return false; }
   },
+  async cgames(t) { return pickConsole(t); },
+  async cstats(t) { return pickConsole(t); },
   async trophies(t) {
     const names = [...new Set(ach.value.map((a) => a.console).filter(Boolean))].sort();
     const v = await choose({ sheet: true, title: 'Which Trophies', options: [{ label: 'All Consoles', value: '__all', icon: 'mdiTrophyOutline', selected: !t.console }, ...names.map((n) => ({ label: n, value: n, raw: true, selected: t.console === n }))] });
@@ -587,6 +676,12 @@ const CONFIG = {
     return true;
   },
 };
+async function pickConsole(t) {
+  const id = await choose({ sheet: true, title: 'Which Console', options: consoles.value.map((p) => ({ label: p.display_name, value: p.id, sub: `${p.rom_count} games`, raw: true, selected: t.platformId === p.id })) });
+  if (!id) return false;
+  t.platformId = id; delete sel[t.id];
+  return true;
+}
 async function configure(t) {
   const ok = await CONFIG[t.type]?.(t);
   if (ok && tiles.value.includes(t)) save();
@@ -600,7 +695,7 @@ function goPage(i) {
   if (mode.value) setMode('');
   pageDir.value = i > page.value ? 'next' : 'prev';
   page.value = i; store.startPage = i;
-  sfx.tab?.();
+  sfx.tab?.(); rumble('tab'); // a page turn is felt, as a tab change is (0.9.24)
 }
 function afterPage() { const f = el.value?.querySelector(editing.value && !tiles.value.length ? '[data-key="st-add"]' : '.st-board [data-focus]'); f?.focus({ preventScroll: true }); if (f) focusTile(tiles.value.find((t) => t.id === f.dataset.id) || {}); }
 function addPage() { pages.value.push([]); save(); goPage(pages.value.length - 1); }
@@ -611,6 +706,41 @@ async function removePage() {
   pageDir.value = 'prev';
   pages.value.splice(i, 1);
   page.value = Math.max(0, i - 1); store.startPage = page.value; save();
+}
+// the pages overview
+const ov = ref(null), ovEl = ref(null);
+let ovLayer = null;
+const pgKey = (pg, i) => (pg[0]?.id || 'empty') + ':' + pg.length + ':' + i;
+const ovRows = (pg) => Math.max(4, bottom(pg));
+function openOv() {
+  if (ov.value) return closeOv();
+  if (mode.value) setMode('');
+  ov.value = { moving: null };
+  nextTick(() => {
+    ovLayer = pushLayer(ovEl.value, {
+      back: () => (ov.value.moving != null ? (ov.value.moving = null) : closeOv()),
+      lt: closeOv, rt: closeOv, start: closeOv, select() {}, x() {}, y() {}, lb() {}, rb() {},
+      left: () => (ov.value.moving != null ? ovMove(-1) : false), right: () => (ov.value.moving != null ? ovMove(1) : false),
+    });
+    focusFirst(ovEl.value, `[data-key="pg-${page.value}"]`);
+  });
+}
+function closeOv() {
+  ovLayer?.pop(); ovLayer = null; ov.value = null;
+  nextTick(() => focusKey(tiles.value[0] ? 'tile-' + tiles.value[0].id : 'st-add'));
+}
+function ovPick(i) {
+  if (ov.value.moving == null) { ov.value.moving = i; sfx.accept?.(); return; }
+  ov.value.moving = null; page.value = Math.min(page.value, pages.value.length - 1); save(); sfx.accept?.();
+  nextTick(() => focusKey('pg-' + i));
+}
+function ovMove(d) {
+  const i = ov.value.moving, j = i + d;
+  if (j < 0 || j >= pages.value.length) { sfx.error?.(); return; }
+  const cur = pages.value[page.value];
+  const list = [...pages.value]; [list[i], list[j]] = [list[j], list[i]]; pages.value = list;
+  page.value = list.indexOf(cur); ov.value.moving = j; store.startPage = page.value; sfx.move?.();
+  nextTick(() => focusKey('pg-' + j));
 }
 // a sideways swipe on touch turns the page
 let sw = null;
@@ -726,8 +856,8 @@ function hDown(t, edge, e) {
 const hints = () => editing.value
   ? (mode.value === 'move' ? [{ b: 'A', label: 'Put down' }, { b: 'B', label: 'Put down' }]
     : mode.value === 'size' ? [{ b: 'LB+RB', label: 'Corner' }, { b: 'A', label: 'Done' }, { b: 'B', label: 'Done' }]
-    : [{ b: 'A', label: 'Pick up' }, { b: 'X', label: 'Resize' }, ...(CONFIG[focusedTile()?.type] ? [{ b: 'SELECT', label: 'Change' }] : []), { b: 'Y', label: 'Remove' }, { b: 'RS', label: 'Pages' }, { b: 'B', label: 'Done' }])
-  : [{ b: 'A', label: 'Open' }, { b: 'A', label: 'Hold: Arrange' }, ...(pages.value.length > 1 ? [{ b: 'RS', label: 'Pages' }] : []), ...(focusedId.value === 'continue' && playing.value.length > 1 ? [{ b: 'LB+RB', label: 'Game' }] : []), { b: 'Y', label: 'Search' }];
+    : [{ b: 'A', label: 'Pick up' }, { b: 'X', label: 'Resize' }, ...(CONFIG[focusedTile()?.type] ? [{ b: 'SELECT', label: 'Change' }] : []), { b: 'Y', label: 'Remove' }, { b: 'RS', label: 'Pages' }, { b: 'LT+RT', label: 'All Pages' }, { b: 'B', label: 'Done' }])
+  : [{ b: 'A', label: 'Open' }, { b: 'A', label: 'Hold: Arrange' }, ...(pages.value.length > 1 ? [{ b: 'RS', label: 'Pages' }] : []), ...((focusedId.value === 'continue' && playing.value.length > 1) || STEPS.has(tiles.value.find((x) => x.id === focusedId.value)?.type) ? [{ b: 'LB+RB', label: focusedId.value && tiles.value.find((x) => x.id === focusedId.value)?.type === 'trophies' ? 'Unlock' : 'Game' }] : []), { b: 'Y', label: 'Search' }];
 const focusedTile = () => tiles.value.find((t) => t.id === document.activeElement?.dataset?.id);
 const dirH = (dir) => () => {
   if (!editing.value || !focusedTile()) return false;
@@ -748,9 +878,10 @@ useView({
   x: () => { const t = focusedTile(); if (editing.value && t) { setMode('size'); return true; } return false; },
   y: () => { if (!editing.value) return false; const t = focusedTile(); if (t) removeTile(t); return true; },
   back: () => { if (!editing.value) return false; if (mode.value) setMode(''); else stopEdit(); return true; },
-  lb: () => { if (mode.value === 'size') return stepCorner(-1), true; if (focusedTile()?.type === 'continue' && playing.value.length > 1) stepGame(-1); },
-  rb: () => { if (mode.value === 'size') return stepCorner(1), true; if (focusedTile()?.type === 'continue' && playing.value.length > 1) stepGame(1); },
+  lb: () => { if (mode.value === 'size') return stepCorner(-1), true; const t = focusedTile(); if (t?.type === 'continue' && playing.value.length > 1) stepGame(-1); else if (t && !editing.value) stepTile(t, -1); },
+  rb: () => { if (mode.value === 'size') return stepCorner(1), true; const t = focusedTile(); if (t?.type === 'continue' && playing.value.length > 1) stepGame(1); else if (t && !editing.value) stepTile(t, 1); },
   rsleft: () => goPage(page.value - 1), rsright: () => goPage(page.value + 1),
+  lt: () => (editing.value ? (openOv(), true) : false), rt: () => (editing.value ? (openOv(), true) : false),
   select: () => { const t = focusedTile(); if (!editing.value || !t || !CONFIG[t.type]) return false; configure(t); return true; },
 }, hints);
 
@@ -772,6 +903,7 @@ watch(() => store.play, loadWeek);
 <style scoped>
 .start { position: absolute; inset: 0; display: flex; flex-direction: column; animation: viewIn var(--d-slow) var(--ease); }
 .st-scroll { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; padding: var(--s-4) var(--s-7) var(--s-6); }
+.start:has(.st-pages) .st-scroll { padding-bottom: var(--s-3); }
 @media (max-width: 1400px) { .st-scroll { padding-left: 36px; padding-right: 36px; } }
 /* the board: tiles placed in pixels from their cell (startLayout.js), so moves and resizes glide */
 .st-board { position: relative; transition: height 460ms cubic-bezier(0.32, 0.72, 0, 1); }
@@ -780,17 +912,25 @@ watch(() => store.play, loadWeek);
 .st-tile:focus-visible, .pad-mode .st-tile:focus { box-shadow: none; }
 /* the face carries the look, so the tile itself only moves */
 .st-face { position: absolute; inset: 0; display: flex; flex-direction: column; min-width: 0; min-height: 0; padding: clamp(10px, min(9cqh, 7cqw), 22px); border-radius: inherit; background: var(--s1); overflow: hidden; isolation: isolate; container-type: size;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  box-shadow: var(--weight-edge), var(--weight);
   transition: transform 380ms cubic-bezier(0.32, 0.72, 0, 1), box-shadow 240ms ease, opacity 200ms ease;
   animation: st-in 640ms cubic-bezier(0.22, 1, 0.36, 1) both; animation-delay: calc(var(--n, 0) * 45ms); }
 /* tiles arrive one after another, rising and settling */
 @keyframes st-in { from { opacity: 0; transform: translateY(18px) scale(0.97); } }
 :global(body.motion-reduce .st-face) { animation: none; }
-.st-tile:focus-visible .st-face, .pad-mode .st-tile:focus .st-face { box-shadow: var(--ring); transform: translateY(-3px); }
+.st-tile:focus-visible .st-face, .pad-mode .st-tile:focus .st-face { box-shadow: var(--ring), 0 26px 50px -24px rgba(0, 0, 0, 0.85); transform: translateY(-3px); }
 /* a soft light passes over a tile when it's reached */
-.st-face::after { content: ''; position: absolute; inset: 0; z-index: 3; pointer-events: none; background: linear-gradient(110deg, transparent 35%, rgba(255, 255, 255, 0.10) 50%, transparent 65%); transform: translateX(-110%); }
-.pad-mode .st-tile:focus .st-face::after, .st-tile:focus-visible .st-face::after { animation: st-glint 900ms cubic-bezier(0.22, 1, 0.36, 1); }
+.st-face::after { content: ''; position: absolute; inset: 0; z-index: 3; pointer-events: none; background: linear-gradient(var(--glint-a, 110deg), transparent 38%, rgba(255, 255, 255, 0.08) 50%, transparent 62%); transform: translateX(-110%); }
+/* the light that passes over a tile you reach comes from a slightly different angle and pace from tile to
+   tile, so it never looks stamped (0.9.24) */
+.st-tile:nth-child(3n + 1) .st-face::after { --glint-a: 104deg; }
+.st-tile:nth-child(3n + 2) .st-face::after { --glint-a: 118deg; animation-duration: 1050ms !important; }
+.st-tile:nth-child(3n) .st-face::after { --glint-a: 96deg; animation-duration: 820ms !important; }
+.pad-mode .st-tile:focus .st-face::after, .st-tile:focus-visible .st-face::after { animation: st-glint 940ms var(--ease-out); }
 @keyframes st-glint { to { transform: translateX(110%); } }
+:global(body.light-fx .st-face::after) { display: none; }
+:global(body.light-fx .st-face) { animation-name: st-fadein !important; }
+@keyframes st-fadein { from { opacity: 0; } }
 :global(body.motion-reduce .st-face::after) { animation: none !important; }
 .st-tile:active .st-face { transform: scale(0.985); transition-duration: 90ms; }
 .st-tile.leaving { opacity: 0; }
@@ -837,12 +977,12 @@ watch(() => store.play, loadWeek);
 .st-handle.on::after { background: var(--focus); box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.25), 0 2px 10px rgba(0, 0, 0, 0.6); transform: scale(1.5); animation: st-pulse 1.4s ease-in-out infinite; }
 @keyframes st-pulse { 50% { transform: scale(1.15); } }
 :global(body.light-fx .st-handle.on::after) { animation: none; }
-.st-add { display: flex; align-items: center; justify-content: center; gap: 14px; padding: 0 18px; border-radius: var(--r-lg); color: var(--muted); background: rgba(255, 255, 255, 0.025); box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, 0.14) !important; transition: background 160ms ease, color 160ms ease; }
-.st-add-plus { width: 40px; height: 40px; flex: none; border-radius: 50%; display: grid; place-items: center; background: rgba(255, 255, 255, 0.08); color: var(--text); transition: transform 240ms var(--ease-out), background 160ms ease; }
+.st-add { display: flex; align-items: center; justify-content: center; gap: 14px; padding: 0 18px; border-radius: var(--r-lg); color: var(--muted); background: transparent; border: 1.5px dashed rgba(255, 255, 255, 0.14); box-shadow: none !important; transition: background 160ms ease, color 160ms ease, border-color 160ms ease; } /* a quiet slot, not another card (0.9.24) */
+.st-add-plus { width: 36px; height: 36px; flex: none; border-radius: 50%; display: grid; place-items: center; background: rgba(255, 255, 255, 0.06); color: var(--text); transition: transform 240ms var(--ease-out), background 160ms ease; }
 .st-add-t { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .st-add-t b { color: var(--text); font-family: var(--display); font-size: var(--t-md); }
 .st-add-t span { font-size: var(--t-xs); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.st-add:focus { color: var(--text); background: rgba(255, 255, 255, 0.06); box-shadow: var(--ring) !important; }
+.st-add:focus { color: var(--text); background: rgba(255, 255, 255, 0.04); border-color: transparent; box-shadow: var(--ring) !important; }
 .st-add:focus .st-add-plus { background: var(--focus); color: var(--on-focus); transform: rotate(90deg); }
 
 /* the parts every tile shares; sizes follow the tile (container units) */
@@ -881,6 +1021,8 @@ watch(() => store.play, loadWeek);
 .st-pin { margin-top: auto; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .st-pin b { font-family: var(--display); font-weight: 700; font-size: clamp(13px, min(12cqh, 8cqw), 22px); line-height: 1.15; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .st-pin span { font-size: var(--t-xs); color: rgba(255, 255, 255, 0.75); }
+.st-cs-mark { font-size: clamp(18px, 14cqh, 40px); line-height: 1; }
+.st-mark { display: inline-flex; align-items: center; gap: 6px; font-size: clamp(14px, 6cqh, 22px) !important; } /* the console's wordmark, not its name (0.9.24) */
 .st-pin :deep(.game-logo) { margin: 0 0 6px; filter: drop-shadow(0 4px 14px rgba(0, 0, 0, 0.55)); }
 .st-pin :deep(.st-pin-name) { margin: 0 0 2px; font-family: var(--display); font-stretch: var(--display-stretch); font-weight: 800; font-size: clamp(14px, min(13cqh, 9cqw), 30px); line-height: 1.08; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 
@@ -889,7 +1031,7 @@ watch(() => store.play, loadWeek);
    hairline edge, so the board reads as a set of objects rather than flat boxes. */
 .t-week .st-face, .t-storage .st-face, .t-downloads .st-face, .t-trophies .st-face, .t-stats .st-face, .t-surprise .st-face, .t-consoles .st-face, .t-html .st-face {
   background: radial-gradient(120% 100% at 100% 0%, var(--glow, rgba(255, 255, 255, 0.06)), transparent 62%), linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent 40%), var(--s1);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.07); }
+  box-shadow: var(--weight-edge), var(--weight); }
 .t-week { --glow: rgba(120, 150, 255, 0.16); }
 .t-storage { --glow: rgba(80, 210, 190, 0.14); }
 .t-downloads { --glow: rgba(90, 170, 255, 0.16); }
@@ -906,10 +1048,21 @@ watch(() => store.play, loadWeek);
 .st-pg-next-enter-from { opacity: 0; transform: translateX(4%); }
 .st-pg-prev-enter-from { opacity: 0; transform: translateX(-4%); }
 :global(body.motion-reduce .st-board) { transition: none !important; transform: none !important; }
-.st-pages { position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 999px; background: rgba(10, 11, 14, 0.55); z-index: 3; }
+.st-ov { position: absolute; inset: 0; z-index: 20; display: flex; flex-direction: column; gap: var(--s-5); padding: var(--s-6) var(--s-7); background: color-mix(in srgb, var(--s0) 88%, transparent); backdrop-filter: blur(14px); animation: viewIn 220ms var(--ease-out); }
+.st-ov-head { display: flex; align-items: baseline; gap: var(--s-4); }
+.st-ov-head b { font-family: var(--display); font-size: var(--t-xl); }
+.st-ov-list { display: flex; gap: var(--s-4); flex-wrap: wrap; align-content: flex-start; }
+.st-ov-page { width: clamp(200px, 22vw, 360px); display: flex; flex-direction: column; gap: 10px; padding: 12px; border-radius: var(--r-lg); background: var(--s1); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06); transition: transform 260ms var(--ease-out), box-shadow 160ms ease; }
+.st-ov-page.on { box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.35); }
+.st-ov-page:focus { box-shadow: var(--ring); }
+.st-ov-page.moving { transform: translateY(-8px) scale(1.04); box-shadow: var(--ring), 0 24px 50px rgba(0, 0, 0, 0.55); }
+.st-ov-map { position: relative; aspect-ratio: 16 / 9; border-radius: var(--r-md); background: rgba(255, 255, 255, 0.03); overflow: hidden; }
+.st-ov-map i { position: absolute; box-sizing: border-box; border: 2px solid transparent; background: rgba(255, 255, 255, 0.16); border-radius: 4px; background-clip: padding-box; }
+.st-ov-n { display: flex; justify-content: space-between; font-weight: 700; font-family: var(--display); }
+.st-ov-n em { font-style: normal; font-weight: 500; color: var(--muted); font-family: var(--body); font-size: var(--t-sm); }
+.st-pages { flex: none; align-self: center; display: flex; align-items: center; gap: 8px; padding: 6px 0 10px; } /* its own row under the board: never over a tile (0.9.24) */
 .st-pages i { width: 7px; height: 7px; border-radius: 4px; background: rgba(255, 255, 255, 0.35); cursor: pointer; transition: width var(--d-med) var(--ease-out), background var(--d-med); }
 .st-pages i.on { width: 22px; background: #fff; }
-.st-rs { margin-right: 4px; }
 .st-blank { position: absolute; left: 0; right: 0; top: 0; height: min(320px, 60vh); margin: auto; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; border-radius: var(--r-lg); color: var(--muted); text-align: center; box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.08); }
 .st-blank b { color: var(--text); font-family: var(--display); font-size: var(--t-lg); }
 .st-blank:focus { box-shadow: var(--ring); color: var(--text); }
@@ -939,18 +1092,21 @@ watch(() => store.play, loadWeek);
 @container (max-height: 120px) { .st-row-lead .st-sub { display: none; } }
 
 /* trophies: the newest large, the ones before it as small badges */
-.st-tro { flex: 1; min-height: 0; display: flex; flex-direction: column; justify-content: flex-end; gap: clamp(6px, 6cqh, 14px); margin-top: 6px; }
-.st-tro-main { display: flex; align-items: center; gap: 12px; min-width: 0; animation: st-in 520ms var(--ease-out) both 120ms; }
-.st-tro-badge { width: clamp(36px, 34cqh, 64px); aspect-ratio: 1; flex: none; border-radius: var(--r-md); overflow: hidden; display: grid; place-items: center; background: var(--s2); box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 210, 120, 0.28); }
+.st-tro { flex: 1; min-height: 0; display: flex; flex-direction: column; justify-content: flex-end; gap: clamp(6px, 4cqh, 14px); margin-top: 6px; }
+.st-tro-list { display: grid; gap: 10px 18px; align-content: end; }
+.st-tro-main { display: flex; align-items: center; gap: 12px; min-width: 0; animation: st-in 520ms var(--ease-out) both; animation-delay: calc(var(--i) * 35ms + 120ms); }
+.st-tro-badge { width: 48px; aspect-ratio: 1; flex: none; border-radius: var(--r-md); overflow: hidden; display: grid; place-items: center; background: var(--s2); box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 210, 120, 0.28); }
+.st-tro.one .st-tro-badge { width: clamp(36px, 34cqh, 64px); }
 .st-tro-badge img { width: 100%; height: 100%; object-fit: cover; }
 .st-tro-t { display: flex; flex-direction: column; min-width: 0; }
-.st-tro-t b { font-family: var(--display); font-weight: 700; font-size: clamp(12px, 12cqh, 18px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.st-tro-t b { font-family: var(--display); font-weight: 700; font-size: clamp(12px, 3.4cqh, 18px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.st-tro.one .st-tro-t b { font-size: clamp(12px, 12cqh, 18px); }
 .st-tro-t span { font-size: var(--t-xs); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .st-tro-strip { display: flex; gap: 6px; overflow: hidden; }
 .st-tro-mini { width: 34px; height: 34px; flex: none; border-radius: var(--r-sm); overflow: hidden; display: grid; place-items: center; background: var(--s2); opacity: calc(1 - var(--i) * 0.06); animation: st-in 420ms var(--ease-out) both; animation-delay: calc(var(--i) * 30ms + 200ms); }
 .st-tro-mini img { width: 100%; height: 100%; object-fit: cover; }
 @container (max-height: 84px) { .st-tro-strip { display: none; } }
-@container (max-width: 200px) { .st-tro-t { display: none; } .st-tro-main { justify-content: center; flex: 1; } .st-tro-badge { width: min(64cqw, 60cqh); } }
+@container (max-width: 200px) { .st-tro-t { display: none; } .st-tro-main:not(:first-child) { display: none; } .st-tro-main { justify-content: center; flex: 1; } .st-tro-badge { width: min(64cqw, 60cqh); } }
 :global(body.motion-reduce .st-tro-main), :global(body.motion-reduce .st-tro-mini) { animation: none; }
 
 /* Surprise me: three cards fanned, dealt again each time */
@@ -992,8 +1148,17 @@ watch(() => store.play, loadWeek);
 .st-gauge > span { font-family: var(--display); font-weight: 700; font-size: clamp(13px, 22cqw, 40px); letter-spacing: -0.02em; }
 .st-gauge small { font-size: 0.62em; color: var(--muted); margin-left: 1px; }
 :global(body.motion-reduce .st-gauge line) { transition: none; }
-@container (aspect-ratio < 1.2) { .st-store { flex-direction: column-reverse; } .st-gauge { height: auto; width: 100%; max-width: none; aspect-ratio: auto; flex: 1; min-height: 0; container-type: size; } .st-gauge > span { font-size: clamp(13px, min(20cqw, 20cqh), 40px); } .st-store-text .st-num { margin-top: 0; } .st-store-text { flex: none; } }
+/* tall: the gauge large in the middle, the numbers and each console's share under it (0.9.24) */
+@container (aspect-ratio < 1.2) { .st-store { flex-direction: column-reverse; justify-content: flex-end; } .st-gauge { height: auto; width: min(100%, 60cqh); max-width: none; aspect-ratio: 1; flex: none; margin: auto; container-type: inline-size; } .st-gauge > span { font-size: clamp(14px, 20cqw, 44px); } .st-store-text .st-num { margin-top: 0; } .st-store-text { flex: none; } }
 @container (max-width: 190px) and (max-height: 190px) { .st-store-text { display: none; } .st-gauge { max-width: none; width: 100%; height: 100%; } }
+.st-store-cons { display: none; flex-direction: column; gap: 7px; margin-top: 14px; }
+.st-store-con { display: grid; grid-template-columns: minmax(0, 1fr) 2fr auto; align-items: center; gap: 10px; font-size: var(--t-xs); color: var(--muted); }
+.st-store-con span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.st-store-con i { height: 5px; border-radius: 3px; background: rgba(255, 255, 255, 0.08); overflow: hidden; }
+.st-store-con b { display: block; height: 100%; border-radius: inherit; background: rgba(255, 255, 255, 0.55); }
+.st-store-con em { font-style: normal; color: var(--text); font-weight: 600; }
+@container (min-height: 300px) { .st-store-cons { display: flex; } }
+@container (min-width: 520px) and (min-height: 200px) { .st-store-cons { display: flex; } .st-store-text .st-num { margin-top: 0; } .st-store-text { justify-content: center; } }
 
 /* this week: wide, the total beside the bars; tall, the bars under it; small, the total only */
 .st-week { flex: 1; min-height: 0; display: flex; align-items: stretch; gap: var(--s-5); }
@@ -1003,7 +1168,7 @@ watch(() => store.play, loadWeek);
 .st-col { flex: 1; min-height: 0; width: 100%; position: relative; }
 .st-bar i { position: absolute; left: 0; right: 0; bottom: 0; border-radius: 6px; background: linear-gradient(to top, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.24)); transform-origin: bottom; animation: st-rise 760ms cubic-bezier(0.22, 1, 0.36, 1) both; animation-delay: calc(var(--i) * 55ms + 180ms); transition: height 500ms var(--ease); }
 .st-bar.today i { background: linear-gradient(to top, rgba(255, 255, 255, 0.78), #fff); }
-.st-bar.none i { left: calc(50% - 3px); width: 6px; height: 6px; border-radius: 50%; background: rgba(255, 255, 255, 0.16); }
+.st-bar.none i { height: 7%; min-height: 4px; background: rgba(255, 255, 255, 0.1); } /* a day without play is a low bar, so the chart reads as one (0.9.24) */
 .st-bar em { position: absolute; left: 50%; transform: translate(-50%, -6px); font-style: normal; font-size: 11px; font-weight: 700; color: var(--text); white-space: nowrap; font-variant-numeric: tabular-nums; }
 .st-bar span { font-size: 11px; font-weight: 600; color: var(--dim); }
 .st-bar.today span { color: var(--text); }
@@ -1011,7 +1176,7 @@ watch(() => store.play, loadWeek);
 :global(body.motion-reduce .st-bar i) { animation: none; }
 @container (aspect-ratio < 1.5) { .st-week { flex-direction: column; gap: var(--s-2); } .st-week-text { max-width: none; } .st-week-text .st-num { margin-top: 6px; } }
 /* 0.9.23 (owner: the bars at 1x1 too): a small tile keeps the bars and the total, without the words */
-@container (max-height: 160px) and (max-width: 240px) { .st-week { flex-direction: column; gap: 4px; } .st-week-text { max-width: none; flex: none; } .st-week-text .st-label, .st-week-text .st-sub { display: none; } .st-week-text .st-num { margin-top: 0; } .st-week .st-big { font-size: clamp(16px, 20cqh, 28px); } .st-bars { padding-top: 4px; gap: 3px; } .st-bar span, .st-bar em { display: none; } }
+@container (max-height: 160px) and (max-width: 240px) { .st-week { flex-direction: column; gap: 4px; } .st-week-text { max-width: none; flex: none; } .st-week-text .st-label, .st-week-text .st-sub { display: none; } .st-week-text .st-num { margin-top: 0; } .st-week .st-big { font-size: clamp(20px, 24cqh, 40px); } .st-bars { padding-top: 4px; gap: 3px; } .st-bar span, .st-bar em { display: none; } }
 
 /* consoles: the same cards as the Consoles page */
 .st-cards { flex: 1; min-height: 0; margin-top: 10px; display: grid; gap: clamp(6px, 2cqw, 12px); }

@@ -13,7 +13,17 @@
       </div>
     </header>
 
-    <div v-if="!store.downloads.length" class="empty-dl">
+    <!-- add-ons downloading and unpacking (0.9.24, owner: texture packs show here too) -->
+    <section v-if="addonJobs.length" class="dl-addons">
+      <div class="sec-title">Add-ons</div>
+      <div v-for="a in addonJobs" :key="a.key" class="lrow" data-focus tabindex="0">
+        <Icon :name="a.state === 'done' ? 'mdiCheckCircle' : a.state === 'error' ? 'mdiAlertCircleOutline' : 'mdiPuzzleOutline'" :size="22" />
+        <span class="l-mid"><b>{{ a.name }}</b><span class="l-sub">{{ a.game }}{{ a.emu ? ' · ' + a.emu : '' }} · {{ addonText(a) }}</span>
+          <span v-if="a.state === 'download' || a.state === 'install'" class="bar" style="margin-top: 6px"><i :style="{ width: (a.pct || 2) + '%' }" /></span></span>
+      </div>
+    </section>
+
+    <div v-if="!store.downloads.length && !addonJobs.length" class="empty-dl">
       <div class="dl-hero">
         <div class="dl-fan"><img v-for="(c, i) in fan" :key="i" :src="c" :style="{ '--i': i - (fan.length - 1) / 2 }" @error="$event.target.style.display = 'none'" /></div>
         <div class="dl-badge"><div class="dl-badge-in"><Icon name="mdiTrayArrowDown" :size="46" class="dl-arrow" /></div></div>
@@ -60,11 +70,14 @@
 </template>
 
 <script setup>
+// add-on jobs, newest first
+const addonText = (a) => (a.state === 'download' ? `Downloading ${a.pct != null ? a.pct + '%' : ''}${a.total ? ' of ' + bytes(a.total) : ''}` : a.state === 'join' ? 'Joining the parts' : a.state === 'install' ? `Unpacking ${a.pct || 0}%` : a.state === 'done' ? 'Installed' : a.state === 'error' ? a.error || 'It failed' : 'Starting');
 import { computed, h } from 'vue';
 import { store, call, img, bytes, go, tab, setBg, romById, backdropOf, allRoms, cover } from '../store.js';
 import { useView } from '../useView.js';
 import Icon from '../components/Icon.vue';
 import Btn from '../components/Btn.vue';
+const addonJobs = computed(() => Object.values(store.addonJobs || {}).sort((a, b) => b.at - a.at));
 
 // three of your games fanned behind the empty-state badge
 const fan = (() => { const l = allRoms().filter((r) => r.path_cover_small || r.url_cover); for (let i = l.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [l[i], l[j]] = [l[j], l[i]]; } return l.slice(0, 3).map((r) => cover(r)); })();

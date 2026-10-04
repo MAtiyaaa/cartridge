@@ -8,9 +8,9 @@
       </div>
     </div>
 
-    <div class="seg st-tabs">
+    <div class="st-tabs-row"><Btn b="LB" /><div class="seg st-tabs">
       <button v-for="t in TABS" :key="t.v" data-focus :data-key="'st-' + t.v" :class="{ on: view === t.v }" @click="setView(t.v)">{{ t.l }}</button>
-    </div>
+    </div><Btn b="RB" /></div>
 
     <!-- This Device -->
     <template v-if="view === 'here'">
@@ -18,6 +18,10 @@
       <div v-else-if="!s.running" class="st-card">
         <b>{{ s.installed ? 'Syncthing Is Installed' : 'No Syncthing on This Device' }}</b>
         <p class="muted small">{{ s.why }}</p>
+        <template v-if="s.needsKey">
+          <TextField v-model="pasteKey" label="Its API key" placeholder="Paste it from Syncthing → Actions → Settings → General" password icon="mdiKeyVariant" />
+          <div class="row"><button class="btn primary" data-focus :disabled="!pasteKey || busy" @click="useKey"><Icon name="mdiCheck" />Use This Key</button></div>
+        </template>
         <p v-if="!s.installed" class="muted small">On SteamOS and Bazzite, install “SyncThingy” or “Syncthing Tray” from the Discover store, or the syncthing package on other systems. Cartridge finds it by itself.</p>
       </div>
       <template v-else>
@@ -68,7 +72,7 @@
                   <button class="btn" data-focus @click="rescan(f)"><Icon name="mdiRefresh" />Rescan</button>
                 </div>
                 <div v-for="x in list.files" :key="x.path" class="file" data-focus tabindex="0">
-                  <span class="mono">{{ x.path }}</span><span class="muted">{{ bytes(x.size) }}</span><span class="muted">{{ ago(x.at) }}</span>
+                  <span class="mono"><b v-if="x.game" class="file-game" :class="{ tex: x.kind === 'Textures' }">{{ x.game }} · {{ x.kind }}</b>{{ x.path }}</span><span class="muted">{{ bytes(x.size) }}</span><span class="muted">{{ ago(x.at) }}</span>
                 </div>
                 <div v-if="list.total > list.files.length" class="muted small">And {{ list.total - list.files.length }} more.</div>
               </template>
@@ -168,9 +172,10 @@ import { store, call, ago, bytes, toast, go, confirm, romById, cover } from '../
 import Icon from './Icon.vue';
 import TextField from './TextField.vue';
 import SyncthingLogo from './SyncthingLogo.vue';
+import Btn from './Btn.vue';
 const TABS = [{ v: 'here', l: 'This Device' }, { v: 'server', l: 'Main Server' }, { v: 'games', l: 'Games' }];
 const s = ref(null), L = ref(null), open = ref(''), list = ref(null), view = ref('here');
-const R = ref(null), G = ref(null), q = ref(''), addr = ref(''), key = ref(''), busy = ref(false), editing = ref(false);
+const R = ref(null), G = ref(null), q = ref(''), addr = ref(''), key = ref(''), busy = ref(false), editing = ref(false), pasteKey = ref('');
 const srvCfg = computed(() => store.config.syncthing?.server || null);
 const short = (p) => String(p || '').replace(store.info?.home || '\0', '~');
 const online = (l) => (l || []).filter((d) => d.online).length;
@@ -186,6 +191,15 @@ onMounted(async () => {
   s.value = (await call('sync:status').catch(() => null)) || { installed: false, running: false, why: 'Couldn’t check.' };
   if (s.value.running) L.value = await call('sync:local').catch(() => null);
 });
+async function useKey() {
+  busy.value = true;
+  try { s.value = await call('sync:setKey', { key: pasteKey.value }); L.value = await call('sync:local').catch(() => null); toast('Connected to Syncthing', 'ok', 2500, 'mdiCheck'); }
+  catch (e) { toast(e.message, 'error', 6000); }
+  busy.value = false;
+}
+// L1/R1 move between This Device, Main Server and Games (0.9.24, owner)
+function step(d) { const i = TABS.findIndex((t) => t.v === view.value); setView(TABS[(i + d + TABS.length) % TABS.length].v); }
+defineExpose({ step });
 function setView(v) {
   view.value = v;
   if (v === 'server' && srvCfg.value && !R.value) loadServer();
@@ -225,7 +239,7 @@ async function copy(text, msg) { try { await call('clip:write', { text }); toast
 .st-hero { display: flex; gap: var(--s-4); align-items: center; }
 .st-hero h1 { margin: 0 0 4px; }
 .st-hero p { margin: 0; max-width: 62ch; line-height: 1.45; }
-.st-tabs { align-self: flex-start; }
+.st-tabs-row { display: flex; align-items: center; gap: 10px; align-self: flex-start; }
 .st-card { display: flex; flex-direction: column; gap: var(--s-2); padding: var(--s-4); border-radius: var(--r-lg); background: var(--s1); }
 .st-card > b { font-family: var(--display); font-size: var(--t-lg); }
 .st-card p { margin: 0; line-height: 1.45; }
@@ -248,6 +262,8 @@ async function copy(text, msg) { try { await call('clip:write', { text }); toast
 .files-head { padding: 4px 0 6px; align-items: center; }
 .file { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: var(--s-4); padding: 6px 10px; border-radius: var(--r-sm); font-size: var(--t-sm); }
 .file .mono { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.file-game { font-family: var(--body); font-weight: 700; margin-right: 8px; color: #9fe0b5; }
+.file-game.tex { color: #b9c7ff; }
 .file:focus-visible, .pad-mode .file:focus { background: var(--focus); color: var(--on-focus); }
 .file:focus-visible .muted, .pad-mode .file:focus .muted { color: var(--on-focus-dim); }
 .st-cover { width: 40px; aspect-ratio: 3 / 4; object-fit: cover; border-radius: var(--r-sm); background: var(--s2); flex: none; }

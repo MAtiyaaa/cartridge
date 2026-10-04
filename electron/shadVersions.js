@@ -122,4 +122,23 @@ function remove(name, home) {
   writeList(list.filter((x) => x !== v), home);
   return true;
 }
-module.exports = { launcherDir, settings, installed, available, addRelease, remove, folderName, iniValue, EXE };
+// which shadPS4 actually ran last (0.9.24, owner: how can I be sure a game starts with the version I picked?):
+// shadPS4 writes its version near the top of log/shad_log.txt in its user folder, the shared one or a version's
+// own portable user/ folder. The newest log says the version, the game's ID and when.
+function lastRun(home = os.homedir(), extra = []) {
+  const data = process.env.XDG_DATA_HOME || path.join(home, '.local/share');
+  const dirs = [path.join(data, 'shadPS4'), path.join(home, '.local/share/shadPS4'), path.join(home, '.var/app/net.shadps4.shadPS4/data/shadPS4'), ...extra];
+  for (const v of installed(home)) if (v.path) dirs.push(path.join(path.dirname(v.path), 'user'));
+  let best = null;
+  for (const d of [...new Set(dirs)]) {
+    const f = path.join(d, 'log', 'shad_log.txt');
+    let st; try { st = fs.statSync(f); } catch { continue; }
+    if (best && st.mtimeMs <= best.at) continue;
+    let head = ''; try { const fd = fs.openSync(f, 'r'); const b = Buffer.alloc(65536); const n = fs.readSync(fd, b, 0, b.length, 0); fs.closeSync(fd); head = b.slice(0, n).toString('utf8'); } catch { continue; }
+    const v = /shadps4[^\n]{0,80}?\bv?(\d+\.\d+\.\d+[\w.+-]*)/i.exec(head) || /Version[:\s]+v?(\d+\.\d+\.\d+[\w.+-]*)/i.exec(head);
+    const g = /\b(CUSA\d{5}|PPSA\d{5}|PCJS\d{5}|PLJM\d{5})\b/.exec(head);
+    best = { at: st.mtimeMs, version: v ? v[1] : '', serial: g ? g[1] : '', file: f, nightly: /nightly|pre-?release|\b[0-9a-f]{7,}\b/i.test((v && head.slice(v.index, v.index + 120)) || '') };
+  }
+  return best;
+}
+module.exports = { lastRun, launcherDir, settings, installed, available, addRelease, remove, folderName, iniValue, EXE };

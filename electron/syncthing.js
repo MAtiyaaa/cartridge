@@ -40,13 +40,35 @@ function find(home = HOME) {
   const fps = flatpakApps().filter((id) => FLATPAKS.includes(id));
   return { installed: !!(file || fps.length || onPath('syncthing')), flatpak: fps[0] || null, program: onPath('syncthing'), config: file || null };
 }
+// 0.9.24 (owner: "Syncthing refused the key in its settings file"): more than one settings file can be on a
+// device (an old ~/.config one beside the ~/.local/state one Syncthing 1.27+ uses, a Flatpak's), and the first
+// found wasn't always the running one. Each file's address and key, and a key you pasted, are tried until
+// Syncthing accepts one; that one is used from then on.
+let pasted = '', picked = null;
+const setLocalKey = (k) => { k = String(k || '').trim(); if (k !== pasted) { pasted = k; picked = null; } };
+async function pick(home = HOME, fetchImpl = fetch) {
+  if (picked && fs.existsSync(picked.file)) return picked;
+  const tries = [];
+  for (const file of configFiles(home).filter((f) => fs.existsSync(f))) {
+    let cfg; try { cfg = parseConfig(fs.readFileSync(file, 'utf8')); } catch { continue; }
+    const base = `${cfg.gui.tls ? 'https' : 'http'}://${cfg.gui.address.replace(/^0\.0\.0\.0/, '127.0.0.1')}`;
+    for (const key of [cfg.gui.apikey, pasted].filter(Boolean)) tries.push({ file, cfg, base, key });
+  }
+  let refused = false;
+  for (const t of tries) {
+    try { const r = await fetchImpl(t.base + '/rest/system/ping', { headers: { 'X-API-Key': t.key }, signal: AbortSignal.timeout(2500) }); if (r.ok) return (picked = t); if (r.status === 401 || r.status === 403) refused = true; } catch {}
+  }
+  return tries[0] ? { ...tries[0], refused } : null;
+}
 // what Cartridge can say about it now; never throws (the page shows what's missing instead)
 async function status({ fetchImpl = fetch, home = HOME } = {}) {
   const f = find(home);
   if (!f.config) return { ...f, running: false, why: f.installed ? 'Syncthing is installed but hasn’t been started yet (its settings file isn’t there).' : 'Syncthing isn’t installed.' };
-  let cfg; try { cfg = parseConfig(fs.readFileSync(f.config, 'utf8')); } catch (e) { return { ...f, running: false, why: `Syncthing’s settings couldn’t be read: ${e.message}` }; }
-  const base = `${cfg.gui.tls ? 'https' : 'http'}://${cfg.gui.address.replace(/^0\.0\.0\.0/, '127.0.0.1')}`;
-  const H = { 'X-API-Key': cfg.gui.apikey };
+  const pk = await pick(home, fetchImpl);
+  if (!pk) return { ...f, running: false, why: 'Syncthing’s settings couldn’t be read.' };
+  const cfg = pk.cfg, base = pk.base;
+  f.config = pk.file;
+  const H = { 'X-API-Key': pk.key };
   const get = async (p) => { const r = await fetchImpl(base + p, { headers: H, signal: AbortSignal.timeout(4000) }); if (!r.ok) throw new Error(`Syncthing answered ${r.status}`); return r.json(); };
   const folders = cfg.folders.map((x) => ({ ...x, saves: saveHint(x.path) }));
   try {
@@ -59,7 +81,7 @@ async function status({ fetchImpl = fetch, home = HOME } = {}) {
     folders.sort((a, b) => !!b.saves - !!a.saves); // saves first: that's what the Sync tab is for
     return { ...f, running: true, address: base, me: me.slice(0, 7), uptime: sys.uptime || 0, folders, devices };
   } catch (e) {
-    return { ...f, running: false, folders, devices: cfg.devices.map((d) => ({ name: d.name || d.id.slice(0, 7), online: false })), why: /401|403/.test(e.message) ? 'Syncthing refused the key in its settings file.' : 'Syncthing isn’t running right now.' };
+    return { ...f, running: false, folders, devices: cfg.devices.map((d) => ({ name: d.name || d.id.slice(0, 7), online: false })), why: /401|403/.test(e.message) ? 'Syncthing refused the key in its settings files. Paste its API key (Syncthing → Actions → Settings → General) to use it.' : 'Syncthing isn’t running right now.', needsKey: /401|403/.test(e.message) };
   }
 }
 // what's inside one synced folder, newest first (0.9.21, owner: a Sync tab that shows saves, view only).
@@ -70,11 +92,7 @@ function flatten(tree, base = '', out = []) {
   return out;
 }
 async function browse(folder, { fetchImpl = fetch, home = HOME, limit = 40 } = {}) {
-  const f = find(home);
-  if (!f.config) throw new Error('Syncthing isn’t set up on this device.');
-  const cfg = parseConfig(fs.readFileSync(f.config, 'utf8'));
-  const base = `${cfg.gui.tls ? 'https' : 'http'}://${cfg.gui.address.replace(/^0\.0\.0\.0/, '127.0.0.1')}`;
-  const H = { 'X-API-Key': cfg.gui.apikey };
+  const l = await localApi(home, fetchImpl), base = l.base, H = { 'X-API-Key': l.key };
   const get = async (p) => { const r = await fetchImpl(base + p, { headers: H, signal: AbortSignal.timeout(6000) }); if (!r.ok) throw new Error(`Syncthing answered ${r.status}`); return r.json(); };
   const files = flatten(await get(`/rest/db/browse?folder=${encodeURIComponent(folder)}&levels=6`)).filter((x) => !/(^|\/)\.st(folder|ignore|versions)/.test(x.path));
   let last = null; try { const st = await get('/rest/stats/folder'); last = st?.[folder]?.lastFile || null; } catch {}
@@ -85,11 +103,10 @@ async function browse(folder, { fetchImpl = fetch, home = HOME, limit = 40 } = {
 // ---- 0.9.23 (owner: a proper Syncthing integration, a main server, which games have saves and textures synced)
 // Still read only for files: Cartridge asks Syncthing's REST API and never opens, copies or changes a synced
 // file. The one thing it asks Syncthing to do is rescan a folder (POST rest/db/scan), as Syncthing's own button does.
-function localApi(home = HOME) {
-  const f = find(home);
-  if (!f.config) throw new Error('Syncthing isn’t set up on this device.');
-  const cfg = parseConfig(fs.readFileSync(f.config, 'utf8'));
-  return { cfg, base: `${cfg.gui.tls ? 'https' : 'http'}://${cfg.gui.address.replace(/^0\.0\.0\.0/, '127.0.0.1')}`, key: cfg.gui.apikey };
+async function localApi(home = HOME, fetchImpl = fetch) {
+  const pk = await pick(home, fetchImpl);
+  if (!pk) throw new Error('Syncthing isn’t set up on this device.');
+  return { cfg: pk.cfg, base: pk.base, key: pk.key };
 }
 function api(base, key, fetchImpl = fetch, ms = 6000) {
   base = String(base || '').trim().replace(/\/+$/, '');
@@ -102,7 +119,7 @@ function api(base, key, fetchImpl = fetch, ms = 6000) {
     if (!r.ok) throw new Error(`Syncthing answered ${r.status}.`);
     return (r.headers.get('content-type') || '').includes('json') ? r.json() : r.text();
   };
-  return { base, get: (p) => call(p), post: (p) => call(p, { method: 'POST' }) };
+  return { base, get: (p) => call(p), post: (p, body) => call(p, body ? { method: 'POST', body: JSON.stringify(body), headers: { 'Content-Type': 'application/json' } } : { method: 'POST' }) };
 }
 // everything about one Syncthing (this device's, or the main server): who it is, its devices, its folders
 async function overview(a) {
@@ -124,7 +141,7 @@ async function overview(a) {
 const TEX_HINT = /textures?|graphicmods|hires|load\/|texture.?pack/i;
 const textureHint = (p) => (TEX_HINT.test(p) ? 'Textures' : null);
 async function local({ fetchImpl = fetch, home = HOME } = {}) {
-  const l = localApi(home);
+  const l = await localApi(home, fetchImpl);
   return overview(api(l.base, l.key, fetchImpl));
 }
 async function server({ address, apikey }, { fetchImpl = fetch } = {}) {
@@ -132,9 +149,30 @@ async function server({ address, apikey }, { fetchImpl = fetch } = {}) {
   return overview(api(address, apikey, fetchImpl, 8000));
 }
 async function rescan(folder, { fetchImpl = fetch, home = HOME } = {}) {
-  const l = localApi(home);
+  const l = await localApi(home, fetchImpl);
   await api(l.base, l.key, fetchImpl).post(`/rest/db/scan?folder=${encodeURIComponent(folder)}`);
   return true;
+}
+// 0.9.24 (owner: Syncthing in the welcome, pick the folder it syncs). Folders to offer: the emulation saves
+// folder when there is one (EmuDeck, ES-DE layout), and Syncthing's own default, ~/Sync.
+function suggest(home = HOME, extra = []) {
+  const out = [];
+  for (const d of [...extra, path.join(home, 'Emulation', 'saves')]) if (d && fs.existsSync(d) && !out.some((o) => o.path === d)) out.push({ path: d, label: 'Emulation saves', sub: 'Your emulators\u2019 saves, in your Emulation folder' });
+  out.push({ path: path.join(home, 'Sync'), label: 'Sync', sub: 'Syncthing\u2019s own default folder' });
+  return out;
+}
+// Shares one folder in this device's Syncthing (the only config change Cartridge makes, and only when asked).
+// A folder already shared at that path is left as it is.
+async function addFolder({ dir, label }, { fetchImpl = fetch, home = HOME } = {}) {
+  const l = await localApi(home, fetchImpl);
+  const a = api(l.base, l.key, fetchImpl);
+  const have = await a.get('/rest/config/folders');
+  const same = (have || []).find((f) => path.resolve(String(f.path || '').replace(/^~(?=\/)/, home)) === path.resolve(dir));
+  if (same) return { id: same.id, existed: true };
+  fs.mkdirSync(dir, { recursive: true });
+  const id = 'cartridge-' + Math.random().toString(36).slice(2, 7);
+  await a.post('/rest/config/folders', { id, label: label || path.basename(dir), path: dir, type: 'sendreceive' });
+  return { id, existed: false };
 }
 // Which games have saves or textures synced (smart search). Every synced folder's index is read from
 // Syncthing (rest/db/browse), and each file path is matched to games by serial or title ID (PS1/PS2/PSP,
@@ -173,7 +211,7 @@ function matchGames(games, folders) {
   return out;
 }
 async function gamesSynced(games, { fetchImpl = fetch, home = HOME, cap = 20000 } = {}) {
-  const l = localApi(home), a = api(l.base, l.key, fetchImpl, 15000);
+  const l = await localApi(home, fetchImpl), a = api(l.base, l.key, fetchImpl, 15000);
   const conf = await a.get('/rest/config/folders');
   const folders = [];
   let n = 0;
@@ -185,4 +223,4 @@ async function gamesSynced(games, { fetchImpl = fetch, home = HOME, cap = 20000 
   }
   return { games: matchGames(games, folders), folders: folders.length, files: n };
 }
-module.exports = { find, status, browse, flatten, parseConfig, configFiles, saveHint, textureHint, local, server, rescan, gamesSynced, matchGames, serialsIn, norm };
+module.exports = { suggest, addFolder, FLATPAKS, setLocalKey, pick, find, status, browse, flatten, parseConfig, configFiles, saveHint, textureHint, local, server, rescan, gamesSynced, matchGames, serialsIn, norm };

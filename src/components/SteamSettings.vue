@@ -4,6 +4,26 @@
     <template v-else>
       <div v-if="ov.steam.error" class="ss-warn glass"><Icon name="mdiAlertOutline" :size="20" />{{ ov.steam.error }}</div>
       <template v-else>
+        <div class="ss-pages"><Btn b="LB" /><div class="seg"><button v-for="pg in PAGES" :key="pg.v" data-focus :data-key="'ssp-' + pg.v" :class="{ on: page === pg.v }" @click="setPage(pg.v)">{{ pg.l }}</button></div><Btn b="RB" /></div>
+        <template v-if="page === 'cols'">
+          <p class="muted small" style="margin: 0">Cartridge reads the collections you already have in Steam and finds the ones made for a console. Rename them to Cartridge's names, or keep yours: either way new games go into the collection you already have, never a second one.</p>
+          <div v-if="!review" class="muted small"><Icon name="mdiSync" :size="16" class="spin" /> Reading your Steam collections…</div>
+          <div v-else-if="review.error" class="ss-warn glass"><Icon name="mdiAlertOutline" :size="20" />{{ review.error }}</div>
+          <template v-else>
+            <div v-if="!consoleCols.length" class="muted small">None of your Steam collections look like they're for a console in your library.</div>
+            <div v-for="c in consoleCols" :key="c.id" class="lrow" :class="{ on: c.pick === 'rename' }" data-focus tabindex="0" @click="flip(c)">
+              <span class="l-mid"><b>{{ c.name }}</b><span class="l-sub">{{ subOf(c) }}</span></span>
+              <span class="l-end"><span class="status">{{ c.action !== 'rename' ? (c.action === 'ok' ? 'Already Cartridge\'s name' : 'Kept') : c.pick === 'rename' ? 'Rename' : 'Keep mine' }}</span></span>
+            </div>
+            <div v-if="otherCols.length" class="muted small">Left as they are: {{ otherCols.map((c) => c.name).join(', ') }}.</div>
+            <div class="row wrap">
+              <button class="btn primary" data-focus :disabled="busyCols" @click="applyCols"><Icon name="mdiCheck" />{{ renameCount ? `Rename ${renameCount} in Steam` : 'Use These Collections' }}</button>
+            </div>
+            <div class="subh"><Icon name="mdiFolderOutline" :size="20" />New Games</div>
+            <Toggle :model-value="!!sc.consoleCollections" :disabled="!colsReady" label="Add downloaded games to their console's collection" :desc="colsReady ? 'Games Cartridge adds also go into the Steam collection for their console, the one you kept or Cartridge\'s name. Your Cartridge collections are never copied into Steam.' : 'Review your collections above first (Use These Collections), so Cartridge puts games into the ones you already have instead of making new ones next to them.'" @update:model-value="setConsoleCols" />
+          </template>
+        </template>
+        <template v-else>
         <div class="card-s glass">
           <div class="kv"><span>Steam account</span><span>{{ ov.steam.account }}<span v-if="ov.steam.accounts.length > 1" class="muted small"> · the one that signed in last ({{ ov.steam.accounts.length }} on this device)</span></span></div>
           <div class="kv"><span>Steam</span><span>{{ ov.steam.running ? 'Running' : 'Closed' }}{{ ov.steam.flatpak ? ' · Flatpak' : '' }}</span></div>
@@ -53,8 +73,9 @@
         <div class="subh"><Icon name="mdiTuneVariant" :size="20" />Options</div>
         <Toggle :model-value="sc.preview !== false" label="Show what changes first" desc="See every Target, Start in and Launch options before Steam is touched" @update:model-value="(v) => setC({ preview: v })" />
         <Toggle :model-value="!!sc.autoAdd" label="Add games after they download" desc="Queues each finished download for Steam, using that console's last collections" @update:model-value="(v) => setC({ autoAdd: v })" />
+        <!-- 0.9.24 (owner): off by default; on, the game page reads shadPS4's log for the version that started the game last -->
+        <Toggle :model-value="!!sc.shadProof" label="shadPS4: show which version ran a game" desc="Reads shadPS4's own log after a game runs and shows the version that actually started it on the game page" @update:model-value="(v) => setC({ shadProof: v })" />
         <Toggle :model-value="!!sc.autoRemove" label="Remove games from Steam when you delete them" desc="Only shortcuts Cartridge added" @update:model-value="(v) => setC({ autoRemove: v })" />
-        <Toggle :model-value="!!sc.consoleCollections" label="Console collections in Steam" desc="Games Cartridge adds also go into a Steam collection named after their console. Your Cartridge collections are never copied into Steam." @update:model-value="setConsoleCols" />
         <div class="row"><span class="lbl">Console in names</span><div class="seg"><button v-for="m in nameOpts" :key="m.v" data-focus :class="{ on: (sc.consoleInName || 'clash') === m.v }" @click="setC({ consoleInName: m.v })">{{ m.l }}</button></div></div>
         <p class="muted small" style="margin-top: -6px">"Only on clashes" adds the console, like "God of War (PS2)", when two games share a name.</p>
 
@@ -66,6 +87,7 @@
         </div>
         <p class="muted small">Steam's shortcuts file is backed up before every change ({{ ov.backups }} kept). Undo puts the one from before the last change back.</p>
         <p v-if="ov.last?.state === 'error'" class="muted small ss-err">Last change failed: {{ ov.last.error }}</p>
+        </template>
       </template>
     </template>
   </div>
@@ -78,8 +100,41 @@ import { steam, applyChanges, restartSteam } from '../steam.js';
 import Icon from './Icon.vue';
 import Toggle from './Toggle.vue';
 import PIcon from './PIcon.vue';
+import Btn from './Btn.vue';
 
 const ov = ref(null);
+// Pages (0.9.24, owner: a Collections tab in the Steam section); LB/RB through Settings' step()
+const PAGES = [{ v: 'games', l: 'Games' }, { v: 'cols', l: 'Collections' }];
+const page = ref('games');
+function setPage(v) { page.value = v; if (v === 'cols') loadReview(); }
+function step(d) { const i = PAGES.findIndex((p) => p.v === page.value); setPage(PAGES[(i + d + PAGES.length) % PAGES.length].v); }
+defineExpose({ step });
+// Collections review: each of the user's collections matched to a console (steamCollections.js)
+const review = ref(null), busyCols = ref(false);
+const consoleCols = computed(() => (review.value?.list || []).filter((c) => c.action !== 'other'));
+const otherCols = computed(() => (review.value?.list || []).filter((c) => c.action === 'other'));
+const renameCount = computed(() => consoleCols.value.filter((c) => c.pick === 'rename').length);
+const colsReady = computed(() => !!review.value?.integrated || !!sc.value.consoleCollections);
+async function loadReview() {
+  try { const r = await call('steam:colReview'); r.list.forEach((c) => { c.pick = c.action === 'rename' ? 'rename' : 'keep'; }); review.value = r; } catch (e) { review.value = { error: e.message }; }
+}
+const subOf = (c) => [`${c.count} game${c.count === 1 ? '' : 's'}`, c.action === 'rename' ? `${c.pick === 'rename' ? 'Becomes' : 'Cartridge would call it'} ${c.want}` : c.action === 'taken' ? `${c.want} is already a collection, so this one stays` : c.action === 'shared' ? `Another collection is also for ${c.want}` : 'For ' + c.want].join(' · ');
+function flip(c) { if (c.action === 'rename') c.pick = c.pick === 'rename' ? 'keep' : 'rename'; }
+async function applyCols() {
+  const list = consoleCols.value;
+  const renames = list.filter((c) => c.pick === 'rename').map((c) => ({ id: c.id, from: c.name, to: c.want, key: c.key }));
+  // a kept collection is the one new games go into (the bigger one when two are for one console)
+  const keep = list.filter((c) => c.pick !== 'rename' && c.action !== 'ok' && !list.some((o) => o.key === c.key && (o.pick === 'rename' || o.action === 'ok'))).sort((a, b) => b.count - a.count)
+    .filter((c, i, a) => a.findIndex((o) => o.key === c.key) === i).map((c) => ({ key: c.key, name: c.name }));
+  busyCols.value = true;
+  try {
+    const r = await call('steam:colApply', { renames, keep });
+    toast(!r.count ? 'Cartridge will use these collections' : r.live ? `${r.count} collection${r.count === 1 ? '' : 's'} renamed in Steam` : `${r.count} collection${r.count === 1 ? '' : 's'} will be renamed when Steam restarts`, 'ok', 4000, 'mdiSteam');
+  } catch (e) { toast(e.message, 'error'); }
+  busyCols.value = false;
+  store.config.steam = { ...sc.value, collectionsIntegrated: true };
+  loadReview();
+}
 const missingCols = ref([]);
 const sc = computed(() => store.config.steam || {});
 const HOW = { learned: 'From your shortcuts', yours: 'Set by you', emudeck: 'EmuDeck', appimage: 'AppImage', flatpak: 'Flatpak', native: 'Installed program', retrodeck: 'RetroDECK', windows: 'Windows build (Proton)' };
@@ -153,6 +208,8 @@ onMounted(() => { load(); loadLive(); });
 </script>
 <style scoped>
 .ss { display: flex; flex-direction: column; gap: 16px; }
+.ss-pages { display: flex; align-items: center; gap: var(--s-2); }
+.ss-pages > * { flex: none; }
 .ss-warn { display: flex; align-items: center; gap: 12px; padding: 16px 18px; color: #ffd978; }
 .ss-queue { display: flex; align-items: center; gap: 14px; padding: 14px 18px; border-radius: var(--r-md); background: rgba(var(--primary-rgb), 0.2); border: 1px solid rgba(var(--primary-l-rgb), 0.5); }
 .ss-q-t { display: flex; flex-direction: column; flex: 1; min-width: 0; }

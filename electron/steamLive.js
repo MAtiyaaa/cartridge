@@ -103,6 +103,18 @@ module.exports = function steamLive({ log = () => {} } = {}) {
       return true;
     })()`);
   }
+  // Rename one of the user's collections (0.9.24). Steam's collection objects keep their name in
+  // m_strName (SetName where a build has it); false when it didn't stick, so the caller uses the helper.
+  async function renameCollection(id, name) {
+    return run(`(async () => {
+      const cs = window.collectionStore;
+      const c = cs && (cs.GetCollection?.(${J(id)}) || cs.userCollections.find((x) => x.id === ${J(id)}));
+      if (!c) return false;
+      if (typeof c.SetName === 'function') c.SetName(${J(name)}); else c.m_strName = ${J(name)};
+      await c.Save();
+      return c.displayName === ${J(name)};
+    })()`);
+  }
   // Steam can fill in "%command%" on a new shortcut after we set empty Launch options, and with the
   // arguments in Target that stops the game starting. Read back what Steam kept and set it again
   // until it sticks. Also used to repair shortcuts that already have it.
@@ -136,5 +148,5 @@ module.exports = function steamLive({ log = () => {} } = {}) {
   const restart = () => run('SteamClient.User.StartRestart(false), true', 5000);
   // start a game the way the library's Play button does (0.9.21): 64-bit game id of a shortcut
   async function runGame(gameId) { return run(`SteamClient.Apps.RunGame(${JSON.stringify(String(gameId))}, '', -1, 100); true`); }
-  return { runGame, available, addShortcut, removeShortcut, updateShortcut, settle, setArtwork, restart, flagOn, FLAG, addToCollections };
+  return { runGame, available, addShortcut, removeShortcut, updateShortcut, settle, setArtwork, restart, flagOn, FLAG, addToCollections, renameCollection };
 };

@@ -21,12 +21,21 @@ import Icon from './Icon.vue';
 import Btn from './Btn.vue';
 
 // Shown once after Setup: the few controls worth knowing. Touch and mouse work everywhere too.
-const STEPS = [
+// 0.9.24: after the welcome it starts with Start, the page it opens on
+const START = [
+  { keys: [], title: 'This Is Start', text: 'Your own page of widgets: what you were playing, new games, trophies, a clock and more. Cartridge opens here.' },
+  { keys: ['A'], title: 'Make It Yours', text: 'Hold A on any widget to arrange Start: move widgets, resize them, add new ones, pictures and your own HTML.' },
+  { keys: ['LB', 'RB'], title: 'Step Through', text: 'On a widget with several games, like Recently Played, the bumpers move between them.' },
+  { keys: ['RS'], title: 'Pages', text: 'Add more pages in Arrange. Flick the right stick, or swipe, to move between them.' },
+];
+const BASE = [
   { keys: ['LT', 'RT'], title: 'Tabs', text: 'The triggers move between Home, Library, Consoles and the rest of the top bar. The bumpers switch sections inside a page.' },
   { keys: ['A', 'X', 'Y'], title: 'Games', text: 'A opens a game. X downloads it, or does the page’s main thing. Y searches, or opens More on a game.' },
   { keys: ['START', 'SELECT'], title: 'Anywhere', text: 'Start opens the Quick Menu. Select jumps to your downloads.' },
   { keys: [], title: 'Into Steam', text: 'Downloaded games go into Steam from their page (More, Add to Steam) or all at once from Settings → Steam. They start with the emulator Setup picked for their console.' },
 ];
+const props = defineProps({ start: Boolean });
+const STEPS = props.start ? [...START, ...BASE] : BASE;
 const i = ref(0);
 const s = computed(() => STEPS[i.value]);
 const el = ref(null);

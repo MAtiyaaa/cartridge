@@ -10,4 +10,6 @@ defineEmits(['update:modelValue']);
 </script>
 <style>
 .toggle.compact { width: auto; padding: 6px 8px; background: none; flex: none; }
+.toggle[disabled] { cursor: default; }
+.toggle[disabled] > div > div:first-child, .toggle[disabled] .sw { opacity: 0.45; }
 </style>

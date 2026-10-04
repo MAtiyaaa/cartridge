@@ -8,6 +8,11 @@
   --sel: #3f4148; /* chosen but not focused: a lighter grey fill, never a stripe (0.9.2) */
   --shadow-card: 0 8px 20px rgba(0, 0, 0, 0.45);
   --shadow-pop: 0 24px 64px rgba(0, 0, 0, 0.6);
+  /* weight (0.9.24, owner: cards felt like they floated over the background): a tight contact shadow right
+     under the card plus a soft one further down, and a faint light along the top edge. Static, so it costs
+     nothing while moving. */
+  --weight: 0 1px 1px rgba(0, 0, 0, 0.35), 0 4px 10px -2px rgba(0, 0, 0, 0.35), 0 22px 44px -26px rgba(0, 0, 0, 0.8);
+  --weight-edge: inset 0 1px 0 rgba(255, 255, 255, 0.07), inset 0 0 0 1px rgba(255, 255, 255, 0.05);
   --d-fast: 120ms; --d-med: 200ms; --d-slow: 320ms;
   --display-stretch: 94%; /* Archivo a touch narrow: heavy without shouting */
   --bg: #0c0d10;
@@ -56,7 +61,7 @@ body {
   font-family: var(--body); font-size: var(--t-md); font-feature-settings: 'cv11', 'ss01'; /* Inter: single-storey a, open digits */
   overflow: hidden; user-select: none; -webkit-font-smoothing: antialiased;
 }
-body.pad-mode, body.touch-mode, body.touch-mode * { cursor: none !important; }
+body.pad-mode, body.pad-mode *, body.touch-mode, body.touch-mode * { cursor: none !important; } /* no cursor over buttons either (0.9.24) */
 /* swipes are handled in nav.js, so the browser must not also pan (it fought the custom scroll) */
 /* touch scrolls natively like a phone: pages up and down, shelves sideways, no pinch zoom */
 html, body { touch-action: pan-x pan-y; }
@@ -85,7 +90,8 @@ img { -webkit-user-drag: none; }
 .bg-stage .grain { position: absolute; inset: 0; opacity: 0.06; mix-blend-mode: overlay; background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>"); }
 
 /* ---------- shell ---------- */
-.shell { position: relative; z-index: 1; display: grid; grid-template-rows: 68px 1fr 46px; height: 100%; }
+.shell { position: relative; z-index: 1; display: grid; grid-template-rows: 68px 1fr 46px; grid-template-areas: 'bar' 'main' 'hints'; height: 100%; }
+.shell > .statusbar { grid-area: bar; } .shell > .main { grid-area: main; } .shell > .hintbar { grid-area: hints; }
 .statusbar { position: relative; display: flex; align-items: center; gap: 20px; padding: 0 32px; }
 /* a soft material behind the bar instead of a hard strip: art and backgrounds run under it (0.9.17) */
 .statusbar::before { content: ''; position: absolute; inset: 0 0 -24px; z-index: -1; pointer-events: none; background: linear-gradient(180deg, rgba(6, 7, 10, 0.72) 0%, rgba(6, 7, 10, 0.38) 62%, rgba(6, 7, 10, 0) 100%); }
@@ -114,6 +120,39 @@ img { -webkit-user-drag: none; }
 .tab.active .tab-badge { background: var(--on-focus); color: var(--focus); }
 .tab-dot { margin-left: 6px; width: 7px; height: 7px; border-radius: 50%; background: #ffb547; }
 @media (prefers-reduced-motion: reduce) { .tab-ink { transition: opacity 160ms ease; } }
+/* ---- the top bar, your way (0.9.24, owner: top, bottom or left; aligned or centred; plain, a floating glass pill,
+   or circles). Body classes from ui.barPos / barAlign / barStyle (App.vue). Pages arrive from the bar's side. */
+body.bar-bottom .shell { grid-template-rows: 1fr 68px 40px; grid-template-areas: 'main' 'bar' 'hints'; }
+body.bar-bottom .statusbar::before { inset: -24px 0 0; background: linear-gradient(0deg, rgba(6, 7, 10, 0.72) 0%, rgba(6, 7, 10, 0.38) 62%, rgba(6, 7, 10, 0) 100%); }
+body.bar-left .shell { grid-template-rows: 1fr 46px; grid-template-columns: 92px 1fr; grid-template-areas: 'bar main' 'bar hints'; }
+body.bar-left .statusbar { flex-direction: column; padding: 22px 0; gap: 14px; }
+body.bar-left .statusbar::before { inset: 0 -24px 0 0; background: linear-gradient(90deg, rgba(6, 7, 10, 0.78) 0%, rgba(6, 7, 10, 0.4) 70%, rgba(6, 7, 10, 0) 100%); }
+body.bar-left .tabs { flex-direction: column; margin: 0; height: auto; gap: 6px; }
+body.bar-left .tab-label, body.bar-left .brand-word, body.bar-left .statusbar .sys .item:not(.net), body.bar-left .tab-trig { display: none; }
+body.bar-left .tab { width: 52px; height: 52px; padding: 0; justify-content: center; border-radius: 16px; }
+body.bar-left .tab-ink { top: 0; left: calc(50% - 26px); width: 52px !important; height: 52px; border-radius: 16px; transition: transform 380ms cubic-bezier(0.32, 0.72, 0, 1), opacity 160ms ease; }
+body.bar-left .statusbar .sys { flex-direction: column; gap: 10px; }
+body.bar-left .statusbar .clock { font-size: var(--t-xs); text-align: center; line-height: 1.2; max-width: 80px; }
+body.bar-left .statusbar .sys::before { width: 24px; height: 1px; margin: 0; }
+body.bar-left .top-search { width: 52px !important; justify-content: center; padding: 0; }
+body.bar-left .top-search input, body.bar-left .top-search .pb { display: none; }
+body.bar-center:not(.bar-left) .tabs { position: absolute; left: 50%; transform: translateX(-50%); margin: 0; }
+body.bar-center.bar-left .tabs { margin: auto 0; }
+/* floating: the tabs sit on their own glass pill, lifted off the page */
+body.bar-pill .tabs { height: 54px; padding: 0 6px; border-radius: 999px; background: rgba(18, 20, 26, 0.55); backdrop-filter: blur(18px) saturate(1.3); box-shadow: var(--weight-edge), var(--weight); }
+body.bar-pill.bar-left .tabs { height: auto; padding: 6px; border-radius: 24px; }
+body.light-fx.bar-pill .tabs { backdrop-filter: none; background: rgba(18, 20, 26, 0.88); }
+/* circles: each tab a round icon, the current one a white circle (its name shows on Start's tab only as a tooltip) */
+body.bar-circle .tab { width: 44px; height: 44px; padding: 0; justify-content: center; border-radius: 50%; }
+body.bar-circle .tab-label, body.bar-circle .tab-badge { display: none; }
+body.bar-circle:not(.bar-left) .tab-ink { width: 44px !important; height: 44px; top: calc(50% - 22px); border-radius: 50%; }
+body.bar-circle.bar-left .tab { width: 52px; height: 52px; }
+body.bar-circle.bar-left .tab-ink { border-radius: 50%; }
+/* pages arrive from where the bar sends them: up or down when it's on the left */
+@keyframes viewFromB { from { opacity: 0; transform: translateY(20px); } }
+@keyframes viewFromT { from { opacity: 0; transform: translateY(-20px); } }
+body.bar-left main.main[data-dir='r'] > * { animation-name: viewFromB; }
+body.bar-left main.main[data-dir='l'] > * { animation-name: viewFromT; }
 .statusbar .sys { display: flex; align-items: center; gap: 16px; color: rgba(255, 255, 255, 0.78); font-size: var(--t-sm); font-weight: 600; font-variant-numeric: tabular-nums; }
 /* status reads as one group: a hairline sets it apart from search */
 .statusbar .sys::before { content: ''; width: 1px; height: 20px; background: rgba(255, 255, 255, 0.16); margin-right: 2px; }
@@ -203,7 +242,7 @@ body.surface-glass .glass { background: var(--glass-bg); border: 1px solid var(-
 
 /* ---------- box art cards ---------- */
 .card { position: relative; display: flex; flex-direction: column; gap: 9px; width: var(--card-w); flex: none; border-radius: 8px; }
-.card .art { position: relative; aspect-ratio: 2 / 3; border-radius: var(--card-r); overflow: hidden; background: var(--s2); box-shadow: var(--shadow-card); transition: transform var(--d-fast) var(--ease); will-change: transform; } /* the ring shows at once, only the lift animates */
+.card .art { position: relative; aspect-ratio: 2 / 3; border-radius: var(--card-r); overflow: hidden; background: var(--s2); box-shadow: var(--weight-edge), var(--weight); transition: transform var(--d-fast) var(--ease); will-change: transform; } /* the ring shows at once, only the lift animates */
 .card .art img { width: 100%; height: 100%; object-fit: cover; object-position: center top; display: block; }
 .card .art::after { content: ''; position: absolute; inset: 0; border-radius: inherit; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.07); pointer-events: none; }
 .card .ph { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: flex-end; padding: 14px; gap: 6px; font-family: var(--display); font-weight: 700; font-size: var(--t-md); line-height: 1.2; background: var(--s2); }
@@ -246,6 +285,7 @@ body.surface-glass .glass { background: var(--glass-bg); border: 1px solid var(-
 /* the picture keeps clear of the rounded corners even when the card is focused (owner, 0.9.21: they were cut off) */
 .systile .glyph { position: absolute; right: 16px; top: 16px; height: calc(100% - 32px); aspect-ratio: 1; opacity: 0.55; filter: saturate(0.6) brightness(1.1) drop-shadow(0 10px 18px rgba(0, 0, 0, 0.45));
   -webkit-mask-image: linear-gradient(90deg, transparent, #000 45%); mask-image: linear-gradient(90deg, transparent, #000 45%); transition: opacity 0.3s, transform 0.4s var(--ease); }
+.systile .glyph.wide { aspect-ratio: 1.5; }
 .systile .glyph > * { width: 100% !important; height: 100% !important; object-fit: contain; } /* PIcon sets a fixed inline size */
 .systile .ico { width: 44px; height: 44px; }
 .systile .ico img { width: 100%; height: 100%; object-fit: contain; }
@@ -332,6 +372,13 @@ body.custom-bars .bar i { background: var(--bar) !important; }
 /* light effects (software rendering): cheaper shadows and no full-screen blending */
 body.light-fx .card .art { box-shadow: 0 4px 10px rgba(0, 0, 0, 0.4); }
 body.light-fx .glass, body.light-fx .dialog, body.light-fx .toast { box-shadow: none; }
+/* every card sits on the page (0.9.24): game covers, console cards, list rows and collection tiles */
+.systile, .lrow, .coll .art, .gtile, .ra-home { box-shadow: var(--weight-edge), var(--weight); }
+body.light-fx .systile, body.light-fx .lrow, body.light-fx .coll .art { box-shadow: var(--weight-edge), 0 2px 6px rgba(0, 0, 0, 0.35); }
+/* weaker devices (0.9.24, owner: animations choppy): without the GPU, pages and tiles only fade in, and
+   nothing moves or scales while arriving; a repainted transform costs a frame there */
+body.light-fx .view > *, body.light-fx .home > .hero, body.light-fx .home .shelves > .shelf-wrap { animation: viewIn 160ms ease-out backwards; }
+body.light-fx main.main[data-dir] > * { animation-name: viewIn; animation-duration: 160ms; }
 body.light-fx .bg-stage .grain { display: none; }
 body.light-fx .hero-title, body.light-fx .g-title { text-shadow: none; }
 body.light-fx .card .art, body.light-fx .systile { will-change: auto; }

@@ -11,7 +11,9 @@ export function steamProgressLabel(p) {
   return p.step === 'art' ? `Steam artwork ${p.done + 1}/${p.total}` : 'Waiting for Steam…';
 }
 window.cart.on('steam-auto', (e) => {
-  toast(e.action === 'add' ? `${e.name || 'Game'} is waiting to be added to Steam. Apply from Settings → Steam.` : 'Removed game is waiting to come off Steam. Apply from Settings → Steam.', 'info', 4500, 'mdiSteam');
+  if (e.action === 'applied') return toast('Added to Steam', 'ok', 3000, 'mdiSteam');
+  // with Steam reachable live it's applied in a moment by itself (0.9.24); otherwise Steam has to close first
+  toast(e.action === 'add' ? `${e.name || 'Game'} goes into Steam: at once when Steam can be changed live, else Apply in Settings → Steam.` : 'Removed game is waiting to come off Steam. Apply from Settings → Steam.', 'info', 4500, 'mdiSteam');
 });
 // An emulator list with the forks behind one "Forks" entry that opens their own page (0.9.15):
 // returns the picked id, or null. first: entries above the list (for example "Same as its console").

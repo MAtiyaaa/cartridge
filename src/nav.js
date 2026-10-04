@@ -121,6 +121,12 @@ function move(dir) {
       if (score < bestScore) { bestScore = score; best = el; }
     }
   }
+  // In a pop-up's long list, right with nothing to the right jumps to the button at its bottom right (Apply,
+  // Done...), so a long list never has to be walked to its end (0.9.24, owner). Pages aren't pop-ups.
+  if (!best && dir === 'right' && layer && layer.el !== document.body && cur.closest('[data-scroll]')) {
+    const out = focusables(scope).filter((el) => !el.closest('[data-scroll]'));
+    best = out[out.length - 1] || null;
+  }
   if (best) {
     sfx.move();
     rumble();
@@ -337,6 +343,7 @@ export function rumble(strong = false) {
 let lastZone = null;
 document.addEventListener('focusin', (e) => { lastZone = e.target.closest?.('[data-zone]') || null; }, true);
 const rsHeld = {};
+let inBackground = false, gsKnown = false; // declared before the poll loop starts (it reads them at once)
 function poll() {
   const now = performance.now();
   const pads = navigator.getGamepads ? [...navigator.getGamepads()].filter(Boolean) : [];
@@ -376,15 +383,17 @@ function poll() {
     }
   }
   padLive.pads = pads;
-  if (document.hasFocus() && !inBackground) for (const key of ACTIONS) press(key, !!merged[key], now);
+  if (inFront()) for (const key of ACTIONS) press(key, !!merged[key], now);
   else for (const key of ACTIONS) if (state[key]) state[key].down = !!merged[key]; // a press held while away doesn't fire on return
 }
 // Every 8 ms while Cartridge is in front; when it isn't (a game is running, or you switched away)
 // only a few times a second, so it costs the system nothing in the background (A14)
-(function loop() { poll(); setTimeout(loop, document.hasFocus() && !inBackground ? 8 : 250); })();
+(function loop() { poll(); setTimeout(loop, inFront() ? 8 : 250); })();
 // Game Mode: Steam's menu is in front while Cartridge keeps its window focus (main.js watchGamescopeFocus)
-let inBackground = false;
-export function setBackground(v) { inBackground = !!v; }
+export function setBackground(v) { inBackground = !!v; gsKnown = true; }
+// In Game Mode gamescope says when Cartridge is in front, which is truer than window focus: after a game
+// the window can be in front without focus, and the pad went dead (0.9.24)
+function inFront() { return gsKnown ? !inBackground : document.hasFocus() && !inBackground; }
 
 export function ensureFocus(root) {
   if (!root) return;

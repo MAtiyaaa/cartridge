@@ -61,12 +61,17 @@
   <SteamEmu v-if="store.modal?.type === 'steam-emu'" :key="JSON.stringify(store.modal.props)" v-bind="store.modal.props" />
   <ArtPicker v-if="store.modal?.type === 'art'" :key="store.modal.props.query || ''" v-bind="store.modal.props" />
   <GameTimeline v-if="store.modal?.type === 'timeline'" v-bind="store.modal.props" />
-  <FirstTour v-if="store.modal?.type === 'tour'" />
+  <FirstTour v-if="store.modal?.type === 'tour'" v-bind="store.modal.props" />
   <ManualViewer v-if="store.modal?.type === 'manual'" v-bind="store.modal.props" />
   <PatchesSheet v-if="store.modal?.type === 'patches'" v-bind="store.modal.props" />
   <AddonsSheet v-if="store.modal?.type === 'addons'" :key="'addons' + store.modal.props.romId" v-bind="store.modal.props" />
   <GameAddons v-if="store.modal?.type === 'gameaddons'" :key="'ga' + store.modal.props.romId" v-bind="store.modal.props" />
   <ShadVersions v-if="store.modal?.type === 'shadversions'" v-bind="store.modal.props" />
+  <WhatsNew v-if="store.modal?.type === 'whatsnew'" v-bind="store.modal.props" />
+  <EmuPaths v-if="store.modal?.type === 'emupaths'" v-bind="store.modal.props" />
+  <AddonDetail v-if="store.modal?.type === 'addondetail'" v-bind="store.modal.props" />
+  <Licenses v-if="store.modal?.type === 'licenses'" />
+  <Installer v-if="store.modal?.type === 'installer'" />
   <GameSettings v-if="store.modal?.type === 'gamesettings'" :key="'gs' + store.modal.props.romId" v-bind="store.modal.props" />
   <IdleScreen v-if="store.config?.configured" />
 
@@ -114,6 +119,11 @@ const ManualViewer = defineAsyncComponent(() => import('./components/ManualViewe
 import PatchesSheet from './components/PatchesSheet.vue';
 import AddonsSheet from './components/AddonsSheet.vue';
 import GameAddons from './components/GameAddons.vue';
+import WhatsNew from './components/WhatsNew.vue';
+import EmuPaths from './components/EmuPaths.vue';
+import AddonDetail from './components/AddonDetail.vue';
+import Licenses from './components/Licenses.vue';
+import Installer from './components/Installer.vue';
 import ShadVersions from './components/ShadVersions.vue';
 import GameSettings from './components/GameSettings.vue';
 import IdleScreen from './components/IdleScreen.vue';
@@ -154,7 +164,8 @@ function onSearch(e) {
 }
 async function searchOsk() {
   if (!builtinKb()) return;
-  const v = await askText({ title: 'Search games', value: store.lastSearch, placeholder: 'Game name', mode: 'game' });
+  const r = searchEl.value?.getBoundingClientRect(); // the keyboard grows out of the search box (0.9.24)
+  const v = await askText({ title: 'Search games', value: store.lastSearch, placeholder: 'Game name', mode: 'game', from: r ? { x: r.left + r.width / 2, y: r.top + r.height / 2 } : null });
   if (v == null) return;
   store.lastSearch = v;
   if (v.trim() && store.route.name !== 'search') go('search');
@@ -179,9 +190,18 @@ const padMode = computed(() => input.mode === 'pad');
 function placeInk() {
   const nav = tabsEl.value, el = nav?.querySelector(`[data-tab="${activeTab.value}"]`);
   if (!el) { ink.value = { opacity: 0 }; return; }
+  // the bar on the left (0.9.24): the pill moves down the column instead of along the row
+  if (document.body.classList.contains('bar-left')) { ink.value = { transform: `translateY(${el.offsetTop}px)`, opacity: 1 }; return; }
   const x = el.offsetLeft, w = el.offsetWidth;
   ink.value = { width: w + 'px', transform: `translateX(${x}px)`, opacity: 1 };
 }
+// where the bar sits and how it looks (Look & Feel → Text and Cards → Top Bar)
+watch(() => [store.config?.ui?.barPos, store.config?.ui?.barAlign, store.config?.ui?.barStyle], ([pos, align, style]) => {
+  const b = document.body.classList;
+  b.toggle('bar-bottom', pos === 'bottom'); b.toggle('bar-left', pos === 'left');
+  b.toggle('bar-center', align === 'center'); b.toggle('bar-pill', style === 'pill'); b.toggle('bar-circle', style === 'circle');
+  nextTick(placeInkSoon);
+}, { immediate: true });
 // the name opens out over 300 ms: a ResizeObserver on the tabs keeps the pill hugging it every frame
 function placeInkSoon() { placeInk(); for (const t of [120, 320]) setTimeout(placeInk, t); }
 const inkWatch = typeof ResizeObserver === 'function' ? new ResizeObserver(() => placeInk()) : null;
@@ -242,7 +262,9 @@ onMounted(async () => {
   setRumble(store.config.ui.rumble);
   applyTheme(store.config.ui);
   detectPad();
-  setPointerPref(store.config.ui.pointer);
+  // Game Mode (0.9.24, owner: touch still showed a cursor): the screen's touches arrive as a mouse there and
+  // nobody uses a mouse in Game Mode, so Auto means Touch: no cursor, and drags scroll
+  setPointerPref(store.config.ui.pointer || (store.info?.gamescope ? 'touch' : 'auto'));
   await loadLibrary();
   loadArt();
   // 0.9.19: Start joins the top bar once for people who had picked their own tabs
@@ -258,6 +280,11 @@ onMounted(async () => {
   // another app in front in Game Mode (0.9.21, owner: still laggy in the background): gamescope never
   // hides or blurs the window, so stop the pad, the animated background and every CSS animation here
   window.cart.on('background', (b) => { setBackground(b?.away); store.away = !!b?.away; document.body.classList.toggle('away', !!b?.away); });
+  window.cart.on('addon-progress', (m) => {
+    if (!m?.key) return;
+    store.addonJobs[m.key] = { ...(store.addonJobs[m.key] || {}), ...m, at: Date.now() };
+    if (m.state === 'done' || m.state === 'error') setTimeout(() => { if (store.addonJobs[m.key]?.state === m.state) delete store.addonJobs[m.key]; }, 12000);
+  });
   window.cart.on('toast', (t) => t?.text && toast(t.text, t.kind || 'info', 4500, t.icon));
   setTimeout(steamReport, 2500);
   // 0.9: a new install goes through emulator Setup once, after connecting to RomM (the welcome does it since 0.9.15)
@@ -283,8 +310,8 @@ onMounted(async () => {
     x: () => viewHandler('x'),
     rsleft: () => { viewHandler('rsleft'); }, rsright: () => { viewHandler('rsright'); }, // right stick: Start's pages
     // Triggers always move between the top tabs; bumpers belong to the page (consoles, collections)
-    lt: () => cycleTab(-1),
-    rt: () => cycleTab(1),
+    lt: () => (viewHandler('lt') !== false ? undefined : cycleTab(-1)), // a page can keep LT/RT (0.9.24: Start's page overview)
+    rt: () => (viewHandler('rt') !== false ? undefined : cycleTab(1)),
     select: () => (viewHandler('select') !== false ? undefined : tab('downloads')),
     start: () => { if (viewHandler('start') !== false) return; store.quickMenu = !store.quickMenu; },
   });

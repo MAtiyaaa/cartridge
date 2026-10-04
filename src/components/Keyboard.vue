@@ -1,6 +1,6 @@
 <template>
   <div class="scrim" ref="el">
-    <div class="dialog kb" :class="{ sleek: store.welcoming }" data-grid>
+    <div class="dialog kb" ref="dlg" :class="{ sleek: store.welcoming, grow: !!from }" :style="growStyle" data-grid>
       <h2>{{ title }}</h2>
       <div class="kb-display" :class="{ empty: !text }">
         <template v-if="text"><span>{{ shown.slice(0, pos) }}</span><i class="caret" /><span>{{ shown.slice(pos) }}</span></template><template v-else><i class="caret" /><span class="ph">{{ placeholder }}</span></template>
@@ -30,7 +30,7 @@
       </div>
       <div class="kb-hints">
         <span class="hint"><Btn b="LB+RB" />Move</span><span class="hint"><Btn b="X" />Delete</span><span class="hint"><Btn b="Y" />Space</span>
-        <span class="hint"><Btn b="LT" />Shift</span><span class="hint"><Btn b="RT" />Symbols</span><span class="hint"><Btn b="START" />Done</span><span class="hint"><Btn b="B" />Cancel</span>
+        <span class="hint"><Btn b="LT" />Shift, twice: Caps</span><span class="hint"><Btn b="RT" />Symbols</span><span class="hint"><Btn b="START" />Done</span><span class="hint"><Btn b="B" />Cancel</span>
       </div>
     </div>
   </div>
@@ -50,8 +50,9 @@ const props = defineProps({
   placeholder: { type: String, default: '' },
   password: Boolean,
   mode: { type: String, default: 'text' }, // text | url | game (suggests your game names)
+  from: Object, // { x, y }: where it was opened from (the search box): it grows out of there (0.9.24)
 });
-const el = ref(null);
+const el = ref(null), dlg = ref(null), growStyle = ref(null);
 const text = ref(props.value || '');
 const shift = ref(false);
 const sym = ref(false);
@@ -128,25 +129,36 @@ function onKey(ev) {
   if (ev.key === ' ') { ev.preventDefault(); ev.stopImmediatePropagation(); insert(' '); }
 }
 
-let layer;
+let layer, lastLt = 0;
 onMounted(() => {
   window.addEventListener('keydown', onKey, true);
   layer = pushLayer(el.value, {
     back: () => closeModal(null),
     x: del,
     y: () => type(' '),
-    lt: () => (shift.value = !shift.value),
+    // LT is Shift; two quick presses are Caps (0.9.24, owner), as on a phone
+    lt: () => { const now = performance.now(); if (now - lastLt < 380) { caps.value = !caps.value; shift.value = false; lastLt = 0; return; } lastLt = now; shift.value = !shift.value; },
     rt: () => (sym.value = !sym.value),
     start: done,
     lb: () => move(-1), rb: () => move(1), select: () => {},
   });
   focusFirst(el.value, '[data-autofocus]');
+  if (props.from && dlg.value) { const r = dlg.value.getBoundingClientRect(); growStyle.value = { '--gx': `${props.from.x - (r.left + r.width / 2)}px`, '--gy': `${props.from.y - (r.top + r.height / 2)}px` }; }
 });
 onBeforeUnmount(() => { window.removeEventListener('keydown', onKey, true); layer.pop(); });
 </script>
 
 <style scoped>
 .kb { width: min(860px, 94vw); }
+/* opened from the search box: it unfolds from there, quick and soft, then the keys settle row by row */
+.kb.grow { animation: kb-grow 340ms var(--ease-out, cubic-bezier(0.23, 1, 0.32, 1)) both; }
+@keyframes kb-grow { from { opacity: 0; transform: translate(var(--gx, 0), var(--gy, 0)) scale(0.18); border-radius: 999px; } 60% { opacity: 1; } }
+.kb.grow .kb-row { animation: kb-row 380ms var(--ease-out, ease-out) both; }
+.kb.grow .kb-row:nth-child(2) { animation-delay: 30ms; } .kb.grow .kb-row:nth-child(3) { animation-delay: 60ms; } .kb.grow .kb-row:nth-child(4) { animation-delay: 90ms; } .kb.grow .kb-row:nth-child(5) { animation-delay: 120ms; }
+@keyframes kb-row { from { opacity: 0; transform: translateY(8px); } }
+:global(body.motion-reduce .kb.grow), :global(body.motion-reduce .kb.grow .kb-row), :global(body.light-fx .kb.grow .kb-row) { animation: none; }
+:global(body.light-fx .kb.grow) { animation: kb-fade 160ms ease-out both; }
+@keyframes kb-fade { from { opacity: 0; } }
 .kb-display { position: relative; display: flex; align-items: center; min-height: 56px; padding: 0 16px; border-radius: var(--r-md); background: var(--bg); border: 1px solid var(--primary); font-size: var(--t-lg); overflow: hidden; white-space: nowrap; }
 .kb-display .ph { color: var(--dim); }
 .caret { display: inline-block; width: 2px; height: 26px; background: var(--primary-l); margin-left: 2px; animation: blink 1s steps(1) infinite; }
