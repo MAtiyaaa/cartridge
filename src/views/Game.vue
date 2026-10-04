@@ -155,7 +155,7 @@
 
 <script setup>
 import { similarTo } from '../recs.js';
-import { addGame, removeGame, applyChanges, pickEmulator, pickCollections } from '../steam.js';
+import { addGame, removeGame, applyChanges, pickEmulator, pickCollections, pickFrameGen } from '../steam.js';
 import { computed, onMounted, onBeforeUnmount, ref, nextTick, watch } from 'vue';
 import { store, heroArt, call, img, go, cover, bytes, year, rating, toast, confirm, download, downloadFor, romById, platformById, isNew, setBg, logoOf, resetLogos, artFor, choose, openModal, allRoms, visible, isFavourite, addToCollection, playOf, playtimeText, ago, loadPlay, askText, saveConfig, backdropOf, wantSharp } from '../store.js';
 import { pinToStart } from '../startTiles.js';
@@ -573,6 +573,8 @@ async function more() {
       else if (st.inSteam) {
         steam.push({ label: 'Add to a Steam collection', sub: st.lastCollections?.length ? `Last time: ${st.lastCollections.join(', ')}` : 'One of yours, or a new one', value: 'steamcol', icon: 'mdiBookmarkPlusOutline' });
         steam.push({ label: 'Remove from Steam', sub: st.ours ? 'Only the shortcut, not the game' : 'Added outside Cartridge', value: 'steamrm', icon: 'mdiSteam' });
+        // 0.9.28 (owner: frame generation from the game's own menu)
+        steam.push({ label: 'Frame Generation', sub: 'lsfg-vk or mako-run for this game', value: 'framegen', icon: 'mdiAnimationPlay' });
       } else steam.push({ label: 'Add to Steam', sub: 'Launches with your emulator setup', value: 'steamadd', icon: 'mdiSteam' });
       const ge = await call('steam:gameEmu', { romId: Number(props.romId) }).catch(() => null);
       play.push({ label: 'Emulator for this game', sub: ge?.current ? 'Its own pick' : 'Same as its console', value: 'gameemu', icon: 'mdiGamepadVariantOutline' });
@@ -682,6 +684,7 @@ async function more() {
     return;
   }
   if (v === 'delete') { await remove(); return; }
+  if (v === 'framegen') return pickFrameGen(Number(props.romId));
   if (v === 'steamcol') {
     const names = await pickCollections(steamInfo.console, steamInfo.lastCollections, true);
     if (!names?.length) return;

@@ -10,16 +10,17 @@
         </div>
       </div>
       <div v-if="!d" class="muted"><Icon name="mdiSync" :size="16" class="spin" /> Reading its settings…</div>
-      <div v-else-if="d.why && !fg" class="muted">{{ d.why }}</div>
+      <div v-else-if="d.why" class="muted small">{{ d.why }}</div>
+      <div v-else-if="!(d.items || []).length" class="muted small">{{ d.name || 'This emulator' }} has no per-game settings Cartridge can change for this game yet.</div>
       <!-- sections as tabs on L1/R1 (0.9.24, owner: the menu style across the board) -->
-      <div v-if="d && (!d.why || fg) && tabs.length > 1" class="gs-tabs"><Btn b="LB" /><div class="seg"><button v-for="t in tabs" :key="t" tabindex="-1" :class="{ on: t === tab }" @click="tab = t">{{ t }}</button></div><Btn b="RB" /></div>
+      <div v-if="d && tabs.length > 1" class="gs-tabs"><Btn b="LB" /><div class="seg"><button v-for="t in tabs" :key="t" tabindex="-1" :class="{ on: t === tab }" @click="tab = t">{{ t }}</button></div><Btn b="RB" /></div>
       <div v-else-if="!d" />
-      <div v-if="d && (!d.why || fg)" class="gs-list" data-scroll :key="tab">
+      <div v-if="d" class="gs-list" data-scroll :key="tab">
         <button v-if="tab === 'Steam' && fg" class="lrow" data-focus :disabled="busy" @click="pickFg">
           <span class="l-mid"><b>Frame Generation</b><span class="l-sub">{{ fg.own ? 'This game’s own' : `Follows ${fg.consoleOwn ? 'its console' : 'your default'}: ${FGL[fg.uses]}` }}. Its Steam shortcut changes at once.</span></span>
           <span class="l-end"><span class="status" :class="{ ok: fg.own }">{{ fg.own ? FGL[fg.own] : 'Default' }}</span></span>
         </button>
-        <div v-if="tab === 'Steam' && !fg" class="muted small">Frame generation needs lsfg-vk or mako-run on this device, and the game in Steam.</div>
+        <div v-if="tab === 'Steam' && !fg" class="lrow" data-focus tabindex="0"><span class="l-mid"><b>Frame Generation</b><span class="l-sub">{{ fgWhy || 'Looking…' }}</span></span></div>
         <button v-for="it in shown" :key="it.id" class="lrow" data-focus :disabled="busy" @click="pick(it)">
           <span class="l-mid"><b>{{ it.label }}</b><span class="l-sub">{{ it.sub || (it.game != null ? 'This game’s own' : `${d.name}’s own${it.base != null ? ': ' + labelOf(it, it.base) : ''}`) }}</span></span>
           <span class="l-end"><span class="status" :class="{ ok: it.game != null }">{{ it.game != null ? labelOf(it, it.game) : 'Default' }}</span></span>
@@ -42,24 +43,23 @@ import { pushLayer, focusFirst } from '../nav.js';
 import { store, call, closeModal, toast, choose, romById, cover } from '../store.js';
 import Icon from './Icon.vue';
 import Btn from './Btn.vue';
+import { frameGenFor } from '../steam.js';
 
 const props = defineProps({ romId: Number, name: String });
 const el = ref(null), d = ref(null), busy = ref(false);
 const rom = computed(() => romById(props.romId));
 const art = computed(() => (rom.value ? cover(rom.value) : ''));
 const tab = ref('');
-const tabs = computed(() => { const t = [...new Set((d.value?.items || []).map((x) => x.tab || 'General'))]; if (fg.value) t.push('Steam'); return t; });
+const tabs = computed(() => { const t = [...new Set((d.value?.items || []).map((x) => x.tab || 'General'))]; t.push('Steam'); return t; }); // Steam always: frame generation says why when it can't apply (0.9.28)
 const shown = computed(() => (d.value?.items || []).filter((x) => (x.tab || 'General') === tab.value));
 watch(tabs, (t) => { if (!t.includes(tab.value)) tab.value = t[0] || ''; }, { immediate: true });
 function stepTab(n) { const t = tabs.value; if (t.length < 2) return; tab.value = t[(t.indexOf(tab.value) + n + t.length) % t.length]; nextTick(() => focusFirst(el.value.querySelector('.gs-list') || el.value)); }
 // frame generation for this game (0.9.24): the same pick as Settings → Steam → Frame generation
 const FGL = { lsfg: 'Lossless Scaling (lsfg-vk)', mako: 'mako-run', off: 'Off' };
-const fg = ref(null);
+const fg = ref(null), fgWhy = ref('');
 async function loadFg() {
-  const r = await call('steam:frameGen').catch(() => null);
-  const g = r?.games.find((x) => x.romId === props.romId);
-  if (!r || !g || !(r.found.lsfg || r.found.mako)) { fg.value = null; return; }
-  fg.value = { found: r.found, own: g.own, uses: g.uses, consoleOwn: !!(r.conf.consoles || {})[g.console] };
+  const f = await frameGenFor(props.romId);
+  if (f.why) { fg.value = null; fgWhy.value = f.why; } else { fg.value = f; fgWhy.value = ''; }
 }
 async function pickFg() {
   const f = fg.value;

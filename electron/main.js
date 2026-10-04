@@ -2183,7 +2183,7 @@ const EMU_PATCH = {
   dolphin: { name: 'Dolphin', list: async (st, mine) => cheatsMod.dolphinList(st.dir, st.serial, cheatsMod.dolphinSysText(cheatsMod.dolphinSys(st.dir.flatpak), st.serial, st.dir.flatpak ? [] : steamMgr.appImagesFor('gc', /dolphin/i), require('./detect').readAppImageFile), mine, await cheatsMod.geckoDownload(st.serial, { cacheDir: path.join(USER_DATA, 'gecko-codes') })), set: (st, todo, mine) => { notRunning('dolphin', 'Dolphin'); return cheatsMod.dolphinSet(st.dir, st.serial, todo, mine); } },
   ppsspp: { name: 'PPSSPP', list: (st, mine) => cheatsMod.ppssppList(st.dir, st.serial, mine), set: (st, todo, mine) => { notRunning('ppsspp', 'PPSSPP'); return cheatsMod.ppssppSet(st.dir, st.serial, todo, mine, st.title); } },
   // Wii U: Cemu's graphic packs; turned on with each category's default preset, as Cemu does
-  cemu: { name: 'Cemu', list: (st, mine) => require('./cemuPacks').list({ root: st.dir.root, settings: st.dir.settings, titleIds: st.ids, name: st.title }, mine), set: (st, todo, mine) => { notRunning('cemu', 'Cemu'); const C = require('./cemuPacks'); const all = C.list({ root: st.dir.root, settings: st.dir.settings, titleIds: st.ids, name: st.title }, mine); C.set({ settings: st.dir.settings }, todo.map((t) => { const p = all.find((x) => x.key === t.key); return { ...t, presets: Object.fromEntries(Object.entries(p?.presets || {}).map(([k, v]) => [k, p.chosen[k] || v[0]])) }; }), mine); return mine; } },
+  cemu: { name: 'Cemu', list: (st, mine) => require('./cemuPacks').list({ root: st.dir.root, settings: st.dir.settings, titleIds: st.ids, name: st.title }, mine), set: (st, todo, mine) => { notRunning('cemu', 'Cemu'); const C = require('./cemuPacks'); const all = C.list({ root: st.dir.root, settings: st.dir.settings, titleIds: st.ids, name: st.title }, mine); C.set({ settings: st.dir.settings }, todo.map((t) => { const p = all.find((x) => x.key === t.key); return { ...t, presets: Object.fromEntries(Object.entries(p?.presets || {}).map(([k, v]) => [k, (t.want && v.includes(t.want[k]) ? t.want[k] : null) || p.chosen[k] || v[0]])) }; }), mine); return mine; } },
   pcsx2: { name: 'PCSX2', list: (st, mine) => patchesMod.pcsx2List(st.dir, st.game, patchesMod.pcsx2ZipBuffer(patchesMod.pcsx2ZipSources(os.homedir(), steamMgr.appImagesFor('ps2', /pcsx2/i)), require('./detect').readAppImageFile), mine), set: (st, todo, mine) => patchesMod.pcsx2Set(st.dir, st.game, todo, mine) },
 };
 // D2: a Vita game through Vita3K (.pkg with its zRIF installs with no window; a .vpk or .zip
@@ -3721,8 +3721,9 @@ const handlers = {
     const byKey = new Map(list.map((p) => [p.key, p]));
     const todo = (changes || []).map((c) => {
       const p = byKey.get(c.key);
-      if (!p || p.on === !!c.on || (p.by === 'emulator' && !c.on)) return null; // unchanged, or not Cartridge's to turn off
-      return { ...p, on: !!c.on };
+      const presetsChanged = !!(p && c.on && c.presets && p.presets) && JSON.stringify(Object.fromEntries(Object.keys(p.presets).map((k) => [k, p.chosen?.[k] || p.presets[k][0]]))) !== JSON.stringify(Object.fromEntries(Object.keys(p.presets).map((k) => [k, c.presets[k] || p.chosen?.[k] || p.presets[k][0]])));
+      if (!p || ((p.on === !!c.on && !presetsChanged) || (p.by === 'emulator' && !c.on))) return null; // unchanged, or not Cartridge's to turn off
+      return { ...p, on: !!c.on, ...(c.presets ? { want: c.presets } : {}) }; // want: a pack's choices (Cemu presets, 0.9.28)
     }).filter(Boolean);
     patchMine[st.emu] = E.set(st, todo, patchMine[st.emu] || {});
     saveJson(PATCHES_FILE, patchMine);
