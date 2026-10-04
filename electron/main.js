@@ -1945,7 +1945,7 @@ async function pumpEmuGet() {
   q.state = 'run'; broadcast('emuget-state', emuGetQ);
   const off = (m) => { if (m.key === q.key && m.id === q.id && m.pct != null) { q.pct = m.pct; broadcast('emuget-state', emuGetQ); } };
   emuGetListeners.add(off);
-  try { await handlers['emuget:install']({ key: q.key, id: q.id }); q.state = 'done'; }
+  try { const r = await handlers['emuget:install']({ key: q.key, id: q.id }); q.state = 'done'; q.where = r?.path || r?.fp || ''; q.relinked = r?.relinked || 0; }
   catch (e) { q.state = 'error'; q.error = e.message; }
   emuGetListeners.delete(off);
   broadcast('emuget-state', emuGetQ);
@@ -2797,7 +2797,7 @@ const handlers09 = {
   'steam:setGameTemplate': ({ romId, template }) => steamMgr.setGameTemplate(romId, template),
   'steam:refreshGame': ({ romId }) => steamMgr.refreshGame(romId),
   // shadPS4 version per game (0.9.17): the Qt launcher's versions, and this game's pick
-  'steam:shadVersions': ({ romId }) => ({ list: steamMgr.shadVersions(), current: ((config.steam || {}).shadVersions || {})[romId] || null }),
+  'steam:shadVersions': ({ romId }) => { let last = null; try { last = require('./shadVersions').lastRun(os.homedir(), emulationRoots().map((r) => path.join(r, 'storage', 'shadps4'))); } catch {} return { list: steamMgr.shadVersions(), current: ((config.steam || {}).shadVersions || {})[romId] || null, last }; },
   'steam:setShadVersion': ({ romId, path: p }) => { const m = ((config.steam ||= {}).shadVersions ||= {}); if (p) m[romId] = p; else delete m[romId]; saveConfig(); return true; },
   // frame generation (0.9.17): what's installed, the picks, and Cartridge's games in Steam with theirs
   'steam:frameGen': () => {
@@ -3376,7 +3376,14 @@ const handlers = {
       }
       log('emulator downloaded', id, r.path || r.fp);
       send({ pct: 100, done: true });
-      steamMgr.scanEmulators().catch(() => {}); // so Steam setup and the lists see it
+      // 0.9.24 (owner: deleted and installed again, it should say where and fix its launch options): scan,
+      // then point every Steam shortcut whose emulator went missing at the new copy
+      r.relinked = 0;
+      try {
+        await steamMgr.scanEmulators();
+        const moved = (steamMgr.health().problems || []).filter((p) => p.issues.some((x) => x.kind === 'emulator' && x.fix));
+        if (moved.length) { const f = await steamMgr.healthFix(moved.map((p) => p.appid)); r.relinked = (f.fixed || 0) + (f.queued || 0); log('relinked after install', id, r.relinked); }
+      } catch (e2) { log('relink after install', e2.message); }
       return r;
     } catch (err) { send({ error: err.message }); throw err; }
     finally { emuGetRun = null; }

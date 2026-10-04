@@ -579,7 +579,9 @@ async function more() {
       // 0.9.23 (owner: change the launch version for any game from its own page)
       if (/ps4/i.test(`${base.value?.platform_slug} ${base.value?.platform_fs_slug}`)) {
         const sv = await call('steam:shadVersions', { romId: Number(props.romId) }).catch(() => null);
-        play.push({ label: 'shadPS4 version', sub: sv?.current ? (sv.list.find((x) => x.path === sv.current)?.name || 'Its own pick') : 'shadPS4’s default', value: 'shadver', icon: 'mdiLayersTriple' });
+        // and which version really ran last, from shadPS4's own log (0.9.24, owner: how can I be sure?)
+        const lastRun = sv?.last?.version ? ` · last ran on v${sv.last.version}${sv.last.at ? ', ' + ago(sv.last.at) : ''}` : '';
+        play.push({ label: 'shadPS4 version', sub: (sv?.current ? (sv.list.find((x) => x.path === sv.current)?.name || 'Its own pick') : 'shadPS4’s default') + lastRun, value: 'shadver', icon: 'mdiLayersTriple' });
       }
       steamInfo = st;
     }
@@ -649,7 +651,7 @@ async function more() {
   if (v === 'gamesettings') { openModal('gamesettings', { romId: Number(props.romId), name: base.value.name }); return; }
   if (v === 'shadver') {
     const sv = await call('steam:shadVersions', { romId: Number(props.romId) }).catch(() => null);
-    const p = await choose({ sheet: true, title: 'shadPS4 version', message: base.value.name, options: [
+    const p = await choose({ sheet: true, title: 'shadPS4 version', message: base.value.name + (sv?.last?.version ? `\nThe last game shadPS4 ran${sv.last.serial ? ' (' + sv.last.serial + ')' : ''} started on v${sv.last.version}, ${ago(sv.last.at)}. Its log says so after every start.` : ''), options: [
       { label: 'shadPS4’s default', sub: 'The version picked in shadPS4’s launcher', value: '__default', icon: 'mdiArrowULeftTop', selected: !sv?.current },
       ...(sv?.list || []).map((x) => ({ label: x.name, sub: [x.codename, x.date].filter(Boolean).join(' · '), value: x.path, icon: 'mdiSourceBranch', selected: sv.current === x.path, raw: true })),
       { label: 'Add Versions', sub: 'Download older or newer shadPS4 builds', value: '__add', icon: 'mdiDownload' },

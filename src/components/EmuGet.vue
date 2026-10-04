@@ -156,11 +156,16 @@ async function getAll() {
   toast(`${items.length} emulator${items.length === 1 ? '' : 's'} downloading in the background`, 'ok', 3000, 'mdiDownloadMultiple');
 }
 let off = null, offP = null, offU = null, lastDone = 0;
+const told = new Set();
 onMounted(async () => {
   off = window.cart.on('emuget-state', (s) => {
     q.value = s;
     const done = s.filter((x) => x.state === 'done' || x.state === 'error').length;
-    if (done !== lastDone) { lastDone = done; load(); }
+    if (done !== lastDone) {
+      // say where it went, and how many Steam shortcuts now point at it (0.9.24)
+      if (done > lastDone) for (const x of s.filter((y) => y.state === 'done' && y.where && !told.has(y.key + y.id))) { told.add(x.key + x.id); toast(`Installed to ${String(x.where).replace(store.info?.home || '\0', '~')}${x.relinked ? ` · ${x.relinked} Steam shortcut${x.relinked === 1 ? '' : 's'} now use it` : ''}`, 'ok', 6000, 'mdiCheck'); }
+      lastDone = done; load();
+    }
   });
   offP = window.cart.on('emuget-progress', (m) => { const x = q.value.find((y) => y.key === m.key && y.id === m.id && y.state === 'run'); if (x && m.pct != null) x.pct = m.pct; });
   offU = window.cart.on('emu-update', (m) => { if (m.path === upRun.value && m.pct != null) upPct.value = m.pct; });
