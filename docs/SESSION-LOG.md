@@ -6,6 +6,10 @@ The branch for 0.9.3 work is `claude/relaxed-fermat-30pigp`. Pull it before star
 
 ---
 
+## 4 Oct 2026 · Plan for 0.9.29 The Syncthing Update (not built)
+
+Owner after 0.9.28 shipped: next update is "The Syncthing Update", saves first (find every save on the device, know which game it belongs to, Syncthing set up by Cartridge only on a blank Syncthing, the onboarding says so plainly). Multi-language is scrapped for now: remove the Language step, never say more languages are coming. Also next: trophy codes to names, Switch title IDs like Eden. "Don't build anything yet": only docs/plan-0.9.29.md was written, after reading Syncthing's docs and Eden's source. Open decisions for the owner are marked "Owner decides" in the plan (the saves rule exception, extra folders, PSN sign-in, how syncing is pushed).
+
 ## 4 Oct 2026 · 0.9.28 The Dock
 
 Owner asked for this as 0.9.27; 0.9.27 (collection names) had already been published, so it ships as 0.9.28. Owner's list (with photos): Dock at the bottom clipping pages and the media bar, Dreamcast logo clipped, page overview as real pages with movement, Recently Played spacing, Emulators flow, console chip clipping, edge clipping in rows; Title Case, touch only working on Start, choppy on handhelds, widget spacing, Syncthing server files, onboarding Back trapped in the installer and smart focus, Syncthing in Game Mode (Decky plugin), Cemu pack choices, GitHub fork updates, Home flash before Start, clock speeding up when the bar moves, storage widget names, hints off by default, Dock colour, bottom as default, widget rework with console widgets and picture/GIF search, Start tips, L1/R1 for pages, add-on downloads on Downloads.
