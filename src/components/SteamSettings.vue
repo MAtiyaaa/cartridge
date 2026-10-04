@@ -13,11 +13,18 @@
             <div v-if="!consoleCols.length" class="muted small">None of your Steam collections look like they're for a console in your library.</div>
             <div v-for="c in consoleCols" :key="c.id" class="lrow" :class="{ on: c.pick === 'rename' }" data-focus tabindex="0" @click="flip(c)">
               <span class="l-mid"><b>{{ c.name }}</b><span class="l-sub">{{ subOf(c) }}</span></span>
-              <span class="l-end"><span class="status">{{ c.action !== 'rename' ? (c.action === 'ok' ? 'Already Cartridge\'s name' : 'Kept') : c.pick === 'rename' ? 'Rename' : 'Keep mine' }}</span></span>
+              <span class="l-end"><span class="status" :class="{ ok: c.pending || c.action === 'ok' }">{{ c.pending ? 'Renamed' : c.action !== 'rename' ? (c.action === 'ok' ? 'Already Cartridge\'s name' : 'Kept') : c.pick === 'rename' ? 'Will Rename' : 'Will Keep Mine' }}</span></span>
             </div>
+            <p v-if="consoleCols.some((c) => c.action === 'rename' && !c.pending)" class="muted small" style="margin: 0">A switches a collection between Rename and Keep Mine, then the button below applies your choices.</p>
             <div v-if="otherCols.length" class="muted small">Left as they are: {{ otherCols.map((c) => c.name).join(', ') }}.</div>
             <div class="row wrap">
               <button class="btn primary" data-focus :disabled="busyCols" @click="applyCols"><Icon name="mdiCheck" />{{ renameCount ? `Rename ${renameCount} in Steam` : 'Use These Collections' }}</button>
+            </div>
+            <!-- 0.9.29 (owner): every console in your library, with the collection its games go into, before any game is added -->
+            <div class="subh"><Icon name="mdiFolderOutline" :size="20" />Your Consoles</div>
+            <div v-for="c in review.consoles || []" :key="c.key" class="lrow" data-focus tabindex="0">
+              <span class="l-mid"><b>{{ c.name }}</b><span class="l-sub">{{ c.count ? `${c.count} game${c.count === 1 ? '' : 's'} in this collection` : c.games ? `${c.games} game${c.games === 1 ? '' : 's'} in Steam, not in a collection yet` : 'Made in Steam when its first game is added' }}</span></span>
+              <span class="l-end"><span class="status" :class="{ ok: c.exists }">{{ c.exists ? 'In Steam' : 'Not Yet' }}</span></span>
             </div>
             <div class="subh"><Icon name="mdiFolderOutline" :size="20" />New Games</div>
             <Toggle :model-value="!!sc.consoleCollections" :disabled="!colsReady" label="Add downloaded games to their console's collection" :desc="colsReady ? 'Games Cartridge adds also go into the Steam collection for their console, the one you kept or Cartridge\'s name. Your Cartridge collections are never copied into Steam.' : 'Review your collections above first (Use These Collections), so Cartridge puts games into the ones you already have instead of making new ones next to them.'" @update:model-value="setConsoleCols" />
@@ -92,7 +99,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, onMounted, onBeforeUnmount, ref, watch } from 'vue';
 import { store, call, confirm, toast, go, romById, choose } from '../store.js';
 import { steam, applyChanges, restartSteam } from '../steam.js';
 import Icon from './Icon.vue';
@@ -113,11 +120,17 @@ const consoleCols = computed(() => (review.value?.list || []).filter((c) => c.ac
 const otherCols = computed(() => (review.value?.list || []).filter((c) => c.action === 'other'));
 const renameCount = computed(() => consoleCols.value.filter((c) => c.pick === 'rename').length);
 const colsReady = computed(() => !!review.value?.integrated || !!sc.value.consoleCollections);
+// read again while the page is open and after games go into Steam, keeping the choices you made (0.9.29)
 async function loadReview() {
-  try { const r = await call('steam:colReview'); r.list.forEach((c) => { c.pick = c.action === 'rename' ? 'rename' : 'keep'; }); review.value = r; } catch (e) { review.value = { error: e.message }; }
+  const picks = Object.fromEntries((review.value?.list || []).map((c) => [c.id, c.pick]));
+  try { const r = await call('steam:colReview'); r.list.forEach((c) => { c.pick = picks[c.id] || (c.action === 'rename' && !c.pending ? 'rename' : 'keep'); }); review.value = r; } catch (e) { review.value = { error: e.message }; }
 }
+let colT = null;
+watch(page, (v) => { clearInterval(colT); if (v === 'cols') colT = setInterval(loadReview, 8000); });
+const offAuto = window.cart.on('steam-auto', () => { if (page.value === 'cols') loadReview(); });
+onBeforeUnmount(() => { clearInterval(colT); offAuto?.(); });
 const subOf = (c) => [`${c.count} game${c.count === 1 ? '' : 's'}`, c.action === 'rename' ? `${c.pick === 'rename' ? 'Becomes' : 'Cartridge would call it'} ${c.want}` : c.action === 'taken' ? `${c.want} is already a collection, so this one stays` : c.action === 'shared' ? `Another collection is also for ${c.want}` : 'For ' + c.want].join(' · ');
-function flip(c) { if (c.action === 'rename') c.pick = c.pick === 'rename' ? 'keep' : 'rename'; }
+function flip(c) { if (c.action === 'rename' && !c.pending) c.pick = c.pick === 'rename' ? 'keep' : 'rename'; }
 async function applyCols() {
   const list = consoleCols.value;
   const renames = list.filter((c) => c.pick === 'rename').map((c) => ({ id: c.id, from: c.name, to: c.want, key: c.key }));
@@ -127,6 +140,7 @@ async function applyCols() {
   busyCols.value = true;
   try {
     const r = await call('steam:colApply', { renames, keep });
+    review.value.list.forEach((c) => { if (c.pick === 'rename') c.pick = 'keep'; }); // done: the reload shows them as Renamed
     toast(!r.count ? 'Cartridge will use these collections' : r.live ? `${r.count} collection${r.count === 1 ? '' : 's'} renamed in Steam` : `${r.count} collection${r.count === 1 ? '' : 's'} will be renamed when Steam restarts`, 'ok', 4000, 'mdiSteam');
   } catch (e) { toast(e.message, 'error'); }
   busyCols.value = false;
