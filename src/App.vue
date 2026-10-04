@@ -196,6 +196,8 @@ function placeInk() {
   ink.value = { width: w + 'px', transform: `translateX(${x}px)`, opacity: 1 };
 }
 // where the bar sits and how it looks (Look & Feel → Text and Cards → Top Bar)
+// touch scrolling (0.9.26): Cartridge's engine unless the browser's was picked in Look & Feel → Controls
+watch(() => store.config?.ui?.touchScroll, (v) => document.documentElement.classList.toggle('touch-native', v === 'browser'), { immediate: true });
 watch(() => [store.config?.ui?.barPos, store.config?.ui?.barAlign, store.config?.ui?.barStyle], ([pos, align, style]) => {
   const b = document.body.classList;
   b.toggle('bar-bottom', pos === 'bottom'); b.toggle('bar-left', pos === 'left');

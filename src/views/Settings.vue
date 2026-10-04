@@ -304,6 +304,8 @@
             <div class="subh"><Icon name="mdiGamepadVariantOutline" :size="20" />Controls &amp; Display</div>
             <div class="row"><span class="lbl">Touch &amp; mouse</span><div class="seg"><button v-for="p in pointers" :key="p.v" data-focus :class="{ on: (ui.pointer || 'auto') === p.v }" @click="setPointer(p.v)">{{ p.l }}</button></div></div>
             <p class="muted small" style="margin-top: -6px">Auto hides the cursor when you tap the screen and shows it when a mouse moves. Touch never shows a cursor.</p>
+            <div class="row"><span class="lbl">Touch scrolling</span><div class="seg"><button v-for="t in TOUCH_SCROLL" :key="t.v" data-focus :class="{ on: (ui.touchScroll || 'own') === t.v }" @click="saveConfig({ ui: { touchScroll: t.v } })">{{ t.l }}</button></div></div>
+            <p class="muted small" style="margin-top: -6px">Cartridge's scrolls with your finger and glides on release, however your system sends touches. The browser's is Chromium's own touch scrolling, for systems where it already works well. Swipe in from the left edge to go back, and swipe along the top bar to change tabs.</p>
             <div class="row"><span class="lbl">Button icons</span><div class="seg"><button v-for="k in buttonOpts" :key="k.v" data-focus :class="{ on: (ui.buttons || 'auto') === k.v }" @click="saveConfig({ ui: { buttons: k.v } })">{{ k.l }}</button></div></div>
             <p class="muted small" style="margin-top: -6px">Auto draws the buttons of the controller you're holding{{ padInfo?.name ? ` (right now: ${padInfo.name})` : '' }}, even when Steam presents it as an Xbox pad. <span class="btn-demo"><Btn b="A" /><Btn b="B" /><Btn b="X" /><Btn b="Y" /><Btn b="LB" /><Btn b="RT" /><Btn b="START" /><Btn b="SELECT" /></span></p>
             <div class="row"><span class="lbl">On-screen keyboard</span><div class="seg"><button v-for="k in keyboards" :key="k.v" data-focus :class="{ on: (ui.keyboard || 'auto') === k.v }" @click="saveConfig({ ui: { keyboard: k.v } })">{{ k.l }}</button></div></div>
@@ -983,6 +985,7 @@ const ps3Ups = ref(null);
 const coverSmall = (romId) => { const r = romById(romId); return r ? cover(r) : ''; };
 const ps3UpCount = computed(() => (ps3Ups.value || []).filter((g) => g.todo.length).length);
 async function loadPs3Updates(fresh = false) { ps3Ups.value = await call('ps3up:list', { fresh }).catch(() => []); }
+const TOUCH_SCROLL = [{ v: 'own', l: 'Cartridge’s' }, { v: 'browser', l: 'The Browser’s' }];
 const BAR_POS = [{ v: 'top', l: 'Top' }, { v: 'bottom', l: 'Bottom' }, { v: 'left', l: 'Left' }];
 const BAR_ALIGN = [{ v: 'start', l: 'Aligned' }, { v: 'center', l: 'Centred' }];
 const BAR_STYLE = [{ v: 'plain', l: 'Plain' }, { v: 'pill', l: 'Floating Pill' }, { v: 'circle', l: 'Circles' }];
