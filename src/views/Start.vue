@@ -1074,7 +1074,7 @@ watch(() => store.play, loadWeek);
 .st-tile:focus .st-row-art { transform: scale(1.03); opacity: 0.6; }
 .st-row-fade { position: absolute; inset: 0; z-index: -1; background: linear-gradient(90deg, var(--s1) 22%, color-mix(in srgb, var(--s1) 70%, transparent) 48%, color-mix(in srgb, var(--s1) 35%, transparent)), linear-gradient(0deg, color-mix(in srgb, var(--s1) 70%, transparent), transparent 50%); }
 .st-row { flex: 1; min-height: 0; display: flex; gap: clamp(10px, 3cqw, 24px); }
-.st-row-info { flex: 0 0 38%; min-width: 0; display: flex; flex-direction: column; }
+.st-row-info { flex: 0 0 38%; min-width: 0; display: flex; flex-direction: column; gap: clamp(8px, 5cqh, 22px); } /* 0.9.28: the row's name never sits on the game's logo */
 .st-row-lead { margin-top: auto; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-width: 0; }
 .st-row-lead :deep(.game-logo) { margin: 0 0 2px; filter: drop-shadow(0 3px 10px rgba(0, 0, 0, 0.5)); }
 .st-row-lead :deep(.st-row-name) { margin: 0; font-family: var(--display); font-stretch: var(--display-stretch); font-weight: 800; font-size: clamp(14px, min(15cqh, 6cqw), 28px); line-height: 1.08; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }

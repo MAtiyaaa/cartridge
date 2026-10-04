@@ -1075,11 +1075,11 @@ onMounted(() => {
 .rail-item.on { color: var(--text); }
 .rail-item:focus { background: var(--focus); color: var(--on-focus); box-shadow: none; }
 .pane { overflow-y: auto; padding: 6px 12px 60px 24px; }
-.ga-cons { display: flex; gap: 8px; overflow-x: auto; padding: 4px 2px 8px; }
+.ga-cons { display: flex; gap: 8px; overflow-x: auto; padding: 8px 6px 10px; margin: 0 -6px; scrollbar-width: none; } /* room for a selected chip (0.9.28: it was cut off) */
 .ga-con { flex: none; display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 999px; background: var(--s1); box-shadow: var(--weight-edge); font-weight: 600; font-size: var(--t-sm); }
 .ga-con em { font-style: normal; color: var(--muted); font-weight: 500; }
 .ga-con.on { background: var(--sel); }
-.ga-con:focus-visible, .pad-mode .ga-con:focus { background: var(--focus); color: var(--on-focus); }
+.ga-con:focus-visible, .pad-mode .ga-con:focus { background: var(--focus); color: var(--on-focus); box-shadow: none; outline: none; } /* the standard highlight: white fill, dark text, no ring */
 .pad-mode .ga-con:focus em { color: var(--on-focus-dim); }
 .rail-st { color: inherit !important; }
 .pane-in { display: flex; flex-direction: column; gap: 16px; max-width: 860px; }

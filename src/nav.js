@@ -404,6 +404,17 @@ export function ensureFocus(root) {
 }
 export function jump(dir, n = 4) { for (let i = 0; i < n; i++) move(dir); }
 
+// 0.9.28 (owner's photos: Home shifted off the left edge, rows clipped at the sides): scrollIntoView also scrolls
+// boxes that clip (overflow hidden), which are never meant to move, so a focused card dragged a whole page sideways.
+// Any such box that moves is put straight back.
+document.addEventListener('scroll', (e) => {
+  const t = e.target;
+  if (!(t instanceof Element) || (!t.scrollLeft && !t.scrollTop)) return;
+  const cs = getComputedStyle(t);
+  if (t.scrollLeft && (cs.overflowX === 'hidden' || cs.overflowX === 'clip')) t.scrollLeft = 0;
+  if (t.scrollTop && (cs.overflowY === 'hidden' || cs.overflowY === 'clip')) t.scrollTop = 0;
+}, { capture: true, passive: true });
+
 // ---------------- touch and drag scrolling
 // 0.9.26, the touch update (owner: "touch never worked, only taps"). Touches reach Cartridge in one of
 // three ways depending on the system: as real touches the browser scrolls itself, as real touches it
