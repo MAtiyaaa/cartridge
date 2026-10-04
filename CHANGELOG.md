@@ -27,6 +27,7 @@ Every Cartridge release, newest first. Each GitHub release only lists its own ch
 - **Title Case** for every widget name and heading on Start.
 
 ### Fixed
+- **PS3 and PS4 games had no Add-ons on their page** after patches moved into Add-ons in 0.9.24. Game More → Emulator → Add-ons is back for them and shows only what the console has: shadPS4 Patches and GoldHEN for PS4, Patches and Game Updates for PS3.
 - **The PlayStation 4 Steam page** ran its shadPS4 option into the games list on handhelds; it sits inside the emulator panel now.
 - **Unnamed PS4 games:** a PS4 game that isn't installed on this device (only its trophy code, like NPWR06616_00) now takes its name and library game from the device that has it installed, through the trophy notes it already writes to RomM. The name is remembered on this device afterwards.
 - **Touch:** swipes now scroll even on systems that send no movement between the finger going down and up, or send it under another pointer. Before, only Start's page swipe worked there.
