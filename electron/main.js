@@ -3380,6 +3380,16 @@ const handlers = {
     for (const d of out) { try { const st = await fsp.statfs(d.path); d.free = st.bavail * st.bsize; d.total = st.blocks * st.bsize; } catch {} d.emulation = isDir(path.join(d.path, 'Emulation')); }
     return out;
   },
+  // EmuDeck already set up (0.9.24, owner: then don't ask for a drive, install beside EmuDeck's): its Emulation
+  // folder for games and BIOS, and ~/Applications for AppImages, where EmuDeck keeps its own
+  'emuget:emudeck': () => { const e = readEmuDeckSettings(); return e.emulationPath && isDir(e.emulationPath) ? { root: e.emulationPath, roms: e.romsPath || path.join(e.emulationPath, 'roms'), bios: e.biosPath || path.join(e.emulationPath, 'bios'), apps: path.join(os.homedir(), 'Applications') } : null; },
+  'emuget:useEmuDeck': () => {
+    const e = handlers['emuget:emudeck'](); if (!e) throw new Error('EmuDeck’s setup wasn’t found.');
+    config.romsRoot ||= e.roms; config.biosPath ||= e.bios; config.emuDir = e.apps;
+    saveConfig(); require('./emuGet').setAppsDir(config.emuDir);
+    if (library) { broadcast('library', publicLibrary()); computeInstalled(); }
+    return e;
+  },
   // an ES-DE style Emulation folder there: roms/<console>, bios, emulators (Cartridge's AppImages)
   'emuget:prepare': ({ base }) => {
     if (!base || !isDir(base)) throw new Error('That drive isn’t there.');

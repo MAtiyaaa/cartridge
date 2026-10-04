@@ -61,7 +61,7 @@
   <SteamEmu v-if="store.modal?.type === 'steam-emu'" :key="JSON.stringify(store.modal.props)" v-bind="store.modal.props" />
   <ArtPicker v-if="store.modal?.type === 'art'" :key="store.modal.props.query || ''" v-bind="store.modal.props" />
   <GameTimeline v-if="store.modal?.type === 'timeline'" v-bind="store.modal.props" />
-  <FirstTour v-if="store.modal?.type === 'tour'" />
+  <FirstTour v-if="store.modal?.type === 'tour'" v-bind="store.modal.props" />
   <ManualViewer v-if="store.modal?.type === 'manual'" v-bind="store.modal.props" />
   <PatchesSheet v-if="store.modal?.type === 'patches'" v-bind="store.modal.props" />
   <AddonsSheet v-if="store.modal?.type === 'addons'" :key="'addons' + store.modal.props.romId" v-bind="store.modal.props" />

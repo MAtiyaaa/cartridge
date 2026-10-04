@@ -330,7 +330,7 @@
 // A replay starts from the current settings: done steps show a green check, nothing is reset, and
 // leaving halfway keeps everything as it was.
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { store, call, saveConfig, toast, tab, confirm, openModal, choose, pickFolder, loadLibrary } from '../store.js';
+import { store, call, saveConfig, toast, tab, confirm, openModal, choose, pickFolder, loadLibrary , activeTabs } from '../store.js';
 import { focusFirst, input } from '../nav.js';
 import { useView } from '../useView.js';
 import Logo from '../components/Logo.vue';
@@ -467,8 +467,9 @@ async function finish() {
   await saveConfig({ welcomed: Date.now(), ui: { welcomeStep: '' } });
   await new Promise((r) => setTimeout(r, 420));
   store.welcoming = false;
-  if (store.config.configured) tab('home');
-  if (!store.config.ui.toured) { await openModal('tour'); saveConfig({ ui: { toured: true } }); }
+  // 0.9.24 (owner): onboarding ends on Start, with a short tour of it
+  if (store.config.configured) tab(activeTabs().includes('start') ? 'start' : 'home');
+  if (!store.config.ui.toured) { await openModal('tour', { start: activeTabs().includes('start') }); saveConfig({ ui: { toured: true } }); }
 }
 async function leave() {
   if (only) return close();
@@ -608,7 +609,7 @@ onBeforeUnmount(() => { off?.(); clearTimeout(padT); window.removeEventListener(
 .w-back { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; background: rgba(255, 255, 255, 0.08); color: inherit; border: 0; flex: none; }
 .w-back:focus, .w-back:hover { background: var(--focus); color: var(--on-focus); outline: none; }
 .w-hints { position: absolute; left: 0; right: 0; bottom: 14px; display: flex; justify-content: center; gap: 22px; color: var(--muted); font-size: var(--t-sm); pointer-events: none; }
-.w-hints span { display: inline-flex; align-items: center; gap: 8px; }
+.w-hints span { display: inline-flex; align-items: center; gap: 8px; line-height: 1; text-box: trim-both cap alphabetic; } /* the word centred on its button, not on its descenders (0.9.24) */
 /* the opening (0.9.17): the mark comes into focus inside two rings of light, a glint crosses it, the
    name follows letter by letter, then everything lifts away to the first card */
 .w-intro { position: absolute; inset: 0; z-index: 5; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px; background: radial-gradient(60% 60% at 50% 45%, rgba(18, 18, 22, 0.55), rgba(5, 5, 7, 0.96)); animation: wiOut 0.5s cubic-bezier(0.4, 0, 0.2, 1) 2.1s forwards; }

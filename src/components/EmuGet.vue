@@ -139,7 +139,12 @@ const running = computed(() => q.value.find((x) => x.state === 'run'));
 const waiting = computed(() => q.value.filter((x) => x.state === 'wait').length);
 const runningName = computed(() => all.value.find((x) => x.c.key === running.value?.key && x.e.id === running.value?.id)?.e.label || '');
 
-async function loadDrives() { drives.value = await call('emuget:drives').catch(() => []); }
+async function loadDrives() {
+  // EmuDeck found: use its folders and say so, instead of asking for a drive (0.9.24)
+  const ed = await call('emuget:emudeck').catch(() => null);
+  if (ed) { try { await call('emuget:useEmuDeck'); store.config = await call('config:get'); toast(`Using EmuDeck’s setup in ${short(ed.root)}: new emulators go beside its own`, 'ok', 4500, 'mdiCheck'); phase.value = 'list'; await load(); return; } catch {} }
+  drives.value = await call('emuget:drives').catch(() => []);
+}
 async function load() { list.value = await call('emuget:list').catch(() => []); q.value = await call('emuget:state').catch(() => []); }
 async function pickDrive(d) {
   busy.value = true;
