@@ -579,7 +579,7 @@ async function finish() {
   store.welcoming = false;
   // 0.9.24 (owner): onboarding ends on Start, with a short tour of it
   if (store.config.configured) tab(activeTabs().includes('start') ? 'start' : 'home');
-  if (!store.config.ui.toured) { await openModal('tour', { start: activeTabs().includes('start') }); saveConfig({ ui: { toured: true } }); }
+  if (!store.config.ui.toured) { await openModal('tour', { start: activeTabs().includes('start') }); saveConfig({ ui: { toured: true, startTips: 1 } }); }
 }
 async function leave() {
   if (only) return close();

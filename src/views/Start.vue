@@ -44,7 +44,7 @@
           <template v-else-if="t.type === 'storage'">
             <div class="st-store">
               <div class="st-store-text">
-                <div class="st-label">Free space</div>
+                <div class="st-label">Free Space</div>
                 <div class="st-num"><span class="st-big tnum">{{ space ? sizeNum(space.free) : '–' }}</span><span class="st-unit">{{ space ? sizeUnit(space.free) : '' }}</span></div>
                 <div class="st-sub">{{ space ? `of ${bytes(space.total)}` : 'Looking…' }}</div>
                 <!-- 0.9.24 (owner: empty space when big): what each console's games take up on this device -->
@@ -63,7 +63,7 @@
           <template v-else-if="t.type === 'week'">
             <div class="st-week">
               <div class="st-week-text">
-                <div class="st-label">Played this week</div>
+                <div class="st-label">Played This Week</div>
                 <div class="st-num">
                   <template v-if="weekMin >= 60"><span class="st-big tnum">{{ Math.floor(weekMin / 60) }}</span><span class="st-unit">h</span><template v-if="weekMin % 60"><span class="st-big tnum">{{ weekMin % 60 }}</span><span class="st-unit">m</span></template></template>
                   <template v-else><span class="st-big tnum">{{ weekMin }}</span><span class="st-unit">min</span></template>
@@ -240,15 +240,23 @@
       </div>
       </Transition>
     </div>
-    <!-- the pages at a glance (0.9.24, owner: LT/RT in Arrange): A picks a page up, left and right move it -->
+    <!-- the pages at a glance (0.9.24; 0.9.28: L1/R1 in Arrange): A picks a page up, left and right move it -->
     <div v-if="ov" class="st-ov" ref="ovEl">
       <div class="st-ov-head"><b>Pages</b><span class="muted">{{ ov.moving != null ? 'Left and right move it. A puts it down.' : 'A picks a page up to move it. B goes back to arranging.' }}</span></div>
-      <div class="st-ov-list">
-        <button v-for="(pg, i) in pages" :key="pgKey(pg, i)" class="st-ov-page" :class="{ on: i === page, moving: ov.moving === i }" data-focus :data-key="'pg-' + i" @click="ovPick(i)">
-          <span class="st-ov-map"><i v-for="x in pg" :key="x.id" :style="{ left: (x.x / COLS) * 100 + '%', top: (x.y / ovRows(pg)) * 100 + '%', width: (x.w / COLS) * 100 + '%', height: (x.h / ovRows(pg)) * 100 + '%' }" /></span>
+      <!-- 0.9.28 (owner): each page in miniature with its real tiles (covers, the clock, pictures, names), and the page
+           you carry lifts while the others slide out of its way -->
+      <TransitionGroup tag="div" name="st-ovm" class="st-ov-list">
+        <button v-for="(pg, i) in pages" :key="pgKey(pg, i)" class="st-ov-page" :class="{ on: i === page, moving: ov.moving === i, dim: ov.moving != null && ov.moving !== i }" data-focus :data-key="'pg-' + i" @click="ovPick(i)">
+          <span class="st-ov-map">
+            <i v-for="x in pg" :key="x.id" :class="{ pic: !!ovThumb(x).pic }" :style="{ left: (x.x / COLS) * 100 + '%', top: (x.y / ovRows(pg)) * 100 + '%', width: (x.w / COLS) * 100 + '%', height: (x.h / ovRows(pg)) * 100 + '%', backgroundImage: ovThumb(x).pic ? `url('${ovThumb(x).pic}')` : undefined }">
+              <span v-if="x.type === 'clock'" class="st-ov-clock">{{ clockShort }}</span>
+              <span v-else-if="!ovThumb(x).pic" class="st-ov-tag"><Icon :name="ovThumb(x).icon" :size="14" /><em>{{ ovThumb(x).name }}</em></span>
+            </i>
+          </span>
           <span class="st-ov-n">Page {{ i + 1 }}<em>{{ pg.length }} {{ pg.length === 1 ? 'widget' : 'widgets' }}</em></span>
+          <span v-if="ov.moving === i" class="st-ov-carry"><Icon name="mdiArrowLeftRight" :size="16" />Moving</span>
         </button>
-      </div>
+      </TransitionGroup>
     </div>
     <!-- pages (0.9.23, owner: more than one page, switched with the right stick) -->
     <div v-if="pages.length > 1 || editing" class="st-pages" aria-hidden="true">
@@ -266,7 +274,7 @@
 // (the D-pad moves a corner, LB/RB pick the corner), Y removes, B is done. Touch and mouse: drag a tile
 // to move it, drag an edge or a corner to resize. Saved in config.ui.start.
 import { computed, ref, reactive, onMounted, onBeforeUnmount, nextTick, watch } from 'vue';
-import { store, heroArt, call, go, tab, img, cover, logoOf, allRoms, visible, visiblePlatforms, romById, isNew, collections, setBg, backdropOf, wantSharp, bytes, saveConfig, choose, confirm, askText, pickFolder, playtimeText, loadPlay, toast } from '../store.js';
+import { store, heroArt, call, go, tab, openModal, img, cover, logoOf, allRoms, visible, visiblePlatforms, romById, isNew, collections, setBg, backdropOf, wantSharp, bytes, saveConfig, choose, confirm, askText, pickFolder, playtimeText, loadPlay, toast } from '../store.js';
 import { useView } from '../useView.js';
 import { recommend } from '../recs.js';
 import { ensureFocus, input, pushLayer, focusFirst, rumble } from '../nav.js';
@@ -405,6 +413,22 @@ const rowOf = (type) => rows.value[type] || [];
 const sel = reactive({});
 const conList = (pid) => roms.value.filter((r) => r.platform_id === pid).sort((a, b) => (lastPlay(b) - lastPlay(a)) || a.name.localeCompare(b.name));
 const listOf = (t) => (t.type === 'cgames' ? conList(t.platformId) : rowOf(t.type));
+// the page overview's picture of a tile: a game's cover where the tile shows games, a picture tile's picture,
+// else its icon and name (0.9.28)
+function ovThumb(x) {
+  const T = TILES[x.type] || {};
+  let r = null, pic = '';
+  try {
+    if (x.type === 'game') r = romById(x.romId);
+    else if (x.type === 'continue') r = playing.value[0];
+    else if (x.type === 'daily') r = daily.value;
+    else if (COVER_ROWS[x.type] || x.type === 'cgames') r = listOf(x)[0];
+    if (r) pic = cover(r, true) || '';
+    if (x.type === 'image' && x.src) pic = x.src;
+  } catch {}
+  return { pic, icon: T.icon || 'mdiViewDashboardOutline', name: x.type === 'cgames' ? rowName(x) : T.name || '' };
+}
+const clockShort = computed(() => now.time);
 const rowName = (t) => (t.type === 'cgames' ? `${platformById(t.platformId)?.display_name || 'Console'} Games` : TILES[t.type].name);
 const rowView = (t) => listOf(t).slice(sel[t.id] || 0);
 const achView = (t) => achOf(t).list.slice(sel[t.id] || 0);
@@ -531,7 +555,7 @@ function openTile(t, ev) {
   if (T === 'week') {
     const most = roms.value.filter((r) => store.play[r.id]?.min).sort((a, b) => store.play[b.id].min - store.play[a.id].min);
     if (!most.length) return;
-    store.homeLists = { ...(store.homeLists || {}), 'start-most': { id: 'start-most', name: 'Most played', icon: 'mdiChartBar', rom_ids: most.map((r) => r.id), auto: true, ordered: true, description: 'From Start' } };
+    store.homeLists = { ...(store.homeLists || {}), 'start-most': { id: 'start-most', name: 'Most Played', icon: 'mdiChartBar', rom_ids: most.map((r) => r.id), auto: true, ordered: true, description: 'From Start' } };
     return go('collection', { collectionId: 'start-most' });
   }
   if (T === 'storage') { store.settingsSection = 'storage'; return go('settings'); }
@@ -712,7 +736,8 @@ async function removePage() {
 // the pages overview
 const ov = ref(null), ovEl = ref(null);
 let ovLayer = null;
-const pgKey = (pg, i) => (pg[0]?.id || 'empty') + ':' + pg.length + ':' + i;
+// a page's key follows its tiles, not its place, so a page that moves slides there instead of being drawn twice (0.9.28)
+const pgKey = (pg, i) => (pg.length ? pg.map((x) => x.id).sort().join('|') : 'empty-' + i);
 const ovRows = (pg) => Math.max(4, bottom(pg));
 function openOv() {
   if (ov.value) return closeOv();
@@ -721,7 +746,7 @@ function openOv() {
   nextTick(() => {
     ovLayer = pushLayer(ovEl.value, {
       back: () => (ov.value.moving != null ? (ov.value.moving = null) : closeOv()),
-      lt: closeOv, rt: closeOv, start: closeOv, select() {}, x() {}, y() {}, lb() {}, rb() {},
+      lt() {}, rt() {}, start: closeOv, select() {}, x() {}, y() {}, lb: closeOv, rb: closeOv,
       left: () => (ov.value.moving != null ? ovMove(-1) : false), right: () => (ov.value.moving != null ? ovMove(1) : false),
     });
     focusFirst(ovEl.value, `[data-key="pg-${page.value}"]`);
@@ -856,9 +881,9 @@ function hDown(t, edge, e) {
 
 // ---- controller
 const hints = () => editing.value
-  ? (mode.value === 'move' ? [{ b: 'A', label: 'Put down' }, { b: 'B', label: 'Put down' }]
+  ? (mode.value === 'move' ? [{ b: 'A', label: 'Put Down' }, { b: 'B', label: 'Put Down' }]
     : mode.value === 'size' ? [{ b: 'LB+RB', label: 'Corner' }, { b: 'A', label: 'Done' }, { b: 'B', label: 'Done' }]
-    : [{ b: 'A', label: 'Pick up' }, { b: 'X', label: 'Resize' }, ...(CONFIG[focusedTile()?.type] ? [{ b: 'SELECT', label: 'Change' }] : []), { b: 'Y', label: 'Remove' }, { b: 'RS', label: 'Pages' }, { b: 'LT+RT', label: 'All Pages' }, { b: 'B', label: 'Done' }])
+    : [{ b: 'A', label: 'Pick Up' }, { b: 'X', label: 'Resize' }, ...(CONFIG[focusedTile()?.type] ? [{ b: 'SELECT', label: 'Change' }] : []), { b: 'Y', label: 'Remove' }, { b: 'RS', label: 'Pages' }, { b: 'LB+RB', label: 'All Pages' }, { b: 'B', label: 'Done' }])
   : [{ b: 'A', label: 'Open' }, { b: 'A', label: 'Hold: Arrange' }, ...(pages.value.length > 1 ? [{ b: 'RS', label: 'Pages' }] : []), ...((focusedId.value === 'continue' && playing.value.length > 1) || STEPS.has(tiles.value.find((x) => x.id === focusedId.value)?.type) ? [{ b: 'LB+RB', label: focusedId.value && tiles.value.find((x) => x.id === focusedId.value)?.type === 'trophies' ? 'Unlock' : 'Game' }] : []), { b: 'Y', label: 'Search' }];
 const focusedTile = () => tiles.value.find((t) => t.id === document.activeElement?.dataset?.id);
 const dirH = (dir) => () => {
@@ -880,16 +905,19 @@ useView({
   x: () => { const t = focusedTile(); if (editing.value && t) { setMode('size'); return true; } return false; },
   y: () => { if (!editing.value) return false; const t = focusedTile(); if (t) removeTile(t); return true; },
   back: () => { if (!editing.value) return false; if (mode.value) setMode(''); else stopEdit(); return true; },
-  lb: () => { if (mode.value === 'size') return stepCorner(-1), true; const t = focusedTile(); if (t?.type === 'continue' && playing.value.length > 1) stepGame(-1); else if (t && !editing.value) stepTile(t, -1); },
-  rb: () => { if (mode.value === 'size') return stepCorner(1), true; const t = focusedTile(); if (t?.type === 'continue' && playing.value.length > 1) stepGame(1); else if (t && !editing.value) stepTile(t, 1); },
+  // arranging (0.9.28, owner): L1/R1 opens the pages overview; in resize mode it still picks the corner
+  lb: () => { if (mode.value === 'size') return stepCorner(-1), true; if (editing.value) return openOv(), true; const t = focusedTile(); if (t?.type === 'continue' && playing.value.length > 1) stepGame(-1); else if (t && !editing.value) stepTile(t, -1); },
+  rb: () => { if (mode.value === 'size') return stepCorner(1), true; if (editing.value) return openOv(), true; const t = focusedTile(); if (t?.type === 'continue' && playing.value.length > 1) stepGame(1); else if (t && !editing.value) stepTile(t, 1); },
   rsleft: () => goPage(page.value - 1), rsright: () => goPage(page.value + 1),
-  lt: () => (editing.value ? (openOv(), true) : false), rt: () => (editing.value ? (openOv(), true) : false),
+  lt: () => (editing.value ? true : false), rt: () => (editing.value ? true : false), // arranging: the tabs stay put
   select: () => { const t = focusedTile(); if (!editing.value || !t || !CONFIG[t.type]) return false; configure(t); return true; },
 }, hints);
 
 let clockT = 0, spaceT = 0, ro = null;
 onMounted(async () => {
   clockT = setInterval(tick, 5000);
+  // 0.9.28 (owner: hints are hidden now, so first-timers get Start's tips once, in a short tour)
+  if (store.config.ui.toured && !store.config.ui.startTips) setTimeout(async () => { if (store.modal || store.route.name !== 'start') return; saveConfig({ ui: { startTips: 1 } }); await openModal('tour', { start: true, only: true }); }, 900);
   loadSpace(); spaceT = setInterval(loadSpace, 60000);
   loadWeek(); loadAch();
   measure();
@@ -1059,7 +1087,15 @@ watch(() => store.play, loadWeek);
 .st-ov-page:focus { box-shadow: var(--ring); }
 .st-ov-page.moving { transform: translateY(-8px) scale(1.04); box-shadow: var(--ring), 0 24px 50px rgba(0, 0, 0, 0.55); }
 .st-ov-map { position: relative; aspect-ratio: 16 / 9; border-radius: var(--r-md); background: rgba(255, 255, 255, 0.03); overflow: hidden; }
-.st-ov-map i { position: absolute; box-sizing: border-box; border: 2px solid transparent; background: rgba(255, 255, 255, 0.16); border-radius: 4px; background-clip: padding-box; }
+.st-ov-map i { position: absolute; box-sizing: border-box; border: 2px solid transparent; background: rgba(255, 255, 255, 0.12); border-radius: 6px; background-clip: padding-box; background-size: cover; background-position: center 30%; overflow: hidden; display: flex; align-items: flex-end; padding: 4px; }
+.st-ov-map i.pic { background-color: #111; }
+.st-ov-tag { display: flex; align-items: center; gap: 4px; min-width: 0; color: rgba(255, 255, 255, 0.8); font-size: 10px; font-weight: 600; }
+.st-ov-tag em { font-style: normal; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.st-ov-clock { align-self: center; margin: auto; font-family: var(--display); font-weight: 800; font-size: clamp(12px, 1.4vw, 22px); color: #fff; }
+.st-ov-page { position: relative; transition: transform 260ms var(--ease-out), box-shadow 260ms var(--ease-out), opacity 200ms ease; }
+.st-ov-page.dim { opacity: 0.55; }
+.st-ov-carry { position: absolute; top: -12px; left: 50%; transform: translateX(-50%); display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; background: var(--focus); color: var(--on-focus); font-size: var(--t-xs); font-weight: 700; box-shadow: 0 6px 16px rgba(0, 0, 0, 0.45); }
+.st-ovm-move { transition: transform 300ms cubic-bezier(0.32, 0.72, 0, 1); }
 .st-ov-n { display: flex; justify-content: space-between; font-weight: 700; font-family: var(--display); }
 .st-ov-n em { font-style: normal; font-weight: 500; color: var(--muted); font-family: var(--body); font-size: var(--t-sm); }
 .st-pages { flex: none; align-self: center; display: flex; align-items: center; gap: 8px; padding: 6px 0 10px; } /* its own row under the board: never over a tile (0.9.24) */
