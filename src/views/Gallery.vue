@@ -108,6 +108,8 @@ import { addGames } from '../steam.js';
 import { IS_ANDROID } from '../platform.js';
 // Android: Steam only when Settings → Android → Steam & PC game apps is on
 const steamOn = computed(() => !IS_ANDROID || store.config?.android?.steamApps === true);
+// Android: Install to for many games at once (src/android/drives.js); the desktop passes nothing
+const installTo = async (count) => (import.meta.env.MODE === 'android' ? (await import('../android/drives.js')).pickDrive({ count }) : undefined);
 import { useView } from '../useView.js';
 import { ensureFocus } from '../nav.js';
 import Icon from '../components/Icon.vue';
@@ -316,7 +318,9 @@ async function bulk(what) {
     if (!todo.length) { toast('Those are all on this device already', 'info', 2200); return; }
     const size = todo.reduce((s, r) => s + (r.fs_size_bytes || 0), 0);
     if (!(await confirm(`Download ${todo.length} game${todo.length === 1 ? '' : 's'}?`, `${bytes(size)} total`, 'Download'))) return;
-    for (const r of todo) await download(r, { checkSpace: todo.length === 1 });
+    const root = await installTo(todo.length); // Android: which drive, asked once
+    if (root === null) return;
+    for (const r of todo) await download(r, { checkSpace: todo.length === 1, root });
   }
   if (what === 'collection' && !(await addToCollection(roms.map((r) => r.id)))) return;
   if (what === 'uncollect') {
@@ -380,7 +384,9 @@ async function downloadAll() {
   const size = todo.reduce((s, r) => s + (r.fs_size_bytes || 0), 0);
   const space = mode.value === 'platform' ? await call('fs:space', platform.value.target?.path) : null;
   if (!(await confirm(`Download ${todo.length} games?`, `${bytes(size)} total${space ? `\n${bytes(space.free)} free on that drive` : ''}`, 'Download all'))) return;
-  for (const r of todo) await download(r, { checkSpace: false }); // the confirm above already showed the space
+  const root = await installTo(todo.length); // Android: which drive, asked once
+  if (root === null) return;
+  for (const r of todo) await download(r, { checkSpace: false, root }); // the confirm above already showed the space
 }
 
 onMounted(async () => {

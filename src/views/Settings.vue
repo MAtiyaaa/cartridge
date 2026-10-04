@@ -78,6 +78,8 @@
               <div style="min-width: 0"><div class="lbl2">BIOS folder</div><div class="mono">{{ store.config.biosPath || 'Not set' }}</div></div>
               <button class="btn small" data-focus @click="browseBios"><Icon name="mdiFolderOpen" :size="18" />Browse</button>
             </div>
+            <!-- Android: SD cards and USB drives, each with its own ROMs folder (Install to) -->
+            <AndroidDrives v-if="IS_ANDROID" />
             <StorageManager :key="storageKey" />
             <LibraryCheck />
           </template>
@@ -529,6 +531,7 @@ import { padInfo } from '../pad.js';
 const IS_ANDROID = import.meta.env.MODE === 'android';
 const AndroidSettings = import.meta.env.MODE === 'android' ? defineAsyncComponent(() => import('../android/AndroidSettings.vue')) : null;
 const AndroidEmulators = import.meta.env.MODE === 'android' ? defineAsyncComponent(() => import('../android/AndroidEmulators.vue')) : null;
+const AndroidDrives = import.meta.env.MODE === 'android' ? defineAsyncComponent(() => import('../android/AndroidDrives.vue')) : null;
 
 const el = ref(null);
 const paneEl = ref(null);

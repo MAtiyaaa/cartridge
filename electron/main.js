@@ -491,6 +491,19 @@ function platformPath(p) {
   return { path: path.join(root, cands[0]), source: 'auto', exists: false };
 }
 
+// Android: games can go to another drive (an SD card). Each drive's ROMs folder is picked once
+// (config.android.driveRoots: drive -> folder, src/android/drives.js); a console's folder there is named
+// the way it is in the main ROMs folder, or made with its first ES-DE name.
+const driveRoots = () => (onAndroid ? Object.values(config.android?.driveRoots || {}).filter((r) => typeof r === 'string' && r && isDir(r) && path.resolve(r) !== path.resolve(config.romsRoot || '/')) : []);
+function platformPathIn(root, p) {
+  const cands = [...(PLATFORM_MAP[p.slug] || []), ...(p.fs_slug ? [p.fs_slug] : []), p.slug].filter(Boolean);
+  const lower = new Map(listDirNames(root).map((n) => [n.toLowerCase(), n]));
+  for (const c of cands) { const hit = lower.get(c.toLowerCase()); if (hit) return { path: path.join(root, hit), exists: true }; }
+  return { path: path.join(root, cands[0]), exists: false };
+}
+// the other drives' ROMs folders and their console folders: never deleted or moved as a whole
+const driveFolders = () => driveRoots().flatMap((r) => [r, ...(library?.platforms || []).map((pl) => platformPathIn(r, pl).path)]);
+
 // ---------------------------------------------------------------- installed detection
 function candidatesFor(rom) {
   const names = [rom.fs_name, `${rom.fs_name}.m3u`];
@@ -522,6 +535,11 @@ function gameIndex(platform) {
   if (root && !config.paths[platform.slug]) {
     const want = new Set([...(PLATFORM_MAP[platform.slug] || []), platform.fs_slug, platform.slug].filter(Boolean).map((n) => n.toLowerCase()));
     for (const n of listDirNames(root)) if (want.has(n.toLowerCase())) dirs.push(path.join(root, n));
+  }
+  // games on the other drives (an SD card's ROMs folder)
+  if (driveRoots().length) {
+    const want = new Set([...(PLATFORM_MAP[platform.slug] || []), platform.fs_slug, platform.slug].filter(Boolean).map((n) => n.toLowerCase()));
+    for (const r of driveRoots()) for (const n of listDirNames(r)) if (want.has(n.toLowerCase())) dirs.push(path.join(r, n));
   }
   const exact = new Map(), byKey = new Map(), byBase = new Map(), top = new Set();
   const add = (full, name, isDir) => {
@@ -1547,7 +1565,7 @@ async function restoreBackup(it) {
 async function redownload(romId) {
   const target = manifest[romId]?.path || installedMap[romId];
   if (!target || target === MARKED) throw new Error('This game has no downloaded copy.');
-  const roots = new Set([config.romsRoot, ...(library?.platforms || []).map((pl) => platformPath(pl).path)].filter(Boolean).map((x) => path.resolve(x)));
+  const roots = new Set([config.romsRoot, ...(library?.platforms || []).map((pl) => platformPath(pl).path), ...driveFolders()].filter(Boolean).map((x) => path.resolve(x)));
   if (roots.has(path.resolve(target))) throw new Error('Refusing to move a whole console folder');
   const r = romIndexMain().get(romId);
   if (!r) throw new Error('Game not found');
@@ -1765,7 +1783,9 @@ async function runJob(it) {
   let lastT = Date.now(), lastB = 0;
   try {
     const rom = await api(`/api/roms/${it.romId}`);
-    const target = platformPath({ slug: rom.platform_slug, fs_slug: rom.platform_fs_slug }).path;
+    // Android: Install to another drive (it.root, one of the drives' ROMs folders)
+    const onDrive = onAndroid && it.root && driveRoots().some((r) => path.resolve(r) === path.resolve(it.root));
+    const target = (onDrive ? platformPathIn(it.root, { slug: rom.platform_slug, fs_slug: rom.platform_fs_slug }) : platformPath({ slug: rom.platform_slug, fs_slug: rom.platform_fs_slug })).path;
     if (!target) throw new Error('No folder set for this platform. Set it in Settings.');
     await fsp.mkdir(target, { recursive: true });
     const files = (rom.files || []).slice().sort((a, b) => a.full_path.localeCompare(b.full_path));
@@ -3238,6 +3258,7 @@ const handlers = {
     if (patch.ui && 'scale' in patch.ui) applyZoom();
     if ('sgdbKey' in patch) { for (const k of Object.keys(logoCache)) if (!logoCache[k].file) delete logoCache[k]; saveLogoCache(); }
     if ('romsRoot' in patch && library) { broadcast('library', publicLibrary()); computeInstalled(); }
+    if (onAndroid && patch.android?.driveRoots && library) computeInstalled(); // another drive's ROMs folder: its games count as installed
     return config;
   },
   'config:setPath': ({ slug, path: p }) => {
@@ -3377,7 +3398,7 @@ const handlers = {
     }
     if (target) {
       // never delete a whole console folder or the ROMs root
-      const roots = new Set([config.romsRoot, ...(library?.platforms || []).map((pl) => platformPath(pl).path)].filter(Boolean).map((x) => path.resolve(x)));
+      const roots = new Set([config.romsRoot, ...(library?.platforms || []).map((pl) => platformPath(pl).path), ...driveFolders()].filter(Boolean).map((x) => path.resolve(x)));
       if (roots.has(path.resolve(target))) throw new Error('Refusing to delete a whole console folder');
       await removeWithProgress(target, romId);
     }
@@ -3446,7 +3467,7 @@ const handlers = {
   'pkg:dropDownload': async ({ romId }) => {
     const m = manifest[romId], rec = installs[romId];
     if (!m?.path || m.installedIn || !rec?.created) throw new Error('Cartridge didn’t install this game in an emulator.');
-    const roots = new Set([config.romsRoot, ...(library?.platforms || []).map((pl) => platformPath(pl).path)].filter(Boolean).map((x) => path.resolve(x)));
+    const roots = new Set([config.romsRoot, ...(library?.platforms || []).map((pl) => platformPath(pl).path), ...driveFolders()].filter(Boolean).map((x) => path.resolve(x)));
     if (roots.has(path.resolve(m.path))) throw new Error('Refusing to delete a whole console folder');
     await removeWithProgress(m.path, romId);
     manifest[romId] = { ...m, path: rec.dir, installedIn: rec.emu, download: m.path };

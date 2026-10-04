@@ -278,20 +278,23 @@ export function downloadFor(romId) {
   for (let i = store.downloads.length - 1; i >= 0; i--) if (store.downloads[i].romId === romId) return store.downloads[i];
   return null;
 }
-export async function download(rom, { checkSpace = true } = {}) {
+// Android: root is the drive it goes to (Install to, src/android/drives.js): '' the main ROMs folder, else another
+// drive's ROMs folder; undefined asks (ask: false takes the drive used last). The desktop never passes it.
+export async function download(rom, { checkSpace = true, root, ask = true } = {}) {
   const p = platformById(rom.platform_id);
-  if (p && !p.target?.path) { toast(`Set a folder for ${p.display_name} first`, 'error'); return false; }
-  if (checkSpace && p?.target?.path && rom.fs_size_bytes && !(await roomFor(rom, p))) return false;
-  await call('dl:add', { romId: rom.id, name: rom.name, platformSlug: rom.platform_slug, platformName: rom.platform_display_name, size: rom.fs_size_bytes, cover: rom.path_cover_small || rom.url_cover });
+  if (import.meta.env.MODE === 'android' && root === undefined) { root = await (await import('./android/drives.js')).pickDrive({ ask }); if (root === null) return false; }
+  if (p && !p.target?.path && !root) { toast(`Set a folder for ${p.display_name} first`, 'error'); return false; }
+  if (checkSpace && (root || p?.target?.path) && rom.fs_size_bytes && !(await roomFor(rom, p, root))) return false;
+  await call('dl:add', { romId: rom.id, name: rom.name, platformSlug: rom.platform_slug, platformName: rom.platform_display_name, size: rom.fs_size_bytes, cover: rom.path_cover_small || rom.url_cover, ...(root ? { root } : {}) });
   toast(`Downloading ${rom.name}`, 'info', 2000, 'mdiDownload');
   return true;
 }
 
 // Before a download: will it fit? Counts what is still downloading to the same folder too.
-async function roomFor(rom, p) {
-  const sp = await call('fs:space', p.target.path).catch(() => null);
+async function roomFor(rom, p, root) {
+  const sp = await call('fs:space', root || p.target.path).catch(() => null);
   if (!sp) return true;
-  const same = (d) => ['queued', 'downloading'].includes(d.status) && store.lib?.platforms.find((x) => x.slug === d.platformSlug)?.target?.path === p.target.path;
+  const same = (d) => ['queued', 'downloading'].includes(d.status) && (root ? d.root === root : !d.root && store.lib?.platforms.find((x) => x.slug === d.platformSlug)?.target?.path === p.target.path);
   const pending = store.downloads.filter(same).reduce((s, d) => s + Math.max(0, (d.total || 0) - (d.received || 0)), 0);
   // PS4/PS5 zips are unpacked next to the zip before it is deleted: room for both
   const unpack = ['ps4', 'ps5'].some((x) => [rom.platform_slug, rom.platform_fs_slug].includes(x)) && /\.zip$/i.test(rom.fs_name || '');
