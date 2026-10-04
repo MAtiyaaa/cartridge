@@ -283,8 +283,8 @@ onMounted(async () => {
     x: () => viewHandler('x'),
     rsleft: () => { viewHandler('rsleft'); }, rsright: () => { viewHandler('rsright'); }, // right stick: Start's pages
     // Triggers always move between the top tabs; bumpers belong to the page (consoles, collections)
-    lt: () => cycleTab(-1),
-    rt: () => cycleTab(1),
+    lt: () => (viewHandler('lt') !== false ? undefined : cycleTab(-1)), // a page can keep LT/RT (0.9.24: Start's page overview)
+    rt: () => (viewHandler('rt') !== false ? undefined : cycleTab(1)),
     select: () => (viewHandler('select') !== false ? undefined : tab('downloads')),
     start: () => { if (viewHandler('start') !== false) return; store.quickMenu = !store.quickMenu; },
   });

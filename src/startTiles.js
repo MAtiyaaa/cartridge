@@ -26,15 +26,18 @@ export const TILES = {
   daily: { name: 'Game of the day', icon: 'mdiWhiteBalanceSunny', size: [2, 2] },
   image: { name: 'A picture', icon: 'mdiImageOutline', size: [2, 2] },
   html: { name: 'Your own widget', icon: 'mdiCodeTags', size: [2, 1] },
+  // 0.9.24 (owner: console pages, like a PS3 page): one console's games, one console at a glance
+  cgames: { name: 'A console’s games', icon: 'mdiGamepadVariantOutline', size: [4, 1] },
+  cstats: { name: 'A console at a glance', icon: 'mdiChartBoxOutline', size: [2, 1] },
 };
 // the add-a-widget sheet, grouped; these can be added more than once (each with its own game, console,
 // picture, page or trophies of one console)
 export const GROUPS = [
-  ['Play', ['continue', 'recent', 'fresh', 'favs', 'recs', 'surprise', 'daily', 'game', 'console', 'consoles']],
-  ['At a Glance', ['clock', 'week', 'stats', 'storage', 'downloads', 'trophies']],
+  ['Play', ['continue', 'cgames', 'recent', 'fresh', 'favs', 'recs', 'surprise', 'daily', 'game', 'console', 'consoles']],
+  ['At a Glance', ['clock', 'week', 'stats', 'cstats', 'storage', 'downloads', 'trophies']],
   ['Make Your Own', ['image', 'html']],
 ];
-export const MANY = new Set(['game', 'console', 'image', 'html', 'trophies']);
+export const MANY = new Set(['game', 'console', 'image', 'html', 'trophies', 'cgames', 'cstats']);
 
 const DEF = [['continue', 4, 2], ['clock', 2, 1], ['storage', 2, 1], ['week', 4, 1], ['consoles', 4, 1], ['fresh', 4, 1], ['recent', 4, 1], ['trophies', 4, 1]];
 export const DEFAULT = () => pack(DEF.map(([type, w, h]) => ({ id: type, type, w, h })));
