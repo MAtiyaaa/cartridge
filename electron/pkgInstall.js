@@ -382,6 +382,16 @@ async function installVita({ cmd, prefs, item, zrif, onStep = () => {}, signal }
     const app = path.join(prefs[0], 'ux0/app', item.titleId);
     return isDir(app) ? [{ serial: item.titleId, dir: app, created: ![...before.values()].includes(item.titleId), licenced: vitaLicenced(prefs[0], item.titleId, app) }] : [];
   }
+  // 0.9.23 (owner: "Vita3K still doesn't install"; read from Vita3K main.cpp and app/apps_list.cpp):
+  // before it installs anything given on its command line, Vita3K builds its games list, and scan_apps()
+  // fails when <storage>/ux0/app doesn't exist yet ("Failed to initialize apps list", exit 1). On a fresh
+  // Vita3K, or one that only has firmware, that folder isn't there, so nothing ever installed. It is made
+  // first, empty, in Vita3K's own storage (the folder Vita3K would make itself on its first game).
+  try { fs.mkdirSync(path.join(prefs[0], 'ux0/app'), { recursive: true }); } catch {}
+  // a copy that can't start at all (Vita3K's Qt6 zip build on SteamOS, which an older Cartridge update
+  // put in place): say so plainly instead of a silent failure
+  const libs = require('./emuUpdates').missingLibs(cmd?.exe);
+  if (libs.length) throw new Error(`Vita3K can’t start on this system (it needs ${libs.slice(0, 2).join(', ')}${libs.length > 2 ? '…' : ''}). Repair it in Settings → Emulators → Vita3K, then try again.`);
   const env = { ...process.env };
   for (const k of ['LD_PRELOAD', 'LD_LIBRARY_PATH', 'APPDIR', 'APPIMAGE', 'ARGV0', 'OWD']) delete env[k];
   const args = item.kind === 'pkg' ? ['--pkg', item.file, '--zrif', zrif || item.zrif] : [item.file];

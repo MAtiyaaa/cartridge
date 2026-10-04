@@ -6,6 +6,26 @@ The branch for 0.9.3 work is `claude/relaxed-fermat-30pigp`. Pull it before star
 
 ---
 
+## 4 Oct 2026 · 0.9.23 Make It Yours
+
+Owner's list (after reading the other account's handover): Vita3K update bricked the AppImage and installs still failed; Emulators delete/redownload, stable vs nightly, page link, Flatpak updates too slow, shadPS4 versions; add-ons install per emulator automatically, more texture pack sources (not PS2), shadPS4 and GoldHEN patches as tabs, Switch IDs and version, RPCS3 patches follow the game version; per-game emulator settings; instant Home hero, wider backgrounds, Switch icon size, media bar bugs; calmer animations like Start; a Start overhaul (pages on the right stick, widgets, custom HTML and pictures, tile-move bug, rows, Surprise me, trophies per console, console cards, 1x1 play time, wording, add button, Start by default); keyboard rows, Settings left/right, touch cursor, onboarding wording; Syncthing integration; Cartridge closing in Game Mode when another game closes.
+
+Done: all of it (details in CLAUDE.md 0.9.23). Causes found:
+- Vita3K: its Linux zip is a Qt 6 build; SteamOS has no Qt 6, so the zip update made Vita3K unopenable. Installs: Vita3K's `init_apps_list` exits when `ux0/app` is missing.
+- Tile-move bug: `settle` changed every tile for good on each step of a drag; a tile pushed down never came back.
+- Keyboard rows: `pickRow` only kept the column inside one parent element; each key row is its own element.
+- Game Mode closing: most likely a SIGTERM/SIGHUP reaching Cartridge as Steam ends the other game; logged as "got SIGTERM while another app was in front". Owner to confirm on the device; if it still closes, the log line says which signal.
+
+Answered: RPCS3 patches already follow the installed game version (0.9.21, `rpcs3List`). Texture catalogs: no machine-readable source for HenrikoMagnifico and others (their sites can't be reached from here), so they are Featured links plus Install a Download. Gemini's GTK4/libadwaita idea isn't possible in Electron; touch is fixed in nav.js instead.
+
+Checked here: `npm test` (122), vite build, Playwright on the mock RomM: Settings left/right, keyboard columns, Syncthing page, Start (opens on Start, arrange, drag away and back, add widgets, pages, right stick, HTML widget runs and can't reach Cartridge), screenshots at 1280x800 and 1920x1080.
+
+Owner to test on the device: Vita3K Repair then a Vita install; a Flatpak update; shadPS4 Versions add and per-game pick; Game Settings for a PS3 and a PS2 game; a PCSX2 patch mod and a Dolphin graphics mod; Switch Add-ons version; leaving Cartridge, running another game and closing it (Game Mode); touch in Game Mode; Start pages with the right stick, widgets, a GIF, a countdown; Syncthing with a main server; Home header speed.
+
+Still blocked: installing Graphify and the skills (the environment's safety check). Slow downloads: still need the log's MB/s line and a browser comparison.
+
+---
+
 ## 3 Oct 2026 · 0.9.22 Home Fix
 
 Owner: Home showed, then after down twice or right once everything disappeared, and no headers showed. Cause: a name clash in Home.vue (`heroArt` the computed vs the store function, not imported), a TypeError in render from 0.9.21. Checked with the stub harness: 0.9.21 code ends with 0 rows and no hero after the same moves, 0.9.22 keeps both. Owner to test on the device: Home with SteamGridDB headers, moving through rows.

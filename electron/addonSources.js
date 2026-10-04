@@ -90,4 +90,28 @@ async function gbFiles(modId, { fetchImpl = webFetch } = {}) {
   return parseGbFiles(await gbGet(`/Mod/${Number(modId)}?_csvProperties=_aFiles,_sName,_aSubmitter`, fetchImpl));
 }
 
-module.exports = { PS2_CATALOG, parsePs2Catalog, ps2Catalog, ps2For, gbGame, gbMods, gbFiles, parseGbMods, parseGbFiles, key, titleForms };
+// Featured texture packs for other consoles (0.9.23, owner: more high-quality catalogs like
+// HenrikoMagnifico's for Nintendo games). No such catalog has a machine-readable list or direct
+// downloads (their packs are on the creators' own pages, Mega or Google Drive), so this is a short,
+// hand-checked list: each pack's page opens in the browser, and the file you download installs from
+// Add-ons → Texture Packs → Install a Download into the right folder. Matched by Dolphin's game ID
+// (the first 3 characters, every region), from each pack's own page or list.
+const FEATURED = [
+  { con: 'gc', ids: ['GZL'], title: 'The Legend of Zelda: The Wind Waker 4K', author: 'HenrikoMagnifico', page: 'https://www.henrikomagnifico.com/wind-waker-4k' },
+  { con: 'gc', ids: ['GZ2'], title: 'The Legend of Zelda: Twilight Princess 4K', author: 'HenrikoMagnifico', page: 'https://www.henrikomagnifico.com/zelda-twilight-princess-4k' },
+  { con: 'gc', ids: ['GMS'], title: 'Super Mario Sunshine 4K', author: 'HenrikoMagnifico', page: 'https://www.henrikomagnifico.com/super-mario-sunshine-4k' },
+  { con: 'gc', ids: ['GLM'], title: 'Luigi’s Mansion 4K', author: 'HenrikoMagnifico', page: 'https://www.henrikomagnifico.com/luigis-mansion-4k' },
+  { con: 'gc', ids: ['GPI'], title: 'Pikmin 4K', author: 'HenrikoMagnifico', page: 'https://www.henrikomagnifico.com/pikmin-4k' },
+  { con: 'gc', ids: ['GPV'], title: 'Pikmin 2 4K', author: 'HenrikoMagnifico', page: 'https://www.henrikomagnifico.com/pikmin-2-4k-texture-pack' },
+  { con: 'gc', ids: ['GM8'], title: 'Metroid Prime HD', author: 'Dolphin community (rapka’s list)', page: 'https://github.com/rapka/dolphin-textures/blob/master/PACKS.md' },
+  { con: 'gc', ids: ['GAL'], title: 'Super Smash Bros. Melee HD', author: 'Dolphin community (rapka’s list)', page: 'https://github.com/rapka/dolphin-textures/blob/master/PACKS.md' },
+  { con: 'gc', ids: ['GT3'], title: 'Tony Hawk’s Pro Skater 3 HD', author: 'Dolphin community (rapka’s list)', page: 'https://github.com/rapka/dolphin-textures/blob/master/PACKS.md' },
+  { con: 'gc', ids: ['GVJ'], title: 'Viewtiful Joe HD', author: 'Dolphin community (rapka’s list)', page: 'https://github.com/rapka/dolphin-textures/blob/master/PACKS.md' },
+  { con: 'gc', ids: ['GRS'], title: 'Soulcalibur II HD', author: 'Dolphin community (rapka’s list)', page: 'https://github.com/rapka/dolphin-textures/blob/master/PACKS.md' },
+];
+function featuredFor(ids = {}) {
+  const g = String(ids.gameId || '').toUpperCase().slice(0, 3);
+  return g ? FEATURED.filter((f) => f.ids.includes(g)).map((f, i) => ({ source: 'page', id: 'f:' + f.ids[0] + i, name: f.title, authors: [f.author], page: f.page })) : [];
+}
+
+module.exports = { FEATURED, featuredFor, PS2_CATALOG, parsePs2Catalog, ps2Catalog, ps2For, gbGame, gbMods, gbFiles, parseGbMods, parseGbFiles, key, titleForms };

@@ -142,11 +142,13 @@ function fitHero() {
   else if (over < -12 && logoMaxH.value < ceil) logoMaxH.value = Math.min(ceil, logoMaxH.value + Math.floor(-over - 8));
 }
 let ro;
-// Fit again once the logo image arrives and after the view's entrance animation: coming back from a
+// the hero's shape, so SteamGridDB's hero that fits it best is picked (0.9.23, less cut off at the edges)
+const noteAspect = () => { const h = heroEl.value; if (h?.clientHeight) store.heroAspect = Math.round((h.clientWidth / h.clientHeight) * 100) / 100; };
+// Android: fit again once the logo image arrives and after the view's entrance animation: coming back from a
 // game, the first fit ran before either and the top of the hero stayed cut off
 const refit = () => requestAnimationFrame(fitHero);
 onMounted(() => {
-  if (window.ResizeObserver) { ro = new ResizeObserver(refit); if (heroEl.value) ro.observe(heroEl.value); }
+  noteAspect(); if (window.ResizeObserver) { ro = new ResizeObserver(() => requestAnimationFrame(() => { noteAspect(); fitHero(); })); if (heroEl.value) ro.observe(heroEl.value); }
   if (!IS_ANDROID) return;
   heroEl.value?.addEventListener('load', refit, true);
   el.value?.addEventListener('animationend', refit);
@@ -158,7 +160,7 @@ const heroCol = ref(null);
 // Media bar art: a screenshot of the highlighted game (or its cover), or art from the highlighted console/collection
 // SteamGridDB's hero only, no RomM picture first (0.9.21). 0.9.22: the store's heroArt under another name:
 // the computed below is also called heroArt, so calling it here threw and Home vanished on the first game
-const artOf = (r) => heroOf(r)?.src || '';
+const artOf = (r) => heroOf(r) || ''; // { src, blur }: MediaBar blurs a cover standing in for a hero
 const heroArt = computed(() => {
   if (heroRom.value) return artOf(heroRom.value);
   if (heroSys.value) return artOf(romsOf(heroSys.value.id).find((r) => r.shot) || romsOf(heroSys.value.id)[0]);
