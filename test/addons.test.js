@@ -124,3 +124,24 @@ test('Switch .xci title ID from the NCA header, with the header key from prod.ke
   const f = path.join(TMP, 'Game.xci'); fs.writeFileSync(f, Buffer.concat([xh, root]));
   assert.strictEqual(A.switchTitleId(f, [dir]), '0100ABCD12340000');
 });
+
+// 0.9.23: PS2 patch mods go to PCSX2's patches folder, Dolphin graphics mods to GraphicMods, both removable
+test('mods that aren’t textures land in the emulator’s other folders, and come out again', async () => {
+  const L = (rels) => rels.map((rel) => ({ rel, size: 1 }));
+  const to = (rels, kind, o) => I.plan(L(rels), kind, o).map((x) => x.to).sort();
+  assert.deepStrictEqual(to(['60fps/SLUS-21287_9C712FF0.pnach', '60fps/readme.txt'], 'pcsx2', { id: 'SLUS-21287' }), ['@patches/SLUS-21287_9C712FF0.pnach']);
+  assert.deepStrictEqual(to(['Mod/HD HUD/metadata.json', 'Mod/HD HUD/hud.png'], 'dolphin', { id: 'GZLE01' }), ['@graphicmods/HD HUD/hud.png', '@graphicmods/HD HUD/metadata.json']);
+  const z = path.join(TMP, 'pn.zip'); zip(z, { 'p/SLUS-21287_9C712FF0.pnach': '[60 fps]\npatch=1,EE,0,word,0' });
+  const dest = path.join(TMP, 'tex', 'SLUS-21287'), patches = path.join(TMP, 'pcsx2patches');
+  const r = await I.install(z, dest, 'pcsx2', { id: 'SLUS-21287', alt: { patches } });
+  assert.deepStrictEqual(r.files, ['@patches/SLUS-21287_9C712FF0.pnach']);
+  assert.ok(fs.existsSync(path.join(patches, 'SLUS-21287_9C712FF0.pnach')));
+  await I.removeFiles(dest, r.files, { patches });
+  assert.ok(!fs.existsSync(path.join(patches, 'SLUS-21287_9C712FF0.pnach')));
+  // without the other folder known, nothing is written
+  await assert.rejects(I.install(z, dest, 'pcsx2', { id: 'SLUS-21287', alt: {} }), /Unsafe/);
+  // featured packs by Dolphin game ID, any region
+  const S = require('../electron/addonSources');
+  assert.ok(S.featuredFor({ gameId: 'GZLP01' }).some((f) => /Wind Waker/.test(f.name)));
+  assert.deepStrictEqual(S.featuredFor({ gameId: 'XXXX01' }), []);
+});

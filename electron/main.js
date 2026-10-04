@@ -2035,6 +2035,33 @@ async function freshRpcs3Patches(romId) {
   try { const res = await patchesMod.rpcs3DownloadPatches(dir.patches); log('rpcs3 patches', res.updated ? 'downloaded' : 'up to date', dir.patches); if (!res.updated) fs.utimesSync(path.join(dir.patches, 'patch.yml'), new Date(), new Date()); }
   catch (e) { log('rpcs3 patches download failed:', e.message); return `RPCS3’s patch list couldn’t be downloaded (${e.message}).`; }
 }
+// A Switch game's version from its files' names (0.9.23): dumps carry [v<number>] (the title version,
+// 65536 per update) in their names; the highest one in the game's folder is what's installed
+function switchVersionOf(where) {
+  if (!where) return null;
+  let names = [path.basename(where)];
+  try { if (fs.statSync(where).isDirectory()) names = fs.readdirSync(where); } catch {}
+  const vs = names.map((n) => (/\[v(\d{5,10})\]/i.exec(n) || /\bv(\d{5,10})\b/i.exec(n) || [])[1]).filter(Boolean).map(Number);
+  const disp = names.map((n) => (/\b(?:v|ver\.?\s*)(\d+\.\d+(?:\.\d+)?)\b/i.exec(n) || [])[1]).filter(Boolean).sort().pop();
+  if (!vs.length && !disp) return null;
+  const n = vs.length ? Math.max(...vs) : null;
+  return { number: n, update: n != null ? Math.floor(n / 65536) : null, display: disp || null };
+}
+// shadPS4's two patch lists, fetched like its launcher's Download Patches when missing or a week old (0.9.23)
+async function freshShadPatches(romId) {
+  const r = romIndexMain().get(Number(romId));
+  if (!/ps4/i.test(`${r?.platform_slug} ${r?.platform_fs_slug}`)) return;
+  const st = ps4PatchState(Number(romId), r);
+  if (!st.dir) return;
+  const errs = [];
+  for (const repo of Object.keys(patchesMod.SHAD_REPOS)) {
+    let age = Infinity; try { age = Date.now() - fs.statSync(path.join(st.dir, 'patches', repo, 'files.json')).mtimeMs; } catch {}
+    if (age < 7 * 864e5) continue;
+    try { const res = await patchesMod.shadDownloadPatches(st.dir, repo); log('shadps4 patches', repo, res.files, 'files'); }
+    catch (e) { log('shadps4 patches download failed', repo, e.message); errs.push(`${repo === 'shadPS4' ? 'shadPS4’s' : 'GoldHEN’s'} patch list couldn’t be downloaded (${e.message}).`); }
+  }
+  return errs.join(' ') || undefined;
+}
 // PS4 games (a folder with sce_sys/param.sfo) and shadPS4's patch repositories
 function ps4PatchState(romId, r) {
   const where = installedMap[romId];
@@ -2043,8 +2070,10 @@ function ps4PatchState(romId, r) {
   const serial = sfo.TITLE_ID || (`${r?.fs_name || ''} ${r?.name || ''} ${path.basename(where)}`.match(/\b((?:CUSA|PPSA)\d{5})\b/i) || [])[1]?.toUpperCase() || null;
   if (!serial) return { emu: 'shadps4', why: 'Cartridge couldn’t read this game’s serial (CUSA12345).' };
   const ph = patchHome(romId, 'shadps4');
-  const dir = (ph.shad || []).find((d) => fs.existsSync(path.join(d, 'patches'))) || patchesMod.shadDirs()[0];
-  if (!dir) return { emu: 'shadps4', serial, why: 'shadPS4’s patches aren’t on this device yet. In the shadPS4 launcher: right-click a game → Cheats / Patches → Download Patches. Then come back.' };
+  // 0.9.23: shadPS4's user folder even before it has patches (Cartridge downloads them, freshShadPatches)
+  const shadUser = path.join(process.env.XDG_DATA_HOME || path.join(os.homedir(), '.local/share'), 'shadPS4');
+  const dir = (ph.shad || []).find((d) => fs.existsSync(path.join(d, 'patches'))) || patchesMod.shadDirs()[0] || (ph.shad || []).find((d) => fs.existsSync(d)) || (fs.existsSync(shadUser) ? shadUser : null);
+  if (!dir) return { emu: 'shadps4', serial, why: 'shadPS4 hasn’t been started on this device yet, so it has no folder for patches. Start it once, then come back.' };
   return { emu: 'shadps4', serial, version: patchesMod.ps4Version(where), dir };
 }
 // PS2 games: PCSX2 must have the game in its game list (that is where the serial and CRC come from)
@@ -3000,7 +3029,8 @@ const handlers = {
   },
   // Add-ons (0.9.15, checkable part): texture folders and their on/off, read from each emulator
   'addons:emulators': () => { const mine = loadJson(path.join(USER_DATA, 'texture-settings.json'), {}); return require('./addons').emulators().map((e) => ({ ...e, mine: !!mine[e.root] })); },
-  'addons:forGame': ({ romId }) => {
+  'addons:gameIds': ({ romId }) => { let ids = {}; handlers['addons:forGame']({ romId, out: (x) => { ids = x; } }); return ids; },
+  'addons:forGame': ({ romId, out }) => {
     const A = require('./addons'), rom = romIndexMain().get(Number(romId));
     if (!rom) return [];
     const slug = rom.platform_slug, ids = {};
@@ -3015,6 +3045,8 @@ const handlers = {
     if (/\.cia$/i.test(file)) ids.titleId = A.ciaTitleId(file);
     if (slug === 'psx' && /\.(bin|img|iso|cue|chd|pbp)$/i.test(file)) ids.serial = A.psxSerial(file);
     if (slug === 'switch') { const k = require('./bios').status('switch', { roots: emuRootsAll() }); const id = A.switchTitleId(file, k?.ok ? [path.dirname(k.where)] : []); if (id) { ids.switchId = id; ids.switchIdLower = id.toLowerCase(); } }
+    if (slug === 'switch') { const v = switchVersionOf(where && where !== MARKED ? where : ''); if (v) ids.version = v; }
+    if (typeof out === 'function') out(ids);
     return A.forGame(slug, ids, A.emulators());
   },
   // custom textures on in the emulator (0.9.16); off only where Cartridge turned them on
@@ -3043,7 +3075,10 @@ const handlers = {
     if (!rom) return { emus: [], packs: [], installed: [] };
     const emus = handlers['addons:forGame']({ romId });
     const installed = Object.entries(addonRecs()).filter(([, r]) => r.romId === rom.id).map(([key, r]) => ({ key, ...r, files: undefined, count: r.files.length }));
-    const out = { emus, installed, packs: [], source: null, error: '' };
+    const out = { emus, installed, packs: [], source: null, error: '', featured: [] };
+    // 0.9.23: hand-picked texture packs from their creators' pages (Dolphin by game ID)
+    try { if (/^(ngc|gamecube|gc)$/i.test(rom.platform_slug)) { const gid = handlers['addons:gameIds']({ romId }).gameId; out.featured = require('./addonSources').featuredFor({ gameId: gid }); } } catch {}
+    try { if (rom.platform_slug === 'switch') out.version = handlers['addons:gameIds']({ romId }).version || null; } catch {}
     const S = require('./addonSources');
     try {
       if (rom.platform_slug === 'ps2') {
@@ -3079,7 +3114,12 @@ const handlers = {
     const key = `${pack.source}:${pack.id}${file ? ':' + file.id : ''}:${rom.id}:${e.emuRoot}`;
     if (addonRecs()[key]) throw new Error('This add-on is already installed.');
     const dir = path.join(USER_DATA, 'addon-downloads'), base = path.join(dir, String(key).replace(/[^\w.-]+/g, '_'));
-    const urls = pack.source === 'ps2' ? (pack.parts ? pack.parts.map((x) => ({ ...x })) : [{ url: pack.url, size: pack.size, sha256: pack.sha256 }]) : [{ url: file.url, size: file.size, md5: file.md5 }];
+    // 0.9.23: a pack you downloaded yourself (any site) installs from its file, the same way
+    const local = pack.source === 'local';
+    if (local && !(pack.file && fs.existsSync(pack.file) && /\.(zip|7z|rar)$/i.test(pack.file))) throw new Error('Pick a .zip, .7z or .rar file.');
+    // the emulator's other folders a mod may need: PCSX2's patches, Dolphin's GraphicMods (beside Textures)
+    const alt = { patches: e.id === 'pcsx2' ? path.join(e.emuRoot, 'patches') : null, graphicmods: e.id === 'dolphin' ? path.join(path.dirname(e.root), 'GraphicMods') : null };
+    const urls = local ? [] : pack.source === 'ps2' ? (pack.parts ? pack.parts.map((x) => ({ ...x })) : [{ url: pack.url, size: pack.size, sha256: pack.sha256 }]) : [{ url: file.url, size: file.size, md5: file.md5 }];
     const total = urls.reduce((s, u) => s + (u.size || 0), 0);
     const free = await fsp.statfs(fs.existsSync(dest) ? dest : e.root).then((st) => st.bavail * st.bsize).catch(() => Infinity);
     if (total * 2 > free) throw new Error(`Not enough space: this add-on needs about ${Math.ceil((total * 2) / 1e9)} GB while it installs.`);
@@ -3096,18 +3136,23 @@ const handlers = {
         if (u.md5 && (await A.sha256(f, 'md5')) !== u.md5) throw new Error('The download is damaged (its checksum doesn’t match). Try again.');
         files.push(f);
       }
-      let archive = files[0];
+      let archive = local ? pack.file : files[0];
       if (files.length > 1) { archive = base + '.zip'; send({ state: 'join' }); await A.join(files, archive); if ((await A.sha256(archive)) !== pack.sha256) throw new Error('The joined download is damaged. Try again.'); }
       send({ state: 'install', pct: 0 });
-      const r = await A.install(archive, dest, kind, { id: kind === 'switch' ? '' : path.basename(dest), name: pack.name, signal: addonRun.abort.signal, onFile: (n, of) => { const now = Date.now(); if (now - last > 400) { last = now; send({ state: 'install', pct: Math.floor((n / of) * 100) }); } } });
+      const r = await A.install(archive, dest, kind, { id: kind === 'switch' ? '' : path.basename(dest), name: pack.name, alt, tmpBase: base, signal: addonRun.abort.signal, onFile: (n, of) => { const now = Date.now(); if (now - last > 400) { last = now; send({ state: 'install', pct: Math.floor((n / of) * 100) }); } } });
       const recs = addonRecs();
-      recs[key] = { source: pack.source, id: pack.id, fileId: file?.id || null, name: pack.name, category: pack.category || '', romId: rom.id, game: rom.name, emu: e.id, emuName: e.name, emuRoot: e.emuRoot, dest, files: r.files, bytes: r.bytes, at: Date.now(), from: pack.sourceUrl || pack.url || '' };
+      recs[key] = { source: pack.source, id: pack.id, fileId: file?.id || null, name: pack.name, category: pack.category || (local && pack.kind === 'tex' ? 'Textures' : ''), romId: rom.id, game: rom.name, emu: e.id, emuName: e.name, emuRoot: e.emuRoot, dest, alt, files: r.files, bytes: r.bytes, at: Date.now(), from: pack.sourceUrl || pack.url || (local ? pack.file : '') };
       saveJson(ADDONS_FILE, recs);
       log('add-on installed', key, r.files.length, 'files');
       send({ state: 'done' });
-      return { key, files: r.files.length, bytes: r.bytes, textures: kind !== 'switch' && e.on === false };
+      // 0.9.23 (owner: Cartridge sets it up itself): a texture pack needs the emulator's custom textures
+      // on; Cartridge turns them on (and remembers it did, so it alone may turn them off again)
+      const isTex = kind !== 'switch' && kind !== 'cemu' && !r.files.every((f) => f.startsWith('@'));
+      let autoOn = false;
+      if (isTex && e.on === false && require('./addons').TEX_KEY[e.id]) { try { handlers['addons:setTextures']({ root: e.emuRoot, on: true }); autoOn = true; } catch (er) { log('textures not turned on:', er.message); } }
+      return { key, files: r.files.length, bytes: r.bytes, textures: isTex && e.on === false && !autoOn, autoOn, patches: r.files.some((f) => f.startsWith('@patches/')), graphicMods: r.files.some((f) => f.startsWith('@graphicmods/')) };
     } catch (err) { send({ state: 'error', error: err.message }); throw err; }
-    finally { addonRun = null; for (const f of [...files, base + '.zip']) fs.rmSync(f, { force: true }); fs.rmSync(base + '.zip.unpacked', { recursive: true, force: true }); }
+    finally { addonRun = null; for (const f of [...files, base + '.zip']) fs.rmSync(f, { force: true }); fs.rmSync(base + '.zip.unpacked', { recursive: true, force: true }); fs.rmSync(base + '.unpacked', { recursive: true, force: true }); }
   },
   'addons:cancel': () => { addonRun?.abort.abort(); return true; },
   // 0.9.19 (owner: a green check when a game already has a texture pack, and whether Cartridge put it
@@ -3136,7 +3181,7 @@ const handlers = {
     const recs = addonRecs(), r = recs[key];
     if (!r) throw new Error('Cartridge didn’t install that add-on.');
     if (require('./raLogin').running().has(r.emu)) throw new Error(`Close ${r.emuName} first.`);
-    await require('./addonInstall').removeFiles(r.dest, r.files);
+    await require('./addonInstall').removeFiles(r.dest, r.files, r.alt || {});
     delete recs[key]; saveJson(ADDONS_FILE, recs);
     log('add-on removed', key);
     return true;
@@ -3325,7 +3370,7 @@ const handlers = {
   'ps3up:install': ({ romId }) => ps3InstallUpdates(Number(romId)),
   'ps3up:cancel': () => { ps3upRun?.ac.abort(); return true; },
   'patches:list': async ({ romId }) => {
-    const dlErr = await freshRpcs3Patches(romId);
+    const dlErr = (await freshRpcs3Patches(romId)) || (await freshShadPatches(romId));
     const st = patchState(romId), E = EMU_PATCH[st.emu];
     if (!st.dir || !E) return { emu: st.emu, emuName: E?.name || '', serial: st.serial, why: [st.why, dlErr].filter(Boolean).join(' '), list: [] };
     if (st.emu === 'ppsspp') { try { const r = await cheatsMod.ppssppDownloadDb(st.dir); if (r.updated) log('ppsspp cheat.db downloaded', r.url); } catch (e) { log('ppsspp cheat.db download failed:', e.message); } }

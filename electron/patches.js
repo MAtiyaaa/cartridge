@@ -220,10 +220,50 @@ function shadList(userDir, serial, version, mine = {}) {
       if (!(a.AppVer === version || a.AppVer === 'mask')) continue;
       const key = ['shadps4', f.repo, f.file, a.Name, a.AppVer].join('\u0001');
       const on = a.isEnabled === 'true';
-      out.push({ key, repo: f.repo, file: f.file, name: a.Name, appVer: a.AppVer, description: unXml(a.Name || ''), version: a.AppVer === 'mask' ? 'All' : a.AppVer, author: unXml(a.Author || ''), notes: unXml(a.Note || ''), group: f.repo, on, by: on ? (mine[key] ? 'cartridge' : 'emulator') : null });
+      out.push({ key, repo: f.repo, file: f.file, name: a.Name, appVer: a.AppVer, description: unXml(a.Name || ''), version: a.AppVer === 'mask' ? 'All' : a.AppVer, author: unXml(a.Author || ''), notes: unXml(a.Note || ''), group: f.repo, section: /goldhen/i.test(f.repo) ? 'GoldHEN' : 'shadPS4', on, by: on ? (mine[key] ? 'cartridge' : 'emulator') : null });
     }
   }
   return out.sort((a, b) => a.description.localeCompare(b.description));
+}
+// shadPS4's two patch lists, downloaded the way its launcher's Download Patches does (0.9.23, owner: both
+// lists, shadPS4's and GoldHEN's; read from shadps4-qtlauncher qt_gui/cheats_patches.cpp downloadPatches
+// and createFilesJson): every .xml of the repository's folder into patches/<repo>/, then files.json
+// maps each file to the game IDs in its <ID> elements. Listing: GitHub's contents API, else the folder's
+// page; files from raw.githubusercontent.com. Nothing else in shadPS4's folder is touched.
+const SHAD_REPOS = {
+  shadPS4: { api: 'https://api.github.com/repos/shadps4-emu/ps4_cheats/contents/PATCHES', page: 'https://github.com/shadps4-emu/ps4_cheats/tree/main/PATCHES', raw: 'https://raw.githubusercontent.com/shadps4-emu/ps4_cheats/main/PATCHES/' },
+  GoldHEN: { api: 'https://api.github.com/repos/illusion0001/PS4-PS5-Game-Patch/contents/patches/xml', page: 'https://github.com/illusion0001/PS4-PS5-Game-Patch/tree/main/patches/xml', raw: 'https://raw.githubusercontent.com/illusion0001/PS4-PS5-Game-Patch/main/patches/xml/' },
+};
+async function shadRepoFiles(repo, fetchImpl) {
+  const R = SHAD_REPOS[repo];
+  const r = await fetchImpl(R.api, { headers: { 'User-Agent': 'Cartridge', Accept: 'application/vnd.github.v3+json' }, signal: AbortSignal.timeout(20000) }).catch(() => null);
+  if (r && r.ok) { const j = await r.json(); if (Array.isArray(j)) return j.filter((x) => /\.xml$/i.test(x.name)).map((x) => ({ name: x.name, url: x.download_url || R.raw + encodeURIComponent(x.name) })); }
+  const p = await fetchImpl(R.page, { headers: { 'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) Cartridge' }, signal: AbortSignal.timeout(20000) });
+  if (!p.ok) throw new Error(`GitHub answered ${p.status}`);
+  const names = [...new Set([...(await p.text()).matchAll(/"name":"([^"]+\.xml)"/g)].map((m) => m[1]))];
+  if (!names.length) throw new Error('GitHub didn’t list the patch files.');
+  return names.map((n) => ({ name: n, url: R.raw + encodeURIComponent(n) }));
+}
+async function shadDownloadPatches(userDir, repo, { fetchImpl = require('./webFetch') } = {}) {
+  const dir = path.join(userDir, 'patches', repo);
+  fs.mkdirSync(dir, { recursive: true });
+  const files = await shadRepoFiles(repo, fetchImpl);
+  let i = 0, ok = 0;
+  const one = async () => {
+    for (let f; (f = files[i++]);) {
+      if (path.basename(f.name) !== f.name) continue;
+      try { const r = await fetchImpl(f.url, { signal: AbortSignal.timeout(30000) }); if (!r.ok) continue; const t = await r.text(); if (!/<Metadata\b/.test(t)) continue; fs.writeFileSync(path.join(dir, f.name), t); ok++; } catch {}
+    }
+  };
+  await Promise.all(Array.from({ length: 8 }, one));
+  // files.json: { "<file>.xml": ["CUSA00001", ...] }, from each file's <ID> elements (createFilesJson)
+  const map = {};
+  for (const n of fs.readdirSync(dir).filter((x) => /\.xml$/i.test(x))) {
+    let t = ''; try { t = fs.readFileSync(path.join(dir, n), 'utf8'); } catch { continue; }
+    map[n] = [...new Set([...t.matchAll(/<ID>\s*([^<\s]+)\s*<\/ID>/g)].map((m) => m[1]))];
+  }
+  fs.writeFileSync(path.join(dir, 'files.json'), JSON.stringify(map, null, 4));
+  return { files: ok };
 }
 // sets isEnabled on the matching <Metadata> tags; the rest of each file stays byte for byte
 function shadSet(userDir, changes, mine = {}) {
@@ -477,4 +517,4 @@ function rpcs3ApplyDb(dir, serial, dbText, mine = {}) {
   return { result: 'written', mine: { ...mine, [serial]: { at: Date.now(), file: f } } };
 }
 
-module.exports = { loosePatchYaml, readPatchFile, rpcs3DownloadPatches, isoFile, rpcs3DbFromText, rpcs3CustomPath, rpcs3DbCached, rpcs3ApplyDb, parseSfo, sfoAt, rpcs3Dirs, ps3Version, rpcs3List, rpcs3Set, shadDirs, ps4Version, shadList, shadSet, load, dump, pcsx2Dirs, pcsx2GameList, pcsx2Game, ps2IsoInfo, pcsx2ZipSources, pcsx2ZipBuffer, pnachList, pcsx2List, pcsx2Set, crcHex };
+module.exports = { loosePatchYaml, readPatchFile, rpcs3DownloadPatches, isoFile, rpcs3DbFromText, rpcs3CustomPath, rpcs3DbCached, rpcs3ApplyDb, parseSfo, sfoAt, rpcs3Dirs, ps3Version, rpcs3List, rpcs3Set, shadDirs, ps4Version, shadList, shadSet, shadDownloadPatches, SHAD_REPOS, load, dump, pcsx2Dirs, pcsx2GameList, pcsx2Game, ps2IsoInfo, pcsx2ZipSources, pcsx2ZipBuffer, pnachList, pcsx2List, pcsx2Set, crcHex };

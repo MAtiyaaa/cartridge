@@ -136,11 +136,23 @@ function pfsEntries(fd, base) { // PFS0 (nsp) or HFS0 (xci partitions): [{ name,
   }
   return out;
 }
-let headerKey; // from prod.keys, read once
+// 0.9.23 (owner: Switch game IDs still not read): a key that wasn't found is looked for again next time
+// (it used to be remembered as missing for good), and every place the Switch emulators keep prod.keys is
+// searched, as yuzu and its forks read it (common/fs/path_util, core/crypto/key_manager: <data>/keys),
+// Ryujinx (<config>/system) and hactool (~/.switch), plus the folders the caller knows (Cartridge's BIOS)
+let headerKey = null; // from prod.keys, once found
+function keyDirs(home = os.homedir(), env = process.env) {
+  const cfg = env.XDG_CONFIG_HOME || path.join(home, '.config'), data = env.XDG_DATA_HOME || path.join(home, '.local/share');
+  const v = (id, ...p) => path.join(home, '.var/app', id, ...p);
+  const out = [];
+  for (const n of ['eden', 'citron', 'yuzu', 'sudachi', 'suyu', 'torzu']) out.push(path.join(data, n, 'keys'), path.join(cfg, n, 'keys'));
+  for (const [id, n] of [['dev.eden_emu.eden', 'eden'], ['org.citron_emu.citron', 'citron'], ['org.yuzu_emu.yuzu', 'yuzu'], ['org.sudachi_emu.sudachi', 'sudachi']]) out.push(v(id, 'data', n, 'keys'));
+  out.push(path.join(cfg, 'Ryujinx/system'), v('io.github.ryubing.Ryujinx', 'config/Ryujinx/system'), v('org.ryujinx.Ryujinx', 'config/Ryujinx/system'), path.join(home, '.switch'));
+  return out;
+}
 function switchHeaderKey(dirs) {
-  if (headerKey !== undefined) return headerKey;
-  headerKey = null;
-  for (const d of dirs) {
+  if (headerKey) return headerKey;
+  for (const d of [...dirs, ...keyDirs()]) {
     try { const m = fs.readFileSync(path.join(d, 'prod.keys'), 'utf8').match(/^\s*header_key\s*=\s*([0-9a-f]{64})\s*$/im); if (m) { headerKey = Buffer.from(m[1], 'hex'); break; } } catch {}
   }
   return headerKey;
@@ -165,11 +177,11 @@ function switchTitleId(file, keyDirs = []) {
     if (h.toString('latin1', 0, 4) === 'PFS0') {
       const ents = pfsEntries(fd, 0);
       id = (ents.map((e) => e.name).join(' ').match(/\b(01[0-9a-f]{14})[0-9a-f]{16}\.tik\b/i) || [])[1] || null;
-      ncas = ents.filter((e) => /\.nca$/i.test(e.name));
+      ncas = ents.filter((e) => /\.nc[az]$/i.test(e.name)); // .ncz (NSZ): its first 0x4000 bytes are the NCA's own header
     } else if (h.toString('latin1', 0x100, 0x104) === 'HEAD') { // .xci: root HFS0 -> "secure" partition -> NCAs
       const root = Number(h.readBigUInt64LE(0x130));
       const secure = pfsEntries(fd, root).find((e) => e.name === 'secure');
-      if (secure) ncas = pfsEntries(fd, secure.offset).filter((e) => /\.nca$/i.test(e.name));
+      if (secure) ncas = pfsEntries(fd, secure.offset).filter((e) => /\.nc[az]$/i.test(e.name));
     }
     const key = !id && ncas.length ? switchHeaderKey(keyDirs) : null;
     if (key) {
