@@ -2846,7 +2846,9 @@ function retroarchRuntime() {
 // romId -> { min, last, src }: Steam's play time for games in Steam, plus RetroArch's own logs
 function playStats() {
   let steam = {};
-  try { steam = steamMgr.playtime(); } catch (e) { log('play time from Steam failed', e.message); }
+  // Android: Cartridge's own launches and Fuse's sessions (no Steam there), merged with anything found below
+  if (onAndroid) steam = AP.totals(androidPlay);
+  else { try { steam = steamMgr.playtime(); } catch (e) { log('play time from Steam failed', e.message); } }
   const ra = retroarchRuntime();
   const out = { ...steam };
   if (ra.size) {
@@ -2882,8 +2884,14 @@ function notePlayDays(stats) {
   for (const k of Object.keys(st.days)) if (k < cut) { delete st.days[k]; changed = true; }
   if (changed) saveJson(PLAY_DAYS_FILE, st);
 }
+// ---------------- Android play time (electron/androidPlaytime.js): Cartridge's launches and Fuse's sessions,
+// kept in android-play.json. Their days come straight from the sessions.
+const AP = onAndroid ? require('./androidPlaytime') : null;
+const ANDROID_PLAY_FILE = path.join(USER_DATA, 'android-play.json');
+const androidPlay = onAndroid ? loadJson(ANDROID_PLAY_FILE, null) || { sessions: {} } : null;
+function saveAndroidPlay() { AP.prune(androidPlay); saveJson(ANDROID_PLAY_FILE, androidPlay, false); playSyncAt = 0; }
 function playWeek() {
-  const st = loadJson(PLAY_DAYS_FILE, { days: {} }), out = [];
+  const st = onAndroid ? { days: AP.days(androidPlay, dayKey) } : loadJson(PLAY_DAYS_FILE, { days: {} }), out = [];
   for (let i = 6; i >= 0; i--) { const t = Date.now() - i * 864e5; out.push({ day: dayKey(t), dow: new Date(t).getDay(), min: Math.round(st.days?.[dayKey(t)] || 0) }); }
   return out;
 }
@@ -2921,7 +2929,7 @@ async function renameDevice(name) {
 async function syncPlay() {
   if (playSyncing) return playSyncing;
   playSyncing = (async () => {
-    const local = (() => { try { return steamMgr.playtime(); } catch { return {}; } })();
+    const local = onAndroid ? AP.totals(androidPlay) : (() => { try { return steamMgr.playtime(); } catch { return {}; } })(); // Android: its sessions go to RomM too
     const devId = await rommDevice();
     // send what's new since last time
     const sessions = [];
@@ -3126,6 +3134,25 @@ const handlers08 = {
   },
   'play:device': ({ name }) => renameDevice(name),
   'play:week': () => playWeek(),
+  // Android: a game Cartridge started (end: null) or the moment Cartridge was back in front (src/android/playLog.js)
+  'play:session': ({ key, romId, start, end } = {}) => {
+    if (!onAndroid || !/^c\d+$/.test(String(key || ''))) return false;
+    if (AP.upsert(androidPlay, String(key), { romId: Number(romId), start: Number(start), end: Number(end) || null, src: 'cartridge' })) saveAndroidPlay();
+    return true;
+  },
+  // Android: Fuse's play sessions (its play provider, read by CartridgeNativePlugin.fusePlay)
+  'play:import': ({ rows } = {}) => {
+    if (!onAndroid || !Array.isArray(rows)) return 0;
+    const ctx = { roms: romIndexMain(), installed: Object.fromEntries(Object.entries(installedMap).filter(([, p]) => p && p !== MARKED)) };
+    let n = 0;
+    for (const r of rows.slice(0, 2000)) {
+      if (!r || String(r.source || '') === 'IMPORTED') continue; // time Fuse imported from elsewhere, not seen
+      const romId = AP.matchRow(r, ctx);
+      if (romId && AP.upsert(androidPlay, 'f' + Number(r.session_id), { romId, start: Number(r.started_at), end: Number(r.ended_at) || null, src: 'fuse' })) n++;
+    }
+    if (n) saveAndroidPlay();
+    return n;
+  },
   // Syncthing, first look (0.9.19): read only, what it syncs and with whom
   'sync:status': () => require('./syncthing').status(),
   'sync:browse': (folder) => require('./syncthing').browse(folder),

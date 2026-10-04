@@ -3,6 +3,7 @@
 // the game into its console folder, opens the app you pick and says where to find the game.
 import { store, choose, toast, download, downloadFor } from '../store.js';
 import { Native } from './native.js';
+import { noteLaunch } from './playLog.js';
 
 export const PC_SLUGS = /^(win|windows|win3x|pc|dos)$/i;
 export const pcAppsOn = () => store.config?.android?.steamApps === true;
@@ -32,5 +33,5 @@ export async function openInPcApp(rom, path) {
   try { await navigator.clipboard?.writeText(path); } catch {}
   const key = Object.keys(HINTS).find((k) => (app.label + app.pkg).toLowerCase().includes(k));
   toast(`${HINTS[key] || `In ${app.label}, add a game from this folder`}: ${path}`, 'info', 9000, 'mdiMicrosoftWindows');
-  try { await Native.openApp({ pkg: app.pkg }); } catch (e) { toast(e.message, 'error'); }
+  try { await Native.openApp({ pkg: app.pkg }); noteLaunch(rom.id); } catch (e) { toast(e.message, 'error'); } // played until Cartridge is in front again (playLog.js)
 }
