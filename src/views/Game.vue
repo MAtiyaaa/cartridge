@@ -552,6 +552,23 @@ async function pickGameEmu() {
 
 // More options: custom artwork from SteamGridDB, plus handy extras
 let steamInfo = null;
+// Syncthing's older versions of one save (0.9.29): grouped by when they were replaced; restoring puts that
+// version back through Syncthing (its own versioning), the only time Cartridge asks for a save to change
+async function olderVersions(x) {
+  let all = {};
+  try { all = (await call('syncsaves:versions', { id: x.synced.id })) || {}; } catch (e) { toast(e.message, 'error', 5000); return; }
+  const rel = x.path.slice(x.synced.path.replace(/\/$/, '').length + 1);
+  const mine = Object.entries(all).filter(([f]) => !rel || f === rel || f.startsWith(rel + '/'));
+  const times = new Map();
+  for (const [f, vs] of mine) for (const v of vs) { const t = times.get(v.versionTime) || { at: Date.parse(v.versionTime), files: {} }; t.files[f] = v.versionTime; times.set(v.versionTime, t); }
+  const opts = [...times.values()].sort((a, b) => b.at - a.at).map((t) => ({ label: new Date(t.at).toLocaleString(), sub: `${Object.keys(t.files).length} ${Object.keys(t.files).length === 1 ? 'file' : 'files'} · replaced ${ago(t.at)}`, value: t.at, icon: 'mdiHistory', raw: true }));
+  if (!opts.length) { toast('No older versions of this save yet', 'info', 3000, 'mdiHistory'); return; }
+  const at = await choose({ title: 'Older Versions', message: 'The save as it was before another device replaced it.', options: opts });
+  const t = [...times.values()].find((y) => y.at === at);
+  if (!t) return;
+  if (!(await confirm('Put this version back?', 'Close the emulator first. The save it replaces is kept as an older version too, so this can be undone.', 'Restore'))) return;
+  try { const r = await call('syncsaves:restore', { id: x.synced.id, files: t.files }); const errs = Object.keys(r || {}).length; toast(errs ? `${errs} files couldn't be restored` : 'Restored', errs ? 'error' : 'ok', 3500, 'mdiHistory'); } catch (e) { toast(e.message, 'error', 5000); }
+}
 async function more() {
   const has = artFor(props.romId);
   const u = cached.value?.user;
@@ -675,8 +692,13 @@ async function more() {
   if (v === 'path') { toast(installedPath.value, 'info', 5000, 'mdiFolder'); return; }
   if (v === 'saves') {
     const list = sv || [];
-    const p = await choose({ title: 'Saves on This Device', message: 'Read only: Cartridge never changes a save. A to copy where it is.', options: list.map((x) => ({ label: x.emuName + (x.shared ? ' · Memory Card' : ''), sub: `${bytes(x.size || 0)} · changed ${ago(x.at)} · ${x.synced ? 'synced in ' + x.synced.label : 'not synced'}`, value: x.path, icon: x.synced ? 'mdiSync' : 'mdiContentSaveOutline', raw: true })) });
-    if (p) { try { await call('clip:write', { text: p }); toast('Location copied', 'ok', 2200, 'mdiContentCopy'); } catch (e) { toast(e.message, 'error'); } }
+    const p = await choose({ title: 'Saves on This Device', message: 'Read only: Cartridge never changes a save. A to copy where it is.', options: list.map((x) => ({ label: x.emuName + (x.shared ? ' · Memory Card' : ''), sub: `${bytes(x.size || 0)} · changed ${ago(x.at)} · ${x.synced ? 'synced in ' + x.synced.label : 'not synced'}${x.conflicts ? ` · ${x.conflicts} conflict ${x.conflicts === 1 ? 'copy' : 'copies'} from two devices` : ''}`, value: x.path, icon: x.synced ? 'mdiSync' : 'mdiContentSaveOutline', raw: true })) });
+    const x = list.find((y) => y.path === p);
+    if (!x) return;
+    // a save in one of Cartridge's synced folders can go back to an older version Syncthing kept (0.9.29)
+    const what = x.synced?.ours ? await choose({ title: x.emuName, options: [{ label: 'Older Versions', sub: 'Kept by Syncthing for 30 days when another device replaced it', value: 'old', icon: 'mdiHistory' }, { label: 'Copy Location', value: 'copy', icon: 'mdiContentCopy' }] }) : 'copy';
+    if (what === 'copy') { try { await call('clip:write', { text: p }); toast('Location copied', 'ok', 2200, 'mdiContentCopy'); } catch (e) { toast(e.message, 'error'); } }
+    if (what === 'old') await olderVersions(x);
     return;
   }
   if (v === 'pkg') { await installPkg(); return; }

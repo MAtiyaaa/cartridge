@@ -2090,12 +2090,27 @@ function savesGameList() {
   });
 }
 let savesCache = null;
+// emulator data folders Cartridge knows beyond the usual places: portable shadPS4 builds (user/ beside them), Vita3K's storage
+function saveExtras() {
+  const extra = {};
+  try { for (const v of require('./shadVersions').installed()) if (v.path) (extra.shadps4 ||= []).push(path.dirname(v.path)); } catch {}
+  try { const exe = steamMgr.vita3kCommand?.()?.exe; for (const d of pkgInst.vita3kFsPaths(exe)) (extra.vita3k ||= []).push(d); } catch {}
+  return extra;
+}
+// a joined device takes the main device's save folders as they're offered (0.9.29)
+let joinT = null;
+function watchJoin() {
+  clearInterval(joinT);
+  if (config.syncthing?.role !== 'member') return;
+  const tick = async () => {
+    try { const r = await require('./syncthing').acceptFolders(require('./saves').syncRoots({ extra: saveExtras() })); if (r.added.length) { log('syncthing: took save folders', r.added.join(' ')); savesCache = null; broadcast('syncsaves', r); } } catch {}
+  };
+  tick(); joinT = setInterval(tick, 30000);
+}
 async function savesList(fresh) {
   if (!fresh && savesCache && Date.now() - savesCache.at < 30000) return savesCache.list;
-  const S = require('./saves'), extra = {};
-  try { for (const v of require('./shadVersions').installed()) if (v.path) (extra.shadps4 ||= []).push(path.dirname(v.path)); } catch {} // portable shadPS4 builds keep user/ beside them
-  try { const exe = steamMgr.vita3kCommand?.()?.exe; for (const d of pkgInst.vita3kFsPaths(exe)) (extra.vita3k ||= []).push(d); } catch {}
-  const list = S.match(S.scan({ extra }), savesGameList());
+  const S = require('./saves');
+  const list = S.match(S.scan({ extra: saveExtras() }), savesGameList());
   // games that keep their save beside the game file (melonDS, mGBA and other emulators' default)
   for (const [id, where] of Object.entries(installedMap)) {
     if (!where || where === MARKED) continue;
@@ -2107,7 +2122,7 @@ async function savesList(fresh) {
   try {
     const l = await require('./syncthing').local();
     const synced = (l?.folders || []).map((f) => ({ path: (f.path || '').replace(/^~(?=\/)/, os.homedir()), label: f.label || f.id, id: f.id })).filter((f) => f.path);
-    for (const s of list) { const f = synced.find((x) => s.path === x.path || s.path.startsWith(x.path.replace(/\/$/, '') + '/') || x.path.startsWith(s.path + '/')); if (f) s.synced = { id: f.id, label: f.label }; }
+    for (const s of list) { const f = synced.find((x) => s.path === x.path || s.path.startsWith(x.path.replace(/\/$/, '') + '/') || x.path.startsWith(s.path + '/')); if (f) s.synced = { id: f.id, label: f.label, path: f.path, ours: f.id.startsWith('cartridge-saves-') }; }
   } catch {}
   savesCache = { at: Date.now(), list };
   return list;
@@ -2771,6 +2786,31 @@ const handlers08 = {
   },
   // 0.9.23 Syncthing page: this device in full, the main server (config.syncthing.server), games with synced files
   'sync:local': () => require('./syncthing').local(),
+  // The Syncthing Update (0.9.29): this device as the main one (only on a blank Syncthing), pairing, joining
+  'syncsaves:state': async () => {
+    const S = require('./syncthing');
+    let st = null, error = null; try { st = await S.saveSync(); } catch (e) { error = e.message; }
+    return { ...(st || {}), error, role: config.syncthing?.role || '', mainId: config.syncthing?.mainId || '', roots: require('./saves').syncRoots({ extra: saveExtras() }) };
+  },
+  'syncsaves:makeMain': async () => {
+    const roots = require('./saves').syncRoots({ extra: saveExtras() });
+    const r = await require('./syncthing').makeMain(roots, { mine: config.syncthing?.role === 'main' });
+    config.syncthing = { ...(config.syncthing || {}), role: 'main', mainId: '' }; saveConfig(); savesCache = null;
+    log('syncthing: main device, save folders', r.made.join(' ') || 'none new');
+    return r;
+  },
+  'syncsaves:addDevice': async ({ id, name }) => { if (config.syncthing?.role !== 'main') throw new Error('Make this device the main one first.'); await require('./syncthing').addDevice({ id, name }); return true; },
+  'syncsaves:join': async ({ id, name }) => {
+    const S = require('./syncthing'), st = await S.saveSync();
+    if (!st.blank && config.syncthing?.role !== 'member') throw new Error('This Syncthing is already set up with other devices or folders, so Cartridge leaves it as it is.');
+    await S.addDevice({ id, name: name || 'Main device', introducer: true });
+    config.syncthing = { ...(config.syncthing || {}), role: 'member', mainId: String(id).trim().toUpperCase() }; saveConfig();
+    watchJoin();
+    return true;
+  },
+  'syncsaves:twoWay': async ({ id }) => { await require('./syncthing').setType(id, 'sendreceive'); return true; },
+  'syncsaves:versions': ({ id }) => require('./syncthing').versions(id),
+  'syncsaves:restore': ({ id, files }) => { log('syncthing: restore', id, Object.keys(files || {}).join(' ')); savesCache = null; return require('./syncthing').restore(id, files); },
   // every save on this device with the game it belongs to (0.9.29); read only
   'saves:list': ({ fresh } = {}) => savesList(fresh),
   'saves:forRom': async ({ romId }) => (await savesList()).filter((s) => (s.romIds || []).includes(Number(romId))),
@@ -4068,6 +4108,7 @@ for (const [ch, fn] of Object.entries(handlers)) {
   });
 }
 
+setTimeout(() => { try { watchJoin(); } catch {} }, 15000);
 // a GPU trial nobody confirmed (a blank window can't be answered) goes back to Auto and restarts
 if (gpuTrial) setTimeout(() => { if (config.gpuKept || config.graphics !== 'gpu') return; log('gpu trial not confirmed, back to auto'); config.graphics = 'auto'; saveConfig(); relaunch(); }, GPU_TRIAL_MS);
 app.whenReady().then(() => {

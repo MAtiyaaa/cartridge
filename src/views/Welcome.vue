@@ -285,7 +285,26 @@
         <template v-else-if="step === 'sync'">
           <template v-if="sy === ''">
             <h1>Sync Your Saves</h1>
-            <p class="w-lead">Syncthing keeps saves, memory cards and texture packs the same on all your devices. It runs on your own devices, with no cloud account. Cartridge shows which games are synced and never changes your files.</p>
+            <p class="w-lead">Syncthing keeps your saves the same on all your devices. It runs on your own devices, with no cloud account. Cartridge finds every game's saves and shows what's synced.</p>
+            <div class="w-box stack">
+              <!-- 0.9.29 (owner): setting Syncthing up for saves is only for a new Syncthing, said plainly here -->
+              <button class="lrow" data-focus @click="syWant = 'saves'; syncDevice()">
+                <Icon name="mdiContentSaveMoveOutline" :size="26" />
+                <div class="l-mid"><b>Sync My Saves Between My Devices</b><span class="l-sub">Cartridge installs Syncthing if needed and sets it up for your saves. Only for a new Syncthing: one you already use is never changed.</span></div>
+              </button>
+              <button class="lrow" data-focus @click="syWant = ''; sy = 'have'">
+                <Icon name="mdiSyncCircle" :size="26" />
+                <div class="l-mid"><b>I Already Use Syncthing</b><span class="l-sub">Cartridge reads it to show which games are synced, and changes nothing</span></div>
+              </button>
+            </div>
+            <div class="w-act">
+              <button class="btn" data-focus @click="prev"><Icon name="mdiArrowLeft" />Back</button>
+              <button class="btn primary" data-focus @click="next()">Skip<Icon name="mdiArrowRight" /></button>
+            </div>
+          </template>
+          <template v-else-if="sy === 'have'">
+            <h1>Your Syncthing</h1>
+            <p class="w-lead">Cartridge only reads it. Nothing in your setup is changed.</p>
             <div class="w-box stack">
               <p class="muted small" style="margin: 0">Do you have a main Syncthing server, like a PC or NAS that keeps everything?</p>
               <button class="lrow" data-focus @click="sy = 'server'">
@@ -294,12 +313,21 @@
               </button>
               <button class="lrow" data-focus @click="syncDevice">
                 <Icon name="mdiCellphoneLink" :size="26" />
-                <div class="l-mid"><b>No, just this device</b><span class="l-sub">Cartridge checks for Syncthing here and can install it</span></div>
+                <div class="l-mid"><b>No, just this device</b><span class="l-sub">Cartridge checks for Syncthing here</span></div>
               </button>
             </div>
             <div class="w-act">
-              <button class="btn" data-focus @click="prev"><Icon name="mdiArrowLeft" />Back</button>
+              <button class="btn" data-focus @click="sy = ''"><Icon name="mdiArrowLeft" />Back</button>
               <button class="btn primary" data-focus @click="next()">Skip<Icon name="mdiArrowRight" /></button>
+            </div>
+          </template>
+          <template v-else-if="sy === 'saves'">
+            <h1>Your Saves, Everywhere</h1>
+            <p class="w-lead">Make this your main device, or join the one you set up first. Your saves stay in each emulator's own folder; Syncthing keeps them the same.</p>
+            <div class="w-box stack"><SaveSync /></div>
+            <div class="w-act">
+              <button class="btn" data-focus @click="sy = ''"><Icon name="mdiArrowLeft" />Back</button>
+              <button class="btn primary" data-focus @click="next()">Continue<Icon name="mdiArrowRight" /></button>
             </div>
           </template>
           <template v-else-if="sy === 'server'">
@@ -331,7 +359,8 @@
             </template>
             <div class="w-act">
               <button class="btn" data-focus @click="sy = ''"><Icon name="mdiArrowLeft" />Back</button>
-              <button v-if="syst && syst.running" class="btn primary" data-focus @click="syncFolders">Choose a Folder<Icon name="mdiArrowRight" /></button>
+              <button v-if="syst && syst.running && syWant === 'saves'" class="btn primary" data-focus @click="sy = 'saves'">Continue<Icon name="mdiArrowRight" /></button>
+              <button v-else-if="syst && syst.running" class="btn primary" data-focus @click="syncFolders">Choose a Folder<Icon name="mdiArrowRight" /></button>
               <button v-else-if="syst && syst.installed" class="btn primary" data-focus :disabled="busy" @click="syKey ? saveSyKey() : syncDevice()">{{ syKey ? 'Use This Key' : 'Check Again' }}</button>
               <template v-else-if="syst">
                 <button class="btn" data-focus @click="next()">Skip</button>
@@ -406,6 +435,7 @@ import Logo from '../components/Logo.vue';
 import Icon from '../components/Icon.vue';
 import Btn from '../components/Btn.vue';
 import TextField from '../components/TextField.vue';
+import SaveSync from '../components/SaveSync.vue';
 import Setup from './Setup.vue';
 import EmuSetup from './EmuSetup.vue';
 import EmuGet from '../components/EmuGet.vue';
@@ -517,7 +547,7 @@ async function saveExtras() {
   busy.value = false;
 }
 // Syncthing (0.9.24): main server, this device (install when missing), then the folder it shares
-const sy = ref(''), syst = ref(null), syKey = ref(''), syPct = ref(null), syFolders = ref([]);
+const sy = ref(''), syWant = ref(''), syst = ref(null), syKey = ref(''), syPct = ref(null), syFolders = ref([]);
 const srv = ref({ address: store.config.syncthing?.server?.address || '', apikey: '' });
 async function saveServer() {
   busy.value = true;

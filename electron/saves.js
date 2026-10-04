@@ -15,18 +15,19 @@ const readText = (f) => { try { return fs.readFileSync(f, 'utf8'); } catch { ret
 
 // size, newest change and file count of a save folder (bounded: a save is small, a runaway folder isn't walked)
 function sizeOf(p, budget = { n: 4000 }) {
-  let size = 0, at = 0, files = 0;
+  let size = 0, at = 0, files = 0, conflicts = 0; // conflicts: copies Syncthing kept when two devices changed the same file
   const walk = (d, depth) => {
     for (const e of ls(d)) {
       if (budget.n-- <= 0) return;
       const f = path.join(d, e.name);
       if (e.isDirectory()) { if (depth < 8) walk(f, depth + 1); continue; }
+      if (e.name.includes('.sync-conflict-')) conflicts++;
       try { const st = fs.statSync(f); size += st.size; files++; if (st.mtimeMs > at) at = st.mtimeMs; } catch {}
     }
   };
-  try { const st = fs.statSync(p); if (st.isFile()) return { size: st.size, at: st.mtimeMs, files: 1 }; } catch { return { size: 0, at: 0, files: 0 }; }
+  try { const st = fs.statSync(p); if (st.isFile()) return { size: st.size, at: st.mtimeMs, files: 1, conflicts: 0 }; } catch { return { size: 0, at: 0, files: 0, conflicts: 0 }; }
   walk(p, 0);
-  return { size, at, files };
+  return { size, at, files, conflicts };
 }
 
 // PARAM.SFO (PS3, PSP, Vita, PS4): the save's own title
@@ -294,4 +295,45 @@ function match(saves, games) {
   return saves;
 }
 
-module.exports = { scan, match, sfo, cardSerials, ryujinxIndex, sizeOf, DATA, NAMES, SCAN };
+// ---- What Cartridge shares in Syncthing when this device is the main one (0.9.29): one folder per console's
+// saves, pointing at the emulator's real save folder (Syncthing never follows links). The folder ID is the
+// same on every device and the path is each device's own, so Eden on one device and Citron on another share
+// Switch saves. Ryujinx is left out: its saves are named by an index that differs per device.
+const retroarchSaves = (base) => { const cfg = readText(path.join(base, 'retroarch.cfg')); let d = (/^\s*savefile_directory\s*=\s*"([^"]*)"/m.exec(cfg) || [])[1] || ''; d = d.replace(/^~(?=\/|$)/, os.homedir()).replace(/^:(?=\/|$)/, base); return !d || d === 'default' ? path.join(base, 'saves') : d; };
+const SYNC = {
+  eden: [['switch', 'Switch Saves', 'nand/user/save']], citron: [['switch', 'Switch Saves', 'nand/user/save']], yuzu: [['switch', 'Switch Saves', 'nand/user/save']],
+  sudachi: [['switch', 'Switch Saves', 'nand/user/save']], suyu: [['switch', 'Switch Saves', 'nand/user/save']], torzu: [['switch', 'Switch Saves', 'nand/user/save']],
+  rpcs3: [['ps3', 'PS3 Saves', 'dev_hdd0/home/00000001/savedata']],
+  ppsspp: [['psp', 'PSP Saves', 'PSP/SAVEDATA']],
+  vita3k: [['vita', 'Vita Saves', 'ux0/user/00/savedata']],
+  shadps4: [['ps4', 'PS4 Saves', 'user/savedata']],
+  pcsx2: [['ps2', 'PS2 Memory Cards', 'memcards']],
+  duckstation: [['ps1', 'PS1 Memory Cards', 'memcards']],
+  dolphin: [['gc', 'GameCube Saves', 'GC'], ['wii', 'Wii Saves', 'Wii/title/00010000']],
+  cemu: [['wiiu', 'Wii U Saves', 'mlc01/usr/save']],
+  azahar: [['3ds', '3DS Saves', 'sdmc/Nintendo 3DS']],
+  xenia: [['x360', 'Xbox 360 Saves', 'content']],
+  retroarch: [['retroarch', 'RetroArch Saves', retroarchSaves]],
+};
+const SYNC_PREFIX = 'cartridge-saves-';
+// -> [{ id, label, emu, emuName, path, exists, at }]: per folder ID the copy on this device with the newest
+// saves (an emulator that's installed but never played still gets its folder, so saves can arrive)
+function syncRoots({ home = os.homedir(), extra = {} } = {}) {
+  const best = new Map(), seen = new Set();
+  for (const emu of Object.keys(SYNC)) {
+    for (const d of [...(DATA[emu] || []).map((x) => path.join(home, x)), ...(extra[emu] || [])]) {
+      let real; try { real = fs.realpathSync(d); } catch { continue; }
+      if (seen.has(emu + real)) continue;
+      seen.add(emu + real);
+      for (const [suffix, label, rel] of SYNC[emu]) {
+        const p = typeof rel === 'function' ? rel(d) : path.join(d, rel);
+        let at = 0, exists = false; try { at = fs.statSync(p).mtimeMs; exists = true; } catch {}
+        const id = SYNC_PREFIX + suffix, cur = best.get(id);
+        if (!cur || (exists && !cur.exists) || (exists === cur.exists && at > cur.at)) best.set(id, { id, label, emu, emuName: NAMES[emu] || emu, path: p, exists, at });
+      }
+    }
+  }
+  return [...best.values()];
+}
+
+module.exports = { scan, match, syncRoots, SYNC, SYNC_PREFIX, sfo, cardSerials, ryujinxIndex, sizeOf, DATA, NAMES, SCAN };

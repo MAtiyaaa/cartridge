@@ -4,7 +4,7 @@
       <SyncthingLogo :size="56" />
       <div class="st-hero-txt">
         <h1>Syncthing</h1>
-        <p class="muted small">Keeps folders the same on all your devices. Cartridge reads what your Syncthing shares and never opens, copies or changes a synced file.</p>
+        <p class="muted small">Keeps your saves the same on all your devices. Cartridge finds every game's saves and reads what Syncthing shares; it only sets Syncthing up when you make this your main device, and never edits a save itself.</p>
       </div>
     </div>
 
@@ -25,6 +25,7 @@
         <p v-if="!s.installed" class="muted small">On SteamOS and Bazzite, install “SyncThingy” or “Syncthing Tray” from the Discover store, or the syncthing package on other systems. Cartridge finds it by itself.</p>
       </div>
       <template v-else>
+        <SaveSync />
         <div class="st-card st-me">
           <div class="st-stats">
             <div><b>{{ online(L?.devices) }}<small>/{{ (L?.devices || s.devices).length }}</small></b><span>Devices Online</span></div>
@@ -160,7 +161,7 @@
           <span class="l-mid">
             <b>{{ g.name }}</b>
             <span class="st-chips">
-              <span v-for="x in g.local" :key="'l' + x.path" class="chip" :class="{ ok: x.synced }"><Icon :name="x.synced ? 'mdiSync' : 'mdiContentSaveOutline'" :size="14" />{{ x.emuName }} · {{ bytes(x.size || 0) }} · {{ ago(x.at) }}{{ x.synced ? ' · Synced' : '' }}</span>
+              <span v-for="x in g.local" :key="'l' + x.path" class="chip" :class="{ ok: x.synced }"><Icon :name="x.synced ? 'mdiSync' : 'mdiContentSaveOutline'" :size="14" />{{ x.emuName }} · {{ bytes(x.size || 0) }} · {{ ago(x.at) }}{{ x.synced ? ' · Synced' : '' }}{{ x.conflicts ? ` · ${x.conflicts} conflict ${x.conflicts === 1 ? 'copy' : 'copies'}` : '' }}</span>
               <span v-for="x in g.saves" :key="'s' + x.folder" class="chip"><Icon name="mdiCloudSyncOutline" :size="14" />{{ x.label }} · {{ x.files }} {{ x.files === 1 ? 'file' : 'files' }} · {{ ago(x.at) }}</span>
               <span v-for="x in g.textures" :key="'t' + x.folder" class="chip tex"><Icon name="mdiTextureBox" :size="14" />{{ x.label }} · {{ bytes(x.size) }}</span>
             </span>
@@ -187,6 +188,7 @@ import { store, call, ago, bytes, toast, go, confirm, romById, cover } from '../
 import Icon from './Icon.vue';
 import TextField from './TextField.vue';
 import SyncthingLogo from './SyncthingLogo.vue';
+import SaveSync from './SaveSync.vue';
 import Btn from './Btn.vue';
 // 0.9.29 (owner): Games first, then Main Server, then This Device; when this device is the main server
 // (set up by Cartridge, config.syncthing.role 'main') the two are one tab

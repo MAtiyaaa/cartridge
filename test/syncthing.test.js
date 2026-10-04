@@ -63,3 +63,67 @@ test('games are found in the main server’s folders too, and texture folders by
   assert.ok(r.games[2].textures.length);
   fs.rmSync(home, { recursive: true, force: true });
 });
+
+// The Syncthing Update (0.9.29): main device only on a blank Syncthing, joining takes folders at its own paths
+function fakeSyncthing(home, state) {
+  const fs = require('fs'), path = require('path');
+  fs.mkdirSync(path.join(home, '.local/state/syncthing'), { recursive: true });
+  fs.writeFileSync(path.join(home, '.local/state/syncthing/config.xml'), '<configuration><gui><address>127.0.0.1:8384</address><apikey>k</apikey></gui></configuration>');
+  const calls = [];
+  const fetchImpl = async (url, opts = {}) => {
+    const u = new URL(url), m = opts.method || 'GET', body = opts.body ? JSON.parse(opts.body) : null;
+    if (m !== 'GET') calls.push([m, u.pathname, body]);
+    let out = {};
+    if (u.pathname === '/rest/system/ping') out = { ping: 'pong' };
+    else if (u.pathname === '/rest/system/status') out = { myID: state.me };
+    else if (u.pathname === '/rest/config') out = state.conf;
+    else if (u.pathname === '/rest/cluster/pending/folders') out = state.pendingFolders || {};
+    else if (u.pathname === '/rest/cluster/pending/devices') out = {};
+    else if (m === 'POST' && u.pathname === '/rest/config/folders') state.conf.folders.push(body);
+    else if (m === 'POST' && u.pathname === '/rest/config/devices') state.conf.devices.push(body);
+    return { ok: true, status: 200, headers: { get: () => 'application/json' }, json: async () => out, text: async () => '' };
+  };
+  return { fetchImpl, calls };
+}
+const ME = 'AAAAAAA-BBBBBBB-CCCCCCC-DDDDDDD-EEEEEEE-FFFFFFF-GGGGGGG-HHHHHHH', OTHER = 'ZZZZZZZ-YYYYYYY-XXXXXXX-WWWWWWW-VVVVVVV-UUUUUUU-TTTTTTT-SSSSSSS';
+
+test('main device: only on a blank Syncthing, one folder per console at the real save folder, versioned', async () => {
+  const fs = require('fs'), os = require('os'), path = require('path');
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'st-'));
+  const state = { me: ME, conf: { devices: [{ deviceID: ME }], folders: [{ id: 'default', path: '~/Sync', devices: [{ deviceID: ME }] }] } };
+  const { fetchImpl, calls } = fakeSyncthing(home, state);
+  const roots = [{ id: 'cartridge-saves-switch', label: 'Switch Saves', path: path.join(home, 'eden/nand/user/save') }];
+  const r = await S.makeMain(roots, { fetchImpl, home });
+  assert.deepStrictEqual(r.made, ['cartridge-saves-switch']);
+  const f = calls.find((c) => c[1] === '/rest/config/folders')[2];
+  assert.strictEqual(f.path, roots[0].path);
+  assert.strictEqual(f.type, 'sendreceive');
+  assert.strictEqual(f.versioning.type, 'staggered');
+  // a second run adds nothing; a Syncthing already used with another device is never changed
+  assert.deepStrictEqual((await S.makeMain(roots, { fetchImpl, home, mine: true })).made, []);
+  const used = fakeSyncthing(home, { me: ME, conf: { devices: [{ deviceID: ME }, { deviceID: OTHER }], folders: [] } });
+  await assert.rejects(S.makeMain(roots, { fetchImpl: used.fetchImpl, home }), /leaves it as it is/);
+  assert.strictEqual(used.calls.length, 0);
+  fs.rmSync(home, { recursive: true, force: true });
+});
+
+test('pairing: a device ID is checked, gets every Cartridge folder; joining takes folders receive only at its own paths', async () => {
+  const fs = require('fs'), os = require('os'), path = require('path');
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'st-'));
+  const state = { me: ME, conf: { devices: [{ deviceID: ME }], folders: [{ id: 'cartridge-saves-ps2', devices: [{ deviceID: ME }] }, { id: 'mine', devices: [] }] } };
+  const { fetchImpl, calls } = fakeSyncthing(home, state);
+  await assert.rejects(S.addDevice({ id: 'nope' }, { fetchImpl, home }), /device ID/);
+  await S.addDevice({ id: OTHER.toLowerCase(), name: 'Deck' }, { fetchImpl, home });
+  assert.ok(calls.some((c) => c[0] === 'POST' && c[1] === '/rest/config/devices' && c[2].deviceID === OTHER && c[2].autoAcceptFolders === false));
+  const put = calls.find((c) => c[0] === 'PUT');
+  assert.strictEqual(put[1], '/rest/config/folders/cartridge-saves-ps2'); // only Cartridge's folders are shared
+  assert.ok(put[2].devices.some((d) => d.deviceID === OTHER));
+  state.pendingFolders = { 'cartridge-saves-ps2': { offeredBy: { [OTHER]: { label: 'PS2 Memory Cards' } } }, 'cartridge-saves-x360': { offeredBy: { [OTHER]: {} } }, 'someone-else': { offeredBy: { [OTHER]: {} } } };
+  const r = await S.acceptFolders([{ id: 'cartridge-saves-ps2', label: 'PS2 Memory Cards', path: path.join(home, 'PCSX2/memcards') }], { fetchImpl, home });
+  assert.deepStrictEqual(r, { added: ['cartridge-saves-ps2'], missing: ['cartridge-saves-x360'] });
+  const added = calls.filter((c) => c[1] === '/rest/config/folders').pop()[2];
+  assert.strictEqual(added.type, 'receiveonly');
+  assert.strictEqual(added.path, path.join(home, 'PCSX2/memcards'));
+  await assert.rejects(S.setType('mine', 'sendreceive', { fetchImpl, home }), /its own/);
+  fs.rmSync(home, { recursive: true, force: true });
+});

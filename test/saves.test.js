@@ -30,6 +30,7 @@ put('.cache/eden/game_list/0100F2C0115B6000.appname.txt', 'The Legend of Zelda: 
 put('.config/Ryujinx/bis/system/save/8000000000000000/0/imkvdb.arc', imkv('01006A800016E000', '0000000000000005'));
 put('.config/Ryujinx/bis/user/save/0000000000000005/0/data.bin', 'smash');
 put('.config/rpcs3/dev_hdd0/home/00000001/savedata/BLUS30001-SAVE00/PARAM.SFO', sfo('Resistance'));
+put('.config/rpcs3/dev_hdd0/home/00000001/savedata/BLUS30001-SAVE00/DATA.sync-conflict-20261004-101010-ZZZZZZZ.BIN');
 put('.config/ppsspp/PSP/SAVEDATA/ULUS10041DATA/PARAM.SFO', sfo('Lumines'));
 put('.local/share/Vita3K/Vita3K/ux0/user/00/savedata/PCSE00120/sdslot.dat');
 put('.local/share/shadPS4/user/savedata/1/CUSA00900/SAVEDATA00/sce_sys/param.sfo', sfo('Bloodborne'));
@@ -59,6 +60,7 @@ test('Ryujinx saves are named through its save index', () => {
 });
 test('PS3 and PSP saves give their serial and the title from PARAM.SFO', () => {
   assert.deepStrictEqual(by('rpcs3').map((s) => [s.keys.serial, s.label]), [['BLUS30001', 'Resistance']]);
+  assert.strictEqual(by('rpcs3')[0].conflicts, 1); // a copy Syncthing kept when two devices changed it
   assert.deepStrictEqual(by('ppsspp').map((s) => [s.keys.serial, s.label]), [['ULUS10041', 'Lumines']]);
 });
 test('Vita, PS4, Cemu, Azahar and Xenia saves by title ID', () => {
