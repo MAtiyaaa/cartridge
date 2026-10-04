@@ -219,7 +219,7 @@ const KEYMAP = {
   ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right',
   Enter: 'accept', ' ': 'accept', Escape: 'back', Backspace: 'back',
   q: 'lb', e: 'rb', x: 'x', y: 'y', '/': 'y', Tab: 'select', m: 'start',
-  PageUp: 'lt', PageDown: 'rt',
+  PageUp: 'lt', PageDown: 'rt', ',': 'rsleft', '.': 'rsright', // , and . flick the right stick (Start's pages)
 };
 // A on something with a held meaning ([data-hold]): a press opens it on release, a hold of 450 ms
 // does the held thing instead (0.9.19, owner: hold a Start tile to arrange the menu)
@@ -287,7 +287,7 @@ window.addEventListener('mousemove', (e) => {
 // otherwise delay the press. Hold-to-repeat starts after 220 ms and speeds up the longer you hold.
 const BTN = { 0: 'accept', 1: 'back', 2: 'x', 3: 'y', 4: 'lb', 5: 'rb', 6: 'lt', 7: 'rt', 8: 'select', 9: 'start', 12: 'up', 13: 'down', 14: 'left', 15: 'right' };
 const REPEATABLE = new Set(['up', 'down', 'left', 'right', 'lt', 'rt']);
-const ACTIONS = [...new Set(Object.values(BTN))];
+const ACTIONS = [...new Set([...Object.values(BTN), 'rsleft', 'rsright'])]; // the right stick's flicks (0.9.23: Start's pages)
 const state = {}; // key -> { down, next, n }
 const DELAY = 220, RATE = 70, FAST = 40;
 
@@ -336,6 +336,7 @@ export function rumble(strong = false) {
 // the part of the screen focus was last in (a [data-zone]), for when the focused element goes away
 let lastZone = null;
 document.addEventListener('focusin', (e) => { lastZone = e.target.closest?.('[data-zone]') || null; }, true);
+const rsHeld = {};
 function poll() {
   const now = performance.now();
   const pads = navigator.getGamepads ? [...navigator.getGamepads()].filter(Boolean) : [];
@@ -360,6 +361,12 @@ function poll() {
     // Left stick (0.9.3 K, B1): only the stronger axis counts, so a slightly diagonal push never moves
     // two ways at once, and a direction lets go only below 0.35 after passing 0.55, so a stick
     // resting near the edge doesn't flicker into double moves.
+    // Right stick left and right (0.9.23, owner: Start's pages): a flick, past 0.7 and back under 0.4
+    const rx = gp.mapping === 'standard' ? gp.axes[2] ?? 0 : gp.axes.length >= 6 ? gp.axes[3] ?? 0 : 0;
+    const rh = rsHeld[gp.index] || (rsHeld[gp.index] = {});
+    rh.l = rx < -0.7 || (rh.l && rx < -0.4); rh.r = rx > 0.7 || (rh.r && rx > 0.4);
+    if (rh.l) merged.rsleft = true;
+    if (rh.r) merged.rsright = true;
     const [ax = 0, ay = 0] = gp.axes;
     const held = stickHeld[gp.index] || (stickHeld[gp.index] = {});
     const horiz = Math.abs(ax) >= Math.abs(ay);

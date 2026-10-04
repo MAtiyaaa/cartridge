@@ -758,6 +758,18 @@ async function handleImage(request) {
     const p = trophySvc.iconPath(tr);
     try { return new Response(await fsp.readFile(p), { headers: { 'Content-Type': /\.svg$/i.test(p) ? 'image/svg+xml' : 'image/png', 'Cache-Control': 'max-age=86400' } }); } catch { return new Response('nf', { status: 404 }); }
   }
+  const wh = u.searchParams.get('wh');
+  if (wh) {
+    let body = ''; try { body = await fsp.readFile(path.join(USER_DATA, 'start-widgets', path.basename(wh).replace(/[^\w-]/g, '') + '.html'), 'utf8'); } catch { return new Response('nf', { status: 404 }); }
+    const base = '<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width"><style>html,body{margin:0;height:100%;color:#fff;font-family:Inter,system-ui,sans-serif;background:transparent;overflow:hidden}</style>';
+    return new Response(base + body, { headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' } });
+  }
+  const sti = u.searchParams.get('st');
+  if (sti) {
+    const f = path.join(USER_DATA, 'start-images', path.basename(sti));
+    const type = { '.png': 'image/png', '.webp': 'image/webp', '.gif': 'image/gif', '.avif': 'image/avif' }[path.extname(f).toLowerCase()] || 'image/jpeg';
+    try { return new Response(await fsp.readFile(f), { headers: { 'Content-Type': type, 'Cache-Control': 'max-age=31536000' } }); } catch { return new Response('nf', { status: 404 }); }
+  }
   const hz = u.searchParams.get('hz');
   if (hz) {
     try { return new Response(await fsp.readFile(path.join(HERO_DIR, path.basename(hz))), { headers: { 'Content-Type': 'image/png', 'Cache-Control': 'max-age=31536000' } }); } catch { return new Response('nf', { status: 404 }); }
@@ -2842,6 +2854,31 @@ const handlers = {
     config.ui.wallpaper = String(Date.now()); config.ui.bgStyle = 'wallpaper'; saveConfig();
     return config;
   },
+  // Start's picture tiles (0.9.23, owner: custom images and GIFs): copied into Cartridge's folder, so the
+  // tile keeps working if the original moves; served as romimg://img/?st=<name>
+  'start:image': async ({ file }) => {
+    const ext = path.extname(file || '').toLowerCase();
+    if (!['.png', '.jpg', '.jpeg', '.webp', '.gif', '.avif'].includes(ext)) throw new Error('Pick a PNG, JPG, WebP, AVIF or GIF image');
+    const st = await fsp.stat(file);
+    if (st.size > 40 * 1024 * 1024) throw new Error('That image is too big (over 40 MB)');
+    const name = Date.now().toString(36) + ext;
+    await fsp.mkdir(path.join(USER_DATA, 'start-images'), { recursive: true });
+    await fsp.copyFile(file, path.join(USER_DATA, 'start-images', name));
+    return 'romimg://img/?st=' + encodeURIComponent(name);
+  },
+  // Start's own widgets (0.9.23, owner: custom HTML widgets): the page is kept as a file and shown in a
+  // sandboxed frame (no access to Cartridge, its own blank origin), served as romimg://img/?wh=<id>
+  'start:html': ({ id, html }) => {
+    const name = String(id || '').replace(/[^\w-]/g, '');
+    if (!name) throw new Error('No widget id');
+    fs.mkdirSync(path.join(USER_DATA, 'start-widgets'), { recursive: true });
+    const f = path.join(USER_DATA, 'start-widgets', name + '.html');
+    if (html == null) { try { fs.rmSync(f); } catch {} return null; }
+    fs.writeFileSync(f, String(html).slice(0, 512 * 1024));
+    return 'romimg://img/?wh=' + name + '&v=' + Date.now().toString(36);
+  },
+  'start:htmlGet': ({ id }) => { try { return fs.readFileSync(path.join(USER_DATA, 'start-widgets', String(id || '').replace(/[^\w-]/g, '') + '.html'), 'utf8'); } catch { return ''; } },
+  'start:imageRemove': ({ url }) => { const m = /[?&]st=([^&]+)/.exec(url || ''); if (m) try { fs.rmSync(path.join(USER_DATA, 'start-images', path.basename(decodeURIComponent(m[1])))); } catch {} return true; },
   'wallpaper:clear': () => { for (const f of fs.readdirSync(USER_DATA)) if (/^wallpaper\./.test(f)) try { fs.rmSync(path.join(USER_DATA, f)); } catch {} config.ui.wallpaper = ''; saveConfig(); return config; },
   'clip:write': ({ text }) => { require('electron').clipboard.writeText(String(text || '')); return true; },
   'clip:read': async () => String((await require('electron').clipboard.readText()) || '').trim().slice(0, 4000),

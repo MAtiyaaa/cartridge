@@ -6,17 +6,25 @@
       <img v-if="logo && !logoFail" class="sys-logo" :src="logo" :alt="p.display_name" :style="logoSize" @error="logoFail = true" />
       <div v-else class="nm">{{ p.display_name }}</div>
     </div>
-    <div v-if="!compact" class="ct">{{ p.rom_count }} {{ p.rom_count === 1 ? 'game' : 'games' }}</div>
+    <!-- 0.9.23 (owner: the bottom left was empty on Start): the maker and the counts, as on the Consoles page -->
+    <div class="cc-foot">
+      <div v-if="!compact && (meta || maker)" class="fam"><svg v-if="maker" class="maker" :class="{ symbol: maker.symbol, tall: maker.tall }" :viewBox="maker.vb" :aria-label="maker.name" role="img"><path v-for="(q, i) in maker.paths || [maker]" :key="i" :d="q.d" :fill-rule="q.evenodd ? 'evenodd' : null" /></svg><span v-if="maker && meta">·</span><span v-if="meta">{{ meta }}</span></div>
+      <div class="ct">{{ p.rom_count }}<span class="cc-games"> {{ p.rom_count === 1 ? 'game' : 'games' }}</span><template v-if="onDevice"> · <span class="ondev">{{ onDevice }}<span class="cc-games"> on device</span></span></template></div>
+    </div>
   </div>
 </template>
 <script setup>
 // A console card for Start's Consoles tile (0.9.21, owner: the same boxes as the Consoles page, not chips)
 import { computed, ref, watch } from 'vue';
-import { call } from '../store.js';
+import { store, call, romsOf } from '../store.js';
+import { MAKERS, makerOf } from '../makers.js';
 import { consoleColors } from '../consoleColors.js';
 import { opticalOf } from '../consoleOptical.js';
 import PIcon from './PIcon.vue';
 const props = defineProps({ p: Object, compact: Boolean });
+const maker = computed(() => MAKERS[makerOf(props.p)] || null);
+const meta = computed(() => [maker.value ? '' : props.p.family_name, props.p.generation ? `Gen ${props.p.generation}` : ''].filter(Boolean).slice(0, 1).join(''));
+const onDevice = computed(() => romsOf(props.p.id).filter((r) => store.installed[r.id]).length);
 const cache = (globalThis.__sysLogos ||= new Map());
 const logo = ref(cache.get(props.p.slug) || ''), logoFail = ref(false);
 watch(() => props.p.slug, () => {
@@ -40,6 +48,10 @@ const tileStyle = computed(() => {
 .systile.static .sys-logo { max-height: min(30px, 26cqh); max-width: 100%; }
 .systile.static .nm { font-size: clamp(12px, 15cqh, 20px); max-width: 100%; }
 .systile.static .glyph { right: 7%; top: 10%; height: 80%; }
-.systile.static .ct { align-self: flex-start; }
-@container (max-height: 90px) { .systile.static .ct { display: none; } }
+.systile.static .cc-foot { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-width: 0; }
+.systile.static .fam { font-size: clamp(10px, 9cqh, 12px); margin: 0; }
+.systile.static .ct { font-size: clamp(10px, 9cqh, 12px); padding: 3px 7px; }
+@container (max-width: 170px) { .systile.static .cc-games { display: none; } }
+@container (max-height: 96px) { .systile.static .fam { display: none; } }
+@container (max-height: 40px) { .systile.static .cc-foot { display: none; } }
 </style>
