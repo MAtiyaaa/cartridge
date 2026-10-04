@@ -1555,10 +1555,21 @@ module.exports = function createSteamManager(ctx) {
   }
   // ---------------------------------------------------------------- collections review (0.9.24)
   // A console's Steam collection: the name the user kept in the review, else RomM's (Cartridge's) name
-  const colName = (g) => SC.nameFor(g.key, g.platform.display_name, cfg().collectionNames);
+  // 0.9.27: maker then console ("Sony PlayStation 3"); a collection already in Steam under RomM's plain name
+  // ("PlayStation 3", from before) keeps being used until it's renamed in the review, so no second one appears
+  let colCache = { at: 0, names: new Set() };
+  const steamColNames = () => {
+    if (Date.now() - colCache.at > 2000) { const env = environment(); colCache = { at: Date.now(), names: new Set(env.account ? readCollections(env.account).map((c) => c.name) : []) }; }
+    return colCache.names;
+  };
+  const colName = (g) => {
+    const want = SC.nameFor(g.key, g.platform.display_name, cfg().collectionNames), plain = g.platform.display_name;
+    if (want !== plain && !cfg().collectionNames?.[g.key]) { const have = steamColNames(); if (!have.has(want) && have.has(plain)) return plain; }
+    return want;
+  };
   function libraryPlatforms() {
     const seen = new Map();
-    for (const p of ctx.getLibrary()?.platforms || []) { const key = keyOf(p.slug, p.fs_slug); if (!seen.has(key)) seen.set(key, { key, name: p.display_name || p.name }); }
+    for (const p of ctx.getLibrary()?.platforms || []) { const key = keyOf(p.slug, p.fs_slug); if (!seen.has(key)) seen.set(key, { key, name: SC.fullName(key, p.display_name || p.name) }); }
     return [...seen.values()];
   }
   // The user's collections, each matched to a console with the name Cartridge would give it

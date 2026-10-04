@@ -80,7 +80,25 @@ function analyse(collections, platforms) {
   return out;
 }
 
+// 0.9.27 (owner): a console's collection is named maker then console: "Sony PlayStation 3", "Nintendo Wii",
+// "Sega Dreamcast", "Microsoft Xbox". RomM's name is used as it is when it already names its maker.
+const MAKER_OF = {
+  Sony: ['psx', 'ps2', 'ps3', 'ps4', 'ps5', 'psp', 'psvita'],
+  Nintendo: ['nes', 'famicom', 'fds', 'snes', 'sfc', 'n64', 'n64dd', 'gc', 'wii', 'wiiu', 'switch', 'gb', 'gbc', 'gba', 'nds', 'n3ds', 'virtualboy', 'pokemini', 'gameandwatch'],
+  Sega: ['sg-1000', 'mastersystem', 'genesis', 'megadrive', 'segacd', 'sega32x', 'saturn', 'dreamcast', 'gamegear', 'pico', 'naomi', 'naomi2'],
+  Microsoft: ['xbox', 'xbox360'],
+  NEC: ['pcengine', 'pcenginecd', 'pcfx', 'pc88', 'pc98'],
+  SNK: ['neogeo', 'neogeocd', 'ngp', 'ngpc'],
+  Atari: ['atari2600', 'atari5200', 'atari7800', 'atari800', 'atarist', 'atarijaguar', 'atarijaguarcd', 'atarilynx'],
+  Bandai: ['wonderswan', 'wonderswancolor'],
+};
+const makerOf = (key) => Object.keys(MAKER_OF).find((m) => MAKER_OF[m].includes(key)) || null;
+function fullName(key, display) {
+  const name = String(display || '').trim(), maker = makerOf(key);
+  if (!maker || !name || new RegExp(`\\b${maker}\\b`, 'i').test(name)) return name;
+  return `${maker} ${name}`;
+}
 // The collection name to use for a console: the one the user kept, else Cartridge's
-function nameFor(key, display, kept) { return (kept && kept[key]) || display; }
+function nameFor(key, display, kept) { return (kept && kept[key]) || fullName(key, display); }
 
-module.exports = { ALIASES, MAKERS, norm, core, consoleOf, analyse, nameFor };
+module.exports = { ALIASES, MAKERS, MAKER_OF, makerOf, fullName, norm, core, consoleOf, analyse, nameFor };

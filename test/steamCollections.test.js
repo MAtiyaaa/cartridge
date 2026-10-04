@@ -34,3 +34,18 @@ test('analyse proposes renames, skips taken names and duplicates', () => {
   assert.strictEqual(by.e.action, 'other');
   assert.strictEqual(C.nameFor('ps2', 'Sony PlayStation 2', { ps2: 'PS2' }), 'PS2');
 });
+
+test('collection names are maker then console (0.9.27)', () => {
+  assert.strictEqual(C.fullName('ps3', 'PlayStation 3'), 'Sony PlayStation 3');
+  assert.strictEqual(C.fullName('wii', 'Wii'), 'Nintendo Wii');
+  assert.strictEqual(C.fullName('dreamcast', 'Dreamcast'), 'Sega Dreamcast');
+  assert.strictEqual(C.fullName('xbox', 'Xbox'), 'Microsoft Xbox');
+  assert.strictEqual(C.fullName('ps2', 'Sony PlayStation 2'), 'Sony PlayStation 2'); // already has its maker
+  assert.strictEqual(C.fullName('snes', 'Super Nintendo Entertainment System'), 'Super Nintendo Entertainment System');
+  assert.strictEqual(C.fullName('arcade', 'Arcade'), 'Arcade'); // no single maker
+  assert.strictEqual(C.nameFor('ps4', 'PlayStation 4', {}), 'Sony PlayStation 4');
+  // the review proposes the full name, and a collection already named that way is left alone
+  const by = Object.fromEntries(C.analyse([{ id: 'a', name: 'PS3', added: [] }, { id: 'b', name: 'Nintendo Wii', added: [] }], [{ key: 'ps3', name: C.fullName('ps3', 'PlayStation 3') }, { key: 'wii', name: C.fullName('wii', 'Wii') }]).map((x) => [x.id, x]));
+  assert.strictEqual(by.a.want, 'Sony PlayStation 3');
+  assert.strictEqual(by.b.action, 'ok');
+});
