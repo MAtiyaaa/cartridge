@@ -9,7 +9,7 @@
       <div class="eg-intro"><b>Where should your emulators live?</b><span class="muted">Cartridge makes an Emulation folder there, laid out like ES-DE and EmuDeck: roms (a folder per console), bios, saves and storage.</span></div>
       <div v-if="!drives" class="muted small"><Icon name="mdiSync" :size="16" class="spin" /> Looking at your drives…</div>
       <div v-else class="eg-drives">
-        <button v-for="d in drives" :key="d.path" class="eg-drive" data-focus :disabled="busy || (d.emulation && store.config.emulationRoot !== d.path + '/Emulation')" @click="pickDrive(d)">
+        <button v-for="d in drives" :key="d.path" class="eg-drive" data-focus :class="{ busy: busy === d.path }" :aria-busy="busy === d.path" :disabled="d.emulation && store.config.emulationRoot !== d.path + '/Emulation'" @click="pickDrive(d)">
           <Icon :name="d.internal ? 'mdiHarddisk' : 'mdiSd'" :size="34" />
           <b>{{ d.label }}</b>
           <span class="muted small mono">{{ short(d.path) }}/Emulation</span>
@@ -142,7 +142,7 @@ import PIcon from './PIcon.vue';
 import TextField from './TextField.vue';
 
 const props = defineProps({ flow: Boolean, updates: Boolean });
-defineEmits(['done']);
+const emit = defineEmits(['done', 'phase']);
 // 0.9.21 (owner: merge Get Emulators and the emulators' updates): in Settings each installed emulator also
 // says whether it's up to date, and picking one with an update installs it (same channels as before)
 const ups = ref(null), upBusy = ref(false), upRun = ref(''), upPct = ref(null);
@@ -224,6 +224,9 @@ async function installLink() {
 }
 const SLUG = { psx: 'psx', ps2: 'ps2', ps3: 'ps3', ps4: 'ps4', psp: 'psp', psvita: 'psvita', gc: 'ngc', wiiu: 'wiiu', switch: 'switch', n3ds: '3ds', nds: 'nds', gba: 'gba', n64: 'n64', xbox: 'xbox', dreamcast: 'dc', xbox360: 'xbox360', saturn: 'saturn', arcade: 'arcade' };
 const phase = ref(props.flow ? (store.config.emuDir ? 'pick' : 'where') : 'list');
+// 0.9.37 (owner: after Location it skipped to the welcome's next step): the welcome shows its own Continue only
+// once installing has started, and focus stays in here while a step loads
+watch(phase, (v) => emit('phase', v), { immediate: true });
 // the installer's steps and what was ticked (0.9.24)
 const STEP_NAMES = ['Location', 'Emulators', 'Installing', 'Done'];
 const stepAt = computed(() => ({ where: 0, pick: 1, install: 2, done: 3 })[phase.value] ?? 1);
@@ -269,16 +272,20 @@ const fresh = ref(null);
 const existingNote = computed(() => `Your ${fresh.value?.emudeck ? 'EmuDeck' : fresh.value?.retrodeck ? 'RetroDECK' : 'emulator'} setup stays as it is: no folders or links are made.`);
 async function loadDrives(auto = true) {
   if (props.flow) fresh.value ||= await call('emuget:fresh').catch(() => ({ fresh: false }));
-  if (props.flow && !fresh.value.fresh && !fresh.value.emudeck) { await call('emuget:useExisting').catch(() => {}); store.config = await call('config:get'); phase.value = 'pick'; await load(); return; }
+  if (props.flow && !fresh.value.fresh && !fresh.value.emudeck) { await call('emuget:useExisting').catch(() => {}); store.config = await call('config:get'); phase.value = 'pick'; await load(); await nextTick(); focusIn(); return; }
   // EmuDeck found: use its folders and say so, instead of asking for a drive (0.9.24)
   const ed = auto && (await call('emuget:emudeck').catch(() => null));
   if (ed) { try { await call('emuget:useEmuDeck'); store.config = await call('config:get'); toast(`Using EmuDeck’s setup in ${short(ed.root)}: new emulators go beside its own`, 'ok', 4500, 'mdiCheck'); phase.value = props.flow ? 'pick' : 'list'; await load(); return; } catch {} }
   drives.value = await call('emuget:drives').catch(() => []);
+  if (props.flow) { await nextTick(); focusFirst(document.querySelector('.eg'), '.eg-drive:not([disabled])'); }
 }
+// the installer's main button, else its first choice: never the welcome's buttons around it
+function focusIn() { const r = document.querySelector('.eg'); if (r) focusFirst(r, r.querySelector('.eg-bar .btn.primary:not([disabled])') ? '.eg-bar .btn.primary:not([disabled])' : '[data-focus]:not([disabled])'); }
 async function load() { list.value = await call('emuget:list').catch(() => []); q.value = await call('emuget:state').catch(() => []); if (phase.value === 'pick' && !picks.value.size) preselect(); }
 async function pickDrive(d) {
-  busy.value = true;
-  try { const r = await call('emuget:prepare', { base: d.path }); store.config = await call('config:get'); toast(`Made ${short(r.root)}`, 'ok', 3000, 'mdiFolderPlus'); phase.value = props.flow ? 'pick' : 'list'; await load(); await nextTick(); focusFirst(document.querySelector('.eg'), '.eg-bar .btn.primary'); }
+  if (busy.value) return; // a second A while the folder is made (the button stays focused, not disabled)
+  busy.value = d.path;
+  try { const r = await call('emuget:prepare', { base: d.path }); store.config = await call('config:get'); toast(`Made ${short(r.root)}`, 'ok', 3000, 'mdiFolderPlus'); phase.value = props.flow ? 'pick' : 'list'; await load(); await nextTick(); focusIn(); }
   catch (e) { toast(e.message, 'error', 5000); }
   busy.value = false;
 }
@@ -350,6 +357,8 @@ defineExpose({ load });
 .eg-drives { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: var(--s-3); }
 .eg-drive { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding: var(--s-4); border-radius: var(--r-lg); background: var(--s2); color: inherit; border: 0; text-align: left; transition: transform var(--d-1, 0.12s), background var(--d-1, 0.12s); }
 .eg-drive b { font-size: var(--t-md); }
+.eg-drive.busy { cursor: progress; animation: eg-wait 1.1s var(--ease-in-out, ease-in-out) infinite alternate; }
+@keyframes eg-wait { to { opacity: 0.72; } }
 .eg-drive:focus { background: var(--focus); color: var(--on-focus); outline: none; transform: translateY(-2px); }
 .eg-drive:focus .muted { color: var(--on-focus-dim); }
 .eg-space { width: 100%; height: 6px; border-radius: 3px; background: rgba(255, 255, 255, 0.12); overflow: hidden; }

@@ -87,11 +87,12 @@
           <!-- 0.9.17: pick your own, by console; 0.9.24 the Cartridge Installer (also in Settings → Emulators) -->
           <template v-if="picking">
             <h1>Cartridge Installer</h1>
-            <div class="w-box"><EmuGet flow /></div>
+            <div class="w-box"><EmuGet flow @phase="(p) => (egPhase = p)" /></div>
+            <!-- 0.9.37: Continue only once installing has started (it used to take focus while Location loaded) -->
             <div class="w-act">
               <button class="btn" data-focus @click="picking = false"><Icon name="mdiArrowLeft" />Back</button>
-              <button class="btn" data-focus @click="recheck">Later</button>
-              <button class="btn primary" data-focus @click="recheck">Continue<Icon name="mdiArrowRight" /></button>
+              <button v-if="egPhase === 'where' || egPhase === 'pick'" class="btn" data-focus @click="recheck">Skip for Now</button>
+              <button v-else class="btn primary" data-focus @click="recheck">Continue<Icon name="mdiArrowRight" /></button>
             </div>
           </template>
           <template v-else-if="st.emudeck || st.retrodeck">
@@ -520,7 +521,7 @@ async function flatpakThenRetroDeck() {
   catch (e) { devPass.value = ''; getting.value = ''; return toast(e.message, 'error', 7000); }
   await getRetroDeck();
 }
-const picking = ref(false);
+const picking = ref(false), egPhase = ref('');
 // without RomM: the games folder (a folder per console), then a library built from it
 async function pickGamesFolder() {
   const dir = await pickFolder({ title: 'Your games folder (the one with a folder per console)', start: store.config.romsRoot || store.info?.home });
@@ -656,7 +657,8 @@ const handlers = { back: () => { if (step.value === 'emus' && picking.value) { p
 useView(handlers, [{ b: 'A', label: 'Select' }, { b: 'B', label: 'Back' }]);
 // Setup and the scan bring their own buttons; the welcome's come back after them
 watch(step, (v) => { if (!replay && !only && v !== 'done') saveConfig({ ui: { welcomeStep: v } }); });
-watch(picking, async () => { await nextTick(); setTimeout(() => focusFirst(el.value?.querySelector('.w-step') || el.value, '.w-step [data-focus]'), 120); });
+// the installer focuses itself once its drives or list are there; leaving it focuses the step's first choice
+watch(picking, async (v) => { await nextTick(); if (!v) setTimeout(() => focusFirst(el.value?.querySelector('.w-step') || el.value, '.w-step [data-focus]'), 120); else setTimeout(() => { const eg = el.value?.querySelector('.eg'); if (eg && !eg.contains(document.activeElement)) focusFirst(eg); }, 120); });
 watch([step, romm, sy], async () => {
   if (step.value === 'self' && st.value.inSteam === false) await load();
   if (step.value === 'scan') loadScanExtras();
