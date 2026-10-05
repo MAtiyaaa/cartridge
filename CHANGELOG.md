@@ -19,6 +19,7 @@ Every Cartridge release, newest first. Each GitHub release only lists its own ch
 - **Cartridge hanging when you picked a Flatpak emulator without Flatpak installed:** a step ran in a way that froze the app, and the password window it waited for didn't exist in Game Mode. Both are gone, and every step has a time limit.
 - **shadPS4, SharpEmu and KytyPS5 saying "already on this device"** instead of opening their sheet in Settings → Emulators. shadPS4's launcher was being hidden from the update list, and a fresh install didn't refresh it.
 - **SharpEmu, KytyPS5 and Ryujinx icons missing:** they come from working addresses now.
+- **shadPS4's row in Settings → Emulators squeezed to one letter a line:** its launcher's update name is one very long word, and the Update pill beside it never wraps, so it took the whole row. The pill now shows just the release date (or version number), can never take the name's room, and reads clearly on a highlighted row.
 - **Settings sections opening part way down:** every section shares one scrolling pane and only its contents changed, so moving from a scrolled section (Achievements) to another (Look & Feel) kept the same depth. Each section now opens at the top.
 - **LT/RT at launch:** Cartridge listens for the controller before anything else loads. If the triggers still don't work right after start, the log now records what the controller sent in its first 20 seconds.
 

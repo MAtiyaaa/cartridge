@@ -79,7 +79,7 @@
             <span class="eg-mid"><b>{{ e.label }}</b><span class="muted small">{{ e.from }}<template v-if="e.installed && upOf(e.id)?.channel && CH[upOf(e.id).channel]"> · {{ CH[upOf(e.id).channel] }}</template></span></span>
             <span v-if="e.installed && upRun && upOf(e.id) && upRun === (upOf(e.id).path || upOf(e.id).fp)" class="status"><Icon name="mdiArrowDownCircle" :size="14" />{{ upPct != null ? upPct + '%' : 'Updating' }}</span>
             <span v-else-if="e.installed && upOf(e.id)?.broken" class="status bad"><Icon name="mdiWrench" :size="14" />Repair</span>
-            <span v-else-if="e.installed && upOf(e.id)?.update" class="status warn"><Icon name="mdiUpdate" :size="14" />Update · {{ upOf(e.id).update.version || upOf(e.id).update.tag || 'new' }}</span>
+            <span v-else-if="e.installed && upOf(e.id)?.update" class="status warn"><Icon name="mdiUpdate" :size="14" />Update · {{ shortVer(upOf(e.id).update) }}</span>
             <span v-else-if="e.installed" class="status ok"><Icon name="mdiCheck" :size="14" />{{ updates && ups && upOf(e.id) && !upOf(e.id).noSource && !upOf(e.id).error ? 'Up to date' : 'Installed' }}</span>
             <span v-else-if="stateOf(c, e)?.state === 'run'" class="status"><Icon name="mdiArrowDownCircle" :size="14" />{{ stateOf(c, e).pct != null ? stateOf(c, e).pct + '%' : 'Starting' }}</span>
             <span v-else-if="stateOf(c, e)?.state === 'wait'" class="status">Waiting</span>
@@ -97,7 +97,7 @@
             <span class="eg-mid"><b>{{ u.label }}</b><span class="muted small">{{ u.version ? 'Version ' + u.version : u.kind === 'flatpak' ? 'Flatpak' : u.kind === 'windows' ? 'Windows build' : '' }}</span></span>
             <span v-if="upRun === (u.path || u.fp)" class="status"><Icon name="mdiArrowDownCircle" :size="14" />{{ upPct != null ? upPct + '%' : 'Updating' }}</span>
             <span v-else-if="u.broken" class="status bad"><Icon name="mdiWrench" :size="14" />Repair</span>
-            <span v-else-if="u.update" class="status warn"><Icon name="mdiUpdate" :size="14" />Update · {{ u.update.version || u.update.tag || 'new' }}</span>
+            <span v-else-if="u.update" class="status warn"><Icon name="mdiUpdate" :size="14" />Update · {{ shortVer(u.update) }}</span>
             <span v-else class="status ok"><Icon name="mdiCheck" :size="14" />{{ u.noSource || u.error ? 'Installed' : 'Up to date' }}</span>
             <i v-if="upRun === (u.path || u.fp)" class="eg-bar-fill" :class="{ live: upPct == null }" :style="{ width: (upPct ?? 100) + '%' }" />
           </button>
@@ -176,6 +176,14 @@ async function runUpdate(u, force = false) {
 // 0.9.23 (owner: delete and download emulators again, stable or pre-release, shadPS4's versions):
 // an installed emulator opens one sheet with everything you can do to it
 const CH = { stable: 'Stable releases', pre: 'Pre-releases', rolling: 'Rolling build', flathub: '' };
+// 0.9.38 (owner's photo): shadPS4's launcher tags are "shadPS4QtLauncher-2026-10-05-<commit>", one long word that the
+// pill (never wrapped) made wider than the row, squeezing the name to a letter a line. The pill shows the part that
+// tells builds apart: a date, else the version number, else the start of the tag
+function shortVer(up) {
+  const v = String(up?.version || up?.tag || '');
+  const m = /\d{4}-\d{2}-\d{2}/.exec(v) || /\d+(?:\.\d+)+(?:[-.]\d+)?/.exec(v);
+  return m ? m[0] : v.slice(0, 16) || 'new';
+}
 const PATH_IDS = new Set(['pcsx2', 'duckstation', 'dolphin', 'eden', 'citron', 'yuzu', 'azahar', 'citra', 'ryujinx', 'cemu', 'rpcs3', 'shadps4', 'vita3k']);
 async function manage(u) {
   if (!u) return;
@@ -411,7 +419,8 @@ defineExpose({ load });
 .eg-emu { position: relative; overflow: hidden; display: flex; align-items: center; gap: var(--s-3); padding: 10px 12px; border-radius: var(--r-md); background: var(--s2); color: inherit; border: 0; text-align: left; font: inherit; flex: none; }
 .eg-emu:focus { background: var(--focus); color: var(--on-focus); outline: none; }
 .eg-emu:focus .muted { color: var(--on-focus-dim); }
-.eg-mid { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.eg-emu > .status { flex: none; max-width: 55%; overflow: hidden; } /* 0.9.38: a long pill never takes the name's room */
+.eg-mid { flex: 1; min-width: 8em; display: flex; flex-direction: column; gap: 2px; }
 .eg-mid b {  overflow-wrap: anywhere; }
 .eg-mid .small {  overflow-wrap: anywhere; }
 .eg-get { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: rgba(255, 255, 255, 0.08); flex: none; }
