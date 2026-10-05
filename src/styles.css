@@ -473,3 +473,40 @@ body.away *, body.away *::before, body.away *::after { animation-play-state: pau
 /* hold A on a row whose text trails off (data-expand, 0.9.29): it opens as a card with all of it; B folds it */
 [data-expand].expanded { position: relative; z-index: 3; height: auto !important; max-height: none !important; align-items: flex-start; background: var(--s2); box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.08); transition: box-shadow var(--d-med) var(--ease-out); }
 [data-expand].expanded * { white-space: normal !important; overflow: visible !important; text-overflow: clip !important; -webkit-line-clamp: unset !important; max-height: none !important; overflow-wrap: anywhere; }
+
+/* ---------------------------------------------------------------- motion (0.9.37, apple-design skill)
+   Spring easings (--spring, --spring-snappy, --spring-soft and their -d durations) come from motion.js. Transitions,
+   not keyframes, wherever something can change its mind half way: a transition starts from where it is. */
+:root { --spring: var(--ease-out); --spring-d: 380ms; --spring-snappy: var(--ease-out); --spring-snappy-d: 240ms; --spring-soft: var(--ease-out); --spring-soft-d: 520ms; }
+/* pop-ups: open from the button that asked (transform-origin set in App.vue), close the same way back; a hand-over
+   between two cross-fades. The page behind dims with the scrim. */
+.modal-enter-active, .modal-leave-active { transition: opacity 220ms var(--ease-out); } /* fades ease, movement springs */
+.modal-leave-active { transition: opacity 170ms var(--ease-out); pointer-events: none; }
+.modal-enter-from, .modal-leave-to { opacity: 0; }
+.modal-enter-active, .modal-enter-active > .dialog, .modal-leave-active > .dialog { animation: none !important; }
+.modal-enter-active > .dialog { transition: transform var(--spring-d) var(--spring); }
+.modal-leave-active > .dialog { transition: transform 170ms var(--ease-out); }
+.modal-enter-from > .dialog { transform: scale(0.94); }
+.modal-leave-to > .dialog { transform: scale(0.97); }
+/* bottom sheets come up and go down the same path */
+.modal-enter-from > .dialog.sheet { transform: translateY(56px); transform-origin: 50% 100% !important; }
+.modal-leave-to > .dialog.sheet { transform: translateY(40px); }
+/* without the GPU each scaled frame of a big box is repainted: opacity only, short */
+body.light-fx .modal-enter-from > .dialog, body.light-fx .modal-leave-to > .dialog { transform: none; }
+body.light-fx .modal-enter-active { transition-duration: var(--d-med); }
+body.motion-reduce .modal-enter-active, body.motion-reduce .modal-leave-active { transition: opacity 120ms linear; }
+body.motion-reduce .modal-enter-from > .dialog, body.motion-reduce .modal-leave-to > .dialog { transform: none; }
+
+/* micro-interactions: the press shows on the press (scale on :active, set above); letting go springs back instead
+   of snapping, and the mouse lifts a card a little before it's picked */
+.btn, .menu-item, .lrow, .seg button { transition: background var(--d-fast), color var(--d-fast), transform var(--spring-snappy-d) var(--spring-snappy); }
+.card .art { transition: transform var(--spring-snappy-d) var(--spring-snappy); }
+body.mouse-mode .card:hover:not(:focus) .art { transform: translateY(-3px); }
+.toggle .sw::after { transition: transform var(--spring-snappy-d) var(--spring-snappy); }
+body.motion-reduce .card .art, body.motion-reduce .btn, body.motion-reduce .lrow { transition-duration: 0ms; }
+
+/* a game card's picture flying into the game page (motion.js morph): the page underneath switches at once, only the
+   picture moves, on a spring */
+:root.morphing::view-transition-old(root), :root.morphing::view-transition-new(root) { animation: none; }
+::view-transition-group(cart-morph) { animation-duration: var(--spring-d); animation-timing-function: var(--spring); z-index: 60; }
+::view-transition-old(cart-morph), ::view-transition-new(cart-morph) { animation-duration: calc(var(--spring-d) * 0.6); height: 100%; object-fit: cover; }

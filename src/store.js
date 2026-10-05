@@ -1,4 +1,5 @@
-import { reactive, markRaw } from 'vue';
+import { reactive, markRaw, nextTick } from 'vue';
+import { morph } from './motion.js';
 
 const rd = window.cart;
 // network failures read as one plain sentence (0.9.24, owner: "net::ERR_NAME_NOT_RESOLVED" was shown)
@@ -60,7 +61,14 @@ export function playtimeText(min) {
 }
 
 // ---------------- routing
+// 0.9.37 (owner: a component morphs into its detail view): a game card's picture flies into the game page's cover,
+// and back into its card on the way out (motion.js morph: GPU only, any press skips it)
 export function go(name, params = {}) {
+  const card = name === 'game' && document.activeElement?.closest?.(`.card[data-key="rom-${params.romId}"]`);
+  if (card?.querySelector('.art img')) return morph(card.querySelector('.art'), () => goNow(name, params), '.g-cover', nextTick);
+  goNow(name, params);
+}
+function goNow(name, params) {
   // leaving Settings for one of its screens: remember the row (Settings puts focus back on it, 0.9.3 L)
   const el = document.activeElement;
   if (store.route.name === 'settings' && el?.closest?.('.pane')) store.settingsSpot = { sec: store.settingsSection, text: (el.textContent || '').trim().slice(0, 60) };
@@ -70,8 +78,11 @@ export function go(name, params = {}) {
 }
 export function back() {
   if (!store.history.length) return false;
-  store.navDir = 'out';
-  store.route = store.history.pop();
+  const from = store.route.name === 'game' && document.querySelector('.g-cover img') && store.route.params?.romId;
+  const prev = store.history[store.history.length - 1];
+  const change = () => { store.navDir = 'out'; store.route = store.history.pop(); };
+  if (from && prev?.focusKey === 'rom-' + from) morph(document.querySelector('.g-cover'), change, `.card[data-key="rom-${from}"] .art`, nextTick);
+  else change();
   return true;
 }
 export function tab(name) {
