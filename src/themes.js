@@ -67,14 +67,16 @@ export const SURFACES = {
 };
 // Elements (ui.elements, 0.9.37, owner: panels set apart from the background): cards, panels, buttons and the
 // highlight. Unset follows the Background picked before 0.9.37 (Panels did both).
-// 0.9.38 (owner: "OLED Black in Elements doesn't make sense, glass looks grey"): Plain and Glass only (OLED Black
-// stays a Background). Plain is the chosen colour, solid, with text that reads on it; Glass is that colour as
-// frosted glass (apple-design skill, materials): a light fill of it, a bright top edge, depth, the page blurred
-// through it. White picked gives white glass with dark text, never grey.
+// 0.9.42 (owner: build Glass with the liquid-glass skill and only that): Liquid Glass is a material for the
+// navigation and control layer (the Dock, buttons, switches, sheets, toasts, search) floating over the content,
+// never for the content itself, so cards, rows and panels stay solid in Glass too (glassA 1). The material is in
+// styles.css (body.elements-glass, the --lg-* tokens set below).
 export const ELEMENTS = {
   plain: { label: 'Plain', glassA: 1 },
-  glass: { label: 'Glass', glassA: 0.62, glass: true },
+  glass: { label: 'Glass', glassA: 1, glass: true },
 };
+// the Dock's colour when none was picked: Glass with Glass elements, white with Light, else black
+export const dockOf = (ui) => ui?.dockColor || (elementsOf(ui) === 'glass' ? 'glass' : ui?.theme === 'light' ? 'white' : 'black');
 export const elementsOf = (ui) => (ELEMENTS[ui?.elements] ? ui.elements : ui?.surface === 'glass' && !ui?.elements ? 'glass' : 'plain');
 export const TEXTS = {
   // three clearly different sets (0.9.3): High contrast lifts the secondary text right up, Soft is
@@ -152,12 +154,8 @@ export function applyTheme(uiOrName) {
   // when one is picked, with text that reads on it (0.9.2)
   const fo = ok(col.highlight) ? a : lightT ? '#1c1c1e' : '#ffffff', foLight = lum(fo) > 0.6;
   r.setProperty('--grad', `linear-gradient(${a}, ${a})`);
-  // Glass elements (0.9.37, owner: the white highlight glass too, with contrasting text): a frosted fill of the
-  // highlight colour, light text on it; the ring stays solid so where you are is never in doubt
-  // 0.9.38: the glass is mostly the colour itself (0.2 of white over a dark page read as grey), so text is
-  // chosen by the colour's lightness, the same as Plain
-  const glassFocus = el.glass;
-  r.setProperty('--focus', glassFocus ? `rgba(${rgb(fo)}, ${foLight ? 0.74 : 0.66})` : fo);
+  // focus is solid in both (0.9.42): in Glass a focused control becomes prominent glass of this colour (--lg-hi)
+  r.setProperty('--focus', fo);
   r.setProperty('--focus-solid', fo);
   r.setProperty('--on-focus', foLight ? '#0c0d10' : lightT ? '#fafafb' : '#ffffff');
   r.setProperty('--on-focus-dim', foLight ? 'rgba(12, 13, 16, 0.7)' : lightT ? 'rgba(250, 250, 251, 0.72)' : 'rgba(255, 255, 255, 0.75)');
@@ -180,7 +178,12 @@ export function applyTheme(uiOrName) {
   if (t.neutral) { r.setProperty('--xmb', black ? '#000' : S[0]); r.setProperty('--xmb-base', black ? '#000' : S[0]); }
   for (let i = 0; i < 6; i++) r.setProperty('--g' + i, g[i]);
   r.setProperty('--tint-rgb', black ? '0, 0, 0' : lightT ? '235, 235, 239' : tint);
-  r.setProperty('--glass-bg', el.glassA < 1 ? `rgba(${el.black || black ? '0, 0, 0' : tint}, ${el.glassA})` : S[1]);
+  r.setProperty('--glass-bg', S[1]);
+  // Liquid Glass tokens (0.9.42): the material's tint (the theme's hue, white glass on Light, black on OLED) and the
+  // prominent colour (the highlight) for focused controls and primary buttons
+  r.setProperty('--lg-tint', lightT ? '255, 255, 255' : black || t.oled ? '0, 0, 0' : tint);
+  r.setProperty('--lg-hi', rgb(fo));
+  r.setProperty('--lg-on-hi', foLight ? '#0c0d10' : '#ffffff');
   r.setProperty('--bg', black ? '#000' : S[0]);
   r.setProperty('--text', tx.text);
   r.setProperty('--muted', tx.muted);

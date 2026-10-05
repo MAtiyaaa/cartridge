@@ -113,7 +113,7 @@ import { computed, onMounted, onBeforeUnmount, ref, watch, nextTick, defineAsync
 import { store, loadConfig, loadLibrary, loadArt, back, tab, go, call, toast, choose, saveConfig, builtinKb, askText, GRADE, activeTabs, TAB_DEFS, romById, isFavourite, download } from './store.js';
 import { pushLayer, focusFirst, input, gameEnded } from './nav.js';
 import { setSoundEnabled, setSoundStyle, sfx } from './sfx.js';
-import { applyTheme, CARD_SIZES } from './themes.js';
+import { applyTheme, CARD_SIZES, dockOf } from './themes.js';
 import { setPointerPref, setRumble, setBackground } from './nav.js';
 import { detectPad } from './pad.js';
 import Icon from './components/Icon.vue';
@@ -220,10 +220,10 @@ function placeInk() {
 watch(() => store.config?.ui?.touchScroll, (v) => document.documentElement.classList.toggle('touch-native', v === 'browser'), { immediate: true });
 // 0.9.28 (owner): the Dock (the bar of tabs) sits at the bottom, centred, as a pill unless chosen otherwise;
 // the strip of button hints is hidden unless turned on; the Dock's colour (pill style)
-watch(() => [store.config?.ui?.barPos || 'bottom', store.config?.ui?.barAlign || 'center', store.config?.ui?.barStyle || 'pill', store.config?.ui?.hints === true || !!store.forceHints, store.config?.ui?.dockColor || (store.config?.ui?.theme === 'light' ? 'white' : 'black')], ([pos, align, style, hints, dock]) => { // Light's own Dock is white unless you picked one
+watch(() => [store.config?.ui?.barPos || 'bottom', store.config?.ui?.barAlign || 'center', store.config?.ui?.barStyle || 'pill', store.config?.ui?.hints === true || !!store.forceHints, dockOf(store.config?.ui)], ([pos, align, style, hints, dock]) => { // unpicked: Glass with Glass elements, white with Light, else black (themes.dockOf)
   const b = document.body.classList;
   b.toggle('bar-top', pos === 'top'); b.toggle('hints-on', hints);
-  for (const c of ['white', 'black', 'accent']) b.toggle('dock-' + c, dock === c);
+  for (const c of ['white', 'black', 'accent', 'glass']) b.toggle('dock-' + c, dock === c);
   b.toggle('bar-bottom', pos === 'bottom'); b.toggle('bar-left', pos === 'left');
   b.toggle('bar-center', align === 'center'); b.toggle('bar-pill', style === 'pill'); b.toggle('bar-circle', style === 'circle');
   nextTick(placeInkSoon);

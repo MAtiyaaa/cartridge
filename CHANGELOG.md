@@ -2,6 +2,23 @@
 
 Every Cartridge release, newest first. Each GitHub release only lists its own changes.
 
+## Cartridge 0.9.42 · Glass
+
+0.9.41 never went out on its own (GitHub couldn't build it); this update carries it too, see 0.9.41 below.
+
+### New
+- **Game Shelf, redesigned:** your games stand as cases on a lit shelf, spines out, each with its console's band on top (blue for PS4, white for PS5, red for Switch, green for Xbox). The game you pick turns out to face you and show its cover, with its name, play time and the green tick if it's on this device. Tap a case to pick it, tap it again (or press A) to open the game.
+
+### Changed
+- **Glass, rebuilt:** Glass now follows Apple's Liquid Glass rules. It's for the things you press and the bars you move with, floating over your games, never the games themselves:
+  - The Dock, search, buttons, switches, pop-ups, sheets and toasts are glass. The page shows through them blurred, with a bright edge where the light catches.
+  - Your cards, lists and panels stay solid, so they read clearly.
+  - Whatever is focused or chosen becomes glass filled with your highlight colour.
+  - Buttons light up from inside when pressed.
+  - With Glass picked, the Dock is glass too (unless you picked a Dock colour).
+  - Light makes it white glass. Reduced transparency in your system makes it frosted and solid, and higher contrast gives it a clear edge.
+- **"On this device" is the green tick** on the disc and cartridge widget too.
+
 ## Cartridge 0.9.41 · Light, Rebuilt
 
 ### New

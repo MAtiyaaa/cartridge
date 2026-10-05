@@ -221,17 +221,23 @@
                   <div v-if="isDisc(t)" class="st-disc-boost"><div class="st-disc" :style="{ backgroundImage: bgUrl(cover(mediaOf(t), true)) }"><i class="st-disc-sheen" /><i class="st-disc-hub" /></div></div>
                   <div v-else class="st-cart" :style="cartTint(t)"><i class="st-cart-grip" /><div class="st-cart-label" :style="{ backgroundImage: bgUrl(cover(mediaOf(t), true)) }" /></div>
                 </div></Transition></div>
-                <div class="st-media-t"><b>{{ mediaOf(t).name }}</b><span>{{ store.play[mediaOf(t).id]?.min ? playtimeText(store.play[mediaOf(t).id].min) + ' played' : store.installed[mediaOf(t).id] ? 'On this device' : 'In your library' }}</span></div>
+                <div class="st-media-t"><b>{{ mediaOf(t).name }}</b><span>{{ store.play[mediaOf(t).id]?.min ? playtimeText(store.play[mediaOf(t).id].min) + ' played' : 'In your library' }}<i v-if="store.installed[mediaOf(t).id]" class="st-dev-tick" title="On this device"><Icon name="mdiCheckBold" :size="11" /></i></span></div>
               </div>
             </template>
             <div v-else class="st-empty small"><span>No games for this console yet</span></div>
           </template>
-          <!-- Game Shelf (0.9.32): the console's games standing as boxes, spines out; the chosen one slides out to show its cover -->
+          <!-- Game Shelf (0.9.42, owner asked for a redesign; option B, a display case): the console's games as cases on a
+               lit shelf, spines out with the console's coloured band; the picked one turns out to show its cover -->
           <template v-else-if="t.type === 'shelf'">
             <template v-if="conList(t.platformId).length">
-              <div class="st-label"><span class="st-lname st-shelf-mark"><ConsoleMark :slug="platformById(t.platformId)?.slug" :label="platformById(t.platformId)?.display_name" /></span><span class="st-count">{{ (sel[t.id] || 0) + 1 }} / {{ conList(t.platformId).length }}</span></div>
-              <div class="st-shelf">
-                <div v-for="r in shelfOf(t)" :key="r.id" class="st-spine" :class="{ out: r.id === conList(t.platformId)[sel[t.id] || 0]?.id }" @click="pickSpine($event, t, r)">
+              <div v-if="mediaOf(t)" class="st-shelf-amb" :style="{ backgroundImage: `url(&quot;${cover(mediaOf(t), true)}&quot;)` }" />
+              <div class="st-label st-shelf-head">
+                <span class="st-lname st-shelf-mark"><ConsoleMark :slug="platformById(t.platformId)?.slug" :label="platformById(t.platformId)?.display_name" /></span><span class="st-count">{{ (sel[t.id] || 0) + 1 }} / {{ conList(t.platformId).length }}</span>
+                <span v-if="mediaOf(t)" class="st-shelf-t"><b>{{ mediaOf(t).name }}</b><span>{{ store.play[mediaOf(t).id]?.min ? playtimeText(store.play[mediaOf(t).id].min) + ' played' : 'Not started' }}<i v-if="store.installed[mediaOf(t).id]" class="st-dev-tick" title="On this device"><Icon name="mdiCheckBold" :size="11" /></i></span></span>
+              </div>
+              <div class="st-shelf" :style="{ '--case': caseOf(t.platformId) }">
+                <i class="st-shelf-spot" />
+                <div v-for="r in shelfOf(t)" :key="r.id" class="st-spine" :class="{ out: r.id === mediaOf(t)?.id }" @click="pickSpine($event, t, r)">
                   <img class="st-spine-art" :src="cover(r, true) || BLANK" alt="" loading="lazy" @error="noImg" />
                   <span class="st-spine-t">{{ r.name }}</span>
                 </div>
@@ -545,7 +551,15 @@ const cartTint = (t) => { const c = consoleColors(platformById(t.platformId) || 
 const isDisc = (t) => { const p = platformById(t.platformId); return DISC.test(p?.slug || '') || DISC.test(p?.fs_slug || ''); };
 const mediaOf = (t) => { const l = conList(t.platformId); return l[(sel[t.id] || 0) % Math.max(1, l.length)] || null; };
 // the shelf shows the spines that fit, with the chosen one in view
-const shelfOf = (t) => { const l = conList(t.platformId), n = Math.max(3, Math.floor((box(t).pw - 40) / 52)), i = sel[t.id] || 0, from = Math.max(0, Math.min(i - Math.floor(n / 3), l.length - n)); return l.slice(from, from + n); };
+// 0.9.42: cases 36px + 5px apart, the turned-out one as wide as its cover at the shelf's height
+const shelfOf = (t) => {
+  const { pw, ph } = box(t), l = conList(t.platformId), outW = Math.min(pw * 0.36, Math.max(60, ph - 96) * 0.7);
+  const n = Math.max(3, Math.floor((pw - 48 - outW) / 41) + 1), i = (sel[t.id] || 0) % Math.max(1, l.length), from = Math.max(0, Math.min(i - Math.floor(n / 3), l.length - n));
+  return l.slice(from, from + n);
+};
+// the band at the top of a case, as the real ones (PS4 blue, PS5 white, Switch red, Xbox green); else the console's colour
+const CASE = { ps4: '#1667d8', ps5: '#eef1f5', ps3: '#15171b', ps2: '#15171b', psvita: '#1b56b8', switch: '#e60012', xbox: '#2a8f2a', xbox360: '#6cc72b', xboxone: '#1c8a1c', wii: '#f2f3f5', wiiu: '#0e94d0', '3ds': '#e8eaee', n3ds: '#e8eaee', nds: '#e8eaee', ngc: '#15171b', gc: '#15171b' };
+const caseOf = (pid) => { const p = platformById(pid); return CASE[p?.slug] || CASE[p?.fs_slug] || consoleColors(p)?.[0] || '#3a3f47'; };
 // the page overview's picture of a tile: a game's cover where the tile shows games, a picture tile's picture,
 // else its icon and name (0.9.28)
 function ovThumb(x) {
@@ -1658,17 +1672,38 @@ watch(() => store.play, loadWeek);
 .st-media-enter-from { opacity: 0; transform: translateX(18%) scale(0.92); }
 .st-media-leave-to { opacity: 0; transform: translateX(-18%) scale(0.92); }
 :global(body.light-fx .st-disc), :global(body.motion-reduce .st-disc), :global(body.light-fx .st-cart), :global(body.motion-reduce .st-cart) { animation: none; }
-/* Game Shelf (0.9.32): spines on a board; the chosen game stands out with its cover */
 .st-shelf-mark :deep(.cmark) { height: 1.15em; } /* 0.9.39 (owner): the console's logo, not "PlayStation 4 Shelf" */
-.st-shelf { position: relative; flex: 1; min-height: 0; display: flex; align-items: flex-end; gap: 6px; padding: 10px 4px 14px; margin-top: 4px; overflow: hidden; }
-.st-spine { position: relative; flex: none; width: 44px; height: 86%; border-radius: 4px 4px 2px 2px; overflow: hidden; background: #22252c; box-shadow: inset -6px 0 10px rgba(0, 0, 0, 0.45), inset 1px 0 0 rgba(255, 255, 255, 0.12), 0 6px 14px rgba(0, 0, 0, 0.45); transition: width 420ms var(--ease-out), height 420ms var(--ease-out), transform 420ms var(--ease-out); }
-.st-spine-art { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: left center; opacity: 0.55; filter: saturate(1.1); transition: opacity 320ms ease; }
-.st-spine-t { position: absolute; inset: 8px 0; writing-mode: vertical-rl; transform: rotate(180deg); display: flex; align-items: center; justify-content: flex-start; padding: 6px 0; font-family: var(--display); font-weight: 800; font-size: 13px; color: #fff; text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8); overflow: hidden; white-space: nowrap; line-height: 44px; }
-.st-spine.out { width: min(36%, calc(86cqh * 0.7)); height: 96%; transform: translateY(-4px); }
-.st-spine.out .st-spine-art { opacity: 1; object-position: center; }
-.st-spine.out .st-spine-t { display: none; }
-.st-spine:not(.out):hover { transform: translateY(-8px); }
-.st-spine { cursor: pointer; }
+/* Game Shelf (0.9.42, option B): cases on a lit shelf. Each case is a spine with the console's band on top and its
+   cover showing faintly through; the picked one turns out (rotateY, spring) to show its whole cover. The spot and
+   the blurred cover behind light it. Springs, not keyframes, so a quick L1/R1 run retargets smoothly. */
+.st-shelf-amb { position: absolute; inset: -40px; z-index: -1; background-size: cover; background-position: center; filter: blur(40px) saturate(1.3); opacity: 0.34; transition: background-image 600ms var(--ease-out); pointer-events: none; }
+.st-shelf-head { display: flex; align-items: center; gap: 0; }
+.st-shelf-t { margin-left: auto; padding-left: 12px; text-align: right; min-width: 0; display: flex; flex-direction: column; align-items: flex-end; }
+.st-shelf-t b { font-family: var(--display); font-weight: 800; font-size: clamp(13px, 1.4em, 19px); color: var(--text); line-height: 1.15; overflow-wrap: anywhere; text-wrap: balance; }
+.st-shelf-t span { display: inline-flex; align-items: center; font-size: 0.85em; font-weight: 500; color: var(--muted); margin-top: 2px; }
+.st-shelf-t .st-dev-tick { width: 18px; height: 18px; margin-left: 8px; }
+@container (max-width: 380px) { .st-shelf-t { display: none; } }
+.st-shelf { position: relative; flex: 1; min-height: 0; display: flex; align-items: flex-end; gap: 5px; padding: 8px 10px 16px; margin-top: 6px; perspective: 900px; overflow: hidden; }
+.st-shelf-spot { position: absolute; left: 0; top: -30%; width: 60%; height: 130%; background: radial-gradient(55% 55% at 35% 0, rgba(255, 255, 255, 0.14), transparent 70%); pointer-events: none; }
+.st-spine { position: relative; flex: none; width: 36px; height: 90%; border-radius: 3px; overflow: hidden; cursor: pointer; background: #1c1d22; transform-origin: right center;
+  box-shadow: inset 1px 0 0 rgba(255, 255, 255, 0.18), inset -8px 0 12px rgba(0, 0, 0, 0.5), 0 6px 10px rgba(0, 0, 0, 0.4);
+  transition: width 560ms var(--spring), height 560ms var(--spring), transform 560ms var(--spring), margin 560ms var(--spring), box-shadow 300ms ease; }
+.st-spine::after { content: ''; position: absolute; left: 0; right: 0; top: 0; height: clamp(14px, 9%, 24px); background: linear-gradient(color-mix(in srgb, var(--case) 100%, #fff 12%), var(--case)); box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.22), 0 1px 0 rgba(0, 0, 0, 0.35); z-index: 2; }
+.st-spine-art { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: left center; opacity: 0.5; filter: blur(1px); transition: opacity 320ms ease, filter 320ms ease; }
+.st-spine-t { position: absolute; inset: clamp(22px, 13%, 32px) 0 8px; z-index: 1; writing-mode: vertical-rl; transform: rotate(180deg); display: flex; align-items: center; justify-content: flex-start; font-family: var(--display); font-weight: 700; font-size: 12px; color: #fff; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9); overflow: hidden; white-space: nowrap; line-height: 36px; }
+.st-spine.out { width: min(36%, calc((100cqh - 96px) * 0.7)); min-width: 60px; height: 100%; margin: 0 12px 0 6px; transform: rotateY(-12deg); border-radius: 4px;
+  box-shadow: 0 24px 40px rgba(0, 0, 0, 0.6), inset 0 0 0 1px rgba(255, 255, 255, 0.2); }
+.st-spine.out .st-spine-art { opacity: 1; filter: none; object-position: center; }
+.st-spine.out .st-spine-t { opacity: 0; }
+.st-spine:not(.out):hover, .st-tile:focus .st-spine:not(.out):hover { transform: translateY(-8px); }
+.st-tile:focus .st-spine.out { transform: rotateY(-6deg) translateY(-4px); }
+.st-shelf-board { position: absolute; left: 0; right: 0; bottom: 4px; height: 12px; border-radius: 4px; background: linear-gradient(180deg, rgba(255, 255, 255, 0.28), rgba(255, 255, 255, 0.06)); box-shadow: 0 14px 24px rgba(0, 0, 0, 0.55); }
+:global(body.light-fx .st-shelf-amb) { display: none; }
+:global(body.light-fx .st-spine-art) { filter: none; }
+:global(body.motion-reduce .st-spine) { transition: none; }
+:global(body.theme-light .st-shelf-board) { background: linear-gradient(180deg, #fff, #d6d6dc); box-shadow: 0 10px 18px rgba(30, 30, 40, 0.22); }
+:global(body.theme-light .st-shelf-spot) { display: none; }
+:global(body.theme-light .st-shelf-amb) { opacity: 0.2; }
 .st-media-stage { cursor: pointer; }
 /* focused: the disc spins faster (a second turn on top, so it never jumps) and lifts; the cartridge rises as if
    pulled from the slot; a game on this device has a soft green glow */
@@ -1678,5 +1713,4 @@ watch(() => store.play, loadWeek);
 .st-disc-boost { height: 92%; aspect-ratio: 1; border-radius: 50%; display: grid; place-items: center; } /* 0.9.39: no faster spin on focus any more */
 .st-disc-boost > .st-disc { height: 100%; }
 :global(body.motion-reduce .st-disc) { animation: none; }
-.st-shelf-board { position: absolute; left: 0; right: 0; bottom: 4px; height: 10px; border-radius: 3px; background: linear-gradient(180deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.04)); box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5); }
 </style>
