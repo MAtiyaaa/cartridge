@@ -58,11 +58,11 @@ function targets(home = os.homedir(), env = process.env) {
     ...[path.join(cfg, 'dolphin-emu/Dolphin.ini'), v('org.DolphinEmu.dolphin-emu', 'config/dolphin-emu/Dolphin.ini')].map((f) => ({ id: 'dolphin', name: 'Dolphin', file: f, for: ['gc', 'ngc', 'wii'] })),
   ].filter((t) => fs.existsSync(t.file)).map((t) => ({ ...t, flatpak: t.file.includes('/.var/app/') }));
 }
-// folders: { slug: dir }; running: emulator ids open now (skipped)
+// folders: { slug: dir or [dirs] }; running: emulator ids open now (skipped)
 function addGameDirs(folders, { home, env, running = new Set() } = {}) {
   const out = [];
   for (const t of targets(home, env)) {
-    const dirs = [...new Set(t.for.map((k) => folders[k]).filter((d) => d && fs.existsSync(d)))];
+    const dirs = [...new Set(t.for.flatMap((k) => [].concat(folders[k] || [])).filter((d) => d && fs.existsSync(d)))]; // one folder or several (0.9.38: other drives)
     if (!dirs.length) continue;
     if (running.has(t.id)) { out.push({ ...t, skipped: 'running' }); continue; }
     const added = t.id === 'dolphin' ? addDolphin(t.file, dirs) : addMulti(t.file, 'GameList', 'RecursivePaths', dirs);

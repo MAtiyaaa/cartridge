@@ -35,7 +35,7 @@ const REPOS = {
   // own Forgejo servers first (git.eden-emu.org, git.ryujinx.app), GitHub second
   // 0.9.37 (owner's photo: "No Linux build in shadps4-qtlauncher's newest release"): every launcher build is published
   // as a pre-release (its build.yml), so GitHub's "latest" skipped them all and found an old release without Linux
-  shadps4: { repo: 'shadps4-emu/shadps4-qtlauncher', asset: /linux-qt.*\.zip$|qt.?launcher.*\.AppImage$/i, zipped: /\.AppImage$/i, only: /qt.?launcher/i, pre: true, preOnly: true },
+  shadps4: { repo: 'shadps4-emu/shadps4-qtlauncher', asset: /linux-qt.*\.zip$|qt.?launcher.*\.AppImage$/i, zipped: /\.AppImage$/i, pre: true, preOnly: true },
   // 0.9.21 (owner: "couldn't check"): Eden's server is git.eden-emu.dev; .org kept as the older name
   eden: { repo: 'eden-emulator/Releases', asset: /(amd64|x86_64|x64|steamdeck|rog).*\.AppImage$|linux.*\.AppImage$/i, forge: [['https://git.eden-emu.dev', 'eden-emu/eden'], ['https://git.eden-emu.org', 'eden-emu/eden']], first: 'forge' },
   ryujinx: { repo: 'Ryubing/Stable-Releases', asset: /x64.*\.AppImage$/i, forge: [['https://git.ryujinx.app', 'Ryubing/Stable'], ['https://git.ryujinx.app', 'ryubing/ryujinx']], first: 'forge' },

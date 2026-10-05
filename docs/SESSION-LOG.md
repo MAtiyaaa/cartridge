@@ -6,6 +6,15 @@ The branch for 0.9.3 work is `claude/relaxed-fermat-30pigp`. Pull it before star
 
 ---
 
+## 5 Oct 2026 · 0.9.38 More Drives, Clearer Glass (built and released)
+- Owner's answers on the pending list, plus a new list with photos. Built: multi-drive (item 17, owner: only if confident; tested in the app with two roots, folder creation and PCSX2.ini), BIOS from RomM by itself after a download (item 7: the code only placed files already on the device), shadPS4/SharpEmu sheets and icons, Flatpak hang (async remote-add, sudo -S with a password typed in Cartridge, time limits; tested with a fake sudo), tour glyphs and pages, sync ring, Elements Plain/Glass with tinted liquid glass (apple-design skill, owner asked), shadPS4 mods (`<game>-mods` overlay read from shadPS4's fs.cpp).
+- Checked in code, no change: add-on site downloads (item 11: caught, page closed, extracted and placed per emulator by content), GPU Always (item 12: trial with confirm, reverts after 25 s).
+- LT/RT at launch: worked in the app about 100 ms after start every time (even with 30,000 games). Base layer now pushed before config loads; a "triggers at start" log line added. Ask the owner for it.
+- Controller dead after a game: no device; ask for the "gamescope focus" and "after the game" log lines.
+- Answers for the owner: Syncthing should keep running while playing (it waits for files to settle); PSN isn't needed for PS4 names (they come from the other device's RomM notes).
+- Plans, not built: RPCS3 mods, Nexus Mods, two-device link via RomM and Syncthing: `docs/plan-0.9.39.md`.
+- Owner to test: Add a Drive on an SD card, games found and downloaded there, emulators seeing it; glass and plain with a coloured highlight; the tour on the device; Flatpak install on a distro without it; BIOS toast after downloading a game for a console without its BIOS; sync ring; shadPS4/SharpEmu sheets; a shadPS4 mod from GameBanana.
+
 ## 5 Oct 2026 · 0.9.37 Set Up for You (built and released, one update with the second list) · handover written
 - First list (owner's photo of a game's About and more): row focus without the clipped ring; Cemu groups (symlinked home, region-only packs, checked against the real community packs); BIOS and firmware put in place automatically plus a Setup and Health section; add-on site downloads close the page and open Downloads; mod layouts per emulator (Azahar mods, Switch patches). Download Latest Patches retracted by the owner (it was there).
 - Second list, same release (owner: "release it all as one update"; the photos arrived in a later message and changed the shadPS4 fix):

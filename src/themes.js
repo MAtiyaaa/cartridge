@@ -63,14 +63,16 @@ export const SURFACES = {
   oled: { label: 'OLED Black', glassA: 1, bg: '#000000', black: true },
 };
 // Elements (ui.elements, 0.9.37, owner: panels set apart from the background): cards, panels, buttons and the
-// highlight. Glass: see-through panels and a frosted highlight with light text; OLED Black: black panels.
-// Unset follows the Background picked before 0.9.37 (Panels did both).
+// highlight. Unset follows the Background picked before 0.9.37 (Panels did both).
+// 0.9.38 (owner: "OLED Black in Elements doesn't make sense, glass looks grey"): Plain and Glass only (OLED Black
+// stays a Background). Plain is the chosen colour, solid, with text that reads on it; Glass is that colour as
+// frosted glass (apple-design skill, materials): a light fill of it, a bright top edge, depth, the page blurred
+// through it. White picked gives white glass with dark text, never grey.
 export const ELEMENTS = {
   plain: { label: 'Plain', glassA: 1 },
   glass: { label: 'Glass', glassA: 0.62, glass: true },
-  oled: { label: 'OLED Black', glassA: 1, black: true },
 };
-export const elementsOf = (ui) => ui?.elements || { glass: 'glass', oled: 'oled' }[ui?.surface] || 'plain';
+export const elementsOf = (ui) => (ELEMENTS[ui?.elements] ? ui.elements : ui?.surface === 'glass' && !ui?.elements ? 'glass' : 'plain');
 export const TEXTS = {
   // three clearly different sets (0.9.3): High contrast lifts the secondary text right up, Soft is
   // dimmer and slightly warm for dark rooms
@@ -141,11 +143,13 @@ export function applyTheme(uiOrName) {
   r.setProperty('--grad', `linear-gradient(${a}, ${a})`);
   // Glass elements (0.9.37, owner: the white highlight glass too, with contrasting text): a frosted fill of the
   // highlight colour, light text on it; the ring stays solid so where you are is never in doubt
+  // 0.9.38: the glass is mostly the colour itself (0.2 of white over a dark page read as grey), so text is
+  // chosen by the colour's lightness, the same as Plain
   const glassFocus = el.glass;
-  r.setProperty('--focus', glassFocus ? `rgba(${rgb(fo)}, ${foLight ? 0.2 : 0.42})` : fo);
+  r.setProperty('--focus', glassFocus ? `rgba(${rgb(fo)}, ${foLight ? 0.74 : 0.66})` : fo);
   r.setProperty('--focus-solid', fo);
-  r.setProperty('--on-focus', glassFocus ? '#ffffff' : foLight ? '#0c0d10' : '#ffffff');
-  r.setProperty('--on-focus-dim', glassFocus ? 'rgba(255, 255, 255, 0.8)' : foLight ? 'rgba(12, 13, 16, 0.7)' : 'rgba(255, 255, 255, 0.75)');
+  r.setProperty('--on-focus', foLight ? '#0c0d10' : '#ffffff');
+  r.setProperty('--on-focus-dim', foLight ? 'rgba(12, 13, 16, 0.7)' : 'rgba(255, 255, 255, 0.75)');
   r.setProperty('--ring', `0 0 0 3px var(--s0), 0 0 0 6px ${fo}`);
   r.setProperty('--ring-soft', `0 0 0 2px ${fo}`);
   // surfaces: neutral greys, tinted a little towards the theme for the coloured themes
@@ -181,7 +185,8 @@ export function applyTheme(uiOrName) {
   b.toggle('surface-oled', !!surf.black);
   b.toggle('surface-glass', surf.glassA < 1 && !surf.black);
   b.toggle('elements-glass', !!el.glass);
-  b.toggle('elements-oled', !!el.black);
+  b.toggle('elements-oled', false);
+  b.toggle('focus-light', foLight); // glass sheen strength
   b.toggle('no-titles', ui.cardTitles === false);
 }
 // Colours the animated backgrounds draw with

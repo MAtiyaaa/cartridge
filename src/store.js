@@ -296,7 +296,8 @@ export async function download(rom, { checkSpace = true } = {}) {
 
 // Before a download: will it fit? Counts what is still downloading to the same folder too.
 async function roomFor(rom, p) {
-  const sp = await call('fs:space', p.target.path).catch(() => null);
+  // 0.9.38: the drive the download would really go to (games folders on more than one drive)
+  const sp = (await call('fs:downloadSpace', { slug: p.slug, fs_slug: p.fs_slug, need: rom.fs_size_bytes || 0 }).catch(() => null)) || (await call('fs:space', p.target.path).catch(() => null));
   if (!sp) return true;
   const same = (d) => ['queued', 'downloading'].includes(d.status) && store.lib?.platforms.find((x) => x.slug === d.platformSlug)?.target?.path === p.target.path;
   const pending = store.downloads.filter(same).reduce((s, d) => s + Math.max(0, (d.total || 0) - (d.received || 0)), 0);

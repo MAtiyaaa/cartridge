@@ -115,8 +115,8 @@ body.light-fx .bg-stage .layer.blur { filter: blur(10px) brightness(0.72); }
 .tab:hover { color: rgba(255, 255, 255, 0.86); }
 .tab.active, .tab.active:hover { color: var(--on-focus); background: none; }
 .tab:active { transform: scale(0.96); transition: transform 100ms ease-out; }
-.tab:focus-visible, .pad-mode .tab:focus { background: none; color: var(--text); box-shadow: inset 0 0 0 2px var(--focus); }
-.tab.active:focus-visible, .pad-mode .tab.active:focus { color: var(--on-focus); box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.55), 0 0 0 4px var(--focus); }
+.tab:focus-visible, .pad-mode .tab:focus { background: none; color: var(--text); box-shadow: inset 0 0 0 2px var(--focus-solid, var(--focus)); }
+.tab.active:focus-visible, .pad-mode .tab.active:focus { color: var(--on-focus); box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.55), 0 0 0 4px var(--focus-solid, var(--focus)); }
 .tab-ico { flex: none; }
 /* the current tab's name opens out beside its icon (grid 0fr -> 1fr animates the width without measuring) */
 .tab-label { display: grid; grid-template-columns: 0fr; opacity: 0; transition: grid-template-columns 300ms cubic-bezier(0.23, 1, 0.32, 1), opacity 180ms ease, margin 300ms cubic-bezier(0.23, 1, 0.32, 1); }
@@ -253,11 +253,22 @@ body.motion-reduce .view > *, body.motion-reduce .home > .hero, body.motion-redu
 .chip.new { background: var(--primary); color: var(--on-primary); font-weight: 800; font-size: var(--t-xs); height: 22px; letter-spacing: 0.04em; }
 .glass { background: var(--s1); border-radius: var(--r-lg); }
 body.surface-glass .glass, body.elements-glass .glass { background: var(--glass-bg); border: 1px solid var(--line); }
-/* Glass elements (0.9.37): the frosted highlight blurs what's behind it and gets a fine light edge; without the GPU
-   (light effects) the blur is left out, the see-through fill and edge stay */
-body.elements-glass :is(.btn, .lrow, .card .art, .seg button, .ad-row, .cc-row, .lf-card, .menu-item, .tab, .eg-drive, .eg-emu):focus { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.38); }
-body.elements-glass:not(.light-fx) :is(.btn, .lrow, .seg button, .ad-row, .cc-row, .lf-card, .menu-item, .eg-drive, .eg-emu):focus { -webkit-backdrop-filter: blur(14px) saturate(1.5); backdrop-filter: blur(14px) saturate(1.5); }
-body.elements-oled .glass, body.elements-oled .dialog { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.07); }
+/* Glass elements (0.9.37, redone 0.9.38 with the apple-design skill's materials: owner, "glass looks grey, it
+   should feel like white glass, or the colour picked"): the highlight is the picked colour as a frosted material.
+   A light fill of the colour (themes.js --focus), a specular sheen across its top half, a bright top edge where
+   the light catches it, a darker bottom edge and a soft drop for depth, and the page blurred and saturated
+   through it. Without the GPU (light effects) the blur is left out; the fill, sheen and edges stay. */
+body.elements-glass :is(.btn, .lrow, .seg button, .ad-row, .cc-row, .lf-card, .menu-item, .eg-drive, .eg-emu, .tab-ink):focus,
+body.elements-glass .tab-ink {
+  background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.5) 0%, rgba(255, 255, 255, 0.14) 46%, rgba(255, 255, 255, 0) 54%, rgba(255, 255, 255, 0.08) 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85), inset 0 0 0 1px rgba(255, 255, 255, 0.3), inset 0 -1px 0 rgba(0, 0, 0, 0.14), 0 10px 26px -10px rgba(0, 0, 0, 0.55);
+}
+body.elements-glass:not(.focus-light) :is(.btn, .lrow, .seg button, .ad-row, .cc-row, .lf-card, .menu-item, .eg-drive, .eg-emu):focus,
+body.elements-glass:not(.focus-light) .tab-ink { background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.32) 0%, rgba(255, 255, 255, 0.08) 46%, rgba(255, 255, 255, 0) 54%); }
+body.elements-glass .card:focus .art { box-shadow: var(--ring), inset 0 1px 0 rgba(255, 255, 255, 0.5); }
+body.elements-glass:not(.light-fx) :is(.btn, .lrow, .seg button, .ad-row, .cc-row, .lf-card, .menu-item, .eg-drive, .eg-emu):focus,
+body.elements-glass:not(.light-fx) .tab-ink { -webkit-backdrop-filter: blur(18px) saturate(1.8); backdrop-filter: blur(18px) saturate(1.8); }
+@media (prefers-reduced-transparency: reduce) { body.elements-glass { --focus: var(--focus-solid); } }
 
 .btn { display: inline-flex; align-items: center; gap: 10px; height: 48px; padding: 0 22px; border-radius: var(--r-md); background: var(--s2); font-size: var(--t-md); font-weight: 600; transition: background var(--d-fast), color var(--d-fast); white-space: nowrap; }
 .btn:hover { background: var(--s3); }

@@ -211,7 +211,7 @@ export function dispatch(action, { keepMode = false } = {}) {
   if (action === 'accept') { sfx.accept(); rumble(true); }
   else if (action === 'back') sfx.back();
   else if (['lb', 'rb'].includes(action)) { sfx.tab(); rumble('tab'); }
-  else if (['lt', 'rt'].includes(action)) rumble('tab');
+  else if (['lt', 'rt'].includes(action)) { rumble('tab'); if (!startLog.done) startLog.fired.push(`${action} ${Math.round(performance.now() - startLog.t0)} ms${layer ? '' : ' (nothing to take it)'}`); }
   // hold A to read it all, B to fold it back (0.9.29, owner: patch names and descriptions that trail off):
   // anything marked data-expand opens as a card with its whole text
   if (action === 'back' && layer) { const open = layer.el.querySelector('.expanded[data-expand]'); if (open) { open.classList.remove('expanded'); open.focus({ preventScroll: true }); return; } }
@@ -375,8 +375,24 @@ function trigger(gp, which, v) {
   const k = gp.index + which, p = gp.index + gp.id;
   if (!firstSeen[p]) firstSeen[p] = performance.now();
   if (v < 0.6 || performance.now() - firstSeen[p] < 400) armed[k] = true;
+  if (!startLog.done) startLog.note(gp, which, v, !!armed[k]);
   return !!armed[k] && v > 0.6;
 }
+// 0.9.38 (owner: LT/RT still dead at launch until another button; it works every time here, with a simulated
+// pad): what the triggers read in the first seconds, written once to the log, so a report from the device says
+// whether the pad showed up, what a trigger at rest reads and whether it was ever armed
+const startLog = { done: false, t0: performance.now(), seen: {}, fired: [],
+  note(gp, which, v, armedNow) {
+    const k = gp.index + which, x = this.seen[k] || (this.seen[k] = { id: gp.id.slice(0, 40), map: gp.mapping || 'none', first: Math.round(v * 100) / 100, at: Math.round(performance.now() - this.t0), max: 0, armedAt: null });
+    x.max = Math.max(x.max, Math.round(v * 100) / 100); if (armedNow && x.armedAt == null) x.armedAt = Math.round(performance.now() - this.t0);
+    if (performance.now() - this.t0 > 20000) this.flush();
+  },
+  flush() {
+    if (this.done) return; this.done = true;
+    const line = 'triggers at start: ' + (Object.entries(this.seen).map(([k, x]) => `${k} ${x.id} (${x.map}) seen ${x.at} ms, first ${x.first}, max ${x.max}, armed ${x.armedAt ?? 'never'}`).join('; ') || 'no pad') + `; LT/RT pressed ${this.fired.join(', ') || 'never'}`;
+    try { window.cart?.call('app:log', { text: line }); } catch {}
+  },
+};
 export const padLive = { pads: [] }; // for Settings → About → Controller test
 const stickHeld = {}; // pad index -> direction -> held (stick hysteresis)
 // Rumble when moving (0.9.3 B3, Look & Feel): a tiny pulse on the pad you last used. Steam Input

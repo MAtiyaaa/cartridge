@@ -28,7 +28,12 @@
         <Btn v-else-if="padMode" b="Y" /><!-- the Y hint only while a controller is in use, like LT/RT -->
       </label>
       <div class="sys">
-        <div v-if="syncBusy" class="item sync-pill"><Icon name="mdiSync" :size="16" class="spin" />{{ syncLabel }}</div>
+        <!-- 0.9.38 (owner: "Syncing 12/21" was long; make it like the Steam ring): the library sync is a ring too,
+             filling round the sync arrows; it closes the circle and settles away when the sync is done -->
+        <Transition name="ring-out"><div v-if="syncBusy || syncEnding" class="item steam-ring sync-ring" :class="{ wait: syncPct == null && !syncEnding, done: syncEnding }" :title="syncLabel" :aria-label="syncLabel">
+          <svg class="sr-ring" viewBox="0 0 36 36"><circle class="sr-arc" cx="18" cy="18" r="15.5" pathLength="100" :stroke-dasharray="`${syncEnding ? 100 : syncPct ?? 22} 100`" /></svg>
+          <Icon :name="syncEnding ? 'mdiCheck' : 'mdiSync'" :size="16" class="sr-logo" />
+        </div></Transition>
         <!-- 0.9.29 (owner): adding to Steam is a ring filling round the Steam logo, one fixed size, so nothing in the
              bar moves (the wide "Steam artwork 18/43" pill pushed the search into the Dock); no track, the arc grows -->
         <div v-if="steam.progress" class="item steam-ring" :class="{ wait: steamPct == null }" :title="steamProgressLabel(steam.progress)" :aria-label="steamProgressLabel(steam.progress)">
@@ -239,6 +244,11 @@ const dlPct = computed(() => {
   return t ? Math.floor((r / t) * 100) : 0;
 });
 const syncBusy = computed(() => ['running', 'scanning'].includes(store.sync.state));
+const syncPct = computed(() => { const s = store.sync; return s.state === 'running' && s.total ? Math.max(4, Math.min(100, ((s.done + 1) / s.total) * 100)) : null; });
+// the ring closes and shows a tick for a moment after the sync, instead of vanishing mid-arc
+const syncEnding = ref(false);
+let syncEndT;
+watch(syncBusy, (v, was) => { clearTimeout(syncEndT); if (v) syncEnding.value = false; else if (was) { syncEnding.value = true; syncEndT = setTimeout(() => (syncEnding.value = false), 900); } });
 const syncLabel = computed(() => {
   const s = store.sync;
   if (s.state === 'scanning') return (s.label || 'Scanning server').slice(0, 42);
@@ -259,6 +269,7 @@ function tick() { clock.value = new Date().toLocaleTimeString([], { hour: '2-dig
 
 function cycleTab(dir) {
   const list = tabs.value;
+  if (!list.length) return; // nothing to switch to yet (still starting)
   const i = list.findIndex((t) => t.name === activeTab.value);
   // on a page whose tab is switched off, RT goes to the first tab and LT to the last
   tab(list[i < 0 ? (dir > 0 ? 0 : list.length - 1) : (i + dir + list.length) % list.length].name);
@@ -271,6 +282,31 @@ function viewHandler(action) {
 watch([() => activeTab.value, () => tabs.value.length, padMode], () => nextTick(() => { placeInkSoon(); if (inkWatch && tabsEl.value) for (const b of tabsEl.value.querySelectorAll('.tab')) inkWatch.observe(b); }));
 window.addEventListener('resize', () => nextTick(placeInk));
 onMounted(async () => {
+  // 0.9.38 (owner: LT/RT still dead at launch until another button): the app's own layer (LT/RT, Start, Y...)
+  // was added only after the config and the whole library had loaded, seconds on a big library, so a
+  // trigger pulled before then had nothing to go to; other buttons still moved focus on their own
+  pushLayer(document.body, {
+    back: () => { if (viewHandler('back') !== false) return; back(); },
+    // Bumpers only switch sections inside a page (Achievements, consoles, collections). Top tabs are LT / RT.
+    lb: () => { viewHandler('lb'); },
+    rb: () => { viewHandler('rb'); },
+    y: () => (viewHandler('y') !== false ? undefined : focusSearch()),
+    accept: (a) => (a === searchEl.value ? toResults() : viewHandler('accept')),
+    hold: () => viewHandler('hold'),
+    // the page can take the D-pad over (0.9.19: Start moves a picked-up tile); otherwise focus moves
+    up: () => viewHandler('up'), down: () => viewHandler('down'), left: () => viewHandler('left'), right: () => viewHandler('right'),
+    x: () => viewHandler('x'),
+    rsleft: () => { viewHandler('rsleft'); }, rsright: () => { viewHandler('rsright'); }, // right stick: Start's pages
+    // Triggers always move between the top tabs; bumpers belong to the page (consoles, collections)
+    lt: () => (viewHandler('lt') !== false ? undefined : cycleTab(-1)), // a page can keep LT/RT (0.9.24: Start's page overview)
+    rt: () => (viewHandler('rt') !== false ? undefined : cycleTab(1)),
+    select: () => (viewHandler('select') !== false ? undefined : tab('downloads')),
+    // the keyboard's own (0.9.37): Ctrl+F or / searches from anywhere, 1 to 9 jump to a tab, F1 or ? lists the keys
+    search: () => focusSearch(),
+    help: () => keysHelp(),
+    ...Object.fromEntries([1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => ['tab' + n, () => { const t = tabs.value[n - 1]; if (t) tab(t.name); }])),
+    start: () => { if (viewHandler('start') !== false) return; store.quickMenu = !store.quickMenu; },
+  });
   tick(); clockT = setInterval(tick, 10000);
   navigator.getBattery?.().then((b) => {
     const upd = () => { battery.value = b.level === 1 && b.charging && !b.dischargingTime ? null : { level: Math.round(b.level * 100), charging: b.charging }; };
@@ -330,28 +366,6 @@ onMounted(async () => {
   setTimeout(setupNotice, 3500);
   gpuCheck();
   if (store.config.configured) call('server:status').then((c) => (store.connection = c)).catch(() => {});
-  pushLayer(document.body, {
-    back: () => { if (viewHandler('back') !== false) return; back(); },
-    // Bumpers only switch sections inside a page (Achievements, consoles, collections). Top tabs are LT / RT.
-    lb: () => { viewHandler('lb'); },
-    rb: () => { viewHandler('rb'); },
-    y: () => (viewHandler('y') !== false ? undefined : focusSearch()),
-    accept: (a) => (a === searchEl.value ? toResults() : viewHandler('accept')),
-    hold: () => viewHandler('hold'),
-    // the page can take the D-pad over (0.9.19: Start moves a picked-up tile); otherwise focus moves
-    up: () => viewHandler('up'), down: () => viewHandler('down'), left: () => viewHandler('left'), right: () => viewHandler('right'),
-    x: () => viewHandler('x'),
-    rsleft: () => { viewHandler('rsleft'); }, rsright: () => { viewHandler('rsright'); }, // right stick: Start's pages
-    // Triggers always move between the top tabs; bumpers belong to the page (consoles, collections)
-    lt: () => (viewHandler('lt') !== false ? undefined : cycleTab(-1)), // a page can keep LT/RT (0.9.24: Start's page overview)
-    rt: () => (viewHandler('rt') !== false ? undefined : cycleTab(1)),
-    select: () => (viewHandler('select') !== false ? undefined : tab('downloads')),
-    // the keyboard's own (0.9.37): Ctrl+F or / searches from anywhere, 1 to 9 jump to a tab, F1 or ? lists the keys
-    search: () => focusSearch(),
-    help: () => keysHelp(),
-    ...Object.fromEntries([1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => ['tab' + n, () => { const t = tabs.value[n - 1]; if (t) tab(t.name); }])),
-    start: () => { if (viewHandler('start') !== false) return; store.quickMenu = !store.quickMenu; },
-  });
 });
 // connected for the first time (the RomM step just finished): emulators next
 watch(() => store.config?.configured, (v, was) => { if (v && !was && !store.config.setupDone && !store.welcoming) go('emu-setup', { first: true }); });
@@ -519,5 +533,11 @@ function modalFrom(el) {
 .steam-ring.wait .sr-ring { animation: sr-spin 1.4s linear infinite; }
 @keyframes sr-spin { to { transform: rotate(270deg); } }
 .sr-logo { opacity: 0.9; }
-.sync-pill { padding: 5px 12px; border-radius: 999px; background: rgba(var(--primary-rgb), 0.18); color: var(--primary-t); }
+/* the sync ring (0.9.38): the Steam ring's look, its arc on the spring; done = a tick, then it settles away */
+.sync-ring .sr-arc { transition: stroke-dasharray var(--spring-soft-d, 600ms) var(--spring-soft, var(--ease-out)); }
+.sync-ring .sr-logo { transition: transform var(--spring-d, 300ms) var(--spring-bounce, var(--ease-out)); }
+.sync-ring.done .sr-logo { transform: scale(1.12); }
+.ring-out-enter-active { transition: opacity 220ms var(--ease-out), transform var(--spring-d, 300ms) var(--spring, var(--ease-out)); }
+.ring-out-leave-active { transition: opacity 260ms var(--ease-in-out), transform 260ms var(--ease-in-out); }
+.ring-out-enter-from, .ring-out-leave-to { opacity: 0; transform: scale(0.7); }
 </style>

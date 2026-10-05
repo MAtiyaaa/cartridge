@@ -62,6 +62,9 @@ async function isZip(file) { try { const fd = await fsp.open(file, 'r'); const b
 // - azahar, citra: load/textures/<title ID>, with subfolders: a folder named the title ID, else as they are
 // - cemu: graphicPacks/<pack>/rules.txt: each rules.txt's folder is one pack, named after it (or the mod)
 // - switch: a mod is <Name>/{romfs,exefs,cheats}; a bare romfs/exefs gets the mod's name as its folder
+// - shadps4 (0.9.38): <game folder>-mods, which shadPS4 lays over the game read-only (fs.cpp probe_overlay "-mods"),
+//   so a mod mirrors the game's own files (dvdroot_ps4/, Image0/...); found by the game folder's top entries (opts.tops),
+//   named as the game names them, and nothing in the game itself is touched
 // - plain: folders wrapping everything are dropped, the rest kept as it is
 const IMG = /\.(png|dds|jpe?g|webp|tga|bmp)$/i;
 const segs = (r) => r.split('/');
@@ -75,7 +78,7 @@ function wrapper(rels) {
 }
 // the folder (prefix) above the first match of test(segment) in r, plus where it is
 function anchorAt(r, test) { const s = segs(r); for (let i = 0; i < s.length - 1; i++) if (test(s[i], i, s)) return { pre: s.slice(0, i).join('/'), i }; return null; }
-function plan(list, kind, { id = '', name = 'Mod' } = {}) {
+function plan(list, kind, { id = '', name = 'Mod', tops: gameTops = [] } = {}) {
   const rels = list.map((e) => e.rel);
   const tops = new Set(rels.map((r) => r.split('/')[0]));
   const ID = String(id || '').toUpperCase();
@@ -157,6 +160,13 @@ function plan(list, kind, { id = '', name = 'Mod' } = {}) {
       const own = i > 0 && !/^[0-9A-F]{16}$/i.test(s[i - 1]) && s[i - 1].toUpperCase() !== ID ? s[i - 1] : safe; // Atmosphere's contents/<id>/romfs too
       return `${own}/${s.slice(i).join('/')}`;
     };
+  } else if (kind === 'shadps4') {
+    const own = new Map(gameTops.filter((n) => !/^(eboot\.bin|sce_sys)$/i.test(n)).map((n) => [n.toLowerCase(), n]));
+    const at = (r) => segs(r).slice(0, -1).findIndex((x) => own.has(x.toLowerCase()));
+    const pre = rels.filter((r) => at(r) >= 0).map((r) => segs(r).slice(0, at(r)).join('/')).sort((a, b) => a.length - b.length)[0];
+    if (pre === undefined) return []; // nothing in it matches the game's files: not a mod for this game's layout
+    const p0 = pre ? pre + '/' : '';
+    map = (r) => { if (!r.startsWith(p0)) return null; const s = segs(r.slice(p0.length)); const o = s.length > 1 && own.get(s[0].toLowerCase()); return o ? [o, ...s.slice(1)].join('/') : null; };
   } else {
     const strip = tops.size === 1 && id && [...tops][0].toUpperCase() === ID && rels.every((r) => r.includes('/')) ? [...tops][0] + '/' : '';
     map = (r) => (strip && r.startsWith(strip) ? r.slice(strip.length) : r);
@@ -168,6 +178,7 @@ const EMPTY = {
   ps2: 'There are no PNG or DDS textures in a replacements folder in this pack.',
   pcsx2: 'There are no textures in this add-on.', duckstation: 'There are no textures in this add-on.',
   cemu: 'This isn’t a Cemu graphic pack (no rules.txt in it).',
+  shadps4: 'None of this mod’s folders match the game’s own (like dvdroot_ps4), so Cartridge doesn’t know where it goes.',
 };
 // archive -> dest; refuses before writing anything if a file is already there
 // "@patches/x" and "@graphicmods/x" (0.9.23) land in the emulator's other folders (opts.alt)

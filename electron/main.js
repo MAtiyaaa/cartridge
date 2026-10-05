@@ -563,6 +563,35 @@ function platformPath(p) {
   return { path: path.join(root, cands[0]), source: 'auto', exists: false };
 }
 
+// Games on more than one drive (0.9.38, owner: "if you can add the paths to the emulators in the background, and
+// it doesn't clutter the app"; plan: docs/plan-multidrive.md). config.extraRoots holds more ROMs folders, each an
+// ES-DE style roms folder on another drive. A console's games can be in any of them: found in all, and a new
+// download goes where there's the most free space (or to the folder picked in Storage). A drive that's
+// unplugged is simply skipped until it's back; nothing is forgotten or moved.
+const extraRoots = () => (config.extraRoots || []).map((r) => r.path).filter(Boolean);
+function rootFolder(root, p) {
+  const cands = [...(PLATFORM_MAP[p.slug] || []), ...(p.fs_slug ? [p.fs_slug] : []), p.slug].filter(Boolean);
+  const lower = new Map(listDirNames(root).map((n) => [n.toLowerCase(), n]));
+  for (const c of cands) { const hit = lower.get(c.toLowerCase()); if (hit) return path.join(root, hit); }
+  return path.join(root, cands[0]);
+}
+// every folder this console's games can be in: its own (or the one you picked), then each extra drive's
+function platformDirs(p) {
+  const main = platformPath(p).path;
+  return [main, ...extraRoots().filter((r) => isDir(r)).map((r) => rootFolder(r, p))].filter(Boolean);
+}
+// where a new download goes: the folder picked in Storage, else the drive with the most free space
+function downloadDir(p, need = 0) {
+  const main = platformPath(p).path;
+  const roots = extraRoots().filter((r) => isDir(r));
+  if (!roots.length || config.paths[p.slug]) return main; // one drive, or a folder you set for this console
+  const opts = [main, ...roots.map((r) => rootFolder(r, p))].filter(Boolean);
+  const pick = config.downloadRoot && config.downloadRoot !== 'most' ? opts.find((d) => path.resolve(d).startsWith(path.resolve(config.downloadRoot) + path.sep)) : null;
+  if (pick) return pick;
+  const free = (d) => { let x = d; while (x && !isDir(x)) { const up = path.dirname(x); if (up === x) break; x = up; } try { const st = fs.statfsSync(x || '/'); return st.bavail * st.bsize; } catch { return 0; } };
+  const ranked = opts.map((d) => ({ d, f: free(d) })).sort((a, b) => b.f - a.f);
+  return (ranked.find((x) => x.f > need + 2e9) || ranked[0]).d;
+}
 // ---------------------------------------------------------------- installed detection
 function candidatesFor(rom) {
   const names = [rom.fs_name, `${rom.fs_name}.m3u`];
@@ -581,25 +610,27 @@ const marks = loadJson(MARKS_FILE, {}); // romId -> { at }
 function saveMarks() { try { fs.writeFileSync(MARKS_FILE, JSON.stringify(marks, null, 1)); } catch {} }
 const titleId = (s) => (String(s || '').match(/\b(CUSA|PPSA)\d{5}\b/i) || [])[0]?.toUpperCase() || '';
 function installedState(roms, platform) {
-  const dir = platformPath(platform).path;
-  let entries = new Set();
-  if (dir) { try { entries = new Set(fs.readdirSync(dir)); } catch {} }
+  // 0.9.38: the console's folder on every drive (platformDirs), the first match wins
+  const dirs = platformDirs(platform).map((dir) => { let entries = new Set(); try { entries = new Set(fs.readdirSync(dir)); } catch {} return { dir, entries, ids: null }; }).filter((x) => x.entries.size);
   const out = {};
-  let ids = null;
   for (const rom of roms) {
     const m = manifest[rom.id];
     if (m && fs.existsSync(m.path)) { out[rom.id] = m.path; continue; }
-    const hit = candidatesFor(rom).find((n) => entries.has(n));
-    if (hit) { out[rom.id] = path.join(dir, hit); continue; }
-    if (isFolderSystem(rom) && dir) {
-      const stem = String(rom.fs_name || '').replace(/\.(zip|7z|rar)$/i, '');
-      if (stem && entries.has(stem)) { out[rom.id] = path.join(dir, stem); continue; }
-      const tid = titleId(rom.fs_name) || titleId(rom.name);
-      if (tid) {
-        ids ||= new Map([...entries].map((e) => [titleId(e), e]).filter(([k]) => k));
-        if (ids.has(tid)) { out[rom.id] = path.join(dir, ids.get(tid)); continue; }
+    let found = null;
+    for (const D of dirs) {
+      const hit = candidatesFor(rom).find((n) => D.entries.has(n));
+      if (hit) { found = path.join(D.dir, hit); break; }
+      if (isFolderSystem(rom)) {
+        const stem = String(rom.fs_name || '').replace(/\.(zip|7z|rar)$/i, '');
+        if (stem && D.entries.has(stem)) { found = path.join(D.dir, stem); break; }
+        const tid = titleId(rom.fs_name) || titleId(rom.name);
+        if (tid) {
+          D.ids ||= new Map([...D.entries].map((e) => [titleId(e), e]).filter(([k]) => k));
+          if (D.ids.has(tid)) { found = path.join(D.dir, D.ids.get(tid)); break; }
+        }
       }
     }
+    if (found) { out[rom.id] = found; continue; }
     if (marks[rom.id]) out[rom.id] = MARKED;
   }
   return out;
@@ -1383,7 +1414,7 @@ async function restoreBackup(it) {
 async function redownload(romId) {
   const target = manifest[romId]?.path || installedMap[romId];
   if (!target || target === MARKED) throw new Error('This game has no downloaded copy.');
-  const roots = new Set([config.romsRoot, ...(library?.platforms || []).map((pl) => platformPath(pl).path)].filter(Boolean).map((x) => path.resolve(x)));
+  const roots = new Set([config.romsRoot, ...extraRoots(), ...(library?.platforms || []).flatMap((pl) => platformDirs(pl))].filter(Boolean).map((x) => path.resolve(x)));
   if (roots.has(path.resolve(target))) throw new Error('Refusing to move a whole console folder');
   const r = romIndexMain().get(romId);
   if (!r) throw new Error('Game not found');
@@ -1596,7 +1627,7 @@ async function runJob(it) {
   let lastT = Date.now(), lastB = 0;
   try {
     const rom = await api(`/api/roms/${it.romId}`);
-    const target = platformPath({ slug: rom.platform_slug, fs_slug: rom.platform_fs_slug }).path;
+    const target = downloadDir({ slug: rom.platform_slug, fs_slug: rom.platform_fs_slug }, rom.fs_size_bytes || 0); // 0.9.38: any drive
     if (!target) throw new Error('No folder set for this platform. Set it in Settings.');
     await fsp.mkdir(target, { recursive: true });
     const files = (rom.files || []).slice().sort((a, b) => a.full_path.localeCompare(b.full_path));
@@ -1689,6 +1720,7 @@ async function runJob(it) {
     // a re-download is the same game as before: Steam already has it, so no automatic add
     if (!it.redo && it.notice !== 'pkg') rpcs3Settings(rom.id);
     if (!it.redo && it.notice !== 'pkg') try { if (steamMgr.onDownloaded(rom.id)) broadcast('steam-auto', { romId: rom.id, name: rom.name, action: 'add' }); } catch (e) { log('steam auto add', e.message); }
+    autoBios(rom.platform_id, rom.platform_slug); // in the background, never holds the download up
   } catch (e) {
     // stopped on purpose: keep a status set since (paused, or queued again by Resume)
     if (ac.signal.aborted) { if (!['paused', 'queued'].includes(it.status)) it.status = 'cancelled'; }
@@ -1741,6 +1773,26 @@ async function downloadBios(platformId, slug) {
   if (key === 'switch') placed.push(...(await switchFirmware(list.filter((f) => /\.zip$/i.test(f.file_name)).map((f) => path.join(dir, f.file_name)))));
   if (placed.length) log('bios placed', key, placed.length);
   return { count: list.length, files: done, dir, installed, emu, placed: placed.length };
+}
+// 0.9.38 (owner: "BIOS and firmware set up automatically? I don't think so, check the code"): it only came from
+// RomM when Get Them from RomM was pressed. Now a finished download for a console whose BIOS or firmware isn't in
+// place yet fetches that console's files from RomM by itself (once per console each run), then puts them in place
+const autoBiosTried = new Set();
+const BIOS_KEY = (slug) => ({ dc: 'dreamcast', 'sega-cd': 'segacd', megacd: 'segacd', 'pc-engine-cd': 'pcenginecd', 'turbografx-cd': 'pcenginecd', vita: 'psvita' })[slug] || slug;
+async function autoBios(platformId, slug) {
+  try {
+    const B = require('./bios'), key = BIOS_KEY(slug);
+    if (!platformId || platformId < 0 || autoBiosTried.has(platformId) || !B.KEYS().includes(key)) return;
+    const st = B.status(key, { roots: emuRootsAll(), steamRoots: steamMgr.steamRoots?.() || [], extra: [] });
+    if (!st || st.ok || st.optional) return;
+    autoBiosTried.add(platformId);
+    const r = await downloadBios(platformId, slug);
+    if (!r.count) return log('bios: RomM has none for', slug);
+    const b = await biosSetup({ install: true });
+    const now = b.list.find((x) => x.key === key);
+    log('bios auto', slug, `${r.count} from RomM`, now?.ok ? 'in place' : now?.why || '');
+    if (now?.ok) broadcast('toast', { text: `${now.label} set up from your RomM server`, kind: 'ok', icon: 'mdiChip' });
+  } catch (e) { log('bios auto', slug, e.message); }
 }
 // BIOS and firmware put in place by themselves (0.9.37, owner: "after the emulators are downloaded, Cartridge puts
 // the BIOS and firmware where each emulator reads it, or installs it"). From the BIOS folder(s) (yours, EmuDeck's or
@@ -1881,6 +1933,7 @@ async function storageOverview() {
     return drives.get(dv.mount);
   };
   await addDrive(config.romsRoot);
+  for (const r of extraRoots()) if (isDir(r)) await addDrive(r); // 0.9.38: games folders on other drives
   // every drive a console downloads to (custom console folders can sit on other drives)
   for (const p of library?.platforms || []) {
     if (!(library.roms[p.id] || []).length) continue;
@@ -2103,13 +2156,15 @@ async function toTrash(p) {
   try { fs.renameSync(p, path.join(T, 'files', name)); }
   catch (e) { fs.rmSync(path.join(T, 'info', name + '.trashinfo'), { force: true }); throw new Error(e.code === 'EXDEV' ? 'That folder is on another drive, so it can’t go to the Trash. Delete it from a file manager.' : e.message); }
 }
+let flatpakPass = null; // the device password for one Flatpak install, from the Emulators page (never saved)
 async function pumpEmuGet() {
   // a Flatpak wanted and no Flatpak here (0.9.37): it's installed first, once, while the AppImages carry on
   const G = require('./emuGet');
   const fpWanted = emuGetQ.some((q) => q.state === 'wait' && G.CATALOG.find((c) => c.key === q.key)?.emus.find((e) => e.id === q.id)?.how === 'flatpak');
   if (fpWanted && !G.hasFlatpak() && !flatpakJob) {
-    flatpakJob = true; bgJob('flatpak:install', { state: 'run', pct: null, kind: 'Install', title: 'Flatpak', icon: 'mdiPackageVariant', text: 'Asking for your password to install Flatpak', error: '' });
-    G.ensureFlatpak((l) => bgJob('flatpak:install', { text: l })).then(() => { bgJob('flatpak:install', { state: 'done', pct: 100, text: 'Flatpak and Flathub are ready' }); log('flatpak installed'); })
+    flatpakJob = true; bgJob('flatpak:install', { state: 'run', pct: null, kind: 'Install', title: 'Flatpak', icon: 'mdiPackageVariant', text: 'Installing Flatpak', error: '' });
+    const pass = flatpakPass; flatpakPass = null; // used once, never kept (0.9.38)
+    G.ensureFlatpak((l) => bgJob('flatpak:install', { text: l }), pass).then(() => { bgJob('flatpak:install', { state: 'done', pct: 100, text: 'Flatpak and Flathub are ready' }); log('flatpak installed'); })
       .catch((e) => { bgJob('flatpak:install', { state: 'error', error: e.message }); log('flatpak install', e.message); flatpakFailed = e.message; })
       .finally(() => { flatpakJob = null; pumpEmuGet(); });
   }
@@ -2657,7 +2712,7 @@ function createWindow() {
   // console collections kept whole by themselves (0.9.34): 30 s after start, and again every 10 minutes, games of a
   // console that are in Steam but not in its collection are put in, only with Steam's interface reachable (no restart)
   const colsAuto = () => { if (!config.steam?.consoleCollections) return; steamMgr.fillCollections({ auto: true }).then((r) => { if (r.count) broadcast('toast', { text: `${r.count} game${r.count === 1 ? '' : 's'} added to ${r.count === 1 ? 'its' : 'their'} console collection in Steam`, kind: 'ok', icon: 'mdiSteam' }); }).catch((e) => log('console collections by itself:', e.message)); };
-  if (!globalThis.__colsAuto) { globalThis.__colsAuto = true; setTimeout(colsAuto, 30000); setInterval(colsAuto, 600000); setTimeout(() => biosSetup({ install: false }).catch(() => {}), 45000); }
+  if (!globalThis.__colsAuto) { globalThis.__colsAuto = true; setTimeout(colsAuto, 30000); setInterval(colsAuto, 600000); setTimeout(() => biosSetup({ install: true }).catch(() => {}), 45000); /* 0.9.38: firmware too, when an emulator lacks it */ }
   win.webContents.once('did-finish-load', () => log('ui loaded', Date.now() - startedAt + 'ms', 'window=' + win.getContentSize().join('x'), 'zoom=' + currentZoom()));
   win.webContents.on('did-finish-load', applyZoom);
   win.on('resize', () => { clearTimeout(zoomT); zoomT = setTimeout(applyZoom, 150); });
@@ -3533,7 +3588,7 @@ const handlers = {
     }
     if (target) {
       // never delete a whole console folder or the ROMs root
-      const roots = new Set([config.romsRoot, ...(library?.platforms || []).map((pl) => platformPath(pl).path)].filter(Boolean).map((x) => path.resolve(x)));
+      const roots = new Set([config.romsRoot, ...extraRoots(), ...(library?.platforms || []).flatMap((pl) => platformDirs(pl))].filter(Boolean).map((x) => path.resolve(x)));
       if (roots.has(path.resolve(target))) throw new Error('Refusing to delete a whole console folder');
       await removeWithProgress(target, romId);
     }
@@ -3602,7 +3657,7 @@ const handlers = {
   'pkg:dropDownload': async ({ romId }) => {
     const m = manifest[romId], rec = installs[romId];
     if (!m?.path || m.installedIn || !rec?.created) throw new Error('Cartridge didn’t install this game in an emulator.');
-    const roots = new Set([config.romsRoot, ...(library?.platforms || []).map((pl) => platformPath(pl).path)].filter(Boolean).map((x) => path.resolve(x)));
+    const roots = new Set([config.romsRoot, ...extraRoots(), ...(library?.platforms || []).flatMap((pl) => platformDirs(pl))].filter(Boolean).map((x) => path.resolve(x)));
     if (roots.has(path.resolve(m.path))) throw new Error('Refusing to delete a whole console folder');
     await removeWithProgress(m.path, romId);
     manifest[romId] = { ...m, path: rec.dir, installedIn: rec.emu, download: m.path };
@@ -3653,7 +3708,15 @@ const handlers = {
     }
     if (slug === 'switch') { const k = require('./bios').status('switch', { roots: emuRootsAll() }); const v = switchVersionOf(where && where !== MARKED ? where : '', k?.ok ? [path.dirname(k.where)] : []); if (v) { ids.version = v; if (!ids.switchId && v.titleId) { ids.switchId = v.titleId; ids.switchIdLower = v.titleId.toLowerCase(); } } }
     if (typeof out === 'function') out(ids);
-    return A.forGame(slug, ids, A.emulators());
+    const list = A.forGame(slug, ids, A.emulators());
+    // 0.9.38 (owner: mods for shadPS4): shadPS4 lays <game folder>-mods over the game (read only, above -UPDATE), so a
+    // mod goes beside the game and never into it; the game folder is the one holding eboot.bin
+    if (slug === 'ps4' && where && where !== MARKED) {
+      let g = where;
+      try { if (!fs.existsSync(path.join(g, 'eboot.bin'))) g = fs.readdirSync(where).map((n) => path.join(where, n)).find((d) => fs.existsSync(path.join(d, 'eboot.bin'))) || ''; } catch { g = ''; }
+      if (g) list.push({ id: 'shadps4', name: 'shadPS4', on: true, mods: true, emuRoot: 'shadps4:' + g, root: path.dirname(g), folder: g + '-mods', has: fs.existsSync(g + '-mods'), game: g });
+    }
+    return list;
   },
   // custom textures on in the emulator (0.9.16); off only where Cartridge turned them on
   'addons:setTextures': ({ root, on }) => {
@@ -3724,7 +3787,7 @@ const handlers = {
     if (require('./raLogin').running().has(e.id)) throw new Error(`Close ${e.name} first.`);
     // each emulator's own layout (addonInstall.plan, 0.9.18); PCSX2 and DuckStation: the game folder is
     // textures/<SERIAL>, the pack brings replacements/ (e.folder ends in it)
-    const kind = pack.source === 'ps2' ? 'ps2' : /^(eden|citron|yuzu|ryujinx)$/.test(e.id) ? 'switch' : ['pcsx2', 'duckstation', 'ppsspp', 'dolphin', 'azahar', 'citra', 'cemu'].includes(e.id) ? e.id : 'plain';
+    const kind = pack.source === 'ps2' ? 'ps2' : /^(eden|citron|yuzu|ryujinx)$/.test(e.id) ? 'switch' : ['pcsx2', 'duckstation', 'ppsspp', 'dolphin', 'azahar', 'citra', 'cemu', 'shadps4'].includes(e.id) ? e.id : 'plain';
     const dest = /\/replacements$/.test(e.folder) ? path.dirname(e.folder) : e.folder;
     const key = `${pack.source}:${pack.id}${file ? ':' + file.id : ''}:${rom.id}:${e.emuRoot}`;
     if (addonRecs()[key]) throw new Error('This add-on is already installed.');
@@ -3756,7 +3819,7 @@ const handlers = {
       let archive = local ? pack.file : files[0];
       if (files.length > 1) { archive = base + '.zip'; send({ state: 'join' }); await A.join(files, archive); if ((await A.sha256(archive)) !== pack.sha256) throw new Error('The joined download is damaged. Try again.'); }
       send({ state: 'install', pct: 0 });
-      const r = await A.install(archive, dest, kind, { id: kind === 'switch' ? '' : path.basename(dest), name: pack.name, alt, tmpBase: base, signal: addonRun.abort.signal, onFile: (n, of) => { const now = Date.now(); if (now - last > 400) { last = now; send({ state: 'install', pct: Math.floor((n / of) * 100) }); } } });
+      const r = await A.install(archive, dest, kind, { id: kind === 'switch' ? '' : path.basename(dest), name: pack.name, tops: e.game ? fs.readdirSync(e.game) : [], alt, tmpBase: base, signal: addonRun.abort.signal, onFile: (n, of) => { const now = Date.now(); if (now - last > 400) { last = now; send({ state: 'install', pct: Math.floor((n / of) * 100) }); } } });
       const recs = addonRecs();
       recs[key] = { source: pack.source, id: pack.id, fileId: file?.id || null, name: pack.name, category: pack.category || (local && pack.kind === 'tex' ? 'Textures' : ''), romId: rom.id, game: rom.name, emu: e.id, emuName: e.name, emuRoot: e.emuRoot, dest, alt, files: r.files, bytes: r.bytes, at: Date.now(), from: pack.sourceUrl || pack.url || (local ? pack.file : '') };
       saveJson(ADDONS_FILE, recs);
@@ -3926,7 +3989,7 @@ const handlers = {
     return { root, romsRoot: config.romsRoot, biosPath: config.biosPath, emuDir: config.emuDir };
   },
   // background queue: Download all, or one at a time, while the page stays usable
-  'emuget:queue': ({ items } = {}) => { for (const it of items || []) if (!emuGetQ.some((q) => q.key === it.key && q.id === it.id && /wait|run/.test(q.state))) emuGetQ.push({ key: it.key, id: it.id, state: 'wait', pct: null }); pumpEmuGet(); return emuGetQ; },
+  'emuget:queue': ({ items, password } = {}) => { if (password != null) { flatpakPass = String(password); flatpakFailed = ''; } for (const it of items || []) if (!emuGetQ.some((q) => q.key === it.key && q.id === it.id && /wait|run/.test(q.state))) emuGetQ.push({ key: it.key, id: it.id, state: 'wait', pct: null }); pumpEmuGet(); return emuGetQ; },
   'emuget:state': () => emuGetQ,
   // is Flatpak here, and if not, can Cartridge install it (0.9.37)
   'emuget:flatpak': () => { const G = require('./emuGet'); if (G.hasFlatpak()) return { has: true }; const p = G.flatpakPlan(); return { has: false, can: !!p?.cmd, why: p?.why || '' }; },
@@ -4041,8 +4104,9 @@ const handlers = {
     const file = path.join(USER_DATA, 'emulator-releases.json'), cache = loadJson(file, {});
     // 0.9.17: the main copies only: not forks, not old copies (RPCS3's *_old, "previous"), not the
     // versions shadPS4's launcher keeps for itself; and the version an update put in (the file name keeps the old one)
+    // 0.9.38: shadPS4's launcher installs as Shadps4-qt.AppImage, so only its SDL core copies are left out
     const isFork = (e) => (FORKS[e.id] || []).some(([re]) => re.test(path.basename(e.path || e.fp || '')));
-    const list = steamMgr.installedEmulators().filter((e) => !(e.path && (/_old\b|\.old\b|previous|\.cartridge-(old|new)/i.test(path.basename(e.path)) || /shadPS4QtLauncher\/versions|\/versions\//i.test(e.path))) && !isFork(e) && !(e.id === 'shadps4' && e.path && !/qt.?launcher/i.test(e.path) && U.REPOS.shadps4.only))
+    const list = steamMgr.installedEmulators().filter((e) => !(e.path && (/_old\b|\.old\b|previous|\.cartridge-(old|new)/i.test(path.basename(e.path)) || /shadPS4QtLauncher\/versions|\/versions\//i.test(e.path))) && !isFork(e) && !(e.id === 'shadps4' && e.path && /sdl/i.test(path.basename(e.path))))
       .map((e) => { const st = e.path && (() => { try { return fs.statSync(e.path); } catch { return null; } })(); const got = (cache.installed || {})[e.path]; const ran = e.path && U.ranVersion(e.id, e.path); /* the version that really runs, where the emulator says it (RPCS3's log, 0.9.37) */ return ran ? { ...e, version: ran } : got && st && got.size === st.size ? { ...e, version: got.version } : e; });
     const fpIds = list.filter((e) => e.kind === 'flatpak').map((e) => e.fp);
     const fpWant = !cached && fpIds.length && (fresh || !cache.fp || Date.now() - cache.fp.t > TTL);
@@ -4391,8 +4455,20 @@ const handlers = {
   // 0.9.17: your console folders added to the emulators' game lists (PCSX2, DuckStation, Dolphin)
   'setup:gameFolders': () => {
     const folders = {};
-    for (const p of library?.platforms || []) { const t = platformPath(p); if (t?.path && fs.existsSync(t.path)) folders[{ ngc: 'gc', gamecube: 'gc' }[p.slug] || p.slug] = t.path; }
-    const r = require('./emuFolders').addGameDirs(folders, { running: require('./raLogin').running() });
+    // 0.9.38: the console's folder on every drive
+    for (const p of library?.platforms || []) { const k = { ngc: 'gc', gamecube: 'gc' }[p.slug] || p.slug; for (const d of platformDirs(p)) if (fs.existsSync(d)) (folders[k] ||= []).push(d); }
+    const running = require('./raLogin').running();
+    const r = require('./emuFolders').addGameDirs(folders, { running });
+    // 0.9.38: Ryujinx (Config.json game_dirs) and shadPS4 (config.toml [GUI] installDirs) through emuPaths, only adding
+    for (const [id, name, key, rid] of [['ryujinx', 'Ryujinx', 'switch', 'game_dirs'], ['shadps4', 'shadPS4', 'ps4', 'GUI.installDirs']]) {
+      const want = [].concat(folders[key] || []); if (!want.length) continue;
+      try {
+        const P = require('./emuPaths'), d = P.describe(id); const row = d.items?.find((x) => x.id === rid); if (!row) continue;
+        if (running.has(id)) { r.push({ name, file: d.file, skipped: 'running' }); continue; }
+        const have = new Set((row.paths || []).map((x) => path.resolve(x))), add = want.filter((x) => !have.has(path.resolve(x)));
+        if (add.length) { P.setPath(id, rid, [...row.value, ...add]); r.push({ name, file: d.file, added: add }); }
+      } catch (e) { log('game folders', id, e.message); }
+    }
     const rec = loadJson(path.join(USER_DATA, 'emu-folders.json'), {});
     for (const t of r) if (t.added?.length) (rec[t.file] ||= []).push(...t.added);
     saveJson(path.join(USER_DATA, 'emu-folders.json'), rec);
@@ -4412,6 +4488,35 @@ const handlers = {
   },
   'fs:mkdir': async (dir) => { await fsp.mkdir(dir, { recursive: true }); return true; },
   'storage:overview': () => storageOverview(),
+  // the space where a console's next download would go (0.9.38: any drive with a games folder)
+  'fs:downloadSpace': async ({ slug, fs_slug, need = 0 } = {}) => { const d = downloadDir({ slug, fs_slug }, need); const sp = await handlers['fs:space'](d); return sp && { ...sp, dir: d }; },
+  // the games folders: this device's and each extra drive's, with free space (Settings → Storage, 0.9.38)
+  'roots:list': async () => {
+    const one = async (p, main) => { const sp = await handlers['fs:space'](p); return { path: p, main, here: isDir(p), free: sp?.free || 0, total: sp?.total || 0 }; };
+    return { roots: [await one(config.romsRoot, true), ...(await Promise.all(extraRoots().map((r) => one(r, false))))].filter((r) => r.path), to: config.downloadRoot || 'most' };
+  },
+  // a drive picked: an ES-DE roms folder made on it (a folder per console in the library), added to every
+  // set-up emulator's game list that has one, and opened to Flatpak emulators; never moves or deletes a game
+  'roots:add': async ({ dir } = {}) => {
+    if (!dir || !isDir(dir)) throw new Error('That folder isn’t there.');
+    let root = dir;
+    if (!/\/roms\/?$/i.test(dir)) root = isDir(path.join(dir, 'roms')) ? path.join(dir, 'roms') : isDir(path.join(dir, 'Emulation', 'roms')) ? path.join(dir, 'Emulation', 'roms') : path.join(dir, 'Emulation', 'roms');
+    const real = (x) => { try { return fs.realpathSync(x); } catch { return path.resolve(x); } };
+    const all = [config.romsRoot, ...extraRoots()].filter(Boolean).map(real);
+    if (fs.existsSync(root) && all.includes(real(root))) throw new Error('That drive’s games folder is already in the list.');
+    fs.mkdirSync(root, { recursive: true });
+    for (const p of library?.platforms || []) { if (p.rom_count > 0) { try { fs.mkdirSync(rootFolder(root, p), { recursive: true }); } catch {} } }
+    config.extraRoots = [...(config.extraRoots || []), { path: root }]; saveConfig();
+    log('games folder added', root);
+    const lists = handlers['setup:gameFolders']();
+    // Flatpak emulators only see folders they were given: this one is given to each that's installed
+    let opened = 0;
+    try { for (const e of steamMgr.installedEmulators().filter((x) => x.kind === 'flatpak')) { try { require('child_process').execFileSync('flatpak', ['override', '--user', `--filesystem=${real(root)}`, e.fp], { timeout: 15000 }); opened++; } catch {} } } catch {}
+    computeInstalled();
+    return { root, lists: lists.filter((x) => x.added.length).map((x) => x.name), opened };
+  },
+  'roots:remove': ({ dir } = {}) => { config.extraRoots = (config.extraRoots || []).filter((r) => r.path !== dir); if (config.downloadRoot === dir) config.downloadRoot = 'most'; saveConfig(); computeInstalled(); return true; },
+  'roots:to': ({ to } = {}) => { config.downloadRoot = to || 'most'; saveConfig(); return true; },
   'fs:space': async (dir) => {
     let d = dir;
     while (d && !isDir(d)) { const up = path.dirname(d); if (up === d) break; d = up; }

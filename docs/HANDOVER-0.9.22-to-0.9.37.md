@@ -16,7 +16,8 @@ The repo is public. Nothing private is in this document: no usernames, paths fro
 
 ## Part 1. Where things stand right now
 
-- **Latest release:** v0.9.37 "Cartridge 0.9.37 · Set Up for You" (5 Oct 2026). See Part 4 for every release.
+- **Since this was written:** 0.9.38 (More Drives, Clearer Glass) is out; see its CLAUDE.md section and SESSION-LOG entry.
+- **Latest release at writing:** v0.9.37 "Cartridge 0.9.37 · Set Up for You" (5 Oct 2026). See Part 4 for every release.
 - **Branch:** all work on `claude/relaxed-fermat-30pigp`. Each PR merges it into `main`; after each merge the branch is reset to `main` (`git fetch origin main && git checkout -B claude/relaxed-fermat-30pigp origin/main && git push --force-with-lease`). Start from `main`.
 - **package.json:** `version` 0.9.37, `versionName` "0.9.37", `build.releaseInfo.releaseName` "Cartridge 0.9.37". Version names equal the number again (no lettered parts since 0.9.15).
 - **Tests:** 179 pass (`npm test`, node:test, 28 files in `test/`). CI runs them before every build.
