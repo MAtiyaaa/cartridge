@@ -411,5 +411,10 @@ LT/RT switch top tabs. LB/RB only switch sections inside a page. A select, B bac
 ## 0.9.39 · Easy on the Eyes (5 Oct 2026)
 - Start disc widget (owner: the spin caused motion sickness): `.st-disc` turns once every 60 s, the 3 s focus spin on `.st-disc-boost` is gone, `motion-reduce` stops it. `.st-media-bg` shows at every size (`.tall` fades it top to bottom on square/tall tiles).
 
+## 0.9.40 · Pictures That Load (5 Oct 2026)
+- `electron/gifSearch.js` (`search(term, page, { fetchImpl })`, `spelledOut`, `SPELL`): Openverse + Wikimedia Commons (`filemime:image/gif`, `iiurlwidth=480`), the typed and spelled-out terms, width >= 200, deduped, biggest first; thumbnails as `romimg://img/?u=` (the proxy now uses webFetch for http(s) targets). Tested in `test/gifSearch.test.js` (neither site reachable from the cloud container).
+- ImageSearch focus: ring is `.isr-item::after` inset (was an outside box-shadow clipped by `contain: paint`), image zooms inside; failed thumbnails show `mdiImageOffOutline`.
+- Game Shelf label: `ConsoleMark` instead of "<console> Shelf". Shelf redesign: three mockups shown to the owner (A Cover Flow, B Display case, C Fan), waiting for a pick.
+
 ## Releases (full steps: HANDOFF D8)
 Only when the owner asks. Bump `version` and `build.releaseInfo.releaseName` ("Cartridge X.Y.Z") in `package.json`, and set `versionName` (what Settings → About and update messages show). **0.9.3 is shipped in parts (owner, 1 Oct 2026):** the number goes up as usual (0.9.4, 0.9.5...) but `versionName` and the release title are "0.9.3 B", "0.9.3 C"... until the 0.9.3 plan is done; notes heading `## Cartridge 0.9.3 B · Title`. Then put only this version's notes in `RELEASE_NOTES.md` (heading `## Cartridge X.Y.Z · Title`), add them to the top of `CHANGELOG.md`, grouped as New / Changed / Fixed with bold lead-ins. CI builds, launch-checks and publishes.

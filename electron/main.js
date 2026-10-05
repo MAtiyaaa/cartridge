@@ -920,7 +920,8 @@ async function handleImage(request) {
     if (/^https?:\/\//.test(target)) url = target.replace(/^\/\//, 'https://');
     else { url = (await resolveBase()) + (target.startsWith('/') ? '' : '/') + target; headers = authHeaders(); delete headers.Accept; }
     if (url.startsWith('//')) url = 'https:' + url;
-    const r = await fetch(url, { headers, signal: AbortSignal.timeout(20000) });
+    // outside sites through webFetch (Electron's network, as the rest of Cartridge: sites behind Cloudflare refuse Node's)
+    const r = /^https?:\/\//.test(target) ? await webFetch(url, { headers: { 'User-Agent': 'Cartridge (https://github.com/abdu2304/cartridge)' }, signal: AbortSignal.timeout(20000) }) : await fetch(url, { headers, signal: AbortSignal.timeout(20000) });
     if (!r.ok) return new Response('nf', { status: 404 });
     const buf = Buffer.from(await r.arrayBuffer());
     const type = r.headers.get('content-type') || 'image/jpeg';
@@ -3002,6 +3003,7 @@ async function editRom({ romId, name, summary, coverUrl, coverFile }) {
 }
 // Files in your console folders that RomM doesn't have (to upload): not a known game, not ours
 const UPLOAD_SKIP = /\.(partial|part|tmp|m3u|txt|nfo|jpe?g|png|webp|gif|pdf|srm|sav|state\d*|auto|cfg|ini|xml|dat|db|json|log|lpl|md5|sha1|sfv|DS_Store)$/i;
+const gifSearch = (term, page) => require('./gifSearch').search(term, page);
 function uploadCandidates() {
   if (!library) return [];
   const known = new Set(Object.values(installedMap).filter((p) => p && p !== MARKED).map((p) => path.resolve(p)));
@@ -3363,12 +3365,7 @@ const handlers = {
   'start:search': async ({ q, kind = 'image', page = 1 }) => {
     const wf = require('./webFetch'), term = String(q || '').trim().slice(0, 80);
     if (!term) return [];
-    if (kind === 'gif') {
-      const r = await wf(`https://api.openverse.org/v1/images/?q=${encodeURIComponent(term)}&extension=gif&page_size=20&page=${page}`, { headers: { 'User-Agent': 'Cartridge' }, signal: AbortSignal.timeout(15000) });
-      if (!r.ok) throw new Error(`Openverse answered ${r.status}`);
-      const j = await r.json();
-      return (j.results || []).filter((x) => x.url && (x.width || 0) >= 320).sort((a, b) => (b.width || 0) - (a.width || 0)).map((x) => ({ url: x.url, thumb: x.thumbnail || x.url, w: x.width || 0, h: x.height || 0, by: x.creator || '', license: (x.license || '').toUpperCase() }));
-    }
+    if (kind === 'gif') return gifSearch(term, page);
     const r = await wf(`https://wallhaven.cc/api/v1/search?q=${encodeURIComponent(term)}&categories=111&purity=100&atleast=3840x2160&sorting=relevance&page=${page}`, { headers: { 'User-Agent': 'Cartridge' }, signal: AbortSignal.timeout(15000) });
     if (!r.ok) throw new Error(`Wallhaven answered ${r.status}`);
     const j = await r.json();
