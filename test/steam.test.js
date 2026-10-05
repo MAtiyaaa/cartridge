@@ -223,3 +223,38 @@ test('collections deleted or renamed in Steam\'s .modified.json are read that wa
   const out = execFileSync(process.execPath, ['-e', code], { env: { ...process.env, HOME: H, XDG_DATA_HOME: '' }, encoding: 'utf8' }).trim().split('\n').pop();
   assert.deepStrictEqual(JSON.parse(out), ['Favourites', 'PS3 Games']);
 });
+
+// 0.9.34 (owner: an old PS3 collection deleted, Cartridge's "Sony PlayStation 3" made, the games already in Steam
+// had to be added by hand): a console collection is compared with what Steam holds, for every game of the console
+// in Steam (shortcuts you made too), never with what Cartridge remembers adding
+test('console collections: games already in Steam count, Cartridge\'s memory of a deleted collection doesn\'t', () => {
+  const H = path.join(TMP, 'concol');
+  const S = H + '/.local/share/Steam', C = S + '/userdata/42/config';
+  fs.mkdirSync(C + '/cloudstorage', { recursive: true }); fs.mkdirSync(S + '/config', { recursive: true }); fs.mkdirSync(H + '/cfg', { recursive: true }); fs.mkdirSync(H + '/roms/ps3', { recursive: true });
+  fs.writeFileSync(S + '/config/loginusers.vdf', '"users"\n{\n\t"76561197960265770"\n\t{\n\t\t"MostRecent"\t\t"1"\n\t}\n}\n');
+  for (const n of ['A Game', 'B Game', 'C Game']) fs.mkdirSync(`${H}/roms/ps3/${n}`, { recursive: true });
+  const A = require(path.join(ROOT, 'electron/steamArt.js'));
+  fs.writeFileSync(C + '/shortcuts.vdf', A.writeVdf({ shortcuts: {
+    0: { appid: 101, AppName: 'A Game', Exe: '"/bin/rpcs3"', StartDir: '"/bin"', LaunchOptions: `--no-gui "${H}/roms/ps3/A Game"` },
+    1: { appid: 102, AppName: 'B Game', Exe: '"/bin/rpcs3"', StartDir: '"/bin"', LaunchOptions: `--no-gui "${H}/roms/ps3/B Game"` },
+    2: { appid: 103, AppName: 'C Game', Exe: '"/bin/rpcs3"', StartDir: '"/bin"', LaunchOptions: `--no-gui "${H}/roms/ps3/C Game"` },
+  } }));
+  const row = (id, name, added) => [`user-collections.${id}`, { key: `user-collections.${id}`, value: JSON.stringify({ id, name, added }) }];
+  fs.writeFileSync(C + '/cloudstorage/cloud-storage-namespace-1.json', JSON.stringify([row('a', 'Sony PlayStation 3', [101])]));
+  // Cartridge added C Game and remembers putting it in the old "PlayStation 3" collection, which is gone
+  fs.writeFileSync(H + '/cfg/steam-games.json', JSON.stringify({ 103: { romId: 3, name: 'C Game', console: 'ps3', collections: ['PlayStation 3', 'Sony PlayStation 3'], account: '42' } }));
+  const code = `
+    const lib = { platforms: [{ id: 1, slug: 'ps3', fs_slug: 'ps3', name: 'PlayStation 3', display_name: 'PlayStation 3' }], roms: { 1: [1, 2, 3].map((i) => ({ id: i, name: ['A', 'B', 'C'][i - 1] + ' Game', fs_name: ['A', 'B', 'C'][i - 1] + ' Game', platform_id: 1, platform_slug: 'ps3' })) } };
+    const inst = { 1: ${JSON.stringify(H + '/roms/ps3/A Game')}, 2: ${JSON.stringify(H + '/roms/ps3/B Game')}, 3: ${JSON.stringify(H + '/roms/ps3/C Game')} };
+    const sm = require(${JSON.stringify(path.join(ROOT, 'electron/steamManager.js'))})({ USER_DATA: ${JSON.stringify(H + '/cfg')}, log() {}, PLATFORM_MAP: {}, getConfig: () => ({ steam: {} }), saveConfig() {}, broadcast() {},
+      emulationRoots: () => [], getLibrary: () => lib, installed: () => inst, romById: () => null, isGamescope: () => false, artFor: () => ({}), MARKED: 'm', markedPath: () => null });
+    (async () => {
+      const c = await sm.consoleCollection('ps3');
+      const r = await sm.fillCollections({ auto: true });
+      console.log(JSON.stringify({ name: c.name, games: c.games.map((g) => g.appid + ':' + g.in), r }));
+    })();`;
+  const out = JSON.parse(execFileSync(process.execPath, ['-e', code], { env: { ...process.env, HOME: H, XDG_DATA_HOME: '', CARTRIDGE_CEF_PORT: '' }, encoding: 'utf8' }).trim().split('\n').pop());
+  assert.strictEqual(out.name, 'Sony PlayStation 3');
+  assert.deepStrictEqual(out.games, ['102:false', '103:false', '101:true']);
+  assert.deepStrictEqual(out.r, { count: 0, waiting: 2 }); // Steam's interface isn't reachable here: by itself it waits, never restarts Steam
+});

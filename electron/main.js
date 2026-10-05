@@ -2571,6 +2571,10 @@ function createWindow() {
       } catch (e) { fail(e.message); }
     }, 3000));
   }
+  // console collections kept whole by themselves (0.9.34): 30 s after start, and again every 10 minutes, games of a
+  // console that are in Steam but not in its collection are put in, only with Steam's interface reachable (no restart)
+  const colsAuto = () => { if (!config.steam?.consoleCollections) return; steamMgr.fillCollections({ auto: true }).then((r) => { if (r.count) broadcast('toast', { text: `${r.count} game${r.count === 1 ? '' : 's'} added to ${r.count === 1 ? 'its' : 'their'} console collection in Steam`, kind: 'ok', icon: 'mdiSteam' }); }).catch((e) => log('console collections by itself:', e.message)); };
+  if (!globalThis.__colsAuto) { globalThis.__colsAuto = true; setTimeout(colsAuto, 30000); setInterval(colsAuto, 600000); }
   win.webContents.once('did-finish-load', () => log('ui loaded', Date.now() - startedAt + 'ms', 'window=' + win.getContentSize().join('x'), 'zoom=' + currentZoom()));
   win.webContents.on('did-finish-load', applyZoom);
   win.on('resize', () => { clearTimeout(zoomT); zoomT = setTimeout(applyZoom, 150); });
@@ -3112,6 +3116,9 @@ const handlers09 = {
   'library:verifyCancel': () => { verifyRun?.ac.abort(); return true; },
   'steam:health': () => steamMgr.health(),
   'steam:consoleCollections': () => steamMgr.syncConsoleCollections(),
+  // one console's collection with every game of it in Steam (0.9.34), and adding the ones not in it
+  'steam:consoleCollection': ({ key }) => steamMgr.consoleCollection(String(key)),
+  'steam:fillCollections': ({ keys, appids } = {}) => steamMgr.fillCollections({ keys: keys || null, appids: appids || null }),
   'steam:colReview': () => steamMgr.collectionsReview(),
   'steam:colApply': (a) => steamMgr.collectionsApply(a),
   'steam:healthFix': ({ appids }) => steamMgr.healthFix(appids || []),

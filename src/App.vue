@@ -66,6 +66,7 @@
   <ArtPicker v-if="store.modal?.type === 'art'" :key="store.modal.props.query || ''" v-bind="store.modal.props" />
   <GameTimeline v-if="store.modal?.type === 'timeline'" v-bind="store.modal.props" />
   <GameAbout v-if="store.modal?.type === 'gameabout'" v-bind="store.modal.props" />
+  <ConsoleCollection v-if="store.modal?.type === 'consolecol'" v-bind="store.modal.props" />
   <FirstTour v-if="store.modal?.type === 'tour'" v-bind="store.modal.props" />
   <ManualViewer v-if="store.modal?.type === 'manual'" v-bind="store.modal.props" />
   <PatchesSheet v-if="store.modal?.type === 'patches'" v-bind="store.modal.props" />
@@ -120,6 +121,7 @@ import Menu from './components/Menu.vue';
 import ArtPicker from './components/ArtPicker.vue';
 import GameTimeline from './components/GameTimeline.vue';
 import GameAbout from './components/GameAbout.vue';
+import ConsoleCollection from './components/ConsoleCollection.vue';
 import FirstTour from './components/FirstTour.vue';
 // the manual reader brings pdf.js: loaded the first time a manual opens, not at start
 const ManualViewer = defineAsyncComponent(() => import('./components/ManualViewer.vue'));

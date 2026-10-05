@@ -99,7 +99,7 @@
 
 <script setup>
 import { computed, onMounted, onBeforeUnmount, ref, watch } from 'vue';
-import { store, call, confirm, toast, go, romById, choose, ago } from '../store.js';
+import { store, call, confirm, toast, go, romById, choose, ago, openModal } from '../store.js';
 import { steam, applyChanges, restartSteam } from '../steam.js';
 import Icon from './Icon.vue';
 import Toggle from './Toggle.vue';
@@ -119,6 +119,7 @@ defineExpose({ step });
 // Collections (0.9.32 redesign): one row per console in the library with the Steam collection its games go into
 // (steamCollections.js matches yours to consoles); A offers Cartridge's name, keeping yours, or another of yours
 const review = ref(null), loadingCols = ref(false);
+let autoFilled = false;
 const otherCols = computed(() => (review.value?.list || []).filter((c) => c.action === 'other'));
 const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
 const rows = computed(() => (review.value?.consoles || []).map((c) => {
@@ -126,13 +127,20 @@ const rows = computed(() => (review.value?.consoles || []).map((c) => {
   const used = mine.find((x) => x.name === c.name) || null;
   const suggest = !c.exists ? mine.filter((x) => x.action !== 'other').sort((a, b) => b.count - a.count)[0] || null : null;
   const title = c.full || c.name;
-  if (c.exists) return { ...c, title, mine, sub: `${c.name === title ? 'Cartridge’s name' : `Yours: “${c.name}”`} · ${plural(c.count, 'game')}`, state: used?.pending ? 'Renamed' : 'In Steam', tone: 'ok' };
+  const gap = c.missing ? ` · ${c.missing} of its games in Steam not in it` : '';
+  if (c.exists) return { ...c, title, mine, sub: `${c.name === title ? 'Cartridge’s name' : `Yours: “${c.name}”`} · ${plural(c.count, 'game')}${gap}`, state: c.missing ? `${c.missing} Missing` : used?.pending ? 'Renamed' : 'In Steam', tone: c.missing ? 'warn' : 'ok' };
   if (suggest) return { ...c, title, mine, suggest, sub: `Your “${suggest.name}” (${plural(suggest.count, 'game')}) looks like this console’s · A to use it or rename it`, state: 'Choose', tone: 'warn' };
-  return { ...c, title, mine, sub: c.games ? `${plural(c.games, 'game')} in Steam, made when the next one is added` : `Made in Steam when its first game is added, as “${c.name}”`, state: 'Not Yet', tone: '' };
+  return { ...c, title, mine, sub: c.games ? `${plural(c.games, 'game')} in Steam, not in a collection yet · A to add them as “${c.name}”` : `Made in Steam when its first game is added, as “${c.name}”`, state: c.games ? `${c.games} Missing` : 'Not Yet', tone: c.games ? 'warn' : '' };
 }));
 async function loadReview(asked) {
   loadingCols.value = true;
   try { review.value = await call('steam:colReview'); if (asked) toast('Collections read again', 'ok', 1800, 'mdiRefresh'); } catch (e) { review.value = { error: e.message }; }
+  // 0.9.34 (owner: "it should be smarter than that"): with console collections on and Steam reachable, games already
+  // in Steam go into their console's collection by themselves (once per visit; nothing restarts)
+  if (!autoFilled && sc.value.consoleCollections && review.value?.source === 'live' && (review.value.consoles || []).some((c) => c.missing)) {
+    autoFilled = true;
+    try { const r = await call('steam:fillCollections', {}); if (r.count) { toast(`${r.count} game${r.count === 1 ? '' : 's'} put in ${r.count === 1 ? 'its' : 'their'} console collection`, 'ok', 3500, 'mdiSteam'); review.value = await call('steam:colReview'); } } catch {}
+  }
   loadingCols.value = false;
 }
 let colT = null;
@@ -144,12 +152,14 @@ async function pickFor(r) {
   const yours = (review.value.list || []).filter((x) => x.name !== r.name);
   const own = r.mine.filter((x) => x.name !== r.name);
   const v = await choose({ title: r.title, message: r.exists ? `Its games go into “${r.name}” in Steam.` : 'Pick the collection its games go into.', options: [
+    ...(r.games ? [{ label: 'Its Games', sub: r.missing ? `${r.missing} of its games in Steam aren’t in “${r.name}”: see them and add them` : `All ${r.games} of its games in Steam are in it`, value: 'games', icon: 'mdiViewList' }] : []),
     ...own.map((x) => ({ label: `Use “${x.name}”`, sub: `Yours, ${plural(x.count, 'game')}, kept as it is`, value: 'keep:' + x.id, icon: 'mdiBookmarkCheckOutline', raw: true })),
     ...own.filter(() => !r.exists).map((x) => ({ label: `Rename “${x.name}” to “${r.full || r.name}”`, sub: 'Its games stay in it', value: 'ren:' + x.id, icon: 'mdiRenameOutline', raw: true })),
     ...(r.kept ? [{ label: `Use Cartridge’s name, “${r.full}”`, sub: 'Made in Steam when the next game is added', value: 'default', icon: 'mdiRestore', raw: true }] : []),
     ...(yours.length ? [{ label: 'Use Another of Your Collections', sub: 'Any collection you made in Steam', value: 'other', icon: 'mdiBookmarkMultipleOutline' }] : []),
   ] });
   if (!v) return;
+  if (v === 'games') { await openModal('consolecol', { ckey: r.key, title: r.name }); return loadReview(); }
   let keep = [], renames = [];
   if (v.startsWith('keep:')) { const x = own.find((y) => 'keep:' + y.id === v); keep = [{ key: r.key, name: x.name }]; }
   else if (v.startsWith('ren:')) { const x = own.find((y) => 'ren:' + y.id === v); renames = [{ id: x.id, from: x.name, to: r.full || r.name, key: r.key }]; }
@@ -218,8 +228,8 @@ async function setConsoleCols(v) {
     try { await call('steam:colApply', { renames: [], keep }); } catch {}
   }
   await setC({ consoleCollections: v });
-  if (!v || !ov.value?.ours) return;
-  if (!(await confirm('Sort the games already in Steam?', `Puts the ${ov.value.ours} game${ov.value.ours === 1 ? '' : 's'} Cartridge added into their console's collection now.`, 'Sort them'))) return;
+  if (!v || !inSteam.value) return;
+  if (!(await confirm('Sort the games already in Steam?', 'Puts each console’s games that are in Steam (Cartridge’s and your own shortcuts) into its collection now.', 'Sort them'))) return;
   try {
     const r = await call('steam:consoleCollections');
     toast(r.count ? (r.live ? `${r.count} games sorted into console collections` : `${r.count} games will be sorted when Steam restarts`) : 'They were already in their console collections', 'ok', 4000, 'mdiSteam');
