@@ -1726,7 +1726,9 @@ async function downloadBios(platformId, slug) {
   let installed = 0;
   if (emu) {
     const cmd = emu === 'rpcs3' ? steamMgr.rpcs3Command() : steamMgr.vita3kCommand();
-    if (!cmd) throw new Error(`The firmware is saved in ${dir}, but ${emu === 'rpcs3' ? 'RPCS3' : 'Vita3K'} wasn't found to install it. Set it up in Settings → Emulators.`);
+    // 0.9.37 (owner: BIOS comes before the emulators in the welcome): kept in the BIOS folder and installed by
+    // biosSetup() as soon as the emulator is installed, instead of failing here
+    if (!cmd) { log('firmware kept for later', emu, dir); return { count: list.length, files: done, dir, installed: 0, emu, placed: 0, pending: true }; }
     for (const f of list.filter((x) => /\.pup$/i.test(x.file_name)).sort((a, b) => /font/i.test(a.file_name) - /font/i.test(b.file_name))) {
       await pkgInst.installFirmware({ emu, cmd, file: path.join(dir, f.file_name) });
       installed++;
@@ -1739,6 +1741,46 @@ async function downloadBios(platformId, slug) {
   if (key === 'switch') placed.push(...(await switchFirmware(list.filter((f) => /\.zip$/i.test(f.file_name)).map((f) => path.join(dir, f.file_name)))));
   if (placed.length) log('bios placed', key, placed.length);
   return { count: list.length, files: done, dir, installed, emu, placed: placed.length };
+}
+// BIOS and firmware put in place by themselves (0.9.37, owner: "after the emulators are downloaded, Cartridge puts
+// the BIOS and firmware where each emulator reads it, or installs it"). From the BIOS folder(s) (yours, EmuDeck's or
+// Cartridge's, and each Emulation root's bios/): copied into every set-up emulator that reads files (never over a
+// file), PS3 and Vita firmware installed through RPCS3/Vita3K when they don't have it, Switch keys and firmware into
+// the yuzu family's keys and NAND. install: false only copies (the quick pass at start).
+let biosRun = null;
+// "in place" means where emulators read it: their own folders, RetroArch's system folder and each Emulation root's
+// bios/ (EmuDeck points its emulators there); Cartridge's BIOS folder alone doesn't count
+async function biosSetup({ install = true } = {}) {
+  if (biosRun) return biosRun;
+  biosRun = (async () => {
+    const B = require('./bios'), roots = emuRootsAll(), steamRoots = steamMgr.steamRoots?.() || [];
+    const dirs = [...new Set([config.biosPath, ...roots.map((r) => path.join(r, 'bios'))].filter((d) => d && isDir(d)))];
+    const filesIn = (re) => dirs.flatMap((d) => { try { return fs.readdirSync(d).filter((n) => re.test(n)).map((n) => path.join(d, n)); } catch { return []; } });
+    const out = [];
+    for (const key of B.KEYS()) {
+      const opts = { roots, steamRoots, extra: [] };
+      const before = B.status(key, opts);
+      let copied = 0, installed = 0, why = '';
+      if (key === 'ps3' || key === 'psvita') {
+        const pups = filesIn(key === 'ps3' ? /^PS3UPDAT\.PUP$/i : /^(PSVUPDAT|PSP2UPDAT)\.PUP$/i).sort((a, b) => /PSP2/i.test(a) - /PSP2/i.test(b));
+        if (!before.ok && pups.length) {
+          const emu = key === 'ps3' ? 'rpcs3' : 'vita3k', cmd = emu === 'rpcs3' ? steamMgr.rpcs3Command() : steamMgr.vita3kCommand();
+          if (!cmd) why = `${emu === 'rpcs3' ? 'RPCS3' : 'Vita3K'} isn’t set up yet: the firmware installs as soon as it is`;
+          else if (!install) why = 'Ready to install';
+          else for (const f of pups) { try { await pkgInst.installFirmware({ emu, cmd, file: f }); installed++; log('firmware installed', emu, path.basename(f)); } catch (e) { why = e.message; log('firmware not installed', emu, e.message); } }
+        } else if (!before.ok) why = 'Not in your BIOS folder: get it from RomM';
+      } else {
+        for (const d of dirs) copied += B.place(key, d, { roots, steamRoots }).length;
+        if (key === 'switch') copied += (await switchFirmware(filesIn(/\.zip$/i).filter((f) => !/^(neogeo|pgm|naomi|awbios|hod2bios|skns|stvbios|cpzn\d|taitofx1|coh\d+)\.zip$/i.test(path.basename(f))))).length; // a zip with .nca files in it
+      }
+      const after = B.status(key, opts);
+      out.push({ key, label: after.label, ok: after.ok, optional: after.optional, where: after.where, look: after.look, names: after.names || [], hint: after.hint, copied, installed, why: after.ok ? '' : why || (after.optional ? '' : 'Not found in your BIOS folder') });
+    }
+    const did = out.reduce((n, x) => n + x.copied + x.installed, 0);
+    if (did) log('bios setup', out.filter((x) => x.copied || x.installed).map((x) => `${x.key}: ${x.copied} copied${x.installed ? ', firmware installed' : ''}`).join('; '));
+    return { list: out, did, dirs };
+  })();
+  try { return await biosRun; } finally { biosRun = null; }
 }
 // Switch firmware from RomM (a zip of .nca files) into each yuzu-family emulator that has none yet
 async function switchFirmware(zips) {
@@ -2034,19 +2076,60 @@ const ADDONS_FILE = path.join(USER_DATA, 'addons-installed.json');
 let addonBrowser = null;
 let addonRun = null, addonCache = null, emuGetRun = null;
 const emuGetQ = [];
+// shadPS4's Qt launcher with a version to run (0.9.37): the newest release when it has none, made the default if none is
+async function shadDefaultVersion() {
+  const SV = require('./shadVersions');
+  let have = SV.installed().filter((v) => v.here);
+  if (!have.length) {
+    const rel = (await SV.available()).find((r) => !r.prerelease) || (await SV.available())[0];
+    if (!rel) throw new Error('shadPS4’s GitHub has no Linux release');
+    const z = path.join(os.tmpdir(), `cartridge-shadps4-${Date.now()}.zip`);
+    try { await downloadTo(rel.asset.url, z, { abort: new AbortController() }, () => {}, { plain: true }); have = [await SV.addRelease(rel, z)]; }
+    finally { fs.rmSync(z, { force: true }); }
+    log('shadPS4 version added after install', have[0].name);
+  }
+  SV.setDefaultIfNone(have[have.length - 1].path);
+  return have[have.length - 1].name;
+}
+// into the Trash (0.9.37): the desktop's own, else the freedesktop Trash in ~/.local/share/Trash by hand (Game Mode
+// has no gio); a folder on another drive than home is refused rather than copied across
+async function toTrash(p) {
+  try { await shell.trashItem(p); return; } catch (e) { log('trashItem', e.message); }
+  const T = path.join(process.env.XDG_DATA_HOME || path.join(os.homedir(), '.local/share'), 'Trash');
+  fs.mkdirSync(path.join(T, 'files'), { recursive: true }); fs.mkdirSync(path.join(T, 'info'), { recursive: true });
+  let name = path.basename(p), n = 1;
+  while (fs.existsSync(path.join(T, 'files', name)) || fs.existsSync(path.join(T, 'info', name + '.trashinfo'))) name = `${path.basename(p)}.${++n}`;
+  fs.writeFileSync(path.join(T, 'info', name + '.trashinfo'), `[Trash Info]\nPath=${encodeURI(p)}\nDeletionDate=${new Date().toISOString().slice(0, 19)}\n`);
+  try { fs.renameSync(p, path.join(T, 'files', name)); }
+  catch (e) { fs.rmSync(path.join(T, 'info', name + '.trashinfo'), { force: true }); throw new Error(e.code === 'EXDEV' ? 'That folder is on another drive, so it can’t go to the Trash. Delete it from a file manager.' : e.message); }
+}
 async function pumpEmuGet() {
+  // a Flatpak wanted and no Flatpak here (0.9.37): it's installed first, once, while the AppImages carry on
+  const G = require('./emuGet');
+  const fpWanted = emuGetQ.some((q) => q.state === 'wait' && G.CATALOG.find((c) => c.key === q.key)?.emus.find((e) => e.id === q.id)?.how === 'flatpak');
+  if (fpWanted && !G.hasFlatpak() && !flatpakJob) {
+    flatpakJob = true; bgJob('flatpak:install', { state: 'run', pct: null, kind: 'Install', title: 'Flatpak', icon: 'mdiPackageVariant', text: 'Asking for your password to install Flatpak', error: '' });
+    G.ensureFlatpak((l) => bgJob('flatpak:install', { text: l })).then(() => { bgJob('flatpak:install', { state: 'done', pct: 100, text: 'Flatpak and Flathub are ready' }); log('flatpak installed'); })
+      .catch((e) => { bgJob('flatpak:install', { state: 'error', error: e.message }); log('flatpak install', e.message); flatpakFailed = e.message; })
+      .finally(() => { flatpakJob = null; pumpEmuGet(); });
+  }
   if (emuGetRun || !emuGetQ.some((q) => q.state === 'wait')) return;
-  const q = emuGetQ.find((x) => x.state === 'wait');
+  // Flatpak still going in: the AppImages first, the Flatpaks once it's there (or each fails with its reason)
+  const isFp = (x) => G.CATALOG.find((c) => c.key === x.key)?.emus.find((e) => e.id === x.id)?.how === 'flatpak';
+  const q = emuGetQ.find((x) => x.state === 'wait' && !(flatpakJob && isFp(x)));
+  if (!q) return;
+  if (flatpakFailed && isFp(q) && !G.hasFlatpak()) { q.state = 'error'; q.error = flatpakFailed; broadcast('emuget-state', emuGetQ); return pumpEmuGet(); }
   q.state = 'run'; broadcast('emuget-state', emuGetQ);
   const off = (m) => { if (m.key === q.key && m.id === q.id && m.pct != null) { q.pct = m.pct; broadcast('emuget-state', emuGetQ); } };
   emuGetListeners.add(off);
-  try { const r = await handlers['emuget:install']({ key: q.key, id: q.id }); q.state = 'done'; q.where = r?.path || r?.fp || ''; q.relinked = r?.relinked || 0; q.links = r?.links || 0; }
+  try { const r = await handlers['emuget:install']({ key: q.key, id: q.id }); q.state = 'done'; q.where = r?.path || r?.fp || ''; q.relinked = r?.relinked || 0; q.links = r?.links || 0; q.note = r?.note || (r?.shadVersion ? `With shadPS4 ${r.shadVersion} as its default` : ''); }
   catch (e) { q.state = 'error'; q.error = e.message; }
   emuGetListeners.delete(off);
   broadcast('emuget-state', emuGetQ);
   pumpEmuGet();
 }
 const emuGetListeners = new Set();
+let flatpakJob = null, flatpakFailed = '';
 const addonRecs = () => (addonCache ||= loadJson(ADDONS_FILE, {}));
 const PATCHES_FILE = path.join(USER_DATA, 'patches.json');
 const LINKS_FILE = path.join(USER_DATA, 'folder-links.json');
@@ -2222,7 +2305,7 @@ function patchState(romId) {
     const e = require('./addons').emulators().find((x) => x.id === 'cemu');
     if (!e) return { emu: 'cemu', why: 'Cemu’s settings weren’t found on this device. Open Cemu once, then come back.' };
     const where = installedMap[romId];
-    const ids = require('./cemuPacks').titleIds(where && where !== MARKED ? where : '', path.dirname(e.settings));
+    const ids = require('./cemuPacks').titleIds(where && where !== MARKED ? where : '', path.dirname(e.settings), r?.name);
     return { emu: 'cemu', serial: ids[0] || r?.name, dir: { root: e.root, settings: e.settings }, ids, title: r?.name };
   }
   if (/^ps2$/i.test(r?.platform_slug || '') || /^ps2$/i.test(r?.platform_fs_slug || '')) return ps2PatchState(romId);
@@ -2574,7 +2657,7 @@ function createWindow() {
   // console collections kept whole by themselves (0.9.34): 30 s after start, and again every 10 minutes, games of a
   // console that are in Steam but not in its collection are put in, only with Steam's interface reachable (no restart)
   const colsAuto = () => { if (!config.steam?.consoleCollections) return; steamMgr.fillCollections({ auto: true }).then((r) => { if (r.count) broadcast('toast', { text: `${r.count} game${r.count === 1 ? '' : 's'} added to ${r.count === 1 ? 'its' : 'their'} console collection in Steam`, kind: 'ok', icon: 'mdiSteam' }); }).catch((e) => log('console collections by itself:', e.message)); };
-  if (!globalThis.__colsAuto) { globalThis.__colsAuto = true; setTimeout(colsAuto, 30000); setInterval(colsAuto, 600000); }
+  if (!globalThis.__colsAuto) { globalThis.__colsAuto = true; setTimeout(colsAuto, 30000); setInterval(colsAuto, 600000); setTimeout(() => biosSetup({ install: false }).catch(() => {}), 45000); }
   win.webContents.once('did-finish-load', () => log('ui loaded', Date.now() - startedAt + 'ms', 'window=' + win.getContentSize().join('x'), 'zoom=' + currentZoom()));
   win.webContents.on('did-finish-load', applyZoom);
   win.on('resize', () => { clearTimeout(zoomT); zoomT = setTimeout(applyZoom, 150); });
@@ -2596,6 +2679,8 @@ const trophySvc = require('./trophyService')({
   codeName: (src, code) => require('./titleNames').nameFor(src, code),
 });
 require('./titleNames').setup({ dir: USER_DATA, fetchImpl: (...a) => webFetch(...a) });
+// PS5 trophy names come from each game's own trophy package (0.9.37, KytyPS5): the downloaded PS5 game folders
+require('./trophies').setPs5Games(() => { const out = []; const idx = romIndexMain(); for (const [id, p] of Object.entries(installedMap)) { const r = idx.get(Number(id)); if (r && [r.platform_slug, r.platform_fs_slug].includes('ps5') && isDir(p)) out.push(p); } return out; });
 // ---------------------------------------------------------------- Steam ROM manager
 function coverCrop(buf, W, H) {
   const { nativeImage } = require('electron');
@@ -3648,7 +3733,9 @@ const handlers = {
     const local = pack.source === 'local';
     if (local && !(pack.file && fs.existsSync(pack.file) && /\.(zip|7z|rar)$/i.test(pack.file))) throw new Error('Pick a .zip, .7z or .rar file.');
     // the emulator's other folders a mod may need: PCSX2's patches, Dolphin's GraphicMods (beside Textures)
-    const alt = { patches: e.id === 'pcsx2' ? path.join(e.emuRoot, 'patches') : null, graphicmods: e.id === 'dolphin' ? path.join(path.dirname(e.root), 'GraphicMods') : null };
+    const alt = { patches: e.id === 'pcsx2' ? path.join(e.emuRoot, 'patches') : null, graphicmods: e.id === 'dolphin' ? path.join(path.dirname(e.root), 'GraphicMods') : null,
+      // Azahar/Citra mods (0.9.37): load/mods/<title ID>, beside load/textures
+      mods3ds: /^(azahar|citra)$/.test(e.id) && e.folder ? path.join(path.dirname(path.dirname(e.folder)), 'mods', path.basename(e.folder)) : null };
     const urls = local ? [] : pack.source === 'ps2' ? (pack.parts ? pack.parts.map((x) => ({ ...x })) : [{ url: pack.url, size: pack.size, sha256: pack.sha256 }]) : [{ url: file.url, size: file.size, md5: file.md5 }];
     const total = urls.reduce((s, u) => s + (u.size || 0), 0);
     const free = await fsp.statfs(fs.existsSync(dest) ? dest : e.root).then((st) => st.bavail * st.bsize).catch(() => Infinity);
@@ -3711,7 +3798,10 @@ const handlers = {
         item.setSavePath(file);
         const key = 'web:' + file;
         bgJob(key, { key, state: 'run', kind: 'Add-on Download', title: fname, romId: Number(ctx.romId), icon: 'mdiDownload', pct: null, text: '' });
-        broadcast('toast', { text: `Downloading ${fname}. It installs when it’s done (see Downloads).`, kind: 'info', icon: 'mdiDownload' });
+        broadcast('toast', { text: `Downloading ${fname}: it installs by itself when it’s done`, kind: 'info', icon: 'mdiDownload' });
+        // 0.9.37 (owner: "it didn't take me back, so I downloaded it four times"): the page closes at once and
+        // Cartridge opens Downloads, where the file shows downloading and then installing (the download carries on)
+        setTimeout(() => { try { if (addonBrowser && !addonBrowser.isDestroyed()) addonBrowser.close(); } catch {} broadcast('nav', { tab: 'downloads', closeModal: true }); }, 150);
         item.on('updated', () => { const t = item.getTotalBytes(); bgJob(key, { pct: t ? Math.floor((item.getReceivedBytes() / t) * 100) : null }); });
         item.once('done', async (_ev, state) => {
           if (state !== 'completed') { bgJob(key, { state: 'error', error: state === 'cancelled' ? 'Cancelled.' : 'The download stopped.' }); fs.rmSync(file, { force: true }); return; }
@@ -3750,6 +3840,19 @@ const handlers = {
     }
     return out;
   },
+  // Delete what's in a game's add-on folder (0.9.37, owner: delete installed mods and texture packs), Cartridge's
+  // or not: the game's own folder (never the emulator's shared one) goes to the Trash, so it can be put back
+  'addons:clear': async ({ romId, emu }) => {
+    const e = (handlers['addons:forGame']({ romId }) || []).find((x) => x.id === emu);
+    if (!e?.folder || !e.has) throw new Error('There’s nothing in its folder.');
+    if (path.resolve(e.folder) === path.resolve(e.root) || path.resolve(e.folder) === path.resolve(e.emuRoot || '/')) throw new Error('That folder is shared by every game, so it’s left as it is.');
+    if (require('./raLogin').running().has(e.id)) throw new Error(`Close ${e.name} first.`);
+    await toTrash(e.folder);
+    const recs = addonRecs(); for (const [k, r] of Object.entries(recs)) if (r.romId === Number(romId) && r.emuRoot === e.emuRoot) delete recs[k];
+    saveJson(ADDONS_FILE, recs);
+    log('add-on folder to Trash', e.folder);
+    return { folder: e.folder };
+  },
   'addons:installed': () => Object.entries(addonRecs()).map(([key, r]) => ({ key, ...r, files: undefined, count: r.files.length })),
   'addons:remove': async ({ key }) => {
     const recs = addonRecs(), r = recs[key];
@@ -3769,7 +3872,7 @@ const handlers = {
       const ck = { retro: 'snes', gc: 'gc' }[key] || key;
       return (steamMgr.candidatesFor(ck) || []).some((c) => c.id.split('@')[0] === e.id);
     };
-    return G.CATALOG.map((c) => ({ key: c.key, name: c.name, emus: c.emus.map((e) => ({ id: e.id, label: require('./emulators').EMU[e.id]?.label || { retroarch: 'RetroArch', supermodel: 'Supermodel' }[e.id] || e.id, how: e.how, from: e.how === 'flatpak' ? 'Flatpak from Flathub' : `${e.binary ? 'Linux build' : 'AppImage'} from ${e.repo.split('/')[0]}${e.fp ? ', else its Flatpak' : ''}`, installed: isHere(e, c.key) })) }));
+    return G.CATALOG.map((c) => ({ key: c.key, name: c.name, emus: c.emus.map((e) => ({ id: e.id, label: require('./emulators').EMU[e.id]?.label || { retroarch: 'RetroArch', supermodel: 'Supermodel' }[e.id] || e.id, how: e.how, from: e.how === 'flatpak' ? 'Flatpak from Flathub' : `${e.binary || e.dirBuild ? 'Linux build' : 'AppImage'} from ${e.repo.split('/')[0]}${e.fp ? ', else its Flatpak' : ''}`, installed: isHere(e, c.key) })) }));
   },
   // where emulators live (0.9.17): this device and every mounted drive, with free space
   'emuget:drives': async () => {
@@ -3825,6 +3928,8 @@ const handlers = {
   // background queue: Download all, or one at a time, while the page stays usable
   'emuget:queue': ({ items } = {}) => { for (const it of items || []) if (!emuGetQ.some((q) => q.key === it.key && q.id === it.id && /wait|run/.test(q.state))) emuGetQ.push({ key: it.key, id: it.id, state: 'wait', pct: null }); pumpEmuGet(); return emuGetQ; },
   'emuget:state': () => emuGetQ,
+  // is Flatpak here, and if not, can Cartridge install it (0.9.37)
+  'emuget:flatpak': () => { const G = require('./emuGet'); if (G.hasFlatpak()) return { has: true }; const p = G.flatpakPlan(); return { has: false, can: !!p?.cmd, why: p?.why || '' }; },
   'emuget:install': async ({ key, id }) => {
     if (emuGetRun) throw new Error('Another emulator is downloading. Wait for it to finish.');
     const G = require('./emuGet');
@@ -3847,6 +3952,9 @@ const handlers = {
         }
       }
       log('emulator downloaded', id, r.path || r.fp);
+      // 0.9.37 (owner: fix the shadPS4 install): the Qt launcher comes with no shadPS4 in it, so games had nothing
+      // to start with; the newest release goes in beside it as the launcher's default, as its own Versions does
+      if (id === 'shadps4') { try { send({ pct: 99, text: 'Adding shadPS4 itself' }); r.shadVersion = await shadDefaultVersion(); } catch (e2) { log('shadPS4 version after install', e2.message); r.note = `shadPS4’s launcher is in, but its newest version couldn’t be added (${e2.message}). Add one in Versions.`; } }
       send({ pct: 100, done: true });
       // its saves and storage linked into the Emulation folder (esdeLinks.js: links only, nothing moved)
       if (config.emulationFresh && config.emulationRoot && isDir(config.emulationRoot)) { try { r.links = require('./esdeLinks').make(id, { root: config.emulationRoot, home: os.homedir(), kind: r.fp ? 'flatpak' : 'appimage' }); } catch {} }
@@ -3858,6 +3966,8 @@ const handlers = {
         const moved = (steamMgr.health().problems || []).filter((p) => p.issues.some((x) => x.kind === 'emulator' && x.fix));
         if (moved.length) { const f = await steamMgr.healthFix(moved.map((p) => p.appid)); r.relinked = (f.fixed || 0) + (f.queued || 0); log('relinked after install', id, r.relinked); }
       } catch (e2) { log('relink after install', e2.message); }
+      // its BIOS or firmware, if it's in the BIOS folder, goes in now (0.9.37)
+      biosSetup({ install: true }).then((b) => { const done = b.list.filter((x) => x.copied || x.installed); if (done.length) broadcast('toast', { text: `BIOS and firmware put in place: ${done.map((x) => x.label).join(', ')}`, kind: 'ok', icon: 'mdiChip' }); }).catch((e) => log('bios setup after install:', e.message));
       return r;
     } catch (err) { send({ error: err.message }); throw err; }
     finally { emuGetRun = null; }
@@ -3923,15 +4033,21 @@ const handlers = {
   },
   'emuget:cancel': () => { emuGetRun?.abort.abort(); return true; },
   // emulator updates (0.9.16): each installed copy, its version and whether a newer one is out
-  'emuup:list': async ({ fresh } = {}) => {
+  // 0.9.37 (owner: slow to open, and RPCS3 said it had an update while Cartridge said up to date): cached answers
+  // at once ({ cached }), then every check at the same time; a check is reused for 10 minutes, not 6 hours
+  'emuup:list': async ({ fresh, cached } = {}) => {
+    const t0 = Date.now(), TTL = 10 * 60e3;
     const U = require('./emuUpdates'), { FORKS } = require('./emulators');
     const file = path.join(USER_DATA, 'emulator-releases.json'), cache = loadJson(file, {});
     // 0.9.17: the main copies only: not forks, not old copies (RPCS3's *_old, "previous"), not the
     // versions shadPS4's launcher keeps for itself; and the version an update put in (the file name keeps the old one)
     const isFork = (e) => (FORKS[e.id] || []).some(([re]) => re.test(path.basename(e.path || e.fp || '')));
     const list = steamMgr.installedEmulators().filter((e) => !(e.path && (/_old\b|\.old\b|previous|\.cartridge-(old|new)/i.test(path.basename(e.path)) || /shadPS4QtLauncher\/versions|\/versions\//i.test(e.path))) && !isFork(e) && !(e.id === 'shadps4' && e.path && !/qt.?launcher/i.test(e.path) && U.REPOS.shadps4.only))
-      .map((e) => { const st = e.path && (() => { try { return fs.statSync(e.path); } catch { return null; } })(); const got = (cache.installed || {})[e.path]; return got && st && got.size === st.size ? { ...e, version: got.version } : e; });
-    const fp = await U.flatpakUpdates(list.filter((e) => e.kind === 'flatpak').map((e) => e.fp)).catch(() => ({}));
+      .map((e) => { const st = e.path && (() => { try { return fs.statSync(e.path); } catch { return null; } })(); const got = (cache.installed || {})[e.path]; const ran = e.path && U.ranVersion(e.id, e.path); /* the version that really runs, where the emulator says it (RPCS3's log, 0.9.37) */ return ran ? { ...e, version: ran } : got && st && got.size === st.size ? { ...e, version: got.version } : e; });
+    const fpIds = list.filter((e) => e.kind === 'flatpak').map((e) => e.fp);
+    const fpWant = !cached && fpIds.length && (fresh || !cache.fp || Date.now() - cache.fp.t > TTL);
+    const fpRun = fpWant ? U.flatpakUpdates(fpIds).then((d) => (cache.fp = { t: Date.now(), d }).d).catch(() => cache.fp?.d || {}) : Promise.resolve(cache.fp?.d || {});
+    const jobs = [];
     const out = [];
     // emulators and forks installed from a GitHub link (0.9.28, owner: update them from the same place): their own
     // project's releases, never the emulator they're a fork of; listed even when the scan doesn't know them
@@ -3941,28 +4057,31 @@ const handlers = {
       const custom = customs.find((x) => x.path === e.path);
       if (custom) {
         const ck = 'gh:' + custom.repo; let c = cache[ck];
-        if (fresh || !c || Date.now() - c.t > 6 * 3600e3) { try { const r = await require('./github').release(custom.repo); c = cache[ck] = { t: Date.now(), tag: r?.tag || null }; } catch (err) { c = { t: c?.t || 0, tag: c?.tag || null, error: err.message }; } }
-        out.push({ ...e, label: custom.repo.split('/')[1], version: custom.tag, custom: { repo: custom.repo }, forkOf: custom.as === 'fork' ? custom.of : null, update: c?.tag && c.tag !== custom.tag ? { version: c.tag, tag: c.tag } : null, latest: c?.tag ? { version: c.tag } : null, error: c?.error || null, channel: null, channels: [], page: `https://github.com/${custom.repo}/releases` });
+        if (!cached && (fresh || !c || Date.now() - c.t > TTL)) jobs.push(require('./github').release(custom.repo).then((r) => { cache[ck] = { t: Date.now(), tag: r?.tag || null }; }).catch((err) => { cache[ck] = { t: c?.t || 0, tag: c?.tag || null, error: err.message }; }));
+        out.push(() => { const c = cache[ck]; return ({ ...e, label: custom.repo.split('/')[1], version: custom.tag, custom: { repo: custom.repo }, forkOf: custom.as === 'fork' ? custom.of : null, update: c?.tag && c.tag !== custom.tag ? { version: c.tag, tag: c.tag } : null, latest: c?.tag ? { version: c.tag } : null, error: c?.error || null, channel: null, channels: [], page: `https://github.com/${custom.repo}/releases` }); });
         continue;
       }
-      if (e.kind === 'flatpak') { out.push({ ...e, update: fp[e.fp] ? { version: fp[e.fp].version } : null, where: fp[e.fp]?.where, channel: 'flathub', channels: [] }); continue; }
+      if (e.kind === 'flatpak') { out.push((fp) => ({ ...e, update: fp[e.fp] ? { version: fp[e.fp].version } : null, where: fp[e.fp]?.where, channel: 'flathub', channels: [] })); continue; }
       const ch = U.channelsOf(e.id, e.path), channel = ((config.emuChannels || {})[e.id]) || ch.def;
       // 0.9.21: the release source follows the copy (Xenia Edge, Xenia's Windows build, Eden's variants)
       // a plain program (not an AppImage, not a folder build Cartridge can update) is never overwritten (0.9.21)
       const kind = e.kind === 'appimage' || e.kind === 'folder' ? U.installKind(e.path) : null, base = U.specFor(e.id, e.path);
-      const spec = kind === 'folder' ? (base?.folder || base?.overProgram ? base : null) : kind === 'program' && !base?.zipped && !base?.overProgram ? null : base;
+      const spec = kind === 'folder' ? (base?.folder || base?.overProgram || base?.dirBuild ? base : null) : kind === 'program' && !base?.zipped && !base?.overProgram ? null : base;
       // 0.9.23: a copy that can't start (system libraries missing, e.g. Vita3K's Qt6 zip build on SteamOS)
       // is offered its update as a repair, newer or not
       const broken = kind === 'program' || kind === 'folder' ? U.missingLibs(e.path) : [];
       const ck = e.id + ':' + path.basename(e.path || '') + (kind === 'folder' ? ':folder' : '') + ':' + (channel || '');
-      let c = cache[ck];
-      if (spec && (fresh || broken.length || !c || Date.now() - c.t > 6 * 3600e3)) {
-        try { c = cache[ck] = { t: Date.now(), rel: await U.latestRelease(e.id, { file: e.path, channel }) }; } catch (err) { c = { t: c?.t || 0, rel: c?.rel || null, error: err.message }; }
-      }
-      out.push({ ...e, build: kind, broken: broken.length ? broken : null, update: c?.rel && (broken.length || U.isNewer(c.rel, e)) ? c.rel : null, latest: c?.rel || null, error: c?.error || null, noSource: !spec, channel, channels: spec ? ch.options : [], page: spec?.repo ? `https://github.com/${spec.repo}/releases` : null });
+      const c0 = cache[ck];
+      if (spec && !cached && (fresh || broken.length || !c0 || Date.now() - c0.t > TTL)) jobs.push(U.latestRelease(e.id, { file: e.path, channel }).then((rel) => { cache[ck] = { t: Date.now(), rel }; }).catch((err) => { cache[ck] = { t: c0?.t || 0, rel: c0?.rel || null, error: err.message }; }));
+      out.push(() => { const c = cache[ck]; return ({ ...e, build: kind, broken: broken.length ? broken : null, update: c?.rel && (broken.length || U.isNewer(c.rel, e)) ? c.rel : null, latest: c?.rel || null, error: c?.error || null, noSource: !spec, channel, channels: spec ? ch.options : [], page: spec?.repo ? `https://github.com/${spec.repo}/releases` : null }); });
     }
+    await Promise.all(jobs);
+    const fpd = await fpRun;
+    const res = out.map((f) => f(fpd));
+    if (!cached) log('emulator updates checked', `${res.length} in ${Date.now() - t0} ms, ${jobs.length} asked`);
+    if (cached) return res;
     saveJson(file, cache);
-    return out;
+    return res;
   },
   // force (0.9.23): Download again, the newest of its channel even when it's the same version
   'emuup:run': async ({ id, kind, fp, where, path: file, force }) => {
@@ -4038,7 +4157,9 @@ const handlers = {
       for (const [, label, rel] of SV.SYNC[f.of] || []) {
         if (typeof rel !== 'string') continue;
         const donor = baseOf(f.of, rel), fb = L.findForkBase(f.exe, rel, home);
-        const to = donor ? path.join(donor, rel) : null, from = fb ? path.join(fb.base, rel) : null;
+        // 0.9.37: not in its usual places: looked for under the fork's own folder
+        const deep = !fb && L.searchForkFolder(f.exe, rel);
+        const to = donor ? path.join(donor, rel) : null, from = fb ? path.join(fb.base, rel) : deep || null;
         const st = from && to ? L.status(from, to) : { state: !to ? 'no-donor' : 'no-folder' };
         if (recs.some((r) => r.from === from)) continue; // already one of yours
         suggestions.push({ fork: f.name, exe: f.exe, of: f.of, ofName: SV.NAMES[f.of] || f.of, label, rel, from, to, how: fb?.how || null, ...st });
@@ -4046,6 +4167,22 @@ const handlers = {
     }
     const links = recs.map((r) => ({ ...r, ...L.status(r.from, r.to) }));
     return { suggestions, links, home };
+  },
+  // Find and Link Saves (0.9.37, owner: detect the saves and link them by itself, keep the manual way): every fork
+  // ready to link gets its games the original lacks copied across (copies only), then the link
+  'links:auto': ({ dry } = {}) => {
+    const L = require('./folderLinks'), list = handlers['links:list']().suggestions.filter((s) => s.from && s.to && ['folder', 'empty', 'missing'].includes(s.state));
+    if (dry) return list.map((s) => ({ fork: s.fork, ofName: s.ofName, label: s.label, from: s.from, to: s.to, state: s.state }));
+    const out = [];
+    for (const s of list) {
+      try {
+        const m = s.state === 'folder' ? L.mergeInto(s.from, s.to) : { copied: [], skipped: [] };
+        const r = handlers['links:make']({ from: s.from, to: s.to, label: s.label, fork: s.fork, of: s.of });
+        out.push({ fork: s.fork, ofName: s.ofName, label: s.label, copied: m.copied.length, kept: r.kept });
+        log('links auto', s.from, '->', s.to, `${m.copied.length} copied, ${m.skipped.length} already there`);
+      } catch (e) { out.push({ fork: s.fork, ofName: s.ofName, label: s.label, error: e.message }); log('links auto failed', s.from, e.message); }
+    }
+    return out;
   },
   'links:check': ({ from, to }) => { const L = require('./folderLinks'); return { why: L.check(from, to), ...L.status(from, to) }; },
   'links:make': ({ from, to, label, fork, of }) => {
@@ -4177,7 +4314,10 @@ const handlers = {
     if (st.emu === 'ppsspp') { try { const r = await cheatsMod.ppssppDownloadDb(st.dir); if (r.updated) log('ppsspp cheat.db downloaded', r.url); } catch (e) { log('ppsspp cheat.db download failed:', e.message); } }
     const list = await E.list(st, patchMine[st.emu] || {});
     const why = dlErr && !list.length ? dlErr : st.emu === 'ppsspp' && !fs.existsSync(path.join(st.dir.cheats, 'cheat.db')) ? 'PPSSPP has no cheats for this game here. They come from cheat.db: put it in PSP/Cheats in PPSSPP’s folder (or add codes in PPSSPP’s Cheats), then come back.' : '';
-    return { emu: st.emu, emuName: E.name, serial: st.serial, version: st.version, why, list };
+    // Cemu (0.9.37): which title ID it matched by, and packs for this game that only list other regions
+    let other = null;
+    if (st.emu === 'cemu') { try { other = require('./cemuPacks').otherRegions({ root: st.dir.root, titleIds: st.ids, name: st.title }); } catch {} log('cemu packs', st.title, 'ids', (st.ids || []).join(',') || 'none', 'packs', list.length, other && Object.keys(other).length ? 'other regions ' + JSON.stringify(other) : ''); }
+    return { emu: st.emu, emuName: E.name, serial: st.serial, version: st.version, why, list, other, ids: st.emu === 'cemu' ? st.ids || [] : undefined };
   },
   // changes: [{ key, on }]. Patches turned on in RPCS3 itself are never turned off here.
   'patches:apply': async ({ romId, changes }) => {
@@ -4222,6 +4362,18 @@ const handlers = {
   'dl:resumeAll': () => { for (const it of queue) if (it.status === 'cancelled') { it.status = 'queued'; it.error = null; } emitQueue(); pump(); },
   'dl:clear': () => { for (let i = queue.length - 1; i >= 0; i--) if (!['queued', 'downloading'].includes(queue[i].status)) queue.splice(i, 1); emitQueue(); },
   'bios:download': ({ platformId, slug }) => downloadBios(platformId, slug),
+  'bios:setup': (o) => biosSetup(o || {}),
+  // each console in the library that needs BIOS or firmware, and whether it's where its emulators read it (0.9.37)
+  'bios:status': () => {
+    const B = require('./bios'), opts = { roots: emuRootsAll(), steamRoots: steamMgr.steamRoots?.() || [], extra: [] };
+    const KEY = { ps: 'psx', psx: 'psx', ps2: 'ps2', ps3: 'ps3', psvita: 'psvita', vita: 'psvita', switch: 'switch', segacd: 'segacd', 'sega-cd': 'segacd', megacd: 'segacd', saturn: 'saturn', dc: 'dreamcast', dreamcast: 'dreamcast', 'pc-engine-cd': 'pcenginecd', pcenginecd: 'pcenginecd', 'turbografx-cd': 'pcenginecd', neogeo: 'neogeo', 'neo-geo': 'neogeo', xbox: 'xbox', nds: 'nds', gba: 'gba' };
+    const out = [];
+    for (const p of library?.platforms || []) {
+      const key = KEY[p.slug] || KEY[p.fs_slug]; if (!key || out.some((x) => x.key === key)) continue;
+      const st = B.status(key, opts); if (st) out.push({ ...st, console: p.display_name || p.name, platformId: p.id, slug: p.slug });
+    }
+    return { list: out.sort((a, b) => Number(a.ok) - Number(b.ok) || Number(a.optional) - Number(b.optional) || a.console.localeCompare(b.console)), dir: config.biosPath || '' };
+  },
   'bios:list': ({ platformId }) => api('/api/firmware', { query: { platform_id: platformId } }),
   // 0.9.17: every console's BIOS and firmware from RomM in one go, then into the emulators
   'bios:all': async () => {
@@ -4229,9 +4381,11 @@ const handlers = {
     for (const p of library?.platforms || []) {
       const list = await api('/api/firmware', { query: { platform_id: p.id } }).catch(() => []);
       if (!list?.length) continue;
-      try { const r = await downloadBios(p.id, p.slug); out.push({ name: p.display_name || p.name, files: r.count, placed: r.placed, installed: r.installed }); }
+      try { const r = await downloadBios(p.id, p.slug); out.push({ name: p.display_name || p.name, files: r.count, placed: r.placed, installed: r.installed, pending: r.pending }); }
       catch (e) { out.push({ name: p.display_name || p.name, error: e.message }); }
     }
+    // then everything into place, for emulators that weren't there when a console's files came (0.9.37)
+    try { const b = await biosSetup({ install: true }); for (const x of out) x.after = b.did; } catch (e) { log('bios setup after download:', e.message); }
     return out;
   },
   // 0.9.17: your console folders added to the emulators' game lists (PCSX2, DuckStation, Dolphin)

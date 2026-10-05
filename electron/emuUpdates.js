@@ -8,6 +8,7 @@
 const fs = require('fs');
 const webFetch = require('./webFetch');
 const path = require('path');
+const os = require('os');
 const { execFile } = require('child_process');
 
 // emulator -> its GitHub releases and the Linux AppImage in them (x86_64)
@@ -20,6 +21,9 @@ const REPOS = {
   // so writing it over a copy left Vita3K unable to start. Vita3K only updates from its AppImage, which
   // carries its own Qt. EmuDeck installs exactly that, renamed to ~/Applications/Vita3K/Vita3K
   // (emuDeckVita3K.sh), so the AppImage may go over a plain program there (overProgram).
+  // PS5 (0.9.37): whole folders as .tar.gz, laid over ~/Applications/<dir> (layFolder)
+  sharpemu: { repo: 'sharpemu/sharpemu', asset: /linux-x64\.tar\.gz$/i, pre: true, dirBuild: { dir: 'SharpEmu', program: 'SharpEmu' } },
+  kytyps5: { repo: 'KytyPS5/KytyPS5', asset: /Linux-x86_64\.tar\.gz$/i, pre: true, dirBuild: { dir: 'KytyPS5', program: 'kyty_emulator' } },
   vita3k: { repo: 'Vita3K/Vita3K', tag: 'continuous', asset: /^Vita3K-x86_64\.AppImage$/i, overProgram: true },
   azahar: { repo: 'azahar-emu/azahar', asset: /\.AppImage$/i },
   cemu: { repo: 'cemu-project/Cemu', asset: /x86_64\.AppImage$/i },
@@ -29,7 +33,9 @@ const REPOS = {
   // 0.9.19: file names checked against the projects' own install scripts (EmuDeck reads the same releases):
   // shadPS4's launcher ships a linux-qt .zip with the AppImage inside; Eden and Ryujinx publish on their
   // own Forgejo servers first (git.eden-emu.org, git.ryujinx.app), GitHub second
-  shadps4: { repo: 'shadps4-emu/shadps4-qtlauncher', asset: /linux-qt.*\.zip$|qt.?launcher.*\.AppImage$/i, zipped: /\.AppImage$/i, only: /qt.?launcher/i },
+  // 0.9.37 (owner's photo: "No Linux build in shadps4-qtlauncher's newest release"): every launcher build is published
+  // as a pre-release (its build.yml), so GitHub's "latest" skipped them all and found an old release without Linux
+  shadps4: { repo: 'shadps4-emu/shadps4-qtlauncher', asset: /linux-qt.*\.zip$|qt.?launcher.*\.AppImage$/i, zipped: /\.AppImage$/i, only: /qt.?launcher/i, pre: true, preOnly: true },
   // 0.9.21 (owner: "couldn't check"): Eden's server is git.eden-emu.dev; .org kept as the older name
   eden: { repo: 'eden-emulator/Releases', asset: /(amd64|x86_64|x64|steamdeck|rog).*\.AppImage$|linux.*\.AppImage$/i, forge: [['https://git.eden-emu.dev', 'eden-emu/eden'], ['https://git.eden-emu.org', 'eden-emu/eden']], first: 'forge' },
   ryujinx: { repo: 'Ryubing/Stable-Releases', asset: /x64.*\.AppImage$/i, forge: [['https://git.ryujinx.app', 'Ryubing/Stable'], ['https://git.ryujinx.app', 'ryubing/ryujinx']], first: 'forge' },
@@ -50,6 +56,7 @@ function installKind(file) {
   // data/ and lang/ left beside it (EmuDeck now puts Vita3K's AppImage there as "Vita3K")
   if (require('./detect').appImageType(file)) return 'appimage';
   const dir = path.dirname(file), here = (n) => { try { return fs.statSync(path.join(dir, n)).isDirectory(); } catch { return false; } };
+  if (Object.values(REPOS).some((r) => r.dirBuild && r.dirBuild.program === path.basename(file))) return 'folder'; // SharpEmu, KytyPS5
   if (here('data') && (here('lang') || here('translations') || here('shaders-builtin'))) return 'folder';
   return 'program';
 }
@@ -69,7 +76,9 @@ function plainEnv() { const env = { ...process.env }; for (const k of ['LD_PRELO
 const run = (cmd, args, timeout = 60000) => new Promise((resolve, reject) => execFile(cmd, args, { env: plainEnv(), timeout, maxBuffer: 8 << 20 }, (e, out, err) => (e ? reject(new Error(String(err || e.message).trim().split('\n').pop())) : resolve(String(out)))));
 
 // version text from a tag or file name: v2.3.120 -> 2.3.120
-const verOf = (s) => (String(s || '').match(/\d+(?:\.\d+){1,3}/) || [])[0] || '';
+// 0.9.37: a build number after the version counts (RPCS3's 0.0.38-18166 is newer than 0.0.38-18101: every
+// RPCS3 build shares 0.0.38, so updates were never seen); it becomes the last part, 0.0.38.18166
+const verOf = (s) => { const m = String(s || '').match(/(\d+(?:\.\d+){1,3})(?:-(\d{4,})(?!\d|-\d{2}-))?/); return m ? m[1] + (m[2] ? '.' + m[2] : '') : ''; };
 const cmpVer = (a, b) => { const x = verOf(a).split('.').map(Number), y = verOf(b).split('.').map(Number); for (let i = 0; i < Math.max(x.length, y.length); i++) { const d = (x[i] || 0) - (y[i] || 0); if (d) return d; } return 0; };
 
 // Flatpak: which of these app ids have an update, per installation
@@ -122,17 +131,18 @@ function channelsOf(id, file = '') {
   const r = specFor(id, file);
   if (!r) return { def: null, options: [] };
   if (r.tag) return { def: 'rolling', options: ['rolling'] };
+  if (r.preOnly) return { def: 'pre', options: ['pre'] }; // only ever pre-releases (shadPS4's launcher): no stable to pick
   return { def: r.pre ? 'pre' : 'stable', options: ['stable', 'pre'] };
 }
 function withChannel(r, id, channel) {
-  if (!r || !channel || r.tag || channel === 'rolling') return r;
+  if (!r || !channel || r.tag || r.preOnly || channel === 'rolling') return r;
   const extra = CHANNEL_REPOS[id]?.[channel];
   return { ...r, ...(extra || {}), pre: channel === 'pre' };
 }
 async function latestRelease(id, { fetchImpl, spec, file, channel } = {}) {
   let r = spec?.repo ? spec : withChannel(specFor(id, file), id, channel);
   // the same kind of build as the copy you have: a folder build from its zip, never an AppImage over a program
-  if (r && !spec?.repo && file && !/\.exe$/i.test(file)) { const k = installKind(file); if (k === 'folder') r = r.folder ? { ...r, asset: r.folder, zipped: null, wholeFolder: true } : r.overProgram ? r : null; else if (k === 'program' && !r.zipped && !r.overProgram) r = null; }
+  if (r && !spec?.repo && file && !/\.exe$/i.test(file)) { const k = installKind(file); if (k === 'folder') r = r.dirBuild ? r : r.folder ? { ...r, asset: r.folder, zipped: null, wholeFolder: true } : r.overProgram ? r : null; else if (k === 'program' && !r.zipped && !r.overProgram) r = null; }
   if (!r) return null;
   // each source in turn (0.9.19): GitHub (its API, else its release pages when the API limit answers 403,
   // github.js) and the project's own Forgejo server; the first with a matching file wins
@@ -143,7 +153,7 @@ async function latestRelease(id, { fetchImpl, spec, file, channel } = {}) {
   for (const t of tries) {
     let rel = null; try { rel = await t(); } catch (e) { lastErr = e; continue; }
     const asset = pickAsset(rel?.assets, r.asset, file);
-    if (asset) return { version: verOf(rel.tag) || verOf(asset.name), tag: rel.tag, name: asset.name, url: asset.url, size: asset.size, date: asset.date || rel.date, folder: !!r.wholeFolder, zipped: r.wholeFolder ? null : /\.(zip|tar\.gz|tgz)$/i.test(asset.name) ? r.zipped || /\.AppImage$/i : null };
+    if (asset) return { version: verOf(rel.tag) || verOf(asset.name), tag: rel.tag, name: asset.name, url: asset.url, size: asset.size, date: asset.date || rel.date, folder: !!r.wholeFolder, dirBuild: r.dirBuild || null, zipped: r.wholeFolder || r.dirBuild ? null : /\.(zip|tar\.gz|tgz)$/i.test(asset.name) ? r.zipped || /\.AppImage$/i : null };
   }
   if (lastErr) throw lastErr; // every source refused: say why
   return null;
@@ -179,9 +189,31 @@ async function fileFromTar(tarFile, dest, want) {
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 }
 // is the release newer than this AppImage? by version when both have one, else by date
+// the version an emulator itself says it is, when it has run since its file last changed (0.9.37): RPCS3 writes
+// "RPCS3 v0.0.38-18166-77d2d1b4 Alpha" at the top of its log
+function ranVersion(id, file, home = os.homedir()) {
+  if (id !== 'rpcs3') return '';
+  const cfg = process.env.XDG_CONFIG_HOME || path.join(home, '.config');
+  for (const log of [path.join(cfg, 'rpcs3', 'RPCS3.log'), path.join(path.dirname(file), 'config', 'RPCS3.log')]) {
+    try {
+      const st = fs.statSync(log), fst = fs.statSync(file);
+      if (st.mtimeMs < fst.mtimeMs) continue; // older than the AppImage: says nothing about this copy
+      const fd = fs.openSync(log, 'r'), b = Buffer.alloc(4096); const n = fs.readSync(fd, b, 0, 4096, 0); fs.closeSync(fd);
+      const m = /RPCS3 v(\d+\.\d+\.\d+-\d+)/.exec(b.toString('utf8', 0, n));
+      if (m) return m[1];
+    } catch {}
+  }
+  return '';
+}
 function isNewer(rel, have) {
   if (!rel) return false;
-  if (verOf(rel.version) && verOf(have.version)) return cmpVer(rel.version, have.version) > 0;
+  const a = verOf(rel.version), b = verOf(have.version);
+  if (a && b) {
+    // compared as far as both go; one with a build number and one without are told apart by date (below)
+    const x = a.split('.').map(Number), y = b.split('.').map(Number), n = Math.min(x.length, y.length);
+    for (let i = 0; i < n; i++) if (x[i] !== y[i]) return x[i] > y[i];
+    if (x.length === y.length) return false;
+  }
   const mt = (() => { try { return fs.statSync(have.path).mtimeMs; } catch { return 0; } })();
   return !!rel.date && Date.parse(rel.date) > mt + 3600e3;
 }
@@ -189,6 +221,7 @@ function isNewer(rel, have) {
 // The file keeps its name and place (owner, 0.9.19: an update must never rename an AppImage, or
 // launch options and shortcuts pointing at it break); Cartridge records the new version itself.
 async function replaceAppImage(file, rel, download) {
+  if (rel.dirBuild) { const z = path.dirname(file) + '.cartridge-dl'; try { await download(rel.url, z); if (rel.size && fs.statSync(z).size !== rel.size) throw new Error('The download was incomplete. Try again.'); await layFolder(z, path.dirname(file), rel.name); } finally { fs.rmSync(z, { force: true }); } fs.chmodSync(file, 0o755); return true; }
   if (rel.folder) return replaceFolder(file, rel, download);
   const tmp = file + '.cartridge-new', old = file + '.cartridge-old';
   if (rel.zipped) { const z = file + '.cartridge-zip'; try { await download(rel.url, z); if (rel.size && fs.statSync(z).size !== rel.size) throw new Error('The download was incomplete. Try again.'); if (/\.(tar\.gz|tgz)$/i.test(rel.name || rel.url)) await fileFromTar(z, tmp, rel.zipped); else await appImageFromZip(z, tmp, rel.zipped); } finally { fs.rmSync(z, { force: true }); } }
@@ -212,6 +245,20 @@ function looksRunnable(file, rel) {
 }
 // a folder build (0.9.21): the zip unpacked over the program's folder, every file at its place, the
 // program's own file name kept; a single top folder in the zip is stripped; the old program back on failure
+// a release that is a whole folder (0.9.37: SharpEmu, KytyPS5, a .tar.gz of the program and its libraries):
+// unpacked beside, one folder around everything taken off, then laid over the folder, so what the emulator keeps
+// there (SharpEmu's user/) stays. Files in the archive never land outside the folder (tar refuses ../ paths).
+async function layFolder(archive, dir, name = '') {
+  const tmp = dir + '.cartridge-new.d';
+  fs.rmSync(tmp, { recursive: true, force: true }); fs.mkdirSync(tmp, { recursive: true });
+  try {
+    if (/\.zip$/i.test(name)) throw new Error('This build is a .zip; only .tar.gz folder builds are unpacked here.');
+    await new Promise((ok, bad) => execFile('tar', ['-xzf', archive, '-C', tmp, '--no-same-owner'], { timeout: 600000 }, (e, so, se) => (e ? bad(new Error(`It couldn't be unpacked: ${String(se || e.message).trim().split('\n').pop()}`)) : ok())));
+    const top = fs.readdirSync(tmp), one = top.length === 1 && fs.statSync(path.join(tmp, top[0])).isDirectory();
+    fs.mkdirSync(dir, { recursive: true });
+    fs.cpSync(one ? path.join(tmp, top[0]) : tmp, dir, { recursive: true, force: true });
+  } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
+}
 async function replaceFolder(file, rel, download) {
   const dir = path.dirname(file), z = file + '.cartridge-zip', old = file + '.cartridge-old';
   await download(rel.url, z);
@@ -242,4 +289,4 @@ async function replaceFolder(file, rel, download) {
   return true;
 }
 
-module.exports = { channelsOf, withChannel, flatpakRemove, installKind, missingLibs, looksRunnable, replaceFolder, specFor, pickAsset, fileFromTar, forgeRelease, appImageFromZip, REPOS, verOf, cmpVer, flatpakUpdates, flatpakUpdate, latestRelease, isNewer, replaceAppImage };
+module.exports = { layFolder, ranVersion, channelsOf, withChannel, flatpakRemove, installKind, missingLibs, looksRunnable, replaceFolder, specFor, pickAsset, fileFromTar, forgeRelease, appImageFromZip, REPOS, verOf, cmpVer, flatpakUpdates, flatpakUpdate, latestRelease, isNewer, replaceAppImage };

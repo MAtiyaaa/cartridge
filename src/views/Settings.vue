@@ -100,6 +100,23 @@
                 <span class="l-end"><Btn b="A" />{{ { collections: 'See them', health: 'Shortcut health', setup: 'Emulator setup', romm: 'RomM settings', fpsteam: 'Allow' }[i.fix] }}</span>
               </button>
             </div>
+            <!-- 0.9.37 (owner: BIOS and firmware put where each emulator reads it, by itself): each console that needs some -->
+            <div class="subh">BIOS and Firmware</div>
+            <div v-if="!biosSt" class="muted small"><Icon name="mdiSync" :size="16" class="spin" /> Checking…</div>
+            <template v-else>
+              <p class="muted small" style="margin: 0">Cartridge puts them in place by itself: copied into every emulator that reads them from a folder, PS3 and Vita firmware installed in RPCS3 and Vita3K, Switch keys and firmware put where Eden and its family read them. It runs after an emulator is installed and after files come from RomM. Nothing is ever replaced.</p>
+              <div class="stack">
+                <div v-for="b in biosSt.list" :key="b.key" class="lrow" data-focus tabindex="0">
+                  <Icon :name="b.ok ? 'mdiCheckCircleOutline' : 'mdiChip'" :size="24" :style="{ color: b.ok ? '#7fe0a0' : b.optional ? 'var(--muted)' : '#ffd978' }" />
+                  <div class="l-mid"><b>{{ b.console }} · {{ b.label }}</b><span class="l-sub">{{ b.ok ? 'In place: ' + shortHome(b.where) : b.optional ? 'Optional: most emulators run without it' : b.hint || ('Not where its emulators read it' + (b.names?.length ? ` (${b.names.slice(0, 3).join(', ')})` : '')) }}</span></div>
+                  <span class="status" :class="b.ok ? 'ok' : b.optional ? '' : 'warn'">{{ b.ok ? 'Ready' : b.optional ? 'Optional' : 'Missing' }}</span>
+                </div>
+              </div>
+              <div class="row wrap">
+                <button class="btn primary" data-focus :disabled="!!biosBusy" @click="biosPlace"><Icon :name="biosBusy === 'place' ? 'mdiSync' : 'mdiFolderArrowRightOutline'" :class="{ spin: biosBusy === 'place' }" />{{ biosBusy === 'place' ? 'Putting Them in Place…' : 'Put Everything in Place' }}</button>
+                <button class="btn" data-focus :disabled="!!biosBusy" @click="biosGet"><Icon :name="biosBusy === 'get' ? 'mdiSync' : 'mdiDownload'" :class="{ spin: biosBusy === 'get' }" />{{ biosBusy === 'get' ? 'Getting Them from RomM…' : 'Get Them from RomM' }}</button>
+              </div>
+            </template>
             <div class="stack">
               <button class="lrow" data-focus @click="openModal('installer')"><Icon name="mdiPackageDown" :size="24" /><div class="l-mid"><b>Cartridge Installer</b><span class="l-sub">An Emulation folder on the drive you pick, then the emulators you tick, set up like EmuDeck</span></div><Icon name="mdiChevronRight" :size="22" class="muted" /></button>
               <button class="lrow" data-focus @click="go('emu-setup')"><Icon name="mdiRadar" :size="24" /><div class="l-mid"><b>Emulator setup</b><span class="l-sub">Find emulators wherever they are, pick one per console, check BIOS and access</span></div><Icon name="mdiChevronRight" :size="22" /></button>
@@ -226,7 +243,8 @@
               </button>
               <button v-if="Object.values(ui.colors || {}).some(Boolean)" class="btn small" data-focus @click="saveConfig({ ui: { colors: { highlight: '', buttons: '', bars: '', background: '' } } })"><Icon name="mdiRestore" :size="16" />Use theme colours</button>
             </div>
-            <div class="row"><span class="lbl">Panels</span><div class="seg"><button v-for="(v, k) in SURFACES" :key="k" data-focus :class="{ on: (ui.surface || 'solid') === k }" @click="saveConfig({ ui: { surface: k } })">{{ v.label }}</button></div></div>
+            <div class="row"><span class="lbl">Background</span><div class="seg"><button v-for="(v, k) in SURFACES" :key="k" data-focus :class="{ on: (ui.surface || 'solid') === k }" @click="saveConfig({ ui: { surface: k, elements: elementsOf(ui) } })">{{ v.label }}</button></div></div>
+            <div class="row"><span class="lbl">Elements</span><div class="seg"><button v-for="(v, k) in ELEMENTS" :key="k" data-focus :class="{ on: elementsOf(ui) === k }" @click="saveConfig({ ui: { elements: k } })">{{ v.label }}</button></div></div>
             <div class="row"><span class="lbl">Text</span><div class="seg"><button v-for="(v, k) in TEXTS" :key="k" data-focus :class="{ on: (ui.text || 'normal') === k }" @click="saveConfig({ ui: { text: k } })">{{ v.label }}</button></div></div>
 
             </template>
@@ -484,6 +502,7 @@
               <p class="muted small" style="margin: 0">Shown on your other devices next to games you played here and trophies you unlocked here, for example "Steam Deck" or "Living Room PC".</p>
             </div>
             <div class="row"><button class="btn" data-focus @click="store.welcoming = true"><Icon name="mdiHandWave" />Run the Welcome Again</button><span class="muted small">Starts from your current settings. Nothing is reset.</span></div>
+            <div class="row"><button class="btn" data-focus @click="openTour({ start: activeTabs().includes('start') })"><Icon name="mdiGestureTapButton" />Take the Tour</button><span class="muted small">Try each control yourself, a step at a time.</span></div>
             <ServerStatus />
             <ControllerTest />
             <ReportProblem />
@@ -503,10 +522,10 @@
 
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { store, call, go, tab, saveConfig, pickFolder, choose, confirm, toast, openModal, bytes, ago, resync, scanServer, allRoms, romById, cover, resetLogos, askText, activeTabs, TAB_DEFS, consoleName } from '../store.js';
+import { store, call, go, tab, saveConfig, pickFolder, choose, confirm, toast, openModal, bytes, ago, resync, scanServer, allRoms, romById, cover, resetLogos, askText, activeTabs, TAB_DEFS, consoleName, openTour } from '../store.js';
 import { useView } from '../useView.js';
 import { input, focusFirst, setPointerPref, setRumble, rumble } from '../nav.js';
-import { THEMES, SURFACES, TEXTS, FONTS, CARD_SHAPES, CARD_SIZES, DENSITIES, themeFrom, themeOf, paletteOf } from '../themes.js';
+import { THEMES, SURFACES, ELEMENTS, elementsOf, TEXTS, FONTS, CARD_SHAPES, CARD_SIZES, DENSITIES, themeFrom, themeOf, paletteOf } from '../themes.js';
 import { BACKGROUNDS, RENDERERS, LEGACY_ART, bgPreview } from '../bgRenderers.js';
 import { setSoundEnabled, setSoundStyle, previewSound, SOUND_PACKS } from '../sfx.js';
 import Icon from '../components/Icon.vue';
@@ -719,7 +738,7 @@ function moveTab(n, d) {
   [l[i], l[j]] = [l[j], l[i]];
   saveConfig({ ui: { tabs: l } });
 }
-const LOOK_KEYS = ['theme', 'customColor', 'colors', 'idle', 'surface', 'text', 'font', 'bgStyle', 'wallDim', 'cardShape', 'density', 'gridSize', 'cardTitles', 'mediaBar', 'mediaSize', 'logos', 'motion', 'effects', 'sounds', 'soundPack', 'volume', 'rumble'];
+const LOOK_KEYS = ['theme', 'customColor', 'colors', 'idle', 'surface', 'elements', 'text', 'font', 'bgStyle', 'wallDim', 'cardShape', 'density', 'gridSize', 'cardTitles', 'mediaBar', 'mediaSize', 'logos', 'motion', 'effects', 'sounds', 'soundPack', 'volume', 'rumble'];
 const presets = computed(() => store.config.lookPresets || []);
 const presetStyle = (p) => { const g = themeOf(p.ui).grad; return { background: `linear-gradient(135deg, ${g[0]}, ${g[2]} 60%, ${g[4]})` }; };
 function lookNow() { const o = {}; for (const k of LOOK_KEYS) if (ui.value[k] !== undefined) o[k] = JSON.parse(JSON.stringify(ui.value[k])); return o; }
@@ -752,7 +771,7 @@ async function presetMenu(p, i) {
 }
 async function resetLook() {
   if (!(await confirm('Reset Look & Feel?', 'Colour, background, fonts, cards, motion and sounds go back to the defaults.', 'Reset'))) return;
-  await saveConfig({ ui: { colors: { highlight: '', buttons: '', bars: '', background: '' }, theme: 'cartridge', customColor: '', surface: 'solid', text: 'normal', font: 'cartridge', cardShape: 'rounded', density: 'normal', cardTitles: true, gridSize: 'md', bgStyle: 'solid', motion: 'normal', effects: 'auto', soundPack: 'soft', volume: 'medium', rumble: 'none' } });
+  await saveConfig({ ui: { colors: { highlight: '', buttons: '', bars: '', background: '' }, theme: 'cartridge', customColor: '', surface: 'solid', elements: 'plain', text: 'normal', font: 'cartridge', cardShape: 'rounded', density: 'normal', cardTitles: true, gridSize: 'md', bgStyle: 'solid', motion: 'normal', effects: 'auto', soundPack: 'soft', volume: 'medium', rumble: 'none' } });
 }
 const gfx = [{ v: 'auto', l: 'Auto' }, { v: 'gpu', l: 'GPU Always' }, { v: 'software', l: 'Compatible' }];
 const pointers = [{ v: 'auto', l: 'Auto' }, { v: 'touch', l: 'Touch' }, { v: 'mouse', l: 'Mouse' }];
@@ -855,7 +874,7 @@ function presentText(id) {
   return f.map((x) => `${x.mods ? 'Mods' : 'Texture pack'} in ${x.name}, ${BY_TEXT[x.by]}${!x.mods && !x.on ? ' (textures are off there)' : ''}`).join(' · ');
 }
 async function removeAddon(a) {
-  if (!(await confirm('Remove this add-on?', `${a.name} (${a.game})\n\nOnly the ${a.count} files Cartridge put in ${a.emuName}’s folder are deleted.`, 'Remove', true))) return;
+  if (!(await confirm('Delete this add-on?', `${a.name} (${a.game})\n\nOnly the ${a.count} files Cartridge put in ${a.emuName}’s folder are deleted.`, 'Delete', true))) return;
   try { await call('addons:remove', { key: a.key }); toast('Add-on removed', 'ok', 2500); } catch (e) { toast(e.message, 'error', 5000); }
   loadAddons();
 }
@@ -865,6 +884,26 @@ async function flipTextures(e) {
   if (e.on && !e.mine) return toast(`Custom textures were turned on in ${e.name}. Turn them off there if you want to.`, 'info', 4500);
   try { await call('addons:setTextures', { root: e.root, on: !e.on }); toast(e.on ? `Custom textures off in ${e.name}` : `Custom textures on in ${e.name}`, 'ok', 3000, 'mdiTextureBox'); texEmus.value = await call('addons:emulators'); }
   catch (err) { toast(err.message, 'error', 5000); }
+}
+// BIOS and firmware (0.9.37)
+const biosSt = ref(null), biosBusy = ref('');
+const shortHome = (p) => String(p || '').replace(store.info?.home || '\u0000', '~');
+async function loadBios() { biosSt.value = await call('bios:status').catch(() => ({ list: [] })); }
+async function biosPlace() {
+  biosBusy.value = 'place';
+  try {
+    const r = await call('bios:setup', { install: true });
+    const done = r.list.filter((x) => x.copied || x.installed);
+    toast(done.length ? `Put in place: ${done.map((x) => x.label).join(', ')}` : r.list.some((x) => !x.ok && !x.optional) ? 'Nothing new to put in place: get the missing ones from RomM' : 'Everything is already in place', done.length ? 'ok' : 'info', 5000, 'mdiChip');
+  } catch (e) { toast(e.message, 'error', 6000); }
+  biosBusy.value = ''; loadBios();
+}
+async function biosGet() {
+  biosBusy.value = 'get';
+  toast('Getting BIOS and firmware from RomM. PS3 and Vita firmware takes a minute to install.', 'info', 5000, 'mdiChip');
+  try { const r = await call('bios:all'); const bad = r.filter((x) => x.error); toast(!r.length ? 'Your RomM server has no BIOS or firmware files.' : `${r.length - bad.length} console${r.length - bad.length === 1 ? '' : 's'} done${bad.length ? `. Not done: ${bad.map((x) => `${x.name} (${x.error})`).join(', ')}` : ''}`, bad.length ? 'info' : 'ok', 7000, 'mdiChip'); }
+  catch (e) { toast(e.message, 'error', 6000); }
+  biosBusy.value = ''; loadBios();
 }
 async function fixIssue(i) {
   if (i.fix === 'health') return go('steam-health');
@@ -883,7 +922,7 @@ async function fixIssue(i) {
   if (v !== 'fix') return;
   try { const r = await call('steam:fixCollections'); toast(r.live ? `${r.fixed} put in their collections` : 'Putting them in their collections: Steam restarts for a moment', 'ok', 3500, 'mdiSteam'); loadIssues(); } catch (e) { toast(e.message, 'error'); }
 }
-watch(sec, (v) => { store.settingsSection = v; if (v === 'emu') loadIssues(); }, { immediate: true });
+watch(sec, (v) => { store.settingsSection = v; if (v === 'emu') { loadIssues(); loadBios(); } }, { immediate: true });
 
 
 function enter() { focusFirst(paneEl.value); }

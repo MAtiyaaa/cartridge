@@ -73,3 +73,25 @@ test('Cheats are their own group, and GitHub\'s release page is used when its AP
   assert.deepStrictEqual(r, { updated: true, version: 'Github999' });
   fs.rmSync(root, { recursive: true, force: true });
 });
+
+// 0.9.37 (owner: Enhancements, Mods and Cheats empty for a game): the title ID is found through a symlinked home
+// (Cemu keeps the real /var/home path) or by the name Cemu lists, and packs listing another region are counted
+test('title IDs through a symlinked home or by name, and other-region packs counted', () => {
+  const T = fs.mkdtempSync(path.join(os.tmpdir(), 'cemu-ids-'));
+  try {
+    fs.mkdirSync(path.join(T, 'real/roms/wiiu'), { recursive: true });
+    fs.symlinkSync(path.join(T, 'real'), path.join(T, 'home'));
+    fs.writeFileSync(path.join(T, 'real/roms/wiiu/Game.wua'), '');
+    const cache = `<?xml version="1.0"?><title_list><title titleId="0005000010101c00" version="0"><name>Super Game U</name><path>${T}/real/roms/wiiu/Game.wua</path></title><title titleId="0005000010202d00" version="0"><name>Other Game</name><path>/elsewhere/Other.wua</path></title></title_list>`;
+    fs.writeFileSync(path.join(T, 'title_list_cache.xml'), cache);
+    assert.deepStrictEqual(C.titleIds(path.join(T, 'home/roms/wiiu/Game.wua'), T, 'Super Game U'), ['0005000010101C00']);
+    assert.deepStrictEqual(C.titleIds('', T, 'Other Game'), ['0005000010202D00']); // not found by path: Cemu's own name for it
+    const pack = (dir, ids, p) => { fs.mkdirSync(path.join(T, 'graphicPacks', dir), { recursive: true }); fs.writeFileSync(path.join(T, 'graphicPacks', dir, 'rules.txt'), `[Definition]\ntitleIds = ${ids}\nname = X\npath = "${p}"\n`); };
+    pack('a', '0005000010101C00', 'Super Game U/Graphics/Resolution');
+    pack('b', '0005000010101D00', 'Super Game U/Cheats/Mega Cheats');
+    pack('c', '0005000010101C00,0005000010101D00', 'Super Game U/Mods/Thing');
+    const items = C.list({ root: T, settings: path.join(T, 'settings.xml'), titleIds: ['0005000010101C00'], name: 'Super Game U' });
+    assert.deepStrictEqual(items.map((i) => i.section).sort(), ['Graphics', 'Mods']);
+    assert.deepStrictEqual(C.otherRegions({ root: T, titleIds: ['0005000010101C00'], name: 'Super Game U' }), { Cheats: 1 });
+  } finally { fs.rmSync(T, { recursive: true, force: true }); }
+});

@@ -1,60 +1,134 @@
 <template>
-  <div class="scrim" ref="el">
-    <div class="dialog tour">
-      <div class="t-step">{{ i + 1 }} of {{ STEPS.length }}</div>
-      <div class="t-keys"><Btn v-for="k in s.keys" :key="k" :b="k" /></div>
+  <div class="tour-root" :class="{ ready }">
+    <!-- the spotlight: a hole over the real interface, the rest dimmed; it glides from one thing to the next -->
+    <div class="spot" :class="{ none: !box }" :style="spotStyle" />
+    <div class="bubble dialog" ref="el" :style="bubbleStyle" :class="{ center: !box }">
+      <div class="t-top"><span class="t-step">{{ i + 1 }} of {{ steps.length }}</span><button class="t-skip" data-focus @click="done">Skip Tour</button></div>
       <h2>{{ s.title }}</h2>
       <p class="muted">{{ s.text }}</p>
-      <div class="row" style="justify-content: space-between">
-        <button class="btn" data-focus @click="done">Skip</button>
-        <button class="btn primary" data-focus data-autofocus @click="next">{{ i === STEPS.length - 1 ? 'Start playing' : 'Next' }}<Icon name="mdiArrowRight" /></button>
+      <!-- what to do, for what's in your hands: a button, a key, a click or a tap -->
+      <div v-if="s.task" class="t-task" :class="{ ok: did }">
+        <span class="t-do"><template v-if="did"><Icon name="mdiCheckCircle" :size="20" />Done</template><template v-else>
+          <template v-if="input.mode === 'pad'">Press <Btn v-for="k in s.task.pad" :key="k" :b="k" /><span v-if="s.task.key" class="t-alt">· {{ s.task.key }} on a keyboard</span></template>
+          <template v-else-if="input.mode === 'touch'">{{ s.task.touch }}</template>
+          <template v-else>{{ s.task.mouse }}<template v-if="s.task.key"> or press <kbd>{{ s.task.key }}</kbd></template></template>
+        </template></span>
+      </div>
+      <div class="row t-act">
+        <button v-if="i" class="btn" data-focus @click="go(i - 1)"><Icon name="mdiArrowLeft" />Back</button>
+        <span style="flex: 1" />
+        <button class="btn" :class="{ primary: !s.task || did }" data-focus data-autofocus @click="next">{{ i === steps.length - 1 ? 'Start Playing' : s.task && !did ? 'Skip This Step' : 'Continue' }}<Icon name="mdiArrowRight" /></button>
       </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { computed, onMounted, onBeforeUnmount, ref, nextTick } from 'vue';
-import { pushLayer, focusFirst } from '../nav.js';
-import { closeModal } from '../store.js';
+// The first-start tour (0.9.37, owner: "much more interactive, not a series of cards"). It points at the real
+// interface and asks you to do each thing yourself: the tour's layer hands those presses to the app (nav.js
+// below()), and a step is done when the app's state says so, whatever you used: controller, keys, mouse or touch.
+// It lives outside the one pop-up slot (store.tour), so the search keyboard and the Quick Menu open over it.
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { pushLayer, focusFirst, input } from '../nav.js';
+import { store, closeTour, activeTabs, tab } from '../store.js';
 import Icon from './Icon.vue';
 import Btn from './Btn.vue';
 
-// Shown once after Setup: the few controls worth knowing. Touch and mouse work everywhere too.
-// 0.9.24: after the welcome it starts with Start, the page it opens on
+const props = defineProps({ start: Boolean, only: Boolean });
+const tabSel = (name) => `.statusbar .tab[data-tab="${name}"]`;
 const START = [
-  { keys: [], title: 'This Is Start', text: 'Your own page of widgets: what you were playing, new games, trophies, a clock and more. Cartridge opens here.' },
-  { keys: ['A'], title: 'Make It Yours', text: 'Hold A on any widget to arrange Start: move widgets, resize them, add new ones, pictures and your own HTML.' },
-  { keys: ['LB', 'RB'], title: 'Step Through', text: 'On a widget with several games, like Recently Played, the bumpers move between them.' },
-  { keys: ['RS'], title: 'Pages', text: 'Add more pages in Arrange. Flick the right stick, or swipe, to move between them.' },
-  { keys: ['LB', 'RB'], title: 'All Your Pages', text: 'While arranging, a bumper shows every page at once. Pick one up with A and move it left or right to reorder them.' },
+  { title: 'This Is Start', text: 'Your own page of widgets: what you were playing, new games, trophies, a clock and more. Cartridge opens here.', at: 'main.main' },
+  { title: 'Make It Yours', text: 'Hold A on a widget (or press and hold it) to arrange Start: move, resize, add widgets, pictures and your own pages.', at: '.st-tile' },
+  { title: 'Step Through', text: 'On a widget with several games, the bumpers (LB and RB) move between them. Flick the right stick, or swipe, for the next page.', at: '.st-tile' },
 ];
 const BASE = [
-  { keys: ['LT', 'RT'], title: 'Tabs', text: 'The triggers move between Home, Library, Consoles and the rest of the top bar. The bumpers switch sections inside a page.' },
-  { keys: ['A', 'X', 'Y'], title: 'Games', text: 'A opens a game. X downloads it, or does the page’s main thing. Y searches, or opens More on a game.' },
-  { keys: ['START', 'SELECT'], title: 'Anywhere', text: 'Start opens the Quick Menu. Select jumps to your downloads.' },
-  { keys: [], title: 'Into Steam', text: 'Downloaded games go into Steam from their page (More, Add to Steam) or all at once from Settings → Steam. They start with the emulator Setup picked for their console.' },
+  { title: 'Your Tabs', text: 'The Dock holds every part of Cartridge. Move to the next tab now.', at: '.statusbar nav.tabs',
+    task: { pad: ['RT'], key: 'Page Down', mouse: 'Click another tab', touch: 'Tap another tab' }, pass: ['lt', 'rt'], doneWhen: (s0) => store.route.name !== s0.route },
+  { title: 'Find Anything', text: 'Search finds games by name from anywhere. Open it now; B or Escape closes it again.', at: '.top-search',
+    task: { pad: ['Y'], key: '/', mouse: 'Click the magnifier', touch: 'Tap the magnifier' }, pass: ['y', 'search'], doneWhen: () => store.modal?.type === 'keyboard' || store.route.name === 'search' },
+  { title: 'Close It Again', text: 'B always goes back: out of a pop-up, a page or a menu.', at: null, when: () => store.modal?.type === 'keyboard' || store.route.name === 'search',
+    task: { pad: ['B'], key: 'Escape', mouse: 'Click outside it', touch: 'Tap outside it' }, pass: ['back'], doneWhen: () => !store.modal && store.route.name !== 'search' },
+  { title: 'Your Downloads', text: 'Downloads, installs and updates all show here, and carry on while you do other things. Jump there now.', at: tabSel('downloads'),
+    task: { pad: ['SELECT'], key: 'Ctrl+J', mouse: 'Click Downloads', touch: 'Tap Downloads' }, pass: ['select'], doneWhen: () => store.route.name === 'downloads' },
+  { title: 'The Quick Menu', text: 'Start opens the Quick Menu from anywhere: refresh the library, Settings, and more. Open it, then press Start again to close it.', at: null,
+    task: { pad: ['START'], key: 'M', mouse: 'Press M on the keyboard', touch: 'Skip this one on touch' }, pass: ['start'], doneWhen: (s0, seen) => seen.quick && !store.quickMenu },
+  { title: 'Games and Steam', text: 'A opens a game, X downloads it. On its page, More (Y) adds it to Steam with the emulator picked for its console, or do them all from Settings → Steam.', at: tabSel('library') },
+  { title: 'You’re Set', text: 'Everything works with a controller, the keyboard, a mouse or touch. F1 lists every key; right-click a game for its quick actions. This tour is in Settings → About whenever you want it again.', at: null },
 ];
-const props = defineProps({ start: Boolean, only: Boolean });
-const STEPS = props.only ? START : props.start ? [...START, ...BASE] : BASE;
-const i = ref(0);
-const s = computed(() => STEPS[i.value]);
-const el = ref(null);
-const done = () => closeModal(true);
-async function next() { if (i.value < STEPS.length - 1) { i.value++; await nextTick(); focusFirst(el.value, '[data-autofocus]'); } else done(); }
+const steps = (props.only ? START : props.start ? [...START, ...BASE] : BASE).filter((s) => !s.at || !s.at.startsWith('.statusbar .tab[') || activeTabs().includes(s.at.match(/data-tab="([^"]+)"/)[1]));
+const i = ref(0), did = ref(false), box = ref(null), ready = ref(false), el = ref(null);
+const s = computed(() => steps[i.value]);
+let s0 = {}, seen = {};
+const done = () => closeTour(true);
+async function go(n) {
+  if (n < 0) return;
+  if (n >= steps.length) return done();
+  i.value = n; did.value = false; s0 = { route: store.route.name }; seen = {};
+  await nextTick(); place(); setTimeout(place, 380); // again once the page it points at has arrived
+  focusFirst(el.value, '[data-autofocus]');
+}
+const next = () => go(i.value + 1);
+// where the spotlight goes: the step's element, padded; none centres the card
+function place() {
+  const t = s.value.at && document.querySelector(s.value.at);
+  const r = t?.getBoundingClientRect();
+  box.value = r && r.width ? { x: r.left - 8, y: r.top - 8, w: r.width + 16, h: r.height + 16 } : null;
+}
+const spotStyle = computed(() => (box.value ? { transform: `translate(${box.value.x}px, ${box.value.y}px)`, width: box.value.w + 'px', height: box.value.h + 'px' } : {}));
+// the card sits beside what it points at: below it, else above, kept on screen
+const bubbleStyle = computed(() => {
+  const b = box.value; if (!b) return {};
+  const W = Math.min(520, innerWidth - 32), H = 260, below = b.y + b.h + 16 + H < innerHeight;
+  const big = b.h > innerHeight * 0.5; // a whole page: the card goes in its corner
+  const x = Math.max(16, Math.min(innerWidth - W - 16, big ? b.x + b.w - W - 24 : b.x + b.w / 2 - W / 2));
+  const y = big ? Math.max(16, b.y + 24) : below ? b.y + b.h + 16 : Math.max(16, b.y - H - 16);
+  return { transform: `translate(${x}px, ${y}px)`, width: W + 'px' };
+});
+// a step is done when the app's state says so (any input); a short pause, then on to the next
+let tick = 0;
+function check() {
+  const st = s.value;
+  if (store.quickMenu) seen.quick = true;
+  if (st.when && !st.when() && i.value) { /* nothing to close any more: skip it */ go(i.value + 1); return; }
+  if (st.doneWhen && !did.value && st.doneWhen(s0, seen)) { did.value = true; setTimeout(() => { if (did.value && s.value === st) next(); }, 650); }
+}
 let layer;
 onMounted(() => {
-  layer = pushLayer(el.value, { back: done, start: done, lb() {}, rb() {}, x() {}, y() {}, select() {}, lt() {}, rt() {} });
-  focusFirst(el.value, '[data-autofocus]');
+  const pass = (a) => () => { if (s.value.pass?.includes(a)) { layer.below(a); setTimeout(check, 60); } };
+  layer = pushLayer(el.value, { back: () => (s.value.pass?.includes('back') ? pass('back')() : done()), start: pass('start'), lt: pass('lt'), rt: pass('rt'), y: pass('y'), search: pass('search'), select: pass('select'), lb() {}, rb() {}, x() {} });
+  // its first steps are about Start: go there when it's opened from elsewhere (Settings → About)
+  if (steps[0]?.at === 'main.main' && store.route.name !== 'start' && activeTabs().includes('start')) tab('start');
+  tick = setInterval(() => { check(); if (s.value.at) place(); }, 250);
+  addEventListener('resize', place);
+  go(0);
+  requestAnimationFrame(() => (ready.value = true));
 });
-onBeforeUnmount(() => layer?.pop());
+watch(() => [store.route.name, store.modal?.type, store.quickMenu], () => setTimeout(check, 30));
+onBeforeUnmount(() => { layer?.pop(); clearInterval(tick); removeEventListener('resize', place); });
 </script>
 
 <style scoped>
-.tour { width: min(560px, 92vw); gap: var(--s-4); }
+/* never in the way of the app: only the card takes clicks, so the thing pointed at can be clicked or tapped */
+.tour-root { position: fixed; inset: 0; z-index: 44; /* under pop-ups (50) and the Quick Menu (45), which it teaches */ pointer-events: none; opacity: 0; transition: opacity 260ms var(--ease-out); }
+.tour-root.ready { opacity: 1; }
+.spot { position: absolute; left: 0; top: 0; border-radius: var(--r-lg); box-shadow: 0 0 0 200vmax rgba(3, 4, 7, 0.72), 0 0 0 2px rgba(255, 255, 255, 0.9) inset;
+  transition: transform var(--spring-soft-d) var(--spring-soft), width var(--spring-soft-d) var(--spring-soft), height var(--spring-soft-d) var(--spring-soft), opacity 200ms; }
+.spot.none { width: 0; height: 0; transform: translate(50vw, 50vh); box-shadow: 0 0 0 200vmax rgba(3, 4, 7, 0.72); }
+.bubble { position: absolute; left: 0; top: 0; pointer-events: auto; min-width: 0; gap: var(--s-3); animation: none;
+  transition: transform var(--spring-d) var(--spring); }
+.bubble.center { width: min(560px, calc(100vw - 32px)); transform: translate(calc(50vw - 50%), calc(50vh - 50%)); }
+.t-top { display: flex; align-items: center; justify-content: space-between; }
 .t-step { font-size: var(--t-sm); font-weight: 600; color: var(--dim); }
-.t-keys { display: flex; gap: var(--s-2); min-height: 22px; }
-.t-keys :deep(.pb) { transform: scale(1.5); transform-origin: left center; margin-right: 14px; }
-.tour h2 { font-size: var(--t-xl); }
-.tour p { margin: 0; line-height: 1.55; font-size: var(--t-md); }
+.t-skip { font-size: var(--t-sm); color: var(--muted); padding: 6px 10px; border-radius: var(--r-sm); }
+.t-skip:focus { background: var(--focus); color: var(--on-focus); }
+.bubble h2 { font-size: var(--t-xl); margin: 0; }
+.bubble p { margin: 0; line-height: 1.55; font-size: var(--t-md); }
+.t-task { display: flex; align-items: center; padding: 12px 14px; border-radius: var(--r-md); background: var(--s2); font-weight: 600; }
+.t-task.ok { background: rgba(63, 185, 80, 0.16); color: var(--green-l); }
+.t-do { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.t-do :deep(.pb) { transform: scale(1.25); margin: 0 4px; }
+kbd { font: inherit; font-size: var(--t-sm); padding: 2px 8px; border-radius: 6px; background: var(--s3); box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.35); }
+.t-act { gap: var(--s-2); }
+.t-alt { font-weight: 500; color: var(--muted); font-size: var(--t-sm); }
+:global(body.light-fx .tour-root .spot) { transition-duration: 0ms; }
 </style>

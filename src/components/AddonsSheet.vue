@@ -21,12 +21,18 @@
       <div v-else class="ad-list" data-scroll>
         <div v-if="run" class="ad-run"><Icon name="mdiSync" :size="18" class="spin" /><span>{{ runText }}</span><button class="btn small" data-focus @click="cancel">Cancel</button></div>
 
-        <template v-if="mine.length">
-          <div class="ad-h">Installed by Cartridge</div>
+        <template v-if="mine.length || (here && here.by !== 'cartridge' && wants(here.mods ? 'mods' : 'tex'))">
+          <div class="ad-h">Installed</div>
+          <!-- 0.9.37 (owner: delete installed mods and texture packs): what was added outside Cartridge too -->
+          <button v-if="here && here.by !== 'cartridge' && wants(here.mods ? 'mods' : 'tex')" class="ad-row" data-focus @click="clearAll">
+            <Icon name="mdiFolderRemoveOutline" :size="22" />
+            <span class="ad-mid"><b>Everything in {{ emu?.name }}’s Folder for This Game</b><span class="ad-sub">{{ here.files.toLocaleString() }} files · {{ here.by === 'both' ? 'some added outside Cartridge' : 'added outside Cartridge' }} · goes to the Trash</span></span>
+            <span class="ad-end">Delete</span>
+          </button>
           <button v-for="r in mine" :key="r.key" class="ad-row" data-focus data-expand @click="remove(r)">
             <Icon name="mdiCheckCircle" :size="22" />
             <span class="ad-mid"><b>{{ r.name }}</b><span class="ad-sub">{{ [r.emuName, bytes(r.bytes), r.count + ' files'].join(' · ') }}</span></span>
-            <span class="ad-end">Remove</span>
+            <span class="ad-end">Delete</span>
           </button>
         </template>
 
@@ -157,9 +163,14 @@ async function install(p, f) {
   finally { run.value = null; load(); }
 }
 async function remove(r) {
-  if (!(await confirm('Remove this add-on?', `${r.name}\n\nOnly the ${r.count} files Cartridge put in ${r.emuName}’s folder are deleted.`, 'Remove', true))) return reopen();
-  try { await call('addons:remove', { key: r.key }); toast('Add-on removed', 'ok', 2500); } catch (e) { toast(e.message, 'error', 5000); }
-  reopen();
+  if (!(await confirm('Delete this add-on?', `${r.name}\n\nOnly the ${r.count} files Cartridge put in ${r.emuName}’s folder are deleted.`, 'Delete', true))) return reopen();
+  try { await call('addons:remove', { key: r.key }); toast('Add-on deleted', 'ok', 2500); } catch (e) { toast(e.message, 'error', 5000); }
+  reopen(); load();
+}
+async function clearAll() {
+  if (!(await confirm('Delete everything in its folder?', `${here.value.files.toLocaleString()} files in ${emu.value.name}’s ${here.value.mods ? 'mods' : 'textures'} folder for this game, including what was added outside Cartridge. The folder goes to the Trash, so it can be put back.`, 'Delete', true))) return reopen();
+  try { await call('addons:clear', { romId: props.romId, emu: emu.value.id }); toast('Moved to the Trash', 'ok', 3000, 'mdiDelete'); } catch (e) { toast(e.message, 'error', 6000); }
+  reopen(); load();
 }
 // confirm() uses the one modal slot: come back to this sheet afterwards
 const resolveSaved = () => store.modal?.resolve;

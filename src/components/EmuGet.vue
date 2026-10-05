@@ -9,7 +9,7 @@
       <div class="eg-intro"><b>Where should your emulators live?</b><span class="muted">Cartridge makes an Emulation folder there, laid out like ES-DE and EmuDeck: roms (a folder per console), bios, saves and storage.</span></div>
       <div v-if="!drives" class="muted small"><Icon name="mdiSync" :size="16" class="spin" /> Looking at your drives…</div>
       <div v-else class="eg-drives">
-        <button v-for="d in drives" :key="d.path" class="eg-drive" data-focus :disabled="busy || (d.emulation && store.config.emulationRoot !== d.path + '/Emulation')" @click="pickDrive(d)">
+        <button v-for="d in drives" :key="d.path" class="eg-drive" data-focus :class="{ busy: busy === d.path }" :aria-busy="busy === d.path" :disabled="d.emulation && store.config.emulationRoot !== d.path + '/Emulation'" @click="pickDrive(d)">
           <Icon :name="d.internal ? 'mdiHarddisk' : 'mdiSd'" :size="34" />
           <b>{{ d.label }}</b>
           <span class="muted small mono">{{ short(d.path) }}/Emulation</span>
@@ -26,6 +26,7 @@
         <button v-if="fresh?.fresh" class="btn" data-focus @click="phase = 'where'; loadDrives(false)"><Icon name="mdiArrowLeft" :size="18" />Location</button>
         <button class="btn primary" data-focus :disabled="!picked.length" @click="install"><Icon name="mdiDownload" :size="18" />Install {{ picked.length || '' }}</button>
       </div>
+      <div v-if="fpNote" class="eg-fp small"><Icon name="mdiPackageVariant" :size="18" />{{ fpNote }}</div>
       <div v-if="!list" class="muted small"><Icon name="mdiSync" :size="16" class="spin" /> Looking at what's installed…</div>
       <div v-else class="eg-grid">
         <section v-for="c in list" :key="c.key" class="eg-con">
@@ -68,6 +69,7 @@
         <button v-if="!flow" class="btn small" data-focus @click="phase = 'where'; loadDrives()"><Icon name="mdiFolderMove" :size="18" />Where they go</button>
         <button v-if="updates" class="btn small" data-focus :disabled="upBusy" @click="loadUps(true)"><Icon name="mdiRefresh" :size="18" :class="{ spin: upBusy }" />{{ upCount ? `Check updates (${upCount} ready)` : 'Check for updates' }}</button>
       </div>
+      <div v-if="fpNote" class="eg-fp small"><Icon name="mdiPackageVariant" :size="18" />{{ fpNote }}</div>
       <div v-if="!list" class="muted small"><Icon name="mdiSync" :size="16" class="spin" /> Looking at what's installed…</div>
       <div v-else class="eg-grid">
         <section v-for="c in list" :key="c.key" class="eg-con">
@@ -142,14 +144,24 @@ import PIcon from './PIcon.vue';
 import TextField from './TextField.vue';
 
 const props = defineProps({ flow: Boolean, updates: Boolean });
-defineEmits(['done']);
+const emit = defineEmits(['done', 'phase']);
 // 0.9.21 (owner: merge Get Emulators and the emulators' updates): in Settings each installed emulator also
 // says whether it's up to date, and picking one with an update installs it (same channels as before)
 const ups = ref(null), upBusy = ref(false), upRun = ref(''), upPct = ref(null);
 const upCount = computed(() => (ups.value || []).filter((u) => u.update).length);
 const upOf = (id) => { const l = (ups.value || []).filter((u) => u.id === id); return l.find((u) => u.update) || l[0] || null; };
 const others = computed(() => { const known = new Set(all.value.map((x) => x.e.id)); return (ups.value || []).filter((u) => !known.has(u.id)); });
-async function loadUps(fresh = false) { if (!props.updates) return; upBusy.value = true; ups.value = await call('emuup:list', { fresh }).catch((e) => { toast(e.message, 'error'); return []; }); upBusy.value = false; }
+// 0.9.37 (owner: slow to open, not live): what was known shows at once, then every emulator is checked again
+let upSeq = 0;
+async function loadUps(fresh = false) {
+  if (!props.updates) return;
+  const n = ++upSeq; upBusy.value = true;
+  if (!ups.value) { const c = await call('emuup:list', { cached: true }).catch(() => null); if (n === upSeq && c && !ups.value) ups.value = c; }
+  const r = await call('emuup:list', { fresh }).catch((e) => { toast(e.message, 'error'); return null; });
+  if (n !== upSeq) return;
+  if (r) ups.value = r; else ups.value ||= [];
+  upBusy.value = false;
+}
 async function runUpdate(u, force = false) {
   if (upRun.value) return toast('One update at a time: wait for this one to finish.', 'info', 3000);
   if (!force && !u.update) return toast(u.error ? `Couldn’t check for updates: ${u.error}` : u.noSource ? `${u.label} updates from inside ${u.label}.` : `${u.label} is up to date.`, 'info', 3500);
@@ -222,8 +234,11 @@ async function installLink() {
   ghCalling = false;
   off?.();
 }
-const SLUG = { psx: 'psx', ps2: 'ps2', ps3: 'ps3', ps4: 'ps4', psp: 'psp', psvita: 'psvita', gc: 'ngc', wiiu: 'wiiu', switch: 'switch', n3ds: '3ds', nds: 'nds', gba: 'gba', n64: 'n64', xbox: 'xbox', dreamcast: 'dc', xbox360: 'xbox360', saturn: 'saturn', arcade: 'arcade' };
+const SLUG = { psx: 'psx', ps2: 'ps2', ps3: 'ps3', ps4: 'ps4', ps5: 'ps5', psp: 'psp', psvita: 'psvita', gc: 'ngc', wiiu: 'wiiu', switch: 'switch', n3ds: '3ds', nds: 'nds', gba: 'gba', n64: 'n64', xbox: 'xbox', dreamcast: 'dc', xbox360: 'xbox360', saturn: 'saturn', arcade: 'arcade' };
 const phase = ref(props.flow ? (store.config.emuDir ? 'pick' : 'where') : 'list');
+// 0.9.37 (owner: after Location it skipped to the welcome's next step): the welcome shows its own Continue only
+// once installing has started, and focus stays in here while a step loads
+watch(phase, (v) => emit('phase', v), { immediate: true });
 // the installer's steps and what was ticked (0.9.24)
 const STEP_NAMES = ['Location', 'Emulators', 'Installing', 'Done'];
 const stepAt = computed(() => ({ where: 0, pick: 1, install: 2, done: 3 })[phase.value] ?? 1);
@@ -235,13 +250,19 @@ function togglePick(c, e) {
   if (n.has(k)) n.delete(k); else n.add(k);
   picks.value = n;
 }
-function preselect() { picks.value = new Set((list.value || []).filter((c) => !c.emus.some((e) => e.installed)).map((c) => c.key + '|' + c.emus[0].id)); }
+// Flatpak missing (0.9.37): said before installing, and installed first in the background when it can be
+const fp = ref({ has: true });
+const fpPicked = computed(() => picked.value.some((k) => { const [key, id] = k.split('|'); return all.value.find((y) => y.c.key === key && y.e.id === id)?.e.how === 'flatpak'; }));
+const fpNote = computed(() => (fp.value.has || !fpPicked.value ? '' : fp.value.can ? 'Flatpak isn’t on this system. Cartridge installs it first (your password is asked once); the others go in meanwhile.' : `Flatpak isn’t on this system, so the Flatpak ones can’t go in. ${fp.value.why}`));
+// PS5 emulators are early (0.9.37): ticked only when the library has PS5 games
+const hasPs5 = () => !!store.lib?.platforms.some((p) => [p.slug, p.fs_slug].includes('ps5') && p.rom_count > 0);
+function preselect() { picks.value = new Set((list.value || []).filter((c) => !c.emus.some((e) => e.installed) && (c.key !== 'ps5' || hasPs5())).map((c) => c.key + '|' + c.emus[0].id)); }
 const jobs = computed(() => jobKeys.value.map((k) => { const [key, id] = k.split('|'); const x = all.value.find((y) => y.c.key === key && y.e.id === id); return { key, id, label: x?.e.label || id, s: q.value.filter((y) => y.key === key && y.id === id).pop() }; }));
 const doneJobs = computed(() => jobs.value.filter((j) => /done|error/.test(j.s?.state || '')));
 const failed = computed(() => jobs.value.filter((j) => j.s?.state === 'error'));
 const linked = computed(() => jobs.value.reduce((n, j) => n + (j.s?.links || 0), 0));
 const doneNote = computed(() => [linked.value ? `Saves and textures are linked in ${short(store.config.emulationRoot)}/saves and storage` : '', 'Steam shortcuts use them from now on'].filter(Boolean).join('. ') + '.');
-const jobNote = (j) => j.s?.state === 'error' ? j.s.error || 'Try again later' : j.s?.state === 'done' ? [short(j.s.where), j.s.relinked ? `${j.s.relinked} Steam shortcut${j.s.relinked === 1 ? '' : 's'} fixed` : ''].filter(Boolean).join(' · ') : '';
+const jobNote = (j) => j.s?.state === 'error' ? j.s.error || 'Try again later' : j.s?.state === 'done' ? [short(j.s.where), j.s.note, j.s.relinked ? `${j.s.relinked} Steam shortcut${j.s.relinked === 1 ? '' : 's'} fixed` : ''].filter(Boolean).join(' · ') : '';
 async function install() {
   const items = picked.value.map((k) => { const [key, id] = k.split('|'); return { key, id }; });
   jobKeys.value = picked.value; picks.value = new Set(); phase.value = 'install';
@@ -269,16 +290,20 @@ const fresh = ref(null);
 const existingNote = computed(() => `Your ${fresh.value?.emudeck ? 'EmuDeck' : fresh.value?.retrodeck ? 'RetroDECK' : 'emulator'} setup stays as it is: no folders or links are made.`);
 async function loadDrives(auto = true) {
   if (props.flow) fresh.value ||= await call('emuget:fresh').catch(() => ({ fresh: false }));
-  if (props.flow && !fresh.value.fresh && !fresh.value.emudeck) { await call('emuget:useExisting').catch(() => {}); store.config = await call('config:get'); phase.value = 'pick'; await load(); return; }
+  if (props.flow && !fresh.value.fresh && !fresh.value.emudeck) { await call('emuget:useExisting').catch(() => {}); store.config = await call('config:get'); phase.value = 'pick'; await load(); await nextTick(); focusIn(); return; }
   // EmuDeck found: use its folders and say so, instead of asking for a drive (0.9.24)
   const ed = auto && (await call('emuget:emudeck').catch(() => null));
   if (ed) { try { await call('emuget:useEmuDeck'); store.config = await call('config:get'); toast(`Using EmuDeck’s setup in ${short(ed.root)}: new emulators go beside its own`, 'ok', 4500, 'mdiCheck'); phase.value = props.flow ? 'pick' : 'list'; await load(); return; } catch {} }
   drives.value = await call('emuget:drives').catch(() => []);
+  if (props.flow) { await nextTick(); focusFirst(document.querySelector('.eg'), '.eg-drive:not([disabled])'); }
 }
-async function load() { list.value = await call('emuget:list').catch(() => []); q.value = await call('emuget:state').catch(() => []); if (phase.value === 'pick' && !picks.value.size) preselect(); }
+// the installer's main button, else its first choice: never the welcome's buttons around it
+function focusIn() { const r = document.querySelector('.eg'); if (r) focusFirst(r, r.querySelector('.eg-bar .btn.primary:not([disabled])') ? '.eg-bar .btn.primary:not([disabled])' : '[data-focus]:not([disabled])'); }
+async function load() { if (props.flow) call('emuget:flatpak').then((r) => (fp.value = r)).catch(() => {}); list.value = await call('emuget:list').catch(() => []); q.value = await call('emuget:state').catch(() => []); if (phase.value === 'pick' && !picks.value.size) preselect(); }
 async function pickDrive(d) {
-  busy.value = true;
-  try { const r = await call('emuget:prepare', { base: d.path }); store.config = await call('config:get'); toast(`Made ${short(r.root)}`, 'ok', 3000, 'mdiFolderPlus'); phase.value = props.flow ? 'pick' : 'list'; await load(); await nextTick(); focusFirst(document.querySelector('.eg'), '.eg-bar .btn.primary'); }
+  if (busy.value) return; // a second A while the folder is made (the button stays focused, not disabled)
+  busy.value = d.path;
+  try { const r = await call('emuget:prepare', { base: d.path }); store.config = await call('config:get'); toast(`Made ${short(r.root)}`, 'ok', 3000, 'mdiFolderPlus'); phase.value = props.flow ? 'pick' : 'list'; await load(); await nextTick(); focusIn(); }
   catch (e) { toast(e.message, 'error', 5000); }
   busy.value = false;
 }
@@ -314,8 +339,8 @@ onMounted(async () => {
   offP = window.cart.on('emuget-progress', (m) => { const x = q.value.find((y) => y.key === m.key && y.id === m.id && y.state === 'run'); if (x && m.pct != null) x.pct = m.pct; });
   offU = window.cart.on('emu-update', (m) => { if (m.path === upRun.value && m.pct != null) upPct.value = m.pct; });
   q.value = (await call('emuget:state').catch(() => null)) || q.value; // installs queued earlier carry on
+  loadUps(); // at the same time as the list (0.9.37)
   if (phase.value === 'where') await loadDrives(); else { if (props.flow) fresh.value = await call('emuget:fresh').catch(() => ({ fresh: false })); await load(); }
-  loadUps();
 });
 onBeforeUnmount(() => { off?.(); offP?.(); offU?.(); });
 defineExpose({ load });
@@ -350,6 +375,9 @@ defineExpose({ load });
 .eg-drives { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: var(--s-3); }
 .eg-drive { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding: var(--s-4); border-radius: var(--r-lg); background: var(--s2); color: inherit; border: 0; text-align: left; transition: transform var(--d-1, 0.12s), background var(--d-1, 0.12s); }
 .eg-drive b { font-size: var(--t-md); }
+.eg-fp { display: flex; gap: var(--s-2); align-items: flex-start; padding: 10px 12px; border-radius: var(--r-md); background: var(--s2); color: var(--muted); }
+.eg-drive.busy { cursor: progress; animation: eg-wait 1.1s var(--ease-in-out, ease-in-out) infinite alternate; }
+@keyframes eg-wait { to { opacity: 0.72; } }
 .eg-drive:focus { background: var(--focus); color: var(--on-focus); outline: none; transform: translateY(-2px); }
 .eg-drive:focus .muted { color: var(--on-focus-dim); }
 .eg-space { width: 100%; height: 6px; border-radius: 3px; background: rgba(255, 255, 255, 0.12); overflow: hidden; }

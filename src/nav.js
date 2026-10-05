@@ -1,6 +1,7 @@
 // Controller-first spatial navigation + gamepad/keyboard input.
 // Layers: the top layer receives input. A layer = { el: scope element, handlers: {action: fn} }.
 // Actions: up down left right accept back x y lb rb lt rt select start
+import { springTo, stopSpring, skipMorph } from './motion.js';
 import { reactive } from 'vue';
 import { sfx } from './sfx.js';
 
@@ -22,20 +23,19 @@ function pressFx(el) {
 }
 export function glideBy(sc, dx = 0, dy = 0) {
   if (!sc || (!dx && !dy)) return;
-  const a = anims.get(sc);
+  let a = anims.get(sc);
   const tx = (a ? a.tx : sc.scrollLeft) + dx, ty = (a ? a.ty : sc.scrollTop) + dy;
-  if (a) cancelAnimationFrame(a.raf);
-  if (scrollMode() === 'auto' || document.body.classList.contains('motion-reduce')) { anims.delete(sc); sc.scrollLeft = tx; sc.scrollTop = ty; return; }
-  // between rows a little longer and softer than along a row (0.9.15, owner: up/down felt rough)
-  const sx = sc.scrollLeft, sy = sc.scrollTop, t0 = performance.now(), D = Math.abs(ty - sy) > Math.abs(tx - sx) ? 210 : 120;
-  const st = { tx, ty, raf: 0 };
-  const step = (t) => {
-    const k = Math.min(1, (t - t0) / D), e = 1 - Math.pow(1 - k, D > 150 ? 4 : 3); // rows: a longer, softer stop; a quick start, so presses in a row never feel slow
-    sc.scrollLeft = sx + (tx - sx) * e; sc.scrollTop = sy + (ty - sy) * e;
-    if (k < 1) st.raf = requestAnimationFrame(step); else anims.delete(sc);
-  };
-  anims.set(sc, st);
-  st.raf = requestAnimationFrame(step);
+  if (scrollMode() === 'auto' || document.body.classList.contains('motion-reduce')) { if (a) { stopSpring(a.sx); stopSpring(a.sy); } anims.delete(sc); sc.scrollLeft = tx; sc.scrollTop = ty; return; }
+  // 0.9.37 (apple-design: interruptible, velocity kept): a critically damped spring per axis. A press while it still
+  // moves only moves the target, so held or quick presses blend into one glide instead of stopping and restarting.
+  // Between rows a little softer than along a row (0.9.15, owner: up/down felt rough).
+  if (!a) { a = { sx: { x: sc.scrollLeft }, sy: { x: sc.scrollTop } }; anims.set(sc, a); }
+  else { if (!a.sx.raf) a.sx.x = sc.scrollLeft; if (!a.sy.raf) a.sy.x = sc.scrollTop; } // moved by hand since: start from where it is
+  a.tx = tx; a.ty = ty;
+  const rows = Math.abs(dy) >= Math.abs(dx);
+  const end = () => { if (!a.sx.raf && !a.sy.raf) anims.delete(sc); };
+  if (dx || a.sx.raf) springTo(a.sx, tx, { response: rows ? 0.3 : 0.2, apply: (v) => { sc.scrollLeft = v; }, done: end });
+  if (dy || a.sy.raf) springTo(a.sy, ty, { response: rows ? 0.3 : 0.2, apply: (v) => { sc.scrollTop = v; }, done: end });
 }
 export const glideTo = (sc, top) => sc && glideBy(sc, 0, top - (anims.get(sc)?.ty ?? sc.scrollTop));
 const layers = [];
@@ -46,6 +46,8 @@ export function pushLayer(el, handlers = {}) {
   return {
     set handlers(h) { layer.handlers = h; },
     get handlers() { return layer.handlers; },
+    // hand a press to the layer underneath (0.9.37: the tour lets the app do what it teaches)
+    below(action) { const i = layers.indexOf(layer); for (let j = i - 1; j >= 0; j--) { const h = layers[j].handlers?.[action]; if (h) return h(document.activeElement); } },
     pop() {
       const i = layers.indexOf(layer);
       if (i >= 0) layers.splice(i, 1);
@@ -202,6 +204,7 @@ function scrollIntoViewSmart(el) {
 
 export function dispatch(action, { keepMode = false } = {}) {
   lastInput = performance.now();
+  skipMorph(); // a picture still flying never holds up the next press
   const layer = topLayer();
   if (!keepMode) setMode('pad'); // a touch gesture (0.9.26) keeps touch mode: no focus rings appear
   const h = layer?.handlers?.[action];
@@ -230,12 +233,47 @@ export function dispatch(action, { keepMode = false } = {}) {
 }
 
 // ---------------- keyboard
+// 0.9.37 (owner: overhaul keyboard and mouse): the controller's buttons on the keys people expect on a desktop, plus
+// desktop habits on top: Tab and Shift+Tab step through what's on screen, Ctrl+Tab and Ctrl+Page Up/Down change tab,
+// 1 to 9 jump to a tab, Ctrl+F or / search, Ctrl+J downloads, Alt+Left and the mouse's back button go back, Home and
+// End go to the first and last thing, F1 or ? lists every key. A, B, X, Y stay on Enter, Escape, X and Y.
 const KEYMAP = {
   ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right',
-  Enter: 'accept', ' ': 'accept', Escape: 'back', Backspace: 'back',
-  q: 'lb', e: 'rb', x: 'x', y: 'y', '/': 'y', Tab: 'select', m: 'start',
+  Enter: 'accept', ' ': 'accept', Escape: 'back', Backspace: 'back', BrowserBack: 'back',
+  q: 'lb', e: 'rb', x: 'x', y: 'y', '/': 'search', m: 'start',
   PageUp: 'lt', PageDown: 'rt', ',': 'rsleft', '.': 'rsright', // , and . flick the right stick (Start's pages)
+  Home: 'first', End: 'last', F1: 'help', '?': 'help', ContextMenu: 'y',
 };
+function keyAction(ev) {
+  const k = ev.key, ctrl = ev.ctrlKey || ev.metaKey;
+  if (k === 'Tab') return ctrl ? (ev.shiftKey ? 'lt' : 'rt') : ev.altKey ? null : ev.shiftKey ? 'prev' : 'next';
+  if (ctrl && (k === 'PageDown' || k === 'PageUp')) return k === 'PageDown' ? 'rt' : 'lt';
+  if (ctrl && (k === 'f' || k === 'F')) return 'search';
+  if (ctrl && (k === 'j' || k === 'J')) return 'select';
+  if (ev.altKey && k === 'ArrowLeft') return 'back';
+  if (ev.shiftKey && k === 'F10') return 'y';
+  if (ctrl || ev.altKey) return null; // everything else with a modifier is the system's or the text field's
+  if (/^[1-9]$/.test(k)) return 'tab' + k;
+  return KEYMAP[k] || null;
+}
+// Tab and Shift+Tab: the next or previous thing in reading order, within the top layer (and its zone)
+function stepFocus(dir) {
+  const layer = topLayer(), root = layer?.el || document.body;
+  const zone = document.activeElement?.closest?.('[data-zone]');
+  const scope = zone && root.contains(zone) ? zone : root;
+  const all = [...scope.querySelectorAll('[data-focus]')].filter((x) => !x.disabled && x.offsetParent !== null);
+  if (!all.length) return;
+  const i = all.indexOf(document.activeElement), at = i < 0 ? (dir > 0 ? -1 : all.length) : i;
+  const el = all[(at + dir + all.length) % all.length];
+  el.focus({ preventScroll: true }); scrollIntoViewSmart(el);
+}
+// Home and End: the first or last thing in the list you're in
+function edgeFocus(last) {
+  const sc = document.activeElement?.closest?.('[data-scroll], [data-hscroll], [data-zone]') || topLayer()?.el || document.body;
+  const all = [...sc.querySelectorAll('[data-focus]')].filter((x) => !x.disabled && x.offsetParent !== null);
+  const el = last ? all[all.length - 1] : all[0];
+  if (el) { el.focus({ preventScroll: true }); scrollIntoViewSmart(el); }
+}
 // A on something with a held meaning ([data-hold]): a press opens it on release, a hold of 450 ms
 // does the held thing instead (0.9.19, owner: hold a Start tile to arrange the menu)
 const HOLD_MS = 450;
@@ -245,9 +283,12 @@ window.addEventListener('keydown', (ev) => {
   const t = ev.target;
   const typing = t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA') && !t.readOnly;
   if (typing && !['Escape', 'Enter', 'ArrowUp', 'ArrowDown'].includes(ev.key)) return;
-  const a = KEYMAP[ev.key];
+  let a = keyAction(ev);
   if (!a) return;
   ev.preventDefault();
+  if (a === 'search' && !topLayer()?.handlers?.search) a = 'y'; // a pop-up without search: / is its Y, as before
+  if (a === 'next' || a === 'prev') { setMode('pad'); stepFocus(a === 'next' ? 1 : -1); return; }
+  if (a === 'first' || a === 'last') { const h = topLayer()?.handlers?.[a]; setMode('pad'); if (h) h(document.activeElement); else edgeFocus(a === 'last'); return; }
   if (a === 'accept' && (keyHold || (!ev.repeat && holdable()))) {
     if (!keyHold) keyHold = { fired: false, t: setTimeout(() => { keyHold.fired = true; dispatch('hold'); }, HOLD_MS) };
     return;
@@ -257,10 +298,14 @@ window.addEventListener('keydown', (ev) => {
 });
 window.addEventListener('keyup', (ev) => {
   if (KEYMAP[ev.key] !== 'accept' || !keyHold) return;
+  if (ev.ctrlKey || ev.altKey || ev.metaKey) return;
   clearTimeout(keyHold.t);
   const fired = keyHold.fired; keyHold = null;
   if (!fired) dispatch('accept');
 });
+// the mouse's back button (button 3) goes back, like a browser (0.9.37)
+window.addEventListener('mouseup', (e) => { if (e.button === 3) { e.preventDefault(); dispatch('back', { keepMode: true }); } }, true);
+window.addEventListener('mousedown', (e) => { if (e.button === 3 || e.button === 4) e.preventDefault(); }, true); // never Chromium's own history
 // ---------------- pointer: touch vs mouse
 // 'auto' follows whatever was used last; 'touch' never shows a cursor; 'mouse' always does.
 let pointerPref = 'auto';
@@ -522,7 +567,7 @@ function feed(x, y) {
     drag.sc = scrollerFor(drag.target, want) || scrollerFor(drag.target, want === 'x' ? 'y' : 'x');
     if (drag.sc && !scrollerFor(drag.target, want)) drag.axis = want === 'x' ? 'y' : 'x';
     if (!drag.sc) { drag = null; return; }
-    const a = anims.get(drag.sc); if (a) { cancelAnimationFrame(a.raf); anims.delete(drag.sc); }
+    const a = anims.get(drag.sc); if (a) { stopSpring(a.sx); stopSpring(a.sy); anims.delete(drag.sc); }
     document.body.classList.add('dragging');
     touchInfo.ours++; touchInfo.last = drag.touch ? 'touch, scrolled by Cartridge' : 'mouse-style drag, scrolled by Cartridge';
     // catch up with the finger: everything it moved before the drag was recognised

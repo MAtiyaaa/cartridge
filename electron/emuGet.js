@@ -24,6 +24,7 @@ const CATALOG = [
   { key: 'ps2', name: 'PlayStation 2', emus: [GH('pcsx2', 'pcsx2-Qt.AppImage', { fp: 'net.pcsx2.PCSX2' })] },
   { key: 'ps3', name: 'PlayStation 3', emus: [GH('rpcs3', 'rpcs3.AppImage', { fp: 'net.rpcs3.RPCS3' })] },
   { key: 'ps4', name: 'PlayStation 4', emus: [GH('shadps4', 'Shadps4-qt.AppImage')] },
+  { key: 'ps5', name: 'PlayStation 5', emus: [GH('sharpemu', 'SharpEmu'), GH('kytyps5', 'KytyPS5')] },
   { key: 'psp', name: 'PSP', emus: [FP('ppsspp', 'org.ppsspp.PPSSPP')] },
   { key: 'psvita', name: 'PS Vita', emus: [GH('vita3k', 'Vita3K.AppImage')] },
   { key: 'gc', name: 'GameCube and Wii', emus: [FP('dolphin', 'org.DolphinEmu.dolphin-emu'), FP('primehack', 'io.github.shiiion.primehack')] },
@@ -52,7 +53,7 @@ const hasFlatpak = () => { try { execFileSync('sh', ['-c', 'command -v flatpak']
 
 // the newest AppImage of one emulator (GitHub API, as Updates reads it)
 async function release(e, opts) {
-  const r = await latestRelease(e.id, { ...opts, spec: { repo: e.repo, asset: e.asset, tag: e.tag, pre: e.pre, forge: e.forge, first: e.first, zipped: e.zipped } });
+  const r = await latestRelease(e.id, { ...opts, spec: { repo: e.repo, asset: e.asset, tag: e.tag, pre: e.pre, forge: e.forge, first: e.first, zipped: e.zipped, dirBuild: e.dirBuild } });
   // (Xenia Canary's Linux build is a .tar.gz with the program in it, not an AppImage)
   if (!r) throw new Error(`No Linux build in ${e.repo}'s newest release.`);
   return r;
@@ -62,6 +63,22 @@ async function release(e, opts) {
 // file that's there
 async function getAppImage(e, download, opts = {}) {
   const rel = await release(e, opts);
+  // a folder build (0.9.37, PS5): unpacked into its own folder there, its program made runnable
+  if (e.dirBuild) {
+    const U = require('./emuUpdates'), dir = path.join(APPS(), e.dirBuild.dir), prog = path.join(dir, e.dirBuild.program);
+    if (fs.existsSync(prog)) return { path: prog, version: rel.version, already: true };
+    if (fs.existsSync(dir) && fs.readdirSync(dir).length) throw new Error(`${e.dirBuild.dir} is already in ${APPS()} without its program. Cartridge leaves it as it is.`);
+    fs.mkdirSync(APPS(), { recursive: true });
+    const z = dir + '.cartridge-dl';
+    try { await download(rel.url, z, rel.size); if (rel.size && fs.statSync(z).size !== rel.size) throw new Error('The download was incomplete. Try again.'); await U.layFolder(z, dir, rel.name); }
+    catch (err) { fs.rmSync(dir, { recursive: true, force: true }); throw err; }
+    finally { fs.rmSync(z, { force: true }); }
+    if (!fs.existsSync(prog)) { fs.rmSync(dir, { recursive: true, force: true }); throw new Error(`The download had no ${e.dirBuild.program} in it.`); }
+    for (const n of fs.readdirSync(dir)) { const f = path.join(dir, n); try { if (fs.statSync(f).isFile() && U.looksRunnable(f, n) && !/\.(so|dll)(\.|$)/i.test(n)) fs.chmodSync(f, 0o755); } catch {} }
+    fs.chmodSync(prog, 0o755);
+    if (!U.looksRunnable(prog, e.dirBuild.program)) throw new Error('What came down wasn’t a working program. Try again later.');
+    return { path: prog, version: rel.version };
+  }
   const name = String(e.name || rel.name).replace(/[\\/]/g, '_');
   const dest = path.join(APPS(), e.binary || /\.AppImage$/i.test(name) ? name : name + '.AppImage'); // binary: a plain program (Xenia Canary's Linux build)
   if (fs.existsSync(dest)) return { path: dest, version: rel.version, already: true };
@@ -81,8 +98,8 @@ async function getAppImage(e, download, opts = {}) {
   return { path: dest, version: rel.version };
 }
 // a Flatpak from Flathub for this user (no password); flatpak prints "NN%" as it goes
-function getFlatpak(fp, onProgress = () => {}) {
-  if (!hasFlatpak()) return Promise.reject(new Error("Flatpak isn't installed on this system."));
+async function getFlatpak(fp, onProgress = () => {}) {
+  if (!hasFlatpak()) await ensureFlatpak();
   return new Promise((resolve, reject) => {
     try { execFileSync('flatpak', ['remote-add', '--user', '--if-not-exists', 'flathub', 'https://dl.flathub.org/repo/flathub.flatpakrepo'], { stdio: 'ignore', env: plainEnv(), timeout: 60000 }); } catch {}
     const p = spawn('flatpak', ['install', '--user', '-y', '--noninteractive', 'flathub', fp], { env: plainEnv() });
@@ -94,4 +111,39 @@ function getFlatpak(fp, onProgress = () => {}) {
   });
 }
 
-module.exports = { CATALOG, MORE, APPS, setAppsDir, ESDE, getAppImage, getFlatpak, release, hasFlatpak };
+// 0.9.37 (owner: if Flatpak isn't there, install it in the background): Flatpak itself is a system package, so
+// it goes in through the system's package manager with pkexec (the desktop's own password prompt). Image-based
+// systems (rpm-ostree, SteamOS) ship it, so there it's only Flathub that can be missing, added for the user.
+const has = (bin) => { try { execFileSync('sh', ['-c', `command -v ${bin}`], { stdio: 'ignore', env: plainEnv() }); return true; } catch { return false; } };
+function flatpakPlan() {
+  if (hasFlatpak()) return null;
+  if (has('rpm-ostree')) return { why: 'This system is image-based: add Flatpak with rpm-ostree install flatpak, then restart.' };
+  const PM = [['apt-get', ['apt-get', 'install', '-y', 'flatpak']], ['dnf', ['dnf', 'install', '-y', 'flatpak']], ['zypper', ['zypper', '--non-interactive', 'install', 'flatpak']], ['pacman', ['pacman', '-S', '--noconfirm', '--needed', 'flatpak']], ['eopkg', ['eopkg', '-y', 'install', 'flatpak']], ['xbps-install', ['xbps-install', '-y', 'flatpak']]];
+  const pm = PM.find(([b]) => has(b));
+  if (!pm) return { why: 'No package manager Cartridge knows was found. Install Flatpak the way your system installs programs.' };
+  if (!has('pkexec')) return { why: `Install Flatpak with: sudo ${pm[1].join(' ')}` };
+  return { cmd: ['pkexec', ...pm[1]], pm: pm[0] };
+}
+let flatpakRun = null;
+function ensureFlatpak(onLine = () => {}) {
+  if (hasFlatpak()) return Promise.resolve({ already: true });
+  if (flatpakRun) return flatpakRun;
+  const plan = flatpakPlan();
+  if (!plan?.cmd) return Promise.reject(new Error(`Flatpak isn't installed. ${plan?.why || ''}`.trim()));
+  flatpakRun = new Promise((resolve, reject) => {
+    const p = spawn(plan.cmd[0], plan.cmd.slice(1), { env: plainEnv() });
+    let tail = '';
+    const read = (b) => { const t = String(b); tail = (tail + t).slice(-1500); const l = t.trim().split('\n').pop(); if (l) onLine(l.slice(0, 120)); };
+    p.stdout.on('data', read); p.stderr.on('data', read);
+    p.on('error', (e) => reject(new Error(`Flatpak couldn't be installed: ${e.message}`)));
+    p.on('close', (code) => {
+      if (code === 0 && hasFlatpak()) return resolve({ installed: true, pm: plan.pm });
+      // no password prompt on this desktop (no polkit agent), or it was closed: say the command to run instead
+      const by = `Install it with: sudo ${plan.cmd.slice(1).join(' ')}`;
+      reject(new Error(code === 126 || code === 127 || /authentication agent|not authorized/i.test(tail) ? `Flatpak wasn’t installed (no password was given). ${by}` : `Flatpak couldn't be installed: ${(tail.trim().split('\n').pop() || 'the package manager failed').slice(0, 160)}. ${by}`));
+    });
+  }).finally(() => { flatpakRun = null; });
+  return flatpakRun;
+}
+
+module.exports = { CATALOG, MORE, APPS, setAppsDir, ESDE, getAppImage, getFlatpak, release, hasFlatpak, flatpakPlan, ensureFlatpak };

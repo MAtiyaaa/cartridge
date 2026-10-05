@@ -55,31 +55,35 @@
   </div>
 
   <QuickMenu v-if="store.quickMenu" />
-  <Keyboard v-if="store.modal?.type === 'keyboard' && builtinKb()" v-bind="store.modal.props" />
-  <TextPrompt v-else-if="store.modal?.type === 'keyboard'" v-bind="store.modal.props" />
-  <FolderPicker v-if="store.modal?.type === 'folder'" v-bind="store.modal.props" />
-  <Menu v-if="store.modal?.type === 'menu'" v-bind="store.modal.props" />
-  <ColorPicker v-if="store.modal?.type === 'color'" v-bind="store.modal.props" />
-  <SteamCollections v-if="store.modal?.type === 'steam-collections'" :key="JSON.stringify(store.modal.props.selected) + (store.modal.props.extra || []).join()" v-bind="store.modal.props" />
-  <SteamPreview v-if="store.modal?.type === 'steam-preview'" v-bind="store.modal.props" />
-  <SteamEmu v-if="store.modal?.type === 'steam-emu'" :key="JSON.stringify(store.modal.props)" v-bind="store.modal.props" />
-  <ArtPicker v-if="store.modal?.type === 'art'" :key="store.modal.props.query || ''" v-bind="store.modal.props" />
-  <GameTimeline v-if="store.modal?.type === 'timeline'" v-bind="store.modal.props" />
-  <GameAbout v-if="store.modal?.type === 'gameabout'" v-bind="store.modal.props" />
-  <ConsoleCollection v-if="store.modal?.type === 'consolecol'" v-bind="store.modal.props" />
-  <FirstTour v-if="store.modal?.type === 'tour'" v-bind="store.modal.props" />
-  <ManualViewer v-if="store.modal?.type === 'manual'" v-bind="store.modal.props" />
-  <PatchesSheet v-if="store.modal?.type === 'patches'" v-bind="store.modal.props" />
-  <AddonsSheet v-if="store.modal?.type === 'addons'" :key="'addons' + store.modal.props.romId" v-bind="store.modal.props" />
-  <GameAddons v-if="store.modal?.type === 'gameaddons'" :key="'ga' + store.modal.props.romId" v-bind="store.modal.props" />
-  <ShadVersions v-if="store.modal?.type === 'shadversions'" v-bind="store.modal.props" />
-  <WhatsNew v-if="store.modal?.type === 'whatsnew'" v-bind="store.modal.props" />
-  <EmuPaths v-if="store.modal?.type === 'emupaths'" v-bind="store.modal.props" />
-  <AddonDetail v-if="store.modal?.type === 'addondetail'" v-bind="store.modal.props" />
-  <Licenses v-if="store.modal?.type === 'licenses'" />
-  <Installer v-if="store.modal?.type === 'installer'" />
-  <ImageSearch v-if="store.modal?.type === 'imgsearch'" v-bind="store.modal.props" />
-  <GameSettings v-if="store.modal?.type === 'gamesettings'" :key="'gs' + store.modal.props.romId" v-bind="store.modal.props" />
+  <!-- 0.9.37 (apple-design: interruptible, anchored to where it came from): every pop-up opens from the button that
+       asked for it and closes back towards it; one slot, so a pop-up that hands over to another cross-fades -->
+  <Transition name="modal" @enter="modalFrom" @before-leave="modalFrom">
+    <Keyboard v-if="store.modal?.type === 'keyboard' && builtinKb()" v-bind="store.modal.props" />
+    <TextPrompt v-else-if="store.modal?.type === 'keyboard'" v-bind="store.modal.props" />
+    <FolderPicker v-else-if="store.modal?.type === 'folder'" v-bind="store.modal.props" />
+    <Menu v-else-if="store.modal?.type === 'menu'" v-bind="store.modal.props" />
+    <ColorPicker v-else-if="store.modal?.type === 'color'" v-bind="store.modal.props" />
+    <SteamCollections v-else-if="store.modal?.type === 'steam-collections'" :key="JSON.stringify(store.modal.props.selected) + (store.modal.props.extra || []).join()" v-bind="store.modal.props" />
+    <SteamPreview v-else-if="store.modal?.type === 'steam-preview'" v-bind="store.modal.props" />
+    <SteamEmu v-else-if="store.modal?.type === 'steam-emu'" :key="JSON.stringify(store.modal.props)" v-bind="store.modal.props" />
+    <ArtPicker v-else-if="store.modal?.type === 'art'" :key="store.modal.props.query || ''" v-bind="store.modal.props" />
+    <GameTimeline v-else-if="store.modal?.type === 'timeline'" v-bind="store.modal.props" />
+    <GameAbout v-else-if="store.modal?.type === 'gameabout'" v-bind="store.modal.props" />
+    <ConsoleCollection v-else-if="store.modal?.type === 'consolecol'" v-bind="store.modal.props" />
+    <ManualViewer v-else-if="store.modal?.type === 'manual'" v-bind="store.modal.props" />
+    <PatchesSheet v-else-if="store.modal?.type === 'patches'" v-bind="store.modal.props" />
+    <AddonsSheet v-else-if="store.modal?.type === 'addons'" :key="'addons' + store.modal.props.romId" v-bind="store.modal.props" />
+    <GameAddons v-else-if="store.modal?.type === 'gameaddons'" :key="'ga' + store.modal.props.romId" v-bind="store.modal.props" />
+    <ShadVersions v-else-if="store.modal?.type === 'shadversions'" v-bind="store.modal.props" />
+    <WhatsNew v-else-if="store.modal?.type === 'whatsnew'" v-bind="store.modal.props" />
+    <EmuPaths v-else-if="store.modal?.type === 'emupaths'" v-bind="store.modal.props" />
+    <AddonDetail v-else-if="store.modal?.type === 'addondetail'" v-bind="store.modal.props" />
+    <Licenses v-else-if="store.modal?.type === 'licenses'" />
+    <Installer v-else-if="store.modal?.type === 'installer'" />
+    <ImageSearch v-else-if="store.modal?.type === 'imgsearch'" v-bind="store.modal.props" />
+    <GameSettings v-else-if="store.modal?.type === 'gamesettings'" :key="'gs' + store.modal.props.romId" v-bind="store.modal.props" />
+  </Transition>
+  <FirstTour v-if="store.tour" v-bind="store.tour.props" />
   <IdleScreen v-if="store.config?.configured" />
 
   <div class="pops">
@@ -101,7 +105,7 @@
 
 <script setup>
 import { computed, onMounted, onBeforeUnmount, ref, watch, nextTick, defineAsyncComponent } from 'vue';
-import { store, loadConfig, loadLibrary, loadArt, back, tab, go, call, toast, choose, saveConfig, builtinKb, askText, GRADE, activeTabs, TAB_DEFS } from './store.js';
+import { store, loadConfig, loadLibrary, loadArt, back, tab, go, call, toast, choose, saveConfig, builtinKb, askText, GRADE, activeTabs, TAB_DEFS, romById, isFavourite, download } from './store.js';
 import { pushLayer, focusFirst, input, gameEnded } from './nav.js';
 import { setSoundEnabled, setSoundStyle, sfx } from './sfx.js';
 import { applyTheme, CARD_SIZES } from './themes.js';
@@ -312,6 +316,8 @@ onMounted(async () => {
     if (m.state === 'done' || m.state === 'error') setTimeout(() => { if (store.addonJobs[m.key]?.state === m.state) delete store.addonJobs[m.key]; }, 12000);
   });
   window.cart.on('toast', (t) => t?.text && toast(t.text, t.kind || 'info', 4500, t.icon));
+  // main asks for a page (0.9.37: a download caught on an add-on site shows its progress in Downloads)
+  window.cart.on('nav', (n) => { if (!n?.tab) return; if (n.closeModal && store.modal) { const r = store.modal.resolve; store.modal = null; try { r?.(null); } catch {} } tab(n.tab); });
   setTimeout(steamReport, 2500);
   // 0.9: a new install goes through emulator Setup once, after connecting to RomM (the welcome does it since 0.9.15)
   if (store.config.configured && !store.config.setupDone && !store.welcoming) go('emu-setup', { first: true });
@@ -340,6 +346,10 @@ onMounted(async () => {
     lt: () => (viewHandler('lt') !== false ? undefined : cycleTab(-1)), // a page can keep LT/RT (0.9.24: Start's page overview)
     rt: () => (viewHandler('rt') !== false ? undefined : cycleTab(1)),
     select: () => (viewHandler('select') !== false ? undefined : tab('downloads')),
+    // the keyboard's own (0.9.37): Ctrl+F or / searches from anywhere, 1 to 9 jump to a tab, F1 or ? lists the keys
+    search: () => focusSearch(),
+    help: () => keysHelp(),
+    ...Object.fromEntries([1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => ['tab' + n, () => { const t = tabs.value[n - 1]; if (t) tab(t.name); }])),
     start: () => { if (viewHandler('start') !== false) return; store.quickMenu = !store.quickMenu; },
   });
 });
@@ -424,6 +434,49 @@ watch(viewKey, async () => {
   }
   focusFirst(root);
 });
+
+// every key and mouse button, one list (0.9.37, owner: overhaul keyboard and mouse controls)
+function keysHelp() {
+  const K = [
+    ['Arrow Keys', 'Move around'], ['Enter or Space', 'Select (A); hold for more'], ['Escape, Backspace or Alt+Left', 'Back (B)'],
+    ['Tab and Shift+Tab', 'Next and previous thing on screen'], ['Ctrl+Tab, Page Up and Down', 'Switch tabs (LT and RT)'], ['1 to 9', 'Jump to a tab'],
+    ['Q and E', 'Sections inside a page (LB and RB)'], ['X', 'Download, or the page’s main action'], ['Y', 'Search, or More on a game'],
+    ['Ctrl+F or /', 'Search from anywhere'], ['Ctrl+J', 'Downloads (Select)'], ['M', 'Quick Menu (Start)'], ['Home and End', 'First and last in a list'],
+    ['Right-click a game', 'Its quick actions'], ['Mouse back button', 'Back'], ['F1 or ?', 'This list'],
+  ];
+  choose({ title: 'Keyboard and Mouse', message: 'A controller, the keyboard, a mouse and touch all work everywhere, and you can switch any time.', options: K.map(([k, d]) => ({ label: k, sub: d, value: null, raw: true })) });
+}
+// right-click a game card (0.9.37): its quick actions where the pointer is
+async function cardMenu(e) {
+  const card = e.target.closest?.('.card[data-key^="rom-"]');
+  if (!card || e.defaultPrevented) return;
+  e.preventDefault();
+  const rom = romById(Number(card.dataset.key.slice(4)));
+  if (!rom) return;
+  card.focus({ preventScroll: true });
+  const here = !!store.installed?.[rom.id], fav = isFavourite(rom.id);
+  const v = await choose({ title: rom.name, options: [
+    { label: 'Open', value: 'open', icon: 'mdiArrowRight' },
+    here ? { label: 'Ready to Play', sub: 'Through Steam', value: 'play', icon: 'mdiPlay' } : { label: 'Download', value: 'dl', icon: 'mdiDownload' },
+    { label: fav ? 'Remove from Favourites' : 'Add to Favourites', value: 'fav', icon: fav ? 'mdiHeart' : 'mdiHeartOutline' },
+  ] });
+  if (v === 'open') go('game', { romId: rom.id });
+  else if (v === 'dl') download(rom);
+  else if (v === 'play') call('steam:play', { romId: rom.id }).catch((err) => toast(err.message, 'error', 5000));
+  else if (v === 'fav') call('fav:set', { romId: rom.id, on: !fav }).then(() => toast(fav ? 'Removed from favourites' : 'Added to favourites', 'ok', 2200, 'mdiHeartOutline')).catch((err) => toast(err.message, 'error', 6000));
+}
+onMounted(() => document.addEventListener('contextmenu', cardMenu));
+// where a pop-up came from (0.9.37): the focused or pressed thing when it opened, read before it takes focus
+let modalTrigger = null;
+watch(() => store.modal, (m, was) => { if (m && !was) { const r = document.activeElement?.getBoundingClientRect?.(); modalTrigger = r && r.width ? { x: r.left + r.width / 2, y: r.top + r.height / 2 } : null; } }, { flush: 'pre' });
+function modalFrom(el) {
+  const d = el.querySelector?.('.dialog, .sheet, .menu, .m-sheet') || el.firstElementChild;
+  if (!d || !modalTrigger) return;
+  const r = d.getBoundingClientRect(), w = r.width || 1, h = r.height || 1;
+  // the origin is the trigger, kept within reach of the box so the scale reads as coming from it, not flying in
+  const ox = Math.max(-0.25 * w, Math.min(1.25 * w, modalTrigger.x - r.left)), oy = Math.max(-0.25 * h, Math.min(1.25 * h, modalTrigger.y - r.top));
+  d.style.transformOrigin = `${ox}px ${oy}px`;
+}
 </script>
 
 <style scoped>

@@ -32,6 +32,7 @@
           </div>
         </template>
       </div>
+      <div v-if="otherNote" class="muted small">{{ otherNote }}</div>
       <div v-if="!embedded" class="row" style="justify-content: flex-end">
         <button class="btn" data-focus @click="closeModal(null)">{{ list.length ? 'Cancel' : 'Close' }}</button>
         <button v-if="list.length" class="btn primary" data-focus :disabled="!changed" @click="closeModal(changes())"><Icon name="mdiCheck" />Apply</button>
@@ -58,7 +59,13 @@ import Btn from './Btn.vue';
 
 // embedded (0.9.21): the Patches tabs of Game Add-ons (GameAddons.vue); section picks Dolphin's kind,
 // and Apply saves here (ticks on every tab), since the sheet stays open
-const props = defineProps({ name: String, emuName: { type: String, default: 'RPCS3' }, serial: String, version: String, why: String, list: { type: Array, default: () => [] }, embedded: Boolean, section: String, romId: Number });
+const props = defineProps({ name: String, emuName: { type: String, default: 'RPCS3' }, serial: String, version: String, why: String, list: { type: Array, default: () => [] }, embedded: Boolean, section: String, romId: Number, other: Object, ids: Array });
+// Cemu (0.9.37): packs for this game that only list other regions' title IDs, which Cemu won't load for this copy
+const otherNote = computed(() => {
+  if (props.emuName !== 'Cemu' || !props.other) return '';
+  const n = props.section ? props.other[props.section] || 0 : Object.values(props.other).reduce((a, b) => a + b, 0);
+  return n ? `${n} more pack${n === 1 ? '' : 's'} for this game ${n === 1 ? 'is' : 'are'} made for another region’s copy only, so Cemu won’t load ${n === 1 ? 'it' : 'them'} for yours${props.ids?.length ? ` (title ID ${props.ids[0]})` : ''}.` : '';
+});
 const want = reactive(Object.fromEntries(props.list.map((p) => [p.key, p.on])));
 const was = reactive(Object.fromEntries(props.list.map((p) => [p.key, p.on])));
 // Dolphin's kinds of code, as its game properties shows them (patches, Action Replay, Gecko, graphics mods)

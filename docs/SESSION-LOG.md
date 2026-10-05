@@ -6,6 +6,23 @@ The branch for 0.9.3 work is `claude/relaxed-fermat-30pigp`. Pull it before star
 
 ---
 
+## 5 Oct 2026 · 0.9.37 Set Up for You (built and released, one update with the second list) · handover written
+- First list (owner's photo of a game's About and more): row focus without the clipped ring; Cemu groups (symlinked home, region-only packs, checked against the real community packs); BIOS and firmware put in place automatically plus a Setup and Health section; add-on site downloads close the page and open Downloads; mod layouts per emulator (Azahar mods, Switch patches). Download Latest Patches retracted by the owner (it was there).
+- Second list, same release (owner: "release it all as one update"; the photos arrived in a later message and changed the shadPS4 fix):
+  - Installer skipping to the next welcome step after Location: reproduced in the app; the drive lost focus while its folder was made and a press landed on the welcome's Continue. Fixed (focus kept, Continue only once installing).
+  - Flatpak missing: installed first through pkexec and the package manager, in the background; without a password prompt the exact command is shown. shadPS4 (the photo, which arrived later: "No Linux build in shadps4-qtlauncher's newest release"): its builds are all pre-releases and Cartridge asked for the latest full release; now pre-releases, plus the newest shadPS4 as the launcher's default version.
+  - Emulator updates slow and not live: parallel checks, cached first, 10-minute reuse; RPCS3's build number (the reason "up to date" was wrong), and RPCS3's log for what really runs.
+  - PS5: SharpEmu and KytyPS5 from their own sources (arguments read from SharpEmu.CLI/Program.cs and KytyPS5 src/main.cpp), folder builds, icons; KytyPS5 trophies (package format from its trophies.cpp).
+  - Linked Folders: Find and Link Saves (copies what only the fork has, then links).
+  - Trophies "truly cloud synced": the system already synced PS3, PS4, Xbox 360 and Vita through RomM notes; the gap was other devices reading only 80 games the library knew had notes. Now every trophy-console game every 30 minutes and on Sync; PS5 added.
+  - Look: Background vs Elements, glass highlight, Title Case; slow drift on game pictures (GPU only).
+  - Motion engine with the apple-design skill (owner asked for it): spring tokens, velocity-keeping scroll spring, anchored interruptible pop-ups, card-to-game morph (GPU only).
+  - Tour rebuilt as an interactive, spotlighted walk-through; keyboard and mouse overhaul (Tab now steps focus; Downloads moved from Tab to Ctrl+J).
+  - Mid-way addition: delete installed mods and texture packs, including ones added outside Cartridge (to the Trash).
+- Checked here: npm test (all pass), vite build, launch check; in the app: installer focus with repeated presses, Find and Link Saves end to end, the tour end to end with keys, every new key and the right-click menu, the glass highlight variables, the card morph (forced GPU path) and modal origins, the spring scroll settling.
+- Not checkable here (owner to test): Flatpak install on a distro without it (pkexec prompt); a real shadPS4 install; SharpEmu/KytyPS5 downloads and games (GitHub was blocked from the container for their releases); RPCS3 update detection on the device; KytyPS5 trophies with a real game; the morph and drift with the GPU in Game Mode and on a TV; delete-to-Trash in Game Mode.
+- Owner is switching accounts for a few days: `docs/HANDOVER-0.9.22-to-0.9.37.md` (updated for the second list), linked from the top of CLAUDE.md.
+
 ## 5 Oct 2026 · 0.9.36 Collections, Checked Properly (built and released)
 - Owner's photo: Issues said 129 games were missing from a long list of old collection names (RomM plain names, SRM's "Nintendo DS - melonDS (Standalone)"). The check read Cartridge's memory (reg[].collections), not Steam. Rewritten to the same rules as the console collection fill; SRM names matched to consoles. Tested in npm test.
 

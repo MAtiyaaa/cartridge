@@ -115,6 +115,13 @@ function plan(list, kind, { id = '', name = 'Mod' } = {}) {
     const base = ini ? segs(ini).slice(0, -1).join('/') : wrapper(rels).replace(/\/$/, '');
     const pre = base ? base + '/' : '';
     map = (r) => (r.startsWith(pre) ? r.slice(pre.length) : null);
+  } else if ((kind === 'azahar' || kind === 'citra') && rels.some((r) => /(^|\/)(romfs|exefs|exheader\.bin|code\.(ips|bps)|exefsdir)(\/|$)/i.test(r))) {
+    // 0.9.37 (owner: read each emulator's guide): a 3DS mod (romfs/, exefs/, code.ips, exheader.bin) belongs in Azahar's
+    // load/mods/<title ID>/ (alt.mods3ds), not with the textures; whatever wraps it (the mod's folder, the title ID) goes
+    const LAY = /^(romfs|exefs|exefsdir|exheader\.bin|code\.(ips|bps))$/i;
+    const pre = rels.map((r) => { const s2 = segs(r), i = s2.findIndex((x) => LAY.test(x)); return i < 0 ? null : s2.slice(0, i).join('/'); }).filter((x) => x !== null).sort((a, b) => a.length - b.length)[0];
+    const p0 = pre ? pre + '/' : '';
+    map = (r) => (r.startsWith(p0) && LAY.test(segs(r.slice(p0.length))[0]) ? '@mods3ds/' + r.slice(p0.length) : null);
   } else if (kind === 'dolphin' || kind === 'azahar' || kind === 'citra') {
     const isId = kind === 'dolphin'
       ? (x) => ID && (x.toUpperCase() === ID || (x.length === 3 && x.toUpperCase() === ID.slice(0, 3)))
@@ -132,12 +139,19 @@ function plan(list, kind, { id = '', name = 'Mod' } = {}) {
       return `${folder}/${p ? r.slice(p.length + 1) : r}`;
     };
   } else if (kind === 'switch') {
-    const LAYER = /^(romfs|exefs|cheats)$/i;
+    // Eden/yuzu load/<id>/<mod>/{romfs,romfs_ext,exefs,cheats}, Ryujinx mods/contents/<id>/<mod>/... (0.9.37, from their
+    // mod guides): Atmosphere's exefs_patches/<name>/*.ips become <name>/exefs/, a loose .ips/.pchtxt goes in the mod's
+    // exefs/, a loose <build ID>.txt in its cheats/
+    const LAYER = /^(romfs|romfs_ext|exefs|cheats)$/i;
     const safe = safeName(name);
     const strip = tops.size === 1 && id && [...tops][0].toUpperCase() === ID ? [...tops][0] + '/' : '';
     map = (r) => {
       const x = strip && r.startsWith(strip) ? r.slice(strip.length) : r;
       const s = segs(x), i = s.findIndex((p, n) => n < s.length - 1 && LAYER.test(p));
+      const ep = s.findIndex((p, n) => n < s.length - 2 && /^exefs_patches$/i.test(p));
+      if (ep >= 0) return `${s[ep + 1]}/exefs/${s.slice(ep + 2).join('/')}`;
+      if (i < 0 && /\.(ips|pchtxt)$/i.test(x)) return `${safe}/exefs/${s[s.length - 1]}`;
+      if (i < 0 && /^[0-9A-F]{16}\.txt$/i.test(s[s.length - 1])) return `${safe}/cheats/${s[s.length - 1]}`;
       if (i < 0) return x;
       // "<Mod>/romfs/..." keeps the mod's own folder; a bare romfs, or one under wrappers, gets the mod's name
       const own = i > 0 && !/^[0-9A-F]{16}$/i.test(s[i - 1]) && s[i - 1].toUpperCase() !== ID ? s[i - 1] : safe; // Atmosphere's contents/<id>/romfs too

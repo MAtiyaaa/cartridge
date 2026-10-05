@@ -1,4 +1,5 @@
-import { reactive, markRaw } from 'vue';
+import { reactive, markRaw, nextTick } from 'vue';
+import { morph } from './motion.js';
 
 const rd = window.cart;
 // network failures read as one plain sentence (0.9.24, owner: "net::ERR_NAME_NOT_RESOLVED" was shown)
@@ -28,6 +29,7 @@ export const store = reactive({
   toasts: [],
   modal: null,
   quickMenu: false,
+  tour: null, // the interactive tour (FirstTour.vue)
   welcoming: false, // the welcome (0.9.15) is on screen
   lastSearch: '',
   logos: {},
@@ -60,7 +62,14 @@ export function playtimeText(min) {
 }
 
 // ---------------- routing
+// 0.9.37 (owner: a component morphs into its detail view): a game card's picture flies into the game page's cover,
+// and back into its card on the way out (motion.js morph: GPU only, any press skips it)
 export function go(name, params = {}) {
+  const card = name === 'game' && document.activeElement?.closest?.(`.card[data-key="rom-${params.romId}"]`);
+  if (card?.querySelector('.art img')) return morph(card.querySelector('.art'), () => goNow(name, params), '.g-cover', nextTick);
+  goNow(name, params);
+}
+function goNow(name, params) {
   // leaving Settings for one of its screens: remember the row (Settings puts focus back on it, 0.9.3 L)
   const el = document.activeElement;
   if (store.route.name === 'settings' && el?.closest?.('.pane')) store.settingsSpot = { sec: store.settingsSection, text: (el.textContent || '').trim().slice(0, 60) };
@@ -70,8 +79,11 @@ export function go(name, params = {}) {
 }
 export function back() {
   if (!store.history.length) return false;
-  store.navDir = 'out';
-  store.route = store.history.pop();
+  const from = store.route.name === 'game' && document.querySelector('.g-cover img') && store.route.params?.romId;
+  const prev = store.history[store.history.length - 1];
+  const change = () => { store.navDir = 'out'; store.route = store.history.pop(); };
+  if (from && prev?.focusKey === 'rom-' + from) morph(document.querySelector('.g-cover'), change, `.card[data-key="rom-${from}"] .art`, nextTick);
+  else change();
   return true;
 }
 export function tab(name) {
@@ -102,6 +114,9 @@ export function closeModal(value) {
   m?.resolve(value);
 }
 export const askText = (props) => openModal('keyboard', props);
+// the tour (0.9.37) lives outside the one pop-up slot, so the pop-ups it teaches can open over it
+export function openTour(props = {}) { return new Promise((resolve) => { store.tour = { props, resolve }; }); }
+export function closeTour(v) { const t = store.tour; store.tour = null; t?.resolve(v); }
 // Built-in on-screen keyboard: always, never (Steam keyboard), or Auto = in Game Mode only
 export function builtinKb() {
   if (store.welcoming) return true; // the welcome always uses Cartridge's own (0.9.17); Auto after it
@@ -150,7 +165,7 @@ export const romById = (id) => (store.libVersion, romIndex.get(Number(id)));
 export const platformById = (id) => (store.libVersion, store.lib?.platforms.find((p) => p.id === Number(id)));
 // A console's name as your RomM server has it now (renamed consoles show their new name everywhere,
 // 0.9.3 L): from the game's console when the game is in the library, else by slug, else the fallback
-const SRC_SLUG = { rpcs3: ['ps3'], shadps4: ['ps4'], xenia: ['xbox360'], vita3k: ['psvita', 'vita'] };
+const SRC_SLUG = { rpcs3: ['ps3'], shadps4: ['ps4'], xenia: ['xbox360'], vita3k: ['psvita', 'vita'], kytyps5: ['ps5'] };
 export function consoleName({ romId, slug, src, fallback = '' } = {}) {
   const r = romId ? romById(romId) : null;
   const p = r ? platformById(r.platform_id) : null;
