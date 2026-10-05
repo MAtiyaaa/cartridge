@@ -44,9 +44,9 @@
 // shadPS4 versions (0.9.23, owner: see which games run which version, add versions from Cartridge).
 // Reads and writes shadPS4 launcher's own versions.json (electron/shadVersions.js); per-game picks are
 // Cartridge's (config.steam.shadVersions), passed to the launcher as -e "<path>".
-import { computed, onMounted, onBeforeUnmount, ref } from 'vue';
+import { computed, onMounted, onBeforeUnmount, ref, watch } from 'vue';
 import { pushLayer, focusFirst } from '../nav.js';
-import { store, call, closeModal, toast, confirm, choose } from '../store.js';
+import { store, call, closeModal, toast, confirm, choose, bgJob } from '../store.js';
 import Icon from './Icon.vue';
 import EmuIcon from './EmuIcon.vue';
 
@@ -59,12 +59,15 @@ async function load(online = true) {
   if (!online && data.value) d.available = data.value.available;
   data.value = d; loadingOnline.value = false;
 }
+let adding = false;
+// 0.9.32: a version still downloading from an earlier visit shows here again
+watch(() => bgJob('shadv:'), (j) => { if (j) { busy.value = j.key.slice(6); pct.value = j.pct ?? null; } else if (busy.value && !adding) { busy.value = ''; load(false); } }, { immediate: true });
 async function add(r) {
   if (busy.value) return;
-  busy.value = r.tag; pct.value = null;
+  busy.value = r.tag; pct.value = null; adding = true;
   try { const v = await call('shadv:install', { tag: r.tag }); toast(`shadPS4 ${v.name} added`, 'ok', 3000, 'mdiCheck'); }
   catch (e) { toast(e.message, 'error', 6000); }
-  busy.value = ''; await load(false);
+  adding = false; busy.value = ''; await load(false);
 }
 async function pickInstalled(v) {
   const games = v.games.map((g) => g.name);

@@ -30,7 +30,23 @@
       </div>
     </section>
 
-    <div v-if="!store.downloads.length && !addonJobs.length" class="empty-dl">
+    <!-- 0.9.32 (owner: leaving a menu shouldn't cancel anything): emulator updates and installs, game updates,
+         shadPS4 versions, BIOS: they carry on here while you go elsewhere -->
+    <section v-if="bgList.length" class="dl-addons">
+      <div class="sec-title">In the Background</div>
+      <div v-for="j in bgList" :key="j.key" class="now-card glass dl-addon dl-bg" data-focus tabindex="0">
+        <div class="now-art"><img v-if="j.romId && romById(j.romId)" :src="cover(romById(j.romId))" alt="" /><Icon v-else :name="j.icon || 'mdiDownload'" :size="40" /></div>
+        <div class="now-body">
+          <div class="eyebrow">{{ j.kind }}</div>
+          <b class="dl-addon-name">{{ j.title }}</b>
+          <span class="muted small">{{ j.state === 'done' ? 'Done' : j.state === 'error' ? j.error || 'It failed' : (j.text || 'Downloading') + (j.pct != null ? ' · ' + j.pct + '%' : '') }}</span>
+          <span v-if="j.state === 'run'" class="bar" :class="{ live: j.pct == null }" style="margin-top: 6px"><i :style="{ width: (j.pct ?? 100) + '%' }" /></span>
+        </div>
+        <Icon class="dl-addon-state" :name="j.state === 'done' ? 'mdiCheckCircle' : j.state === 'error' ? 'mdiAlertCircleOutline' : j.icon || 'mdiDownload'" :size="26" />
+      </div>
+    </section>
+
+    <div v-if="!store.downloads.length && !addonJobs.length && !bgList.length" class="empty-dl">
       <div class="dl-hero">
         <div class="dl-fan"><img v-for="(c, i) in fan" :key="i" :src="c" :style="{ '--i': i - (fan.length - 1) / 2 }" @error="$event.target.style.display = 'none'" /></div>
         <div class="dl-badge"><div class="dl-badge-in"><Icon name="mdiTrayArrowDown" :size="46" class="dl-arrow" /></div></div>
@@ -87,6 +103,7 @@ import Icon from '../components/Icon.vue';
 import Btn from '../components/Btn.vue';
 import GameLogo from '../components/GameLogo.vue';
 const addonJobs = computed(() => Object.values(store.addonJobs || {}).sort((a, b) => b.at - a.at));
+const bgList = computed(() => Object.values(store.bgJobs || {}).sort((a, b) => b.at - a.at));
 
 // three of your games fanned behind the empty-state badge
 const fan = (() => { const l = allRoms().filter((r) => r.path_cover_small || r.url_cover); for (let i = l.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [l[i], l[j]] = [l[j], l[i]]; } return l.slice(0, 3).map((r) => cover(r)); })();
@@ -133,6 +150,7 @@ DlRow.emits = ['act'];
 </script>
 
 <style scoped>
+.dl-bg .now-art { display: grid; place-items: center; color: var(--muted); }
 .dl-head { display: flex; align-items: flex-end; justify-content: space-between; margin: 18px 0 24px; }
 .big { font-size: var(--t-2xl); font-weight: 700; margin: 6px 0 6px; }
 .empty-dl { display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 60px 0; text-align: center; }
@@ -154,7 +172,7 @@ DlRow.emits = ['act'];
 .now-art { width: 120px; aspect-ratio: 2/3; border-radius: var(--r-md); overflow: hidden; background: #1a1e2a; flex: none; box-shadow: 0 14px 34px rgba(0, 0, 0, 0.55); }
 .now-art img { width: 100%; height: 100%; object-fit: cover; }
 .now-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 10px; }
-.now-body h2 { font-size: var(--t-xl); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.now-body h2 { font-size: var(--t-xl);  overflow-wrap: anywhere; }
 .big-bar { height: 12px; border-radius: var(--r-sm); }
 .stats { gap: 20px; color: var(--muted); font-size: var(--t-sm); }
 .pct { font-family: var(--display); font-weight: 700; font-size: var(--t-xl); }
@@ -167,7 +185,7 @@ DlRow.emits = ['act'];
 :deep(.dl-row .thumb img) { width: 100%; height: 100%; object-fit: cover; }
 :deep(.dl-row .mid) { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
 :deep(.dl-row .mid b) { font-weight: 500; }
-:deep(.dl-row .mid span) { font-size: var(--t-xs); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+:deep(.dl-row .mid span) { font-size: var(--t-xs);  overflow-wrap: anywhere; }
 :deep(.dl-row .st) { font-size: var(--t-xs); font-weight: 600; color: var(--muted); width: 70px; text-align: right; }
 :deep(.dl-row .st.done) { color: var(--green-l); }
 :deep(.dl-row .st.error) { color: #ffa39c; }

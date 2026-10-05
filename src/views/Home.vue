@@ -348,7 +348,7 @@ onMounted(async () => { await nextTick(); ensureFocus(el.value); });
 .hero :deep(.media) { bottom: -14vh; }
 .hero-in { position: relative; z-index: 1; max-width: 760px; display: flex; flex-direction: column; gap: var(--s-3); }
 .hero-leave-active { left: var(--s-7); bottom: var(--s-4); }
-.hero-title { font-family: var(--display); font-stretch: var(--display-stretch); font-size: clamp(var(--t-2xl), 4.6vw, var(--t-3xl)); font-weight: 800; line-height: 1; letter-spacing: -0.02em; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.hero-title { font-family: var(--display); font-stretch: var(--display-stretch); font-size: clamp(var(--t-2xl), 4.6vw, var(--t-3xl)); font-weight: 800; line-height: 1; letter-spacing: -0.02em; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .hero-title.sys-mark :deep(.cmark) { height: 1.15em; max-width: min(460px, 100%); object-fit: contain; object-position: left bottom; opacity: 1; filter: brightness(0) invert(1) drop-shadow(0 4px 18px rgba(0, 0, 0, 0.55)); }
 .meta { display: flex; align-items: center; gap: var(--s-4); flex-wrap: nowrap; white-space: nowrap; overflow: hidden; min-width: 0; color: var(--text); font-size: var(--t-md); font-weight: 500; }
 .summary { margin: 0; max-width: 680px; color: var(--muted); line-height: 1.5; font-size: var(--t-md); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
@@ -357,7 +357,10 @@ onMounted(async () => { await nextTick(); ensureFocus(el.value); });
 .shelf { padding: 22px var(--s-7) 18px; margin: -12px calc(-1 * var(--s-7)) 0; scroll-padding: 0 var(--s-7); }
 @media (max-width: 1400px) { .hero { padding-left: 36px; padding-right: 36px; } .hero-leave-active { left: 36px; } .shelves { padding-left: 36px; padding-right: 36px; } .shelf { padding-left: 36px; padding-right: 36px; margin-left: -36px; margin-right: -36px; scroll-padding: 0 36px; } }
 /* rows far below aren't laid out or painted until they come near (0.9.28: smoother on handhelds) */
-.shelves > .shelf-wrap:nth-child(n+3) { content-visibility: auto; contain-intrinsic-size: auto 360px; }
+/* 0.9.32 (owner: the first card's ring was cut): content-visibility clips a row to its own box, which stopped at
+   the page margin; the box now runs to the screen edges (margin out, padding back in), so a lifted card and its ring show */
+.shelves > .shelf-wrap:nth-child(n+3) { content-visibility: auto; contain-intrinsic-size: auto 360px; margin-left: calc(-1 * var(--s-7)); margin-right: calc(-1 * var(--s-7)); padding-left: var(--s-7); padding-right: var(--s-7); }
+@media (max-width: 1400px) { .shelves > .shelf-wrap:nth-child(n+3) { margin-left: -36px; margin-right: -36px; padding-left: 36px; padding-right: 36px; } }
 .hero-enter-active { transition: opacity 0.14s ease-out; }
 .hero-leave-active { transition: opacity 0.1s ease-in; position: absolute; }
 .hero-enter-from, .hero-leave-to { opacity: 0; }
@@ -374,8 +377,8 @@ onMounted(async () => { await nextTick(); ensureFocus(el.value); });
 .ach-src { position: absolute; right: -6px; bottom: -6px; height: 22px; min-width: 22px; padding: 0 3px; border-radius: var(--r-sm); background: rgba(12, 12, 22, 0.92); display: grid; place-items: center; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5); }
 .ach-ra { height: 12px; width: auto; }
 .ra-home-p.k-tro { color: #cfe0ff; }
-.ra-home-t { font-family: var(--display); font-weight: 600; font-size: var(--t-sm); line-height: 1.2; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-.ra-home-g { font-size: var(--t-xs); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.ra-home-t { font-family: var(--display); font-weight: 600; font-size: var(--t-sm); line-height: 1.2; overflow-wrap: anywhere; }
+.ra-home-g { font-size: var(--t-xs); color: var(--muted); max-width: 100%;  overflow-wrap: anywhere; }
 .ra-home-p { font-size: var(--t-xs); color: var(--gold); font-weight: 600; }
 .ra-home { position: relative; padding-top: 28px; }
 .ach-when { position: absolute; top: 8px; left: 50%; transform: translateX(-50%); padding: 2px 8px; border-radius: 999px; background: rgba(0, 0, 0, 0.35); font-size: var(--t-xs); font-weight: 600; color: rgba(255, 255, 255, 0.78); white-space: nowrap; }

@@ -55,6 +55,9 @@ function consoleOf(colName, platforms) {
   // the library's own names first (exact, with or without the maker), then the alias table
   for (const p of platforms) if (norm(p.name) === n || core(p.name) === c) return p.key;
   for (const p of platforms) if ((ALIASES[p.key] || []).includes(c)) return p.key;
+  // Steam ROM Manager's (EmuDeck's) names: "<console> - <emulator> (...)", "Nintendo DS - melonDS (Standalone)" (0.9.36)
+  const head = String(colName || '').split(/\s+-\s+/)[0];
+  if (head && head !== colName) return consoleOf(head, platforms);
   return null;
 }
 

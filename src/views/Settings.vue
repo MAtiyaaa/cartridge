@@ -163,6 +163,7 @@
               </div>
             <p v-if="!texEmus.length" class="muted">None of the emulators that take texture packs or mods (PCSX2, DuckStation, Dolphin, PPSSPP, Azahar, Cemu, Eden, Citron, Yuzu, Ryujinx) are set up here yet.</p>
             </template>
+            <LinkedFolders v-else-if="emuPage === 'links'" />
             <template v-else-if="emuPage === 'folders'">
             <div class="row" style="justify-content: space-between">
               <p class="muted small" style="margin: 0; max-width: 520px">Matched inside your ROMs folder using ES-DE folder names. Pick any system to point it somewhere else.</p>
@@ -254,7 +255,7 @@
             <div class="row"><span class="lbl">Placement</span><div class="seg"><button v-for="m in BAR_POS" :key="m.v" data-focus :class="{ on: (ui.barPos || 'bottom') === m.v }" @click="saveConfig({ ui: { barPos: m.v } })">{{ m.l }}</button></div></div>
             <div class="row"><span class="lbl">Tabs</span><div class="seg"><button v-for="m in BAR_ALIGN" :key="m.v" data-focus :class="{ on: (ui.barAlign || 'center') === m.v }" @click="saveConfig({ ui: { barAlign: m.v } })">{{ m.l }}</button></div></div>
             <div class="row"><span class="lbl">Style</span><div class="seg"><button v-for="m in BAR_STYLE" :key="m.v" data-focus :class="{ on: (ui.barStyle || 'pill') === m.v }" @click="saveConfig({ ui: { barStyle: m.v } })">{{ m.l }}</button></div></div>
-            <div v-if="(ui.barStyle || 'pill') === 'pill'" class="row"><span class="lbl">Colour</span><div class="seg"><button v-for="m in DOCK_COLOR" :key="m.v" data-focus :class="{ on: (ui.dockColor || '') === m.v }" @click="saveConfig({ ui: { dockColor: m.v } })">{{ m.l }}</button></div></div>
+            <div v-if="(ui.barStyle || 'pill') === 'pill'" class="row"><span class="lbl">Colour</span><div class="seg"><button v-for="m in DOCK_COLOR" :key="m.v" data-focus :class="{ on: (ui.dockColor || 'black') === m.v }" @click="saveConfig({ ui: { dockColor: m.v } })">{{ m.l }}</button></div></div>
             <Toggle :model-value="ui.hints === true" label="Button hints" desc="A strip along the bottom with what each button does on this page (A Open, Y Search…)" @update:model-value="(v) => saveConfig({ ui: { hints: v } })" />
             <div class="subh"><Icon name="mdiViewGridOutline" :size="20" />Games &amp; Cards</div>
             <div class="row"><span class="lbl">Box art size</span><div class="seg"><button v-for="(v, k) in CARD_SIZES" :key="k" data-focus :class="{ on: (ui.gridSize || 'md') === k }" @click="saveConfig({ ui: { gridSize: k } })">{{ v.label }}</button></div></div>
@@ -458,7 +459,7 @@
             <h1>Steam</h1>
             <p v-if="IS_ANDROID" class="muted small">Steam doesn't run on Android, so these tools work on a Deck or PC. For Windows games on this device, open a game and pick More → Open in a PC game app (GameNative, GameHub or Winlator).</p>
             <!-- not in Steam yet: adding Cartridge comes first; once added it moves to the bottom (0.9.3 L) -->
-            <div v-if="!IS_ANDROID && selfAdded === false" class="about glass">
+            <div v-if="!IS_ANDROID && selfAdded === false && steamReady" class="about glass">
               <img src="../../steam-art/grid.png" class="steam-grid" />
               <div style="display: flex; flex-direction: column; gap: 10px">
                 <div style="font-family: var(--display); font-size: 22px; font-weight: 700">Add Cartridge to Game Mode</div>
@@ -468,8 +469,8 @@
                 </div>
               </div>
             </div>
-            <SteamSettings ref="steamRef" />
-            <template v-if="!IS_ANDROID && selfAdded">
+            <SteamSettings ref="steamRef" @ready="steamReady = true" />
+            <template v-if="!IS_ANDROID && selfAdded && steamReady">
             <div class="subh" style="margin-top: 10px">Cartridge</div>
             <div class="about glass">
               <img src="../../steam-art/grid.png" class="steam-grid" />
@@ -550,6 +551,7 @@ import SyncthingLogo from '../components/SyncthingLogo.vue';
 import RommUpload from '../components/RommUpload.vue';
 import EmuIcon from '../components/EmuIcon.vue';
 import EmuGet from '../components/EmuGet.vue';
+import LinkedFolders from '../components/LinkedFolders.vue';
 import ChangelogCard from '../components/ChangelogCard.vue';
 import ServerStatus from '../components/ServerStatus.vue';
 import ControllerTest from '../components/ControllerTest.vue';
@@ -913,12 +915,12 @@ async function fixIssue(i) {
     return;
   }
   // which games first, then put them back (0.9.3 L): the list, with the action on top
-  const v = await choose({ sheet: true, title: i.text, message: 'Steam closes for a moment while its collections are written.', options: [
-    { label: 'Put them back', value: 'fix', icon: 'mdiFolderSyncOutline' },
+  const v = await choose({ sheet: true, title: i.text, message: 'Straight into Steam when Cartridge can reach its interface, otherwise Steam closes for a moment while its collections are written.', options: [
+    { label: 'Put Them In', value: 'fix', icon: 'mdiFolderSyncOutline' },
     ...(i.items || []).map((g) => ({ label: g.name, sub: g.collection, value: null, icon: 'mdiGamepadVariantOutline', raw: true })),
   ] });
   if (v !== 'fix') return;
-  try { await call('steam:fixCollections'); toast('Putting them back in their collections', 'ok', 3000, 'mdiSteam'); loadIssues(); } catch (e) { toast(e.message, 'error'); }
+  try { const r = await call('steam:fixCollections'); toast(r.live ? `${r.fixed} put in their collections` : 'Putting them in their collections: Steam restarts for a moment', 'ok', 3500, 'mdiSteam'); loadIssues(); } catch (e) { toast(e.message, 'error'); }
 }
 watch(sec, (v) => { store.settingsSection = v; if (v === 'emu' && !IS_ANDROID) loadIssues(); }, { immediate: true }); // Android: AndroidEmulators has its own
 
@@ -988,8 +990,10 @@ async function loadAll() {
 const mediaSizes = [{ v: 'compact', l: 'Compact' }, { v: 'spacious', l: 'Spacious' }, { v: 'large', l: 'Large' }];
 // Emulators pages (0.9.16)
 // 0.9.28 (owner: the flow felt confusing): what you have first, then add-ons, then setup and health checks, then folders
-// Android: its own overview (AndroidEmulators) and Console Folders; getting, updating and adding to desktop emulators is desktop only
-const EMU_PAGES = IS_ANDROID ? [{ v: 'overview', l: 'Overview' }, { v: 'folders', l: 'Console Folders' }] : [{ v: 'emus', l: 'Emulators' }, { v: 'addons', l: 'Game Add-ons' }, { v: 'overview', l: 'Setup and Health' }, { v: 'folders', l: 'Console Folders' }];
+// Android: its own overview (AndroidEmulators) and Console Folders; getting, updating, linking and adding to desktop emulators is desktop only
+const EMU_PAGES = IS_ANDROID ? [{ v: 'overview', l: 'Overview' }, { v: 'folders', l: 'Console Folders' }] : [{ v: 'emus', l: 'Emulators' }, { v: 'addons', l: 'Game Add-ons' }, { v: 'overview', l: 'Setup and Health' }, { v: 'folders', l: 'Console Folders' }, { v: 'links', l: 'Linked Folders' }];
+// a fork's Manage sheet asks for Linked Folders (0.9.33)
+watch(() => store.emuPageWant, (v) => { if (!v) return; store.emuPageWant = null; setEmuPage(v); nextTick(() => focusFirst(paneEl.value, `[data-key="emup-${v}"]`)); });
 const emuPage = ref(IS_ANDROID || store.issues ? 'overview' : 'emus'); // problems waiting: open where they're listed
 // installed games whose emulator has patches (0.9.16), by console then name
 const PATCH_EMU = [[/ps3/i, 'RPCS3', 'rpcs3'], [/ps4/i, 'shadPS4', 'shadps4'], [/\bps2\b/i, 'PCSX2', 'pcsx2'], [/\b(ngc|gamecube|gc|wii)\b/i, 'Dolphin', 'dolphin'], [/\bpsp\b/i, 'PPSSPP', 'ppsspp']];
@@ -1033,7 +1037,8 @@ const ps3UpCount = computed(() => (ps3Ups.value || []).filter((g) => g.todo.leng
 async function loadPs3Updates(fresh = false) { ps3Ups.value = await call('ps3up:list', { fresh }).catch(() => []); }
 const TOUCH_SCROLL = [{ v: 'own', l: 'Cartridge’s' }, { v: 'browser', l: 'The Browser’s' }];
 const BAR_POS = [{ v: 'top', l: 'Top' }, { v: 'bottom', l: 'Bottom' }, { v: 'left', l: 'Left' }];
-const DOCK_COLOR = [{ v: '', l: 'Glass' }, { v: 'white', l: 'White' }, { v: 'black', l: 'Black' }, { v: 'accent', l: 'Accent' }];
+// 0.9.32 (owner): black is the Dock's colour unless you pick another; Glass is its own choice now
+const DOCK_COLOR = [{ v: 'black', l: 'Black' }, { v: 'glass', l: 'Glass' }, { v: 'white', l: 'White' }, { v: 'accent', l: 'Accent' }];
 const BAR_ALIGN = [{ v: 'start', l: 'Aligned' }, { v: 'center', l: 'Centred' }];
 const BAR_STYLE = [{ v: 'plain', l: 'Plain' }, { v: 'pill', l: 'Floating Pill' }, { v: 'circle', l: 'Circles' }];
 const LOOK_PAGES = [{ v: 'theme', l: 'Theme' }, { v: 'cards', l: 'Text and Cards' }, { v: 'meta', l: 'Metadata' }, { v: 'motion', l: 'Motion and Sound' }, { v: 'controls', l: 'Controls' }];
@@ -1087,6 +1092,8 @@ async function setGraphics(v) {
 }
 // is Cartridge itself in Steam (null until known)
 const selfAdded = ref(null);
+// the Cartridge cards wait for the rest of the Steam page, so it all appears at once (0.9.32)
+const steamReady = ref(!!store.steamOv);
 async function loadSelf() { try { selfAdded.value = !!(await call('steam:status')).added; } catch { selfAdded.value = false; } }
 watch(sec, (v) => { if (v === 'steam') loadSelf(); }, { immediate: true });
 async function applyArt() {
@@ -1139,7 +1146,7 @@ onMounted(() => {
 .prow { display: grid; grid-template-columns: 30px 210px 1fr auto; align-items: center; gap: 14px; padding: 10px 14px; border-radius: var(--r-md); background: var(--s2); }
 .prow:focus { background: var(--focus); color: var(--on-focus); box-shadow: none; }
 .prow:focus .pp, .prow:focus .muted { color: var(--on-focus-dim); }
-.pn { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pn {  overflow-wrap: anywhere; }
 .pp { color: var(--muted); }
 .about { display: flex; align-items: center; gap: 22px; padding: 22px; }
 .swatches { display: flex; flex-wrap: wrap; gap: 10px; }
@@ -1153,7 +1160,7 @@ onMounted(() => {
 .finetune { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
 .presets { display: flex; flex-wrap: wrap; gap: 10px; }
 .preset { display: flex; flex-direction: column; gap: 6px; width: 120px; padding: 8px; border-radius: var(--r-md); background: var(--s2); text-align: left; }
-.preset b { font-size: var(--t-xs); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.preset b { font-size: var(--t-xs); font-weight: 600;  overflow-wrap: anywhere; }
 .preset-sw { position: relative; height: 44px; border-radius: var(--r-sm); display: grid; place-items: center; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.15); }
 .preset-sw i { position: absolute; top: 6px; right: 6px; width: 12px; height: 12px; border-radius: 50%; box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.7); }
 .preset.add .preset-sw { background: rgba(255, 255, 255, 0.06); color: var(--muted); border: 1px dashed var(--line-2); box-shadow: none; }
@@ -1217,7 +1224,7 @@ onMounted(() => {
 .src-top { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .src-path { display: flex; align-items: center; gap: 12px; font-size: var(--t-xs); min-width: 0; }
 .src-path .how { color: var(--muted); width: 110px; flex: none; }
-.src-path .mono { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+.src-path .mono { min-width: 0; flex: 1;  overflow-wrap: anywhere; }
 .chip.found { background: rgba(80, 200, 120, 0.18); color: #9be8b4; }
 .chip.found.nokey { background: rgba(245, 197, 66, 0.18); color: #ffd978; }
 .src-note { margin: 0; }

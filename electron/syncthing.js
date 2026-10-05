@@ -103,8 +103,8 @@ async function browse(folder, { fetchImpl = fetch, home = HOME, limit = 40, serv
   let last = null; try { const st = await a.get('/rest/stats/folder'); last = st?.[folder]?.lastFile || null; } catch {}
   files.sort((x, y) => y.at - x.at);
   // textures or saves, from the folder's path and name as well as the file's (a "GameCube Textures" folder is textures)
+  for (const f of files) f.kind = KIND_LABEL[kindOf(fpath + '/' + label + '/' + f.path)];
   const texFolder = !!textureHint(fpath + '/' + label);
-  for (const f of files) f.kind = texFolder || textureHint(f.path) ? 'Textures' : 'Save';
   return { id: folder, label, path: fpath, textures: texFolder, total: files.length, size: files.reduce((n, x) => n + x.size, 0), files: files.slice(0, limit), last: last?.filename ? { path: last.filename, at: Date.parse(last.at) || 0, deleted: !!last.deleted } : null };
 }
 
@@ -149,6 +149,11 @@ async function overview(a) {
 }
 const TEX_HINT = /textures?|graphicmods|hires|load\/|texture.?pack/i;
 const textureHint = (p) => (TEX_HINT.test(p) ? 'Textures' : null);
+// what a synced file is, from its folder and name (0.9.32, owner: tabs for saves, textures, patches, updates):
+// textures, patches (cheats, Gecko, .pnach, IPS), game updates and DLC, mods, else a save
+const KINDS = [['textures', TEX_HINT], ['patches', /patch(es)?\b|cheats?\b|gecko|\.pnach$|\.(ips|bps|ups)$|patch\.yml/i], ['updates', /\bupdates?\b|\bdlc\b|\[v\d{5,}\]|\[upd\]|\.pkg$/i], ['mods', /\bmods?\b|graphicpacks|\/contents\/[0-9a-f]{16}\b|atmosphere\//i]];
+const kindOf = (p) => (KINDS.find(([, re]) => re.test(p)) || ['saves'])[0];
+const KIND_LABEL = { saves: 'Save', textures: 'Textures', patches: 'Patch', updates: 'Update', mods: 'Mod' };
 async function local({ fetchImpl = fetch, home = HOME } = {}) {
   const l = await localApi(home, fetchImpl);
   return overview(api(l.base, l.key, fetchImpl));
@@ -206,13 +211,13 @@ function matchGames(games, folders) {
   byName.sort((a, b) => b[0].length - a[0].length); // the longer name wins ("Sonic 2" over "Sonic")
   const out = {};
   const add = (gid, kind, folder, f) => {
-    const g = (out[gid] ||= { saves: [], textures: [] });
+    const g = (out[gid] ||= { saves: [], textures: [], patches: [], updates: [], mods: [] });
     let e = g[kind].find((x) => x.folder === folder.id);
     if (!e) g[kind].push((e = { folder: folder.id, label: folder.label, files: 0, size: 0, at: 0 }));
     e.files++; e.size += f.size || 0; if (f.at > e.at) e.at = f.at;
   };
   for (const folder of folders) for (const f of folder.files || []) {
-    const kind = textureHint(folder.path + '/' + f.path) ? 'textures' : 'saves';
+    const kind = kindOf(folder.path + '/' + f.path);
     let gid = null;
     for (const s of serialsIn(f.path)) { if (byId.has(s)) { gid = byId.get(s); break; } }
     // a folder named exactly after a game's ID (Dolphin's GALE01 or GAL texture folders, 0.9.28)
@@ -340,4 +345,4 @@ async function restore(id, files, { fetchImpl = fetch, home = HOME } = {}) {
   return (await localA(fetchImpl, home)).post(`/rest/folder/versions?folder=${encodeURIComponent(id)}`, files);
 }
 
-module.exports = { saveSync, makeMain, addDevice, acceptFolders, setType, versions, restore, isBlank, PREFIX, DEVICE_RE, suggest, addFolder, FLATPAKS, setLocalKey, pick, find, status, browse, flatten, parseConfig, configFiles, saveHint, textureHint, local, server, rescan, gamesSynced, matchGames, serialsIn, norm };
+module.exports = { saveSync, makeMain, addDevice, acceptFolders, setType, versions, restore, isBlank, PREFIX, DEVICE_RE, suggest, addFolder, FLATPAKS, setLocalKey, pick, find, status, browse, flatten, parseConfig, configFiles, saveHint, textureHint, kindOf, KIND_LABEL, local, server, rescan, gamesSynced, matchGames, serialsIn, norm };

@@ -169,6 +169,15 @@
       <div v-if="!SV" class="muted small"><Icon name="mdiSync" :size="14" class="spin" /> Looking for saves…</div>
       <template v-else>
         <div class="muted small">{{ found.length }} {{ found.length === 1 ? 'game' : 'games' }} · {{ SV.length }} {{ SV.length === 1 ? 'save' : 'saves' }} on this device<template v-if="G && !G.error"> · {{ G.files }} synced files</template></div>
+        <!-- 0.9.32 (owner): two rows like Game Add-ons: which console, then what it is -->
+        <div v-if="cons.length > 1 && !q" class="st-cons" data-hscroll>
+          <button class="st-con" :class="{ on: !fCon }" data-focus @click="fCon = ''"><span>All Consoles</span><em>{{ found.length }}</em></button>
+          <button v-for="c in cons" :key="c.slug" class="st-con" :class="{ on: fCon === c.slug }" data-focus @click="fCon = c.slug"><PIcon :p="c.p" :size="24" /><span>{{ c.name }}</span><em>{{ c.n }}</em></button>
+        </div>
+        <div v-if="kinds.length > 1" class="st-cons" data-hscroll>
+          <button class="st-con" :class="{ on: !fKind }" data-focus @click="fKind = ''"><span>Everything</span></button>
+          <button v-for="k in kinds" :key="k.v" class="st-con" :class="{ on: fKind === k.v }" data-focus @click="fKind = k.v"><Icon :name="k.icon" :size="18" /><span>{{ k.l }}</span><em>{{ k.n }}</em></button>
+        </div>
         <div v-if="!shown.length" class="muted small">{{ q ? `Nothing for “${q}”.` : 'No saves were found for your games yet. Play a game once and they show here.' }}</div>
         <button v-for="g in shown" :key="g.id" class="lrow st-game" data-focus @click="go('game', { romId: g.id })">
           <img v-if="g.art" class="st-cover" :src="g.art" loading="lazy" />
@@ -179,6 +188,9 @@
               <span v-for="x in g.local" :key="'l' + x.path" class="chip" :class="{ ok: x.synced }"><Icon :name="x.synced ? 'mdiSync' : 'mdiContentSaveOutline'" :size="14" />{{ x.emuName }} · {{ bytes(x.size || 0) }} · {{ ago(x.at) }}{{ x.synced ? ' · Synced' : '' }}{{ x.conflicts ? ` · ${x.conflicts} conflict ${x.conflicts === 1 ? 'copy' : 'copies'}` : '' }}</span>
               <span v-for="x in g.saves" :key="'s' + x.folder" class="chip"><Icon name="mdiCloudSyncOutline" :size="14" />{{ x.label }} · {{ x.files }} {{ x.files === 1 ? 'file' : 'files' }} · {{ ago(x.at) }}</span>
               <span v-for="x in g.textures" :key="'t' + x.folder" class="chip tex"><Icon name="mdiTextureBox" :size="14" />{{ x.label }} · {{ bytes(x.size) }}</span>
+              <span v-for="x in g.patches" :key="'p' + x.folder" class="chip pat"><Icon name="mdiBandage" :size="14" />{{ x.label }} · {{ x.files }} {{ x.files === 1 ? 'file' : 'files' }}</span>
+              <span v-for="x in g.updates" :key="'u' + x.folder" class="chip upd"><Icon name="mdiPackageUp" :size="14" />{{ x.label }} · {{ bytes(x.size) }}</span>
+              <span v-for="x in g.mods" :key="'m' + x.folder" class="chip mod"><Icon name="mdiPuzzleOutline" :size="14" />{{ x.label }} · {{ x.files }} {{ x.files === 1 ? 'file' : 'files' }}</span>
             </span>
           </span>
           <span class="l-end"><span class="status" :class="{ ok: g.local.some((x) => x.synced) || g.saves.length }">{{ g.local.some((x) => x.synced) || g.saves.length ? 'Synced' : g.platform }}</span></span>
@@ -205,6 +217,7 @@ import TextField from './TextField.vue';
 import SyncthingLogo from './SyncthingLogo.vue';
 import SaveSync from './SaveSync.vue';
 import Btn from './Btn.vue';
+import PIcon from './PIcon.vue';
 // 0.9.29 (owner): Games first, then Main Server, then This Device; when this device is the main server
 // (set up by Cartridge, config.syncthing.role 'main') the two are one tab
 const isMain = computed(() => store.config.syncthing?.role === 'main');
@@ -219,13 +232,25 @@ const dur = (sec) => { const h = Math.floor(sec / 3600), d = Math.floor(h / 24);
 // saves on this device (saves:list) and files in synced folders (sync:games), one row per game
 const found = computed(() => {
   const by = new Map();
-  const row = (id) => { if (!by.has(id)) { const r = romById(id); if (!r) return null; by.set(id, { id: r.id, name: r.name, platform: r.platform_display_name || '', art: cover(r), local: [], saves: [], textures: [], at: 0 }); } return by.get(id); };
+  const row = (id) => { if (!by.has(id)) { const r = romById(id); if (!r) return null; by.set(id, { id: r.id, name: r.name, platform: r.platform_display_name || '', slug: r.platform_slug || '', pid: r.platform_id, art: cover(r), local: [], saves: [], textures: [], patches: [], updates: [], mods: [], at: 0 }); } return by.get(id); };
   for (const x of SV.value || []) for (const id of x.romIds || []) { const g = row(id); if (g) { g.local.push(x); g.at = Math.max(g.at, x.at || 0); } }
-  for (const [id, v] of Object.entries(G.value?.games || {})) { const g = row(Number(id)); if (g) { g.saves.push(...v.saves); g.textures.push(...v.textures); g.at = Math.max(g.at, ...v.saves.map((x) => x.at), ...v.textures.map((x) => x.at)); } }
+  for (const [id, v] of Object.entries(G.value?.games || {})) { const g = row(Number(id)); if (g) { for (const k of KINDS) g[k.v === 'saves' ? 'saves' : k.v].push(...(v[k.v] || [])); g.at = Math.max(g.at, ...KINDS.flatMap((k) => (v[k.v] || []).map((x) => x.at))); } }
   return [...by.values()].sort((a, b) => b.at - a.at);
 });
 const loose = computed(() => (SV.value || []).filter((x) => !(x.romIds || []).length).sort((a, b) => (b.at || 0) - (a.at || 0)));
-const shown = computed(() => { const k = q.value.trim().toLowerCase(); return k ? found.value.filter((g) => g.name.toLowerCase().includes(k) || g.platform.toLowerCase().includes(k)) : found.value; });
+const KINDS = [{ v: 'saves', l: 'Saves', icon: 'mdiContentSaveOutline' }, { v: 'textures', l: 'Textures', icon: 'mdiTextureBox' }, { v: 'patches', l: 'Patches', icon: 'mdiBandage' }, { v: 'updates', l: 'Updates', icon: 'mdiPackageUp' }, { v: 'mods', l: 'Mods', icon: 'mdiPuzzleOutline' }];
+const has = (g, k) => (k === 'saves' ? g.local.length || g.saves.length : g[k].length) > 0;
+const fCon = ref(''), fKind = ref('');
+// the consoles and kinds that are there, each with how many games
+const cons = computed(() => { const m = new Map(); for (const g of found.value) { const c = m.get(g.slug) || { slug: g.slug, name: g.platform, p: { slug: g.slug, fs_slug: g.slug, id: g.pid }, n: 0 }; c.n++; m.set(g.slug, c); } return [...m.values()].sort((a, b) => a.name.localeCompare(b.name)); });
+const kinds = computed(() => KINDS.map((k) => ({ ...k, n: found.value.filter((g) => (!fCon.value || g.slug === fCon.value) && has(g, k.v)).length })).filter((k) => k.n));
+const shown = computed(() => {
+  const k = q.value.trim().toLowerCase();
+  let l = k ? found.value.filter((g) => g.name.toLowerCase().includes(k) || g.platform.toLowerCase().includes(k)) : found.value;
+  if (fCon.value && !k) l = l.filter((g) => g.slug === fCon.value);
+  if (fKind.value) l = l.filter((g) => has(g, fKind.value));
+  return l;
+});
 
 onMounted(async () => {
   loadGames();
@@ -289,7 +314,8 @@ async function toggleService() {
 .mono { font-family: ui-monospace, monospace; }
 .st-hero { display: flex; gap: var(--s-4); align-items: center; }
 .st-hero h1 { margin: 0 0 4px; }
-.st-hero p { margin: 0; max-width: 62ch; line-height: 1.45; }
+.st-hero-txt { flex: 1; min-width: 0; }
+.st-hero p { margin: 0; max-width: 120ch; line-height: 1.45; } /* 0.9.32 (owner): uses the width, not three squeezed lines */
 .st-tabs-row { display: flex; align-items: center; gap: 10px; align-self: flex-start; }
 .st-card { display: flex; flex-direction: column; gap: var(--s-2); padding: var(--s-4); border-radius: var(--r-lg); background: var(--s1); }
 .st-card > b { font-family: var(--display); font-size: var(--t-lg); }
@@ -312,7 +338,7 @@ async function toggleService() {
 .files { display: flex; flex-direction: column; gap: 2px; padding: 0 0 var(--s-3) 46px; }
 .files-head { padding: 4px 0 6px; align-items: center; }
 .file { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: var(--s-4); padding: 6px 10px; border-radius: var(--r-sm); font-size: var(--t-sm); }
-.file .mono { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.file .mono {  overflow-wrap: anywhere; }
 .file-game { font-family: var(--body); font-weight: 700; margin-right: 8px; color: #9fe0b5; }
 .file-game.tex { color: #b9c7ff; }
 .file:focus-visible, .pad-mode .file:focus { background: var(--focus); color: var(--on-focus); }
@@ -321,6 +347,15 @@ async function toggleService() {
 .st-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
 .chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: var(--r-sm); background: var(--s2); font-size: var(--t-xs); color: var(--muted); }
 .chip.tex { color: #b9c7ff; }
+.chip.pat { color: #ffd59b; }
+.chip.upd { color: #a8e6ff; }
+.chip.mod { color: #e3b8ff; }
+.st-cons { display: flex; gap: 8px; overflow-x: auto; padding: 6px 6px 8px; margin: 0 -6px; scrollbar-width: none; }
+.st-con { flex: none; display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 999px; background: var(--s1); box-shadow: var(--weight-edge); font-weight: 600; font-size: var(--t-sm); }
+.st-con em { font-style: normal; color: var(--muted); font-weight: 500; }
+.st-con.on { background: var(--sel); }
+.st-con:focus-visible, .pad-mode .st-con:focus { background: var(--focus); color: var(--on-focus); box-shadow: none; outline: none; }
+.pad-mode .st-con:focus em { color: var(--on-focus-dim); }
 .chip.ok { color: #9be8b4; }
 .pad-mode .st-game:focus .chip, .st-game:focus-visible .chip { background: rgba(0, 0, 0, 0.12); color: var(--on-focus-dim); }
 </style>

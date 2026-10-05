@@ -162,7 +162,7 @@
 import { similarTo } from '../recs.js';
 import { addGame, removeGame, applyChanges, pickEmulator, pickCollections, pickFrameGen } from '../steam.js';
 import { computed, onMounted, onBeforeUnmount, ref, nextTick, watch, defineAsyncComponent, getCurrentScope, shallowRef } from 'vue';
-import { store, heroArt, call, img, go, cover, bytes, year, rating, toast, confirm, download, downloadFor, romById, platformById, isNew, setBg, logoOf, resetLogos, artFor, choose, openModal, allRoms, visible, isFavourite, addToCollection, playOf, playtimeText, ago, loadPlay, askText, saveConfig, backdropOf, wantSharp } from '../store.js';
+import { store, heroArt, call, img, go, cover, bytes, year, rating, toast, confirm, download, downloadFor, romById, platformById, isNew, setBg, logoOf, resetLogos, artFor, choose, openModal, allRoms, visible, isFavourite, addToCollection, playOf, playtimeText, ago, loadPlay, askText, saveConfig, backdropOf, wantSharp, bgJob } from '../store.js';
 import { pinToStart } from '../startTiles.js';
 import { useView } from '../useView.js';
 import { IS_ANDROID } from '../platform.js';
@@ -278,7 +278,7 @@ async function remove() {
 // the download, whether Cartridge installed it, and the install's progress.
 const pkg = ref(null);
 const pkgProg = ref(null);
-const pkgBusy = computed(() => pkgProg.value?.state === 'running' || pkg.value?.running);
+const pkgBusy = computed(() => pkgProg.value?.state === 'running' || pkg.value?.running || !!bgJob('pkg:' + props.romId)); // 0.9.32: still installing from before
 const needsInstall = computed(() => pkg.value?.pkgs > 0 && !pkg.value.installed);
 const emuName = computed(() => pkg.value?.emuName || 'RPCS3');
 // Android: emulators install packages from their own menus (Settings → Emulators lists what's waiting)
@@ -662,6 +662,7 @@ async function more() {
   if (detail.value?.path_manual) details.unshift({ label: 'Manual', sub: 'The game’s manual from RomM', value: 'manual', icon: 'mdiBookOpenPageVariantOutline' });
   // Options (0.9.16): hide, re-download and delete, out of the header
   const options = [
+    { label: 'About', sub: 'Console, ID, version, and what’s installed for it', value: 'about', icon: 'mdiInformationOutline' },
     { label: u?.hidden ? 'Unhide game' : 'Hide game', sub: u?.hidden ? 'Show it in lists again' : 'Keep it out of Home, Library and Search', value: 'hide', icon: u?.hidden ? 'mdiEyeOutline' : 'mdiEyeOffOutline' },
     ...(installedPath.value && !marked.value ? [
       { label: 'Re-download', sub: 'The copy on this device is replaced', value: 'redownload', icon: 'mdiRefresh' },
@@ -682,6 +683,7 @@ async function more() {
   }
   if (v === 'status') { await pickStatus(); return; }
   if (v === 'timeline') { await openTimeline(); return; }
+  if (v === 'about') { openModal('gameabout', { romId: Number(props.romId), name: base.value.name, cover: coverSrc.value || '' }); return; }
   if (v === 'manual') { openModal('manual', { romId: Number(props.romId), name: base.value.name }); return; }
   if (v === 'edit') { await editDetails(); return; }
   if (v === 'theme') { await themeFromGame(); return; }

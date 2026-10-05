@@ -74,11 +74,21 @@ function parseGbMods(j) {
   const recs = Array.isArray(j?._aRecords) ? j._aRecords : [];
   return recs.filter((m) => m && m._idRow && (!m._sModelName || m._sModelName === 'Mod')).map((m) => {
     const img = m._aPreviewMedia?._aImages?.[0];
-    return { source: 'gb', id: m._idRow, name: m._sName || `Mod ${m._idRow}`, authors: m._aSubmitter?._sName ? [m._aSubmitter._sName] : [], category: m._aRootCategory?._sName || '', likes: m._nLikeCount || 0, url: m._sProfileUrl || `https://gamebanana.com/mods/${m._idRow}`, preview: img?._sBaseUrl && (img._sFile220 || img._sFile) ? `${img._sBaseUrl}/${img._sFile220 || img._sFile}` : '' };
+    return { source: 'gb', id: m._idRow, name: m._sName || `Mod ${m._idRow}`, authors: m._aSubmitter?._sName ? [m._aSubmitter._sName] : [], category: m._aRootCategory?._sName || '', likes: m._nLikeCount || 0, downloads: m._nDownloadCount || 0, views: m._nViewCount || 0, added: (m._tsDateAdded || 0) * 1000, updated: (m._tsDateUpdated || m._tsDateModified || m._tsDateAdded || 0) * 1000, url: m._sProfileUrl || `https://gamebanana.com/mods/${m._idRow}`, preview: img?._sBaseUrl && (img._sFile220 || img._sFile) ? `${img._sBaseUrl}/${img._sFile220 || img._sFile}` : '' };
   });
 }
-async function gbMods(gameId, { fetchImpl = webFetch, page = 1 } = {}) {
-  return parseGbMods(await gbGet(`/Game/${Number(gameId)}/Subfeed?_nPage=${page}&_sSort=default&_csvModelInclusions=Mod`, fetchImpl));
+// 0.9.32 (owner: sort mods, most downloaded first): GameBanana's own sorted index for the game, else its game
+// feed sorted here by what each mod carries (downloads, likes, dates)
+const GB_SORT = { downloads: 'Generic_MostDownloaded', liked: 'Generic_MostLiked', newest: 'Generic_Newest', updated: 'Generic_LatestUpdated' };
+const sortMods = (l, sort) => [...l].sort(sort === 'liked' ? (a, b) => b.likes - a.likes : sort === 'newest' ? (a, b) => b.added - a.added : sort === 'updated' ? (a, b) => b.updated - a.updated : (a, b) => (b.downloads - a.downloads) || (b.likes - a.likes) || (b.views - a.views));
+async function gbMods(gameId, { fetchImpl = webFetch, page = 1, sort = 'downloads' } = {}) {
+  if (GB_SORT[sort]) {
+    try {
+      const l = parseGbMods(await gbGet(`/Mod/Index?_nPage=${page}&_nPerpage=50&_aFilters%5BGeneric_Game%5D=${Number(gameId)}&_sSort=${GB_SORT[sort]}`, fetchImpl));
+      if (l.length) return l;
+    } catch {}
+  }
+  return sortMods(parseGbMods(await gbGet(`/Game/${Number(gameId)}/Subfeed?_nPage=${page}&_sSort=default&_csvModelInclusions=Mod`, fetchImpl)), sort);
 }
 const ARCHIVE = /\.(zip|7z|rar)$/i;
 function parseGbFiles(j) {
@@ -174,4 +184,4 @@ function featuredFor(ids = {}, live = []) {
   return out;
 }
 
-module.exports = { gbMod, FEATURED, HENRIKO, featuredFor, parseHenriko, henrikoCatalog, namesGame, PS2_CATALOG, parsePs2Catalog, ps2Catalog, ps2For, gbGame, gbMods, gbFiles, parseGbMods, parseGbFiles, key, titleForms };
+module.exports = { sortMods, gbMod, FEATURED, HENRIKO, featuredFor, parseHenriko, henrikoCatalog, namesGame, PS2_CATALOG, parsePs2Catalog, ps2Catalog, ps2For, gbGame, gbMods, gbFiles, parseGbMods, parseGbFiles, key, titleForms };

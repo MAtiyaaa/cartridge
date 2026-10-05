@@ -342,6 +342,38 @@ LT/RT switch top tabs. LB/RB only switch sections inside a page. A select, B bac
 ## 0.9.31 · Sony's Own Marks (4 Oct 2026)
 - `electron/sonyArt.js`: RomM's platform pictures (`/assets/platforms/<slug>.svg`) for psx/ps2/ps3/ps4/ps5/psp carry RomM's parody marks. `handleImage` runs `fix(slug, buf)` on cached and fresh copies: paths matched by sha1 of their `d` (all must match, else the file is untouched) are removed, and the SONY wordmark (makers.js path) and the PlayStation logo (Simple Icons, CC0) are placed in the measured boxes (`FIX[slug].sony`/`.logo`, viewBox 1000) in the drawing's colours. RomM's art is never shipped in the repo. Tested in `test/sonyArt.test.js`.
 
+## 0.9.32 · In the Background (5 Oct 2026; log: docs/SESSION-LOG.md)
+- Background jobs (main.js): `bgJobs`, `bgJob(key, o)` broadcasts `bg-job` (gone 20 s after done/error), `jobs:list`; `JOBS` wraps handlers with `asJob` (emuup:run, emuget:install/custom, shadv:install, ps3up:install, pkg:install, bios:download, sync:install); `JOB_EVENTS` maps their progress broadcasts (`broadcast` is wrapped). store `bgJobs` + `bgJob(prefix)`; Downloads "In the Background"; EmuGet, ShadVersions, GameAddons, Game reattach.
+- `steamManager.scriptRuns`: an EmuDeck launcher counts only while what it runs (flatpak id, emufolder, AppImage) exists (Vita3K after Delete).
+- GitHub archives: customEmu `pickArchive`/`programsIn`; main `unpackTo` (zip, tar, 7z), `programsInFolder`, `finishCustom`, `emuget:customPick`.
+- Steam settings: `store.steamOv` (last overview shown at once), Settings `steamReady`.
+- Syncthing: `KINDS`/`kindOf`/`KIND_LABEL` (saves, textures, patches, updates, mods); SyncCard console and kind chip rows.
+- Home rows: `content-visibility: auto` clipped the first card's ring (negative margin + padding on rows 3+). Pages fade above the Dock: mask on `main.main:not([data-page='start'])` (`data-page` = route name).
+- Dock black by default (`DOCK_COLOR`), Settings tab dot removed, `.sr-ring` keeps the Steam logo upright.
+- Cemu: Cheats section, `downloadCommunity` falls back to `github.release()`, `cemu:packsDownload`, presets shown while a pack is off.
+- Start: trophies `troFor` feat/side/mosaic, `weekArt`, `storeRows`, widgets `media` (`mediaOf`, disc or cart by `DISC`) and `shelf` (`shelfOf`); labels and subs wrap (2 lines) instead of ellipsis. ConsoleCard sys-top capped (no overlap with the maker logo).
+- Mods: `addonSources.GB_SORT`/`sortMods`, `gbMods(id, { sort })` (Mod/Index, Subfeed fallback), `ui.modSort`; AddonsSheet `.ad-facts`. `addons:browse` opens a page in a `persist:addons` window; `will-download` (.zip/.7z/.rar) → bg job → `addons:install` with `source: 'local'`, file deleted after.
+- `game:about` + `GameAbout.vue` (modal `gameabout`, Game More → Options → About): IDs from `addons:forGame`/`patchState`, add-on records, `addons:present`, patches on (`EMU_PATCH[].list`), `gamesettings:get` items with `game`.
+- Steam collections: `cloudRows` merges `cloud-storage-namespace-1.modified.json` (deletions) over the main file (tested); `steamLive.listCollections`; `collectionsReview` is async, live first (`source`), drops kept names whose collection is gone; `collectionsApply` `reset`. SteamSettings Collections page rebuilt (`rows`, `pickFor`, Refresh).
+
+## 0.9.33 · Linked Folders (5 Oct 2026; log: docs/SESSION-LOG.md)
+- `electron/folderLinks.js` (tested in `test/folderLinks.test.js`): `findForkBase(exe, rel)` (portable beside the program: dir, user/, User/, portable/; else ~/.local/share or ~/.config named after it), `status`, `check` (home or other drives only, never inside each other), `link` (existing folder renamed `<name>.cartridge-kept`, then a symlink to the real path), `unlink` (only Cartridge's links, kept folder back, else an empty one). Owner's exception to "never touches saves": only on request, nothing deleted.
+- main `links:list` (suggestions from `steamMgr.forksAll()` x `saves.SYNC` of the original, donor from `saves.DATA`), `links:check`, `links:make`, `links:remove`, records in `folder-links.json`. `LinkedFolders.vue` = Settings → Emulators page `links`; EmuGet Manage `Share Saves With the Original` for `customEmus` forks (`forkOf`), via `store.emuPageWant`.
+- `patches:download` (RPCS3 `freshRpcs3Patches(id, true)`, shadPS4 `freshShadPatches(id, true)`, Cemu); PatchesSheet `DL` per emulator.
+- Ellipsis removed app-wide (wrap with `overflow-wrap: anywhere`); kept only for single-line controls (Keyboard suggestion keys, ControllerTest id, dev pill, field values, Start overview tags). Card titles and trophy descriptions unclamped.
+- Start `ejectMedia`/`pickSpine`, `.st-disc-boost` (second spin, paused unless focused), `.dev` glow.
+
+## 0.9.34 · Back in Control (5 Oct 2026; log: docs/SESSION-LOG.md)
+- Controller after a game: Chromium (152, navigator_gamepad.cc) gates gamepad data on page visibility only, not focus. `watchGamescopeFocus` notes the app focused while our game runs (`gameFocus.gameApp`, `runActive()`); after it ends (`endedAt`) that id doesn't count as away until focus moves on or a fresh launch is seen. `steamFront()` 1.5 s after the end: if GAMESCOPE_FOCUSED_APP isn't ours, `steamMgr.frontRunning` → `steamLive.frontRunning` (SteamUIStore NavigateToRunningApp variants, result logged). nav.js: `returned` survives blurs within 10 s of a game end; `watchReturn()` logs pad count, input changes, focus, visibility, inFront 20 s after (`app:log`). Log lines: `gamescope focus`, `after the game`. Simulated with a fake xprop (not in the repo).
+- Collections: `steamManager.colsNow` (live list else files), `gamesInSteam` (every installed game matched by `inSteamIndex`), `consoleCollection(key)`, `fillCollections({ keys, appids, auto })` (auto: live only, never next to an unreviewed collection of yours); `syncConsoleCollections` = fill. Review consoles carry `games`/`missing`, plain-name rule as `colName` (`libraryPlatforms().plain`). main `steam:consoleCollection`, `steam:fillCollections`, `colsAuto` (30 s, every 10 min, when `steam.consoleCollections`). `ConsoleCollection.vue` (modal `consolecol`). steamHelper `writeCollections` reads `.modified.json` (deleted rows skipped, changed rows kept in step). Tested in `test/steam.test.js`.
+
+## 0.9.35 · Steady Pictures (5 Oct 2026)
+- PIcon watches `cands` by its joined string (pages pass `p` as a new object each render; the old watch reset the fit on every redraw and the same picture never loaded again to be measured). Measured: 30 of 30 samples unfitted during update progress before, 0 after.
+- steamManager `pruneStale(list, trusted)` (in `colsNow` and `verifyCollections`): kept names whose collection is gone are dropped, reg[].collections keep only names in Steam or a console's current one. Tested in `test/steam.test.js`.
+
+## 0.9.36 · Collections, Checked Properly (5 Oct 2026)
+- `verifyCollections` (Issues "missing from their collections"): console collections (any name `consoleOf` maps) are checked from `gamesInSteam` against `colName`, only with `steam.consoleCollections` on, skipping consoles with an unreviewed collection of yours; other remembered collections only while they exist. `fixCollections` is async, live first. `steamCollections.consoleOf` understands SRM's "<console> - <emulator>" names. Tested.
+
 ## Releases (full steps: HANDOFF D8)
 Only when the owner asks. Bump `version` and `build.releaseInfo.releaseName` ("Cartridge X.Y.Z") in `package.json`, put only this version's notes in `RELEASE_NOTES.md` (heading `## Cartridge X.Y.Z · Title`), add them to the top of `CHANGELOG.md`, grouped as New / Changed / Fixed with bold lead-ins. CI builds, launch-checks and publishes.
 

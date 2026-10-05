@@ -21,6 +21,7 @@ export const store = reactive({
   fuseUploads: [], // games Fuse handed over to upload to RomM (electron/fuseUpload.js), newest first
   fuseUpload: null, // the request of the last cartridge://upload link, until its page reads it
   addonJobs: {}, // key -> add-on downloading or installing (0.9.24: shown on the Downloads page)
+  bgJobs: {}, // key -> a long task running in the background (0.9.32: emulator updates, installs, game updates...)
   bg: '',
   route: { name: 'home', params: {} },
   navDir: 'in', // how the next page arrives: 'r'/'l' (a tab to the right/left), 'in' (deeper), 'out' (back)
@@ -214,6 +215,8 @@ export async function scanServer() {
 }
 
 // ---------------- images / backgrounds
+// a long task still running in the background (0.9.32): screens show it again when they open
+export const bgJob = (prefix) => Object.values(store.bgJobs || {}).find((j) => j.key.startsWith(prefix) && j.state === 'run') || null;
 export function img(p) {
   if (!p) return '';
   return romimg('u=' + encodeURIComponent(p));

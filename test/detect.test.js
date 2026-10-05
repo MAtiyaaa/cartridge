@@ -109,7 +109,7 @@ test('EmuDeck: its launchers, and the copies they run are not listed twice', () 
     w('/Emulation/tools/launchers/pcsx2-qt.sh', '#!/bin/bash\n"$HOME/Applications/pcsx2-Qt.AppImage" "$@"\n');
     w('/Emulation/tools/launchers/xemu-emu.sh', '#!/bin/bash\n/usr/bin/flatpak run app.xemu.xemu "$@"\n');
     w('/Emulation/tools/launchers/eden.sh', '#!/bin/bash\n"$HOME/Applications/eden.AppImage" "$@"\n');
-    w('/Applications/pcsx2-Qt.AppImage');
+    w('/Applications/pcsx2-Qt.AppImage'); w('/Applications/eden.AppImage'); // 0.9.32: a launcher counts only while what it starts is there
     flatpaks.push('org.libretro.RetroArch', 'app.xemu.xemu');
     core('/.var/app/org.libretro.RetroArch/config/retroarch/cores', 'snes9x');
   });

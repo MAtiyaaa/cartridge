@@ -4,7 +4,7 @@
       <div class="ss-dot" :class="h ? (h.ok ? 'ok' : 'bad') : ''" />
       <div style="min-width: 0">
         <b>Your RomM server</b>
-        <div class="muted small mono" style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap">{{ h?.base || store.connection.base || 'Not connected' }}</div>
+        <div class="muted small mono" style="overflow-wrap: anywhere">{{ h?.base || store.connection.base || 'Not connected' }}</div>
       </div>
       <div class="spacer" />
       <button class="btn small" data-focus :disabled="busy" @click="load"><Icon name="mdiRefresh" :size="18" :class="{ spin: busy }" />Check again</button>

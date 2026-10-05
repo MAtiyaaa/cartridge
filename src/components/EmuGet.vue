@@ -115,7 +115,7 @@
               <template v-if="gh.as === 'fork'"><button v-for="x in forkTargets" :key="x.id" class="eg-chip" data-focus :class="{ on: gh.of === x.id }" @click="gh.of = x.id">{{ x.label }}</button></template>
               <template v-else><button v-for="c in list || []" :key="c.key" class="eg-chip" data-focus :class="{ on: gh.key === c.key }" @click="gh.key = c.key">{{ c.name }}</button></template>
             </div>
-            <p class="muted small" style="margin: 0">{{ gh.as === 'fork' ? 'It starts games the way the emulator it comes from does, and shows as that emulator’s fork when you pick emulators for a console.' : 'It becomes that console’s emulator for new Steam shortcuts. If Cartridge doesn’t know it, games are given to it as a file path.' }} The newest Linux AppImage from its releases goes in {{ short(store.config.emuDir) || '~/Applications' }}.</p>
+            <p class="muted small" style="margin: 0">{{ gh.as === 'fork' ? 'It starts games the way the emulator it comes from does, and shows as that emulator’s fork when you pick emulators for a console.' : 'It becomes that console’s emulator for new Steam shortcuts. If Cartridge doesn’t know it, games are given to it as a file path.' }} The newest Linux AppImage from its releases goes in {{ short(store.config.emuDir) || '~/Applications' }}; a Linux .zip or .tar is unpacked into its own folder there, and you pick its program if there’s more than one.</p>
             <div v-if="gh.busy" class="eg-ghbar"><i :class="{ live: gh.pct == null }" :style="{ width: (gh.pct ?? 100) + '%' }" /></div>
             <div class="row" style="gap: 10px; justify-content: flex-end">
               <button class="btn" data-focus :disabled="gh.busy" @click="gh.open = false">Cancel</button>
@@ -134,7 +134,7 @@
 // Download all; first where they live, as an ES-DE style Emulation folder on the drive you pick).
 // Used by the welcome (flow) and Settings → Emulators → Get Emulators.
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { store, call, toast, bytes, confirm, choose, openModal } from '../store.js';
+import { store, call, toast, bytes, confirm, choose, openModal, bgJob } from '../store.js';
 import { focusFirst } from '../nav.js';
 import Icon from './Icon.vue';
 import EmuIcon from './EmuIcon.vue';
@@ -176,6 +176,8 @@ async function manage(u) {
     ...(ch.length > 1 ? ch.map((c) => ({ heading: c === ch[0] ? 'Updates Follow' : undefined, label: CH[c], sub: c === 'pre' ? 'Nightlies and test builds' : 'Releases the project calls finished', value: 'ch:' + c, icon: c === 'pre' ? 'mdiFlask' : 'mdiCheckDecagram', selected: u.channel === c })) : []),
     // the emulator's own folders: games, installed content, saves, textures (0.9.24)
     ...(PATH_IDS.has(u.id) ? [{ label: 'Folders', sub: 'Where it keeps games, installed content and saves', value: 'folders', icon: 'mdiFolderCogOutline' }] : []),
+    // 0.9.33 (owner): a fork plays with the saves of the emulator it comes from, through Linked Folders
+    ...(u.forkOf ? [{ label: 'Share Saves With the Original', sub: 'Link its save folder in Linked Folders', value: 'links', icon: 'mdiLinkVariant' }] : []),
     ...(u.id === 'shadps4' ? [{ label: 'Versions', sub: 'Which games use which, and more to add', value: 'versions', icon: 'mdiLayersTriple' }] : []),
     ...(u.page ? [{ label: 'Open Its Releases Page', value: 'page', icon: 'mdiOpenInNew' }] : []),
     { label: 'Delete', sub: u.kind === 'flatpak' ? 'Uninstall the Flatpak' : 'Your saves and settings stay', value: 'delete', icon: 'mdiDeleteOutline', danger: true },
@@ -187,6 +189,7 @@ async function manage(u) {
   if (v === 'again') return runUpdate(u, true);
   if (v.startsWith('ch:')) { await call('emuup:setChannel', { id: u.id, channel: v.slice(3) }); toast(`${u.label} follows ${CH[v.slice(3)].toLowerCase()} now`, 'ok', 3000); return loadUps(true); }
   if (v === 'versions') return openModal('shadversions', {});
+  if (v === 'links') { store.emuPageWant = 'links'; return; }
   if (v === 'folders') return openModal('emupaths', { id: u.id, name: u.label });
   if (v === 'page') return window.open(u.page);
   if (v === 'delete') {
@@ -200,15 +203,23 @@ const gh = ref({ open: false, link: '', as: 'fork', of: '', key: '', busy: false
 const forkTargets = computed(() => uniq.value.map((x) => ({ id: x.e.id, label: x.e.label })).filter((x) => x.id !== 'retroarch'));
 async function installLink() {
   const g = gh.value;
-  g.busy = true; g.pct = null;
+  g.busy = true; g.pct = null; ghCalling = true;
   const off = window.cart.on('emuget-custom', (m) => { g.pct = m.pct; });
   try {
-    const r = await call('emuget:custom', { link: g.link.trim(), as: g.as, of: g.of, key: g.key });
+    let r = await call('emuget:custom', { link: g.link.trim(), as: g.as, of: g.of, key: g.key });
+    // 0.9.32: a release that came as an archive, with more than one program in it: you say which is the emulator
+    if (r.pick) {
+      g.pct = null;
+      const f = await choose({ title: `Which one is ${r.name}?`, message: `Unpacked into ${short(r.folder)}. Pick the program that starts the emulator.`, raw: true, options: r.pick.map((p) => ({ label: p.rel.split('/').pop(), sub: `${p.rel.includes('/') ? p.rel.replace(/\/[^/]+$/, '') + ' · ' : ''}${p.appimage ? 'AppImage' : 'Program'} · ${bytes(p.size)}`, value: p.path, icon: p.appimage ? 'mdiPackageVariant' : 'mdiApplicationOutline' })) });
+      if (!f) { toast(`${r.name} stays unpacked in ${short(r.folder)}. Install it again to pick its program.`, 'info', 6000); g.busy = false; ghCalling = false; off?.(); return; }
+      r = await call('emuget:customPick', { file: f });
+    }
     const what = g.as === 'fork' ? `as a fork of ${forkTargets.value.find((x) => x.id === g.of)?.label}: pick it on a console’s page` : `for ${(list.value || []).find((c) => c.key === g.key)?.name}`;
-    toast(`${r.name} ${r.tag} is in ${short(r.path.replace(/\/[^/]+$/, ''))}, set up ${what}`, 'ok', 7000, 'mdiGithub');
+    toast(`${r.name} ${r.tag} is in ${short(r.folder || r.path.replace(/\/[^/]+$/, ''))}, set up ${what}`, 'ok', 7000, 'mdiGithub');
     gh.value = { open: false, link: '', as: 'fork', of: '', key: '', busy: false, pct: null };
     await load(); await loadUps(true);
   } catch (e) { toast(e.message, 'error', 7000); g.busy = false; }
+  ghCalling = false;
   off?.();
 }
 const SLUG = { psx: 'psx', ps2: 'ps2', ps3: 'ps3', ps4: 'ps4', psp: 'psp', psvita: 'psvita', gc: 'ngc', wiiu: 'wiiu', switch: 'switch', n3ds: '3ds', nds: 'nds', gba: 'gba', n64: 'n64', xbox: 'xbox', dreamcast: 'dc', xbox360: 'xbox360', saturn: 'saturn', arcade: 'arcade' };
@@ -283,6 +294,11 @@ async function getAll() {
   q.value = await call('emuget:queue', { items }).catch((err) => { toast(err.message, 'error'); return q.value; });
   toast(`${items.length} emulator${items.length === 1 ? '' : 's'} downloading in the background`, 'ok', 3000, 'mdiDownloadMultiple');
 }
+// 0.9.32 (owner: leaving shouldn't cancel): an update or a GitHub install started earlier is still running
+// in the background (Downloads lists it); this screen shows it again, and lets go when it ends
+let ghCalling = false;
+watch(() => bgJob('emu:'), (j) => { if (j) { upRun.value = j.key.slice(4); upPct.value = j.pct ?? null; } else if (upRun.value) { upRun.value = ''; loadUps(true); } }, { immediate: true });
+watch(() => bgJob('custom:'), (j) => { if (j) { gh.value.open = true; gh.value.busy = true; gh.value.pct = j.pct ?? null; } else if (gh.value.busy && !ghCalling) { gh.value.busy = false; load(); loadUps(true); } }, { immediate: true });
 let off = null, offP = null, offU = null, lastDone = 0;
 const told = new Set();
 onMounted(async () => {
@@ -297,6 +313,7 @@ onMounted(async () => {
   });
   offP = window.cart.on('emuget-progress', (m) => { const x = q.value.find((y) => y.key === m.key && y.id === m.id && y.state === 'run'); if (x && m.pct != null) x.pct = m.pct; });
   offU = window.cart.on('emu-update', (m) => { if (m.path === upRun.value && m.pct != null) upPct.value = m.pct; });
+  q.value = (await call('emuget:state').catch(() => null)) || q.value; // installs queued earlier carry on
   if (phase.value === 'where') await loadDrives(); else { if (props.flow) fresh.value = await call('emuget:fresh').catch(() => ({ fresh: false })); await load(); }
   loadUps();
 });
@@ -344,13 +361,13 @@ defineExpose({ load });
 .eg-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: var(--s-3); }
 .eg-con { display: flex; flex-direction: column; gap: 6px; padding: var(--s-3); border-radius: var(--r-lg); background: var(--s1); }
 .eg-head { display: flex; align-items: center; gap: 10px; padding: 2px 4px 6px; }
-.eg-head b { font-family: var(--display); font-size: var(--t-md); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.eg-head b { font-family: var(--display); font-size: var(--t-md);  overflow-wrap: anywhere; }
 .eg-emu { position: relative; overflow: hidden; display: flex; align-items: center; gap: var(--s-3); padding: 10px 12px; border-radius: var(--r-md); background: var(--s2); color: inherit; border: 0; text-align: left; font: inherit; flex: none; }
 .eg-emu:focus { background: var(--focus); color: var(--on-focus); outline: none; }
 .eg-emu:focus .muted { color: var(--on-focus-dim); }
 .eg-mid { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-.eg-mid b { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.eg-mid .small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.eg-mid b {  overflow-wrap: anywhere; }
+.eg-mid .small {  overflow-wrap: anywhere; }
 .eg-get { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: rgba(255, 255, 255, 0.08); flex: none; }
 .eg-emu:focus .eg-get { background: rgba(0, 0, 0, 0.1); }
 .eg-bar-fill { position: absolute; left: 0; bottom: 0; height: 3px; background: currentColor; transition: width 0.3s ease; }
