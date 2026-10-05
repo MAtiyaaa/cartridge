@@ -19,7 +19,7 @@ The repo is public. Nothing private is in this document: no usernames, paths fro
 - **Latest release:** v0.9.37 "Cartridge 0.9.37 · Set Up for You" (5 Oct 2026). See Part 4 for every release.
 - **Branch:** all work on `claude/relaxed-fermat-30pigp`. Each PR merges it into `main`; after each merge the branch is reset to `main` (`git fetch origin main && git checkout -B claude/relaxed-fermat-30pigp origin/main && git push --force-with-lease`). Start from `main`.
 - **package.json:** `version` 0.9.37, `versionName` "0.9.37", `build.releaseInfo.releaseName` "Cartridge 0.9.37". Version names equal the number again (no lettered parts since 0.9.15).
-- **Tests:** 172 pass (`npm test`, node:test, 27 files in `test/`). CI runs them before every build.
+- **Tests:** 178 pass (`npm test`, node:test, 28 files in `test/`). CI runs them before every build.
 - **Build:** `npm ci --ignore-scripts && npx vite build`.
 - **Big change in tooling:** in this stretch the cloud container **could run Electron** (`node_modules/electron/dist/electron`, Electron 44, Chromium 152). I drove the real app with Playwright's `_electron` against a mock RomM. The launch check `CARTRIDGE_SMOKE=1` also ran locally. See Part 3. If your container can't, the old stubbed-browser harness from the previous handover still works.
 
@@ -31,6 +31,21 @@ The owner's last messages to me, and their state:
 5. **Mod installs per emulator:** checked against each emulator's own mod layout (0.9.37). Azahar mods were going into the textures folder; Switch layouts improved. Part 6.5.
 6. **Download Latest Patches for RPCS3 and shadPS4:** the owner first said it was missing, then said it was there and they hadn't updated. Nothing to do.
 7. **The handover:** this document.
+
+Then, in the same turn, a second list for the same release ("release it all as one update"). The owner said photos came with it; **none came through**, so everything below was read from the text alone. Ask about the ones marked *ask*.
+8. **Installer skipped to the next welcome step after Location:** reproduced in the real app. While `emuget:prepare` ran, the drive button was `disabled`, so it lost focus; the next A landed on the welcome's own Continue (`recheck` → `next()`). Fixed: the drive stays focused, the installer focuses itself, Continue shows only once installing. Part 6.8.
+9. **Install Flatpak in the background when missing:** built (pkexec + the package manager; image-based systems get the command). Never run against a system without Flatpak.
+10. **"Fix the shadPS4 install, it shouldn't be like this":** *ask*. I read it as the Qt launcher arriving with no shadPS4 version, so games had nothing to run; the installer now adds the newest release as the launcher's default. If the photo showed something else (a wrong folder, a wrong name, an error), it's still open.
+11. **Emulator updates page slow and not live (RPCS3 showed an update, Cartridge said up to date):** fixed. Slow: one check after another. Not live: 6-hour cache, and RPCS3's versions all start 0.0.38 with the build number after a dash, which was ignored. Part 6.8.
+12. **PS5 emulators SharpEmu and KytyPS5:** built from their source (Part 6.15). Their GitHub releases couldn't be downloaded from the container, so the download itself is untested.
+13. **Linked Folders smart detection:** Find and Link Saves (Part 6.3 addition below).
+14. **Trophies "truly cloud synced" for PS3, Xbox 360 and others:** this already existed (RPCS3, shadPS4, Xenia gamerscore, Vita3K through private RomM notes; remote-only games show without the emulator). The real gap was the pull: other devices read at most 80 games and only the ones the library last said had notes. Now a full sweep every 30 minutes and on Sync. PS5 (KytyPS5) added. *Ask* whether they meant anything beyond this, e.g. RetroAchievements (already its own cloud) or emulators without trophy files.
+15. **Look: Background vs Elements, glass highlight, OLED Black Title Case:** built as the owner proposed (Panels renamed Background; new Elements). Part 6.12.
+16. **Subtle pan/zoom on game backgrounds:** built (GPU only).
+17. **Motion engine with the apple-design skill** (owner asked for that skill by link): Part 6.13.
+18. **Interactive first-start tour; keyboard and mouse overhaul:** Part 6.14. Tab no longer means Select (Downloads is Ctrl+J now); tell the owner if they relied on it.
+19. **Mid-way addition: delete installed mods and texture packs:** Cartridge's own already could be removed; now everything in a game's add-on folder can be sent to the Trash. Part 6.5 addition.
+20. **"Tell me if there's anything we missed":** answered in the final chat message of this session; the misses are in Part 9.
 
 ---
 
@@ -142,7 +157,7 @@ Every real fix in this stretch came from reading the upstream project. Clone int
 | 0.9.34 | Back in Control | Controller after a game, console collections from Steam's real state, Its Games page (PR #51) |
 | 0.9.35 | Steady Pictures | Console pictures stopped glitching during updates, deleted collections forgotten (PR #52) |
 | 0.9.36 | Collections, Checked Properly | Issues check reads Steam, SRM names matched (PR #53) |
-| 0.9.37 | Set Up for You | BIOS/firmware put in place by itself, Cemu groups fixed, mods per emulator, add-on site download goes to Downloads, row focus (PR #54) |
+| 0.9.37 | Set Up for You | BIOS/firmware put in place by itself, Cemu groups fixed, mods per emulator, add-on site download goes to Downloads, row focus; installer fix, Flatpak bootstrap, shadPS4 default version, live emulator updates, PS5 emulators and trophies, Find and Link Saves, trophy pull sweep, Background/Elements, motion engine, interactive tour, keyboard and mouse, delete add-ons (PR #54) |
 
 PRs #38 to #48 cover 0.9.22 to 0.9.31 (one of those releases took two PRs).
 
@@ -165,6 +180,9 @@ Main process (`electron/`):
 - `steamHelper.js` `writeCollections`: respects Steam's `.modified.json`.
 - `bios.js`: what each console needs and where emulators read it; `place()`.
 - `customEmu.js`: GitHub link installs, archives (`pickArchive`, `programsIn`).
+- `motion.js` (src, 0.9.37): spring curves as CSS tokens, `springTo` for scrolling, `morph`/`skipMorph` (View Transitions). Part 6.13.
+- `emuGet.js` 0.9.37: `flatpakPlan`, `ensureFlatpak`; `getAppImage` handles folder builds (`dirBuild`). `emuUpdates.js`: `layFolder`, `ranVersion`, build-number `verOf`, PS5 `REPOS`.
+- `trophies.js` 0.9.37: KytyPS5 source (`readUcp`, `parseKyty`, `setPs5Games`).
 - `main.js` additions: background jobs (`bgJobs`, `asJob`, `JOBS`, `JOB_EVENTS`), `game:about`, `addons:browse` (add-on site window), `links:*`, `patches:download`, `steamFront`, `app:log`, `biosSetup`, `bios:setup`, `bios:status`, `colsAuto`, `steam:consoleCollection`, `steam:fillCollections`.
 
 UI (`src/`):
@@ -173,6 +191,8 @@ UI (`src/`):
 - `views/Settings.vue`: Emulators pages (Emulators, Game Add-ons, Setup and Health with Issues and **BIOS and Firmware**, Console Folders, Linked Folders), Steam settings (`SteamSettings.vue`, Collections page).
 - `nav.js`: touch engine, `gameEnded`/`returned`/`watchReturn`, hold A expand.
 - `components/PIcon.vue`: console pictures, measured and fitted once.
+- `components/FirstTour.vue` (rebuilt 0.9.37): the interactive tour, opened with `openTour()` (store.tour), not the modal slot.
+- `App.vue` 0.9.37: the modal `<Transition>` chain and `modalFrom`, `keysHelp` (F1), `cardMenu` (right-click), base-layer `search`/`help`/`tabN`.
 
 ---
 
@@ -271,6 +291,32 @@ Read all of it before touching collections.
 
 ---
 
+### 6.13 Motion engine (0.9.37, apple-design skill)
+- The skill's rules applied: interruptible (transitions start from the current value; scroll keeps velocity on a new target), springs critically damped by default (no overshoot unless momentum), enter and exit on the same path, anchored to the trigger, reduced motion = fades.
+- `motion.js springCurve` simulates the spring once and writes CSS `linear()` easings (`--spring` etc.) at start-up; old engines keep the cubic fallbacks in `:root`.
+- `springTo` drives `nav.js glideBy` (per-axis state in `anims`); touch drags stop it (`stopSpring`).
+- Morph: store `go('game')` from a focused `.card[data-key="rom-N"]` with a loaded picture → View Transition `cart-morph` into `.g-cover`; `back()` reverses into the card when the history entry's `focusKey` is that card. Root snapshots have `animation: none` (`:root.morphing`), so only the picture moves. GPU only (not `light-fx`, not reduced motion); every `dispatch` calls `skipMorph()`.
+- Modals: one `<Transition name="modal">` around the v-if chain in App.vue. Leave and enter overlap (a hand-over cross-fades). Component unmount hooks still run at once (layers pop); the leaving DOM has `pointer-events: none`. `modalFrom` sets the dialog's transform-origin from the element focused when the modal opened (`modalTrigger`, watch with flush 'pre').
+- Measured here: the scroll spring settles without overshoot (sampled scrollTop); the morph ran with the GPU path forced; origins set. Not measured on a device: the morph and drift cost with the real GPU in Game Mode.
+
+### 6.14 The tour and keyboard/mouse (0.9.37)
+- `FirstTour.vue`: steps with `at` (what to spotlight), `task` (pad buttons, a key, mouse and touch words), `pass` (actions handed to the app through `layer.below()`), `doneWhen` (app state: route, modal, Quick Menu) and `when` (skip a step whose situation has passed). The overlay takes no clicks except the card, so mouse and touch use the real interface. z-index 44: under pop-ups (50) and the Quick Menu (45), which it teaches. Opened by `openTour()` from Welcome, EmuSetup, Start (Start tips) and Settings → About.
+- Keys (`nav.js keyAction`): Tab/Shift+Tab `stepFocus` (reading order in the top layer and zone), Ctrl+Tab and Ctrl+PgUp/PgDn = LT/RT, 1-9 `tabN`, Ctrl+F and / `search` (falls back to Y in a pop-up without search), Ctrl+J = Select, Alt+Left and mouse button 3 = Back, Shift+F10 and the Menu key = Y, Home/End `edgeFocus`, F1/? `help`. Other modifier combinations are left to the system and text fields. **Tab used to be Select (Downloads).**
+- Right-click a game card: Open, Download or Ready to Play, Favourites (`cardMenu`).
+
+### 6.15 PS5 (0.9.37)
+- SharpEmu (C#, sharpemu/sharpemu): release `sharpemu-<ver>-linux-x64.tar.gz` (a self-contained folder with `SharpEmu`); CLI `SharpEmu [options] <eboot.bin>` (src/SharpEmu.CLI/Program.cs), `--window-mode=borderless` for fullscreen; saves `<folder>/user/savedata` unless `SHARPEMU_SAVEDATA_DIR`.
+- KytyPS5 (C++, KytyPS5/KytyPS5): release `<tag>-Linux-x86_64.tar.gz` with `launcher` (Qt) and `kyty_emulator`; `kyty_emulator --game <dir|elf|zar> --fullscreen` (src/main.cpp). Saves and trophy unlocks under the working folder's `_SaveData/<title ID>` (Steam's Start in = its folder). Trophy names from the game's `sce_sys/trophy2/trophyNN.ucp` (format in src/common/trophies.cpp). No unlock times, so Cartridge records first-seen times.
+- Both install into `~/Applications/<SharpEmu|KytyPS5>` via `layFolder` (updates laid over, user data kept). Icons: SharpEmu's logo from its repo, KytyPS5's GitHub avatar.
+- Not done: Linked Folders/Syncthing save folders for them (two emulators with different save formats would share one `ps5` folder ID); game add-ons for PS5.
+
+### Additions to earlier subsystems (0.9.37 second list)
+- 6.3 Linked Folders: `links:auto` = Find and Link Saves. `mergeInto` copies only games the original lacks (whole game folders by `GAME_DIR`: serials, CUSA/PPSA, 16-hex title IDs; the all-zero Switch folder is gone into), never over a file; then the normal link (fork folder set aside). `searchForkFolder` looks three levels under the fork's program.
+- 6.5 Add-ons: `addons:clear` sends the game's own add-on folder to the Trash (`toTrash`: Electron's, else the freedesktop Trash by hand); never the emulator's shared folder; Cartridge's records for that game and emulator are dropped.
+- 6.8 Emulators: installer focus fix; Flatpak bootstrap (`flatpak:install` bg job); shadPS4 default version after install; `emuup:list` cached then parallel, TTL 10 min; build numbers and `ranVersion` (RPCS3.log).
+- 6.12 Look: Background (`ui.surface`) vs Elements (`ui.elements`, `elementsOf`); glass focus is translucent `--focus` with white `--on-focus` (`--focus-solid` keeps the solid colour); slow drift on MediaBar and Background art (GPU only).
+- Trophies: trophyService pull is a full sweep every 30 minutes or on Sync (6 requests at a time), else ROMs known to have notes (`trophy-noted.json`).
+
 ## Part 7. Things that broke and how they were fixed (learn from these)
 
 1. **Home vanished after a couple of moves (0.9.21 → 0.9.22):** a view's computed named like a store function it never imported. Import store functions under another name when a view has its own.
@@ -306,6 +352,7 @@ Read all of it before touching collections.
 - Owner-approved writes added in this stretch: Linked Folders (on request), BIOS/firmware placement and installs, console collections (only with the toggle on, or on request).
 - Row focus: fill only (styles.css exemption list).
 - No "…" in new UI.
+- 0.9.37: the tour stays outside the modal slot (`store.tour`); `layer.below()` only for actions a step lists; `skipMorph()` on every dispatch; morph and drift never without the GPU; `mergeInto` never overwrites; `addons:clear` never on a shared folder; Flatpak only installed with the user's password prompt; installer Continue hidden until installing.
 
 ---
 
@@ -316,6 +363,12 @@ Read all of it before touching collections.
 2. **Controller after a game:** still dead? Ask for the `gamescope focus` and `after the game` log lines.
 3. **Collections:** do the Issues list and Its Games look right now with their real Steam (Decky on)?
 4. **BIOS:** after the next emulator install, did RPCS3/Vita3K firmware install and did Eden see the keys/firmware?
+
+**Second list (0.9.37), ask or test:**
+5. **shadPS4 install:** what did the photo show? (I fixed "launcher with no version".)
+6. **Trophies:** is the 30-minute sweep what they meant by "truly cloud synced"? Anything for consoles without trophy files?
+7. **Tab moved:** Downloads is Ctrl+J now; Tab steps focus.
+8. **Device tests:** Flatpak install on a distro without it; SharpEmu and KytyPS5 downloads and a PS5 game in Steam; RPCS3 update shown when RPCS3 says so; KytyPS5 trophies; the morph and background drift on the GPU (handheld and TV); glass Elements readability; delete add-ons to Trash in Game Mode; Find and Link Saves with a real fork.
 
 **Never run on a real device (owner to test):**
 - Linked Folders with a real fork (and with Flatpak emulators).
