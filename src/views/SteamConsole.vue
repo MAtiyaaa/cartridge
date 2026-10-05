@@ -249,7 +249,7 @@ onMounted(async () => { await load(); loadRuns(); await nextTick(); ensureFocus(
 .small { font-size: var(--t-xs); }
 .sc-opt { margin-top: var(--s-2); flex: none; }
 .sc-runs { flex: none; align-items: flex-start; }
-.sc-runs .l-sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sc-runs .l-sub {  overflow-wrap: anywhere; }
 .sc-opt > div { min-width: 0; }
 .ss-queue { display: flex; align-items: center; gap: 14px; padding: 14px 18px; border-radius: var(--r-md); background: rgba(var(--primary-rgb), 0.2); border: 1px solid rgba(var(--primary-l-rgb), 0.5); margin-bottom: 18px; }
 .ss-q-t { display: flex; flex-direction: column; flex: 1; min-width: 0; }
@@ -260,7 +260,7 @@ onMounted(async () => { await load(); loadRuns(); await nextTick(); ensureFocus(
 .sc-thumb { width: 40px; height: 54px; border-radius: var(--r-sm); overflow: hidden; background: #1a1e2a; flex: none; }
 .sc-thumb img { width: 100%; height: 100%; object-fit: cover; }
 .sc-mid { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
-.sc-mid b { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sc-mid b { font-weight: 500;  overflow-wrap: anywhere; }
 .sc-mid span { font-size: var(--t-xs); }
 .sc-act { display: flex; align-items: center; gap: 8px; width: 120px; justify-content: flex-end; color: var(--muted); font-size: var(--t-xs); flex: none; }
 .chip.how-learned { background: rgba(80, 200, 120, 0.18); color: #9be8b4; }

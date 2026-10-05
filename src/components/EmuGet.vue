@@ -361,13 +361,13 @@ defineExpose({ load });
 .eg-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: var(--s-3); }
 .eg-con { display: flex; flex-direction: column; gap: 6px; padding: var(--s-3); border-radius: var(--r-lg); background: var(--s1); }
 .eg-head { display: flex; align-items: center; gap: 10px; padding: 2px 4px 6px; }
-.eg-head b { font-family: var(--display); font-size: var(--t-md); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.eg-head b { font-family: var(--display); font-size: var(--t-md);  overflow-wrap: anywhere; }
 .eg-emu { position: relative; overflow: hidden; display: flex; align-items: center; gap: var(--s-3); padding: 10px 12px; border-radius: var(--r-md); background: var(--s2); color: inherit; border: 0; text-align: left; font: inherit; flex: none; }
 .eg-emu:focus { background: var(--focus); color: var(--on-focus); outline: none; }
 .eg-emu:focus .muted { color: var(--on-focus-dim); }
 .eg-mid { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-.eg-mid b { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.eg-mid .small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.eg-mid b {  overflow-wrap: anywhere; }
+.eg-mid .small {  overflow-wrap: anywhere; }
 .eg-get { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: rgba(255, 255, 255, 0.08); flex: none; }
 .eg-emu:focus .eg-get { background: rgba(0, 0, 0, 0.1); }
 .eg-bar-fill { position: absolute; left: 0; bottom: 0; height: 3px; background: currentColor; transition: width 0.3s ease; }

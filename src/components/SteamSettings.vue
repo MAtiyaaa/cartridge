@@ -257,7 +257,7 @@ onMounted(() => { if (ov.value) emit('ready'); load(); loadLive(); });
 .ss-emu:focus .muted { color: var(--on-focus-dim); }
 .ss-e-logo { width: 60px; height: 60px; border-radius: var(--r-md); display: grid; place-items: center; background: rgba(255, 255, 255, 0.06); flex: none; }
 .ss-e-mid { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
-.ss-e-mid b { font-size: var(--t-md); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ss-e-mid b { font-size: var(--t-md);  overflow-wrap: anywhere; }
 .chip.how-learned { background: rgba(80, 200, 120, 0.18); color: #9be8b4; }
 .chip.how-yours { background: rgba(var(--primary-rgb), 0.25); }
 .chip.none { background: rgba(245, 197, 66, 0.18); color: #ffd978; }

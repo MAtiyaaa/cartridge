@@ -142,7 +142,7 @@ onBeforeUnmount(() => layer?.pop());
 .pt-row.on .box .icon { color: var(--s0); }
 .pt-row.on:focus .box .icon { color: var(--focus); }
 .pt-mid { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.pt-sub { font-size: var(--t-sm); opacity: 0.75; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pt-sub { font-size: var(--t-sm); opacity: 0.75;  overflow-wrap: anywhere; }
 .pt-presets.off { opacity: 0.6; }
 .pt-presets { flex: none; display: flex; flex-direction: column; gap: 8px; margin: -4px 0 4px 44px; padding: 10px 12px; border-radius: var(--r-md); background: rgba(255, 255, 255, 0.04); }
 .pt-cat { display: flex; flex-direction: column; gap: 6px; }

@@ -38,7 +38,7 @@ const covers = computed(() => props.g.rom_ids.slice(0, 16).map((id) => romById(i
 .strip img { width: 92px; aspect-ratio: 2 / 3; object-fit: cover; border-radius: var(--r-sm); box-shadow: 0 8px 18px rgba(0, 0, 0, 0.55); }
 .txt { position: relative; display: flex; flex-direction: column; gap: 4px; max-width: 58%; }
 .ic { width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; background: rgba(255, 255, 255, 0.16); color: #fff; margin-bottom: 6px; }
-.txt b { font-family: var(--display); font-size: var(--t-lg); font-weight: 700; line-height: 1.1; text-shadow: 0 2px 12px rgba(0, 0, 0, 0.5); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.txt b { font-family: var(--display); font-size: var(--t-lg); font-weight: 700; line-height: 1.1; text-shadow: 0 2px 12px rgba(0, 0, 0, 0.5); overflow-wrap: anywhere; }
 .txt small { color: rgba(255, 255, 255, 0.75); font-size: var(--t-xs); }
 body.motion-reduce .genre:focus { transform: none; }
 </style>

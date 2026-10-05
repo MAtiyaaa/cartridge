@@ -1244,7 +1244,7 @@ watch(() => store.play, loadWeek);
 .st-add-plus { width: 36px; height: 36px; flex: none; border-radius: 50%; display: grid; place-items: center; background: rgba(255, 255, 255, 0.06); color: var(--text); transition: transform 240ms var(--ease-out), background 160ms ease; }
 .st-add-t { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .st-add-t b { color: var(--text); font-family: var(--display); font-size: var(--t-md); }
-.st-add-t span { font-size: var(--t-xs); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.st-add-t span { font-size: var(--t-xs);  overflow-wrap: anywhere; }
 .st-add:focus { color: var(--text); background: rgba(255, 255, 255, 0.04); border-color: transparent; box-shadow: var(--ring) !important; }
 .st-add:focus .st-add-plus { background: var(--focus); color: var(--on-focus); transform: rotate(90deg); }
 
@@ -1441,7 +1441,7 @@ watch(() => store.play, loadWeek);
 .st-emu-dot { position: absolute; top: 0; right: 0; width: 10px; height: 10px; border-radius: 50%; background: #5bd28a; box-shadow: 0 0 0 3px color-mix(in srgb, var(--s1) 80%, transparent); }
 .st-emu-dot.warn { background: #f5c542; }
 .st-emu-t { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-.st-emu-t b { font-family: var(--display); font-weight: 800; font-size: clamp(15px, 14cqh, 28px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.st-emu-t b { font-family: var(--display); font-weight: 800; font-size: clamp(15px, 14cqh, 28px);  overflow-wrap: anywhere; }
 .st-emu-t > span:not(.status) { color: var(--muted); font-size: var(--t-xs); }
 .st-emu-t .status { align-self: flex-start; }
 .st-spot-enter-active, .st-spot-leave-active { transition: opacity 900ms ease; }

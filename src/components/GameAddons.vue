@@ -137,7 +137,7 @@ onBeforeUnmount(() => { layer?.pop(); off?.(); });
 .ga-head { display: flex; align-items: center; gap: var(--s-4); }
 .ga-cover { width: 56px; height: 56px; object-fit: cover; border-radius: var(--r-sm); flex: none; }
 .ga-title { min-width: 0; }
-.ga h2 { margin: 2px 0 0; font-size: var(--t-xl); line-height: 1.15; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ga h2 { margin: 2px 0 0; font-size: var(--t-xl); line-height: 1.15;  overflow-wrap: anywhere; }
 .ga-tabs { display: flex; align-items: center; gap: var(--s-2); }
 .ga-tabs .seg { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
 .ga-tabs .seg button { flex: none; white-space: nowrap; }

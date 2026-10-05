@@ -244,7 +244,7 @@ onMounted(async () => { await nextTick(); focusFirst(el.value); });
 .res { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: var(--r-sm); font-size: var(--t-sm); }
 .res.ok { background: rgba(63, 185, 80, 0.1); color: #7ee787; }
 .res.bad { background: rgba(218, 54, 51, 0.1); color: #ff9b95; }
-.mono { font-family: ui-monospace, monospace; font-size: var(--t-sm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mono { font-family: ui-monospace, monospace; font-size: var(--t-sm);  overflow-wrap: anywhere; }
 h3 { font-size: var(--t-md); }
 .qr { display: flex; gap: 20px; align-items: center; padding: 16px; }
 .qr-img { width: 190px; height: 190px; flex: none; background: #fff; border-radius: var(--r-md); padding: 8px; }

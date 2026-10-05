@@ -1104,7 +1104,7 @@ onMounted(() => {
 .prow { display: grid; grid-template-columns: 30px 210px 1fr auto; align-items: center; gap: 14px; padding: 10px 14px; border-radius: var(--r-md); background: var(--s2); }
 .prow:focus { background: var(--focus); color: var(--on-focus); box-shadow: none; }
 .prow:focus .pp, .prow:focus .muted { color: var(--on-focus-dim); }
-.pn { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pn {  overflow-wrap: anywhere; }
 .pp { color: var(--muted); }
 .about { display: flex; align-items: center; gap: 22px; padding: 22px; }
 .swatches { display: flex; flex-wrap: wrap; gap: 10px; }
@@ -1118,7 +1118,7 @@ onMounted(() => {
 .finetune { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
 .presets { display: flex; flex-wrap: wrap; gap: 10px; }
 .preset { display: flex; flex-direction: column; gap: 6px; width: 120px; padding: 8px; border-radius: var(--r-md); background: var(--s2); text-align: left; }
-.preset b { font-size: var(--t-xs); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.preset b { font-size: var(--t-xs); font-weight: 600;  overflow-wrap: anywhere; }
 .preset-sw { position: relative; height: 44px; border-radius: var(--r-sm); display: grid; place-items: center; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.15); }
 .preset-sw i { position: absolute; top: 6px; right: 6px; width: 12px; height: 12px; border-radius: 50%; box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.7); }
 .preset.add .preset-sw { background: rgba(255, 255, 255, 0.06); color: var(--muted); border: 1px dashed var(--line-2); box-shadow: none; }
@@ -1182,7 +1182,7 @@ onMounted(() => {
 .src-top { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .src-path { display: flex; align-items: center; gap: 12px; font-size: var(--t-xs); min-width: 0; }
 .src-path .how { color: var(--muted); width: 110px; flex: none; }
-.src-path .mono { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+.src-path .mono { min-width: 0; flex: 1;  overflow-wrap: anywhere; }
 .chip.found { background: rgba(80, 200, 120, 0.18); color: #9be8b4; }
 .chip.found.nokey { background: rgba(245, 197, 66, 0.18); color: #ffd978; }
 .src-note { margin: 0; }

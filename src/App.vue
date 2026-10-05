@@ -453,8 +453,8 @@ watch(viewKey, async () => {
 .pop-icon img { width: 100%; height: 100%; object-fit: cover; }
 .pop-body { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .pop-kind { display: flex; gap: 6px; align-items: center; font-size: var(--t-xs); letter-spacing: 0.04em; color: #cfd6e4; }
-.pop-name { font-family: var(--display); font-weight: 700; font-size: var(--t-md); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.pop-game { font-size: var(--t-xs); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pop-name { font-family: var(--display); font-weight: 700; font-size: var(--t-md);  overflow-wrap: anywhere; }
+.pop-game { font-size: var(--t-xs); color: var(--muted);  overflow-wrap: anywhere; }
 .pop-enter-active, .pop-leave-active { transition: opacity 0.3s, transform 0.35s var(--ease); }
 .pop-enter-from { opacity: 0; transform: translateX(40px); }
 .pop-leave-to { opacity: 0; transform: translateY(-12px); }
