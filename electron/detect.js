@@ -305,7 +305,9 @@ const SKIP_UNDER_LOCAL = new Set(['share/Steam', 'share/Trash', 'share/flatpak',
 async function walk(roots, { maxDepth = 7, ms = 20000, maxDirs = 60000, skip = [], onProgress } = {}) {
   const t0 = Date.now(), seen = new Set(), found = [], skipReal = new Set(skip.map((p) => { try { return fs.realpathSync(p); } catch { return p; } }));
   let dirs = 0, stopped = false;
-  const stack = roots.filter(Boolean).map((r) => ({ d: r.dir || r, depth: 0, home: r.home || null }));
+  // roots in the order given (home first): the stack pops from the end, so they go on reversed. 0.9.43: it was the
+  // other way round, and a big /opt (GitHub's runners keep their tool cache there) used the whole budget before home
+  const stack = roots.filter(Boolean).map((r) => ({ d: r.dir || r, depth: 0, home: r.home || null })).reverse();
   while (stack.length) {
     if (Date.now() - t0 > ms || dirs > maxDirs) { stopped = true; break; }
     const { d, depth, home } = stack.pop();

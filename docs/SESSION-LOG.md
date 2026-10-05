@@ -6,6 +6,10 @@ The branch for 0.9.3 work is `claude/relaxed-fermat-30pigp`. Pull it before star
 
 ---
 
+## 5 Oct 2026 · 0.9.43 Steady Home
+- Owner: the screen shakes scrolling games on Home fast. Measured in Chromium (shelves' top per frame while pressing right/left every 70 ms, games with long titles and summaries): it jumped 70 px for ~5 frames on long ones. Cause and fix in CLAUDE.md 0.9.43. After: one position for every frame at 1280x800 and 1920x1080; the header keeps its old height (300 / 367 px); a long text title fits in two lines.
+- GitHub had no runners for about an hour (billing was fine, the owner checked: public repo, 0 of 2,000 minutes); 0.9.42 was merged so its release ran as soon as they came back.
+
 ## 5 Oct 2026 · 0.9.42 Glass (built; carries 0.9.41)
 - 0.9.41 was never published: the Test build sat queued 15 min without a runner and GitHub cancelled it, twice (no step ran; likely Actions minutes or a spending limit on the account). PR #59 stays open and 0.9.42 goes in it, with 0.9.41's notes inside 0.9.42's release notes.
 - Owner: "build the next update based on everything so far" and asked what I recommend for the Game Shelf. Recommended B (Display case): the only one that is a shelf, it scales to every tile size by adding cases, and A's 3D strip and reflection read badly on small tiles while C repeats the cover rows and Spotlight. Built B with A's turn-out (rotateY on a spring).

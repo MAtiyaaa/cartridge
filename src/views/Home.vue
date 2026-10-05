@@ -123,8 +123,19 @@ function heroAvail() {
 const logoCeil = () => Math.round(Math.min(230, Math.max(110, heroAvail() * 0.42)));
 function fitHero() {
   const h = heroEl.value, inner = h?.querySelector('.hero-in:not(.hero-leave-active)');
-  if (!h || !inner || h.querySelector('.hero-leave-active')) return; // not mid-crossfade: both would be measured
+  if (!h || !inner) return; // only the arriving one is measured (the leaving one is absolute, out of the flow)
   const logo = inner.querySelector('.game-logo, .hero-title');
+  // 0.9.42: a title in words (no logo) shrinks its own type until it fits, set on the element at once (no render
+  // in between, so it never shows too big), since the row no longer grows for it
+  if (logo?.tagName === 'H1') {
+    for (let i = 0, k = 1; i < 4; i++) {
+      const over = inner.scrollHeight - heroAvail(), th = logo.offsetHeight;
+      if (over <= 0 || !th) break;
+      k = Math.max(0.5, k * Math.max(0.5, (th - over - 2) / th));
+      inner.style.setProperty('--title-k', k.toFixed(3));
+    }
+    return;
+  }
   const logoH = logo ? logo.getBoundingClientRect().height / (parseFloat(getComputedStyle(document.body).zoom) || 1) : 0;
   const over = inner.scrollHeight - heroAvail(), ceil = logoCeil();
   if (over > 0) logoMaxH.value = Math.max(72, Math.floor(Math.min(logoMaxH.value, logoH) - over - 2));
@@ -312,6 +323,7 @@ useView(
 watch(() => [heroRom.value?.id, heroSys.value?.id, heroCol.value?.id, heroRom.value && store.logos[heroRom.value.id]], async () => {
   logoMaxH.value = logoCeil() || 160; // a new game: full size first, then fit
   await nextTick();
+  fitHero(); // before it's painted
   for (const t of [0, 180, 600]) setTimeout(() => requestAnimationFrame(fitHero), t);
 });
 watch(() => store.libVersion, async () => { await nextTick(); ensureFocus(el.value); });
@@ -319,7 +331,7 @@ onMounted(async () => { await nextTick(); ensureFocus(el.value); });
 </script>
 
 <style scoped>
-.home { position: absolute; inset: 0; display: grid; grid-template-rows: minmax(min-content, var(--hero-h, 46%)) 1fr; /* 0.9.28: grows to fit the logo and text, never runs off the top */ animation: viewIn var(--d-med) var(--ease); }
+.home { position: absolute; inset: 0; display: grid; grid-template-rows: max(300px, 34vh) 1fr; /* 0.9.42 (owner: the screen shook scrolling games fast): one fixed height. It was minmax(min-content, --hero-h), which in practice sized the row to each game's own text (the fr row took the rest): a long title or summary grew it for a few frames before fitHero shrank the logo, and every row below jumped. 300px / 34vh is the height it had for most games (300 at 1280x800, about 344 at 1080p), so the look stays. */ animation: viewIn var(--d-med) var(--ease); }
 .first-sync { grid-row: 1 / -1; align-content: center; }
 .first-sync h2 { font-size: var(--t-xl); color: var(--text); }
 .hero { position: relative; padding: var(--s-5) var(--s-7) var(--s-4); display: flex; align-items: flex-end; min-height: 300px; }
@@ -329,7 +341,7 @@ onMounted(async () => { await nextTick(); ensureFocus(el.value); });
 .hero :deep(.media) { bottom: -14vh; }
 .hero-in { position: relative; z-index: 1; max-width: 760px; display: flex; flex-direction: column; gap: var(--s-3); }
 .hero-leave-active { left: var(--s-7); bottom: var(--s-4); }
-.hero-title { font-family: var(--display); font-stretch: var(--display-stretch); font-size: clamp(var(--t-2xl), 4.6vw, var(--t-3xl)); font-weight: 800; line-height: 1; letter-spacing: -0.02em; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.hero-title { font-family: var(--display); font-stretch: var(--display-stretch); font-size: calc(clamp(var(--t-2xl), 4.6vw, var(--t-3xl)) * var(--title-k, 1)); font-weight: 800; line-height: 1; letter-spacing: -0.02em; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .meta { display: flex; align-items: center; gap: var(--s-4); flex-wrap: nowrap; white-space: nowrap; overflow: hidden; min-width: 0; color: var(--text); font-size: var(--t-md); font-weight: 500; }
 .summary { margin: 0; max-width: 680px; color: var(--muted); line-height: 1.5; font-size: var(--t-md); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .shelves { position: relative; overflow-y: auto; padding: var(--s-3) var(--s-7) 60vh; }
