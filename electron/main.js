@@ -2215,16 +2215,16 @@ function patchState(romId) {
 }
 // RPCS3's patch list, fetched the way RPCS3's "Download latest patches" does when it's missing or a
 // week old (owner, 0.9.16: show the patches RPCS3 has even if it was never asked to download them)
-async function freshRpcs3Patches(romId) {
+async function freshRpcs3Patches(romId, force = false) {
   const r = romIndexMain().get(Number(romId));
   if (!/ps3/i.test(`${r?.platform_slug} ${r?.platform_fs_slug}`)) return;
   const ph = patchHome(romId, 'rpcs3'), dirs = patchesMod.rpcs3Dirs();
   const dir = (ph.rpcs3Home && dirs.find((d) => d.root === ph.rpcs3Home)) || (ph.rpcs3Home === null ? dirs.find((d) => !d.root.includes('/.var/app/')) : null) || dirs[0];
   if (!dir) return;
   let age = Infinity; try { age = Date.now() - fs.statSync(path.join(dir.patches, 'patch.yml')).mtimeMs; } catch {}
-  if (age < 7 * 864e5) return;
-  try { const res = await patchesMod.rpcs3DownloadPatches(dir.patches); log('rpcs3 patches', res.updated ? 'downloaded' : 'up to date', dir.patches); if (!res.updated) fs.utimesSync(path.join(dir.patches, 'patch.yml'), new Date(), new Date()); }
-  catch (e) { log('rpcs3 patches download failed:', e.message); return `RPCS3’s patch list couldn’t be downloaded (${e.message}).`; }
+  if (age < 7 * 864e5 && !force) return;
+  try { const res = await patchesMod.rpcs3DownloadPatches(dir.patches); log('rpcs3 patches', res.updated ? 'downloaded' : 'up to date', dir.patches); if (!res.updated) fs.utimesSync(path.join(dir.patches, 'patch.yml'), new Date(), new Date()); if (force) return { updated: !!res.updated }; }
+  catch (e) { log('rpcs3 patches download failed:', e.message); if (force) throw new Error(`RPCS3’s patch list couldn’t be downloaded (${e.message}).`); return `RPCS3’s patch list couldn’t be downloaded (${e.message}).`; }
 }
 // A Switch game's version from its files' names (0.9.23): dumps carry [v<number>] (the title version,
 // 65536 per update) in their names; the highest one in the game's folder is what's installed
@@ -2341,18 +2341,20 @@ async function unzipTo(zip, dir) {
   } finally { try { close?.(); } catch {} }
 }
 // shadPS4's two patch lists, fetched like its launcher's Download Patches when missing or a week old (0.9.23)
-async function freshShadPatches(romId) {
+async function freshShadPatches(romId, force = false) {
   const r = romIndexMain().get(Number(romId));
   if (!/ps4/i.test(`${r?.platform_slug} ${r?.platform_fs_slug}`)) return;
   const st = ps4PatchState(Number(romId), r);
   if (!st.dir) return;
   const errs = [];
+  let got = 0;
   for (const repo of Object.keys(patchesMod.SHAD_REPOS)) {
     let age = Infinity; try { age = Date.now() - fs.statSync(path.join(st.dir, 'patches', repo, 'files.json')).mtimeMs; } catch {}
-    if (age < 7 * 864e5) continue;
-    try { const res = await patchesMod.shadDownloadPatches(st.dir, repo); log('shadps4 patches', repo, res.files, 'files'); }
+    if (age < 7 * 864e5 && !force) continue;
+    try { const res = await patchesMod.shadDownloadPatches(st.dir, repo); log('shadps4 patches', repo, res.files, 'files'); got += res.files || 0; }
     catch (e) { log('shadps4 patches download failed', repo, e.message); errs.push(`${repo === 'shadPS4' ? 'shadPS4’s' : 'GoldHEN’s'} patch list couldn’t be downloaded (${e.message}).`); }
   }
+  if (force) { if (errs.length && !got) throw new Error(errs.join(' ')); return { files: got, partly: errs.join(' ') }; }
   return errs.join(' ') || undefined;
 }
 // PS4 games (a folder with sce_sys/param.sfo) and shadPS4's patch repositories
@@ -4088,6 +4090,15 @@ const handlers = {
   'ps3up:cancel': () => { ps3upRun?.ac.abort(); return true; },
   // Cemu's own "Download latest community graphic packs" (0.9.32): now, whatever the week says
   'cemu:packsDownload': ({ romId }) => freshCemuPacks(Number(romId), true),
+  // 0.9.33 (owner: Cemu has Download Latest, so should shadPS4 and RPCS3): each emulator's own patch sources, now
+  // (RPCS3's patch API like its Download latest patches; shadPS4's and GoldHEN's repositories like its patch manager)
+  'patches:download': async ({ romId }) => {
+    const r = romIndexMain().get(Number(romId)), slugs = `${r?.platform_slug} ${r?.platform_fs_slug}`;
+    if (/ps3/i.test(slugs)) { const x = await freshRpcs3Patches(Number(romId), true); if (!x) throw new Error('RPCS3’s folder wasn’t found on this device. Start RPCS3 once, then try again.'); return { emu: 'RPCS3', ...x }; }
+    if (/ps4/i.test(slugs)) { const x = await freshShadPatches(Number(romId), true); if (!x) throw new Error('shadPS4’s folder wasn’t found on this device. Start shadPS4 once, then try again.'); return { emu: 'shadPS4', ...x }; }
+    if (/\bwiiu\b/i.test(slugs)) return { emu: 'Cemu', ...(await freshCemuPacks(Number(romId), true)) };
+    throw new Error('No patch download for this console.');
+  },
   'patches:list': async ({ romId }) => {
     const dlErr = (await freshRpcs3Patches(romId)) || (await freshShadPatches(romId)) || (await freshCemuPacks(romId));
     const st = patchState(romId), E = EMU_PATCH[st.emu];

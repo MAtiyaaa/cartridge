@@ -36,10 +36,10 @@
         <button class="btn" data-focus @click="closeModal(null)">{{ list.length ? 'Cancel' : 'Close' }}</button>
         <button v-if="list.length" class="btn primary" data-focus :disabled="!changed" @click="closeModal(changes())"><Icon name="mdiCheck" />Apply</button>
       </div>
-      <div v-else-if="list.length || emuName === 'Cemu'" class="row" style="justify-content: flex-end">
-        <!-- Cemu's own button (0.9.32): its community graphic packs, newest now -->
-        <button v-if="emuName === 'Cemu'" class="btn" data-focus :disabled="packsBusy" style="margin-right: auto" @click="packsDownload"><Icon :name="packsBusy ? 'mdiSync' : 'mdiDownload'" :class="{ spin: packsBusy }" />{{ packsBusy ? 'Downloading Graphic Packs…' : 'Download Latest Community Graphic Packs' }}</button>
-        <span v-if="changed" class="muted small" :style="emuName === 'Cemu' ? '' : 'margin-right: auto'">{{ changes().length }} change{{ changes().length === 1 ? '' : 's' }} to apply</span>
+      <div v-else-if="list.length || DL[emuName]" class="row" style="justify-content: flex-end">
+        <!-- the emulator's own download (0.9.32 Cemu's community graphic packs, 0.9.33 RPCS3's and shadPS4's patches), newest now -->
+        <button v-if="DL[emuName]" class="btn" data-focus :disabled="packsBusy" style="margin-right: auto" @click="packsDownload"><Icon :name="packsBusy ? 'mdiSync' : 'mdiDownload'" :class="{ spin: packsBusy }" />{{ packsBusy ? DL[emuName].busy : DL[emuName].label }}</button>
+        <span v-if="changed" class="muted small" :style="DL[emuName] ? '' : 'margin-right: auto'">{{ changes().length }} change{{ changes().length === 1 ? '' : 's' }} to apply</span>
         <button class="btn" data-focus :disabled="!changed || busy" @click="undo">Undo</button>
         <button class="btn primary" data-focus :disabled="!changed || busy" @click="apply"><Icon name="mdiCheck" />Apply</button>
       </div>
@@ -81,9 +81,20 @@ const changed = computed(() => props.list.some((p) => want[p.key] !== was[p.key]
 const changes = () => props.list.filter((p) => want[p.key] !== was[p.key] || (want[p.key] && presetsMoved(p))).map((p) => ({ key: p.key, on: want[p.key], ...(p.presets ? { presets: { ...choice[p.key] } } : {}) }));
 const busy = ref(false), packsBusy = ref(false);
 const emit = defineEmits(['reload']);
+const DL = {
+  Cemu: { label: 'Download Latest Community Graphic Packs', busy: 'Downloading Graphic Packs…' },
+  RPCS3: { label: 'Download Latest Patches', busy: 'Downloading RPCS3’s Patches…' },
+  shadPS4: { label: 'Download Latest Patches', busy: 'Downloading shadPS4 and GoldHEN Patches…' },
+};
 async function packsDownload() {
   packsBusy.value = true;
-  try { const r = await call('cemu:packsDownload', { romId: props.romId }); toast(r?.updated ? `Cemu's graphic packs are now ${r.version}` : `Cemu's graphic packs are up to date${r?.version ? ' (' + r.version + ')' : ''}`, 'ok', 3500, 'mdiDownload'); emit('reload'); }
+  try {
+    const r = await call('patches:download', { romId: props.romId });
+    toast(r.emu === 'Cemu' ? (r.updated ? `Cemu's graphic packs are now ${r.version}` : `Cemu's graphic packs are up to date${r?.version ? ' (' + r.version + ')' : ''}`)
+      : r.emu === 'RPCS3' ? (r.updated ? 'RPCS3’s patch list is the newest now' : 'RPCS3’s patch list is up to date')
+      : `shadPS4 and GoldHEN patches downloaded${r.partly ? '. ' + r.partly : ''}`, r.partly ? 'info' : 'ok', 4000, 'mdiDownload');
+    emit('reload');
+  }
   catch (e) { toast(e.message, 'error', 6000); }
   packsBusy.value = false;
 }
