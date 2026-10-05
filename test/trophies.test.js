@@ -45,3 +45,18 @@ test('a wrong key or no key gives no list, never garbage; not a TRP gives nothin
   assert.deepStrictEqual(T.readTrp(file, NP, null), {});
   assert.strictEqual(T.readTrp(Buffer.alloc(200), NP, KEY), null);
 });
+
+test('Xbox 360 title IDs are named from x360db, alternative IDs too, cached (0.9.29)', async () => {
+  const fs = require('fs'), os = require('os'), path = require('path');
+  const TN = require('../electron/titleNames');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tn-'));
+  let asked = 0;
+  TN.setup({ dir, fetchImpl: async () => { asked++; return { ok: true, json: async () => [{ id: '4D5307E6', alternative_id: ['4D53082A'], title: 'Halo 3' }, { id: 'bad', title: 'x' }] }; } });
+  assert.strictEqual(TN.nameFor('xenia', '4D5307E6'), ''); // first ask starts the load
+  await TN.loadX360();
+  assert.strictEqual(TN.nameFor('xenia', '4d53082a'), 'Halo 3');
+  assert.strictEqual(TN.nameFor('shadps4', 'NPWR00001_00'), '');
+  assert.ok(fs.existsSync(path.join(dir, 'x360db.json')));
+  assert.strictEqual(asked, 1);
+  fs.rmSync(dir, { recursive: true, force: true });
+});

@@ -19,6 +19,9 @@ watch(() => props.src, async (v) => {
   const off = () => { layers.forEach((l) => (l.on = false)); shown.value = ''; };
   if (!src) return off();
   if (layers[idx].src === src && layers[idx].on) { layers[idx].blur = blur; return; }
+  // 0.9.29 (owner: choppy on handhelds): holding a direction passes a game every 40 to 70 ms; only the one
+  // focus rests on is decoded and faded in (the passed ones were replaced before their fade ended anyway)
+  if (shown.value) { await new Promise((r) => setTimeout(r, 90)); if (my !== token) return; }
   const im = new Image();
   im.src = src;
   try { await im.decode(); } catch { if (my === token) off(); return; }
@@ -46,6 +49,13 @@ watch(() => props.src, async (v) => {
 @keyframes media-settle { from { transform: scale(1.025); } to { transform: none; } } /* 0.9.23: calmer, it changes with every game you pass */
 :global(body.motion-reduce .media img.on) { animation: none; }
 /* a cover standing in for a missing hero: blurred and dimmed, never a stretched sharp cover */
+/* 0.9.29: each picture on its own layer, so the fade is the compositor's work; without it the whole
+   header (picture and scrims) was repainted on every frame of every fade, the biggest cost on Home
+   without the GPU (measured: about a fifth of the CPU per focus move) */
+.media img { will-change: opacity; }
+/* without the GPU each frame of the fade recomposites the header: a shorter one (measured: a third less
+   CPU per focus move on Home). The GPU keeps the full fade. */
+:global(body.light-fx .media img) { transition-duration: var(--d-fast); }
 .media img.blur { filter: blur(28px) saturate(1.2) brightness(0.7); inset: -40px; width: calc(100% + 80px); height: calc(100% + 80px); }
 .media img.blur.on { animation: none; } /* a blur redrawn every frame of the settle costs too much without the GPU */
 :global(body.light-fx .media img.blur) { filter: saturate(1.1) brightness(0.55); }

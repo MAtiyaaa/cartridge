@@ -6,6 +6,100 @@ The branch for 0.9.3 work is `claude/relaxed-fermat-30pigp`. Pull it before star
 
 ---
 
+## 4 Oct 2026 · 0.9.31 Sony's Own Marks (built and released)
+
+Owner (photo of the PS3 card): "make it say Sony like the actual controller ... the PlayStation icon is wrong ... check PS2, PS1 and PS4". Found in RomM's frontend/assets/platforms: ROMMY on psx/ps2/ps3/psp, an R logo on all six Sony pictures, "Rommstation" on psx/ps2. Fixed at load time in sonyArt.js (path hashes, measured boxes), RomM's art not copied into the repo. Checked: renders of all six before and after, the PlayStation card in the app against the mock RomM serving RomM's own SVG, npm test, vite build, launch check. Owner to test: the Consoles page and Start console cards for every Sony console on the TV.
+
+## 4 Oct 2026 · 0.9.30 Switch, Read Properly (built and released)
+
+Owner: heavy focus on Switch IDs ("Eden reads the game ID and its version, figure out how from its Git"), and console card controllers looking cut out (photo). Found: Electron has no AES-XTS, so Cartridge's NCA header read always threw inside the app (tests run in plain Node, which has it). Rewrote the reader from Eden's source (mirror github.com/eden-emulator/mirror): CNMT for ID, type and version, NACP for the version string and name, tickets/title.keys for title-key NCAs, NCZ bodies, Eden NAND updates. Console cards: the glyph's drop-shadow was clipped by its own mask box. Checked: npm test (155), the reader inside Electron 44 on an OpenSSL-encrypted NSP with keys in Eden's folder, vite build, launch check, before/after render of the card. Owner to test: a game's Add-ons version line for NSP, XCI, NSZ games and an update installed in Eden; console cards on the TV.
+
+## 4 Oct 2026 · 0.9.29 The Syncthing Update (built and released)
+
+Owner: "take everything we discussed and start building this update", plus optimisation so it feels fluid anywhere (choppy on the ROG Ally), and Settings → Syncthing tabs Games, Main Server, This Device, merged when this device is the main server. Built everything in docs/plan-0.9.29.md.
+
+Decisions taken without the owner (said in the release message): the saves rule stays for Cartridge itself (it never writes a save); Syncthing changes saves only in folders the user made Cartridge set up, versioning always on; restore and Make Two-Way only on the user's choice. Existing Syncthing setups: the main-device option isn't offered at all. Push behaviour: Syncthing's normal always-on syncing for now (pause while playing is still the owner's to decide). PSN sign-in for PS4 names not built (owner to decide). Ryujinx left out of syncing (its save index differs per device). Optional folders (states, BIOS, keys) not offered.
+
+Found: the Ally runs Game Mode at 1080p, so the existing rules draw in software; GPU Always is opt-in with an automatic revert. Start's clock clouds kept animating without the GPU because of a specificity bug (half a core while idle).
+
+Checked here: npm test (147), vite build, launch check, Playwright on the mock RomM and a fake Syncthing REST server (main-device setup, pairing a waiting device, merged tab, Games tab with matched and unmatched saves, overview copies), CPU per focus move measured before and after. Owner to test on devices: two devices with Syncthing (blank on one, join from the other, a save syncing, Make Two-Way, Older Versions), GPU Always on the Ally, controls after closing a game started from Cartridge (send the log if it still needs a tap), Recently Launched, Xbox 360 names, Switch saves matched.
+
+Then the owner sent four photos and a list for the same update: emulator widget at 1x1, 4K picture search stacked, Steam pill moving the bar (now a ring round the Steam logo), clipped counts, shadPS4 typed numbers, hold A to expand trailing text with B to close, trophies widget names and every system, Openverse 401, menus A to Z, gentler row rolling, picture motion, Cemu packs missing, Steam collections listing every system and updating live, Rename/Keep Mine and Apply, Syncthing textures called saves and main server folders not openable, PS3 updates twice, controls dead after a game on a desktop PC. All built. Causes: Openverse allows 20 per page without an account; Cartridge never downloaded Cemu's community graphic packs (Cemu does it from its own menu); collection renames weren't shown until Steam saved its file; on the desktop the pad waited for window focus that Steam kept after the game. Checked: npm test (149), vite build, launch check, hold A expand in Playwright. Owner to test: collections apply with real Steam, Cemu packs on a Wii U game, controls after a game on the PC, ring while adding games.
+
+## 4 Oct 2026 · Plan for 0.9.29 The Syncthing Update (not built)
+
+Owner after 0.9.28 shipped: next update is "The Syncthing Update", saves first (find every save on the device, know which game it belongs to, Syncthing set up by Cartridge only on a blank Syncthing, the onboarding says so plainly). Multi-language is scrapped for now: remove the Language step, never say more languages are coming. Also next: trophy codes to names, Switch title IDs like Eden. "Don't build anything yet": only docs/plan-0.9.29.md was written, after reading Syncthing's docs and Eden's source. Open decisions for the owner are marked "Owner decides" in the plan (the saves rule exception, extra folders, PSN sign-in, how syncing is pushed).
+
+## 4 Oct 2026 · 0.9.28 The Dock
+
+Owner asked for this as 0.9.27; 0.9.27 (collection names) had already been published, so it ships as 0.9.28. Owner's list (with photos): Dock at the bottom clipping pages and the media bar, Dreamcast logo clipped, page overview as real pages with movement, Recently Played spacing, Emulators flow, console chip clipping, edge clipping in rows; Title Case, touch only working on Start, choppy on handhelds, widget spacing, Syncthing server files, onboarding Back trapped in the installer and smart focus, Syncthing in Game Mode (Decky plugin), Cemu pack choices, GitHub fork updates, Home flash before Start, clock speeding up when the bar moves, storage widget names, hints off by default, Dock colour, bottom as default, widget rework with console widgets and picture/GIF search, Start tips, L1/R1 for pages, add-on downloads on Downloads.
+
+Done: all of it except the two below (details in CLAUDE.md 0.9.28). Causes found:
+- Touch: Start's page swipe compared only down and up points, so on that device moves never reached the engine; it now takes moves from every event type and scrolls move-less swipes on release.
+- Sideways pages: scrollIntoView scrolled overflow-hidden boxes (Home, rows); they are reset now.
+- Syncthing: one shared 20,000-file limit and only this device's folders.
+
+Not done, said plainly: the clock speeding up after moving the bar could not be reproduced here (its position stayed still across bar changes); owner to say which clock and where. The Decky Syncthing plugin isn't installed (Decky's plugins folder is root's, so it needs a password); a systemd user service keeps Syncthing running in Game Mode instead. The Wallhaven and Openverse searches couldn't be reached from the build container (host allowlist), so they are written to their documented APIs and untested.
+
+Added after the first build (owner, same day): Start's rows of games move to their next game by themselves (20 s per row, one row at a time, 45 s pause after you step one yourself; crossfade for the art, slide for the name, the covers glide). Go to Game Page first in the achievements/trophies More. Unnamed PS4 games: shadPS4 keeps a game's name only with the installed game (its param.sfo and decrypted trophy list), so a device with only the synced user folder has just NPWR codes; the name now comes from the other device's RomM trophy note (same set key), and is remembered in titles.json. Needs the game played with Cartridge open on the device that has it installed, linked to a RomM game, with at least one trophy, so the note exists. Owner to test on device: two devices, PS4 game installed on one only.
+
+Checked here: npm test (135), vite build, launch check, Playwright on the mock RomM: touch paths (real touch, down/up only, other-pointer moves, mouse drag, edge swipe, top bar swipe, tap), Dock at the bottom at 1920x1080 and 1280x800, page overview moving a page, big widgets, new widgets.
+
+Owner to test on the device: touch scrolling everywhere (Settings → About → Touch check if not), the Dock on the TV and handheld, the page overview, picture search, Cemu resolution pack choice, frame generation from a game's More, a GitHub-link emulator update, Syncthing in Game Mode, the Games tab with a main server, handheld smoothness.
+
+---
+
+## 4 Oct 2026 · 0.9.27 Collection Names
+
+Owner: Steam console collections should be maker then console (Nintendo Wii, Sony PlayStation 3 and 4, Sega Dreamcast, Microsoft Xbox), and the shadPS4 version toggle belongs on the PlayStation 4 page, not Steam's main page (photo). Done. Checked here: npm test (new name tests), the Collections review on the fake Steam ("PlayStation" now proposes "Sony PlayStation"), vite build, launch check. Owner to test on the device: Settings → Steam → Collections renames, a new download going into the existing collection, the toggle on the PlayStation 4 page.
+
+0.9.26 was published (v0.9.26).
+
+---
+
+## 4 Oct 2026 · 0.9.26 The Touch Update
+
+Owner: touch never worked anywhere (Game Mode or desktop): taps work, but no swiping, scrolling or gestures; other apps on SteamOS scroll fine. Asked for an update only about touch.
+
+Found: driving Chromium with real touch input (CDP touch events) and with mouse-style drags, every page scrolled, so the pages themselves were never the problem: on the device the browser isn't turning touches into scrolling. Rather than depend on that, Cartridge now scrolls every touch itself (`touch-action: none`, the nav.js engine), whichever way the touch arrives. Checked here: real touches (Cartridge scrolls, no double scroll with the browser), touches the browser ignores, mouse-style drags, a tap opens a game, edge swipe goes back, top bar swipe changes tab, touch mode kept (no focus rings), npm test, vite build, launch check.
+
+Owner to test on the device, Game Mode and desktop: scrolling Home, Library, Settings and a menu; flicks glide; a swipe doesn't open a game; left-edge swipe back; top bar swipe; Start arranging by touch. If anything still fails: Settings → About, the Touch check line (it says how touches arrive and who scrolled), and try Look & Feel → Controls → Touch scrolling → The Browser's.
+
+0.9.25 was published (v0.9.25).
+
+---
+
+## 4 Oct 2026 · 0.9.25 Open Emulators
+
+Owner: "Build 0.9.25 just with this: open emulator from Cartridge, Settings, Emulators, Emulators." Done: Open at the top of each emulator's menu. Checked here: npm test, vite build, the handler in the app (a program starts; missing file, Windows build and a file without the exec bit each give a clear message), launch check. Owner to test on the device: Open for an AppImage, a Flatpak and an EmuDeck launcher, in Desktop Mode and in Game Mode (the emulator shows in front, the controller doesn't move Cartridge underneath, and Cartridge answers the controller again after the emulator closes).
+
+0.9.24 was published (v0.9.24, Cartridge-x86_64.AppImage).
+
+---
+
+## 4 Oct 2026 · 0.9.24 Set Up Your Way
+
+Owner's list (with photos): console glyph clipped, page dots (no RS, below the tiles), trophies/storage/week too empty when big, L1/R1 through games on row cards; emulator folders editable, shadPS4 version proof; Start add button, page overview on LT/RT, console widgets, square console cards, logos, any orientation; controls dead after a game, touch, double LT Caps, right to a pop-up's buttons; icon flicker, reinstall relink, Vita3K, Switch icon; Syncthing key and L1/R1; shadPS4 advanced settings in tabs, per-game frame generation; Cemu packs, HenrikoMagnifico, add-on size/author, add-on detail page, Switch IDs and version, add-on downloads on Downloads, Game Add-ons less cluttered, Patches row gone; What's New; onboarding A/B, EmuDeck folders, end on Start with a tour; auto add applies; No internet pill. Extras: weaker-device animations, card weight, frame gen updates shortcuts, Pin a Game picker, varied shine, keyboard from search, page-turn haptics, idle logos, multi-drive plan, Steam collections rework, Cartridge Installer, top bar placement, Metadata page, Licences, Syncthing icon/smarter/onboarding.
+
+Done: all of it (details in CLAUDE.md 0.9.24). Notes:
+- A/B hints in the welcome were off centre because `.w-hints span` also matched the button glyphs (now `.w-hints > span`).
+- EmuDeck in the background: EmuDeck's setup only runs through its own app (no supported headless mode), so the Cartridge Installer does the same job itself: ES-DE/EmuDeck folders, AppImages in ~/Applications, saves and storage linked in, its own launch options.
+- Steam collection rename live uses Steam's collection object (`m_strName`, or `SetName` when a build has it) and reads the name back; if it didn't stick, the helper renames it in the cloud-storage file while Steam is closed. Never run against a real Steam client yet.
+- Multi-drive: planning only, `docs/plan-multidrive.md`.
+- Owner, after the first push: the installer's folders and links only on a fresh setup (nothing found), so existing setups aren't touched; RS on Start round like a thumbstick.
+- Owner, later: emulators and forks from a GitHub link (last card on the Emulators page); the shadPS4 version line behind a Settings → Steam toggle, off by default.
+- CI: every push since emuPaths' test failed: it moved folders to /mnt/..., which `setPath` creates; fine as root here, EACCES on CI. Now inside the test's temp home.
+
+Answered: RPCS3 patches already follow the installed game version. Gemini's GTK4 idea isn't possible in Electron. HenrikoMagnifico's site can't be reached from the build container; the app reads it live on the device (7-day cache) with a built-in list as fallback.
+
+Checked here: `npm test` (132), vite build, Playwright on the mock RomM: Start tiles at 1280x800 and 1920x1080, top bar placements, Steam Collections review and rename through the helper (fake Steam), welcome Syncthing step, Cartridge Installer location and pick steps (Emulation folder made).
+
+Owner to test on the device: Steam Collections rename with live changes on and off; the console collection toggle after review; Cartridge Installer on internal and on an SD card (links in Emulation/saves and storage); Syncthing install from the welcome and a folder share; emulator Folders change for RPCS3 and Eden; Cemu graphic packs; controls after closing a game in Game Mode; touch in Game Mode; top bar at the bottom and left on the TV; Start L1/R1 and page overview.
+
+Still blocked: installing Graphify and the skills (the environment's safety check).
+
+---
+
 ## 4 Oct 2026 · 0.9.23 Make It Yours
 
 Owner's list (after reading the other account's handover): Vita3K update bricked the AppImage and installs still failed; Emulators delete/redownload, stable vs nightly, page link, Flatpak updates too slow, shadPS4 versions; add-ons install per emulator automatically, more texture pack sources (not PS2), shadPS4 and GoldHEN patches as tabs, Switch IDs and version, RPCS3 patches follow the game version; per-game emulator settings; instant Home hero, wider backgrounds, Switch icon size, media bar bugs; calmer animations like Start; a Start overhaul (pages on the right stick, widgets, custom HTML and pictures, tile-move bug, rows, Surprise me, trophies per console, console cards, 1x1 play time, wording, add button, Start by default); keyboard rows, Settings left/right, touch cursor, onboarding wording; Syncthing integration; Cartridge closing in Game Mode when another game closes.

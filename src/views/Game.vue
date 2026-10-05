@@ -160,7 +160,7 @@
 
 <script setup>
 import { similarTo } from '../recs.js';
-import { addGame, removeGame, applyChanges, pickEmulator, pickCollections } from '../steam.js';
+import { addGame, removeGame, applyChanges, pickEmulator, pickCollections, pickFrameGen } from '../steam.js';
 import { computed, onMounted, onBeforeUnmount, ref, nextTick, watch, defineAsyncComponent, getCurrentScope, shallowRef } from 'vue';
 import { store, heroArt, call, img, go, cover, bytes, year, rating, toast, confirm, download, downloadFor, romById, platformById, isNew, setBg, logoOf, resetLogos, artFor, choose, openModal, allRoms, visible, isFavourite, addToCollection, playOf, playtimeText, ago, loadPlay, askText, saveConfig, backdropOf, wantSharp } from '../store.js';
 import { pinToStart } from '../startTiles.js';
@@ -575,6 +575,23 @@ if (import.meta.env.MODE === 'android') {
   import('../android/play.js').then((m) => scope.run(() => { ap.value = m.usePlay({ romId: () => props.romId, base: () => base.value, detail: () => detail.value, installedPath: () => installedPath.value, dl: () => dl.value, space: () => space.value }); }));
 }
 const PC_SLUGS = /^(win|windows|win3x|pc|dos)$/i; // PC games (Android: open in GameNative, GameHub or Winlator)
+// Syncthing's older versions of one save (0.9.29): grouped by when they were replaced; restoring puts that
+// version back through Syncthing (its own versioning), the only time Cartridge asks for a save to change
+async function olderVersions(x) {
+  let all = {};
+  try { all = (await call('syncsaves:versions', { id: x.synced.id })) || {}; } catch (e) { toast(e.message, 'error', 5000); return; }
+  const rel = x.path.slice(x.synced.path.replace(/\/$/, '').length + 1);
+  const mine = Object.entries(all).filter(([f]) => !rel || f === rel || f.startsWith(rel + '/'));
+  const times = new Map();
+  for (const [f, vs] of mine) for (const v of vs) { const t = times.get(v.versionTime) || { at: Date.parse(v.versionTime), files: {} }; t.files[f] = v.versionTime; times.set(v.versionTime, t); }
+  const opts = [...times.values()].sort((a, b) => b.at - a.at).map((t) => ({ label: new Date(t.at).toLocaleString(), sub: `${Object.keys(t.files).length} ${Object.keys(t.files).length === 1 ? 'file' : 'files'} · replaced ${ago(t.at)}`, value: t.at, icon: 'mdiHistory', raw: true }));
+  if (!opts.length) { toast('No older versions of this save yet', 'info', 3000, 'mdiHistory'); return; }
+  const at = await choose({ title: 'Older Versions', message: 'The save as it was before another device replaced it.', options: opts });
+  const t = [...times.values()].find((y) => y.at === at);
+  if (!t) return;
+  if (!(await confirm('Put this version back?', 'Close the emulator first. The save it replaces is kept as an older version too, so this can be undone.', 'Restore'))) return;
+  try { const r = await call('syncsaves:restore', { id: x.synced.id, files: t.files }); const errs = Object.keys(r || {}).length; toast(errs ? `${errs} files couldn't be restored` : 'Restored', errs ? 'error' : 'ok', 3500, 'mdiHistory'); } catch (e) { toast(e.message, 'error', 5000); }
+}
 async function more() {
   const has = artFor(props.romId);
   const u = cached.value?.user;
@@ -600,13 +617,17 @@ async function more() {
       else if (st.inSteam) {
         steam.push({ label: 'Add to a Steam collection', sub: st.lastCollections?.length ? `Last time: ${st.lastCollections.join(', ')}` : 'One of yours, or a new one', value: 'steamcol', icon: 'mdiBookmarkPlusOutline' });
         steam.push({ label: 'Remove from Steam', sub: st.ours ? 'Only the shortcut, not the game' : 'Added outside Cartridge', value: 'steamrm', icon: 'mdiSteam' });
+        // 0.9.28 (owner: frame generation from the game's own menu). lsfg-vk and MAKO are Linux only
+        if (!IS_ANDROID) steam.push({ label: 'Frame Generation', sub: 'lsfg-vk or mako-run for this game', value: 'framegen', icon: 'mdiAnimationPlay' });
       } else steam.push({ label: 'Add to Steam', sub: 'Launches with your emulator setup', value: 'steamadd', icon: 'mdiSteam' });
       const ge = await call('steam:gameEmu', { romId: Number(props.romId) }).catch(() => null);
       play.push({ label: 'Emulator for this game', sub: ge?.current ? 'Its own pick' : 'Same as its console', value: 'gameemu', icon: 'mdiGamepadVariantOutline' });
       // 0.9.23 (owner: change the launch version for any game from its own page)
       if (!IS_ANDROID && /ps4/i.test(`${base.value?.platform_slug} ${base.value?.platform_fs_slug}`)) { // shadPS4's Linux builds
         const sv = await call('steam:shadVersions', { romId: Number(props.romId) }).catch(() => null);
-        play.push({ label: 'shadPS4 version', sub: sv?.current ? (sv.list.find((x) => x.path === sv.current)?.name || 'Its own pick') : 'shadPS4’s default', value: 'shadver', icon: 'mdiLayersTriple' });
+        // and which version really ran last, from shadPS4's own log (0.9.24, owner: how can I be sure?)
+        const lastRun = sv?.last?.version ? ` · last ran on v${sv.last.version}${sv.last.at ? ', ' + ago(sv.last.at) : ''}` : '';
+        play.push({ label: 'shadPS4 version', sub: (sv?.current ? (sv.list.find((x) => x.path === sv.current)?.name || 'Its own pick') : 'shadPS4’s default') + lastRun, value: 'shadver', icon: 'mdiLayersTriple' });
       }
       steamInfo = st;
     }
@@ -619,20 +640,17 @@ async function more() {
   if (trophySystem.value) play.push({ label: tro.value ? 'Change linked trophies' : 'Link to trophies', sub: 'Pick which emulator trophy set belongs to this game', value: 'trophies', icon: 'mdiLinkVariant' });
   const slugs = `${base.value?.platform_slug} ${base.value?.platform_fs_slug}`;
   const pe = /ps3/i.test(slugs) ? 'RPCS3' : /ps4/i.test(slugs) ? 'shadPS4' : /\bps2\b/i.test(slugs) ? 'PCSX2' : /\b(ngc|gamecube|gc|wii)\b/i.test(slugs) ? 'Dolphin' : /\bpsp\b/i.test(slugs) ? 'PPSSPP' : null;
-  // PS3 game updates from Sony's list (0.9.16); never holds the menu up for long
-  // Android: RPCS3's updates, desktop emulators' patch lists and add-on folders aren't reachable there
-  if (!IS_ANDROID && installedPath.value && !marked.value && /ps3/i.test(slugs)) {
-    const up = await Promise.race([call('ps3up:game', { romId: Number(props.romId) }).catch(() => null), new Promise((r) => setTimeout(() => r(null), 1500))]);
-    // 0.9.21 (owner: game updates on the game's own page, not only in Settings): always offered; when
-    // Sony's list is slow to answer, picking it checks and then installs
-    if (up?.todo?.length) play.push({ label: `Install game update ${up.todo[up.todo.length - 1].version}`, sub: `${up.todo.length} update${up.todo.length === 1 ? '' : 's'} from Sony · ${bytes(up.size)} · now ${up.have || 'unknown'}`, value: 'ps3up', icon: 'mdiPackageUp' });
-    else play.push({ label: 'Game updates', sub: up ? (up.error ? 'Couldn’t check Sony’s update list' : `Up to date${up.have ? ' · version ' + up.have : ''}`) : 'Check Sony’s update list for this game', value: 'ps3check', icon: 'mdiPackageUp' });
-  }
-  // 0.9.23 (owner: edit a game's emulator settings from Cartridge). Desktop only, like patches and add-ons:
-  // they write desktop emulators' own files
+  // PS3 game updates are a tab in Add-ons (0.9.29, owner: no second place for them)
+  // 0.9.23 (owner: edit a game's emulator settings from Cartridge)
+  // Android: game settings, add-ons and saves are desktop emulators' own files, not reachable there
   if (!IS_ANDROID && installedPath.value && !marked.value && (pe || /\bpsx\b/i.test(slugs))) play.push({ label: 'Game settings', sub: `${pe || 'DuckStation'}’s settings for this game only`, value: 'gamesettings', icon: 'mdiTune' });
-  if (!IS_ANDROID && installedPath.value && !marked.value && pe) play.push({ label: pe === 'PPSSPP' ? 'Cheats' : pe === 'Dolphin' ? 'Patches and cheats' : 'Patches', sub: `From ${pe}’s ${pe === 'PPSSPP' ? 'cheat' : 'patch'} list, saved in ${pe}`, value: 'patches', icon: 'mdiPuzzleOutline' });
-  if (!IS_ANDROID && installedPath.value && !marked.value && /\b(ps2|psx|ngc|gamecube|wii|psp|3ds|n3ds|switch|wiiu)\b/i.test(slugs)) play.push({ label: 'Add-ons', sub: /\bps2\b/i.test(slugs) ? 'Texture packs to download, and what’s installed' : 'Mods and packs to download, and what’s installed', value: 'textures', icon: 'mdiPuzzleOutline' });
+  // patches and cheats are in Game Add-ons (0.9.24, owner: no separate row for them here)
+  // 0.9.28 (owner: PS4 patches had gone from here): PS3 and PS4 too; Game Add-ons shows only the tabs the console has
+  if (!IS_ANDROID && installedPath.value && !marked.value && /\b(ps2|ps3|ps4|psx|ngc|gamecube|gc|wii|psp|3ds|n3ds|switch|wiiu)\b/i.test(slugs)) play.push({ label: 'Add-ons', value: 'textures', icon: 'mdiPuzzleOutline',
+    sub: /ps4/i.test(slugs) ? 'Patches from shadPS4 and GoldHEN' : /ps3/i.test(slugs) ? 'Patches and game updates' : /\bps2\b/i.test(slugs) ? 'Texture packs and patches' : /\bpsp\b/i.test(slugs) ? 'Mods and cheats' : 'Mods, packs and patches, and what’s installed' });
+  // 0.9.29 (The Syncthing Update): this game's saves on this device, found by the save's own ID
+  const sv = IS_ANDROID ? null : await Promise.race([call('saves:forRom', { romId: Number(props.romId) }).catch(() => []), new Promise((r) => setTimeout(() => r(null), 1500))]);
+  if (sv?.length) play.push({ label: 'Saves on This Device', sub: `${sv.length} ${sv.length === 1 ? 'save' : 'saves'} · ${sv.some((x) => x.synced) ? 'synced with Syncthing' : 'not synced'} · changed ${ago(Math.max(...sv.map((x) => x.at || 0)))}`, value: 'saves', icon: 'mdiContentSaveOutline' });
   if (installedPath.value) play.push({ label: 'Show file location', value: 'path', icon: 'mdiFolderOutline' });
   const top = [
     { label: fav.value ? 'Remove from favourites' : 'Add to favourites', sub: 'Saved in RomM', value: 'fav', icon: fav.value ? 'mdiHeartOff' : 'mdiHeartOutline' },
@@ -680,7 +698,7 @@ async function more() {
   if (v === 'gamesettings') { openModal('gamesettings', { romId: Number(props.romId), name: base.value.name }); return; }
   if (v === 'shadver') {
     const sv = await call('steam:shadVersions', { romId: Number(props.romId) }).catch(() => null);
-    const p = await choose({ sheet: true, title: 'shadPS4 version', message: base.value.name, options: [
+    const p = await choose({ sheet: true, title: 'shadPS4 version', message: base.value.name + (sv?.last?.version ? `\nThe last game shadPS4 ran${sv.last.serial ? ' (' + sv.last.serial + ')' : ''} started on v${sv.last.version}, ${ago(sv.last.at)}. Its log says so after every start.` : ''), options: [
       { label: 'shadPS4’s default', sub: 'The version picked in shadPS4’s launcher', value: '__default', icon: 'mdiArrowULeftTop', selected: !sv?.current },
       ...(sv?.list || []).map((x) => ({ label: x.name, sub: [x.codename, x.date].filter(Boolean).join(' · '), value: x.path, icon: 'mdiSourceBranch', selected: sv.current === x.path, raw: true })),
       { label: 'Add Versions', sub: 'Download older or newer shadPS4 builds', value: '__add', icon: 'mdiDownload' },
@@ -695,6 +713,17 @@ async function more() {
   if (v === 'mark' || v === 'unmark') { await setMark(v === 'mark'); return; }
   if (v === 'trophies') { await linkTrophies(); return; }
   if (v === 'path') { toast(installedPath.value, 'info', 5000, 'mdiFolder'); return; }
+  if (v === 'saves') {
+    const list = sv || [];
+    const p = await choose({ title: 'Saves on This Device', message: 'Read only: Cartridge never changes a save. A to copy where it is.', options: list.map((x) => ({ label: x.emuName + (x.shared ? ' · Memory Card' : ''), sub: `${bytes(x.size || 0)} · changed ${ago(x.at)} · ${x.synced ? 'synced in ' + x.synced.label : 'not synced'}${x.conflicts ? ` · ${x.conflicts} conflict ${x.conflicts === 1 ? 'copy' : 'copies'} from two devices` : ''}`, value: x.path, icon: x.synced ? 'mdiSync' : 'mdiContentSaveOutline', raw: true })) });
+    const x = list.find((y) => y.path === p);
+    if (!x) return;
+    // a save in one of Cartridge's synced folders can go back to an older version Syncthing kept (0.9.29)
+    const what = x.synced?.ours ? await choose({ title: x.emuName, options: [{ label: 'Older Versions', sub: 'Kept by Syncthing for 30 days when another device replaced it', value: 'old', icon: 'mdiHistory' }, { label: 'Copy Location', value: 'copy', icon: 'mdiContentCopy' }] }) : 'copy';
+    if (what === 'copy') { try { await call('clip:write', { text: p }); toast('Location copied', 'ok', 2200, 'mdiContentCopy'); } catch (e) { toast(e.message, 'error'); } }
+    if (what === 'old') await olderVersions(x);
+    return;
+  }
   if (v === 'pkg') { await installPkg(); return; }
   if (v === 'patches') { await openModal('gameaddons', { romId: Number(props.romId), name: base.value.name, tab: 'patches' }); return; }
   if (v === 'redownload') { await redownload(); return; }
@@ -711,14 +740,16 @@ async function more() {
     return;
   }
   if (v === 'delete') { await remove(); return; }
+  if (v === 'framegen') return pickFrameGen(Number(props.romId));
   if (v === 'steamcol') {
     const names = await pickCollections(steamInfo.console, steamInfo.lastCollections, true);
     if (!names?.length) return;
     try { await call('steam:addToCollections', { romId: Number(props.romId), names }); toast(`Added to ${names.join(', ')}`, 'ok', 3000, 'mdiSteam'); } catch (e) { toast(e.message, 'error', 6000); }
     return;
   }
-  if (v === 'textures') { await openModal('gameaddons', { romId: Number(props.romId), name: base.value.name, tab: /\bps2\b/i.test(base.value.platform_slug || '') ? 'tex' : 'mods' }); return; }
-  if (v === 'refresh') { try { detail.value = await call('rom:detail', { romId: Number(props.romId) }); resetLogos(props.romId); toast('Details refreshed', 'ok', 2000, 'mdiRefresh'); } catch (e) { toast(e.message, 'error'); } return; }
+  if (v === 'textures') { const sl = `${base.value.platform_slug} ${base.value.platform_fs_slug}`; await openModal('gameaddons', { romId: Number(props.romId), name: base.value.name, tab: /ps3|ps4/i.test(sl) ? 'patches' : /\bps2\b/i.test(sl) ? 'tex' : 'mods' }); return; }
+  // Android: rom:detail trims huge file lists (0.9.18)
+  if (v === 'refresh') { try { detail.value = await (IS_ANDROID ? call('rom:detail', { romId: Number(props.romId) }) : call('api:get', { path: `/api/roms/${props.romId}` })); resetLogos(props.romId); toast('Details refreshed', 'ok', 2000, 'mdiRefresh'); } catch (e) { toast(e.message, 'error'); } return; }
   if (v === 'reset') { store.art = { ...store.art }; delete store.art[props.romId]; await call('art:reset', { id: props.romId }); resetLogos(props.romId); toast('Artwork reset', 'ok', 2000, 'mdiRestore'); return; }
   if (!store.config.sgdbKey) { toast('Add a SteamGridDB API key in Settings → Look & feel first', 'error', 4500); return; }
   const url = await openModal('art', { kind: v, romName: base.value.name });

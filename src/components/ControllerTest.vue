@@ -18,6 +18,8 @@
       <div class="muted small">Mapping: {{ pad.mapping || 'not standard' }} · {{ pad.buttons.length }} buttons · {{ pad.axes.length }} axes</div>
     </template>
     <div class="muted small">Last touch or click came as: <b>{{ pointer || 'nothing yet' }}</b></div>
+    <!-- 0.9.26 (the touch update): what the screen sends and who scrolled, so a device report says where touch breaks -->
+    <div class="muted small">Touch check: {{ ti.touch }} touches, {{ ti.mouse }} mouse presses, {{ ti.touchEvents }} touch events, {{ ti.moves }} moves · scrolled by the browser {{ ti.native }}, by Cartridge {{ ti.ours }} · gestures {{ ti.gestures }}<template v-if="ti.last"> · last: <b>{{ ti.last }}</b></template></div>
   </div>
 </template>
 
@@ -25,17 +27,19 @@
 // Settings → About: live button, trigger and stick values, and how touches arrive (a real touch,
 // or a mouse click as Game Mode sometimes sends them). For checking controllers and touch on a device.
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
-import { padLive, lastPointer } from '../nav.js';
+import { padLive, lastPointer, touchInfo } from '../nav.js';
 import Icon from './Icon.vue';
 
 const NAMES = ['A', 'B', 'X', 'Y', 'LB', 'RB', 'LT', 'RT', 'Select', 'Start', 'L3', 'R3', 'Up', 'Down', 'Left', 'Right', 'Guide'];
 const snap = ref(null);
 const pointer = ref('');
+const ti = ref({ ...touchInfo });
 let raf = 0;
 const tick = () => {
   const p = padLive.pads[0];
   snap.value = p ? { id: p.id, mapping: p.mapping, buttons: p.buttons.map((b) => ({ pressed: b.pressed, value: b.value })), axes: [...p.axes] } : null;
   pointer.value = { touch: 'a real touch', pen: 'a pen', mouse: 'mouse (touches in Game Mode can arrive this way)' }[lastPointer.type] || '';
+  ti.value = { ...touchInfo };
   raf = requestAnimationFrame(tick);
 };
 onMounted(() => { raf = requestAnimationFrame(tick); });

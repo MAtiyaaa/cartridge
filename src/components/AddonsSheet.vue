@@ -10,7 +10,7 @@
         <div v-if="emu" class="muted small mono">{{ emu.folder ? short(emu.folder) : `${short(emu.root)} (this game’s ID couldn’t be read)` }}</div>
         <div v-if="here && wants(here.mods ? 'mods' : 'tex')" class="ad-here"><Icon name="mdiCheckCircle" :size="18" /><span>{{ here.mods ? 'Mods are' : 'A texture pack is' }} in place for this game ({{ here.files.toLocaleString() }} files), {{ here.by === 'cartridge' ? 'installed by Cartridge' : here.by === 'both' ? 'partly installed by Cartridge' : 'added outside Cartridge' }}.</span></div>
         <div v-if="emu && !emu.mods && wants('tex')" class="muted small">{{ emu.on ? 'Custom textures are on.' : 'Custom textures are off. Cartridge turns them on when it installs a pack.' }}</div>
-        <div v-if="d?.version && wants('mods')" class="ad-ver"><Icon name="mdiTagOutline" :size="16" /><span>Your copy: <b>{{ d.version.display ? 'version ' + d.version.display : d.version.update ? 'update ' + d.version.update : 'the base game' }}</b><template v-if="d.version.number != null"> · v{{ d.version.number }}</template>. Mods made for another version may not load.</span></div>
+        <div v-if="d?.version && wants('mods')" class="ad-ver"><Icon name="mdiTagOutline" :size="16" /><span>Your copy: <b>{{ d.version.display ? 'version ' + d.version.display : d.version.update ? 'update ' + d.version.update : 'the base game' }}</b><template v-if="d.version.text"> · {{ d.version.text }}</template><template v-else-if="d.version.number != null"> · v{{ d.version.number }}</template><template v-if="d.version.titleId"> · {{ d.version.titleId }}</template>. Mods made for another version may not load.</span></div>
       </div>
 
       <div v-if="!d" class="muted"><Icon name="mdiSync" :size="16" class="spin" /> Looking for add-ons…</div>
@@ -19,7 +19,7 @@
 
         <template v-if="mine.length">
           <div class="ad-h">Installed by Cartridge</div>
-          <button v-for="r in mine" :key="r.key" class="ad-row" data-focus @click="remove(r)">
+          <button v-for="r in mine" :key="r.key" class="ad-row" data-focus data-expand @click="remove(r)">
             <Icon name="mdiCheckCircle" :size="22" />
             <span class="ad-mid"><b>{{ r.name }}</b><span class="ad-sub">{{ [r.emuName, bytes(r.bytes), r.count + ' files'].join(' · ') }}</span></span>
             <span class="ad-end">Remove</span>
@@ -28,7 +28,7 @@
 
         <template v-if="featured.length && wants('tex')">
           <div class="ad-h">Featured packs</div>
-          <button v-for="f in featured" :key="f.id" class="ad-row" data-focus @click="openPage(f)">
+          <button v-for="f in featured" :key="f.id" class="ad-row" data-focus data-expand @click="openPage(f)">
             <Icon name="mdiStarFourPointsOutline" :size="22" />
             <span class="ad-mid"><b>{{ f.name }}</b><span class="ad-sub">by {{ f.authors[0] }} · download it from its page, then Install a Download below</span></span>
             <span class="ad-end">Open Page</span>
@@ -38,16 +38,16 @@
         <div v-if="d.error && (kind !== 'tex' || d.source === 'ps2')" class="muted small">{{ d.error }}</div>
         <div v-else-if="!packs.length" class="muted small">{{ !d.emus?.length ? 'No emulator for this console is set up here.' : kind === 'tex' ? (d.source === 'ps2' ? 'No texture packs for this game in the catalog yet.' : 'There’s no texture pack catalog for this console yet. A pack you put in the folder above is used once custom textures are on.') : 'No mods for this game on GameBanana.' }}</div>
         <template v-for="p in packs" :key="p.source + p.id">
-          <button class="ad-row" data-focus :disabled="!!run" @click="act(p)">
+          <button class="ad-row" data-focus data-expand :disabled="!!run" @click="act(p)">
             <img v-if="p.preview || p.previews?.[0]" class="ad-img" :src="p.preview || p.previews[0]" loading="lazy" />
             <Icon v-else name="mdiPuzzleOutline" :size="22" />
             <span class="ad-mid"><b>{{ p.name }}</b><span class="ad-sub">{{ subOf(p) }}</span></span>
-            <span class="ad-end">{{ has(p) ? 'Installed' : p.source === 'gb' ? (open === p.id ? 'Hide files' : 'Files') : 'Install' }}</span>
+            <span class="ad-end">{{ has(p) ? 'Installed' : 'Details' }}</span>
           </button>
           <template v-if="open === p.id">
             <div v-if="!files" class="muted small ad-files"><Icon name="mdiSync" :size="14" class="spin" /> Loading files…</div>
             <div v-else-if="!files.length" class="muted small ad-files">No zip, 7z or rar files in this mod.</div>
-            <button v-for="f in files" :key="f.id" class="ad-row ad-file" data-focus :disabled="!!run" @click="install(p, f)">
+            <button v-for="f in files" :key="f.id" class="ad-row ad-file" data-focus data-expand :disabled="!!run" @click="install(p, f)">
               <Icon name="mdiFileDownloadOutline" :size="20" />
               <span class="ad-mid"><b>{{ f.name }}</b><span class="ad-sub">{{ [bytes(f.size), f.description].filter(Boolean).join(' · ') }}</span></span>
               <span class="ad-end">Install</span>
@@ -73,7 +73,7 @@
 // picked above: PS2 texture packs from the EmuCoreX catalog, other consoles' mods from GameBanana.
 import { computed, onMounted, onBeforeUnmount, ref } from 'vue';
 import { pushLayer, focusFirst } from '../nav.js';
-import { store, call, closeModal, toast, bytes, confirm, pickFolder } from '../store.js';
+import { store, call, closeModal, toast, bytes, confirm, pickFolder, openModal, tab } from '../store.js';
 import Icon from './Icon.vue';
 
 // embedded (0.9.21): one tab of Game Add-ons (GameAddons.vue); kind 'tex' is the texture pack catalog
@@ -100,7 +100,7 @@ async function fromFile() {
 const mine = computed(() => (d.value?.installed || []).filter((r) => (!emu.value || r.emuRoot === emu.value.emuRoot) && ofKind(r)));
 const short = (p) => String(p || '').replace(store.info?.home || '\0', '~');
 const has = (p) => mine.value.some((r) => String(r.id) === String(p.id));
-const subOf = (p) => (p.source === 'ps2' ? [p.authors.join(', ') && 'by ' + p.authors.join(', '), bytes(p.size), p.files ? p.files.toLocaleString() + ' textures' : '', p.version].filter(Boolean).join(' · ') : [p.authors[0] && 'by ' + p.authors[0], p.category].filter(Boolean).join(' · '));
+const subOf = (p) => [p.authors?.[0] ? 'by ' + p.authors.join(', ') : '', p.size ? bytes(p.size) : '', p.files ? p.files.toLocaleString() + ' textures' : '', p.version, p.category].filter(Boolean).join(' · ');
 const runText = computed(() => { const r = run.value; if (!r) return ''; return r.state === 'download' ? `Downloading ${r.pct != null ? r.pct + '%' : ''}` : r.state === 'join' ? 'Joining the parts…' : r.state === 'install' ? `Installing ${r.pct || 0}%` : 'Starting…'; });
 
 // what is already in the game's folder (0.9.19), Cartridge's or not
@@ -113,18 +113,23 @@ async function load() {
   else emu.value = emus.value.find((e) => e.emuRoot === emu.value.emuRoot) || emus.value[0] || null;
 }
 function pickEmu(e) { emu.value = e; }
+// A opens the add-on in full (0.9.24): its text, pictures, size and maker, and Install at the bottom
 async function act(p) {
+  const r = await openModal('addondetail', { p: JSON.parse(JSON.stringify(p)), installed: has(p), kind: props.kind });
+  reopen();
+  if (!r) return;
   if (has(p)) return toast('Already installed. Remove it from the list above.', 'info', 3000);
-  if (p.source === 'ps2') return install(p, null);
-  if (open.value === p.id) { open.value = null; return; }
-  open.value = p.id; files.value = null;
-  try { files.value = await call('addons:gbFiles', { modId: p.id }); } catch (e) { files.value = []; toast(e.message, 'error'); }
+  if (r.file) return install(p, r.file);
+  if (r.install && p.source === 'ps2') return install(p, null);
 }
 async function install(p, f) {
   if (!emu.value) return toast('No emulator for this game is set up here.', 'info');
   run.value = { state: 'start' };
+  // 0.9.28 (owner): Install goes to Downloads, where the pack shows with its game, downloading then unpacking
+  const job = call('addons:install', { romId: props.romId, emuRoot: emu.value.emuRoot, pack: JSON.parse(JSON.stringify(p)), file: f ? JSON.parse(JSON.stringify(f)) : null });
+  closeModal(null); tab('downloads');
   try {
-    const r = await call('addons:install', { romId: props.romId, emuRoot: emu.value.emuRoot, pack: JSON.parse(JSON.stringify(p)), file: f ? JSON.parse(JSON.stringify(f)) : null });
+    const r = await job;
     toast(`Installed in ${emu.value.name}: ${r.files.toLocaleString()} files${r.patches ? ', in its patches (turn it on in the game’s Patches)' : r.graphicMods ? ', in its Graphics Mods (turn it on in the game’s Graphics Mods)' : r.autoOn ? '. Custom textures are on now.' : r.textures ? '. Turn custom textures on to see them.' : ''}`, 'ok', 5000, 'mdiPuzzleOutline');
     open.value = null;
   } catch (e) { if (!/abort/i.test(e.message)) toast(e.message, 'error', 6000); }

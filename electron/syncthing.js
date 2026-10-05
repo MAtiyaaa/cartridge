@@ -40,13 +40,35 @@ function find(home = HOME) {
   const fps = flatpakApps().filter((id) => FLATPAKS.includes(id));
   return { installed: !!(file || fps.length || onPath('syncthing')), flatpak: fps[0] || null, program: onPath('syncthing'), config: file || null };
 }
+// 0.9.24 (owner: "Syncthing refused the key in its settings file"): more than one settings file can be on a
+// device (an old ~/.config one beside the ~/.local/state one Syncthing 1.27+ uses, a Flatpak's), and the first
+// found wasn't always the running one. Each file's address and key, and a key you pasted, are tried until
+// Syncthing accepts one; that one is used from then on.
+let pasted = '', picked = null;
+const setLocalKey = (k) => { k = String(k || '').trim(); if (k !== pasted) { pasted = k; picked = null; } };
+async function pick(home = HOME, fetchImpl = fetch) {
+  if (picked && fs.existsSync(picked.file)) return picked;
+  const tries = [];
+  for (const file of configFiles(home).filter((f) => fs.existsSync(f))) {
+    let cfg; try { cfg = parseConfig(fs.readFileSync(file, 'utf8')); } catch { continue; }
+    const base = `${cfg.gui.tls ? 'https' : 'http'}://${cfg.gui.address.replace(/^0\.0\.0\.0/, '127.0.0.1')}`;
+    for (const key of [cfg.gui.apikey, pasted].filter(Boolean)) tries.push({ file, cfg, base, key });
+  }
+  let refused = false;
+  for (const t of tries) {
+    try { const r = await fetchImpl(t.base + '/rest/system/ping', { headers: { 'X-API-Key': t.key }, signal: AbortSignal.timeout(2500) }); if (r.ok) return (picked = t); if (r.status === 401 || r.status === 403) refused = true; } catch {}
+  }
+  return tries[0] ? { ...tries[0], refused } : null;
+}
 // what Cartridge can say about it now; never throws (the page shows what's missing instead)
 async function status({ fetchImpl = fetch, home = HOME } = {}) {
   const f = find(home);
   if (!f.config) return { ...f, running: false, why: f.installed ? 'Syncthing is installed but hasn’t been started yet (its settings file isn’t there).' : 'Syncthing isn’t installed.' };
-  let cfg; try { cfg = parseConfig(fs.readFileSync(f.config, 'utf8')); } catch (e) { return { ...f, running: false, why: `Syncthing’s settings couldn’t be read: ${e.message}` }; }
-  const base = `${cfg.gui.tls ? 'https' : 'http'}://${cfg.gui.address.replace(/^0\.0\.0\.0/, '127.0.0.1')}`;
-  const H = { 'X-API-Key': cfg.gui.apikey };
+  const pk = await pick(home, fetchImpl);
+  if (!pk) return { ...f, running: false, why: 'Syncthing’s settings couldn’t be read.' };
+  const cfg = pk.cfg, base = pk.base;
+  f.config = pk.file;
+  const H = { 'X-API-Key': pk.key };
   const get = async (p) => { const r = await fetchImpl(base + p, { headers: H, signal: AbortSignal.timeout(4000) }); if (!r.ok) throw new Error(`Syncthing answered ${r.status}`); return r.json(); };
   const folders = cfg.folders.map((x) => ({ ...x, saves: saveHint(x.path) }));
   try {
@@ -59,37 +81,40 @@ async function status({ fetchImpl = fetch, home = HOME } = {}) {
     folders.sort((a, b) => !!b.saves - !!a.saves); // saves first: that's what the Sync tab is for
     return { ...f, running: true, address: base, me: me.slice(0, 7), uptime: sys.uptime || 0, folders, devices };
   } catch (e) {
-    return { ...f, running: false, folders, devices: cfg.devices.map((d) => ({ name: d.name || d.id.slice(0, 7), online: false })), why: /401|403/.test(e.message) ? 'Syncthing refused the key in its settings file.' : 'Syncthing isn’t running right now.' };
+    return { ...f, running: false, folders, devices: cfg.devices.map((d) => ({ name: d.name || d.id.slice(0, 7), online: false })), why: /401|403/.test(e.message) ? 'Syncthing refused the key in its settings files. Paste its API key (Syncthing → Actions → Settings → General) to use it.' : 'Syncthing isn’t running right now.', needsKey: /401|403/.test(e.message) };
   }
 }
 // what's inside one synced folder, newest first (0.9.21, owner: a Sync tab that shows saves, view only).
 // Syncthing's own index (rest/db/browse) is read, never the files; nothing is opened, copied or changed.
 function flatten(tree, base = '', out = []) {
-  if (Array.isArray(tree)) { for (const e of tree) { const p = base ? base + '/' + e.name : e.name; if (e.type === 'FILE_INFO_TYPE_DIRECTORY' || e.children) flatten(e.children || [], p, out); else out.push({ path: p, size: e.size || 0, at: Date.parse(e.modTime) || 0 }); } return out; }
-  for (const [name, v] of Object.entries(tree || {})) { const p = base ? base + '/' + name : name; if (Array.isArray(v)) out.push({ path: p, at: Date.parse(v[0]) || 0, size: v[1] || 0 }); else flatten(v, p, out); }
+  // a folder at the depth asked for comes back empty: kept as an entry, its name still names the game (0.9.28)
+  if (Array.isArray(tree)) { for (const e of tree) { const p = base ? base + '/' + e.name : e.name; if (e.type === 'FILE_INFO_TYPE_DIRECTORY' || e.children) { if (e.children?.length) flatten(e.children, p, out); else out.push({ path: p + '/', size: 0, at: Date.parse(e.modTime) || 0, dir: true }); } else out.push({ path: p, size: e.size || 0, at: Date.parse(e.modTime) || 0 }); } return out; }
+  for (const [name, v] of Object.entries(tree || {})) { const p = base ? base + '/' + name : name; if (Array.isArray(v)) out.push({ path: p, at: Date.parse(v[0]) || 0, size: v[1] || 0 }); else if (v && Object.keys(v).length) flatten(v, p, out); else out.push({ path: p + '/', size: 0, at: 0, dir: true }); }
   return out;
 }
-async function browse(folder, { fetchImpl = fetch, home = HOME, limit = 40 } = {}) {
-  const f = find(home);
-  if (!f.config) throw new Error('Syncthing isn’t set up on this device.');
-  const cfg = parseConfig(fs.readFileSync(f.config, 'utf8'));
-  const base = `${cfg.gui.tls ? 'https' : 'http'}://${cfg.gui.address.replace(/^0\.0\.0\.0/, '127.0.0.1')}`;
-  const H = { 'X-API-Key': cfg.gui.apikey };
-  const get = async (p) => { const r = await fetchImpl(base + p, { headers: H, signal: AbortSignal.timeout(6000) }); if (!r.ok) throw new Error(`Syncthing answered ${r.status}`); return r.json(); };
-  const files = flatten(await get(`/rest/db/browse?folder=${encodeURIComponent(folder)}&levels=6`)).filter((x) => !/(^|\/)\.st(folder|ignore|versions)/.test(x.path));
-  let last = null; try { const st = await get('/rest/stats/folder'); last = st?.[folder]?.lastFile || null; } catch {}
-  files.sort((a, b) => b.at - a.at);
-  return { total: files.length, size: files.reduce((n, x) => n + x.size, 0), files: files.slice(0, limit), last: last?.filename ? { path: last.filename, at: Date.parse(last.at) || 0, deleted: !!last.deleted } : null };
+async function browse(folder, { fetchImpl = fetch, home = HOME, limit = 40, server: srv = null } = {}) {
+  // 0.9.29: the main server's folders too (owner: open PSP textures on the main server like on this device)
+  let a;
+  if (srv) a = api(srv.address, srv.apikey, fetchImpl, 8000);
+  else { const l = await localApi(home, fetchImpl); a = api(l.base, l.key, fetchImpl, 8000); }
+  const conf = await a.get(`/rest/config/folders/${encodeURIComponent(folder)}`).catch(() => ({}));
+  const fpath = String(conf.path || ''), label = conf.label || folder;
+  const files = flatten(await a.get(`/rest/db/browse?folder=${encodeURIComponent(folder)}&levels=6`)).filter((x) => !/(^|\/)\.st(folder|ignore|versions)/.test(x.path));
+  let last = null; try { const st = await a.get('/rest/stats/folder'); last = st?.[folder]?.lastFile || null; } catch {}
+  files.sort((x, y) => y.at - x.at);
+  // textures or saves, from the folder's path and name as well as the file's (a "GameCube Textures" folder is textures)
+  const texFolder = !!textureHint(fpath + '/' + label);
+  for (const f of files) f.kind = texFolder || textureHint(f.path) ? 'Textures' : 'Save';
+  return { id: folder, label, path: fpath, textures: texFolder, total: files.length, size: files.reduce((n, x) => n + x.size, 0), files: files.slice(0, limit), last: last?.filename ? { path: last.filename, at: Date.parse(last.at) || 0, deleted: !!last.deleted } : null };
 }
 
 // ---- 0.9.23 (owner: a proper Syncthing integration, a main server, which games have saves and textures synced)
 // Still read only for files: Cartridge asks Syncthing's REST API and never opens, copies or changes a synced
 // file. The one thing it asks Syncthing to do is rescan a folder (POST rest/db/scan), as Syncthing's own button does.
-function localApi(home = HOME) {
-  const f = find(home);
-  if (!f.config) throw new Error('Syncthing isn’t set up on this device.');
-  const cfg = parseConfig(fs.readFileSync(f.config, 'utf8'));
-  return { cfg, base: `${cfg.gui.tls ? 'https' : 'http'}://${cfg.gui.address.replace(/^0\.0\.0\.0/, '127.0.0.1')}`, key: cfg.gui.apikey };
+async function localApi(home = HOME, fetchImpl = fetch) {
+  const pk = await pick(home, fetchImpl);
+  if (!pk) throw new Error('Syncthing isn’t set up on this device.');
+  return { cfg: pk.cfg, base: pk.base, key: pk.key };
 }
 function api(base, key, fetchImpl = fetch, ms = 6000) {
   base = String(base || '').trim().replace(/\/+$/, '');
@@ -102,7 +127,8 @@ function api(base, key, fetchImpl = fetch, ms = 6000) {
     if (!r.ok) throw new Error(`Syncthing answered ${r.status}.`);
     return (r.headers.get('content-type') || '').includes('json') ? r.json() : r.text();
   };
-  return { base, get: (p) => call(p), post: (p) => call(p, { method: 'POST' }) };
+  const send = (method) => (p, body) => call(p, body ? { method, body: JSON.stringify(body), headers: { 'Content-Type': 'application/json' } } : { method });
+  return { base, get: (p) => call(p), post: send('POST'), put: send('PUT'), patch: send('PATCH') };
 }
 // everything about one Syncthing (this device's, or the main server): who it is, its devices, its folders
 async function overview(a) {
@@ -124,7 +150,7 @@ async function overview(a) {
 const TEX_HINT = /textures?|graphicmods|hires|load\/|texture.?pack/i;
 const textureHint = (p) => (TEX_HINT.test(p) ? 'Textures' : null);
 async function local({ fetchImpl = fetch, home = HOME } = {}) {
-  const l = localApi(home);
+  const l = await localApi(home, fetchImpl);
   return overview(api(l.base, l.key, fetchImpl));
 }
 async function server({ address, apikey }, { fetchImpl = fetch } = {}) {
@@ -132,16 +158,37 @@ async function server({ address, apikey }, { fetchImpl = fetch } = {}) {
   return overview(api(address, apikey, fetchImpl, 8000));
 }
 async function rescan(folder, { fetchImpl = fetch, home = HOME } = {}) {
-  const l = localApi(home);
+  const l = await localApi(home, fetchImpl);
   await api(l.base, l.key, fetchImpl).post(`/rest/db/scan?folder=${encodeURIComponent(folder)}`);
   return true;
+}
+// 0.9.24 (owner: Syncthing in the welcome, pick the folder it syncs). Folders to offer: the emulation saves
+// folder when there is one (EmuDeck, ES-DE layout), and Syncthing's own default, ~/Sync.
+function suggest(home = HOME, extra = []) {
+  const out = [];
+  for (const d of [...extra, path.join(home, 'Emulation', 'saves')]) if (d && fs.existsSync(d) && !out.some((o) => o.path === d)) out.push({ path: d, label: 'Emulation saves', sub: 'Your emulators\u2019 saves, in your Emulation folder' });
+  out.push({ path: path.join(home, 'Sync'), label: 'Sync', sub: 'Syncthing\u2019s own default folder' });
+  return out;
+}
+// Shares one folder in this device's Syncthing (the only config change Cartridge makes, and only when asked).
+// A folder already shared at that path is left as it is.
+async function addFolder({ dir, label }, { fetchImpl = fetch, home = HOME } = {}) {
+  const l = await localApi(home, fetchImpl);
+  const a = api(l.base, l.key, fetchImpl);
+  const have = await a.get('/rest/config/folders');
+  const same = (have || []).find((f) => path.resolve(String(f.path || '').replace(/^~(?=\/)/, home)) === path.resolve(dir));
+  if (same) return { id: same.id, existed: true };
+  fs.mkdirSync(dir, { recursive: true });
+  const id = 'cartridge-' + Math.random().toString(36).slice(2, 7);
+  await a.post('/rest/config/folders', { id, label: label || path.basename(dir), path: dir, type: 'sendreceive' });
+  return { id, existed: false };
 }
 // Which games have saves or textures synced (smart search). Every synced folder's index is read from
 // Syncthing (rest/db/browse), and each file path is matched to games by serial or title ID (PS1/PS2/PSP,
 // PS3, PS4, Vita, Switch, GameCube/Wii) or by name: the whole name, or one of 8+ letters inside a folder or file
 // name, so "Sonic" isn't taken for "Sonic Heroes".
 const norm = (s) => String(s || '').toLowerCase().replace(/&/g, 'and').replace(/[^a-z0-9]+/g, '');
-const SERIAL_RE = /\b([A-Z]{4})[-_. ]?(\d{3})\.?(\d{2})\b|\b(CUSA|PPSA|PCS[A-Z])[-_]?(\d{5})\b|\b(0100[0-9A-F]{12})\b/gi;
+const SERIAL_RE = /\b([A-Z]{4})[-_. ]?(\d{3})\.?(\d{2})\b|\b(CUSA|PPSA|PCS[A-Z])[-_]?(\d{5})\b|\b(0100[0-9A-F]{12}|0004[0-9A-F]{12})\b/gi; // 0.9.28: 3DS title IDs (0004…) too
 function serialsIn(text) {
   const out = new Set();
   for (const m of String(text || '').matchAll(SERIAL_RE)) out.add(m[6] ? m[6].toUpperCase() : m[4] ? (m[4] + m[5]).toUpperCase() : (m[1] + m[2] + m[3]).toUpperCase());
@@ -149,9 +196,10 @@ function serialsIn(text) {
 }
 // games: [{ id, name, ids: [serial or title id...] }] -> { [id]: { saves: [{ folder, files, at }], textures: [...] } }
 function matchGames(games, folders) {
-  const byId = new Map(), byName = [];
+  const byId = new Map(), byName = [], byExact = new Map();
   for (const g of games) {
     for (const s of g.ids || []) if (s) byId.set(String(s).toUpperCase().replace(/[-_.]/g, ''), g.id);
+    for (const s of g.discIds || []) { byExact.set(s.toUpperCase(), g.id); if (s.length === 6) byExact.set(s.slice(0, 3).toUpperCase(), g.id); }
     const k = norm(g.name.replace(/\s*[([].*$/, ''));
     if (k.length >= 5) byName.push([k, g.id]);
   }
@@ -167,22 +215,129 @@ function matchGames(games, folders) {
     const kind = textureHint(folder.path + '/' + f.path) ? 'textures' : 'saves';
     let gid = null;
     for (const s of serialsIn(f.path)) { if (byId.has(s)) { gid = byId.get(s); break; } }
+    // a folder named exactly after a game's ID (Dolphin's GALE01 or GAL texture folders, 0.9.28)
+    if (gid == null) for (const seg of f.path.split('/')) { const u = seg.toUpperCase(); if (byExact.has(u)) { gid = byExact.get(u); break; } }
     if (gid == null) { const parts = f.path.split('/').map((p) => norm(p.replace(/\.[^.]+$/, ''))); for (const [k, id] of byName) { if (parts.some((p) => p === k || (k.length >= 8 && p.includes(k)))) { gid = id; break; } } }
     if (gid != null) add(gid, kind, folder, f);
   }
   return out;
 }
-async function gamesSynced(games, { fetchImpl = fetch, home = HOME, cap = 20000 } = {}) {
-  const l = localApi(home), a = api(l.base, l.key, fetchImpl, 15000);
-  const conf = await a.get('/rest/config/folders');
-  const folders = [];
+// 0.9.28 (owner: only a few games showed from the main server): this device's folders and the main server's
+// (when one is set), each read up to its own limit (one huge texture folder used to use up a shared limit and
+// hide every folder after it); texture folders only as deep as their game folders, saves deeper.
+async function gamesSynced(games, { fetchImpl = fetch, home = HOME, cap = 40000, server: srv = null } = {}) {
+  const sources = [];
+  try { const l = await localApi(home, fetchImpl); sources.push(api(l.base, l.key, fetchImpl, 20000)); } catch (e) { if (!srv) throw e; }
+  if (srv?.address && srv?.apikey) sources.push(api(srv.address, srv.apikey, fetchImpl, 20000));
+  const folders = [], seen = new Set();
   let n = 0;
-  for (const x of conf) {
-    if (n > cap) break;
-    let files = []; try { files = flatten(await a.get(`/rest/db/browse?folder=${encodeURIComponent(x.id)}&levels=8`)).filter((f) => !/(^|\/)\.st(folder|ignore|versions)/.test(f.path)); } catch {}
-    n += files.length;
-    folders.push({ id: x.id, label: x.label || x.id, path: String(x.path || ''), files: files.slice(0, cap) });
+  for (const a of sources) {
+    let conf = []; try { conf = await a.get('/rest/config/folders'); } catch { continue; }
+    for (const x of conf) {
+      if (seen.has(x.id)) continue; // the same folder shared on both: read once
+      seen.add(x.id);
+      const tex = !!textureHint(String(x.path || '') + '/' + (x.label || ''));
+      let files = []; try { files = flatten(await a.get(`/rest/db/browse?folder=${encodeURIComponent(x.id)}&levels=${tex ? 4 : 14}`)).filter((f) => !/(^|\/)\.st(folder|ignore|versions)/.test(f.path)); } catch {}
+      n += files.length;
+      folders.push({ id: x.id, label: x.label || x.id, path: String(x.path || ''), files: files.slice(0, cap) });
+    }
   }
   return { games: matchGames(games, folders), folders: folders.length, files: n };
 }
-module.exports = { find, status, browse, flatten, parseConfig, configFiles, saveHint, textureHint, local, server, rescan, gamesSynced, matchGames, serialsIn, norm };
+// ---- Cartridge's save sync (0.9.29, The Syncthing Update). Only on a Syncthing nobody has set up yet (no other
+// devices, no folders but its empty default), or one Cartridge set up: an existing setup is never changed.
+// Main device: one folder per console's saves at the emulator's real save folder (saves.syncRoots), ID
+// cartridge-saves-<console>, kept in step both ways, with staggered versioning (30 days) so a replaced save
+// can always be restored. Other devices pair with it (it introduces them to each other) and take the folders
+// at their own emulators' paths, receive only until the user says two-way. Docs: rest/config, cluster-pending-*,
+// folder-versions-*, users/versioning, users/introducer, users/foldertypes.
+const PREFIX = 'cartridge-saves-';
+const DEVICE_RE = /^[A-Z2-7]{7}(-[A-Z2-7]{7}){7}$/;
+async function localA(fetchImpl = fetch, home = HOME) { const l = await localApi(home, fetchImpl); return api(l.base, l.key, fetchImpl, 10000); }
+function isBlank(conf, me) {
+  const devs = (conf.devices || []).filter((d) => d.deviceID !== me);
+  const folders = (conf.folders || []).filter((f) => !String(f.id).startsWith(PREFIX));
+  return !devs.length && folders.every((f) => f.id === 'default');
+}
+async function saveSync({ fetchImpl = fetch, home = HOME } = {}) {
+  const a = await localA(fetchImpl, home);
+  const [sys, conf] = await Promise.all([a.get('/rest/system/status'), a.get('/rest/config')]);
+  const me = sys.myID || '';
+  const pd = await a.get('/rest/cluster/pending/devices').catch(() => ({}));
+  const pf = await a.get('/rest/cluster/pending/folders').catch(() => ({}));
+  const names = new Map((conf.devices || []).map((d) => [d.deviceID, d.name || d.deviceID.slice(0, 7)]));
+  const ours = (conf.folders || []).filter((f) => String(f.id).startsWith(PREFIX));
+  const done = {}; for (const f of ours) { try { done[f.id] = Math.round((await a.get(`/rest/db/completion?folder=${encodeURIComponent(f.id)}`)).completion ?? 100); } catch {} }
+  return {
+    me, name: names.get(me) || '', blank: isBlank(conf, me),
+    devices: (conf.devices || []).filter((d) => d.deviceID !== me).map((d) => ({ id: d.deviceID, name: d.name || d.deviceID.slice(0, 7), introducer: !!d.introducer })),
+    folders: ours.map((f) => ({ id: f.id, label: f.label, path: f.path, type: f.type, paused: !!f.paused, devices: (f.devices || []).map((d) => d.deviceID).filter((d) => d !== me).map((d) => names.get(d) || d.slice(0, 7)), done: done[f.id] })),
+    pendingDevices: Object.entries(pd || {}).map(([id, v]) => ({ id, name: v.name || id.slice(0, 7), address: v.address || '', time: v.time })),
+    pendingFolders: Object.entries(pf || {}).filter(([id]) => id.startsWith(PREFIX)).map(([id, v]) => ({ id, label: Object.values(v.offeredBy || {})[0]?.label || id, from: Object.keys(v.offeredBy || {}) })),
+  };
+}
+const folderBody = async (a, { id, label, path: p, type, devices }) => {
+  const def = await a.get('/rest/config/defaults/folder').catch(() => ({}));
+  return { ...def, id, label, path: p, type, devices, fsWatcherEnabled: true, rescanIntervalS: 3600, maxConflicts: 10, versioning: { ...(def.versioning || {}), type: 'staggered', params: { maxAge: String(30 * 86400), cleanInterval: '3600' }, cleanupIntervalS: 3600 } };
+};
+// roots: saves.syncRoots(); only allowed on a blank Syncthing or one already made main by Cartridge (mine)
+async function makeMain(roots, { mine = false, fetchImpl = fetch, home = HOME } = {}) {
+  const a = await localA(fetchImpl, home);
+  const [sys, conf] = await Promise.all([a.get('/rest/system/status'), a.get('/rest/config')]);
+  const me = sys.myID;
+  if (!mine && !isBlank(conf, me)) throw new Error('This Syncthing is already set up with other devices or folders, so Cartridge leaves it as it is.');
+  const others = (conf.devices || []).filter((d) => d.deviceID !== me).map((d) => ({ deviceID: d.deviceID }));
+  const made = [];
+  for (const r of roots) {
+    if ((conf.folders || []).some((f) => f.id === r.id)) continue;
+    try { fs.mkdirSync(r.path, { recursive: true }); } catch {}
+    await a.post('/rest/config/folders', await folderBody(a, { id: r.id, label: r.label, path: r.path, type: 'sendreceive', devices: [{ deviceID: me }, ...others] }));
+    made.push(r.id);
+  }
+  return { me, made };
+}
+// add a device: on the main device it gets every Cartridge folder; joining, the main device is the introducer
+async function addDevice({ id, name, introducer = false }, { fetchImpl = fetch, home = HOME } = {}) {
+  id = String(id || '').trim().toUpperCase();
+  if (!DEVICE_RE.test(id)) throw new Error('That isn’t a Syncthing device ID (eight groups of seven letters and digits).');
+  const a = await localA(fetchImpl, home);
+  const conf = await a.get('/rest/config');
+  if (!(conf.devices || []).some((d) => d.deviceID === id)) {
+    const def = await a.get('/rest/config/defaults/device').catch(() => ({}));
+    await a.post('/rest/config/devices', { ...def, deviceID: id, name: name || id.slice(0, 7), introducer: !!introducer, autoAcceptFolders: false });
+  }
+  for (const f of (conf.folders || []).filter((x) => String(x.id).startsWith(PREFIX))) {
+    if ((f.devices || []).some((d) => d.deviceID === id)) continue;
+    await a.put(`/rest/config/folders/${encodeURIComponent(f.id)}`, { ...f, devices: [...(f.devices || []), { deviceID: id }] });
+  }
+  return true;
+}
+// a joining device takes the main device's folders at its own emulators' save folders, receive only at first
+async function acceptFolders(roots, { fetchImpl = fetch, home = HOME } = {}) {
+  const a = await localA(fetchImpl, home);
+  const [sys, pf] = await Promise.all([a.get('/rest/system/status'), a.get('/rest/cluster/pending/folders').catch(() => ({}))]);
+  const out = { added: [], missing: [] };
+  for (const [id, v] of Object.entries(pf || {})) {
+    if (!id.startsWith(PREFIX)) continue;
+    const r = roots.find((x) => x.id === id);
+    if (!r) { out.missing.push(id); continue; }
+    try { fs.mkdirSync(r.path, { recursive: true }); } catch {}
+    const from = Object.keys(v.offeredBy || {}).map((d) => ({ deviceID: d }));
+    await a.post('/rest/config/folders', await folderBody(a, { id, label: r.label, path: r.path, type: 'receiveonly', devices: [{ deviceID: sys.myID }, ...from] }));
+    out.added.push(id);
+  }
+  return out;
+}
+async function setType(id, type, { fetchImpl = fetch, home = HOME } = {}) {
+  if (!String(id).startsWith(PREFIX)) throw new Error('Cartridge only changes its own save folders.');
+  const a = await localA(fetchImpl, home);
+  await a.patch(`/rest/config/folders/${encodeURIComponent(id)}`, { type });
+  return true;
+}
+const versions = async (id, { fetchImpl = fetch, home = HOME } = {}) => (await localA(fetchImpl, home)).get(`/rest/folder/versions?folder=${encodeURIComponent(id)}`);
+async function restore(id, files, { fetchImpl = fetch, home = HOME } = {}) {
+  if (!String(id).startsWith(PREFIX)) throw new Error('Cartridge only restores in its own save folders.');
+  return (await localA(fetchImpl, home)).post(`/rest/folder/versions?folder=${encodeURIComponent(id)}`, files);
+}
+
+module.exports = { saveSync, makeMain, addDevice, acceptFolders, setType, versions, restore, isBlank, PREFIX, DEVICE_RE, suggest, addFolder, FLATPAKS, setLocalKey, pick, find, status, browse, flatten, parseConfig, configFiles, saveHint, textureHint, local, server, rescan, gamesSynced, matchGames, serialsIn, norm };

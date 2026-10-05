@@ -3,7 +3,7 @@
     <nav class="rail" :data-scroll="IS_ANDROID ? '' : undefined">
       <div class="eyebrow" style="padding: 0 14px 10px">Settings</div>
       <button v-for="s in sections" :key="s.id" class="rail-item" :class="{ on: sec === s.id }" data-focus :data-key="'sec-' + s.id" :data-autofocus="sec === s.id ? '' : undefined" @focus="sec = s.id" @click="IS_ANDROID ? pick(s.id) : enter()">
-        <SyncthingLogo v-if="s.id === 'syncthing'" :size="20" /><Icon v-else :name="s.icon" :size="20" />{{ s.label }}
+        <SyncthingLogo v-if="s.id === 'syncthing'" :size="20" mono class="rail-st" /><Icon v-else :name="s.icon" :size="20" />{{ s.label }}
       </button>
     </nav>
     <section class="pane" data-scroll data-zone ref="paneEl">
@@ -86,7 +86,7 @@
 
           <!-- Syncthing (its own tab in 0.9.21; renamed with its logo in 0.9.23, owner) -->
           <template v-else-if="sec === 'syncthing'">
-            <SyncCard />
+            <SyncCard ref="syncRef" />
           </template>
 
           <template v-else-if="sec === 'emu'">
@@ -109,6 +109,7 @@
               </button>
             </div>
             <div class="stack">
+              <button class="lrow" data-focus @click="openModal('installer')"><Icon name="mdiPackageDown" :size="24" /><div class="l-mid"><b>Cartridge Installer</b><span class="l-sub">An Emulation folder on the drive you pick, then the emulators you tick, set up like EmuDeck</span></div><Icon name="mdiChevronRight" :size="22" class="muted" /></button>
               <button class="lrow" data-focus @click="go('emu-setup')"><Icon name="mdiRadar" :size="24" /><div class="l-mid"><b>Emulator setup</b><span class="l-sub">Find emulators wherever they are, pick one per console, check BIOS and access</span></div><Icon name="mdiChevronRight" :size="22" /></button>
               <button class="lrow" data-focus @click="go('steam-health')"><Icon name="mdiStethoscope" :size="24" /><div class="l-mid"><b>Shortcut health</b><span class="l-sub">Steam shortcuts that would fail, and fixes for them</span></div><Icon name="mdiChevronRight" :size="22" /></button>
             </div>
@@ -123,6 +124,10 @@
               <!-- 0.9.21 (owner): game updates, patches and add-ons in one page; a game opens Game Add-ons with a tab for each -->
               <p class="muted small" style="margin-top: -6px">Mods, texture packs, patches and game updates for the games on this device, from each emulator's own lists, GameBanana and the EmuCoreX catalog. The same as Game Add-ons in a game's More menu.</p>
               <TextField v-model="gaFind" placeholder="Find a game" icon="mdiMagnify" mode="game" fkey="ga-find" />
+              <!-- one console at a time (0.9.24, owner: too long to scroll from Nintendo 3DS to PS4): pick it here, or LB/RB -->
+              <div v-if="gaAll.length > 1 && !gaFind" class="ga-cons" data-hscroll>
+                <button v-for="grp in gaAll" :key="grp.slug" class="ga-con" :class="{ on: gaCon === grp.slug }" data-focus @click="gaCon = grp.slug"><PIcon :p="grp.p" :size="26" /><span>{{ grp.name }}</span><em>{{ grp.games.length }}</em></button>
+              </div>
               <section v-for="grp in gaGroups" :key="grp.slug" class="con-sec">
                 <div class="con-head"><PIcon :p="grp.p" :size="34" /><b>{{ grp.name }}</b><span class="count">{{ grp.games.length }}</span><span v-if="grp.emu" class="con-emu"><EmuIcon :id="grp.id" :size="22" fallback="mdiPuzzleOutline" />{{ grp.emu }}</span></div>
                 <div class="stack">
@@ -244,32 +249,49 @@
             <p class="muted small" style="margin-top: -6px">{{ scaleNote }}</p>
 
 
+            <!-- 0.9.28 (owner): "top bar" is no longer always at the top, so it's the Dock -->
+            <div class="subh">Dock</div>
+            <div class="row"><span class="lbl">Placement</span><div class="seg"><button v-for="m in BAR_POS" :key="m.v" data-focus :class="{ on: (ui.barPos || 'bottom') === m.v }" @click="saveConfig({ ui: { barPos: m.v } })">{{ m.l }}</button></div></div>
+            <div class="row"><span class="lbl">Tabs</span><div class="seg"><button v-for="m in BAR_ALIGN" :key="m.v" data-focus :class="{ on: (ui.barAlign || 'center') === m.v }" @click="saveConfig({ ui: { barAlign: m.v } })">{{ m.l }}</button></div></div>
+            <div class="row"><span class="lbl">Style</span><div class="seg"><button v-for="m in BAR_STYLE" :key="m.v" data-focus :class="{ on: (ui.barStyle || 'pill') === m.v }" @click="saveConfig({ ui: { barStyle: m.v } })">{{ m.l }}</button></div></div>
+            <div v-if="(ui.barStyle || 'pill') === 'pill'" class="row"><span class="lbl">Colour</span><div class="seg"><button v-for="m in DOCK_COLOR" :key="m.v" data-focus :class="{ on: (ui.dockColor || '') === m.v }" @click="saveConfig({ ui: { dockColor: m.v } })">{{ m.l }}</button></div></div>
+            <Toggle :model-value="ui.hints === true" label="Button hints" desc="A strip along the bottom with what each button does on this page (A Open, Y Search…)" @update:model-value="(v) => saveConfig({ ui: { hints: v } })" />
             <div class="subh"><Icon name="mdiViewGridOutline" :size="20" />Games &amp; Cards</div>
             <div class="row"><span class="lbl">Box art size</span><div class="seg"><button v-for="(v, k) in CARD_SIZES" :key="k" data-focus :class="{ on: (ui.gridSize || 'md') === k }" @click="saveConfig({ ui: { gridSize: k } })">{{ v.label }}</button></div></div>
             <Toggle :model-value="ui.cardTitles !== false" label="Game names under box art" desc="Turn off for a clean wall of covers" @update:model-value="(v) => saveConfig({ ui: { cardTitles: v } })" />
             <Toggle :model-value="ui.mediaBar !== false" label="Media bar" desc="Show artwork of the highlighted game at the top of Home" @update:model-value="(v) => saveConfig({ ui: { mediaBar: v } })" />
             <div v-if="ui.mediaBar !== false" class="row"><span class="lbl">Media bar size</span><div class="seg"><button v-for="m in mediaSizes" :key="m.v" data-focus :class="{ on: (ui.mediaSize || MEDIA_DEFAULT) === m.v }" @click="saveConfig({ ui: { mediaSize: m.v } })">{{ m.l }}</button></div></div>
-            <Toggle :model-value="ui.logos !== false" label="Game logos" desc="Show the game's logo instead of its name on Home and game pages" @update:model-value="(v) => saveConfig({ ui: { logos: v } })" />
             <button class="lrow adv-tg" data-focus @click="lookAdv = !lookAdv"><Icon name="mdiTuneVariant" :size="22" /><div class="l-mid"><b>Advanced</b></div><Icon :name="lookAdv ? 'mdiChevronUp' : 'mdiChevronDown'" :size="22" /></button>
             <template v-if="lookAdv">
             <div class="row"><span class="lbl">Card corners</span><div class="seg"><button v-for="(v, k) in CARD_SHAPES" :key="k" data-focus :class="{ on: (ui.cardShape || 'rounded') === k }" @click="saveConfig({ ui: { cardShape: k } })">{{ v.label }}</button></div></div>
             <div class="row"><span class="lbl">Spacing</span><div class="seg"><button v-for="(v, k) in DENSITIES" :key="k" data-focus :class="{ on: (ui.density || 'normal') === k }" @click="saveConfig({ ui: { density: k } })">{{ v.label }}</button></div></div>
-            <template v-if="ui.logos !== false">
+            <Toggle :model-value="ui.hideEmpty" label="Hide empty systems" @update:model-value="(v) => saveConfig({ ui: { hideEmpty: v } })" />
+
+            </template>
+            </template>
+            <!-- Metadata (0.9.24, owner: its own tab): SteamGridDB, and fetching art ahead of time -->
+            <template v-else-if="lookPage === 'meta'">
+              <div class="subh">SteamGridDB</div>
+              <p class="muted small" style="margin-top: -6px">Logos come from your RomM server when it has them (ScreenScraper "logo" media). For everything else, add a free key from steamgriddb.com → Preferences → API. {{ store.config.sgdbKey ? 'Key saved.' : '' }}</p>
               <div class="row" style="align-items: flex-end; gap: 12px">
                 <TextField v-model="sgdbKey" label="SteamGridDB API key" placeholder="Paste your key" password icon="mdiKeyVariant" style="flex: 1" />
                 <button class="btn" data-focus :disabled="sgdbBusy" @click="saveSgdb"><Icon name="mdiCheck" :size="18" />{{ sgdbBusy ? 'Checking…' : 'Save key' }}</button>
               </div>
-              <div class="row" style="gap: 12px; align-items: center">
-                <button v-if="!logoJob" class="btn" data-focus @click="fetchAll"><Icon name="mdiDownloadMultiple" :size="18" />Fetch All Metadata</button>
-                <button v-else class="btn" data-focus @click="call('logo:stopAll')"><Icon name="mdiStop" :size="18" />Stop</button>
-                <div v-if="logoJob" class="logo-prog"><div class="bar live"><i :style="{ width: (logoJob.total ? (logoJob.done / logoJob.total) * 100 : 0) + '%' }" /></div><span class="muted small">{{ logoJob.done }} / {{ logoJob.total }} games · {{ logoJob.found }} logos</span></div>
-                <span v-else class="muted small">Gets every game's logo, sharpest background, cover and screenshot now, instead of as you browse.</span>
+              <div class="subh">Fetch Ahead of Time</div>
+              <p class="muted small" style="margin-top: -6px">Gets art now, instead of as you browse, so pages open with everything in place.</p>
+              <div v-if="logoJob" class="row" style="gap: 12px; align-items: center">
+                <div class="logo-prog"><div class="bar live"><i :style="{ width: (logoJob.total ? (logoJob.done / logoJob.total) * 100 : 0) + '%' }" /></div><span class="muted small">{{ logoJob.done }} / {{ logoJob.total }} games · {{ logoJob.found }} logos</span></div>
+                <button class="btn" data-focus @click="call('logo:stopAll')"><Icon name="mdiStop" :size="18" />Stop</button>
               </div>
-              <p class="muted small" style="margin-top: -6px">Logos come from your RomM server when it has them (ScreenScraper "logo" media). For everything else, add a free key from steamgriddb.com → Preferences → API. {{ store.config.sgdbKey ? 'Key saved.' : '' }}</p>
-            </template>
-            <Toggle :model-value="ui.hideEmpty" label="Hide empty systems" @update:model-value="(v) => saveConfig({ ui: { hideEmpty: v } })" />
-
-            </template>
+              <template v-else>
+                <button class="lrow" data-focus @click="fetchAll()"><Icon name="mdiDownloadMultiple" :size="22" /><span class="l-mid"><b>Fetch All Metadata</b><span class="l-sub">Logos, backgrounds, covers and screenshots for every game</span></span></button>
+                <button class="lrow" data-focus @click="fetchAll(['logos'])"><Icon name="mdiAlphaLBoxOutline" :size="22" /><span class="l-mid"><b>Fetch Logos</b><span class="l-sub">Each game’s logo, from RomM or SteamGridDB</span></span></button>
+                <button class="lrow" data-focus :disabled="!store.config.sgdbKey" @click="fetchAll(['heroes'])"><Icon name="mdiPanorama" :size="22" /><span class="l-mid"><b>Fetch Backgrounds</b><span class="l-sub">SteamGridDB’s heroes, the sharpest that fit your screen{{ store.config.sgdbKey ? '' : ' (needs a key)' }}</span></span></button>
+                <button class="lrow" data-focus @click="fetchAll(['covers'])"><Icon name="mdiImageMultipleOutline" :size="22" /><span class="l-mid"><b>Fetch Covers and Screenshots</b><span class="l-sub">From your RomM server, kept on this device</span></span></button>
+              </template>
+              <div class="subh">On Screen</div>
+              <Toggle :model-value="ui.logos !== false" label="Game logos" desc="Show the game's logo instead of its name on Home and game pages" @update:model-value="(v) => saveConfig({ ui: { logos: v } })" />
+              <p class="muted small">Steam’s own artwork for your games is in Settings → Steam → Refresh artwork.</p>
             </template>
             <template v-else-if="lookPage === 'motion'">
             <div class="subh"><Icon name="mdiAnimationPlayOutline" :size="20" />Motion &amp; Sound</div>
@@ -294,6 +316,8 @@
             <div class="subh"><Icon name="mdiGamepadVariantOutline" :size="20" />Controls &amp; Display</div>
             <div class="row"><span class="lbl">Touch &amp; mouse</span><div class="seg"><button v-for="p in pointers" :key="p.v" data-focus :class="{ on: (ui.pointer || 'auto') === p.v }" @click="setPointer(p.v)">{{ p.l }}</button></div></div>
             <p class="muted small" style="margin-top: -6px">Auto hides the cursor when you tap the screen and shows it when a mouse moves. Touch never shows a cursor.</p>
+            <div class="row"><span class="lbl">Touch scrolling</span><div class="seg"><button v-for="t in TOUCH_SCROLL" :key="t.v" data-focus :class="{ on: (ui.touchScroll || (IS_ANDROID ? 'browser' : 'own')) === t.v }" @click="saveConfig({ ui: { touchScroll: t.v } })">{{ t.l }}</button></div></div>
+            <p class="muted small" style="margin-top: -6px">Cartridge's scrolls with your finger and glides on release, however your system sends touches. The browser's is Chromium's own touch scrolling, for systems where it already works well. Swipe in from the left edge to go back, and swipe along the top bar to change tabs.</p>
             <div class="row"><span class="lbl">Button icons</span><div class="seg"><button v-for="k in buttonOpts" :key="k.v" data-focus :class="{ on: (ui.buttons || 'auto') === k.v }" @click="saveConfig({ ui: { buttons: k.v } })">{{ k.l }}</button></div></div>
             <p class="muted small" style="margin-top: -6px">Auto draws the buttons of the controller you're holding{{ padInfo?.name ? ` (right now: ${padInfo.name})` : '' }}, even when Steam presents it as an Xbox pad. <span class="btn-demo"><Btn b="A" /><Btn b="B" /><Btn b="X" /><Btn b="Y" /><Btn b="LB" /><Btn b="RT" /><Btn b="START" /><Btn b="SELECT" /></span></p>
             <div class="row"><span class="lbl">On-screen keyboard</span><div class="seg"><button v-for="k in keyboards" :key="k.v" data-focus :class="{ on: (ui.keyboard || 'auto') === k.v }" @click="saveConfig({ ui: { keyboard: k.v } })">{{ k.l }}</button></div></div>
@@ -315,8 +339,11 @@
 
             <button class="lrow adv-tg" data-focus @click="lookAdv = !lookAdv"><Icon name="mdiTuneVariant" :size="22" /><div class="l-mid"><b>Advanced</b></div><Icon :name="lookAdv ? 'mdiChevronUp' : 'mdiChevronDown'" :size="22" /></button>
             <template v-if="lookAdv">
+            <!-- Electron's GPU or software rendering: the desktop's choice, not Android's WebView -->
+            <template v-if="!IS_ANDROID">
             <div class="row"><span class="lbl">Rendering</span><div class="seg"><button v-for="g in gfx" :key="g.v" data-focus :class="{ on: (store.config.graphics || 'auto') === g.v }" @click="setGraphics(g.v)">{{ g.l }}</button></div></div>
-            <p class="muted small" style="margin-top: -6px">Auto uses the GPU from the app menu and on big screens like TVs. On handheld-size screens launched from Steam or Game Mode it uses software rendering, which is proven there. If the GPU ever fails, Cartridge switches to Compatible by itself. Compatible never uses the GPU.</p>
+            <p class="muted small" style="margin-top: -6px">Auto uses the GPU from the app menu and on big screens like TVs. On handheld-size screens launched from Steam or Game Mode it uses software rendering, which is proven there. GPU Always uses the GPU there too, which is much smoother on handhelds with a strong GPU: after the restart Cartridge asks if it looks right, and goes back to Auto by itself if you can't answer. If the GPU ever fails, Cartridge switches to Compatible by itself. Compatible never uses the GPU.</p>
+            </template>
             <div class="row"><button class="btn" data-focus @click="call('app:fullscreen')"><Icon name="mdiFullscreen" />Toggle fullscreen</button><button class="btn" data-focus @click="clearCache"><Icon name="mdiImageRemove" />Clear image cache</button></div>
             </template>
             </template>
@@ -338,6 +365,7 @@
             </div>
             <p v-if="IS_ANDROID" class="muted small">New versions come from the GitHub Releases page. The APK downloads in the background, then Android asks you to confirm the install. Your settings and games stay as they are.</p>
             <p v-else class="muted small">New versions come from the GitHub Releases page. They download in the background and replace this AppImage in place, so your Steam shortcut and settings stay as they are.</p>
+            <button class="lrow" data-focus @click="openModal('whatsnew')"><Icon name="mdiNewspaperVariantOutline" :size="22" /><span class="l-mid"><b>What’s New</b><span class="l-sub">Every version’s changes, newest first</span></span><span class="l-end"><Icon name="mdiChevronRight" :size="20" /></span></button>
             <ChangelogCard />
             <!-- Roll back swaps the AppImage: desktop only -->
             <template v-if="!IS_ANDROID">
@@ -440,7 +468,7 @@
                 </div>
               </div>
             </div>
-            <SteamSettings />
+            <SteamSettings ref="steamRef" />
             <template v-if="!IS_ANDROID && selfAdded">
             <div class="subh" style="margin-top: 10px">Cartridge</div>
             <div class="about glass">
@@ -489,6 +517,7 @@
               <div class="kv"><span>Controller</span><span>{{ padInfo?.name || input.padName || 'Press any button' }}</span></div>
               <div class="kv"><span>Data</span><span class="mono">{{ store.info.userData }}</span></div>
             </div>
+            <button class="lrow" data-focus @click="openModal('licenses')"><Icon name="mdiScaleBalance" :size="22" /><span class="l-mid"><b>Licences and Acknowledgements</b><span class="l-sub">The open source projects, emulators and services Cartridge is built on, and their licences</span></span><span class="l-end"><Icon name="mdiChevronRight" :size="20" /></span></button>
             <div class="row"><button class="btn danger" data-focus @click="call('app:quit')"><Icon name="mdiPower" />Quit Cartridge</button></div>
           </template>
         </div>
@@ -534,7 +563,7 @@ const AndroidEmulators = import.meta.env.MODE === 'android' ? defineAsyncCompone
 const AndroidDrives = import.meta.env.MODE === 'android' ? defineAsyncComponent(() => import('../android/AndroidDrives.vue')) : null;
 
 const el = ref(null);
-const paneEl = ref(null);
+const paneEl = ref(null), syncRef = ref(null), steamRef = ref(null);
 const OLD_SEC = { folders: 'emu', conn: 'romm', sync: 'romm' }; // sections merged in 0.9.3
 const sec = ref(OLD_SEC[store.settingsSection] || store.settingsSection || 'romm');
 const ALL_SECTIONS = [
@@ -575,10 +604,10 @@ const sgdbKey = ref(store.config.sgdbKey || '');
 const sgdbBusy = ref(false);
 // Fetch all logos: progress lives in the store (one listener for the whole app)
 const logoJob = computed(() => store.logoJob);
-async function fetchAll() {
+async function fetchAll(kinds = null) {
   if (IS_ANDROID && !store.config.sgdbKey) toast('Without a SteamGridDB key only logos RomM has can be found. Add a key above for the rest.', 'info', 6000, 'mdiKeyVariant');
   store.logoJob = { done: 0, total: 0, found: 0 };
-  call('logo:fetchAll').catch((e) => { store.logoJob = null; toast(e.message, 'error', 4000); });
+  call('logo:fetchAll', { kinds }).catch((e) => { store.logoJob = null; toast(e.message, 'error', 4000); });
 }
 // RetroAchievements account
 const raUser = ref(store.config.ra?.user || '');
@@ -762,7 +791,7 @@ async function resetLook() {
   if (!(await confirm('Reset Look & Feel?', 'Colour, background, fonts, cards, motion and sounds go back to the defaults.', 'Reset'))) return;
   await saveConfig({ ui: { colors: { highlight: '', buttons: '', bars: '', background: '' }, theme: 'cartridge', customColor: '', surface: 'solid', text: 'normal', font: 'cartridge', cardShape: 'rounded', density: 'normal', cardTitles: true, gridSize: 'md', bgStyle: 'solid', motion: 'normal', effects: 'auto', soundPack: 'soft', volume: 'medium', rumble: 'none' } });
 }
-const gfx = [{ v: 'auto', l: 'Auto (GPU)' }, { v: 'software', l: 'Compatible' }];
+const gfx = [{ v: 'auto', l: 'Auto' }, { v: 'gpu', l: 'GPU Always' }, { v: 'software', l: 'Compatible' }];
 const pointers = [{ v: 'auto', l: 'Auto' }, { v: 'touch', l: 'Touch' }, { v: 'mouse', l: 'Mouse' }];
 const homeAchOpts = [{ v: 'all', l: 'All' }, { v: 'ra', l: 'RetroAchievements' }, { v: 'trophies', l: 'Trophies' }, { v: 'off', l: 'Off' }];
 const homeAch = computed(() => ui.value.homeAch || (ui.value.raOnHome === false ? 'trophies' : 'all'));
@@ -829,7 +858,7 @@ function paneLeft() {
   if (more) return false;
   focusFirst(el.value, `[data-key="sec-${sec.value}"]`);
 }
-useView({ right: railRight, left: paneLeft, back: () => { if (!document.activeElement?.closest('.rail')) { focusFirst(el.value, `[data-key="sec-${sec.value}"]`); return; } return false; }, lb: () => (sec.value === 'emu' ? stepEmu(-1) : stepLook(-1)), rb: () => (sec.value === 'emu' ? stepEmu(1) : stepLook(1)) },
+useView({ right: railRight, left: paneLeft, back: () => { if (!document.activeElement?.closest('.rail')) { focusFirst(el.value, `[data-key="sec-${sec.value}"]`); return; } return false; }, lb: () => (sec.value === 'emu' ? stepEmu(-1) : sec.value === 'syncthing' ? syncRef.value?.step(-1) : sec.value === 'steam' ? steamRef.value?.step(-1) : stepLook(-1)), rb: () => (sec.value === 'emu' ? stepEmu(1) : sec.value === 'syncthing' ? syncRef.value?.step(1) : sec.value === 'steam' ? steamRef.value?.step(1) : stepLook(1)) },
   [{ b: 'A', label: 'Select' }, { b: 'B', label: 'Back' }, { b: 'LT+RT', label: 'Tabs' }]);
 // Settings → Emulators → Issues
 const issues = ref(null);
@@ -958,14 +987,19 @@ async function loadAll() {
 }
 const mediaSizes = [{ v: 'compact', l: 'Compact' }, { v: 'spacious', l: 'Spacious' }, { v: 'large', l: 'Large' }];
 // Emulators pages (0.9.16)
+// 0.9.28 (owner: the flow felt confusing): what you have first, then add-ons, then setup and health checks, then folders
 // Android: its own overview (AndroidEmulators) and Console Folders; getting, updating and adding to desktop emulators is desktop only
-const EMU_PAGES = [{ v: 'overview', l: 'Overview' }, { v: 'emus', l: 'Emulators' }, { v: 'addons', l: 'Game Add-ons' }, { v: 'folders', l: 'Console Folders' }].filter((p) => !IS_ANDROID || p.v === 'overview' || p.v === 'folders');
-const emuPage = ref('overview');
+const EMU_PAGES = IS_ANDROID ? [{ v: 'overview', l: 'Overview' }, { v: 'folders', l: 'Console Folders' }] : [{ v: 'emus', l: 'Emulators' }, { v: 'addons', l: 'Game Add-ons' }, { v: 'overview', l: 'Setup and Health' }, { v: 'folders', l: 'Console Folders' }];
+const emuPage = ref(IS_ANDROID || store.issues ? 'overview' : 'emus'); // problems waiting: open where they're listed
 // installed games whose emulator has patches (0.9.16), by console then name
 const PATCH_EMU = [[/ps3/i, 'RPCS3', 'rpcs3'], [/ps4/i, 'shadPS4', 'shadps4'], [/\bps2\b/i, 'PCSX2', 'pcsx2'], [/\b(ngc|gamecube|gc|wii)\b/i, 'Dolphin', 'dolphin'], [/\bpsp\b/i, 'PPSSPP', 'ppsspp']];
 // Game Add-ons page (0.9.21): every installed game with add-ons, patches or game updates, by console, with a search
 const gaFind = ref('');
-const gaGroups = computed(() => {
+const gaCon = ref('');
+// with nothing searched, one console's games at a time; searching looks through all of them
+const gaGroups = computed(() => (gaFind.value.trim() || gaAll.value.length < 2 ? gaAll.value : gaAll.value.filter((g) => g.slug === (gaCon.value || gaAll.value[0]?.slug))));
+function stepGaCon(d) { const l = gaAll.value; if (l.length < 2) return; const i = Math.max(0, l.findIndex((g) => g.slug === gaCon.value)); gaCon.value = l[(i + d + l.length) % l.length].slug; }
+const gaAll = computed(() => {
   const q = gaFind.value.trim().toLowerCase(), by = new Map();
   for (const r of allRoms()) {
     if (!store.installed[r.id] || (q && !r.name.toLowerCase().includes(q))) continue;
@@ -997,7 +1031,12 @@ const ps3Ups = ref(null);
 const coverSmall = (romId) => { const r = romById(romId); return r ? cover(r) : ''; };
 const ps3UpCount = computed(() => (ps3Ups.value || []).filter((g) => g.todo.length).length);
 async function loadPs3Updates(fresh = false) { ps3Ups.value = await call('ps3up:list', { fresh }).catch(() => []); }
-const LOOK_PAGES = [{ v: 'theme', l: 'Theme' }, { v: 'cards', l: 'Text and Cards' }, { v: 'motion', l: 'Motion and Sound' }, { v: 'controls', l: 'Controls' }];
+const TOUCH_SCROLL = [{ v: 'own', l: 'Cartridge’s' }, { v: 'browser', l: 'The Browser’s' }];
+const BAR_POS = [{ v: 'top', l: 'Top' }, { v: 'bottom', l: 'Bottom' }, { v: 'left', l: 'Left' }];
+const DOCK_COLOR = [{ v: '', l: 'Glass' }, { v: 'white', l: 'White' }, { v: 'black', l: 'Black' }, { v: 'accent', l: 'Accent' }];
+const BAR_ALIGN = [{ v: 'start', l: 'Aligned' }, { v: 'center', l: 'Centred' }];
+const BAR_STYLE = [{ v: 'plain', l: 'Plain' }, { v: 'pill', l: 'Floating Pill' }, { v: 'circle', l: 'Circles' }];
+const LOOK_PAGES = [{ v: 'theme', l: 'Theme' }, { v: 'cards', l: 'Text and Cards' }, { v: 'meta', l: 'Metadata' }, { v: 'motion', l: 'Motion and Sound' }, { v: 'controls', l: 'Controls' }];
 const lookPage = ref('theme'), lookAdv = ref(false);
 function setLookPage(v) { lookPage.value = v; lookAdv.value = false; }
 function stepLook(d) {
@@ -1040,10 +1079,10 @@ async function rollBack() {
   try { await call('update:rollback', { tag }); toast('Restarting…', 'ok', 3000, 'mdiHistory'); } catch (e) { toast(e.message, 'error', 6000); rollBusy.value = false; }
 }
 async function checkUpdates() { try { await call('update:check'); } catch (e) { toast(e.message, 'info', 4000); } }
-async function setPointer(v) { await saveConfig({ ui: { pointer: v } }); setPointerPref(v); }
+async function setPointer(v) { await saveConfig({ ui: { pointer: v } }); setPointerPref(v === 'auto' && store.info?.gamescope ? 'touch' : v); }
 async function setGraphics(v) {
   if ((store.config.graphics || 'auto') === v) return;
-  await saveConfig({ graphics: v });
+  await saveConfig({ graphics: v, gpuKept: false }); // GPU Always starts as a trial that has to be confirmed
   if (await confirm('Restart Cartridge?', 'The rendering change takes effect after a restart.', 'Restart now')) call('app:relaunch');
 }
 // is Cartridge itself in Steam (null until known)
@@ -1079,6 +1118,13 @@ onMounted(() => {
 .rail-item.on { color: var(--text); }
 .rail-item:focus { background: var(--focus); color: var(--on-focus); box-shadow: none; }
 .pane { overflow-y: auto; padding: 6px 12px 60px 24px; }
+.ga-cons { display: flex; gap: 8px; overflow-x: auto; padding: 8px 6px 10px; margin: 0 -6px; scrollbar-width: none; } /* room for a selected chip (0.9.28: it was cut off) */
+.ga-con { flex: none; display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 999px; background: var(--s1); box-shadow: var(--weight-edge); font-weight: 600; font-size: var(--t-sm); }
+.ga-con em { font-style: normal; color: var(--muted); font-weight: 500; }
+.ga-con.on { background: var(--sel); }
+.ga-con:focus-visible, .pad-mode .ga-con:focus { background: var(--focus); color: var(--on-focus); box-shadow: none; outline: none; } /* the standard highlight: white fill, dark text, no ring */
+.pad-mode .ga-con:focus em { color: var(--on-focus-dim); }
+.rail-st { color: inherit !important; }
 .pane-in { display: flex; flex-direction: column; gap: 16px; max-width: 860px; }
 .pane h1 { font-size: var(--t-2xl); font-weight: 700; margin: 4px 0 6px; }
 .card-s { padding: 18px 20px; display: flex; flex-direction: column; gap: 10px; }

@@ -198,7 +198,8 @@ module.exports = function createTrophyService(ctx) {
   // user folder gives NPWR12345_00; Xenia sometimes has no title) takes the name another device wrote
   // to RomM, else the linked library game's (0.9.3 K, E1). Nothing is written into emulator folders.
   const isCode = (t) => !t || /^(NPWR\d{5}_\d{2}|[0-9A-F]{8}|CUSA\d{5}|[A-Z]{4}\d{5}|PCS[A-Z]\d{5})$/i.test(String(t).trim());
-  const nameOf = (title, remTitle, romId) => (!isCode(title) ? title : !isCode(remTitle) ? remTitle : romById(romId)?.name || title || remTitle || 'Unknown game');
+  // 0.9.29: then a built-in name for the code (titleNames: Xbox 360 title IDs from x360db)
+  const nameOf = (title, remTitle, romId, src) => (!isCode(title) ? title : !isCode(remTitle) ? remTitle : romById(romId)?.name || ctx.codeName?.(src, title || remTitle) || title || remTitle || 'Unknown game');
   function merged(k) {
     const loc = games.get(k);
     const rem = remote.get(k)?.data;
@@ -220,7 +221,7 @@ module.exports = function createTrophyService(ctx) {
     }
     const romId = k in links ? links[k] || null : remote.get(k)?.romId || (loc ? autoLink(loc) : null);
     // still only a code (a game deleted before Cartridge learnt its name): say so, keep the code (0.9.16)
-    const title = nameOf(base.title, rem?.title, romId), unnamed = isCode(title);
+    const title = nameOf(base.title, rem?.title, romId, base.src), unnamed = isCode(title);
     return { ...base, title: unnamed ? `Unnamed ${T.SOURCES[base.src]?.short || ''} game`.replace('  ', ' ') : title, code: unnamed ? title : null, romId: romId || null, key: k };
   }
   function light(g) {
@@ -376,12 +377,21 @@ module.exports = function createTrophyService(ctx) {
       }
       // games played only on other devices: ROMs with notes on trophy consoles
       const localRoms = new Set([...games.values()].map(autoLink).filter(Boolean));
-      const withNotes = ORDER.flatMap((id) => romsFor(id)).filter((r) => r.has_notes && !localRoms.has(r.id)).slice(0, 80);
+      // consoles with a game known here only by its code are read first, so the 80 cover them
+      const coded = new Set([...games.values()].filter((g) => isCode(g.title)).map((g) => g.src));
+      const withNotes = [...ORDER.filter((id) => coded.has(id)), ...ORDER.filter((id) => !coded.has(id))].flatMap((id) => romsFor(id)).filter((r) => r.has_notes && !localRoms.has(r.id)).slice(0, 80);
       for (const r of withNotes) {
         const all = await notesAll(r.id);
         for (const n of all.filter((x) => x.data.cartridge === 'trophies' && x.title === NOTE_TITLE)) {
           const k = `${n.data.src}:${n.data.set}`;
-          if (!T.SOURCES[n.data.src] || games.has(k)) continue;
+          if (!T.SOURCES[n.data.src]) continue;
+          // 0.9.28: a game this device has only as a code (a PS4 game that isn't installed here, so shadPS4 left
+          // NPWR06616_00) takes the name and the library link from the device that wrote the note
+          if (games.has(k)) {
+            if (!isCode(games.get(k).title) || remote.has(k) && !isCode(remote.get(k).data?.title)) continue;
+            if (isCode(n.data.title)) continue;
+            T.rememberTitle(n.data.set, n.data.title);
+          }
           const icons = cfg().syncIcons === false ? {} : unpackIcons(n.data.set, all.filter((x) => x.data.cartridge === 'trophy-icons' && x.data.set === n.data.set));
           remote.set(k, { romId: r.id, noteId: n.id, data: n.data, icons }); pulled++;
         }

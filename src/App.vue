@@ -31,7 +31,12 @@
       <!-- Android: the status area is a button that opens the Quick Menu, which shows the same things in more detail -->
       <component :is="IS_ANDROID ? 'button' : 'div'" class="sys" v-bind="IS_ANDROID ? { tabindex: -1, 'aria-label': 'Quick Menu' } : {}" v-on="IS_ANDROID ? { click: () => (store.quickMenu = !store.quickMenu) } : {}">
         <div v-if="syncBusy" class="item sync-pill"><Icon name="mdiSync" :size="16" class="spin" />{{ syncLabel }}</div>
-        <div v-if="steam.progress" class="item sync-pill"><Icon name="mdiSteam" :size="16" />{{ steamProgressLabel(steam.progress) }}</div>
+        <!-- 0.9.29 (owner): adding to Steam is a ring filling round the Steam logo, one fixed size, so nothing in the
+             bar moves (the wide "Steam artwork 18/43" pill pushed the search into the Dock); no track, the arc grows -->
+        <div v-if="steam.progress" class="item steam-ring" :class="{ wait: steamPct == null }" :title="steamProgressLabel(steam.progress)" :aria-label="steamProgressLabel(steam.progress)">
+          <svg viewBox="0 0 36 36"><circle class="sr-arc" cx="18" cy="18" r="15.5" pathLength="100" :stroke-dasharray="`${steamPct ?? 22} 100`" /></svg>
+          <Icon name="mdiSteam" :size="17" class="sr-logo" />
+        </div>
         <div v-if="activeDl.length" class="item">
           <svg width="22" height="22" viewBox="0 0 36 36" class="ring"><circle cx="18" cy="18" r="15" fill="none" stroke="rgba(255,255,255,.12)" stroke-width="4" /><circle cx="18" cy="18" r="15" fill="none" stroke="url(#rg)" stroke-width="4" stroke-linecap="round" :stroke-dasharray="`${dlPct * 0.943} 100`" transform="rotate(-90 18 18)" /><defs><linearGradient id="rg"><stop offset="0" style="stop-color: var(--primary-l)" /><stop offset="1" style="stop-color: var(--peach)" /></linearGradient></defs></svg>
           {{ dlPct }}%
@@ -63,12 +68,18 @@
   <SteamEmu v-if="store.modal?.type === 'steam-emu'" :key="JSON.stringify(store.modal.props)" v-bind="store.modal.props" />
   <ArtPicker v-if="store.modal?.type === 'art'" :key="store.modal.props.query || ''" v-bind="store.modal.props" />
   <GameTimeline v-if="store.modal?.type === 'timeline'" v-bind="store.modal.props" />
-  <FirstTour v-if="store.modal?.type === 'tour'" />
+  <FirstTour v-if="store.modal?.type === 'tour'" v-bind="store.modal.props" />
   <ManualViewer v-if="store.modal?.type === 'manual'" v-bind="store.modal.props" />
   <PatchesSheet v-if="store.modal?.type === 'patches'" v-bind="store.modal.props" />
   <AddonsSheet v-if="store.modal?.type === 'addons'" :key="'addons' + store.modal.props.romId" v-bind="store.modal.props" />
   <GameAddons v-if="store.modal?.type === 'gameaddons'" :key="'ga' + store.modal.props.romId" v-bind="store.modal.props" />
   <ShadVersions v-if="store.modal?.type === 'shadversions'" v-bind="store.modal.props" />
+  <WhatsNew v-if="store.modal?.type === 'whatsnew'" v-bind="store.modal.props" />
+  <EmuPaths v-if="store.modal?.type === 'emupaths'" v-bind="store.modal.props" />
+  <AddonDetail v-if="store.modal?.type === 'addondetail'" v-bind="store.modal.props" />
+  <Licenses v-if="store.modal?.type === 'licenses'" />
+  <Installer v-if="store.modal?.type === 'installer'" />
+  <ImageSearch v-if="store.modal?.type === 'imgsearch'" v-bind="store.modal.props" />
   <GameSettings v-if="store.modal?.type === 'gamesettings'" :key="'gs' + store.modal.props.romId" v-bind="store.modal.props" />
   <IdleScreen v-if="store.config?.configured" />
 
@@ -93,7 +104,7 @@
 import { computed, onMounted, onBeforeUnmount, ref, watch, nextTick, defineAsyncComponent } from 'vue';
 import { store, loadConfig, loadLibrary, loadArt, back, rootBack, tab, go, call, toast, choose, saveConfig, builtinKb, askText, GRADE, activeTabs, TAB_DEFS } from './store.js';
 import { desktopLinks } from './links.js';
-import { pushLayer, focusFirst, input } from './nav.js';
+import { pushLayer, focusFirst, input, gameEnded } from './nav.js';
 import { setSoundEnabled, setSoundStyle, sfx } from './sfx.js';
 import { applyTheme, CARD_SIZES } from './themes.js';
 import { setPointerPref, setRumble, setBackground } from './nav.js';
@@ -117,6 +128,12 @@ const ManualViewer = defineAsyncComponent(() => import('./components/ManualViewe
 import PatchesSheet from './components/PatchesSheet.vue';
 import AddonsSheet from './components/AddonsSheet.vue';
 import GameAddons from './components/GameAddons.vue';
+import WhatsNew from './components/WhatsNew.vue';
+import EmuPaths from './components/EmuPaths.vue';
+import AddonDetail from './components/AddonDetail.vue';
+import Licenses from './components/Licenses.vue';
+import Installer from './components/Installer.vue';
+import ImageSearch from './components/ImageSearch.vue';
 import ShadVersions from './components/ShadVersions.vue';
 import GameSettings from './components/GameSettings.vue';
 import IdleScreen from './components/IdleScreen.vue';
@@ -153,6 +170,7 @@ import FuseUpload from './views/FuseUpload.vue';
 const views = { start: Start, achievements: Achievements, 'ra-game': RaGame, 'trophy-game': TrophyGame, home: Home, library: Gallery, consoles: Consoles, platform: Gallery, collection: Gallery, genre: Gallery, genres: Genres, collections: Collections, game: Game, downloads: Downloads, settings: Settings, search: Search, 'steam-console': SteamConsole, 'steam-missing': SteamMissing, 'emu-setup': EmuSetup, 'steam-health': ShortcutHealth, 'frame-gen': FrameGen, 'fuse-upload': FuseUpload };
 // the tabs you picked in Look & Feel → Top bar, in your order
 const tabs = computed(() => activeTabs().map((name) => ({ name, ...TAB_DEFS[name] })));
+const steamPct = computed(() => { const p = steam.progress; return p?.total ? Math.max(4, Math.min(100, ((p.done + 1) / p.total) * 100)) : null; });
 const mainEl = ref(null);
 const searchEl = ref(null);
 // Search box in the top bar: typing jumps to the Search view and filters live
@@ -162,7 +180,8 @@ function onSearch(e) {
 }
 async function searchOsk() {
   if (!builtinKb()) return;
-  const v = await askText({ title: 'Search games', value: store.lastSearch, placeholder: 'Game name', mode: 'game' });
+  const r = searchEl.value?.getBoundingClientRect(); // the keyboard grows out of the search box (0.9.24)
+  const v = await askText({ title: 'Search games', value: store.lastSearch, placeholder: 'Game name', mode: 'game', from: r ? { x: r.left + r.width / 2, y: r.top + r.height / 2 } : null });
   if (v == null) return;
   store.lastSearch = v;
   if (v.trim() && store.route.name !== 'search') go('search');
@@ -187,9 +206,25 @@ const padMode = computed(() => input.mode === 'pad');
 function placeInk() {
   const nav = tabsEl.value, el = nav?.querySelector(`[data-tab="${activeTab.value}"]`);
   if (!el) { ink.value = { opacity: 0 }; return; }
+  // the bar on the left (0.9.24): the pill moves down the column instead of along the row
+  if (document.body.classList.contains('bar-left')) { ink.value = { transform: `translateY(${el.offsetTop}px)`, opacity: 1 }; return; }
   const x = el.offsetLeft, w = el.offsetWidth;
   ink.value = { width: w + 'px', transform: `translateX(${x}px)`, opacity: 1 };
 }
+// where the bar sits and how it looks (Look & Feel → Text and Cards → Top Bar)
+// touch scrolling (0.9.26): Cartridge's engine unless the browser's was picked in Look & Feel → Controls
+// Android: the WebView's own touch scrolling unless Cartridge's is picked (it always scrolled natively there)
+watch(() => store.config?.ui?.touchScroll, (v) => document.documentElement.classList.toggle('touch-native', v === 'browser' || (IS_ANDROID && !v)), { immediate: true });
+// 0.9.28 (owner): the Dock (the bar of tabs) sits at the bottom, centred, as a pill unless chosen otherwise;
+// the strip of button hints is hidden unless turned on; the Dock's colour (pill style)
+watch(() => [store.config?.ui?.barPos || 'bottom', store.config?.ui?.barAlign || 'center', store.config?.ui?.barStyle || 'pill', store.config?.ui?.hints === true || !!store.forceHints, store.config?.ui?.dockColor || ''], ([pos, align, style, hints, dock]) => {
+  const b = document.body.classList;
+  b.toggle('bar-top', pos === 'top'); b.toggle('hints-on', hints);
+  for (const c of ['white', 'black', 'accent']) b.toggle('dock-' + c, dock === c);
+  b.toggle('bar-bottom', pos === 'bottom'); b.toggle('bar-left', pos === 'left');
+  b.toggle('bar-center', align === 'center'); b.toggle('bar-pill', style === 'pill'); b.toggle('bar-circle', style === 'circle');
+  nextTick(placeInkSoon);
+}, { immediate: true });
 // the name opens out over 300 ms: a ResizeObserver on the tabs keeps the pill hugging it every frame
 function placeInkSoon() { placeInk(); for (const t of [120, 320]) setTimeout(placeInk, t); }
 const inkWatch = typeof ResizeObserver === 'function' ? new ResizeObserver(() => placeInk()) : null;
@@ -250,7 +285,14 @@ onMounted(async () => {
   setRumble(store.config.ui.rumble);
   applyTheme(store.config.ui);
   detectPad();
-  setPointerPref(store.config.ui.pointer);
+  // Game Mode (0.9.24, owner: touch still showed a cursor): the screen's touches arrive as a mouse there and
+  // nobody uses a mouse in Game Mode, so Auto means Touch: no cursor, and drags scroll
+  setPointerPref(store.config.ui.pointer || (store.info?.gamescope ? 'touch' : 'auto'));
+  // 0.9.28 (owner: Home flashed before Start): the opening page is picked before the library loads, not after
+  {
+    const ui0 = store.config.ui, first = ui0.openOn || 'start';
+    if (store.route.name === 'home') store.route = { name: activeTabs().includes(first) || (first === 'start' && !ui0.startAdded) ? first : activeTabs()[0], params: {} };
+  }
   await loadLibrary();
   // Phone remote on desktop: tell phones what's on screen while it's turned on (Android always does)
   if (!IS_ANDROID) {
@@ -264,7 +306,7 @@ onMounted(async () => {
   if (!ui.startAdded) { const t = Array.isArray(ui.tabs) && ui.tabs.length ? (ui.tabs.includes('start') ? ui.tabs : ['start', ...ui.tabs]) : undefined; saveConfig({ ui: { startAdded: Date.now(), ...(t ? { tabs: t } : {}) } }); }
   // the menu Cartridge opens on (Look & Feel → Open on, 0.9.19); one taken off the top bar: the first tab
   const openOn = ui.openOn || 'start'; // 0.9.23 (owner): Start by default
-  if (store.route.name === 'home') tab(activeTabs().includes(openOn) ? openOn : activeTabs()[0]);
+  if (store.route.name === 'home' && openOn !== 'home') tab(activeTabs().includes(openOn) ? openOn : activeTabs()[0]);
   // opened from a Steam shortcut whose game is gone (--game <id>), or a second launch handing over
   const openGame = (id) => { if (id && store.lib) { store.quickMenu = false; go('game', { romId: Number(id) }); } };
   call('app:startGame').then(openGame).catch(() => {});
@@ -275,7 +317,13 @@ onMounted(async () => {
   const steamOn = !IS_ANDROID || store.config?.android?.steamApps;
   // another app in front in Game Mode (0.9.21, owner: still laggy in the background): gamescope never
   // hides or blurs the window, so stop the pad, the animated background and every CSS animation here
+  window.cart.on('game-run', (g) => gameEnded(g?.state === 'ended'));
   window.cart.on('background', (b) => { setBackground(b?.away); store.away = !!b?.away; document.body.classList.toggle('away', !!b?.away); });
+  window.cart.on('addon-progress', (m) => {
+    if (!m?.key) return;
+    store.addonJobs[m.key] = { ...(store.addonJobs[m.key] || {}), ...m, at: Date.now() };
+    if (m.state === 'done' || m.state === 'error') setTimeout(() => { if (store.addonJobs[m.key]?.state === m.state) delete store.addonJobs[m.key]; }, 12000);
+  });
   window.cart.on('toast', (t) => t?.text && toast(t.text, t.kind || 'info', 4500, t.icon));
   if (steamOn) setTimeout(steamReport, 2500);
   // 0.9: a new install goes through emulator Setup once, after connecting to RomM (the welcome does it since 0.9.15)
@@ -287,6 +335,7 @@ onMounted(async () => {
   // a dot on Settings and a list in Settings → Emulators, not a pop-up (0.9.3). Android without Steam has none.
   if (steamOn) setTimeout(() => { if (store.config.configured) call('issues:list').then((l) => (store.issues = l.length)).catch(() => {}); }, 8000);
   if (steamOn) setTimeout(setupNotice, 3500);
+  if (!IS_ANDROID) gpuCheck(); // the GPU Always trial is the desktop's rendering choice
   if (store.config.configured) call('server:status').then((c) => (store.connection = c)).catch(() => {});
   pushLayer(document.body, {
     back: () => { if (viewHandler('back') !== false) return; if (!back()) rootBack(); },
@@ -301,8 +350,8 @@ onMounted(async () => {
     x: () => viewHandler('x'),
     rsleft: () => { viewHandler('rsleft'); }, rsright: () => { viewHandler('rsright'); }, // right stick: Start's pages
     // Triggers always move between the top tabs; bumpers belong to the page (consoles, collections)
-    lt: () => cycleTab(-1),
-    rt: () => cycleTab(1),
+    lt: () => (viewHandler('lt') !== false ? undefined : cycleTab(-1)), // a page can keep LT/RT (0.9.24: Start's page overview)
+    rt: () => (viewHandler('rt') !== false ? undefined : cycleTab(1)),
     select: () => (viewHandler('select') !== false ? undefined : tab('downloads')),
     start: () => { if (viewHandler('start') !== false) return; store.quickMenu = !store.quickMenu; },
   });
@@ -323,6 +372,18 @@ watch(() => store.config?.configured, (v, was) => {
   if (!store.config.setupDone && !store.welcoming) go('emu-setup', { first: true });
 });
 // People who set up before 0.9 skipped Emulator setup: tell them about it once
+// GPU Always (0.9.29): the first start with it asks whether it looks right. No answer (a blank window)
+// and main goes back to Auto by itself after 25 s.
+async function gpuCheck() {
+  const g = await call('app:graphics').catch(() => null);
+  if (!g?.trial) return;
+  const v = await choose({ title: 'Is Cartridge Drawing Correctly?', message: 'Cartridge is using the GPU in Game Mode. If anything looks wrong, go back. With no answer it goes back to Auto by itself in a few seconds.', options: [
+    { label: 'Keep GPU Always', value: 'keep', icon: 'mdiCheck' },
+    { label: 'Go Back to Auto', value: 'auto', icon: 'mdiRestore' },
+  ] });
+  if (v === 'keep') { await call('app:gpuKeep', { keep: true }); store.config.gpuKept = true; toast('GPU Always kept', 'ok', 2500, 'mdiCheck'); }
+  else if (v === 'auto') call('app:gpuKeep', { keep: false });
+}
 async function setupNotice() {
   // 0.9.15: people who were set up before get the new welcome offered once (it includes the system scan)
   if (store.config?.configured && !store.config.welcomed && !store.config.ui.welcomeNotice && !store.modal && !store.welcoming) {
@@ -427,5 +488,11 @@ watch(viewKey, async () => {
 .pop-enter-active, .pop-leave-active { transition: opacity 0.3s, transform 0.35s var(--ease); }
 .pop-enter-from { opacity: 0; transform: translateX(40px); }
 .pop-leave-to { opacity: 0; transform: translateY(-12px); }
+.steam-ring { position: relative; flex: none; width: 30px; height: 30px; padding: 0; display: grid; place-items: center; }
+.steam-ring svg { position: absolute; inset: 0; width: 100%; height: 100%; transform: rotate(-90deg); }
+.sr-arc { fill: none; stroke: var(--text); stroke-width: 3; stroke-linecap: round; transition: stroke-dasharray 600ms var(--ease-out); }
+.steam-ring.wait svg { animation: sr-spin 1.4s linear infinite; }
+@keyframes sr-spin { to { transform: rotate(270deg); } }
+.sr-logo { opacity: 0.9; }
 .sync-pill { padding: 5px 12px; border-radius: 999px; background: rgba(var(--primary-rgb), 0.18); color: var(--primary-t); }
 </style>

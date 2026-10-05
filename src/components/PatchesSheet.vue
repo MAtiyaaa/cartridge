@@ -14,13 +14,22 @@
       <div v-if="!list.length" class="muted" style="padding: 12px 2px">{{ why || `${emuName} has no patches for this game.` }}</div>
       <div v-else-if="!shown.length" class="muted" style="padding: 12px 2px">{{ EMPTY[tab] || 'Nothing here for this game.' }}</div>
       <div v-else class="pt-list" data-scroll>
-        <button v-for="p in shown" :key="p.key" class="pt-row" :class="{ on: want[p.key], locked: p.by === 'emulator' }" data-focus @click="flip(p)">
+        <template v-for="p in shown" :key="p.key">
+        <button class="pt-row" :class="{ on: want[p.key], locked: p.by === 'emulator' }" data-focus data-expand @click="flip(p)">
           <span class="box"><Icon v-if="want[p.key]" name="mdiCheck" :size="18" /></span>
           <span class="pt-mid">
             <b>{{ p.description }}</b>
             <span class="pt-sub">{{ [p.by === 'emulator' ? `On in ${emuName}` : '', p.version === 'All' ? 'Any version' : '', p.author ? 'by ' + p.author : '', p.notes].filter(Boolean).join(' · ') }}</span>
           </span>
         </button>
+        <!-- 0.9.28 (owner: Cemu's resolution pack and others ask for a choice): its choices under it while it's on -->
+          <div v-if="want[p.key] && choicesOf(p).length" class="pt-presets">
+            <div v-for="c in choicesOf(p)" :key="c.cat" class="pt-cat">
+              <span class="pt-cat-l">{{ c.cat || 'Choice' }}</span>
+              <div class="pt-chips"><button v-for="o in c.opts" :key="o" class="pt-chip" :class="{ on: (choice[p.key] || {})[c.cat] === o }" data-focus @click="choose(p, c.cat, o)">{{ o }}</button></div>
+            </div>
+          </div>
+        </template>
       </div>
       <div v-if="!embedded" class="row" style="justify-content: flex-end">
         <button class="btn" data-focus @click="closeModal(null)">{{ list.length ? 'Cancel' : 'Close' }}</button>
@@ -58,15 +67,22 @@ const tabs = computed(() => (props.list.some((p) => p.section) ? kinds.value.map
 const tab = ref((props.list.find((p) => p.section) || {}).section || 'OnFrame');
 const shown = computed(() => (tabs.value.length ? props.list.filter((p) => p.section === (props.embedded ? props.section : tab.value)) : props.list));
 const step = (d) => { const K = kinds.value; const i = K.findIndex((t) => t.k === tab.value); tab.value = K[(i + d + K.length) % K.length].k; requestAnimationFrame(() => focusFirst(el.value.querySelector('.pt-list') || el.value)); };
-const changed = computed(() => props.list.some((p) => want[p.key] !== was[p.key]));
-const changes = () => props.list.filter((p) => want[p.key] !== was[p.key]).map((p) => ({ key: p.key, on: want[p.key] }));
+// a pack's choices (Cemu presets): categories with more than one option, and what's picked for each
+const choicesOf = (p) => Object.entries(p.presets || {}).filter(([, v]) => v.length > 1).map(([cat, opts]) => ({ cat, opts }));
+const pickedOf = (p) => Object.fromEntries(Object.entries(p.presets || {}).map(([k, v]) => [k, (p.chosen || {})[k] || v[0]]));
+const choice = reactive(Object.fromEntries(props.list.filter((p) => p.presets).map((p) => [p.key, pickedOf(p)])));
+const choiceWas = Object.fromEntries(Object.entries(choice).map(([k, v]) => [k, JSON.stringify(v)]));
+const presetsMoved = (p) => p.presets && JSON.stringify(choice[p.key]) !== choiceWas[p.key];
+function choose(p, cat, o) { choice[p.key] = { ...(choice[p.key] || {}), [cat]: o }; }
+const changed = computed(() => props.list.some((p) => want[p.key] !== was[p.key] || (want[p.key] && presetsMoved(p))));
+const changes = () => props.list.filter((p) => want[p.key] !== was[p.key] || (want[p.key] && presetsMoved(p))).map((p) => ({ key: p.key, on: want[p.key], ...(p.presets ? { presets: { ...choice[p.key] } } : {}) }));
 const busy = ref(false);
 function undo() { for (const p of props.list) want[p.key] = was[p.key]; }
 async function apply() {
   busy.value = true;
   try {
     const r = await call('patches:apply', { romId: props.romId, changes: changes() });
-    for (const p of props.list) was[p.key] = want[p.key];
+    for (const p of props.list) { was[p.key] = want[p.key]; if (choice[p.key]) choiceWas[p.key] = JSON.stringify(choice[p.key]); }
     toast(r.count ? `Saved in ${props.emuName}. They apply next time the game starts.` : 'Nothing changed', 'ok', 3500, 'mdiPuzzleOutline');
   } catch (e) { toast(e.message, 'error', 7000); }
   busy.value = false;
@@ -106,4 +122,11 @@ onBeforeUnmount(() => layer?.pop());
 .pt-row.on:focus .box .icon { color: var(--focus); }
 .pt-mid { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .pt-sub { font-size: var(--t-sm); opacity: 0.75; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pt-presets { flex: none; display: flex; flex-direction: column; gap: 8px; margin: -4px 0 4px 44px; padding: 10px 12px; border-radius: var(--r-md); background: rgba(255, 255, 255, 0.04); }
+.pt-cat { display: flex; flex-direction: column; gap: 6px; }
+.pt-cat-l { font-size: var(--t-xs); color: var(--muted); font-weight: 600; }
+.pt-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.pt-chip { padding: 6px 12px; border-radius: 999px; border: 0; background: var(--s2); color: inherit; font: inherit; font-size: var(--t-sm); }
+.pt-chip.on { background: var(--sel); font-weight: 650; }
+.pt-chip:focus { background: var(--focus); color: var(--on-focus); outline: none; }
 </style>
