@@ -6,6 +6,9 @@ The branch for 0.9.3 work is `claude/relaxed-fermat-30pigp`. Pull it before star
 
 ---
 
+## 5 Oct 2026 · 0.9.36 Collections, Checked Properly (built and released)
+- Owner's photo: Issues said 129 games were missing from a long list of old collection names (RomM plain names, SRM's "Nintendo DS - melonDS (Standalone)"). The check read Cartridge's memory (reg[].collections), not Steam. Rewritten to the same rules as the console collection fill; SRM names matched to consoles. Tested in npm test.
+
 ## 5 Oct 2026 · 0.9.35 Steady Pictures (built and released)
 - Owner: console ("system") icons glitch on Settings → Emulators while an emulator updates, again; and the collections request again (already in 0.9.34). Icons: PIcon reset its fit on every redraw (reproduced in the app with bg-job progress events, 30/30 before, 0/30 after). Collections: two more ways a deleted collection came back (kept name, start-up check Fix), fixed and tested.
 

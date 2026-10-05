@@ -253,12 +253,17 @@ test('console collections: games already in Steam count, Cartridge\'s memory of 
     (async () => {
       const c = await sm.consoleCollection('ps3');
       const r = await sm.fillCollections({ auto: true });
-      console.log(JSON.stringify({ name: c.name, games: c.games.map((g) => g.appid + ':' + g.in), r, verify: sm.verifyCollections(), kept: conf.steam.collectionNames }));
+      const verify = sm.verifyCollections();
+      conf.steam.consoleCollections = true;
+      const verifyOn = sm.verifyCollections().map((m) => m.appid + ':' + m.collection).sort();
+      console.log(JSON.stringify({ name: c.name, games: c.games.map((g) => g.appid + ':' + g.in), r, verify, verifyOn, kept: conf.steam.collectionNames }));
     })();`;
   const out = JSON.parse(execFileSync(process.execPath, ['-e', code], { env: { ...process.env, HOME: H, XDG_DATA_HOME: '', CARTRIDGE_CEF_PORT: '' }, encoding: 'utf8' }).trim().split('\n').pop());
   assert.strictEqual(out.name, 'Sony PlayStation 3');
   assert.deepStrictEqual(out.games, ['102:false', '103:false', '101:true']);
   assert.deepStrictEqual(out.r, { count: 0, waiting: 2 }); // Steam's interface isn't reachable here: by itself it waits, never restarts Steam
   assert.deepStrictEqual(out.kept, {}); // the deleted collection you'd kept is forgotten, so it's never made again
-  assert.ok(!out.verify.some((m) => m.collection === 'PlayStation 3')); // and isn't reported as dropped by Steam
+  assert.deepStrictEqual(out.verify, []); // and isn't reported as dropped by Steam (0.9.36: nothing from Cartridge's memory)
+  // with console collections on, the Issues check names what's really missing from the console's collection
+  assert.deepStrictEqual(out.verifyOn, ['102:Sony PlayStation 3', '103:Sony PlayStation 3']);
 });

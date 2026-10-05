@@ -876,12 +876,12 @@ async function fixIssue(i) {
     return;
   }
   // which games first, then put them back (0.9.3 L): the list, with the action on top
-  const v = await choose({ sheet: true, title: i.text, message: 'Steam closes for a moment while its collections are written.', options: [
-    { label: 'Put them back', value: 'fix', icon: 'mdiFolderSyncOutline' },
+  const v = await choose({ sheet: true, title: i.text, message: 'Straight into Steam when Cartridge can reach its interface, otherwise Steam closes for a moment while its collections are written.', options: [
+    { label: 'Put Them In', value: 'fix', icon: 'mdiFolderSyncOutline' },
     ...(i.items || []).map((g) => ({ label: g.name, sub: g.collection, value: null, icon: 'mdiGamepadVariantOutline', raw: true })),
   ] });
   if (v !== 'fix') return;
-  try { await call('steam:fixCollections'); toast('Putting them back in their collections', 'ok', 3000, 'mdiSteam'); loadIssues(); } catch (e) { toast(e.message, 'error'); }
+  try { const r = await call('steam:fixCollections'); toast(r.live ? `${r.fixed} put in their collections` : 'Putting them in their collections: Steam restarts for a moment', 'ok', 3500, 'mdiSteam'); loadIssues(); } catch (e) { toast(e.message, 'error'); }
 }
 watch(sec, (v) => { store.settingsSection = v; if (v === 'emu') loadIssues(); }, { immediate: true });
 

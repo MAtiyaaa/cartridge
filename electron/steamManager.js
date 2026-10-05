@@ -1254,13 +1254,21 @@ module.exports = function createSteamManager(ctx) {
   }
   function hasCmd(c) { return (process.env.PATH || '/usr/bin:/bin').split(':').some((d) => exists(path.join(d, c))); }
   // Put games back into collections Steam dropped
-  function fixCollections() {
+  async function fixCollections() {
     const env = environment();
     if (!env.account) throw new Error('Steam was not found.');
     const miss = verifyCollections() || [];
     if (!miss.length) return { fixed: 0 };
     const collections = {};
     for (const m of miss) (collections[m.collection] ||= []).push(Number(m.appid) >>> 0);
+    for (const m of miss) if (reg[m.appid]) reg[m.appid].collections = [...new Set([...(reg[m.appid].collections || []), m.collection])];
+    saveReg();
+    // with Steam's interface reachable, straight in (no restart)
+    if (await live.available(env.account.root).catch(() => false)) {
+      let done = 0;
+      for (const [name, ids] of Object.entries(collections)) for (const id of ids) if (await live.addToCollections(id, [name]).catch(() => false)) done++;
+      return { fixed: done, live: true };
+    }
     const stamp = new Date().toISOString().replace(/[:.]/g, '-');
     runHelper('last', { id: stamp, stamp, add: [], remove: [], collections, restart: true, gamescope: !!ctx.isGamescope(), flatpakSteam: !!env.account.flatpak, shortcutsFile: files(env.account).shortcuts, cloudFile: files(env.account).cloud, backupDir: BACKUP_DIR, logFile: path.join(USER_DATA, 'steam-apply.log') });
     return { fixed: miss.length, steamWillRestart: steamRunning() };
@@ -1274,19 +1282,30 @@ module.exports = function createSteamManager(ctx) {
     return true;
   }
   // After Steam restarts: were the collections kept? (Steam Cloud can replace the local file)
+  // Games missing from their Steam collections (Settings → Emulators → Issues). 0.9.36 (owner's photo: "129 games are
+  // missing from PlayStation 4, ..., Nintendo DS - melonDS (Standalone)" with a Put Them Back that would make old
+  // collections again): it no longer trusts what Cartridge remembers. Console collections are compared with what Steam
+  // really holds, for every game of the console in Steam, and only with console collections on (the same rule as
+  // filling them); any other collection only while it's still in Steam. Old names (yours, Steam ROM Manager's) are left.
   function verifyCollections() {
     const env = environment();
     if (!env.account) return null;
     const cols = readCollections(env.account);
     pruneStale(cols, false);
-    const missing = [];
-    for (const [appid, r] of Object.entries(reg)) {
-      for (const c of r.collections || []) {
-        const col = cols.find((x) => x.name === c);
-        if (!col || !col.added.map((x) => x >>> 0).includes(Number(appid) >>> 0)) missing.push({ appid, name: r.name, collection: c });
-      }
+    const plats = libraryPlatforms(), byName = new Map(cols.map((c) => [c.name, c]));
+    const out = new Map();
+    for (const [appid, r] of Object.entries(reg)) for (const n of r.collections || []) {
+      if (SC.consoleOf(n, plats)) continue; // a console's collection: below
+      const col = byName.get(n);
+      if (col && !inCol(col).has(Number(appid) >>> 0)) out.set(appid + '|' + n, { appid, name: r.name, collection: n });
     }
-    return missing;
+    if (cfg().consoleCollections) for (const { g, appid } of gamesInSteam(env)) {
+      const name = colName(g), col = byName.get(name);
+      if (inCol(col).has(appid)) continue;
+      if (!col && cols.some((c) => SC.consoleOf(c.name, plats) === g.key)) continue; // yours, not reviewed yet: the review decides
+      out.set(appid + '|' + name, { appid, name: g.rom.name, collection: name, console: g.key });
+    }
+    return [...out.values()];
   }
   // Test one console's launch setup: does the Target exist and run?
   // Shown once after Cartridge starts: how the last Steam change went, and any collections
