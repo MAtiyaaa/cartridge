@@ -1,31 +1,28 @@
-## Cartridge 0.9.37 · Set Up for You
+## Cartridge 0.9.38 · More Drives, Clearer Glass
 
 ### New
-- **An interactive tour:** instead of a few cards, the tour now points at the real screen and asks you to do each thing yourself: move to the next tab, open search, close it, jump to Downloads, open the Quick Menu. It moves on once you've done it, with a controller, the keyboard, a mouse or touch, and shows the right button for what's in your hands. Settings → About → Take the Tour runs it again.
-- **Keyboard and mouse, properly:** Tab and Shift+Tab step through the screen, Ctrl+Tab and Ctrl+Page Up/Down change tab, 1 to 9 jump straight to a tab, Ctrl+F or / searches from anywhere, Ctrl+J opens Downloads, Alt+Left and the mouse's back button go back, Home and End go to the first and last thing in a list. Right-click a game for Open, Download or Ready to Play, and Favourites. F1 or ? lists every key.
-- **Fluid motion:** pop-ups open from the button you pressed and close back towards it, and can change their mind half way. Bottom sheets come up and go down the same way. Presses spring back when you let go, the mouse lifts a game before you pick it, controller scrolling glides as one smooth motion when you press quickly, and a game's cover flies from its card into the game page and back (with the GPU). Without the GPU it stays light: fades only.
-- **Background and Elements:** Panels is split in two. Background (Solid, Glass, OLED Black) is the page behind everything; Elements (Plain, Glass, OLED Black) is the cards, panels, buttons and the highlight. With Glass elements the white highlight is frosted glass with light text.
-- **Game pictures that aren't stills:** the art behind Home and the game pages drifts and zooms very slowly. With the GPU only, paused behind a game, off with reduced motion.
-- **PS5 emulators:** SharpEmu and KytyPS5 in Get Emulators. Cartridge downloads their Linux builds, unpacks them into ~/Applications, makes them runnable, keeps them updated and adds PS5 games to Steam with each one's own launch options. They're only ticked in the installer when your library has PS5 games.
-- **PS5 trophies:** games played in KytyPS5 show their trophies, with names and pictures from the game itself, and sync through RomM like the rest.
-- **Find and Link Saves** in Linked Folders: one press links every fork that's ready to the emulator it comes from. Games only the fork has saves for are copied to the original first, so nothing goes missing. Linking one at a time still works.
-- **Delete mods and texture packs,** including ones you added yourself: everything in a game's add-on folder goes to the Trash, so it can be put back.
-- **BIOS and firmware put in place by themselves:** after an emulator is installed and after files come from RomM, Cartridge copies BIOS files into every emulator that reads them from a folder (never over a file), installs PS3 firmware in RPCS3 and Vita firmware in Vita3K when they don't have it, and puts Switch keys and firmware where Eden and its family read them.
-- **BIOS and Firmware in Setup and Health** (Settings → Emulators): each console in your library that needs them, Ready or Missing, with Put Everything in Place and Get Them from RomM.
+- **Games on more than one drive:** Settings → Storage → Games on Other Drives. Add a drive (an SD card or a second disk) and Cartridge makes an Emulation/roms folder on it with a folder for each console you have games for, finds games on every drive, and tells your emulators about the new folders (Flatpak emulators are allowed to read it too). Choose where new games go: the drive with the most free space, this device, or one drive. A drive that isn't plugged in says so and nothing is lost.
+- **Two new colours, OLED and Light** (Settings → Look & Feel → Colour). OLED is pure black behind everything, with Cartridge's grey panels. Light is a soft off-white, never glaring white, with dark text and a dark highlight; animated backgrounds such as Ribbons are drawn in dark lines, console logos turn dark, and anything sitting on a game's picture keeps its white text.
+- **Motion you can see, also on handhelds:** in 0.9.37 most of the motion only ran with the GPU, so in Game Mode on a handheld (where Cartridge draws without it) it was mostly plain fades. Now:
+  - A game's cover flies from its card into the game page, and back into its card when you leave, on every device. Any press finishes it at once.
+  - Every row of choices (Look & Feel pages, Interface size, Dock placement and the rest) has one pill that glides to what you pick and stretches to fit it.
+  - Buttons lift a little as you land on them and spring back with a little give when pressed; toggle knobs stretch as they move; text fields' focus rings grow in.
+  - Pop-ups and bottom sheets arrive on a spring, also without the GPU. With the GPU, pages slide further and settle on a spring.
+  - All of it moves only position and fade, measured against 0.9.37 without the GPU so it costs no extra slow frames. Reduce Motion still turns it off.
+- **Mods for PS4 games in shadPS4:** Game Add-ons now has a Mods tab for PS4 games. A mod goes in the folder shadPS4 lays over the game (`<game folder>-mods`), in the game's own layout, so the game's files are never changed and removing the mod puts everything back.
+- **BIOS from RomM by itself:** when a game is downloaded for a console whose BIOS or firmware isn't set up, Cartridge fetches it from your RomM server once and puts it in place.
+- **The tour shows every page:** Home, Library, Consoles, Achievements and Settings each get a step. Buttons are shown for what you're using: your controller's own buttons, or the keys once you press a key on a keyboard, never both side by side.
+- **Syncing ring:** Syncthing progress in the top bar is a ring like the Steam one, with a tick when it finishes.
 
 ### Changed
-- **Trophies synced from other devices show up sooner:** every game on a trophy console is checked every 30 minutes (and when you press Sync), not only the ones the library last knew had notes, so trophies earned elsewhere appear even where that emulator or game isn't installed.
-- **The Cartridge Installer installs Flatpak first** when you pick a Flatpak emulator and it's missing (your password is asked once); the AppImages carry on meanwhile.
-- **Downloads from add-on sites:** the moment a download starts, the page closes and Downloads opens.
-- **Cemu's Add-ons tabs** show only the groups a game has, each with its count.
-- **OLED Black, High Contrast and Extra Round** in Title Case.
+- **Elements are Plain and Glass:** OLED Black stays under Background only. Glass is now clear glass with a bright edge and a soft shine, tinted by the colour you picked (white by default) instead of grey. Plain is your colour solid. Text on both picks dark or light to stay readable.
+- **About** in a game's More menu is now in the Game tab, last, under Pin to Start (it was under Options).
+- **Installing Flatpak** asks for your device password inside Cartridge, used once and never saved, instead of waiting for a desktop password window that never appears in Game Mode.
 
 ### Fixed
-- **shadPS4 not installing ("No Linux build in shadps4-qtlauncher's newest release"):** every build of shadPS4's launcher is published as a pre-release, and Cartridge asked GitHub for the latest full release, which found an old one without a Linux build. It reads the newest pre-release now, and the launcher installs with the newest shadPS4 as its default version.
-- **Flatpak missing:** when Cartridge can't install it (no password prompt on that desktop), it says the exact command to run.
-- **The Cartridge Installer skipping to the next welcome step after you picked a location:** while the Emulation folder was made the drive button lost focus, so the next press landed on Continue. It keeps focus now, and Continue only shows once installing has started.
-- **Emulator updates slow to open and not up to date:** what was known shows at once, then every emulator is checked at the same time, and checks are reused for 10 minutes instead of 6 hours. RPCS3's build number now counts (every build is 0.0.38, so a newer one was never seen), and the build RPCS3 says it runs is the one compared.
-- **Cemu Enhancements, Mods, Workarounds and Cheats coming up empty** on Bazzite and other systems where home is a link.
-- **3DS mods for Azahar and Citra** go in load/mods/<title ID>, where Azahar loads them.
-- **Switch mods:** Atmosphere-style exefs_patches, loose .ips and .pchtxt patches, loose cheat files and romfs_ext are arranged the way Eden, yuzu and Ryujinx load them.
-- **Focus in About, Its Games and Linked Folders:** rows show the plain fill like every other list, without a ring cut off at the top.
+- **Cartridge hanging when you picked a Flatpak emulator without Flatpak installed:** a step ran in a way that froze the app, and the password window it waited for didn't exist in Game Mode. Both are gone, and every step has a time limit.
+- **shadPS4, SharpEmu and KytyPS5 saying "already on this device"** instead of opening their sheet in Settings → Emulators. shadPS4's launcher was being hidden from the update list, and a fresh install didn't refresh it.
+- **SharpEmu, KytyPS5 and Ryujinx icons missing:** they come from working addresses now.
+- **shadPS4's row in Settings → Emulators squeezed to one letter a line:** its launcher's update name is one very long word, and the Update pill beside it never wraps, so it took the whole row. The pill now shows just the release date (or version number), can never take the name's room, and reads clearly on a highlighted row.
+- **Settings sections opening part way down:** every section shares one scrolling pane and only its contents changed, so moving from a scrolled section (Achievements) to another (Look & Feel) kept the same depth. Each section now opens at the top.
+- **LT/RT at launch:** Cartridge listens for the controller before anything else loads. If the triggers still don't work right after start, the log now records what the controller sent in its first 20 seconds.

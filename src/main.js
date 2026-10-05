@@ -11,6 +11,8 @@ import '@fontsource-variable/lexend';
 import '@fontsource-variable/archivo/wdth.css';
 import './styles.css';
 import App from './App.vue';
-import { installSprings } from './motion.js';
+import { installSprings, slidingPills } from './motion.js';
 installSprings(); // spring easings as CSS tokens (0.9.37), before the first paint
 createApp(App).mount('#app');
+const repill = slidingPills(); // the chosen option's pill glides between choices (0.9.38)
+document.fonts?.ready.then(repill); // measured again once the fonts are in

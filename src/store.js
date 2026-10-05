@@ -63,7 +63,8 @@ export function playtimeText(min) {
 
 // ---------------- routing
 // 0.9.37 (owner: a component morphs into its detail view): a game card's picture flies into the game page's cover,
-// and back into its card on the way out (motion.js morph: GPU only, any press skips it)
+// and back into its card on the way out (motion.js morph: one picture moved by transform, with or without the GPU
+// since 0.9.38; any press finishes it)
 export function go(name, params = {}) {
   const card = name === 'game' && document.activeElement?.closest?.(`.card[data-key="rom-${params.romId}"]`);
   if (card?.querySelector('.art img')) return morph(card.querySelector('.art'), () => goNow(name, params), '.g-cover', nextTick);
@@ -296,7 +297,8 @@ export async function download(rom, { checkSpace = true } = {}) {
 
 // Before a download: will it fit? Counts what is still downloading to the same folder too.
 async function roomFor(rom, p) {
-  const sp = await call('fs:space', p.target.path).catch(() => null);
+  // 0.9.38: the drive the download would really go to (games folders on more than one drive)
+  const sp = (await call('fs:downloadSpace', { slug: p.slug, fs_slug: p.fs_slug, need: rom.fs_size_bytes || 0 }).catch(() => null)) || (await call('fs:space', p.target.path).catch(() => null));
   if (!sp) return true;
   const same = (d) => ['queued', 'downloading'].includes(d.status) && store.lib?.platforms.find((x) => x.slug === d.platformSlug)?.target?.path === p.target.path;
   const pending = store.downloads.filter(same).reduce((s, d) => s + Math.max(0, (d.total || 0) - (d.received || 0)), 0);

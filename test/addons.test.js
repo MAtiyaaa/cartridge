@@ -162,3 +162,15 @@ test('mod layouts from the emulators\' own guides: Azahar mods, Switch exefs pat
   assert.deepStrictEqual(to(['My Mod/romfs_ext/x.bfres'], 'switch', { id: S, name: 'My Mod' }), ['My Mod/romfs_ext/x.bfres']);
   assert.deepStrictEqual(to(['atmosphere/contents/' + S + '/romfs/Model/a.bfres'], 'switch', { id: S, name: 'Hair' }), ['Hair/romfs/Model/a.bfres']);
 });
+
+// 0.9.38 (owner: mods for shadPS4, without breaking games): shadPS4 lays <game folder>-mods over the game read only
+// (fs.cpp probe_overlay "-mods"), so a mod's files go there in the game's own layout, matched by its top folders
+test('shadPS4 mods mirror the game\'s own folders, whatever wraps them', () => {
+  const L = (rels) => rels.map((rel) => ({ rel, size: 1 }));
+  const to = (rels, o) => I.plan(L(rels), 'shadps4', o).map((x) => x.to).sort();
+  const tops = ['eboot.bin', 'sce_sys', 'dvdroot_ps4', 'sce_module'];
+  assert.deepStrictEqual(to(['My Mod v2/CUSA00900/dvdroot_ps4/chr/c0000.bin', 'My Mod v2/readme.txt'], { tops }), ['dvdroot_ps4/chr/c0000.bin']);
+  assert.deepStrictEqual(to(['DVDROOT_PS4/map/m1.bin'], { tops }), ['dvdroot_ps4/map/m1.bin']); // the game's own spelling
+  assert.deepStrictEqual(to(['loose/thing.bin'], { tops }), []); // nothing matches the game: not installed anywhere
+  assert.deepStrictEqual(to(['Mod/sce_sys/param.sfo'], { tops }), []); // never the game's own system files
+});

@@ -5,13 +5,18 @@
     <div class="bubble dialog" ref="el" :style="bubbleStyle" :class="{ center: !box }">
       <div class="t-top"><span class="t-step">{{ i + 1 }} of {{ steps.length }}</span><button class="t-skip" data-focus @click="done">Skip Tour</button></div>
       <h2>{{ s.title }}</h2>
-      <p class="muted">{{ s.text }}</p>
+      <!-- buttons in the text are drawn for what's in your hands (0.9.38, owner: "A" was just a letter): the
+           controller's own glyph, or the key on a keyboard -->
+      <p class="muted"><template v-for="(x, n) in parts(s.text)" :key="n"><template v-if="!x.b">{{ x.t }}</template><kbd v-else-if="input.mode === 'mouse' || input.keys">{{ KEYS[x.b] || x.b }}</kbd><Btn v-else :b="x.b" class="t-inl" /></template></p>
       <!-- what to do, for what's in your hands: a button, a key, a click or a tap -->
       <div v-if="s.task" class="t-task" :class="{ ok: did }">
         <span class="t-do"><template v-if="did"><Icon name="mdiCheckCircle" :size="20" />Done</template><template v-else>
-          <template v-if="input.mode === 'pad'">Press <Btn v-for="k in s.task.pad" :key="k" :b="k" /><span v-if="s.task.key" class="t-alt">· {{ s.task.key }} on a keyboard</span></template>
+          <!-- 0.9.38 (owner): only what's in your hands, the controller's button or the keyboard's key, never both -->
+          <template v-if="input.mode === 'pad' && input.keys && s.task.key">Press <kbd>{{ s.task.key }}</kbd></template>
+          <template v-else-if="input.mode === 'pad'">Press <Btn v-for="k in s.task.pad" :key="k" :b="k" /></template>
           <template v-else-if="input.mode === 'touch'">{{ s.task.touch }}</template>
-          <template v-else>{{ s.task.mouse }}<template v-if="s.task.key"> or press <kbd>{{ s.task.key }}</kbd></template></template>
+          <template v-else-if="s.task.mouse">{{ s.task.mouse }}<template v-if="s.task.key"> or press <kbd>{{ s.task.key }}</kbd></template></template>
+          <template v-else>Press <kbd>{{ s.task.key }}</kbd></template>
         </template></span>
       </div>
       <div class="row t-act">
@@ -36,26 +41,38 @@ import Btn from './Btn.vue';
 
 const props = defineProps({ start: Boolean, only: Boolean });
 const tabSel = (name) => `.statusbar .tab[data-tab="${name}"]`;
+// {A}, {LB}... in a step's text become the button's glyph (or its key on a keyboard)
+const KEYS = { A: 'Enter', B: 'Esc', X: 'X', Y: 'Y', LB: 'Q', RB: 'E', LT: 'Page Up', RT: 'Page Down', START: 'M', SELECT: 'Ctrl+J', RS: ', .' };
+const parts = (t) => String(t).split(/(\{[A-Z]+\})/).filter(Boolean).map((x) => (/^\{[A-Z]+\}$/.test(x) ? { b: x.slice(1, -1) } : { t: x }));
 const START = [
   { title: 'This Is Start', text: 'Your own page of widgets: what you were playing, new games, trophies, a clock and more. Cartridge opens here.', at: 'main.main' },
-  { title: 'Make It Yours', text: 'Hold A on a widget (or press and hold it) to arrange Start: move, resize, add widgets, pictures and your own pages.', at: '.st-tile' },
-  { title: 'Step Through', text: 'On a widget with several games, the bumpers (LB and RB) move between them. Flick the right stick, or swipe, for the next page.', at: '.st-tile' },
+  { title: 'Make It Yours', text: 'Hold {A} on a widget (or press and hold it) to arrange Start: move, resize, add widgets, pictures and your own pages.', at: '.st-tile' },
+  { title: 'Step Through', text: 'On a widget with several games, {LB} and {RB} move between them. Flick {RS}, or swipe, for the next page.', at: '.st-tile' },
 ];
-const BASE = [
+// 0.9.38 (owner: the tour only showed Start): it visits the other pages too, each with what it's for
+const PAGES = [
+  { title: 'Home', go: 'home', text: 'Your library at a glance: Continue Playing, what’s new, recommendations and your latest trophies. {A} opens a game, {X} downloads it.', at: 'main.main' },
+  { title: 'Library', go: 'library', text: 'Every game on your server, with filters and sorting at the top. Pick a few at once to download them or add them to Steam together.', at: 'main.main' },
+  { title: 'Consoles', go: 'consoles', text: 'Each console with its games. Its More ({Y}) holds the emulator it uses and how its games go into Steam.', at: 'main.main' },
+  { title: 'Achievements', go: 'achievements', text: 'RetroAchievements and your emulators’ trophies in one place. {LB} and {RB} switch between them.', at: 'main.main' },
+];
+const BASE0 = [
   { title: 'Your Tabs', text: 'The Dock holds every part of Cartridge. Move to the next tab now.', at: '.statusbar nav.tabs',
     task: { pad: ['RT'], key: 'Page Down', mouse: 'Click another tab', touch: 'Tap another tab' }, pass: ['lt', 'rt'], doneWhen: (s0) => store.route.name !== s0.route },
-  { title: 'Find Anything', text: 'Search finds games by name from anywhere. Open it now; B or Escape closes it again.', at: '.top-search',
+  { title: 'Find Anything', text: 'Search finds games by name from anywhere. Open it now; {B} closes it again.', at: '.top-search',
     task: { pad: ['Y'], key: '/', mouse: 'Click the magnifier', touch: 'Tap the magnifier' }, pass: ['y', 'search'], doneWhen: () => store.modal?.type === 'keyboard' || store.route.name === 'search' },
-  { title: 'Close It Again', text: 'B always goes back: out of a pop-up, a page or a menu.', at: null, when: () => store.modal?.type === 'keyboard' || store.route.name === 'search',
+  { title: 'Close It Again', text: '{B} always goes back: out of a pop-up, a page or a menu.', at: null, when: () => store.modal?.type === 'keyboard' || store.route.name === 'search',
     task: { pad: ['B'], key: 'Escape', mouse: 'Click outside it', touch: 'Tap outside it' }, pass: ['back'], doneWhen: () => !store.modal && store.route.name !== 'search' },
   { title: 'Your Downloads', text: 'Downloads, installs and updates all show here, and carry on while you do other things. Jump there now.', at: tabSel('downloads'),
     task: { pad: ['SELECT'], key: 'Ctrl+J', mouse: 'Click Downloads', touch: 'Tap Downloads' }, pass: ['select'], doneWhen: () => store.route.name === 'downloads' },
-  { title: 'The Quick Menu', text: 'Start opens the Quick Menu from anywhere: refresh the library, Settings, and more. Open it, then press Start again to close it.', at: null,
-    task: { pad: ['START'], key: 'M', mouse: 'Press M on the keyboard', touch: 'Skip this one on touch' }, pass: ['start'], doneWhen: (s0, seen) => seen.quick && !store.quickMenu },
-  { title: 'Games and Steam', text: 'A opens a game, X downloads it. On its page, More (Y) adds it to Steam with the emulator picked for its console, or do them all from Settings → Steam.', at: tabSel('library') },
+  { title: 'The Quick Menu', text: '{START} opens the Quick Menu from anywhere: refresh the library, Settings, and more. Open it, then press {START} again to close it.', at: null,
+    task: { pad: ['START'], key: 'M', mouse: '', touch: 'Skip this one on touch' }, pass: ['start'], doneWhen: (s0, seen) => seen.quick && !store.quickMenu },
+  { title: 'Games and Steam', text: 'On a game’s page, More ({Y}) adds it to Steam with the emulator picked for its console, plus its add-ons, patches and settings.', at: tabSel('library') },
+  { title: 'Settings', go: 'settings', text: 'Emulators (get and update them, BIOS, add-ons), Steam (add all your games at once), Syncthing for saves, and Look & Feel.', at: 'main.main' },
   { title: 'You’re Set', text: 'Everything works with a controller, the keyboard, a mouse or touch. F1 lists every key; right-click a game for its quick actions. This tour is in Settings → About whenever you want it again.', at: null },
 ];
-const steps = (props.only ? START : props.start ? [...START, ...BASE] : BASE).filter((s) => !s.at || !s.at.startsWith('.statusbar .tab[') || activeTabs().includes(s.at.match(/data-tab="([^"]+)"/)[1]));
+const BASE = [BASE0[0], ...PAGES, ...BASE0.slice(1)];
+const steps = (props.only ? START : props.start ? [...START, ...BASE] : BASE).filter((s) => (!s.go || activeTabs().includes(s.go)) && (!s.at || !s.at.startsWith('.statusbar .tab[') || activeTabs().includes(s.at.match(/data-tab="([^"]+)"/)[1])));
 const i = ref(0), did = ref(false), box = ref(null), ready = ref(false), el = ref(null);
 const s = computed(() => steps[i.value]);
 let s0 = {}, seen = {};
@@ -63,6 +80,7 @@ const done = () => closeTour(true);
 async function go(n) {
   if (n < 0) return;
   if (n >= steps.length) return done();
+  if (steps[n].go && store.route.name !== steps[n].go) tab(steps[n].go); // the page it talks about
   i.value = n; did.value = false; s0 = { route: store.route.name }; seen = {};
   await nextTick(); place(); setTimeout(place, 380); // again once the page it points at has arrived
   focusFirst(el.value, '[data-autofocus]');
@@ -127,8 +145,9 @@ onBeforeUnmount(() => { layer?.pop(); clearInterval(tick); removeEventListener('
 .t-task.ok { background: rgba(63, 185, 80, 0.16); color: var(--green-l); }
 .t-do { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .t-do :deep(.pb) { transform: scale(1.25); margin: 0 4px; }
+.bubble p :deep(.pb.t-inl) { margin: 0 2px; vertical-align: -3px; }
+.bubble p kbd { margin: 0 2px; }
 kbd { font: inherit; font-size: var(--t-sm); padding: 2px 8px; border-radius: 6px; background: var(--s3); box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.35); }
 .t-act { gap: var(--s-2); }
-.t-alt { font-weight: 500; color: var(--muted); font-size: var(--t-sm); }
 :global(body.light-fx .tour-root .spot) { transition-duration: 0ms; }
 </style>

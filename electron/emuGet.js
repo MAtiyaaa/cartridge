@@ -101,19 +101,25 @@ async function getAppImage(e, download, opts = {}) {
 async function getFlatpak(fp, onProgress = () => {}) {
   if (!hasFlatpak()) await ensureFlatpak();
   return new Promise((resolve, reject) => {
-    try { execFileSync('flatpak', ['remote-add', '--user', '--if-not-exists', 'flathub', 'https://dl.flathub.org/repo/flathub.flatpakrepo'], { stdio: 'ignore', env: plainEnv(), timeout: 60000 }); } catch {}
+    // 0.9.38: not execFileSync any more: it held Electron's main thread (the whole app) for up to a minute
+    const remote = () => new Promise((ok) => { const r = spawn('flatpak', ['remote-add', '--user', '--if-not-exists', 'flathub', 'https://dl.flathub.org/repo/flathub.flatpakrepo'], { stdio: 'ignore', env: plainEnv() }); const t = setTimeout(() => r.kill(), 60000); r.on('error', () => ok()); r.on('close', () => { clearTimeout(t); ok(); }); });
+    remote().then(() => {
     const p = spawn('flatpak', ['install', '--user', '-y', '--noninteractive', 'flathub', fp], { env: plainEnv() });
     let tail = '';
     const read = (b) => { const s = String(b); tail = (tail + s).slice(-2000); const all = [...s.matchAll(/(\d{1,3})%/g)]; if (all.length) onProgress(Math.min(100, Number(all[all.length - 1][1]))); };
     p.stdout.on('data', read); p.stderr.on('data', read);
     p.on('error', reject);
     p.on('close', (code) => (code === 0 ? resolve({ fp }) : reject(new Error(`It didn't install: ${(tail.trim().split('\n').pop() || 'flatpak failed').slice(0, 200)}`))));
+    });
   });
 }
 
 // 0.9.37 (owner: if Flatpak isn't there, install it in the background): Flatpak itself is a system package, so
-// it goes in through the system's package manager with pkexec (the desktop's own password prompt). Image-based
-// systems (rpm-ostree, SteamOS) ship it, so there it's only Flathub that can be missing, added for the user.
+// it goes in through the system's package manager. Image-based systems (rpm-ostree, SteamOS) ship it, so there
+// it's only Flathub that can be missing, added for the user.
+// 0.9.38 (owner: Cartridge hung installing Flatpak): pkexec waited for the desktop's password window, which
+// never shows in Game Mode or on a system without a polkit agent. Now the password is typed in Cartridge
+// (like RomM on this device), handed to sudo -S once and never kept, with time limits so nothing waits forever.
 const has = (bin) => { try { execFileSync('sh', ['-c', `command -v ${bin}`], { stdio: 'ignore', env: plainEnv() }); return true; } catch { return false; } };
 function flatpakPlan() {
   if (hasFlatpak()) return null;
@@ -121,26 +127,36 @@ function flatpakPlan() {
   const PM = [['apt-get', ['apt-get', 'install', '-y', 'flatpak']], ['dnf', ['dnf', 'install', '-y', 'flatpak']], ['zypper', ['zypper', '--non-interactive', 'install', 'flatpak']], ['pacman', ['pacman', '-S', '--noconfirm', '--needed', 'flatpak']], ['eopkg', ['eopkg', '-y', 'install', 'flatpak']], ['xbps-install', ['xbps-install', '-y', 'flatpak']]];
   const pm = PM.find(([b]) => has(b));
   if (!pm) return { why: 'No package manager Cartridge knows was found. Install Flatpak the way your system installs programs.' };
-  if (!has('pkexec')) return { why: `Install Flatpak with: sudo ${pm[1].join(' ')}` };
-  return { cmd: ['pkexec', ...pm[1]], pm: pm[0] };
+  if (!has('sudo')) return { why: `Install Flatpak with: ${pm[1].join(' ')} (as root)` };
+  return { cmd: pm[1], pm: pm[0] };
 }
 let flatpakRun = null;
-function ensureFlatpak(onLine = () => {}) {
+const FP_LIMIT = 20 * 60e3, FP_QUIET = 4 * 60e3; // the whole install, and silence from the package manager
+function ensureFlatpak(onLine = () => {}, password = null) {
   if (hasFlatpak()) return Promise.resolve({ already: true });
   if (flatpakRun) return flatpakRun;
   const plan = flatpakPlan();
   if (!plan?.cmd) return Promise.reject(new Error(`Flatpak isn't installed. ${plan?.why || ''}`.trim()));
+  const by = `Install it with: sudo ${plan.cmd.join(' ')}`;
+  if (password == null) return Promise.reject(new Error(`Flatpak isn't installed, and installing it needs your password. ${by}`));
   flatpakRun = new Promise((resolve, reject) => {
-    const p = spawn(plan.cmd[0], plan.cmd.slice(1), { env: plainEnv() });
-    let tail = '';
-    const read = (b) => { const t = String(b); tail = (tail + t).slice(-1500); const l = t.trim().split('\n').pop(); if (l) onLine(l.slice(0, 120)); };
+    const env = { ...plainEnv(), DEBIAN_FRONTEND: 'noninteractive' };
+    const p = spawn('sudo', ['-S', '-k', '-p', '', '--', ...plan.cmd], { env, stdio: ['pipe', 'pipe', 'pipe'] });
+    p.stdin.on('error', () => {}); p.stdin.end(String(password) + '\n');
+    let tail = '', done = false;
+    const stop = (why) => { if (done) return; done = true; try { p.kill('SIGTERM'); } catch {} reject(new Error(`${why} ${by}`)); };
+    const whole = setTimeout(() => stop('Installing Flatpak took too long, so Cartridge stopped it.'), FP_LIMIT);
+    let quiet = setTimeout(() => stop('The package manager stopped answering (it may be waiting for another install to finish).'), FP_QUIET);
+    const read = (b) => { const t = String(b); tail = (tail + t).slice(-1500); clearTimeout(quiet); quiet = setTimeout(() => stop('The package manager stopped answering (it may be waiting for another install to finish).'), FP_QUIET); const l = t.trim().split('\n').pop(); if (l) onLine(l.slice(0, 120)); };
     p.stdout.on('data', read); p.stderr.on('data', read);
-    p.on('error', (e) => reject(new Error(`Flatpak couldn't be installed: ${e.message}`)));
+    p.on('error', (e) => { clearTimeout(whole); clearTimeout(quiet); if (!done) { done = true; reject(new Error(`Flatpak couldn't be installed: ${e.message}. ${by}`)); } });
     p.on('close', (code) => {
+      clearTimeout(whole); clearTimeout(quiet);
+      if (done) return; done = true;
       if (code === 0 && hasFlatpak()) return resolve({ installed: true, pm: plan.pm });
-      // no password prompt on this desktop (no polkit agent), or it was closed: say the command to run instead
-      const by = `Install it with: sudo ${plan.cmd.slice(1).join(' ')}`;
-      reject(new Error(code === 126 || code === 127 || /authentication agent|not authorized/i.test(tail) ? `Flatpak wasn’t installed (no password was given). ${by}` : `Flatpak couldn't be installed: ${(tail.trim().split('\n').pop() || 'the package manager failed').slice(0, 160)}. ${by}`));
+      if (/incorrect password|sorry, try again|no password was provided|a password is required/i.test(tail)) return reject(new Error('That password wasn’t right, so Flatpak wasn’t installed. Try again.'));
+      if (/not in the sudoers|not allowed to run sudo/i.test(tail)) return reject(new Error(`This account can’t install system programs. ${by}`));
+      reject(new Error(`Flatpak couldn't be installed: ${(tail.trim().split('\n').pop() || 'the package manager failed').slice(0, 160)}. ${by}`));
     });
   }).finally(() => { flatpakRun = null; });
   return flatpakRun;

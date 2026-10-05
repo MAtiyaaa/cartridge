@@ -71,6 +71,15 @@
                 <button class="btn small" data-focus @click="browseRoot"><Icon name="mdiFolderOpen" :size="18" />Browse</button>
               </div>
             </div>
+            <!-- games on more than one drive (0.9.38): extra ES-DE roms folders; one short block, the rest is automatic -->
+            <div class="pathrow glass" style="flex-wrap: wrap">
+              <div style="min-width: 0; flex: 1"><div class="lbl2">Games on Other Drives</div>
+                <div v-if="!xroots.length" class="muted small">Add an SD card or another drive: Cartridge makes a games folder on it and adds it to your emulators.</div>
+                <div v-for="r in xroots" :key="r.path" class="xroot"><span class="mono">{{ r.path }}</span><span class="muted small">{{ r.here ? `${bytes(r.free)} free` : 'Not plugged in' }}</span><button class="btn small" data-focus @click="removeRoot(r)"><Icon name="mdiClose" :size="16" />Remove</button></div>
+                <div v-if="xroots.length" class="row" style="margin-top: 8px; gap: 8px"><span class="muted small">New games go to</span><div class="seg"><button data-focus :class="{ on: rootTo === 'most' }" @click="setRootTo('most')">Most Free Space</button><button v-for="r in allRoots" :key="r.path" data-focus :class="{ on: rootTo === r.path }" @click="setRootTo(r.path)">{{ r.main ? 'This Device' : rootLabel(r.path) }}</button></div></div>
+              </div>
+              <button class="btn small" data-focus @click="addRoot"><Icon name="mdiHarddiskPlus" :size="18" />Add a Drive</button>
+            </div>
             <div class="pathrow glass">
               <div style="min-width: 0"><div class="lbl2">BIOS folder</div><div class="mono">{{ store.config.biosPath || 'Not set' }}</div></div>
               <button class="btn small" data-focus @click="browseBios"><Icon name="mdiFolderOpen" :size="18" />Browse</button>
@@ -218,7 +227,7 @@
 
             <div class="subh"><Icon name="mdiPaletteOutline" :size="20" />Colour</div>
             <div class="swatches">
-              <button v-for="(t, k) in THEMES" :key="k" class="swatch" data-focus :class="{ on: (ui.theme || 'cartridge') === k }" :style="{ background: `linear-gradient(135deg, ${t.grad[0]}, ${t.grad[2]} 60%, ${t.grad[4]})` }" :title="t.label" @click="saveConfig({ ui: { theme: k, gameTheme: null } })"><i :style="{ background: t.accent[0] }" /><span>{{ t.label }}</span></button>
+              <button v-for="(t, k) in THEMES" :key="k" class="swatch" data-focus :class="{ on: (ui.theme || 'cartridge') === k, ink: t.light }" :style="{ background: `linear-gradient(135deg, ${t.grad[0]}, ${t.grad[2]} 60%, ${t.grad[4]})` }" :title="t.label" @click="saveConfig({ ui: { theme: k, gameTheme: null } })"><i :style="{ background: t.accent[0] }" /><span>{{ t.label }}</span></button>
               <button class="swatch custom" data-focus :class="{ on: ui.theme === 'custom' }" :style="ui.customColor ? { background: `linear-gradient(135deg, ${customT.grad[0]}, ${customT.grad[2]} 60%, ${customT.grad[4]})` } : {}" @click="pickColor"><Icon name="mdiEyedropperVariant" :size="18" /><span>Custom</span></button>
             </div>
             <!-- the background is part of the theme (owner, 0.9.21: one page, not two) -->
@@ -524,7 +533,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { store, call, go, tab, saveConfig, pickFolder, choose, confirm, toast, openModal, bytes, ago, resync, scanServer, allRoms, romById, cover, resetLogos, askText, activeTabs, TAB_DEFS, consoleName, openTour } from '../store.js';
 import { useView } from '../useView.js';
-import { input, focusFirst, setPointerPref, setRumble, rumble } from '../nav.js';
+import { input, focusFirst, setPointerPref, setRumble, rumble, stopScroll } from '../nav.js';
 import { THEMES, SURFACES, ELEMENTS, elementsOf, TEXTS, FONTS, CARD_SHAPES, CARD_SIZES, DENSITIES, themeFrom, themeOf, paletteOf } from '../themes.js';
 import { BACKGROUNDS, RENDERERS, LEGACY_ART, bgPreview } from '../bgRenderers.js';
 import { setSoundEnabled, setSoundStyle, previewSound, SOUND_PACKS } from '../sfx.js';
@@ -848,7 +857,7 @@ const ISSUE_ICON = { collections: 'mdiFolderSyncOutline', moved: 'mdiLinkVariant
 async function loadIssues() { issues.value = await call('issues:list').catch(() => []); store.issues = issues.value.length; texEmus.value = (await call('addons:emulators').catch(() => null)) || []; }
 const texEmus = ref([]);
 // Add-ons page (0.9.17): installed games of consoles with add-ons, by console, and what Cartridge installed
-const ADDON_SLUGS = /^(ps2|psx|ngc|gamecube|wii|psp|3ds|n3ds|switch|wiiu)$/i;
+const ADDON_SLUGS = /^(ps2|psx|ngc|gamecube|wii|psp|3ds|n3ds|switch|wiiu|ps4)$/i;
 const addonGames = computed(() => {
   const by = new Map();
   for (const r of allRoms()) {
@@ -959,6 +968,30 @@ async function browseRoot() {
   await saveConfig({ romsRoot: p });
   await afterPath();
 }
+// games on more than one drive (0.9.38)
+const allRoots = ref([]), rootTo = ref('most');
+// a drive's name from its folder: /run/media/deck/SD/Emulation/roms -> SD
+const rootLabel = (p) => { const parts = p.split('/').filter(Boolean); while (parts.length > 1 && /^(roms|emulation)$/i.test(parts[parts.length - 1])) parts.pop(); return parts[parts.length - 1] || p; };
+const xroots = computed(() => allRoots.value.filter((r) => !r.main));
+async function loadRoots() { const r = await call('roots:list').catch(() => null); if (r) { allRoots.value = r.roots; rootTo.value = r.to; } }
+async function addRoot() {
+  const dir = await pickFolder({ title: 'Choose a drive (or a folder on it)', subtitle: 'An Emulation/roms folder is made there, with a folder per console', start: '/run/media' });
+  if (!dir) return;
+  try {
+    const r = await call('roots:add', { dir });
+    toast(`Games folder ready: ${r.root}${r.lists.length ? `. Added to ${r.lists.join(', ')}` : ''}`, 'ok', 5000, 'mdiHarddiskPlus');
+  } catch (e) { toast(e.message, 'error', 5000); }
+  await loadRoots(); storageKey.value++;
+}
+async function removeRoot(r) {
+  if (!(await confirm('Stop using this folder?', `${r.path}\n\nNothing is deleted: its games stay on the drive, and Cartridge stops looking there.`, 'Stop Using'))) return;
+  await call('roots:remove', { dir: r.path }); await loadRoots(); storageKey.value++;
+}
+async function setRootTo(v) { await call('roots:to', { to: v }); rootTo.value = v; }
+watch(sec, (v) => { if (v === 'storage') loadRoots(); }, { immediate: true });
+// 0.9.38 (owner: Look & Feel opened at the depth Achievements was scrolled to): every section shares the one .pane
+// scroll box and only its contents change, so a new section starts at the top
+watch(sec, () => { const el = paneEl.value; if (el) { stopScroll(el); el.scrollTop = 0; } });
 async function browseBios() {
   const p = await pickFolder({ title: 'Choose your BIOS folder', start: store.config.biosPath || undefined });
   if (p) await saveConfig({ biosPath: p });
@@ -1138,6 +1171,7 @@ onMounted(() => {
 .lbl2 { font-size: var(--t-xs); color: var(--muted); margin-bottom: 4px; font-weight: 600; }
 .small { font-size: var(--t-xs); }
 .wrap { flex-wrap: wrap; }
+.xroot { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 6px; }
 .pathrow { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 18px; }
 .plist { display: flex; flex-direction: column; gap: 6px; }
 .prow { display: grid; grid-template-columns: 30px 210px 1fr auto; align-items: center; gap: 14px; padding: 10px 14px; border-radius: var(--r-md); background: var(--s2); }
@@ -1152,6 +1186,7 @@ onMounted(() => {
 .swatch.on { box-shadow: 0 0 0 3px var(--s0), 0 0 0 5px rgba(255, 255, 255, 0.45); }
 .swatch { position: relative; }
 .swatch i { position: absolute; top: 6px; right: 6px; width: 12px; height: 12px; border-radius: 50%; box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.7); }
+.swatch.ink { color: #1d1e22; text-shadow: none; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12); } /* Light's swatch (0.9.38) */
 .swatch.custom { background: conic-gradient(from 90deg, #f55, #fd5, #5f8, #5df, #85f, #f5c, #f55); flex-direction: column; justify-content: space-between; align-items: flex-start; }
 .btn-demo { display: inline-flex; gap: 4px; vertical-align: middle; margin-left: 6px; }
 .finetune { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }

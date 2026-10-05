@@ -5,7 +5,7 @@ import { springTo, stopSpring, skipMorph } from './motion.js';
 import { reactive } from 'vue';
 import { sfx } from './sfx.js';
 
-export const input = reactive({ mode: 'pad', padName: '' }); // 'pad' | 'mouse'
+export const input = reactive({ mode: 'pad', padName: '', keys: false }); // 'pad' | 'mouse'; keys: in pad mode, the last press was a keyboard's (0.9.38, for the tour's hints)
 document.body.classList.add('pad-mode'); // the starting mode needs its class too (row snapping relies on it)
 // While a direction is held down, focus jumps several times a second. Smooth scrolling can't keep
 // up with that (each new animation restarts the last), so scroll instantly during a hold.
@@ -38,6 +38,8 @@ export function glideBy(sc, dx = 0, dy = 0) {
   if (dy || a.sy.raf) springTo(a.sy, ty, { response: rows ? 0.3 : 0.2, apply: (v) => { sc.scrollTop = v; }, done: end });
 }
 export const glideTo = (sc, top) => sc && glideBy(sc, 0, top - (anims.get(sc)?.ty ?? sc.scrollTop));
+// 0.9.38: a glide still running would carry on over whatever the box shows next (Settings' pane between sections)
+export function stopScroll(sc) { const a = sc && anims.get(sc); if (a) { stopSpring(a.sx); stopSpring(a.sy); anims.delete(sc); } }
 const layers = [];
 
 export function pushLayer(el, handlers = {}) {
@@ -211,7 +213,7 @@ export function dispatch(action, { keepMode = false } = {}) {
   if (action === 'accept') { sfx.accept(); rumble(true); }
   else if (action === 'back') sfx.back();
   else if (['lb', 'rb'].includes(action)) { sfx.tab(); rumble('tab'); }
-  else if (['lt', 'rt'].includes(action)) rumble('tab');
+  else if (['lt', 'rt'].includes(action)) { rumble('tab'); if (!startLog.done) startLog.fired.push(`${action} ${Math.round(performance.now() - startLog.t0)} ms${layer ? '' : ' (nothing to take it)'}`); }
   // hold A to read it all, B to fold it back (0.9.29, owner: patch names and descriptions that trail off):
   // anything marked data-expand opens as a card with its whole text
   if (action === 'back' && layer) { const open = layer.el.querySelector('.expanded[data-expand]'); if (open) { open.classList.remove('expanded'); open.focus({ preventScroll: true }); return; } }
@@ -286,6 +288,7 @@ window.addEventListener('keydown', (ev) => {
   let a = keyAction(ev);
   if (!a) return;
   ev.preventDefault();
+  if (!input.keys) input.keys = true;
   if (a === 'search' && !topLayer()?.handlers?.search) a = 'y'; // a pop-up without search: / is its Y, as before
   if (a === 'next' || a === 'prev') { setMode('pad'); stepFocus(a === 'next' ? 1 : -1); return; }
   if (a === 'first' || a === 'last') { const h = topLayer()?.handlers?.[a]; setMode('pad'); if (h) h(document.activeElement); else edgeFocus(a === 'last'); return; }
@@ -375,8 +378,24 @@ function trigger(gp, which, v) {
   const k = gp.index + which, p = gp.index + gp.id;
   if (!firstSeen[p]) firstSeen[p] = performance.now();
   if (v < 0.6 || performance.now() - firstSeen[p] < 400) armed[k] = true;
+  if (!startLog.done) startLog.note(gp, which, v, !!armed[k]);
   return !!armed[k] && v > 0.6;
 }
+// 0.9.38 (owner: LT/RT still dead at launch until another button; it works every time here, with a simulated
+// pad): what the triggers read in the first seconds, written once to the log, so a report from the device says
+// whether the pad showed up, what a trigger at rest reads and whether it was ever armed
+const startLog = { done: false, t0: performance.now(), seen: {}, fired: [],
+  note(gp, which, v, armedNow) {
+    const k = gp.index + which, x = this.seen[k] || (this.seen[k] = { id: gp.id.slice(0, 40), map: gp.mapping || 'none', first: Math.round(v * 100) / 100, at: Math.round(performance.now() - this.t0), max: 0, armedAt: null });
+    x.max = Math.max(x.max, Math.round(v * 100) / 100); if (armedNow && x.armedAt == null) x.armedAt = Math.round(performance.now() - this.t0);
+    if (performance.now() - this.t0 > 20000) this.flush();
+  },
+  flush() {
+    if (this.done) return; this.done = true;
+    const line = 'triggers at start: ' + (Object.entries(this.seen).map(([k, x]) => `${k} ${x.id} (${x.map}) seen ${x.at} ms, first ${x.first}, max ${x.max}, armed ${x.armedAt ?? 'never'}`).join('; ') || 'no pad') + `; LT/RT pressed ${this.fired.join(', ') || 'never'}`;
+    try { window.cart?.call('app:log', { text: line }); } catch {}
+  },
+};
 export const padLive = { pads: [] }; // for Settings → About → Controller test
 const stickHeld = {}; // pad index -> direction -> held (stick hysteresis)
 // Rumble when moving (0.9.3 B3, Look & Feel): a tiny pulse on the pad you last used. Steam Input
@@ -404,7 +423,7 @@ function poll() {
   const merged = {};
   for (const gp of pads) {
     input.padName = gp.id;
-    if (gp.buttons.some((b) => b.pressed) || gp.axes.slice(0, 2).some((a) => Math.abs(a) > 0.55)) lastPad = gp.index;
+    if (gp.buttons.some((b) => b.pressed) || gp.axes.slice(0, 2).some((a) => Math.abs(a) > 0.55)) { lastPad = gp.index; if (input.keys) input.keys = false; }
     gp.buttons.forEach((b, i) => {
       const a = BTN[i];
       if (!a || a === 'lt' || a === 'rt') return;

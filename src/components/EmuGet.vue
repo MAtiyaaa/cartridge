@@ -79,7 +79,7 @@
             <span class="eg-mid"><b>{{ e.label }}</b><span class="muted small">{{ e.from }}<template v-if="e.installed && upOf(e.id)?.channel && CH[upOf(e.id).channel]"> · {{ CH[upOf(e.id).channel] }}</template></span></span>
             <span v-if="e.installed && upRun && upOf(e.id) && upRun === (upOf(e.id).path || upOf(e.id).fp)" class="status"><Icon name="mdiArrowDownCircle" :size="14" />{{ upPct != null ? upPct + '%' : 'Updating' }}</span>
             <span v-else-if="e.installed && upOf(e.id)?.broken" class="status bad"><Icon name="mdiWrench" :size="14" />Repair</span>
-            <span v-else-if="e.installed && upOf(e.id)?.update" class="status warn"><Icon name="mdiUpdate" :size="14" />Update · {{ upOf(e.id).update.version || upOf(e.id).update.tag || 'new' }}</span>
+            <span v-else-if="e.installed && upOf(e.id)?.update" class="status warn"><Icon name="mdiUpdate" :size="14" />Update · {{ shortVer(upOf(e.id).update) }}</span>
             <span v-else-if="e.installed" class="status ok"><Icon name="mdiCheck" :size="14" />{{ updates && ups && upOf(e.id) && !upOf(e.id).noSource && !upOf(e.id).error ? 'Up to date' : 'Installed' }}</span>
             <span v-else-if="stateOf(c, e)?.state === 'run'" class="status"><Icon name="mdiArrowDownCircle" :size="14" />{{ stateOf(c, e).pct != null ? stateOf(c, e).pct + '%' : 'Starting' }}</span>
             <span v-else-if="stateOf(c, e)?.state === 'wait'" class="status">Waiting</span>
@@ -97,7 +97,7 @@
             <span class="eg-mid"><b>{{ u.label }}</b><span class="muted small">{{ u.version ? 'Version ' + u.version : u.kind === 'flatpak' ? 'Flatpak' : u.kind === 'windows' ? 'Windows build' : '' }}</span></span>
             <span v-if="upRun === (u.path || u.fp)" class="status"><Icon name="mdiArrowDownCircle" :size="14" />{{ upPct != null ? upPct + '%' : 'Updating' }}</span>
             <span v-else-if="u.broken" class="status bad"><Icon name="mdiWrench" :size="14" />Repair</span>
-            <span v-else-if="u.update" class="status warn"><Icon name="mdiUpdate" :size="14" />Update · {{ u.update.version || u.update.tag || 'new' }}</span>
+            <span v-else-if="u.update" class="status warn"><Icon name="mdiUpdate" :size="14" />Update · {{ shortVer(u.update) }}</span>
             <span v-else class="status ok"><Icon name="mdiCheck" :size="14" />{{ u.noSource || u.error ? 'Installed' : 'Up to date' }}</span>
             <i v-if="upRun === (u.path || u.fp)" class="eg-bar-fill" :class="{ live: upPct == null }" :style="{ width: (upPct ?? 100) + '%' }" />
           </button>
@@ -136,7 +136,7 @@
 // Download all; first where they live, as an ES-DE style Emulation folder on the drive you pick).
 // Used by the welcome (flow) and Settings → Emulators → Get Emulators.
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { store, call, toast, bytes, confirm, choose, openModal, bgJob } from '../store.js';
+import { store, call, toast, bytes, confirm, choose, openModal, bgJob, askText } from '../store.js';
 import { focusFirst } from '../nav.js';
 import Icon from './Icon.vue';
 import EmuIcon from './EmuIcon.vue';
@@ -176,6 +176,14 @@ async function runUpdate(u, force = false) {
 // 0.9.23 (owner: delete and download emulators again, stable or pre-release, shadPS4's versions):
 // an installed emulator opens one sheet with everything you can do to it
 const CH = { stable: 'Stable releases', pre: 'Pre-releases', rolling: 'Rolling build', flathub: '' };
+// 0.9.38 (owner's photo): shadPS4's launcher tags are "shadPS4QtLauncher-2026-10-05-<commit>", one long word that the
+// pill (never wrapped) made wider than the row, squeezing the name to a letter a line. The pill shows the part that
+// tells builds apart: a date, else the version number, else the start of the tag
+function shortVer(up) {
+  const v = String(up?.version || up?.tag || '');
+  const m = /\d{4}-\d{2}-\d{2}/.exec(v) || /\d+(?:\.\d+)+(?:[-.]\d+)?/.exec(v);
+  return m ? m[0] : v.slice(0, 16) || 'new';
+}
 const PATH_IDS = new Set(['pcsx2', 'duckstation', 'dolphin', 'eden', 'citron', 'yuzu', 'azahar', 'citra', 'ryujinx', 'cemu', 'rpcs3', 'shadps4', 'vita3k']);
 async function manage(u) {
   if (!u) return;
@@ -263,10 +271,22 @@ const failed = computed(() => jobs.value.filter((j) => j.s?.state === 'error'));
 const linked = computed(() => jobs.value.reduce((n, j) => n + (j.s?.links || 0), 0));
 const doneNote = computed(() => [linked.value ? `Saves and textures are linked in ${short(store.config.emulationRoot)}/saves and storage` : '', 'Steam shortcuts use them from now on'].filter(Boolean).join('. ') + '.');
 const jobNote = (j) => j.s?.state === 'error' ? j.s.error || 'Try again later' : j.s?.state === 'done' ? [short(j.s.where), j.s.note, j.s.relinked ? `${j.s.relinked} Steam shortcut${j.s.relinked === 1 ? '' : 's'} fixed` : ''].filter(Boolean).join(' · ') : '';
+// 0.9.38 (owner: Cartridge hung installing Flatpak): when a Flatpak is wanted and Flatpak isn't on the system,
+// the device password is asked here, in Cartridge, and handed to the install once (never saved)
+const isFlatpakItem = (it) => (list.value || []).find((c) => c.key === it.key)?.emus.find((e) => e.id === it.id)?.how === 'flatpak';
+async function queue(items) {
+  let password;
+  if (!fp.value.has && fp.value.can && items.some(isFlatpakItem)) {
+    password = await askText({ title: 'Your device password, to install Flatpak', placeholder: 'Used once, never saved', password: true });
+    if (password == null) items = items.filter((it) => !isFlatpakItem(it));
+    if (!items.length) return q.value;
+  }
+  return call('emuget:queue', { items, password }).catch((err) => { toast(err.message, 'error'); return q.value; });
+}
 async function install() {
   const items = picked.value.map((k) => { const [key, id] = k.split('|'); return { key, id }; });
   jobKeys.value = picked.value; picks.value = new Set(); phase.value = 'install';
-  q.value = await call('emuget:queue', { items }).catch((err) => { toast(err.message, 'error'); return q.value; });
+  q.value = await queue(items);
   await nextTick(); focusFirst(document.querySelector('.eg'), '.eg-job');
 }
 watch(() => doneJobs.value.length, (n) => { if (phase.value === 'install' && jobs.value.length && n === jobs.value.length) phase.value = 'done'; });
@@ -299,7 +319,7 @@ async function loadDrives(auto = true) {
 }
 // the installer's main button, else its first choice: never the welcome's buttons around it
 function focusIn() { const r = document.querySelector('.eg'); if (r) focusFirst(r, r.querySelector('.eg-bar .btn.primary:not([disabled])') ? '.eg-bar .btn.primary:not([disabled])' : '[data-focus]:not([disabled])'); }
-async function load() { if (props.flow) call('emuget:flatpak').then((r) => (fp.value = r)).catch(() => {}); list.value = await call('emuget:list').catch(() => []); q.value = await call('emuget:state').catch(() => []); if (phase.value === 'pick' && !picks.value.size) preselect(); }
+async function load() { call('emuget:flatpak').then((r) => (fp.value = r)).catch(() => {}); list.value = await call('emuget:list').catch(() => []); q.value = await call('emuget:state').catch(() => []); if (phase.value === 'pick' && !picks.value.size) preselect(); }
 async function pickDrive(d) {
   if (busy.value) return; // a second A while the folder is made (the button stays focused, not disabled)
   busy.value = d.path;
@@ -308,15 +328,21 @@ async function pickDrive(d) {
   busy.value = false;
 }
 async function get(c, e) {
-  if (e.installed) { const u = props.updates && upOf(e.id); return u ? manage(u) : toast(`${e.label} is already on this device.`, 'info', 2500); }
+  // 0.9.38 (owner: shadPS4 and SharpEmu said "already on this device" instead of opening their sheet): the
+  // update list is read again when it doesn't have the emulator yet (installed moments ago)
+  if (e.installed) {
+    let u = props.updates && upOf(e.id);
+    if (!u && props.updates) { await loadUps(); u = upOf(e.id); }
+    return u ? manage(u) : toast(`${e.label} is already on this device.`, 'info', 2500);
+  }
   const s = stateOf(c, e);
   if (s && /wait|run/.test(s.state)) return toast(s.state === 'run' ? 'Downloading now. You can keep going.' : 'It’s in the queue.', 'info', 2500);
-  q.value = await call('emuget:queue', { items: [{ key: c.key, id: e.id }] }).catch((err) => { toast(err.message, 'error'); return q.value; });
+  q.value = await queue([{ key: c.key, id: e.id }]);
 }
 async function getAll() {
   if (!missingFirst.value.length) return;
   const items = (list.value || []).filter((c) => !c.emus.some((e) => e.installed)).map((c) => ({ key: c.key, id: c.emus[0].id }));
-  q.value = await call('emuget:queue', { items }).catch((err) => { toast(err.message, 'error'); return q.value; });
+  q.value = await queue(items);
   toast(`${items.length} emulator${items.length === 1 ? '' : 's'} downloading in the background`, 'ok', 3000, 'mdiDownloadMultiple');
 }
 // 0.9.32 (owner: leaving shouldn't cancel): an update or a GitHub install started earlier is still running
@@ -333,7 +359,7 @@ onMounted(async () => {
     if (done !== lastDone) {
       // say where it went, and how many Steam shortcuts now point at it (0.9.24)
       if (done > lastDone && !props.flow) for (const x of s.filter((y) => y.state === 'done' && y.where && !told.has(y.key + y.id))) { told.add(x.key + x.id); toast(`Installed to ${String(x.where).replace(store.info?.home || '\0', '~')}${x.relinked ? ` · ${x.relinked} Steam shortcut${x.relinked === 1 ? '' : 's'} now use it` : ''}`, 'ok', 6000, 'mdiCheck'); }
-      lastDone = done; load();
+      lastDone = done; load(); loadUps(); // 0.9.38: a fresh install gets its sheet (it had no update entry yet)
     }
   });
   offP = window.cart.on('emuget-progress', (m) => { const x = q.value.find((y) => y.key === m.key && y.id === m.id && y.state === 'run'); if (x && m.pct != null) x.pct = m.pct; });
@@ -393,7 +419,8 @@ defineExpose({ load });
 .eg-emu { position: relative; overflow: hidden; display: flex; align-items: center; gap: var(--s-3); padding: 10px 12px; border-radius: var(--r-md); background: var(--s2); color: inherit; border: 0; text-align: left; font: inherit; flex: none; }
 .eg-emu:focus { background: var(--focus); color: var(--on-focus); outline: none; }
 .eg-emu:focus .muted { color: var(--on-focus-dim); }
-.eg-mid { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.eg-emu > .status { flex: none; max-width: 55%; overflow: hidden; } /* 0.9.38: a long pill never takes the name's room */
+.eg-mid { flex: 1; min-width: 8em; display: flex; flex-direction: column; gap: 2px; }
 .eg-mid b {  overflow-wrap: anywhere; }
 .eg-mid .small {  overflow-wrap: anywhere; }
 .eg-get { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: rgba(255, 255, 255, 0.08); flex: none; }
