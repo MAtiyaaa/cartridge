@@ -273,7 +273,7 @@ body.elements-glass:not(.light-fx) .tab-ink { -webkit-backdrop-filter: blur(18px
 .btn { display: inline-flex; align-items: center; gap: 10px; height: 48px; padding: 0 22px; border-radius: var(--r-md); background: var(--s2); font-size: var(--t-md); font-weight: 600; transition: background var(--d-fast), color var(--d-fast); white-space: nowrap; }
 .btn:hover { background: var(--s3); }
 .btn.primary { background: var(--btn, var(--primary)); color: var(--on-btn, var(--on-primary)); font-weight: 700; }
-.btn.danger { color: #ff9b93; }
+.btn.danger { color: var(--danger-t, #ff9b93); }
 .btn.ok { color: var(--green-l); }
 .btn.small { height: 38px; padding: 0 16px; font-size: var(--t-sm); border-radius: var(--r-sm); }
 .btn.xl { height: 56px; padding: 0 28px; font-size: var(--t-lg); }
@@ -368,7 +368,7 @@ body.light-fx .systile .glyph { filter: saturate(0.6) brightness(1.1); }
 .menu-list { display: flex; flex-direction: column; gap: 6px; overflow-y: auto; padding: 4px; }
 .menu-list > * { flex: none; }
 .menu-item { display: flex; align-items: center; gap: 14px; padding: 14px 16px; border-radius: var(--r-md); background: var(--s2); font-size: var(--t-md); font-weight: 500; transition: background var(--d-fast), color var(--d-fast); }
-.menu-item.danger { color: #ff9b93; }
+.menu-item.danger { color: var(--danger-t, #ff9b93); }
 .menu-item.selected { background: var(--sel); }
 .menu-item:hover { background: var(--s3); }
 .menu-item:focus { background: var(--focus); color: var(--on-focus); box-shadow: none; }
@@ -521,3 +521,27 @@ body.motion-reduce .card .art, body.motion-reduce .btn, body.motion-reduce .lrow
 :root.morphing::view-transition-old(root), :root.morphing::view-transition-new(root) { animation: none; }
 ::view-transition-group(cart-morph) { animation-duration: var(--spring-d); animation-timing-function: var(--spring); z-index: 60; }
 ::view-transition-old(cart-morph), ::view-transition-new(cart-morph) { animation-duration: calc(var(--spring-d) * 0.6); height: 100%; object-fit: cover; }
+
+/* ---------------------------------------------------------------- Light theme (0.9.38, owner: "white, but not the
+   white that blinds you"; backgrounds and lines inverted to dark). themes.js sets the page, panels, text and the
+   dark highlight; these are the colours written for a dark page elsewhere. Text over pictures stays white. */
+body.theme-light {
+  --line: rgba(0, 0, 0, 0.1);
+  --glass: rgba(236, 235, 231, 0.7); --glass-hi: rgba(214, 213, 207, 0.85);
+  --green: #1f8a3a; --green-l: #1b7a33; --red: #c8332a; --gold: #9a6b00;
+  --text-2: #3d3f45; --score: #1b7a33; --danger-t: #b3261c; --ondev: #1b7a33; --faint: rgba(0, 0, 0, 0.5); --line-2: rgba(0, 0, 0, 0.14);
+  --shadow-card: 0 10px 24px rgba(40, 38, 32, 0.18);
+}
+body.theme-light .statusbar::before { background: linear-gradient(180deg, rgba(230, 229, 225, 0.85) 0%, rgba(230, 229, 225, 0.45) 62%, rgba(230, 229, 225, 0) 100%); }
+body.theme-light.bar-bottom .statusbar::before { background: linear-gradient(0deg, rgba(230, 229, 225, 0.85) 0%, rgba(230, 229, 225, 0.45) 62%, rgba(230, 229, 225, 0) 100%); }
+body.theme-light .card:focus .title { color: var(--text); }
+/* console wordmarks: dark on the page, white where they sit on a picture or the idle screen */
+body.theme-light .cmark { filter: brightness(0); opacity: 0.78; }
+body.theme-light :is(.idle, .st-face:has(.st-scrim), .st-face:has(.st-art)) .cmark { filter: brightness(0) invert(1); opacity: 0.92; }
+/* Start tiles drawn over a game's picture keep light text */
+body.theme-light .st-face:has(.st-scrim) { color: #f4f4f5; --text: #f4f4f5; --muted: rgba(255, 255, 255, 0.8); --dim: rgba(255, 255, 255, 0.6); }
+/* Played This Week: dark bars on the light tile */
+body.theme-light .st-bar i { background: linear-gradient(to top, rgba(0, 0, 0, 0.1), rgba(0, 0, 0, 0.22)); }
+body.theme-light .st-bar.today i { background: linear-gradient(to top, rgba(29, 30, 34, 0.75), #1d1e22); }
+body.theme-light .st-bar.none i { background: rgba(0, 0, 0, 0.1); }
+body.theme-light .swatch.on { box-shadow: 0 0 0 3px var(--s0), 0 0 0 5px rgba(0, 0, 0, 0.5); } /* the chosen colour's ring */

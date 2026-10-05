@@ -150,9 +150,9 @@ onMounted(async () => { await load(); focusFirst(el.value); });
 .aa-uicon img { width: 100%; height: 100%; object-fit: cover; }
 .aa-ubody { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
 .aa-utitle { font-family: var(--display); font-weight: 600; font-size: var(--t-md); display: flex; gap: 6px; align-items: center;  overflow-wrap: anywhere; }
-.aa-udesc { font-size: var(--t-xs); color: #c3c9d4; overflow-wrap: anywhere; }
+.aa-udesc { font-size: var(--t-xs); color: var(--text-2, #c3c9d4); overflow-wrap: anywhere; }
 .aa-umeta { display: flex; gap: 10px; align-items: center; font-size: var(--t-xs); color: var(--muted); }
-.aa-umeta .pts { color: #9be38a; font-weight: 600; }
+.aa-umeta .pts { color: var(--score, #9be38a); font-weight: 600; }
 .aa-ugame { font-size: var(--t-xs); color: var(--muted);  overflow-wrap: anywhere; }
 .aa-gh { display: flex; align-items: center; gap: var(--s-2); margin: 0 0 var(--s-3); flex-wrap: wrap; }
 .aa-list { display: flex; flex-direction: column; gap: 4px; padding-bottom: 30px; max-width: 1200px; }

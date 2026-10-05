@@ -227,7 +227,7 @@
 
             <div class="subh"><Icon name="mdiPaletteOutline" :size="20" />Colour</div>
             <div class="swatches">
-              <button v-for="(t, k) in THEMES" :key="k" class="swatch" data-focus :class="{ on: (ui.theme || 'cartridge') === k }" :style="{ background: `linear-gradient(135deg, ${t.grad[0]}, ${t.grad[2]} 60%, ${t.grad[4]})` }" :title="t.label" @click="saveConfig({ ui: { theme: k, gameTheme: null } })"><i :style="{ background: t.accent[0] }" /><span>{{ t.label }}</span></button>
+              <button v-for="(t, k) in THEMES" :key="k" class="swatch" data-focus :class="{ on: (ui.theme || 'cartridge') === k, ink: t.light }" :style="{ background: `linear-gradient(135deg, ${t.grad[0]}, ${t.grad[2]} 60%, ${t.grad[4]})` }" :title="t.label" @click="saveConfig({ ui: { theme: k, gameTheme: null } })"><i :style="{ background: t.accent[0] }" /><span>{{ t.label }}</span></button>
               <button class="swatch custom" data-focus :class="{ on: ui.theme === 'custom' }" :style="ui.customColor ? { background: `linear-gradient(135deg, ${customT.grad[0]}, ${customT.grad[2]} 60%, ${customT.grad[4]})` } : {}" @click="pickColor"><Icon name="mdiEyedropperVariant" :size="18" /><span>Custom</span></button>
             </div>
             <!-- the background is part of the theme (owner, 0.9.21: one page, not two) -->
@@ -1186,6 +1186,7 @@ onMounted(() => {
 .swatch.on { box-shadow: 0 0 0 3px var(--s0), 0 0 0 5px rgba(255, 255, 255, 0.45); }
 .swatch { position: relative; }
 .swatch i { position: absolute; top: 6px; right: 6px; width: 12px; height: 12px; border-radius: 50%; box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.7); }
+.swatch.ink { color: #1d1e22; text-shadow: none; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12); } /* Light's swatch (0.9.38) */
 .swatch.custom { background: conic-gradient(from 90deg, #f55, #fd5, #5f8, #5df, #85f, #f5c, #f55); flex-direction: column; justify-content: space-between; align-items: flex-start; }
 .btn-demo { display: inline-flex; gap: 4px; vertical-align: middle; margin-left: 6px; }
 .finetune { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }

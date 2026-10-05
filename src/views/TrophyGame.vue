@@ -156,9 +156,9 @@ onMounted(async () => { await load(); focusFirst(el.value); });
 .tg-body { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
 .tg-ticon { border-radius: var(--r-md); }
 .tg-t-title { font-family: var(--display); font-weight: 600; font-size: var(--t-md); display: flex; gap: 6px; align-items: center; }
-.tg-t-desc { font-size: var(--t-xs); color: #c3c9d4; }
+.tg-t-desc { font-size: var(--t-xs); color: var(--text-2, #c3c9d4); }
 .tg-t-meta { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; font-size: var(--t-xs); color: var(--muted); }
-.tg-t-meta .pts { color: #9be38a; font-weight: 600; }
+.tg-t-meta .pts { color: var(--score, #9be38a); font-weight: 600; }
 .gr-P { color: #cfe0ff; } .gr-G { color: #ffd978; } .gr-S { color: #dfe4ea; } .gr-B { color: #e8a878; }
 .dev { display: inline-flex; gap: 4px; align-items: center; color: #9cc3ff; }
 @media (max-width: 1100px) { .tg-icon { width: 180px; } }

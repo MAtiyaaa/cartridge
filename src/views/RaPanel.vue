@@ -183,7 +183,7 @@ onMounted(async () => { await load(); focusFirst(el.value); });
 .ra-badge { width: 64px; height: 64px; border-radius: var(--r-md); flex: none; box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4); }
 .ra-u-body { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
 .ra-u-title { font-family: var(--display); font-weight: 600; font-size: var(--t-md);  overflow-wrap: anywhere; }
-.ra-u-desc { font-size: var(--t-xs); color: #c3c9d4; overflow-wrap: anywhere; }
+.ra-u-desc { font-size: var(--t-xs); color: var(--text-2, #c3c9d4); overflow-wrap: anywhere; }
 .ra-u-meta { display: flex; gap: 10px; align-items: center; font-size: var(--t-xs); color: var(--muted); }
 .ra-u-meta .pts { color: var(--gold); font-weight: 600; }
 .chip.hc { font-size: var(--t-xs); padding: 2px 6px; background: rgba(255, 90, 90, 0.18); color: #ff9b9b; }
@@ -200,7 +200,7 @@ onMounted(async () => { await load(); focusFirst(el.value); });
 .inlib { color: var(--green-l); }
 .ra-bar { height: 6px; }
 .ra-bar i { background: linear-gradient(90deg, #f5c542, #ffdf80); }
-.ra-g-prog { font-size: var(--t-xs); color: #c3c9d4; }
+.ra-g-prog { font-size: var(--t-xs); color: var(--text-2, #c3c9d4); }
 .mastered { color: var(--gold); flex: none; }
 @media (max-width: 1100px) { .ra-fields { grid-template-columns: 1fr; } }
 </style>

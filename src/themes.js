@@ -48,6 +48,10 @@ export const THEMES = {
   sky: themeFrom('#3fb6f0', 'Sky'),
   lavender: themeFrom('#b89cf5', 'Lavender'),
   graphite: themeFrom('#9aa3b2', 'Graphite'),
+  // 0.9.38 (owner): OLED, pure black behind everything with Cartridge's neutral panels; Light, an off-white page
+  // (never paper white, it glares on a TV at night) with dark text, a dark highlight and backgrounds drawn in dark ink
+  oled: { label: 'OLED', grad: ['#121214', '#000000', '#000000', '#000000', '#000000', '#000000'], accent: ['#ffffff', '#ffffff', '#d4d4d8'], bgAccent: ['#ef4b23', '#ff7a55'], warm: '#ffb35c', neutral: true, black: true },
+  light: { label: 'Light', grad: ['#f3f2ee', '#e6e5e1', '#dddcd7', '#d3d2cc', '#c9c8c2', '#e9e8e4'], accent: ['#1d1e22', '#3a3c42', '#000000'], bgAccent: ['#d8401c', '#ef6a45'], warm: '#b8651a', neutral: true, light: true },
 };
 // Swatches for the custom colour picker: 12 hues x 3 shades, plus greys
 export const CUSTOM_SWATCHES = [
@@ -80,6 +84,9 @@ export const TEXTS = {
   bright: { label: 'High Contrast', text: '#ffffff', muted: '#e6e7eb', dim: '#b9bcc4' },
   soft: { label: 'Soft', text: '#cfccc6', muted: '#8a8781', dim: '#5a5853' },
 };
+// the same three on the Light theme (0.9.38): dark ink on the off-white page
+const LIGHT_TEXTS = { normal: { text: '#1d1e22', muted: '#55575d', dim: '#83858b' }, bright: { text: '#000000', muted: '#34363b', dim: '#5c5e64' }, soft: { text: '#3a3934', muted: '#6e6c66', dim: '#93918b' } };
+const LIGHT_S = ['#e6e5e1', '#dcdbd6', '#d2d1cb', '#c7c6c0']; // page, then panels a step darker each (raised = further from the page)
 // Bundled open-source fonts (SIL Open Font License), display + body
 export const FONTS = {
   cartridge: { label: 'Archivo + Inter', display: "'Archivo Variable', 'Inter Variable', Roboto, sans-serif", body: "'Inter Variable', Roboto, 'Noto Sans', system-ui, sans-serif" },
@@ -121,7 +128,8 @@ export function applyTheme(uiOrName) {
   document.body.classList.toggle('custom-bars', ok(col.bars));
   const surf = SURFACES[ui.surface] || SURFACES.solid;
   const el = ELEMENTS[elementsOf(ui)] || ELEMENTS.plain;
-  const tx = TEXTS[ui.text] || TEXTS.normal;
+  const lightT = !!t.light, black = !!(surf.black || t.black);
+  const tx = lightT ? LIGHT_TEXTS[ui.text] || LIGHT_TEXTS.normal : TEXTS[ui.text] || TEXTS.normal;
   const g = t.grad;
   const rgb = (h) => hex2rgb(h).join(', ');
   const [th, ts] = rgb2hsl(...hex2rgb(g[3]));
@@ -133,13 +141,13 @@ export function applyTheme(uiOrName) {
   r.setProperty('--primary-rgb', rgb(a));
   r.setProperty('--primary-l-rgb', rgb(al));
   const light = lum(a) > 0.75;
-  r.setProperty('--primary-t', light ? '#ffffff' : hsl(ah, 0.9, 0.86));
-  r.setProperty('--on-primary', light ? '#0c0d10' : hsl(ah, 0.5, 0.1));
+  r.setProperty('--primary-t', lightT ? a : light ? '#ffffff' : hsl(ah, 0.9, 0.86));
+  r.setProperty('--on-primary', lightT && !light ? '#f4f3ef' : light ? '#0c0d10' : hsl(ah, 0.5, 0.1));
   r.setProperty('--knob', light ? '#0c0d10' : '#ffffff');
   r.setProperty('--peach', t.warm);
   // 0.9: one flat accent, no gradients. Focus (where you are) is white, or the Highlights colour
   // when one is picked, with text that reads on it (0.9.2)
-  const fo = ok(col.highlight) ? a : '#ffffff', foLight = lum(fo) > 0.6;
+  const fo = ok(col.highlight) ? a : lightT ? '#1d1e22' : '#ffffff', foLight = lum(fo) > 0.6;
   r.setProperty('--grad', `linear-gradient(${a}, ${a})`);
   // Glass elements (0.9.37, owner: the white highlight glass too, with contrasting text): a frosted fill of the
   // highlight colour, light text on it; the ring stays solid so where you are is never in doubt
@@ -148,27 +156,27 @@ export function applyTheme(uiOrName) {
   const glassFocus = el.glass;
   r.setProperty('--focus', glassFocus ? `rgba(${rgb(fo)}, ${foLight ? 0.74 : 0.66})` : fo);
   r.setProperty('--focus-solid', fo);
-  r.setProperty('--on-focus', foLight ? '#0c0d10' : '#ffffff');
-  r.setProperty('--on-focus-dim', foLight ? 'rgba(12, 13, 16, 0.7)' : 'rgba(255, 255, 255, 0.75)');
+  r.setProperty('--on-focus', foLight ? '#0c0d10' : lightT ? '#f4f3ef' : '#ffffff');
+  r.setProperty('--on-focus-dim', foLight ? 'rgba(12, 13, 16, 0.7)' : lightT ? 'rgba(244, 243, 239, 0.75)' : 'rgba(255, 255, 255, 0.75)');
   r.setProperty('--ring', `0 0 0 3px var(--s0), 0 0 0 6px ${fo}`);
   r.setProperty('--ring-soft', `0 0 0 2px ${fo}`);
   // surfaces: neutral greys, tinted a little towards the theme for the coloured themes
   const sh = rgb2hsl(...hex2rgb(g[2])), ss = t.neutral ? 0 : Math.min(0.16, sh[1] * 0.25);
   // the page (s0) follows Background, the panels (s1 to s3) follow Elements (0.9.37)
-  const pageL = surf.black ? 0 : 0.05, elL = el.black ? [0.055, 0.09, 0.14] : [0.085, 0.12, 0.165];
-  const S = [pageL, ...elL].map((l) => hsl(sh[0], ss, l));
-  if (surf.bg && !surf.black && surf.glassA < 1) S[0] = surf.bg;
+  const pageL = black ? 0 : 0.05, elL = el.black ? [0.055, 0.09, 0.14] : [0.085, 0.12, 0.165];
+  const S = lightT ? [...LIGHT_S] : [pageL, ...elL].map((l) => hsl(sh[0], ss, l));
+  if (surf.bg && !black && !lightT && surf.glassA < 1) S[0] = surf.bg;
   // chosen but not where you are: a lighter grey fill (0.9.2, replaces accent stripes)
-  r.setProperty('--sel', hsl(sh[0], ss, el.black ? 0.22 : 0.26));
+  r.setProperty('--sel', lightT ? '#bab9b3' : hsl(sh[0], ss, el.black ? 0.22 : 0.26));
   S.forEach((c, i) => r.setProperty('--s' + i, el.glassA < 1 && i ? `rgba(${rgb(c)}, ${el.glassA})` : c));
   r.setProperty('--xmb', `radial-gradient(120% 90% at 85% 0%, ${g[0]} 0%, transparent 55%), radial-gradient(90% 80% at 0% 100%, ${g[5]} 0%, transparent 60%), linear-gradient(160deg, ${g[1]} 0%, ${g[2]} 38%, ${g[3]} 70%, ${g[4]} 100%)`);
-  r.setProperty('--xmb-base', surf.black ? '#000' : g[4]);
+  r.setProperty('--xmb-base', black ? '#000' : g[4]);
   // Cartridge's own theme: a flat page, so art and panels meet it without a seam
-  if (t.neutral) { r.setProperty('--xmb', surf.black ? '#000' : S[0]); r.setProperty('--xmb-base', surf.black ? '#000' : S[0]); }
+  if (t.neutral) { r.setProperty('--xmb', black ? '#000' : S[0]); r.setProperty('--xmb-base', black ? '#000' : S[0]); }
   for (let i = 0; i < 6; i++) r.setProperty('--g' + i, g[i]);
-  r.setProperty('--tint-rgb', surf.black ? '0, 0, 0' : tint);
-  r.setProperty('--glass-bg', el.glassA < 1 ? `rgba(${el.black || surf.black ? '0, 0, 0' : tint}, ${el.glassA})` : S[1]);
-  r.setProperty('--bg', surf.black ? '#000' : S[0]);
+  r.setProperty('--tint-rgb', black ? '0, 0, 0' : lightT ? '230, 229, 225' : tint);
+  r.setProperty('--glass-bg', el.glassA < 1 ? `rgba(${el.black || black ? '0, 0, 0' : tint}, ${el.glassA})` : S[1]);
+  r.setProperty('--bg', black ? '#000' : S[0]);
   r.setProperty('--text', tx.text);
   r.setProperty('--muted', tx.muted);
   r.setProperty('--dim', tx.dim);
@@ -182,11 +190,13 @@ export function applyTheme(uiOrName) {
   const b = document.body.classList;
   b.toggle('motion-fast', ui.motion === 'fast');
   b.toggle('motion-reduce', ui.motion === 'reduce');
-  b.toggle('surface-oled', !!surf.black);
-  b.toggle('surface-glass', surf.glassA < 1 && !surf.black);
+  b.toggle('surface-oled', !!black);
+  b.toggle('surface-glass', surf.glassA < 1 && !black);
   b.toggle('elements-glass', !!el.glass);
   b.toggle('elements-oled', false);
   b.toggle('focus-light', foLight); // glass sheen strength
+  b.toggle('theme-light', lightT);
+  document.documentElement.style.colorScheme = lightT ? 'light' : 'dark'; // scrollbars and form controls
   b.toggle('no-titles', ui.cardTitles === false);
 }
 // Colours the animated backgrounds draw with
@@ -196,7 +206,7 @@ export function paletteOf(ui) {
   if (/^#[0-9a-f]{6}$/i.test(ui?.colors?.highlight || '')) t = { ...t, accent: themeFrom(ui.colors.highlight).accent };
   // animated backgrounds keep the brand colour when the highlights are plain white
   const [pa, pl] = !ui?.colors?.highlight && t.bgAccent ? t.bgAccent : t.accent;
-  return { accent: pa, light: pl, warm: t.warm, grad: t.grad, black: !!(SURFACES[ui?.surface] || {}).black };
+  return { accent: pa, light: pl, warm: t.warm, grad: t.grad, black: !!((SURFACES[ui?.surface] || {}).black || t.black), ink: t.light ? '24,25,29' : '' };
 }
 // "Light effects" when the GPU is off (software rendering), unless the user picked otherwise
 export function lightEffects(ui, info) {

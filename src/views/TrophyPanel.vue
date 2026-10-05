@@ -189,9 +189,9 @@ onMounted(async () => { await load(); focusFirst(el.value); });
 .tp-ticon-game .gicon { box-shadow: 0 0 0 2px rgba(10, 10, 20, 0.9); }
 .tp-u-body { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
 .tp-u-title { font-family: var(--display); font-weight: 600; font-size: var(--t-md); display: flex; gap: 6px; align-items: center;  overflow-wrap: anywhere; }
-.tp-u-desc { font-size: var(--t-xs); color: #c3c9d4; overflow-wrap: anywhere; }
+.tp-u-desc { font-size: var(--t-xs); color: var(--text-2, #c3c9d4); overflow-wrap: anywhere; }
 .tp-u-meta { display: flex; gap: 10px; align-items: center; font-size: var(--t-xs); color: var(--muted); }
-.tp-u-meta .pts { color: #9be38a; font-weight: 600; }
+.tp-u-meta .pts { color: var(--score, #9be38a); font-weight: 600; }
 .dev { display: inline-flex; gap: 4px; align-items: center; color: #9cc3ff; }
 .tp-u-game { font-size: var(--t-xs); color: var(--muted);  overflow-wrap: anywhere; }
 .tp-games { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 14px; padding-bottom: 30px; }
@@ -205,7 +205,7 @@ onMounted(async () => { await load(); focusFirst(el.value); });
 .inlib { color: var(--green-l); }
 .tp-bar { height: 6px; }
 .tp-bar i { background: linear-gradient(90deg, #7fa8ff, #cfe0ff); }
-.tp-g-prog { font-size: var(--t-xs); color: #c3c9d4; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.tp-g-prog { font-size: var(--t-xs); color: var(--text-2, #c3c9d4); display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .tp-mini { display: inline-flex; gap: 8px; margin-left: 6px; }
 .tp-mini span { display: inline-flex; gap: 3px; align-items: center; }
 .tp-plat { flex: none; }
