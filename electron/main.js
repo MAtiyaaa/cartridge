@@ -3648,7 +3648,9 @@ const handlers = {
     const local = pack.source === 'local';
     if (local && !(pack.file && fs.existsSync(pack.file) && /\.(zip|7z|rar)$/i.test(pack.file))) throw new Error('Pick a .zip, .7z or .rar file.');
     // the emulator's other folders a mod may need: PCSX2's patches, Dolphin's GraphicMods (beside Textures)
-    const alt = { patches: e.id === 'pcsx2' ? path.join(e.emuRoot, 'patches') : null, graphicmods: e.id === 'dolphin' ? path.join(path.dirname(e.root), 'GraphicMods') : null };
+    const alt = { patches: e.id === 'pcsx2' ? path.join(e.emuRoot, 'patches') : null, graphicmods: e.id === 'dolphin' ? path.join(path.dirname(e.root), 'GraphicMods') : null,
+      // Azahar/Citra mods (0.9.37): load/mods/<title ID>, beside load/textures
+      mods3ds: /^(azahar|citra)$/.test(e.id) && e.folder ? path.join(path.dirname(path.dirname(e.folder)), 'mods', path.basename(e.folder)) : null };
     const urls = local ? [] : pack.source === 'ps2' ? (pack.parts ? pack.parts.map((x) => ({ ...x })) : [{ url: pack.url, size: pack.size, sha256: pack.sha256 }]) : [{ url: file.url, size: file.size, md5: file.md5 }];
     const total = urls.reduce((s, u) => s + (u.size || 0), 0);
     const free = await fsp.statfs(fs.existsSync(dest) ? dest : e.root).then((st) => st.bavail * st.bsize).catch(() => Infinity);
