@@ -3845,7 +3845,7 @@ const handlers = {
       const ck = { retro: 'snes', gc: 'gc' }[key] || key;
       return (steamMgr.candidatesFor(ck) || []).some((c) => c.id.split('@')[0] === e.id);
     };
-    return G.CATALOG.map((c) => ({ key: c.key, name: c.name, emus: c.emus.map((e) => ({ id: e.id, label: require('./emulators').EMU[e.id]?.label || { retroarch: 'RetroArch', supermodel: 'Supermodel' }[e.id] || e.id, how: e.how, from: e.how === 'flatpak' ? 'Flatpak from Flathub' : `${e.binary ? 'Linux build' : 'AppImage'} from ${e.repo.split('/')[0]}${e.fp ? ', else its Flatpak' : ''}`, installed: isHere(e, c.key) })) }));
+    return G.CATALOG.map((c) => ({ key: c.key, name: c.name, emus: c.emus.map((e) => ({ id: e.id, label: require('./emulators').EMU[e.id]?.label || { retroarch: 'RetroArch', supermodel: 'Supermodel' }[e.id] || e.id, how: e.how, from: e.how === 'flatpak' ? 'Flatpak from Flathub' : `${e.binary || e.dirBuild ? 'Linux build' : 'AppImage'} from ${e.repo.split('/')[0]}${e.fp ? ', else its Flatpak' : ''}`, installed: isHere(e, c.key) })) }));
   },
   // where emulators live (0.9.17): this device and every mounted drive, with free space
   'emuget:drives': async () => {
@@ -4039,7 +4039,7 @@ const handlers = {
       // 0.9.21: the release source follows the copy (Xenia Edge, Xenia's Windows build, Eden's variants)
       // a plain program (not an AppImage, not a folder build Cartridge can update) is never overwritten (0.9.21)
       const kind = e.kind === 'appimage' || e.kind === 'folder' ? U.installKind(e.path) : null, base = U.specFor(e.id, e.path);
-      const spec = kind === 'folder' ? (base?.folder || base?.overProgram ? base : null) : kind === 'program' && !base?.zipped && !base?.overProgram ? null : base;
+      const spec = kind === 'folder' ? (base?.folder || base?.overProgram || base?.dirBuild ? base : null) : kind === 'program' && !base?.zipped && !base?.overProgram ? null : base;
       // 0.9.23: a copy that can't start (system libraries missing, e.g. Vita3K's Qt6 zip build on SteamOS)
       // is offered its update as a repair, newer or not
       const broken = kind === 'program' || kind === 'folder' ? U.missingLibs(e.path) : [];

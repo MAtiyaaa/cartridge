@@ -24,6 +24,7 @@ const CATALOG = [
   { key: 'ps2', name: 'PlayStation 2', emus: [GH('pcsx2', 'pcsx2-Qt.AppImage', { fp: 'net.pcsx2.PCSX2' })] },
   { key: 'ps3', name: 'PlayStation 3', emus: [GH('rpcs3', 'rpcs3.AppImage', { fp: 'net.rpcs3.RPCS3' })] },
   { key: 'ps4', name: 'PlayStation 4', emus: [GH('shadps4', 'Shadps4-qt.AppImage')] },
+  { key: 'ps5', name: 'PlayStation 5', emus: [GH('sharpemu', 'SharpEmu'), GH('kytyps5', 'KytyPS5')] },
   { key: 'psp', name: 'PSP', emus: [FP('ppsspp', 'org.ppsspp.PPSSPP')] },
   { key: 'psvita', name: 'PS Vita', emus: [GH('vita3k', 'Vita3K.AppImage')] },
   { key: 'gc', name: 'GameCube and Wii', emus: [FP('dolphin', 'org.DolphinEmu.dolphin-emu'), FP('primehack', 'io.github.shiiion.primehack')] },
@@ -52,7 +53,7 @@ const hasFlatpak = () => { try { execFileSync('sh', ['-c', 'command -v flatpak']
 
 // the newest AppImage of one emulator (GitHub API, as Updates reads it)
 async function release(e, opts) {
-  const r = await latestRelease(e.id, { ...opts, spec: { repo: e.repo, asset: e.asset, tag: e.tag, pre: e.pre, forge: e.forge, first: e.first, zipped: e.zipped } });
+  const r = await latestRelease(e.id, { ...opts, spec: { repo: e.repo, asset: e.asset, tag: e.tag, pre: e.pre, forge: e.forge, first: e.first, zipped: e.zipped, dirBuild: e.dirBuild } });
   // (Xenia Canary's Linux build is a .tar.gz with the program in it, not an AppImage)
   if (!r) throw new Error(`No Linux build in ${e.repo}'s newest release.`);
   return r;
@@ -62,6 +63,22 @@ async function release(e, opts) {
 // file that's there
 async function getAppImage(e, download, opts = {}) {
   const rel = await release(e, opts);
+  // a folder build (0.9.37, PS5): unpacked into its own folder there, its program made runnable
+  if (e.dirBuild) {
+    const U = require('./emuUpdates'), dir = path.join(APPS(), e.dirBuild.dir), prog = path.join(dir, e.dirBuild.program);
+    if (fs.existsSync(prog)) return { path: prog, version: rel.version, already: true };
+    if (fs.existsSync(dir) && fs.readdirSync(dir).length) throw new Error(`${e.dirBuild.dir} is already in ${APPS()} without its program. Cartridge leaves it as it is.`);
+    fs.mkdirSync(APPS(), { recursive: true });
+    const z = dir + '.cartridge-dl';
+    try { await download(rel.url, z, rel.size); if (rel.size && fs.statSync(z).size !== rel.size) throw new Error('The download was incomplete. Try again.'); await U.layFolder(z, dir, rel.name); }
+    catch (err) { fs.rmSync(dir, { recursive: true, force: true }); throw err; }
+    finally { fs.rmSync(z, { force: true }); }
+    if (!fs.existsSync(prog)) { fs.rmSync(dir, { recursive: true, force: true }); throw new Error(`The download had no ${e.dirBuild.program} in it.`); }
+    for (const n of fs.readdirSync(dir)) { const f = path.join(dir, n); try { if (fs.statSync(f).isFile() && U.looksRunnable(f, n) && !/\.(so|dll)(\.|$)/i.test(n)) fs.chmodSync(f, 0o755); } catch {} }
+    fs.chmodSync(prog, 0o755);
+    if (!U.looksRunnable(prog, e.dirBuild.program)) throw new Error('What came down wasn’t a working program. Try again later.');
+    return { path: prog, version: rel.version };
+  }
   const name = String(e.name || rel.name).replace(/[\\/]/g, '_');
   const dest = path.join(APPS(), e.binary || /\.AppImage$/i.test(name) ? name : name + '.AppImage'); // binary: a plain program (Xenia Canary's Linux build)
   if (fs.existsSync(dest)) return { path: dest, version: rel.version, already: true };

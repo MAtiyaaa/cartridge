@@ -344,6 +344,7 @@ module.exports = function createSteamManager(ctx) {
     const addFolder = (id, p, version = '') => { if (!seen.has(p) && exists(p) && U.installKind(p) === 'folder') { seen.add(p); out.push({ id, label: labelOf(id), kind: 'folder', path: p, version }); } };
     for (const x of found?.items || []) if (x.kind === 'program' && x.id && x.conf >= 2 && !/\/\.mount_|cartridge/i.test(x.path)) addFolder(x.id, x.path, x.version || '');
     for (const [id, e] of Object.entries(EMU)) for (const d of APP_DIRS()) for (const b of e.bin || []) addFolder(id, path.join(d, e.label || id, b));
+    for (const [id, e] of Object.entries(EMU)) for (const n of e.dir || []) for (const d of APP_DIRS()) for (const b of e.bin || []) addFolder(id, path.join(d, n, b));
     const fps = flatpakApps();
     for (const [id, e] of Object.entries(EMU)) for (const fp of e.fp || []) if (fps.includes(fp)) out.push({ id, label: labelOf(id), kind: 'flatpak', fp });
     // Windows builds run through Proton (Xenia Canary's xenia_canary.exe, EmuDeck keeps it in roms/xbox360):
@@ -455,9 +456,11 @@ module.exports = function createSteamManager(ctx) {
       }
       const fp = (e.fp || []).find((x) => flatpakApps().includes(x));
       if (fp && !wrap.flatpak) mk('/usr/bin/flatpak', '/usr/bin', 'flatpak', fp, `run ${fp} ${argsFor(id, key, 'flatpak')}`, null, realName(id, fp));
+      // folder builds in their own folder in ~/Applications (0.9.37: SharpEmu, KytyPS5)
+      for (const n of e.dir || []) { const p = APP_DIRS().flatMap((d) => (e.bin || []).map((b) => path.join(d, n, b))).find(exists); if (p) { mk(p, path.dirname(p), 'folder', `${n}/${path.basename(p)}`, null, null, e.label); break; } }
       const bin = findBin(e.bin) || foundFor(id).find((x) => x.kind === 'program' || x.kind === 'unpacked' || x.kind === 'script')?.path;
       if (bin && !/flatpak\/exports/.test(bin)) mk(bin, path.dirname(bin), 'native', bin, null, null, realName(id, bin));
-      const SRC = { emudeck: 'EmuDeck', appimage: 'AppImage', flatpak: 'Flatpak', native: 'Installed', windows: 'Windows build' };
+      const SRC = { emudeck: 'EmuDeck', appimage: 'AppImage', flatpak: 'Flatpak', native: 'Installed', windows: 'Windows build', folder: 'Folder' };
       // an emulator that is itself a fork (PrimeHack) is listed with the forks, never the default
       if (e.forkOf) { found.forEach((f, i) => forksOut.push({ id: i ? `${id}@${f.src}` : id, label: `${f.name} · fork of ${EMU[e.forkOf]?.label || e.forkOf}${found.length > 1 ? ' · ' + SRC[f.src] : ''}`, fork: true, t: f.t })); continue; }
       found.forEach((f, i) => out.push({ id: i ? `${id}@${f.src}` : id, label: found.length > 1 ? `${f.name} · ${SRC[f.src]}` : f.name, t: f.t }));

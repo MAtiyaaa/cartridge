@@ -30,3 +30,21 @@ test('RPCS3 says which build runs, only when its log is newer than the AppImage'
     assert.strictEqual(U.ranVersion('pcsx2', app, H), '');
   } finally { if (save !== undefined) process.env.XDG_CONFIG_HOME = save; }
 });
+
+test('a PS5 folder build is laid over its folder, keeping what the emulator keeps there', async () => {
+  const H = fs.mkdtempSync(path.join(os.tmpdir(), 'cartridge-fold-'));
+  const src = path.join(H, 'src/sharpemu-0.0.3-linux-x64'), dir = path.join(H, 'Applications/SharpEmu');
+  fs.mkdirSync(src, { recursive: true });
+  const elf = Buffer.alloc(64); Buffer.from([0x7f, 0x45, 0x4c, 0x46, 2, 1, 1]).copy(elf);
+  fs.writeFileSync(path.join(src, 'SharpEmu'), elf); fs.writeFileSync(path.join(src, 'libSkiaSharp.so'), 'x');
+  const tgz = path.join(H, 'sharpemu-0.0.3-linux-x64.tar.gz');
+  require('child_process').execFileSync('tar', ['-czf', tgz, '-C', path.join(H, 'src'), 'sharpemu-0.0.3-linux-x64']);
+  fs.mkdirSync(path.join(dir, 'user/savedata'), { recursive: true }); fs.writeFileSync(path.join(dir, 'user/savedata/s.bin'), 'save');
+  await U.layFolder(tgz, dir, path.basename(tgz));
+  assert.ok(fs.existsSync(path.join(dir, 'SharpEmu')) && fs.existsSync(path.join(dir, 'libSkiaSharp.so')));
+  assert.strictEqual(fs.readFileSync(path.join(dir, 'user/savedata/s.bin'), 'utf8'), 'save');
+  assert.ok(!fs.existsSync(dir + '.cartridge-new.d'));
+  assert.strictEqual(U.installKind(path.join(dir, 'SharpEmu')), 'folder');
+  assert.ok(U.REPOS.kytyps5.asset.test('KytyPS5-2026-10-05-72e4989-Linux-x86_64.tar.gz') && !U.REPOS.kytyps5.asset.test('KytyPS5-2026-10-05-72e4989-Windows-x64.zip'));
+  assert.ok(U.REPOS.sharpemu.asset.test('sharpemu-0.0.2-beta.2-linux-x64.tar.gz') && !U.REPOS.sharpemu.asset.test('sharpemu-0.0.2-beta.2-osx-x64.tar.gz'));
+});

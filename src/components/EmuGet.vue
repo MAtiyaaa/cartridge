@@ -234,7 +234,7 @@ async function installLink() {
   ghCalling = false;
   off?.();
 }
-const SLUG = { psx: 'psx', ps2: 'ps2', ps3: 'ps3', ps4: 'ps4', psp: 'psp', psvita: 'psvita', gc: 'ngc', wiiu: 'wiiu', switch: 'switch', n3ds: '3ds', nds: 'nds', gba: 'gba', n64: 'n64', xbox: 'xbox', dreamcast: 'dc', xbox360: 'xbox360', saturn: 'saturn', arcade: 'arcade' };
+const SLUG = { psx: 'psx', ps2: 'ps2', ps3: 'ps3', ps4: 'ps4', ps5: 'ps5', psp: 'psp', psvita: 'psvita', gc: 'ngc', wiiu: 'wiiu', switch: 'switch', n3ds: '3ds', nds: 'nds', gba: 'gba', n64: 'n64', xbox: 'xbox', dreamcast: 'dc', xbox360: 'xbox360', saturn: 'saturn', arcade: 'arcade' };
 const phase = ref(props.flow ? (store.config.emuDir ? 'pick' : 'where') : 'list');
 // 0.9.37 (owner: after Location it skipped to the welcome's next step): the welcome shows its own Continue only
 // once installing has started, and focus stays in here while a step loads
@@ -254,7 +254,9 @@ function togglePick(c, e) {
 const fp = ref({ has: true });
 const fpPicked = computed(() => picked.value.some((k) => { const [key, id] = k.split('|'); return all.value.find((y) => y.c.key === key && y.e.id === id)?.e.how === 'flatpak'; }));
 const fpNote = computed(() => (fp.value.has || !fpPicked.value ? '' : fp.value.can ? 'Flatpak isn’t on this system. Cartridge installs it first (your password is asked once); the others go in meanwhile.' : `Flatpak isn’t on this system, so the Flatpak ones can’t go in. ${fp.value.why}`));
-function preselect() { picks.value = new Set((list.value || []).filter((c) => !c.emus.some((e) => e.installed)).map((c) => c.key + '|' + c.emus[0].id)); }
+// PS5 emulators are early (0.9.37): ticked only when the library has PS5 games
+const hasPs5 = () => !!store.lib?.platforms.some((p) => [p.slug, p.fs_slug].includes('ps5') && p.rom_count > 0);
+function preselect() { picks.value = new Set((list.value || []).filter((c) => !c.emus.some((e) => e.installed) && (c.key !== 'ps5' || hasPs5())).map((c) => c.key + '|' + c.emus[0].id)); }
 const jobs = computed(() => jobKeys.value.map((k) => { const [key, id] = k.split('|'); const x = all.value.find((y) => y.c.key === key && y.e.id === id); return { key, id, label: x?.e.label || id, s: q.value.filter((y) => y.key === key && y.id === id).pop() }; }));
 const doneJobs = computed(() => jobs.value.filter((j) => /done|error/.test(j.s?.state || '')));
 const failed = computed(() => jobs.value.filter((j) => j.s?.state === 'error'));

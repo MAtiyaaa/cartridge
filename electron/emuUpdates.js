@@ -21,6 +21,9 @@ const REPOS = {
   // so writing it over a copy left Vita3K unable to start. Vita3K only updates from its AppImage, which
   // carries its own Qt. EmuDeck installs exactly that, renamed to ~/Applications/Vita3K/Vita3K
   // (emuDeckVita3K.sh), so the AppImage may go over a plain program there (overProgram).
+  // PS5 (0.9.37): whole folders as .tar.gz, laid over ~/Applications/<dir> (layFolder)
+  sharpemu: { repo: 'sharpemu/sharpemu', asset: /linux-x64\.tar\.gz$/i, pre: true, dirBuild: { dir: 'SharpEmu', program: 'SharpEmu' } },
+  kytyps5: { repo: 'KytyPS5/KytyPS5', asset: /Linux-x86_64\.tar\.gz$/i, pre: true, dirBuild: { dir: 'KytyPS5', program: 'kyty_emulator' } },
   vita3k: { repo: 'Vita3K/Vita3K', tag: 'continuous', asset: /^Vita3K-x86_64\.AppImage$/i, overProgram: true },
   azahar: { repo: 'azahar-emu/azahar', asset: /\.AppImage$/i },
   cemu: { repo: 'cemu-project/Cemu', asset: /x86_64\.AppImage$/i },
@@ -51,6 +54,7 @@ function installKind(file) {
   // data/ and lang/ left beside it (EmuDeck now puts Vita3K's AppImage there as "Vita3K")
   if (require('./detect').appImageType(file)) return 'appimage';
   const dir = path.dirname(file), here = (n) => { try { return fs.statSync(path.join(dir, n)).isDirectory(); } catch { return false; } };
+  if (Object.values(REPOS).some((r) => r.dirBuild && r.dirBuild.program === path.basename(file))) return 'folder'; // SharpEmu, KytyPS5
   if (here('data') && (here('lang') || here('translations') || here('shaders-builtin'))) return 'folder';
   return 'program';
 }
@@ -135,7 +139,7 @@ function withChannel(r, id, channel) {
 async function latestRelease(id, { fetchImpl, spec, file, channel } = {}) {
   let r = spec?.repo ? spec : withChannel(specFor(id, file), id, channel);
   // the same kind of build as the copy you have: a folder build from its zip, never an AppImage over a program
-  if (r && !spec?.repo && file && !/\.exe$/i.test(file)) { const k = installKind(file); if (k === 'folder') r = r.folder ? { ...r, asset: r.folder, zipped: null, wholeFolder: true } : r.overProgram ? r : null; else if (k === 'program' && !r.zipped && !r.overProgram) r = null; }
+  if (r && !spec?.repo && file && !/\.exe$/i.test(file)) { const k = installKind(file); if (k === 'folder') r = r.dirBuild ? r : r.folder ? { ...r, asset: r.folder, zipped: null, wholeFolder: true } : r.overProgram ? r : null; else if (k === 'program' && !r.zipped && !r.overProgram) r = null; }
   if (!r) return null;
   // each source in turn (0.9.19): GitHub (its API, else its release pages when the API limit answers 403,
   // github.js) and the project's own Forgejo server; the first with a matching file wins
@@ -146,7 +150,7 @@ async function latestRelease(id, { fetchImpl, spec, file, channel } = {}) {
   for (const t of tries) {
     let rel = null; try { rel = await t(); } catch (e) { lastErr = e; continue; }
     const asset = pickAsset(rel?.assets, r.asset, file);
-    if (asset) return { version: verOf(rel.tag) || verOf(asset.name), tag: rel.tag, name: asset.name, url: asset.url, size: asset.size, date: asset.date || rel.date, folder: !!r.wholeFolder, zipped: r.wholeFolder ? null : /\.(zip|tar\.gz|tgz)$/i.test(asset.name) ? r.zipped || /\.AppImage$/i : null };
+    if (asset) return { version: verOf(rel.tag) || verOf(asset.name), tag: rel.tag, name: asset.name, url: asset.url, size: asset.size, date: asset.date || rel.date, folder: !!r.wholeFolder, dirBuild: r.dirBuild || null, zipped: r.wholeFolder || r.dirBuild ? null : /\.(zip|tar\.gz|tgz)$/i.test(asset.name) ? r.zipped || /\.AppImage$/i : null };
   }
   if (lastErr) throw lastErr; // every source refused: say why
   return null;
@@ -214,6 +218,7 @@ function isNewer(rel, have) {
 // The file keeps its name and place (owner, 0.9.19: an update must never rename an AppImage, or
 // launch options and shortcuts pointing at it break); Cartridge records the new version itself.
 async function replaceAppImage(file, rel, download) {
+  if (rel.dirBuild) { const z = path.dirname(file) + '.cartridge-dl'; try { await download(rel.url, z); if (rel.size && fs.statSync(z).size !== rel.size) throw new Error('The download was incomplete. Try again.'); await layFolder(z, path.dirname(file), rel.name); } finally { fs.rmSync(z, { force: true }); } fs.chmodSync(file, 0o755); return true; }
   if (rel.folder) return replaceFolder(file, rel, download);
   const tmp = file + '.cartridge-new', old = file + '.cartridge-old';
   if (rel.zipped) { const z = file + '.cartridge-zip'; try { await download(rel.url, z); if (rel.size && fs.statSync(z).size !== rel.size) throw new Error('The download was incomplete. Try again.'); if (/\.(tar\.gz|tgz)$/i.test(rel.name || rel.url)) await fileFromTar(z, tmp, rel.zipped); else await appImageFromZip(z, tmp, rel.zipped); } finally { fs.rmSync(z, { force: true }); } }
@@ -237,6 +242,20 @@ function looksRunnable(file, rel) {
 }
 // a folder build (0.9.21): the zip unpacked over the program's folder, every file at its place, the
 // program's own file name kept; a single top folder in the zip is stripped; the old program back on failure
+// a release that is a whole folder (0.9.37: SharpEmu, KytyPS5, a .tar.gz of the program and its libraries):
+// unpacked beside, one folder around everything taken off, then laid over the folder, so what the emulator keeps
+// there (SharpEmu's user/) stays. Files in the archive never land outside the folder (tar refuses ../ paths).
+async function layFolder(archive, dir, name = '') {
+  const tmp = dir + '.cartridge-new.d';
+  fs.rmSync(tmp, { recursive: true, force: true }); fs.mkdirSync(tmp, { recursive: true });
+  try {
+    if (/\.zip$/i.test(name)) throw new Error('This build is a .zip; only .tar.gz folder builds are unpacked here.');
+    await new Promise((ok, bad) => execFile('tar', ['-xzf', archive, '-C', tmp, '--no-same-owner'], { timeout: 600000 }, (e, so, se) => (e ? bad(new Error(`It couldn't be unpacked: ${String(se || e.message).trim().split('\n').pop()}`)) : ok())));
+    const top = fs.readdirSync(tmp), one = top.length === 1 && fs.statSync(path.join(tmp, top[0])).isDirectory();
+    fs.mkdirSync(dir, { recursive: true });
+    fs.cpSync(one ? path.join(tmp, top[0]) : tmp, dir, { recursive: true, force: true });
+  } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
+}
 async function replaceFolder(file, rel, download) {
   const dir = path.dirname(file), z = file + '.cartridge-zip', old = file + '.cartridge-old';
   await download(rel.url, z);
@@ -267,4 +286,4 @@ async function replaceFolder(file, rel, download) {
   return true;
 }
 
-module.exports = { ranVersion, channelsOf, withChannel, flatpakRemove, installKind, missingLibs, looksRunnable, replaceFolder, specFor, pickAsset, fileFromTar, forgeRelease, appImageFromZip, REPOS, verOf, cmpVer, flatpakUpdates, flatpakUpdate, latestRelease, isNewer, replaceAppImage };
+module.exports = { layFolder, ranVersion, channelsOf, withChannel, flatpakRemove, installKind, missingLibs, looksRunnable, replaceFolder, specFor, pickAsset, fileFromTar, forgeRelease, appImageFromZip, REPOS, verOf, cmpVer, flatpakUpdates, flatpakUpdate, latestRelease, isNewer, replaceAppImage };

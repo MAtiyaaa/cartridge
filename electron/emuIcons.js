@@ -53,6 +53,7 @@ function iconFor(id, emu, { appImages = [], cacheDir, home = os.homedir(), readA
 // from the emulator's own repository, fetched once and kept (0.9.17; each URL checked)
 const GH = 'https://raw.githubusercontent.com/';
 const ICON_URLS = {
+  sharpemu: GH + 'sharpemu/sharpemu/main/src/SharpEmu.GUI/logo_transparent.png', kytyps5: 'https://github.com/KytyPS5.png?size=256', // 0.9.37: PS5
   rpcs3: GH + 'RPCS3/rpcs3/master/rpcs3/rpcs3.svg', xenia: GH + 'xenia-canary/xenia-canary/canary_experimental/assets/icon/256.png',
   shadps4: GH + 'shadps4-emu/shadPS4/main/.github/shadps4.png', cemu: GH + 'cemu-project/Cemu/main/dist/linux/info.cemu.Cemu.png',
   xemu: GH + 'xemu-project/xemu/master/ui/icons/xemu_256x256.png', azahar: GH + 'azahar-emu/azahar/master/dist/azahar.svg',
