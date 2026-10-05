@@ -81,8 +81,8 @@ async function getAppImage(e, download, opts = {}) {
   return { path: dest, version: rel.version };
 }
 // a Flatpak from Flathub for this user (no password); flatpak prints "NN%" as it goes
-function getFlatpak(fp, onProgress = () => {}) {
-  if (!hasFlatpak()) return Promise.reject(new Error("Flatpak isn't installed on this system."));
+async function getFlatpak(fp, onProgress = () => {}) {
+  if (!hasFlatpak()) await ensureFlatpak();
   return new Promise((resolve, reject) => {
     try { execFileSync('flatpak', ['remote-add', '--user', '--if-not-exists', 'flathub', 'https://dl.flathub.org/repo/flathub.flatpakrepo'], { stdio: 'ignore', env: plainEnv(), timeout: 60000 }); } catch {}
     const p = spawn('flatpak', ['install', '--user', '-y', '--noninteractive', 'flathub', fp], { env: plainEnv() });
@@ -94,4 +94,37 @@ function getFlatpak(fp, onProgress = () => {}) {
   });
 }
 
-module.exports = { CATALOG, MORE, APPS, setAppsDir, ESDE, getAppImage, getFlatpak, release, hasFlatpak };
+// 0.9.37 (owner: if Flatpak isn't there, install it in the background): Flatpak itself is a system package, so
+// it goes in through the system's package manager with pkexec (the desktop's own password prompt). Image-based
+// systems (rpm-ostree, SteamOS) ship it, so there it's only Flathub that can be missing, added for the user.
+const has = (bin) => { try { execFileSync('sh', ['-c', `command -v ${bin}`], { stdio: 'ignore', env: plainEnv() }); return true; } catch { return false; } };
+function flatpakPlan() {
+  if (hasFlatpak()) return null;
+  if (has('rpm-ostree')) return { why: 'This system is image-based: add Flatpak with rpm-ostree install flatpak, then restart.' };
+  const PM = [['apt-get', ['apt-get', 'install', '-y', 'flatpak']], ['dnf', ['dnf', 'install', '-y', 'flatpak']], ['zypper', ['zypper', '--non-interactive', 'install', 'flatpak']], ['pacman', ['pacman', '-S', '--noconfirm', '--needed', 'flatpak']], ['eopkg', ['eopkg', '-y', 'install', 'flatpak']], ['xbps-install', ['xbps-install', '-y', 'flatpak']]];
+  const pm = PM.find(([b]) => has(b));
+  if (!pm) return { why: 'No package manager Cartridge knows was found. Install Flatpak the way your system installs programs.' };
+  if (!has('pkexec')) return { why: `Install Flatpak with: sudo ${pm[1].join(' ')}` };
+  return { cmd: ['pkexec', ...pm[1]], pm: pm[0] };
+}
+let flatpakRun = null;
+function ensureFlatpak(onLine = () => {}) {
+  if (hasFlatpak()) return Promise.resolve({ already: true });
+  if (flatpakRun) return flatpakRun;
+  const plan = flatpakPlan();
+  if (!plan?.cmd) return Promise.reject(new Error(`Flatpak isn't installed. ${plan?.why || ''}`.trim()));
+  flatpakRun = new Promise((resolve, reject) => {
+    const p = spawn(plan.cmd[0], plan.cmd.slice(1), { env: plainEnv() });
+    let tail = '';
+    const read = (b) => { const t = String(b); tail = (tail + t).slice(-1500); const l = t.trim().split('\n').pop(); if (l) onLine(l.slice(0, 120)); };
+    p.stdout.on('data', read); p.stderr.on('data', read);
+    p.on('error', (e) => reject(new Error(`Flatpak couldn't be installed: ${e.message}`)));
+    p.on('close', (code) => {
+      if (code === 0 && hasFlatpak()) return resolve({ installed: true, pm: plan.pm });
+      reject(new Error(code === 126 || code === 127 ? 'Flatpak wasn’t installed: the password prompt was closed.' : `Flatpak couldn't be installed: ${(tail.trim().split('\n').pop() || 'the package manager failed').slice(0, 160)}`));
+    });
+  }).finally(() => { flatpakRun = null; });
+  return flatpakRun;
+}
+
+module.exports = { CATALOG, MORE, APPS, setAppsDir, ESDE, getAppImage, getFlatpak, release, hasFlatpak, flatpakPlan, ensureFlatpak };

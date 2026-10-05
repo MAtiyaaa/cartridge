@@ -2076,19 +2076,48 @@ const ADDONS_FILE = path.join(USER_DATA, 'addons-installed.json');
 let addonBrowser = null;
 let addonRun = null, addonCache = null, emuGetRun = null;
 const emuGetQ = [];
+// shadPS4's Qt launcher with a version to run (0.9.37): the newest release when it has none, made the default if none is
+async function shadDefaultVersion() {
+  const SV = require('./shadVersions');
+  let have = SV.installed().filter((v) => v.here);
+  if (!have.length) {
+    const rel = (await SV.available()).find((r) => !r.prerelease) || (await SV.available())[0];
+    if (!rel) throw new Error('shadPS4’s GitHub has no Linux release');
+    const z = path.join(os.tmpdir(), `cartridge-shadps4-${Date.now()}.zip`);
+    try { await downloadTo(rel.asset.url, z, { abort: new AbortController() }, () => {}, { plain: true }); have = [await SV.addRelease(rel, z)]; }
+    finally { fs.rmSync(z, { force: true }); }
+    log('shadPS4 version added after install', have[0].name);
+  }
+  SV.setDefaultIfNone(have[have.length - 1].path);
+  return have[have.length - 1].name;
+}
 async function pumpEmuGet() {
+  // a Flatpak wanted and no Flatpak here (0.9.37): it's installed first, once, while the AppImages carry on
+  const G = require('./emuGet');
+  const fpWanted = emuGetQ.some((q) => q.state === 'wait' && G.CATALOG.find((c) => c.key === q.key)?.emus.find((e) => e.id === q.id)?.how === 'flatpak');
+  if (fpWanted && !G.hasFlatpak() && !flatpakJob) {
+    flatpakJob = true; bgJob('flatpak:install', { state: 'run', pct: null, kind: 'Install', title: 'Flatpak', icon: 'mdiPackageVariant', text: 'Asking for your password to install Flatpak', error: '' });
+    G.ensureFlatpak((l) => bgJob('flatpak:install', { text: l })).then(() => { bgJob('flatpak:install', { state: 'done', pct: 100, text: 'Flatpak and Flathub are ready' }); log('flatpak installed'); })
+      .catch((e) => { bgJob('flatpak:install', { state: 'error', error: e.message }); log('flatpak install', e.message); flatpakFailed = e.message; })
+      .finally(() => { flatpakJob = null; pumpEmuGet(); });
+  }
   if (emuGetRun || !emuGetQ.some((q) => q.state === 'wait')) return;
-  const q = emuGetQ.find((x) => x.state === 'wait');
+  // Flatpak still going in: the AppImages first, the Flatpaks once it's there (or each fails with its reason)
+  const isFp = (x) => G.CATALOG.find((c) => c.key === x.key)?.emus.find((e) => e.id === x.id)?.how === 'flatpak';
+  const q = emuGetQ.find((x) => x.state === 'wait' && !(flatpakJob && isFp(x)));
+  if (!q) return;
+  if (flatpakFailed && isFp(q) && !G.hasFlatpak()) { q.state = 'error'; q.error = flatpakFailed; broadcast('emuget-state', emuGetQ); return pumpEmuGet(); }
   q.state = 'run'; broadcast('emuget-state', emuGetQ);
   const off = (m) => { if (m.key === q.key && m.id === q.id && m.pct != null) { q.pct = m.pct; broadcast('emuget-state', emuGetQ); } };
   emuGetListeners.add(off);
-  try { const r = await handlers['emuget:install']({ key: q.key, id: q.id }); q.state = 'done'; q.where = r?.path || r?.fp || ''; q.relinked = r?.relinked || 0; q.links = r?.links || 0; }
+  try { const r = await handlers['emuget:install']({ key: q.key, id: q.id }); q.state = 'done'; q.where = r?.path || r?.fp || ''; q.relinked = r?.relinked || 0; q.links = r?.links || 0; q.note = r?.note || (r?.shadVersion ? `With shadPS4 ${r.shadVersion} as its default` : ''); }
   catch (e) { q.state = 'error'; q.error = e.message; }
   emuGetListeners.delete(off);
   broadcast('emuget-state', emuGetQ);
   pumpEmuGet();
 }
 const emuGetListeners = new Set();
+let flatpakJob = null, flatpakFailed = '';
 const addonRecs = () => (addonCache ||= loadJson(ADDONS_FILE, {}));
 const PATCHES_FILE = path.join(USER_DATA, 'patches.json');
 const LINKS_FILE = path.join(USER_DATA, 'folder-links.json');
@@ -3872,6 +3901,8 @@ const handlers = {
   // background queue: Download all, or one at a time, while the page stays usable
   'emuget:queue': ({ items } = {}) => { for (const it of items || []) if (!emuGetQ.some((q) => q.key === it.key && q.id === it.id && /wait|run/.test(q.state))) emuGetQ.push({ key: it.key, id: it.id, state: 'wait', pct: null }); pumpEmuGet(); return emuGetQ; },
   'emuget:state': () => emuGetQ,
+  // is Flatpak here, and if not, can Cartridge install it (0.9.37)
+  'emuget:flatpak': () => { const G = require('./emuGet'); if (G.hasFlatpak()) return { has: true }; const p = G.flatpakPlan(); return { has: false, can: !!p?.cmd, why: p?.why || '' }; },
   'emuget:install': async ({ key, id }) => {
     if (emuGetRun) throw new Error('Another emulator is downloading. Wait for it to finish.');
     const G = require('./emuGet');
@@ -3894,6 +3925,9 @@ const handlers = {
         }
       }
       log('emulator downloaded', id, r.path || r.fp);
+      // 0.9.37 (owner: fix the shadPS4 install): the Qt launcher comes with no shadPS4 in it, so games had nothing
+      // to start with; the newest release goes in beside it as the launcher's default, as its own Versions does
+      if (id === 'shadps4') { try { send({ pct: 99, text: 'Adding shadPS4 itself' }); r.shadVersion = await shadDefaultVersion(); } catch (e2) { log('shadPS4 version after install', e2.message); r.note = `shadPS4’s launcher is in, but its newest version couldn’t be added (${e2.message}). Add one in Versions.`; } }
       send({ pct: 100, done: true });
       // its saves and storage linked into the Emulation folder (esdeLinks.js: links only, nothing moved)
       if (config.emulationFresh && config.emulationRoot && isDir(config.emulationRoot)) { try { r.links = require('./esdeLinks').make(id, { root: config.emulationRoot, home: os.homedir(), kind: r.fp ? 'flatpak' : 'appimage' }); } catch {} }

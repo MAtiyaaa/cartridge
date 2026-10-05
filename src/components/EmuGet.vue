@@ -26,6 +26,7 @@
         <button v-if="fresh?.fresh" class="btn" data-focus @click="phase = 'where'; loadDrives(false)"><Icon name="mdiArrowLeft" :size="18" />Location</button>
         <button class="btn primary" data-focus :disabled="!picked.length" @click="install"><Icon name="mdiDownload" :size="18" />Install {{ picked.length || '' }}</button>
       </div>
+      <div v-if="fpNote" class="eg-fp small"><Icon name="mdiPackageVariant" :size="18" />{{ fpNote }}</div>
       <div v-if="!list" class="muted small"><Icon name="mdiSync" :size="16" class="spin" /> Looking at what's installed…</div>
       <div v-else class="eg-grid">
         <section v-for="c in list" :key="c.key" class="eg-con">
@@ -68,6 +69,7 @@
         <button v-if="!flow" class="btn small" data-focus @click="phase = 'where'; loadDrives()"><Icon name="mdiFolderMove" :size="18" />Where they go</button>
         <button v-if="updates" class="btn small" data-focus :disabled="upBusy" @click="loadUps(true)"><Icon name="mdiRefresh" :size="18" :class="{ spin: upBusy }" />{{ upCount ? `Check updates (${upCount} ready)` : 'Check for updates' }}</button>
       </div>
+      <div v-if="fpNote" class="eg-fp small"><Icon name="mdiPackageVariant" :size="18" />{{ fpNote }}</div>
       <div v-if="!list" class="muted small"><Icon name="mdiSync" :size="16" class="spin" /> Looking at what's installed…</div>
       <div v-else class="eg-grid">
         <section v-for="c in list" :key="c.key" class="eg-con">
@@ -238,13 +240,17 @@ function togglePick(c, e) {
   if (n.has(k)) n.delete(k); else n.add(k);
   picks.value = n;
 }
+// Flatpak missing (0.9.37): said before installing, and installed first in the background when it can be
+const fp = ref({ has: true });
+const fpPicked = computed(() => picked.value.some((k) => { const [key, id] = k.split('|'); return all.value.find((y) => y.c.key === key && y.e.id === id)?.e.how === 'flatpak'; }));
+const fpNote = computed(() => (fp.value.has || !fpPicked.value ? '' : fp.value.can ? 'Flatpak isn’t on this system. Cartridge installs it first (your password is asked once); the others go in meanwhile.' : `Flatpak isn’t on this system, so the Flatpak ones can’t go in. ${fp.value.why}`));
 function preselect() { picks.value = new Set((list.value || []).filter((c) => !c.emus.some((e) => e.installed)).map((c) => c.key + '|' + c.emus[0].id)); }
 const jobs = computed(() => jobKeys.value.map((k) => { const [key, id] = k.split('|'); const x = all.value.find((y) => y.c.key === key && y.e.id === id); return { key, id, label: x?.e.label || id, s: q.value.filter((y) => y.key === key && y.id === id).pop() }; }));
 const doneJobs = computed(() => jobs.value.filter((j) => /done|error/.test(j.s?.state || '')));
 const failed = computed(() => jobs.value.filter((j) => j.s?.state === 'error'));
 const linked = computed(() => jobs.value.reduce((n, j) => n + (j.s?.links || 0), 0));
 const doneNote = computed(() => [linked.value ? `Saves and textures are linked in ${short(store.config.emulationRoot)}/saves and storage` : '', 'Steam shortcuts use them from now on'].filter(Boolean).join('. ') + '.');
-const jobNote = (j) => j.s?.state === 'error' ? j.s.error || 'Try again later' : j.s?.state === 'done' ? [short(j.s.where), j.s.relinked ? `${j.s.relinked} Steam shortcut${j.s.relinked === 1 ? '' : 's'} fixed` : ''].filter(Boolean).join(' · ') : '';
+const jobNote = (j) => j.s?.state === 'error' ? j.s.error || 'Try again later' : j.s?.state === 'done' ? [short(j.s.where), j.s.note, j.s.relinked ? `${j.s.relinked} Steam shortcut${j.s.relinked === 1 ? '' : 's'} fixed` : ''].filter(Boolean).join(' · ') : '';
 async function install() {
   const items = picked.value.map((k) => { const [key, id] = k.split('|'); return { key, id }; });
   jobKeys.value = picked.value; picks.value = new Set(); phase.value = 'install';
@@ -281,7 +287,7 @@ async function loadDrives(auto = true) {
 }
 // the installer's main button, else its first choice: never the welcome's buttons around it
 function focusIn() { const r = document.querySelector('.eg'); if (r) focusFirst(r, r.querySelector('.eg-bar .btn.primary:not([disabled])') ? '.eg-bar .btn.primary:not([disabled])' : '[data-focus]:not([disabled])'); }
-async function load() { list.value = await call('emuget:list').catch(() => []); q.value = await call('emuget:state').catch(() => []); if (phase.value === 'pick' && !picks.value.size) preselect(); }
+async function load() { if (props.flow) call('emuget:flatpak').then((r) => (fp.value = r)).catch(() => {}); list.value = await call('emuget:list').catch(() => []); q.value = await call('emuget:state').catch(() => []); if (phase.value === 'pick' && !picks.value.size) preselect(); }
 async function pickDrive(d) {
   if (busy.value) return; // a second A while the folder is made (the button stays focused, not disabled)
   busy.value = d.path;
@@ -357,6 +363,7 @@ defineExpose({ load });
 .eg-drives { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: var(--s-3); }
 .eg-drive { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding: var(--s-4); border-radius: var(--r-lg); background: var(--s2); color: inherit; border: 0; text-align: left; transition: transform var(--d-1, 0.12s), background var(--d-1, 0.12s); }
 .eg-drive b { font-size: var(--t-md); }
+.eg-fp { display: flex; gap: var(--s-2); align-items: flex-start; padding: 10px 12px; border-radius: var(--r-md); background: var(--s2); color: var(--muted); }
 .eg-drive.busy { cursor: progress; animation: eg-wait 1.1s var(--ease-in-out, ease-in-out) infinite alternate; }
 @keyframes eg-wait { to { opacity: 0.72; } }
 .eg-drive:focus { background: var(--focus); color: var(--on-focus); outline: none; transform: translateY(-2px); }
