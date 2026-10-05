@@ -75,7 +75,7 @@ onBeforeUnmount(() => { layer?.pop(); io?.disconnect(); doc?.destroy?.(); });
 <style scoped>
 .mv { position: fixed; inset: 0; z-index: 60; background: var(--s0); display: flex; flex-direction: column; animation: fade var(--d-med); }
 .mv-top { display: flex; align-items: center; gap: var(--s-4); padding: var(--s-3) var(--s-5); background: var(--s1); }
-.mv-top b { font-family: var(--display); font-size: var(--t-lg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mv-top b { font-family: var(--display); font-size: var(--t-lg);  overflow-wrap: anywhere; }
 .mv-top .hint { display: flex; align-items: center; gap: 6px; font-size: var(--t-sm); color: var(--muted); }
 .spacer { flex: 1; }
 .mv-pages { flex: 1; overflow: auto; display: flex; flex-direction: column; align-items: center; gap: var(--s-4); padding: var(--s-5) 0 var(--s-8); outline: none; }

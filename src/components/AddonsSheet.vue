@@ -209,7 +209,7 @@ onBeforeUnmount(() => { layer?.pop(); off?.(); });
 .ad-files { margin-left: var(--s-5); }
 .ad-img { width: 64px; height: 36px; object-fit: cover; border-radius: var(--r-sm); flex: none; }
 .ad-mid { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
-.ad-sub { font-size: var(--t-sm); opacity: 0.75; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ad-sub { font-size: var(--t-sm); opacity: 0.75;  overflow-wrap: anywhere; }
 .ad-end { flex: none; font-size: var(--t-sm); opacity: 0.85; }
 .ad-run { display: flex; align-items: center; gap: var(--s-3); padding: var(--s-2) var(--s-3); border-radius: var(--r-md); background: var(--s2); }
 .ad-run span { flex: 1; }

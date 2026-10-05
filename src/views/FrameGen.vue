@@ -118,7 +118,7 @@ onMounted(async () => { await load(); await nextTick(); ensureFocus(el.value); }
 .sc-thumb { width: 40px; height: 54px; border-radius: var(--r-sm); overflow: hidden; background: #1a1e2a; flex: none; }
 .sc-thumb img { width: 100%; height: 100%; object-fit: cover; }
 .sc-mid { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
-.sc-mid b { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sc-mid b { font-weight: 500;  overflow-wrap: anywhere; }
 .sc-mid span { font-size: var(--t-xs); }
 .sc-act { width: 160px; text-align: right; color: var(--muted); font-size: var(--t-sm); flex: none; }
 .sc-act.on { color: inherit; font-weight: 600; }

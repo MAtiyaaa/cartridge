@@ -170,7 +170,7 @@ DlRow.emits = ['act'];
 .now-art { width: 120px; aspect-ratio: 2/3; border-radius: var(--r-md); overflow: hidden; background: #1a1e2a; flex: none; box-shadow: 0 14px 34px rgba(0, 0, 0, 0.55); }
 .now-art img { width: 100%; height: 100%; object-fit: cover; }
 .now-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 10px; }
-.now-body h2 { font-size: var(--t-xl); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.now-body h2 { font-size: var(--t-xl);  overflow-wrap: anywhere; }
 .big-bar { height: 12px; border-radius: var(--r-sm); }
 .stats { gap: 20px; color: var(--muted); font-size: var(--t-sm); }
 .pct { font-family: var(--display); font-weight: 700; font-size: var(--t-xl); }
@@ -183,7 +183,7 @@ DlRow.emits = ['act'];
 :deep(.dl-row .thumb img) { width: 100%; height: 100%; object-fit: cover; }
 :deep(.dl-row .mid) { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
 :deep(.dl-row .mid b) { font-weight: 500; }
-:deep(.dl-row .mid span) { font-size: var(--t-xs); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+:deep(.dl-row .mid span) { font-size: var(--t-xs);  overflow-wrap: anywhere; }
 :deep(.dl-row .st) { font-size: var(--t-xs); font-weight: 600; color: var(--muted); width: 70px; text-align: right; }
 :deep(.dl-row .st.done) { color: var(--green-l); }
 :deep(.dl-row .st.error) { color: #ffa39c; }

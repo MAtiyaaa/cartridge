@@ -1658,6 +1658,15 @@ module.exports = function createSteamManager(ctx) {
     runHelper('last', { id: stamp, stamp, add: [], remove: [], rename: left, restart: true, gamescope: !!ctx.isGamescope(), flatpakSteam: !!env.account.flatpak, shortcutsFile: files(env.account).shortcuts, cloudFile: files(env.account).cloud, backupDir: BACKUP_DIR, logFile: path.join(USER_DATA, 'steam-apply.log') });
     return { count: renames.length, steamWillRestart: steamRunning() };
   }
+  // every fork found on this device (0.9.33, Linked Folders): [{ of, name, exe, how }]
+  function forksAll() {
+    const seen = new Map(), keys = new Set(Object.values(EMU).flatMap((e) => e.for || []));
+    for (const k of keys) for (const c of candidates(k)) if (c.fork && c.t?.exe && !seen.has(c.t.exe)) {
+      const id = String(c.id).split('@')[0];
+      seen.set(c.t.exe, { of: EMU[id]?.forkOf || id, name: String(c.label).split(' · ')[0], exe: c.t.exe, how: c.t.how });
+    }
+    return [...seen.values()];
+  }
   // A plain-text summary for bug reports: what was found and chosen, with personal details taken out
   function setupReport() {
     const o = setupOverview();
@@ -1777,7 +1786,7 @@ module.exports = function createSteamManager(ctx) {
     liveInfo: async () => { const env = environment(); if (!env.account) return { on: false, flag: false }; return { on: await live.available(env.account.root), flag: live.flagOn(env.account.root) }; },
     liveEnable: () => { const env = environment(); if (!env.account) throw new Error('Steam was not found.'); fs.writeFileSync(path.join(env.account.root, live.FLAG), ''); return true; },
     installedEmulators, addRomToCollections, onDownloaded, onDeleted, lastStatus, writeScript, startupReport, forRom, fixCollections, played, playtime, steamRoots, refreshArt,
-    play, scanEmulators, rpcs3Command, vita3kCommand, setupOverview, confirm, markFork, useFile, health, healthFix, movedEmulators, setupReport, syncConsoleCollections, collectionsReview, collectionsApply, preflight: (key) => preflight(key, templateFor(key)),
+    play, scanEmulators, rpcs3Command, vita3kCommand, setupOverview, confirm, markFork, useFile, health, healthFix, movedEmulators, setupReport, syncConsoleCollections, collectionsReview, collectionsApply, forksAll, preflight: (key) => preflight(key, templateFor(key)),
     candidatesFor: (key) => az(candidates(key).map((c) => ({ id: c.id, label: c.label, sub: shortPath(c.t.how === 'flatpak' ? c.t.from : c.t.exe), fork: !!c.fork }))),
     // one game's own Target, Start in and Launch options (console page, 0.9.15); null goes back
     setGameTemplate: (romId, t) => { const c = cfg(); c.gameTemplates ||= {}; if (t) c.gameTemplates[romId] = parseTemplate(t); else delete c.gameTemplates[romId]; ctx.saveConfig(); return true; },

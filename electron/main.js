@@ -2025,6 +2025,7 @@ async function pumpEmuGet() {
 const emuGetListeners = new Set();
 const addonRecs = () => (addonCache ||= loadJson(ADDONS_FILE, {}));
 const PATCHES_FILE = path.join(USER_DATA, 'patches.json');
+const LINKS_FILE = path.join(USER_DATA, 'folder-links.json');
 let patchMine = loadJson(PATCHES_FILE, {});
 // a PS3 game's serial: from its install record, its PARAM.SFO, else its name
 function ps3Serial(romId, where) {
@@ -2215,16 +2216,16 @@ function patchState(romId) {
 }
 // RPCS3's patch list, fetched the way RPCS3's "Download latest patches" does when it's missing or a
 // week old (owner, 0.9.16: show the patches RPCS3 has even if it was never asked to download them)
-async function freshRpcs3Patches(romId) {
+async function freshRpcs3Patches(romId, force = false) {
   const r = romIndexMain().get(Number(romId));
   if (!/ps3/i.test(`${r?.platform_slug} ${r?.platform_fs_slug}`)) return;
   const ph = patchHome(romId, 'rpcs3'), dirs = patchesMod.rpcs3Dirs();
   const dir = (ph.rpcs3Home && dirs.find((d) => d.root === ph.rpcs3Home)) || (ph.rpcs3Home === null ? dirs.find((d) => !d.root.includes('/.var/app/')) : null) || dirs[0];
   if (!dir) return;
   let age = Infinity; try { age = Date.now() - fs.statSync(path.join(dir.patches, 'patch.yml')).mtimeMs; } catch {}
-  if (age < 7 * 864e5) return;
-  try { const res = await patchesMod.rpcs3DownloadPatches(dir.patches); log('rpcs3 patches', res.updated ? 'downloaded' : 'up to date', dir.patches); if (!res.updated) fs.utimesSync(path.join(dir.patches, 'patch.yml'), new Date(), new Date()); }
-  catch (e) { log('rpcs3 patches download failed:', e.message); return `RPCS3’s patch list couldn’t be downloaded (${e.message}).`; }
+  if (age < 7 * 864e5 && !force) return;
+  try { const res = await patchesMod.rpcs3DownloadPatches(dir.patches); log('rpcs3 patches', res.updated ? 'downloaded' : 'up to date', dir.patches); if (!res.updated) fs.utimesSync(path.join(dir.patches, 'patch.yml'), new Date(), new Date()); if (force) return { updated: !!res.updated }; }
+  catch (e) { log('rpcs3 patches download failed:', e.message); if (force) throw new Error(`RPCS3’s patch list couldn’t be downloaded (${e.message}).`); return `RPCS3’s patch list couldn’t be downloaded (${e.message}).`; }
 }
 // A Switch game's version from its files' names (0.9.23): dumps carry [v<number>] (the title version,
 // 65536 per update) in their names; the highest one in the game's folder is what's installed
@@ -2341,18 +2342,20 @@ async function unzipTo(zip, dir) {
   } finally { try { close?.(); } catch {} }
 }
 // shadPS4's two patch lists, fetched like its launcher's Download Patches when missing or a week old (0.9.23)
-async function freshShadPatches(romId) {
+async function freshShadPatches(romId, force = false) {
   const r = romIndexMain().get(Number(romId));
   if (!/ps4/i.test(`${r?.platform_slug} ${r?.platform_fs_slug}`)) return;
   const st = ps4PatchState(Number(romId), r);
   if (!st.dir) return;
   const errs = [];
+  let got = 0;
   for (const repo of Object.keys(patchesMod.SHAD_REPOS)) {
     let age = Infinity; try { age = Date.now() - fs.statSync(path.join(st.dir, 'patches', repo, 'files.json')).mtimeMs; } catch {}
-    if (age < 7 * 864e5) continue;
-    try { const res = await patchesMod.shadDownloadPatches(st.dir, repo); log('shadps4 patches', repo, res.files, 'files'); }
+    if (age < 7 * 864e5 && !force) continue;
+    try { const res = await patchesMod.shadDownloadPatches(st.dir, repo); log('shadps4 patches', repo, res.files, 'files'); got += res.files || 0; }
     catch (e) { log('shadps4 patches download failed', repo, e.message); errs.push(`${repo === 'shadPS4' ? 'shadPS4’s' : 'GoldHEN’s'} patch list couldn’t be downloaded (${e.message}).`); }
   }
+  if (force) { if (errs.length && !got) throw new Error(errs.join(' ')); return { files: got, partly: errs.join(' ') }; }
   return errs.join(' ') || undefined;
 }
 // PS4 games (a folder with sce_sys/param.sfo) and shadPS4's patch repositories
@@ -3908,7 +3911,7 @@ const handlers = {
       if (custom) {
         const ck = 'gh:' + custom.repo; let c = cache[ck];
         if (fresh || !c || Date.now() - c.t > 6 * 3600e3) { try { const r = await require('./github').release(custom.repo); c = cache[ck] = { t: Date.now(), tag: r?.tag || null }; } catch (err) { c = { t: c?.t || 0, tag: c?.tag || null, error: err.message }; } }
-        out.push({ ...e, label: custom.repo.split('/')[1], version: custom.tag, custom: { repo: custom.repo }, update: c?.tag && c.tag !== custom.tag ? { version: c.tag, tag: c.tag } : null, latest: c?.tag ? { version: c.tag } : null, error: c?.error || null, channel: null, channels: [], page: `https://github.com/${custom.repo}/releases` });
+        out.push({ ...e, label: custom.repo.split('/')[1], version: custom.tag, custom: { repo: custom.repo }, forkOf: custom.as === 'fork' ? custom.of : null, update: c?.tag && c.tag !== custom.tag ? { version: c.tag, tag: c.tag } : null, latest: c?.tag ? { version: c.tag } : null, error: c?.error || null, channel: null, channels: [], page: `https://github.com/${custom.repo}/releases` });
         continue;
       }
       if (e.kind === 'flatpak') { out.push({ ...e, update: fp[e.fp] ? { version: fp[e.fp].version } : null, where: fp[e.fp]?.where, channel: 'flathub', channels: [] }); continue; }
@@ -3990,6 +3993,45 @@ const handlers = {
     if (here) { try { const d = handlers['gamesettings:get']({ romId: r.id }); if (d?.items) { out.settingsEmu = d.name; out.settings = d.items.filter((x) => x.game != null).map((x) => ({ label: x.label, value: x.options.find((o) => String(o.value) === String(x.game))?.label || String(x.game) })); } } catch {} }
     try { const s = steamMgr.forRom(r.id); if (s?.steam) out.steam = { inSteam: !!s.inSteam, queued: s.queued || null }; } catch {}
     return out;
+  },
+  // Linked Folders (0.9.33, owner): a fork's save folders linked to the emulator it's a fork of. Suggestions from
+  // the forks found, plus links you made yourself; folder-links.json records Cartridge's, the only ones it removes.
+  'links:list': () => {
+    const L = require('./folderLinks'), SV = require('./saves'), home = os.homedir();
+    const recs = loadJson(LINKS_FILE, []);
+    const baseOf = (id, rel) => { const roots = (SV.DATA[id] || []).map((r) => path.join(home, r)).filter((d) => fs.existsSync(d)); return roots.find((d) => fs.existsSync(path.join(d, rel))) || roots[0] || null; };
+    const suggestions = [];
+    let forks = []; try { forks = steamMgr.forksAll(); } catch (e) { log('links forks', e.message); }
+    for (const f of forks) {
+      if (f.how === 'flatpak') continue;
+      for (const [, label, rel] of SV.SYNC[f.of] || []) {
+        if (typeof rel !== 'string') continue;
+        const donor = baseOf(f.of, rel), fb = L.findForkBase(f.exe, rel, home);
+        const to = donor ? path.join(donor, rel) : null, from = fb ? path.join(fb.base, rel) : null;
+        const st = from && to ? L.status(from, to) : { state: !to ? 'no-donor' : 'no-folder' };
+        if (recs.some((r) => r.from === from)) continue; // already one of yours
+        suggestions.push({ fork: f.name, exe: f.exe, of: f.of, ofName: SV.NAMES[f.of] || f.of, label, rel, from, to, how: fb?.how || null, ...st });
+      }
+    }
+    const links = recs.map((r) => ({ ...r, ...L.status(r.from, r.to) }));
+    return { suggestions, links, home };
+  },
+  'links:check': ({ from, to }) => { const L = require('./folderLinks'); return { why: L.check(from, to), ...L.status(from, to) }; },
+  'links:make': ({ from, to, label, fork, of }) => {
+    const r = require('./folderLinks').link(from, to);
+    const recs = loadJson(LINKS_FILE, []).filter((x) => x.from !== from);
+    if (!r.already) recs.push({ id: Date.now().toString(36), from, to, kept: r.kept, label: String(label || '').slice(0, 80), fork: fork || '', of: of || '', at: Date.now() });
+    saveJson(LINKS_FILE, recs);
+    log('folder linked', from, '->', to, r.kept ? '(kept aside)' : '');
+    return r;
+  },
+  'links:remove': ({ id }) => {
+    const recs = loadJson(LINKS_FILE, []), rec = recs.find((x) => x.id === id);
+    if (!rec) throw new Error('Cartridge didn’t make that link.');
+    require('./folderLinks').unlink(rec);
+    saveJson(LINKS_FILE, recs.filter((x) => x.id !== id));
+    log('folder unlinked', rec.from);
+    return true;
   },
   'gamesettings:get': ({ romId }) => { const c = gameSettingsCtx(Number(romId)); return c.why ? { why: c.why, emu: c.emu } : require('./gameSettings').describe(c); },
   'gamesettings:set': ({ romId, changes }) => {
@@ -4088,6 +4130,15 @@ const handlers = {
   'ps3up:cancel': () => { ps3upRun?.ac.abort(); return true; },
   // Cemu's own "Download latest community graphic packs" (0.9.32): now, whatever the week says
   'cemu:packsDownload': ({ romId }) => freshCemuPacks(Number(romId), true),
+  // 0.9.33 (owner: Cemu has Download Latest, so should shadPS4 and RPCS3): each emulator's own patch sources, now
+  // (RPCS3's patch API like its Download latest patches; shadPS4's and GoldHEN's repositories like its patch manager)
+  'patches:download': async ({ romId }) => {
+    const r = romIndexMain().get(Number(romId)), slugs = `${r?.platform_slug} ${r?.platform_fs_slug}`;
+    if (/ps3/i.test(slugs)) { const x = await freshRpcs3Patches(Number(romId), true); if (!x) throw new Error('RPCS3’s folder wasn’t found on this device. Start RPCS3 once, then try again.'); return { emu: 'RPCS3', ...x }; }
+    if (/ps4/i.test(slugs)) { const x = await freshShadPatches(Number(romId), true); if (!x) throw new Error('shadPS4’s folder wasn’t found on this device. Start shadPS4 once, then try again.'); return { emu: 'shadPS4', ...x }; }
+    if (/\bwiiu\b/i.test(slugs)) return { emu: 'Cemu', ...(await freshCemuPacks(Number(romId), true)) };
+    throw new Error('No patch download for this console.');
+  },
   'patches:list': async ({ romId }) => {
     const dlErr = (await freshRpcs3Patches(romId)) || (await freshShadPatches(romId)) || (await freshCemuPacks(romId));
     const st = patchState(romId), E = EMU_PATCH[st.emu];

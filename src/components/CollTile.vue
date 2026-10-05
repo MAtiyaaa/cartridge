@@ -70,5 +70,5 @@ const logo = computed(() => (props.c.series && store.config.ui.logos !== false &
 body.light-fx .badge { backdrop-filter: none; }
 .coll:focus .mosaic, .coll:focus .art { transform: translateY(-5px) scale(1.04); box-shadow: var(--ring); }
 .cap { display: flex; align-items: center; gap: 8px; font-size: var(--t-sm); padding: 0 4px; }
-.cap .nm { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cap .nm { font-weight: 500;  overflow-wrap: anywhere; }
 </style>

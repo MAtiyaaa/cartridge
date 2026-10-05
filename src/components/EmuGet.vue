@@ -176,6 +176,8 @@ async function manage(u) {
     ...(ch.length > 1 ? ch.map((c) => ({ heading: c === ch[0] ? 'Updates Follow' : undefined, label: CH[c], sub: c === 'pre' ? 'Nightlies and test builds' : 'Releases the project calls finished', value: 'ch:' + c, icon: c === 'pre' ? 'mdiFlask' : 'mdiCheckDecagram', selected: u.channel === c })) : []),
     // the emulator's own folders: games, installed content, saves, textures (0.9.24)
     ...(PATH_IDS.has(u.id) ? [{ label: 'Folders', sub: 'Where it keeps games, installed content and saves', value: 'folders', icon: 'mdiFolderCogOutline' }] : []),
+    // 0.9.33 (owner): a fork plays with the saves of the emulator it comes from, through Linked Folders
+    ...(u.forkOf ? [{ label: 'Share Saves With the Original', sub: 'Link its save folder in Linked Folders', value: 'links', icon: 'mdiLinkVariant' }] : []),
     ...(u.id === 'shadps4' ? [{ label: 'Versions', sub: 'Which games use which, and more to add', value: 'versions', icon: 'mdiLayersTriple' }] : []),
     ...(u.page ? [{ label: 'Open Its Releases Page', value: 'page', icon: 'mdiOpenInNew' }] : []),
     { label: 'Delete', sub: u.kind === 'flatpak' ? 'Uninstall the Flatpak' : 'Your saves and settings stay', value: 'delete', icon: 'mdiDeleteOutline', danger: true },
@@ -187,6 +189,7 @@ async function manage(u) {
   if (v === 'again') return runUpdate(u, true);
   if (v.startsWith('ch:')) { await call('emuup:setChannel', { id: u.id, channel: v.slice(3) }); toast(`${u.label} follows ${CH[v.slice(3)].toLowerCase()} now`, 'ok', 3000); return loadUps(true); }
   if (v === 'versions') return openModal('shadversions', {});
+  if (v === 'links') { store.emuPageWant = 'links'; return; }
   if (v === 'folders') return openModal('emupaths', { id: u.id, name: u.label });
   if (v === 'page') return window.open(u.page);
   if (v === 'delete') {
@@ -358,13 +361,13 @@ defineExpose({ load });
 .eg-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: var(--s-3); }
 .eg-con { display: flex; flex-direction: column; gap: 6px; padding: var(--s-3); border-radius: var(--r-lg); background: var(--s1); }
 .eg-head { display: flex; align-items: center; gap: 10px; padding: 2px 4px 6px; }
-.eg-head b { font-family: var(--display); font-size: var(--t-md); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.eg-head b { font-family: var(--display); font-size: var(--t-md);  overflow-wrap: anywhere; }
 .eg-emu { position: relative; overflow: hidden; display: flex; align-items: center; gap: var(--s-3); padding: 10px 12px; border-radius: var(--r-md); background: var(--s2); color: inherit; border: 0; text-align: left; font: inherit; flex: none; }
 .eg-emu:focus { background: var(--focus); color: var(--on-focus); outline: none; }
 .eg-emu:focus .muted { color: var(--on-focus-dim); }
 .eg-mid { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-.eg-mid b { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.eg-mid .small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.eg-mid b {  overflow-wrap: anywhere; }
+.eg-mid .small {  overflow-wrap: anywhere; }
 .eg-get { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: rgba(255, 255, 255, 0.08); flex: none; }
 .eg-emu:focus .eg-get { background: rgba(0, 0, 0, 0.1); }
 .eg-bar-fill { position: absolute; left: 0; bottom: 0; height: 3px; background: currentColor; transition: width 0.3s ease; }

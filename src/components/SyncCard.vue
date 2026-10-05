@@ -338,7 +338,7 @@ async function toggleService() {
 .files { display: flex; flex-direction: column; gap: 2px; padding: 0 0 var(--s-3) 46px; }
 .files-head { padding: 4px 0 6px; align-items: center; }
 .file { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: var(--s-4); padding: 6px 10px; border-radius: var(--r-sm); font-size: var(--t-sm); }
-.file .mono { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.file .mono {  overflow-wrap: anywhere; }
 .file-game { font-family: var(--body); font-weight: 700; margin-right: 8px; color: #9fe0b5; }
 .file-game.tex { color: #b9c7ff; }
 .file:focus-visible, .pad-mode .file:focus { background: var(--focus); color: var(--on-focus); }

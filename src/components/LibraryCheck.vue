@@ -64,5 +64,5 @@ async function fixAll() {
 .spacer { flex: 1; }
 .lc-run { display: flex; flex-direction: column; gap: var(--s-3); padding: var(--s-4); }
 .lc-top { display: flex; align-items: center; gap: var(--s-3); min-width: 0; }
-.lc-top .muted { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.lc-top .muted { min-width: 0;  overflow-wrap: anywhere; }
 </style>
