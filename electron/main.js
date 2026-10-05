@@ -4006,15 +4006,21 @@ const handlers = {
   },
   'emuget:cancel': () => { emuGetRun?.abort.abort(); return true; },
   // emulator updates (0.9.16): each installed copy, its version and whether a newer one is out
-  'emuup:list': async ({ fresh } = {}) => {
+  // 0.9.37 (owner: slow to open, and RPCS3 said it had an update while Cartridge said up to date): cached answers
+  // at once ({ cached }), then every check at the same time; a check is reused for 10 minutes, not 6 hours
+  'emuup:list': async ({ fresh, cached } = {}) => {
+    const t0 = Date.now(), TTL = 10 * 60e3;
     const U = require('./emuUpdates'), { FORKS } = require('./emulators');
     const file = path.join(USER_DATA, 'emulator-releases.json'), cache = loadJson(file, {});
     // 0.9.17: the main copies only: not forks, not old copies (RPCS3's *_old, "previous"), not the
     // versions shadPS4's launcher keeps for itself; and the version an update put in (the file name keeps the old one)
     const isFork = (e) => (FORKS[e.id] || []).some(([re]) => re.test(path.basename(e.path || e.fp || '')));
     const list = steamMgr.installedEmulators().filter((e) => !(e.path && (/_old\b|\.old\b|previous|\.cartridge-(old|new)/i.test(path.basename(e.path)) || /shadPS4QtLauncher\/versions|\/versions\//i.test(e.path))) && !isFork(e) && !(e.id === 'shadps4' && e.path && !/qt.?launcher/i.test(e.path) && U.REPOS.shadps4.only))
-      .map((e) => { const st = e.path && (() => { try { return fs.statSync(e.path); } catch { return null; } })(); const got = (cache.installed || {})[e.path]; return got && st && got.size === st.size ? { ...e, version: got.version } : e; });
-    const fp = await U.flatpakUpdates(list.filter((e) => e.kind === 'flatpak').map((e) => e.fp)).catch(() => ({}));
+      .map((e) => { const st = e.path && (() => { try { return fs.statSync(e.path); } catch { return null; } })(); const got = (cache.installed || {})[e.path]; const ran = e.path && U.ranVersion(e.id, e.path); /* the version that really runs, where the emulator says it (RPCS3's log, 0.9.37) */ return ran ? { ...e, version: ran } : got && st && got.size === st.size ? { ...e, version: got.version } : e; });
+    const fpIds = list.filter((e) => e.kind === 'flatpak').map((e) => e.fp);
+    const fpWant = !cached && fpIds.length && (fresh || !cache.fp || Date.now() - cache.fp.t > TTL);
+    const fpRun = fpWant ? U.flatpakUpdates(fpIds).then((d) => (cache.fp = { t: Date.now(), d }).d).catch(() => cache.fp?.d || {}) : Promise.resolve(cache.fp?.d || {});
+    const jobs = [];
     const out = [];
     // emulators and forks installed from a GitHub link (0.9.28, owner: update them from the same place): their own
     // project's releases, never the emulator they're a fork of; listed even when the scan doesn't know them
@@ -4024,11 +4030,11 @@ const handlers = {
       const custom = customs.find((x) => x.path === e.path);
       if (custom) {
         const ck = 'gh:' + custom.repo; let c = cache[ck];
-        if (fresh || !c || Date.now() - c.t > 6 * 3600e3) { try { const r = await require('./github').release(custom.repo); c = cache[ck] = { t: Date.now(), tag: r?.tag || null }; } catch (err) { c = { t: c?.t || 0, tag: c?.tag || null, error: err.message }; } }
-        out.push({ ...e, label: custom.repo.split('/')[1], version: custom.tag, custom: { repo: custom.repo }, forkOf: custom.as === 'fork' ? custom.of : null, update: c?.tag && c.tag !== custom.tag ? { version: c.tag, tag: c.tag } : null, latest: c?.tag ? { version: c.tag } : null, error: c?.error || null, channel: null, channels: [], page: `https://github.com/${custom.repo}/releases` });
+        if (!cached && (fresh || !c || Date.now() - c.t > TTL)) jobs.push(require('./github').release(custom.repo).then((r) => { cache[ck] = { t: Date.now(), tag: r?.tag || null }; }).catch((err) => { cache[ck] = { t: c?.t || 0, tag: c?.tag || null, error: err.message }; }));
+        out.push(() => { const c = cache[ck]; return ({ ...e, label: custom.repo.split('/')[1], version: custom.tag, custom: { repo: custom.repo }, forkOf: custom.as === 'fork' ? custom.of : null, update: c?.tag && c.tag !== custom.tag ? { version: c.tag, tag: c.tag } : null, latest: c?.tag ? { version: c.tag } : null, error: c?.error || null, channel: null, channels: [], page: `https://github.com/${custom.repo}/releases` }); });
         continue;
       }
-      if (e.kind === 'flatpak') { out.push({ ...e, update: fp[e.fp] ? { version: fp[e.fp].version } : null, where: fp[e.fp]?.where, channel: 'flathub', channels: [] }); continue; }
+      if (e.kind === 'flatpak') { out.push((fp) => ({ ...e, update: fp[e.fp] ? { version: fp[e.fp].version } : null, where: fp[e.fp]?.where, channel: 'flathub', channels: [] })); continue; }
       const ch = U.channelsOf(e.id, e.path), channel = ((config.emuChannels || {})[e.id]) || ch.def;
       // 0.9.21: the release source follows the copy (Xenia Edge, Xenia's Windows build, Eden's variants)
       // a plain program (not an AppImage, not a folder build Cartridge can update) is never overwritten (0.9.21)
@@ -4038,14 +4044,17 @@ const handlers = {
       // is offered its update as a repair, newer or not
       const broken = kind === 'program' || kind === 'folder' ? U.missingLibs(e.path) : [];
       const ck = e.id + ':' + path.basename(e.path || '') + (kind === 'folder' ? ':folder' : '') + ':' + (channel || '');
-      let c = cache[ck];
-      if (spec && (fresh || broken.length || !c || Date.now() - c.t > 6 * 3600e3)) {
-        try { c = cache[ck] = { t: Date.now(), rel: await U.latestRelease(e.id, { file: e.path, channel }) }; } catch (err) { c = { t: c?.t || 0, rel: c?.rel || null, error: err.message }; }
-      }
-      out.push({ ...e, build: kind, broken: broken.length ? broken : null, update: c?.rel && (broken.length || U.isNewer(c.rel, e)) ? c.rel : null, latest: c?.rel || null, error: c?.error || null, noSource: !spec, channel, channels: spec ? ch.options : [], page: spec?.repo ? `https://github.com/${spec.repo}/releases` : null });
+      const c0 = cache[ck];
+      if (spec && !cached && (fresh || broken.length || !c0 || Date.now() - c0.t > TTL)) jobs.push(U.latestRelease(e.id, { file: e.path, channel }).then((rel) => { cache[ck] = { t: Date.now(), rel }; }).catch((err) => { cache[ck] = { t: c0?.t || 0, rel: c0?.rel || null, error: err.message }; }));
+      out.push(() => { const c = cache[ck]; return ({ ...e, build: kind, broken: broken.length ? broken : null, update: c?.rel && (broken.length || U.isNewer(c.rel, e)) ? c.rel : null, latest: c?.rel || null, error: c?.error || null, noSource: !spec, channel, channels: spec ? ch.options : [], page: spec?.repo ? `https://github.com/${spec.repo}/releases` : null }); });
     }
+    await Promise.all(jobs);
+    const fpd = await fpRun;
+    const res = out.map((f) => f(fpd));
+    if (!cached) log('emulator updates checked', `${res.length} in ${Date.now() - t0} ms, ${jobs.length} asked`);
+    if (cached) return res;
     saveJson(file, cache);
-    return out;
+    return res;
   },
   // force (0.9.23): Download again, the newest of its channel even when it's the same version
   'emuup:run': async ({ id, kind, fp, where, path: file, force }) => {

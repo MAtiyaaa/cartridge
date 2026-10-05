@@ -8,6 +8,7 @@
 const fs = require('fs');
 const webFetch = require('./webFetch');
 const path = require('path');
+const os = require('os');
 const { execFile } = require('child_process');
 
 // emulator -> its GitHub releases and the Linux AppImage in them (x86_64)
@@ -69,7 +70,9 @@ function plainEnv() { const env = { ...process.env }; for (const k of ['LD_PRELO
 const run = (cmd, args, timeout = 60000) => new Promise((resolve, reject) => execFile(cmd, args, { env: plainEnv(), timeout, maxBuffer: 8 << 20 }, (e, out, err) => (e ? reject(new Error(String(err || e.message).trim().split('\n').pop())) : resolve(String(out)))));
 
 // version text from a tag or file name: v2.3.120 -> 2.3.120
-const verOf = (s) => (String(s || '').match(/\d+(?:\.\d+){1,3}/) || [])[0] || '';
+// 0.9.37: a build number after the version counts (RPCS3's 0.0.38-18166 is newer than 0.0.38-18101: every
+// RPCS3 build shares 0.0.38, so updates were never seen); it becomes the last part, 0.0.38.18166
+const verOf = (s) => { const m = String(s || '').match(/(\d+(?:\.\d+){1,3})(?:-(\d{4,})(?!\d|-\d{2}-))?/); return m ? m[1] + (m[2] ? '.' + m[2] : '') : ''; };
 const cmpVer = (a, b) => { const x = verOf(a).split('.').map(Number), y = verOf(b).split('.').map(Number); for (let i = 0; i < Math.max(x.length, y.length); i++) { const d = (x[i] || 0) - (y[i] || 0); if (d) return d; } return 0; };
 
 // Flatpak: which of these app ids have an update, per installation
@@ -179,9 +182,31 @@ async function fileFromTar(tarFile, dest, want) {
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 }
 // is the release newer than this AppImage? by version when both have one, else by date
+// the version an emulator itself says it is, when it has run since its file last changed (0.9.37): RPCS3 writes
+// "RPCS3 v0.0.38-18166-77d2d1b4 Alpha" at the top of its log
+function ranVersion(id, file, home = os.homedir()) {
+  if (id !== 'rpcs3') return '';
+  const cfg = process.env.XDG_CONFIG_HOME || path.join(home, '.config');
+  for (const log of [path.join(cfg, 'rpcs3', 'RPCS3.log'), path.join(path.dirname(file), 'config', 'RPCS3.log')]) {
+    try {
+      const st = fs.statSync(log), fst = fs.statSync(file);
+      if (st.mtimeMs < fst.mtimeMs) continue; // older than the AppImage: says nothing about this copy
+      const fd = fs.openSync(log, 'r'), b = Buffer.alloc(4096); const n = fs.readSync(fd, b, 0, 4096, 0); fs.closeSync(fd);
+      const m = /RPCS3 v(\d+\.\d+\.\d+-\d+)/.exec(b.toString('utf8', 0, n));
+      if (m) return m[1];
+    } catch {}
+  }
+  return '';
+}
 function isNewer(rel, have) {
   if (!rel) return false;
-  if (verOf(rel.version) && verOf(have.version)) return cmpVer(rel.version, have.version) > 0;
+  const a = verOf(rel.version), b = verOf(have.version);
+  if (a && b) {
+    // compared as far as both go; one with a build number and one without are told apart by date (below)
+    const x = a.split('.').map(Number), y = b.split('.').map(Number), n = Math.min(x.length, y.length);
+    for (let i = 0; i < n; i++) if (x[i] !== y[i]) return x[i] > y[i];
+    if (x.length === y.length) return false;
+  }
   const mt = (() => { try { return fs.statSync(have.path).mtimeMs; } catch { return 0; } })();
   return !!rel.date && Date.parse(rel.date) > mt + 3600e3;
 }
@@ -242,4 +267,4 @@ async function replaceFolder(file, rel, download) {
   return true;
 }
 
-module.exports = { channelsOf, withChannel, flatpakRemove, installKind, missingLibs, looksRunnable, replaceFolder, specFor, pickAsset, fileFromTar, forgeRelease, appImageFromZip, REPOS, verOf, cmpVer, flatpakUpdates, flatpakUpdate, latestRelease, isNewer, replaceAppImage };
+module.exports = { ranVersion, channelsOf, withChannel, flatpakRemove, installKind, missingLibs, looksRunnable, replaceFolder, specFor, pickAsset, fileFromTar, forgeRelease, appImageFromZip, REPOS, verOf, cmpVer, flatpakUpdates, flatpakUpdate, latestRelease, isNewer, replaceAppImage };

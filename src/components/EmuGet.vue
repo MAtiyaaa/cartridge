@@ -151,7 +151,17 @@ const ups = ref(null), upBusy = ref(false), upRun = ref(''), upPct = ref(null);
 const upCount = computed(() => (ups.value || []).filter((u) => u.update).length);
 const upOf = (id) => { const l = (ups.value || []).filter((u) => u.id === id); return l.find((u) => u.update) || l[0] || null; };
 const others = computed(() => { const known = new Set(all.value.map((x) => x.e.id)); return (ups.value || []).filter((u) => !known.has(u.id)); });
-async function loadUps(fresh = false) { if (!props.updates) return; upBusy.value = true; ups.value = await call('emuup:list', { fresh }).catch((e) => { toast(e.message, 'error'); return []; }); upBusy.value = false; }
+// 0.9.37 (owner: slow to open, not live): what was known shows at once, then every emulator is checked again
+let upSeq = 0;
+async function loadUps(fresh = false) {
+  if (!props.updates) return;
+  const n = ++upSeq; upBusy.value = true;
+  if (!ups.value) { const c = await call('emuup:list', { cached: true }).catch(() => null); if (n === upSeq && c && !ups.value) ups.value = c; }
+  const r = await call('emuup:list', { fresh }).catch((e) => { toast(e.message, 'error'); return null; });
+  if (n !== upSeq) return;
+  if (r) ups.value = r; else ups.value ||= [];
+  upBusy.value = false;
+}
 async function runUpdate(u, force = false) {
   if (upRun.value) return toast('One update at a time: wait for this one to finish.', 'info', 3000);
   if (!force && !u.update) return toast(u.error ? `Couldn’t check for updates: ${u.error}` : u.noSource ? `${u.label} updates from inside ${u.label}.` : `${u.label} is up to date.`, 'info', 3500);
@@ -327,8 +337,8 @@ onMounted(async () => {
   offP = window.cart.on('emuget-progress', (m) => { const x = q.value.find((y) => y.key === m.key && y.id === m.id && y.state === 'run'); if (x && m.pct != null) x.pct = m.pct; });
   offU = window.cart.on('emu-update', (m) => { if (m.path === upRun.value && m.pct != null) upPct.value = m.pct; });
   q.value = (await call('emuget:state').catch(() => null)) || q.value; // installs queued earlier carry on
+  loadUps(); // at the same time as the list (0.9.37)
   if (phase.value === 'where') await loadDrives(); else { if (props.flow) fresh.value = await call('emuget:fresh').catch(() => ({ fresh: false })); await load(); }
-  loadUps();
 });
 onBeforeUnmount(() => { off?.(); offP?.(); offU?.(); });
 defineExpose({ load });
