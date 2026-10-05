@@ -7,13 +7,16 @@
       <h2>{{ s.title }}</h2>
       <!-- buttons in the text are drawn for what's in your hands (0.9.38, owner: "A" was just a letter): the
            controller's own glyph, or the key on a keyboard -->
-      <p class="muted"><template v-for="(x, n) in parts(s.text)" :key="n"><template v-if="!x.b">{{ x.t }}</template><kbd v-else-if="input.mode === 'mouse'">{{ KEYS[x.b] || x.b }}</kbd><Btn v-else :b="x.b" class="t-inl" /></template></p>
+      <p class="muted"><template v-for="(x, n) in parts(s.text)" :key="n"><template v-if="!x.b">{{ x.t }}</template><kbd v-else-if="input.mode === 'mouse' || input.keys">{{ KEYS[x.b] || x.b }}</kbd><Btn v-else :b="x.b" class="t-inl" /></template></p>
       <!-- what to do, for what's in your hands: a button, a key, a click or a tap -->
       <div v-if="s.task" class="t-task" :class="{ ok: did }">
         <span class="t-do"><template v-if="did"><Icon name="mdiCheckCircle" :size="20" />Done</template><template v-else>
-          <template v-if="input.mode === 'pad'">Press <Btn v-for="k in s.task.pad" :key="k" :b="k" /><span v-if="s.task.key" class="t-alt">· {{ s.task.key }} on a keyboard</span></template>
+          <!-- 0.9.38 (owner): only what's in your hands, the controller's button or the keyboard's key, never both -->
+          <template v-if="input.mode === 'pad' && input.keys && s.task.key">Press <kbd>{{ s.task.key }}</kbd></template>
+          <template v-else-if="input.mode === 'pad'">Press <Btn v-for="k in s.task.pad" :key="k" :b="k" /></template>
           <template v-else-if="input.mode === 'touch'">{{ s.task.touch }}</template>
-          <template v-else>{{ s.task.mouse }}<template v-if="s.task.key"> or press <kbd>{{ s.task.key }}</kbd></template></template>
+          <template v-else-if="s.task.mouse">{{ s.task.mouse }}<template v-if="s.task.key"> or press <kbd>{{ s.task.key }}</kbd></template></template>
+          <template v-else>Press <kbd>{{ s.task.key }}</kbd></template>
         </template></span>
       </div>
       <div class="row t-act">
@@ -56,14 +59,14 @@ const PAGES = [
 const BASE0 = [
   { title: 'Your Tabs', text: 'The Dock holds every part of Cartridge. Move to the next tab now.', at: '.statusbar nav.tabs',
     task: { pad: ['RT'], key: 'Page Down', mouse: 'Click another tab', touch: 'Tap another tab' }, pass: ['lt', 'rt'], doneWhen: (s0) => store.route.name !== s0.route },
-  { title: 'Find Anything', text: 'Search finds games by name from anywhere. Open it now; B or Escape closes it again.', at: '.top-search',
+  { title: 'Find Anything', text: 'Search finds games by name from anywhere. Open it now; {B} closes it again.', at: '.top-search',
     task: { pad: ['Y'], key: '/', mouse: 'Click the magnifier', touch: 'Tap the magnifier' }, pass: ['y', 'search'], doneWhen: () => store.modal?.type === 'keyboard' || store.route.name === 'search' },
-  { title: 'Close It Again', text: 'B always goes back: out of a pop-up, a page or a menu.', at: null, when: () => store.modal?.type === 'keyboard' || store.route.name === 'search',
+  { title: 'Close It Again', text: '{B} always goes back: out of a pop-up, a page or a menu.', at: null, when: () => store.modal?.type === 'keyboard' || store.route.name === 'search',
     task: { pad: ['B'], key: 'Escape', mouse: 'Click outside it', touch: 'Tap outside it' }, pass: ['back'], doneWhen: () => !store.modal && store.route.name !== 'search' },
   { title: 'Your Downloads', text: 'Downloads, installs and updates all show here, and carry on while you do other things. Jump there now.', at: tabSel('downloads'),
     task: { pad: ['SELECT'], key: 'Ctrl+J', mouse: 'Click Downloads', touch: 'Tap Downloads' }, pass: ['select'], doneWhen: () => store.route.name === 'downloads' },
-  { title: 'The Quick Menu', text: 'Start opens the Quick Menu from anywhere: refresh the library, Settings, and more. Open it, then press Start again to close it.', at: null,
-    task: { pad: ['START'], key: 'M', mouse: 'Press M on the keyboard', touch: 'Skip this one on touch' }, pass: ['start'], doneWhen: (s0, seen) => seen.quick && !store.quickMenu },
+  { title: 'The Quick Menu', text: '{START} opens the Quick Menu from anywhere: refresh the library, Settings, and more. Open it, then press {START} again to close it.', at: null,
+    task: { pad: ['START'], key: 'M', mouse: '', touch: 'Skip this one on touch' }, pass: ['start'], doneWhen: (s0, seen) => seen.quick && !store.quickMenu },
   { title: 'Games and Steam', text: 'On a game’s page, More ({Y}) adds it to Steam with the emulator picked for its console, plus its add-ons, patches and settings.', at: tabSel('library') },
   { title: 'Settings', go: 'settings', text: 'Emulators (get and update them, BIOS, add-ons), Steam (add all your games at once), Syncthing for saves, and Look & Feel.', at: 'main.main' },
   { title: 'You’re Set', text: 'Everything works with a controller, the keyboard, a mouse or touch. F1 lists every key; right-click a game for its quick actions. This tour is in Settings → About whenever you want it again.', at: null },
@@ -146,6 +149,5 @@ onBeforeUnmount(() => { layer?.pop(); clearInterval(tick); removeEventListener('
 .bubble p kbd { margin: 0 2px; }
 kbd { font: inherit; font-size: var(--t-sm); padding: 2px 8px; border-radius: 6px; background: var(--s3); box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.35); }
 .t-act { gap: var(--s-2); }
-.t-alt { font-weight: 500; color: var(--muted); font-size: var(--t-sm); }
 :global(body.light-fx .tour-root .spot) { transition-duration: 0ms; }
 </style>

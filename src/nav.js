@@ -5,7 +5,7 @@ import { springTo, stopSpring, skipMorph } from './motion.js';
 import { reactive } from 'vue';
 import { sfx } from './sfx.js';
 
-export const input = reactive({ mode: 'pad', padName: '' }); // 'pad' | 'mouse'
+export const input = reactive({ mode: 'pad', padName: '', keys: false }); // 'pad' | 'mouse'; keys: in pad mode, the last press was a keyboard's (0.9.38, for the tour's hints)
 document.body.classList.add('pad-mode'); // the starting mode needs its class too (row snapping relies on it)
 // While a direction is held down, focus jumps several times a second. Smooth scrolling can't keep
 // up with that (each new animation restarts the last), so scroll instantly during a hold.
@@ -288,6 +288,7 @@ window.addEventListener('keydown', (ev) => {
   let a = keyAction(ev);
   if (!a) return;
   ev.preventDefault();
+  if (!input.keys) input.keys = true;
   if (a === 'search' && !topLayer()?.handlers?.search) a = 'y'; // a pop-up without search: / is its Y, as before
   if (a === 'next' || a === 'prev') { setMode('pad'); stepFocus(a === 'next' ? 1 : -1); return; }
   if (a === 'first' || a === 'last') { const h = topLayer()?.handlers?.[a]; setMode('pad'); if (h) h(document.activeElement); else edgeFocus(a === 'last'); return; }
@@ -422,7 +423,7 @@ function poll() {
   const merged = {};
   for (const gp of pads) {
     input.padName = gp.id;
-    if (gp.buttons.some((b) => b.pressed) || gp.axes.slice(0, 2).some((a) => Math.abs(a) > 0.55)) lastPad = gp.index;
+    if (gp.buttons.some((b) => b.pressed) || gp.axes.slice(0, 2).some((a) => Math.abs(a) > 0.55)) { lastPad = gp.index; if (input.keys) input.keys = false; }
     gp.buttons.forEach((b, i) => {
       const a = BTN[i];
       if (!a || a === 'lt' || a === 'rt') return;

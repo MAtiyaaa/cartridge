@@ -399,7 +399,7 @@ LT/RT switch top tabs. LB/RB only switch sections inside a page. A select, B bac
 - Emulators sheet: `emuup:list` keeps `Shadps4-qt.AppImage` (only the SDL build is hidden); `REPOS.shadps4.only` removed; EmuGet `get()` reloads updates before saying "already on this device". Icons: SharpEmu `assets/images/logo_transparent.png`, KytyPS5 and Ryujinx (fallback) GitHub avatars.
 - BIOS: `autoBios(platformId, slug)` after a game download (once per console per run, only when not OK and not optional) → `downloadBios` + `biosSetup({install:true})`; the 45 s start pass installs too.
 - LT/RT: App.vue pushes the base layer before `loadConfig()`; `cycleTab` ignores empty tabs. nav.js `startLog` writes one "triggers at start" log line after 20 s (ask the owner for it if LT/RT still fail).
-- Tour: `FirstTour.vue` `{A}`-style tokens rendered as `Btn` (keys `KEYS` in mouse mode), `PAGES` steps with `go:` tab names.
+- Tour: `FirstTour.vue` `{A}`-style tokens rendered as `Btn` (keys `KEYS` in mouse mode or after a key press), `PAGES` steps with `go:` tab names. nav.js `input.keys`: true on a mapped keydown, false on a pad button or stick; task hints show the pad's buttons or the key, never both.
 - Sync ring: App.vue `.steam-ring.sync-ring`, `syncPct`, `syncEnding` (900 ms tick).
 - Elements: `ELEMENTS` plain/glass only (`elements-oled` gone; old values fall to plain). Glass `--focus` is the chosen colour at 0.66 to 0.74 alpha, `body.focus-light`, `--on-focus` by lightness; styles.css glass: sheen gradient, top inset edge, `blur(18px) saturate(1.8)`, solid under `prefers-reduced-transparency`.
 - Settings: a `sec` watch sets `.pane` scrollTop 0 after `stopScroll(el)` (new nav.js export: ends a running glide); the pane is shared by all sections.

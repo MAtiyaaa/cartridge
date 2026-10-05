@@ -4,7 +4,7 @@
 - **Games on more than one drive:** Settings → Storage → Games on Other Drives. Add a drive (an SD card or a second disk) and Cartridge makes an Emulation/roms folder on it with a folder for each console you have games for, finds games on every drive, and tells your emulators about the new folders (Flatpak emulators are allowed to read it too). Choose where new games go: the drive with the most free space, this device, or one drive. A drive that isn't plugged in says so and nothing is lost.
 - **Mods for PS4 games in shadPS4:** Game Add-ons now has a Mods tab for PS4 games. A mod goes in the folder shadPS4 lays over the game (`<game folder>-mods`), in the game's own layout, so the game's files are never changed and removing the mod puts everything back.
 - **BIOS from RomM by itself:** when a game is downloaded for a console whose BIOS or firmware isn't set up, Cartridge fetches it from your RomM server once and puts it in place.
-- **The tour shows every page:** Home, Library, Consoles, Achievements and Settings each get a step, and button names are shown as the real buttons for your controller (or keys when you use a keyboard and mouse).
+- **The tour shows every page:** Home, Library, Consoles, Achievements and Settings each get a step. Buttons are shown for what you're using: your controller's own buttons, or the keys once you press a key on a keyboard, never both side by side.
 - **Syncing ring:** Syncthing progress in the top bar is a ring like the Steam one, with a tick when it finishes.
 
 ### Changed
