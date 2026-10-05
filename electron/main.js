@@ -2667,6 +2667,8 @@ const trophySvc = require('./trophyService')({
   codeName: (src, code) => require('./titleNames').nameFor(src, code),
 });
 require('./titleNames').setup({ dir: USER_DATA, fetchImpl: (...a) => webFetch(...a) });
+// PS5 trophy names come from each game's own trophy package (0.9.37, KytyPS5): the downloaded PS5 game folders
+require('./trophies').setPs5Games(() => { const out = []; const idx = romIndexMain(); for (const [id, p] of Object.entries(installedMap)) { const r = idx.get(Number(id)); if (r && [r.platform_slug, r.platform_fs_slug].includes('ps5') && isDir(p)) out.push(p); } return out; });
 // ---------------------------------------------------------------- Steam ROM manager
 function coverCrop(buf, W, H) {
   const { nativeImage } = require('electron');

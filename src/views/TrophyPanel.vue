@@ -92,7 +92,7 @@ import ConsoleMark from '../components/ConsoleMark.vue';
 // Trophies and achievements that emulators keep on this device (plus other devices, via RomM)
 const el = ref(null);
 const data = ref(null);
-const SLUG = { rpcs3: 'ps3', shadps4: 'ps4', xenia: 'xbox360', vita3k: 'psvita' };
+const SLUG = { rpcs3: 'ps3', shadps4: 'ps4', xenia: 'xbox360', vita3k: 'psvita', kytyps5: 'ps5' };
 // the game's logo: the library game's own, or one looked up by name for games only in trophies
 const hash = (t) => { let h = 5381; for (const c of String(t)) h = ((h * 33) ^ c.charCodeAt(0)) >>> 0; return h.toString(36); };
 function logoFor(g) {
@@ -120,7 +120,7 @@ const syncText = computed(() => {
 
 // Show: every console or one; Sort: latest unlock, most or least complete, name
 const show = ref('all'), sort = ref('latest'), withHidden = ref(false);
-const PLAT = { rpcs3: 'PS3', shadps4: 'PS4', xenia: 'Xbox 360', vita3k: 'PS Vita' };
+const PLAT = { rpcs3: 'PS3', shadps4: 'PS4', xenia: 'Xbox 360', vita3k: 'PS Vita', kytyps5: 'PS5' };
 const SORTS = [{ v: 'latest', l: 'Latest', icon: 'mdiClockOutline' }, { v: 'most', l: 'Most complete', icon: 'mdiProgressCheck' }, { v: 'least', l: 'Least complete', icon: 'mdiProgressClock' }, { v: 'name', l: 'A–Z', icon: 'mdiSortAlphabeticalAscending' }];
 const showLabel = computed(() => (show.value === 'all' ? 'All consoles' : PLAT[show.value]));
 const games = computed(() => {
