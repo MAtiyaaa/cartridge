@@ -2025,6 +2025,7 @@ async function pumpEmuGet() {
 const emuGetListeners = new Set();
 const addonRecs = () => (addonCache ||= loadJson(ADDONS_FILE, {}));
 const PATCHES_FILE = path.join(USER_DATA, 'patches.json');
+const LINKS_FILE = path.join(USER_DATA, 'folder-links.json');
 let patchMine = loadJson(PATCHES_FILE, {});
 // a PS3 game's serial: from its install record, its PARAM.SFO, else its name
 function ps3Serial(romId, where) {
@@ -3910,7 +3911,7 @@ const handlers = {
       if (custom) {
         const ck = 'gh:' + custom.repo; let c = cache[ck];
         if (fresh || !c || Date.now() - c.t > 6 * 3600e3) { try { const r = await require('./github').release(custom.repo); c = cache[ck] = { t: Date.now(), tag: r?.tag || null }; } catch (err) { c = { t: c?.t || 0, tag: c?.tag || null, error: err.message }; } }
-        out.push({ ...e, label: custom.repo.split('/')[1], version: custom.tag, custom: { repo: custom.repo }, update: c?.tag && c.tag !== custom.tag ? { version: c.tag, tag: c.tag } : null, latest: c?.tag ? { version: c.tag } : null, error: c?.error || null, channel: null, channels: [], page: `https://github.com/${custom.repo}/releases` });
+        out.push({ ...e, label: custom.repo.split('/')[1], version: custom.tag, custom: { repo: custom.repo }, forkOf: custom.as === 'fork' ? custom.of : null, update: c?.tag && c.tag !== custom.tag ? { version: c.tag, tag: c.tag } : null, latest: c?.tag ? { version: c.tag } : null, error: c?.error || null, channel: null, channels: [], page: `https://github.com/${custom.repo}/releases` });
         continue;
       }
       if (e.kind === 'flatpak') { out.push({ ...e, update: fp[e.fp] ? { version: fp[e.fp].version } : null, where: fp[e.fp]?.where, channel: 'flathub', channels: [] }); continue; }
@@ -3992,6 +3993,45 @@ const handlers = {
     if (here) { try { const d = handlers['gamesettings:get']({ romId: r.id }); if (d?.items) { out.settingsEmu = d.name; out.settings = d.items.filter((x) => x.game != null).map((x) => ({ label: x.label, value: x.options.find((o) => String(o.value) === String(x.game))?.label || String(x.game) })); } } catch {} }
     try { const s = steamMgr.forRom(r.id); if (s?.steam) out.steam = { inSteam: !!s.inSteam, queued: s.queued || null }; } catch {}
     return out;
+  },
+  // Linked Folders (0.9.33, owner): a fork's save folders linked to the emulator it's a fork of. Suggestions from
+  // the forks found, plus links you made yourself; folder-links.json records Cartridge's, the only ones it removes.
+  'links:list': () => {
+    const L = require('./folderLinks'), SV = require('./saves'), home = os.homedir();
+    const recs = loadJson(LINKS_FILE, []);
+    const baseOf = (id, rel) => { const roots = (SV.DATA[id] || []).map((r) => path.join(home, r)).filter((d) => fs.existsSync(d)); return roots.find((d) => fs.existsSync(path.join(d, rel))) || roots[0] || null; };
+    const suggestions = [];
+    let forks = []; try { forks = steamMgr.forksAll(); } catch (e) { log('links forks', e.message); }
+    for (const f of forks) {
+      if (f.how === 'flatpak') continue;
+      for (const [, label, rel] of SV.SYNC[f.of] || []) {
+        if (typeof rel !== 'string') continue;
+        const donor = baseOf(f.of, rel), fb = L.findForkBase(f.exe, rel, home);
+        const to = donor ? path.join(donor, rel) : null, from = fb ? path.join(fb.base, rel) : null;
+        const st = from && to ? L.status(from, to) : { state: !to ? 'no-donor' : 'no-folder' };
+        if (recs.some((r) => r.from === from)) continue; // already one of yours
+        suggestions.push({ fork: f.name, exe: f.exe, of: f.of, ofName: SV.NAMES[f.of] || f.of, label, rel, from, to, how: fb?.how || null, ...st });
+      }
+    }
+    const links = recs.map((r) => ({ ...r, ...L.status(r.from, r.to) }));
+    return { suggestions, links, home };
+  },
+  'links:check': ({ from, to }) => { const L = require('./folderLinks'); return { why: L.check(from, to), ...L.status(from, to) }; },
+  'links:make': ({ from, to, label, fork, of }) => {
+    const r = require('./folderLinks').link(from, to);
+    const recs = loadJson(LINKS_FILE, []).filter((x) => x.from !== from);
+    if (!r.already) recs.push({ id: Date.now().toString(36), from, to, kept: r.kept, label: String(label || '').slice(0, 80), fork: fork || '', of: of || '', at: Date.now() });
+    saveJson(LINKS_FILE, recs);
+    log('folder linked', from, '->', to, r.kept ? '(kept aside)' : '');
+    return r;
+  },
+  'links:remove': ({ id }) => {
+    const recs = loadJson(LINKS_FILE, []), rec = recs.find((x) => x.id === id);
+    if (!rec) throw new Error('Cartridge didn’t make that link.');
+    require('./folderLinks').unlink(rec);
+    saveJson(LINKS_FILE, recs.filter((x) => x.id !== id));
+    log('folder unlinked', rec.from);
+    return true;
   },
   'gamesettings:get': ({ romId }) => { const c = gameSettingsCtx(Number(romId)); return c.why ? { why: c.why, emu: c.emu } : require('./gameSettings').describe(c); },
   'gamesettings:set': ({ romId, changes }) => {
