@@ -634,6 +634,7 @@ async function more() {
   if (detail.value?.path_manual) details.unshift({ label: 'Manual', sub: 'The game’s manual from RomM', value: 'manual', icon: 'mdiBookOpenPageVariantOutline' });
   // Options (0.9.16): hide, re-download and delete, out of the header
   const options = [
+    { label: 'About', sub: 'Console, ID, version, and what’s installed for it', value: 'about', icon: 'mdiInformationOutline' },
     { label: u?.hidden ? 'Unhide game' : 'Hide game', sub: u?.hidden ? 'Show it in lists again' : 'Keep it out of Home, Library and Search', value: 'hide', icon: u?.hidden ? 'mdiEyeOutline' : 'mdiEyeOffOutline' },
     ...(installedPath.value && !marked.value ? [
       { label: 'Re-download', sub: 'The copy on this device is replaced', value: 'redownload', icon: 'mdiRefresh' },
@@ -652,6 +653,7 @@ async function more() {
   }
   if (v === 'status') { await pickStatus(); return; }
   if (v === 'timeline') { await openTimeline(); return; }
+  if (v === 'about') { openModal('gameabout', { romId: Number(props.romId), name: base.value.name, cover: coverSrc.value || '' }); return; }
   if (v === 'manual') { openModal('manual', { romId: Number(props.romId), name: base.value.name }); return; }
   if (v === 'edit') { await editDetails(); return; }
   if (v === 'theme') { await themeFromGame(); return; }

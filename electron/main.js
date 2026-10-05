@@ -3958,6 +3958,39 @@ const handlers = {
   },
   // Per-game emulator settings (0.9.23, electron/gameSettings.js): the emulator this game uses and its
   // per-game file; only written while that emulator is closed (it saves its settings when it quits)
+  // 0.9.32 (owner: an About for every game): what Cartridge knows about one game, read only and from this
+  // device (no downloads): its console, file, IDs, version, and what is installed or turned on for it
+  'game:about': async ({ romId }) => {
+    const r = romIndexMain().get(Number(romId));
+    if (!r) throw new Error('That game isn’t in the library.');
+    const where = installedMap[r.id], here = where && where !== MARKED ? where : '';
+    const out = { name: r.name, console: r.platform_display_name || r.platform_slug, slug: r.platform_slug, rommId: r.id > 0 ? r.id : null, file: r.fs_name || '', size: r.fs_size_bytes || 0, regions: r.regions || [], where: here, marked: where === MARKED, ids: [], version: '', addons: [], other: [], patches: [], settings: [], install: null, steam: null };
+    const id = (label, value) => { if (value && !out.ids.some((x) => x.value === value)) out.ids.push({ label, value: String(value) }); };
+    const step = () => new Promise((res) => setImmediate(res)); // long reads never hold up the window
+    let ids = {};
+    if (here) { try { handlers['addons:forGame']({ romId: r.id, out: (x) => { ids = x; } }); } catch {} }
+    id('Serial', ids.serial); id('Game ID', ids.gameId); id('Title ID', ids.titleId || ids.switchId);
+    const v = ids.version;
+    if (v) out.version = [v.display || v.text, v.update ? `update ${v.update}` : '', v.number != null && !v.display ? `v${v.number}` : ''].filter(Boolean).join(' · ');
+    await step();
+    let st = {};
+    if (here) { try { st = patchState(r.id) || {}; } catch {} }
+    id(/ps3|ps4/i.test(r.platform_slug) ? 'Serial' : 'ID', st.serial !== r.name ? st.serial : '');
+    if (!out.version && st.version) out.version = String(st.version);
+    if (/ps3/i.test(r.platform_slug) && here) { const s = ps3Serial(r.id, here); id('Serial', s); }
+    if (installs[r.id]) out.install = { emu: emuLabel(installs[r.id].emu), at: installs[r.id].at || null };
+    // add-ons Cartridge put in, and files in the game's folders it didn't
+    out.addons = Object.values(addonRecs()).filter((x) => x.romId === r.id).map((x) => ({ name: x.name, kind: x.category || (x.source === 'ps2' ? 'Textures' : 'Mod'), emu: x.emuName, files: x.files.length, at: x.at }));
+    if (here) { try { out.other = ((await handlers['addons:present']({ romIds: [r.id] }))[r.id] || []).filter((x) => x.by !== 'cartridge').map((x) => ({ emu: x.name, files: x.files })); } catch {} }
+    await step();
+    // patches and cheats turned on, from the emulator's own files (Cartridge's or yours)
+    const E = EMU_PATCH[st.emu];
+    if (st.dir && E) { try { out.patchEmu = E.name; out.patches = (await E.list(st, patchMine[st.emu] || {})).filter((x) => x.on).map((x) => ({ name: x.name || x.description, by: x.by === 'emulator' ? 'you' : 'cartridge', section: x.section || '' })); } catch {} }
+    // this game's own emulator settings
+    if (here) { try { const d = handlers['gamesettings:get']({ romId: r.id }); if (d?.items) { out.settingsEmu = d.name; out.settings = d.items.filter((x) => x.game != null).map((x) => ({ label: x.label, value: x.options.find((o) => String(o.value) === String(x.game))?.label || String(x.game) })); } } catch {} }
+    try { const s = steamMgr.forRom(r.id); if (s?.steam) out.steam = { inSteam: !!s.inSteam, queued: s.queued || null }; } catch {}
+    return out;
+  },
   'gamesettings:get': ({ romId }) => { const c = gameSettingsCtx(Number(romId)); return c.why ? { why: c.why, emu: c.emu } : require('./gameSettings').describe(c); },
   'gamesettings:set': ({ romId, changes }) => {
     const c = gameSettingsCtx(Number(romId));
