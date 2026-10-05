@@ -4547,6 +4547,7 @@ const handlers = {
     const where = installedMap[r.id], here = where && where !== MARKED ? where : '';
     const out = { name: r.name, console: r.platform_display_name || r.platform_slug, slug: r.platform_slug, rommId: r.id > 0 ? r.id : null, file: r.fs_name || '', size: r.fs_size_bytes || 0, regions: r.regions || [], where: here, marked: where === MARKED, ids: [], version: '', addons: [], other: [], patches: [], settings: [], install: null, steam: null };
     const id = (label, value) => { if (value && !out.ids.some((x) => x.value === value)) out.ids.push({ label, value: String(value) }); };
+    if (onAndroid) return out; // Android: the rest reads desktop emulators' own files (add-ons, patches, settings)
     const step = () => new Promise((res) => setImmediate(res)); // long reads never hold up the window
     let ids = {};
     if (here) { try { handlers['addons:forGame']({ romId: r.id, out: (x) => { ids = x; } }); } catch {} }
