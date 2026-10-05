@@ -6,6 +6,11 @@ The branch for 0.9.3 work is `claude/relaxed-fermat-30pigp`. Pull it before star
 
 ---
 
+## 5 Oct 2026 · 0.9.37 Set Up for You (built and released) · handover written
+- Owner (photo of a game's About): rows had the ring, clipped. Fixed with the row exemption list. Cemu groups empty: real causes were the symlinked home (title ID not found) and region-only packs (checked against the real community packs). BIOS/firmware placed automatically after emulator installs and RomM downloads, Setup and Health section. Add-on site download closes the page and opens Downloads. Mod layouts checked per emulator (Azahar mods, Switch patches). The owner retracted the Download Latest Patches report (it was there).
+- Owner is switching accounts for a few days: `docs/HANDOVER-0.9.22-to-0.9.37.md` covers everything from 0.9.22 to here, linked from the top of CLAUDE.md.
+- Owner to test: a Cemu game's Add-ons; BIOS after the next emulator install (RPCS3/Vita3K firmware, Eden keys); a mod download from a site in Game Mode; a 3DS mod in Azahar.
+
 ## 5 Oct 2026 · 0.9.36 Collections, Checked Properly (built and released)
 - Owner's photo: Issues said 129 games were missing from a long list of old collection names (RomM plain names, SRM's "Nintendo DS - melonDS (Standalone)"). The check read Cartridge's memory (reg[].collections), not Steam. Rewritten to the same rules as the console collection fill; SRM names matched to consoles. Tested in npm test.
 

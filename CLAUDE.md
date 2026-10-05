@@ -4,6 +4,8 @@ A controller-first RomM client for SteamOS and Bazzite, shipped as one AppImage.
 
 **Coming back after 0.9.2 (the first account)?** Read `docs/HANDOVER-0.9.3-to-0.9.21.md` first: everything the second account did from 0.9.3 to 0.9.21, the owner's decisions, what broke and how it was fixed, and what is still open.
 
+**Coming back after 0.9.37 (another account)?** Read `docs/HANDOVER-0.9.22-to-0.9.37.md` first: everything from 0.9.22 to 0.9.37 (Syncthing saves, Switch reading, Steam collections, controller after a game, Cemu, BIOS placement, Linked Folders and more), the owner's decisions, how the real app was run and tested in the container, what broke and how it was fixed, and what is still open. Then the older handover above for the history before.
+
 This file is the short version every session needs. The full handoff (history, every decision, the reasons behind odd-looking code, test notes) is in **`docs/HANDOFF.md`**. Read the parts that relate to your task before changing code. The Steam manager test scripts are in `docs/steam-tests.md`.
 
 ## Stack and layout
@@ -373,6 +375,13 @@ LT/RT switch top tabs. LB/RB only switch sections inside a page. A select, B bac
 
 ## 0.9.36 · Collections, Checked Properly (5 Oct 2026)
 - `verifyCollections` (Issues "missing from their collections"): console collections (any name `consoleOf` maps) are checked from `gamesInSteam` against `colName`, only with `steam.consoleCollections` on, skipping consoles with an unreviewed collection of yours; other remembered collections only while they exist. `fixCollections` is async, live first. `steamCollections.consoleOf` understands SRM's "<console> - <emulator>" names. Tested.
+
+## 0.9.37 · Set Up for You (5 Oct 2026; log: docs/SESSION-LOG.md; handover: docs/HANDOVER-0.9.22-to-0.9.37.md)
+- Row focus: `.ga-row`, `.cc-row`, `.lf-card`, `.tl-e` on the styles.css ring-exemption list (fill only, no clipped ring).
+- Add-on site download: `will-download` closes the window after 150 ms and broadcasts `nav` `{ tab: 'downloads', closeModal }` (App.vue); the download carries on.
+- Cemu: `cemuPacks.titleIds(path, cfgDir, name)` compares real paths (/var/home) and falls back to Cemu's listed name; `sectionOf`, `otherRegions` (packs for the game listing only other regions); `patches:list` returns `other`/`ids` and logs `cemu packs`; GameAddons Cemu tabs only for groups present, with counts; PatchesSheet `otherNote`. Tested; checked against the real cemu_graphic_packs (95 games, 20 with region-only groups).
+- Mods: `addonInstall.plan` Azahar/Citra mods (romfs/exefs/code.ips/exheader) to `@mods3ds/` (alt `mods3ds` = load/mods/<TID>); Switch `exefs_patches`, loose .ips/.pchtxt, loose cheats, `romfs_ext`. Tested.
+- BIOS: `biosSetup({ install })` in main.js (copies via `bios.place`, PS3/Vita firmware through `pkgInstall.installFirmware` when missing, Switch keys and firmware zips); after `emuget:install`, after `bios:all`, copy-only 45 s after start; `downloadBios` keeps firmware `pending` instead of failing. `bios:status`, `bios:setup`; Settings → Emulators → Setup and Health "BIOS and Firmware" section. "In place" never counts Cartridge's own BIOS folder.
 
 ## Releases (full steps: HANDOFF D8)
 Only when the owner asks. Bump `version` and `build.releaseInfo.releaseName` ("Cartridge X.Y.Z") in `package.json`, and set `versionName` (what Settings → About and update messages show). **0.9.3 is shipped in parts (owner, 1 Oct 2026):** the number goes up as usual (0.9.4, 0.9.5...) but `versionName` and the release title are "0.9.3 B", "0.9.3 C"... until the 0.9.3 plan is done; notes heading `## Cartridge 0.9.3 B · Title`. Then put only this version's notes in `RELEASE_NOTES.md` (heading `## Cartridge X.Y.Z · Title`), add them to the top of `CHANGELOG.md`, grouped as New / Changed / Fixed with bold lead-ins. CI builds, launch-checks and publishes.
