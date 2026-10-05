@@ -6,6 +6,12 @@ The branch for 0.9.3 work is `claude/relaxed-fermat-30pigp`. Pull it before star
 
 ---
 
+## 5 Oct 2026 · 0.9.34 Back in Control (built and released)
+- Owner: the controller is seen but does nothing after a game started from Cartridge closes; and console collections: open one, see its games, add them, plus the bug where games already in Steam had to be added by hand to the new "Sony PlayStation 3".
+- Controller: no device to reproduce on. Read Chromium 152's gamepad code (visibility gates data, not focus). Found and fixed: a closed game's id kept as gamescope's focused app kept the pad off; main's refocus blur cleared `returned` on the desktop. Added Steam "back to running app" when gamescope doesn't name Cartridge, and logging so the next report shows where it stops. Simulated Game Mode with a fake xprop and a fake game process.
+- Collections: the bug was reg[].collections (Cartridge's memory) treated as truth, and only Cartridge's own shortcuts considered. Rewritten to compare with Steam's real collections for every matched shortcut. Tested in npm test and in the app with a fake Steam (helper path).
+- Owner to test: a game started from Cartridge in Game Mode, then closed (and send the log lines "gamescope focus" and "after the game" if the pad is still dead); collections with Decky/live on.
+
 ## 5 Oct 2026 · 0.9.33 Linked Folders (built and released)
 - Owner's asks: Download Latest for RPCS3 and shadPS4 like Cemu's; a save-link editor for forks (owner picked: a page in Settings → Emulators, fork's saves kept aside as .cartridge-kept); and the three left from 0.9.32 (no "…" anywhere, console logos checked on every console, interactive console widgets).
 - Checked: npm test, vite build, launch check; Linked Folders end to end in the app (fake home with shadPS4 and a portable GR2: suggested, linked, fork saves set aside); 40 consoles with real logos measured for overlaps on the Consoles page and Start (1280x800, 1920x1080); taps on disc and shelf.

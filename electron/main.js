@@ -157,9 +157,11 @@ function refocus() {
 // The game Cartridge asked Steam to start (0.9.29): found by its file in a running process's command line
 // (every emulator is given the game's path, or its folder), then watched until it ends. When it does,
 // Cartridge comes back to the front with the pad working (nav.js gameEnded), in Game Mode and on the desktop.
-let runT = null;
+let runT = null, runOn = false;
+const runActive = () => runOn;
 function watchGameRun(romId) {
   clearInterval(runT);
+  gameFocus.gameApp = null; gameFocus.endedAt = 0;
   const where = installedMap[romId];
   if (!where || where === MARKED) return;
   const r = romIndexMain().get(romId) || {};
@@ -178,14 +180,28 @@ function watchGameRun(romId) {
   broadcast('game-run', { state: 'starting', romId });
   runT = setInterval(() => {
     let on = false; try { on = running(); } catch {}
-    if (on && !seen) { seen = true; log('game running', romId); }
+    if (on && !seen) { seen = true; runOn = true; log('game running', romId); }
     if (!on && !seen && Date.now() - started > 180000) { clearInterval(runT); return; } // never seen: give up after 3 min
     if (!on && seen) {
-      clearInterval(runT); log('game ended', romId);
+      clearInterval(runT); runOn = false; gameFocus.endedAt = Date.now(); log('game ended', romId);
       broadcast('game-run', { state: 'ended', romId });
       bringBack();
+      if (isGamescope()) setTimeout(steamFront, 1500);
     }
   }, 2000);
+}
+// Game Mode, 1.5 s after our game ended (0.9.34): when gamescope still doesn't name Cartridge as the app in front,
+// Steam is asked to go back to its running app the way its own Resume does (only with Steam's interface reachable,
+// as for live changes). Steam hands the controller to the app it has in front, so this is what gives the pad back.
+function steamFront() {
+  require('child_process').execFile('xprop', ['-root', 'GAMESCOPE_FOCUSED_APP'], { timeout: 1500 }, async (err, out) => {
+    const app = (/=\s*(\d+)/.exec(String(out || '')) || [])[1] || '?';
+    const gid = process.env.SteamGameId || process.env.STEAM_GAME_ID || '';
+    let mine = ''; try { mine = String(BigInt(gid) > 0xffffffffn ? BigInt(gid) >> 32n : BigInt(gid)); } catch {}
+    if (!mine || app === mine) { log('after the game, gamescope focus', app, app === mine ? 'is cartridge' : ''); return; }
+    try { log('after the game, gamescope focus', app, 'not cartridge (' + mine + '): asking steam', JSON.stringify(await steamMgr.frontRunning(Number(mine)))); }
+    catch (e) { log('after the game, steam not asked:', e.message); }
+  });
 }
 // back in front after a game: in Game Mode gamescope decides (refocus asks until the page has focus); on the
 // desktop a window manager may refuse a plain focus, so the window is lifted above the rest for a moment
@@ -206,7 +222,14 @@ function watchGamescopeFocus() {
       busy = false;
       const m = /=\s*(\d+)/.exec(String(out || ''));
       if (err || !m) return;
-      const away = BigInt(m[1]) !== mine && m[1] !== '0';
+      let away = BigInt(m[1]) !== mine && m[1] !== '0';
+      // 0.9.34 (owner: after a game started from Cartridge closes, the pad is seen but does nothing): while our game
+      // runs, the app gamescope focuses is noted; once it has ended, gamescope can keep naming that closed game as
+      // focused while Cartridge is what's on screen, which kept the pad switched off here. Its id no longer counts as away.
+      if (away && m[1] !== '769' && runActive()) gameFocus.gameApp = m[1];
+      if (gameFocus.endedAt && m[1] !== gameFocus.gameApp) { gameFocus.endedAt = 0; gameFocus.gameApp = null; } // focus moved on: back to normal
+      if (away && gameFocus.endedAt && m[1] === gameFocus.gameApp) away = false;
+      if (m[1] !== gameFocus.lastApp) { log('gamescope focus', m[1], away ? '(away)' : '(cartridge)'); gameFocus.lastApp = m[1]; }
       if (away !== last) {
         last = away; broadcast('background', { away });
         // back in front after a game (0.9.24, owner: controls dead after closing a game): the window came back
@@ -229,6 +252,7 @@ function watchGamescopeFocus() {
       seen = now;
       if (fresh && first) { first = false; return; }
       first = false;
+      if (fresh) { gameFocus.endedAt = 0; gameFocus.gameApp = null; } // a new game (even the same one again) is away as usual
       if (fresh && win && !win.isDestroyed() && win.isVisible()) { log('steam started another game, stepping aside'); hiddenFor = Date.now(); win.hide(); }
     }, () => { scanning = false; });
   }, 600);
@@ -236,7 +260,7 @@ function watchGamescopeFocus() {
 // Game Mode, another app in front or just closed (0.9.23, owner: closing a game started from Steam closed
 // Cartridge too). Steam ends a game by signalling its launch session, and on the way back Cartridge got
 // one as well. A signal in that moment is logged and ignored; a second one within 10 s still quits.
-const gameFocus = { watched: false, away: false, otherAt: 0, ignoredAt: 0 };
+const gameFocus = { watched: false, away: false, otherAt: 0, ignoredAt: 0, gameApp: null, endedAt: 0, lastApp: null };
 function ignoreSignal(sig) {
   if (!gameFocus.watched || sig === 'SIGINT') return false;
   const now = Date.now();
@@ -2547,6 +2571,10 @@ function createWindow() {
       } catch (e) { fail(e.message); }
     }, 3000));
   }
+  // console collections kept whole by themselves (0.9.34): 30 s after start, and again every 10 minutes, games of a
+  // console that are in Steam but not in its collection are put in, only with Steam's interface reachable (no restart)
+  const colsAuto = () => { if (!config.steam?.consoleCollections) return; steamMgr.fillCollections({ auto: true }).then((r) => { if (r.count) broadcast('toast', { text: `${r.count} game${r.count === 1 ? '' : 's'} added to ${r.count === 1 ? 'its' : 'their'} console collection in Steam`, kind: 'ok', icon: 'mdiSteam' }); }).catch((e) => log('console collections by itself:', e.message)); };
+  if (!globalThis.__colsAuto) { globalThis.__colsAuto = true; setTimeout(colsAuto, 30000); setInterval(colsAuto, 600000); }
   win.webContents.once('did-finish-load', () => log('ui loaded', Date.now() - startedAt + 'ms', 'window=' + win.getContentSize().join('x'), 'zoom=' + currentZoom()));
   win.webContents.on('did-finish-load', applyZoom);
   win.on('resize', () => { clearTimeout(zoomT); zoomT = setTimeout(applyZoom, 150); });
@@ -3088,6 +3116,9 @@ const handlers09 = {
   'library:verifyCancel': () => { verifyRun?.ac.abort(); return true; },
   'steam:health': () => steamMgr.health(),
   'steam:consoleCollections': () => steamMgr.syncConsoleCollections(),
+  // one console's collection with every game of it in Steam (0.9.34), and adding the ones not in it
+  'steam:consoleCollection': ({ key }) => steamMgr.consoleCollection(String(key)),
+  'steam:fillCollections': ({ keys, appids } = {}) => steamMgr.fillCollections({ keys: keys || null, appids: appids || null }),
   'steam:colReview': () => steamMgr.collectionsReview(),
   'steam:colApply': (a) => steamMgr.collectionsApply(a),
   'steam:healthFix': ({ appids }) => steamMgr.healthFix(appids || []),
@@ -4335,6 +4366,8 @@ const handlers = {
   'steam:report': () => steamMgr.startupReport(),
   'steam:last': () => steamMgr.lastStatus(),
   'steam:forRom': ({ romId }) => steamMgr.forRom(Number(romId)),
+  // the UI's own lines in the log (0.9.34: what the pad did after a game, for device reports)
+  'app:log': ({ text }) => { log('[ui]', String(text || '').slice(0, 600)); return true; },
   'steam:play': async ({ romId }) => { const r = await steamMgr.play(Number(romId)); watchGameRun(Number(romId)); return r; },
   'steam:addToCollections': ({ romId, names }) => steamMgr.addRomToCollections(Number(romId), names || []),
   // HowLongToBeat times when RomM has none: name plus release year, cached in hltb.json
