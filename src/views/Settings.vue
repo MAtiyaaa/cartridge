@@ -273,7 +273,7 @@
             <div class="row"><span class="lbl">Placement</span><div class="seg"><button v-for="m in BAR_POS" :key="m.v" data-focus :class="{ on: (ui.barPos || 'bottom') === m.v }" @click="saveConfig({ ui: { barPos: m.v } })">{{ m.l }}</button></div></div>
             <div class="row"><span class="lbl">Tabs</span><div class="seg"><button v-for="m in BAR_ALIGN" :key="m.v" data-focus :class="{ on: (ui.barAlign || 'center') === m.v }" @click="saveConfig({ ui: { barAlign: m.v } })">{{ m.l }}</button></div></div>
             <div class="row"><span class="lbl">Style</span><div class="seg"><button v-for="m in BAR_STYLE" :key="m.v" data-focus :class="{ on: (ui.barStyle || 'pill') === m.v }" @click="saveConfig({ ui: { barStyle: m.v } })">{{ m.l }}</button></div></div>
-            <div v-if="(ui.barStyle || 'pill') === 'pill'" class="row"><span class="lbl">Colour</span><div class="seg"><button v-for="m in DOCK_COLOR" :key="m.v" data-focus :class="{ on: (ui.dockColor || 'black') === m.v }" @click="saveConfig({ ui: { dockColor: m.v } })">{{ m.l }}</button></div></div>
+            <div v-if="(ui.barStyle || 'pill') === 'pill'" class="row"><span class="lbl">Colour</span><div class="seg"><button v-for="m in DOCK_COLOR" :key="m.v" data-focus :class="{ on: dockOf(ui) === m.v }" @click="saveConfig({ ui: { dockColor: m.v } })">{{ m.l }}</button></div></div>
             <Toggle :model-value="ui.hints === true" label="Button hints" desc="A strip along the bottom with what each button does on this page (A Open, Y Search…)" @update:model-value="(v) => saveConfig({ ui: { hints: v } })" />
             <div class="subh"><Icon name="mdiViewGridOutline" :size="20" />Games &amp; Cards</div>
             <div class="row"><span class="lbl">Box art size</span><div class="seg"><button v-for="(v, k) in CARD_SIZES" :key="k" data-focus :class="{ on: (ui.gridSize || 'md') === k }" @click="saveConfig({ ui: { gridSize: k } })">{{ v.label }}</button></div></div>
@@ -358,8 +358,7 @@
 
             <button class="lrow adv-tg" data-focus @click="lookAdv = !lookAdv"><Icon name="mdiTuneVariant" :size="22" /><div class="l-mid"><b>Advanced</b></div><Icon :name="lookAdv ? 'mdiChevronUp' : 'mdiChevronDown'" :size="22" /></button>
             <template v-if="lookAdv">
-            <div class="row"><span class="lbl">Rendering</span><div class="seg"><button v-for="g in gfx" :key="g.v" data-focus :class="{ on: (store.config.graphics || 'auto') === g.v }" @click="setGraphics(g.v)">{{ g.l }}</button></div></div>
-            <p class="muted small" style="margin-top: -6px">Auto uses the GPU from the app menu and on big screens like TVs. On handheld-size screens launched from Steam or Game Mode it uses software rendering, which is proven there. GPU Always uses the GPU there too, which is much smoother on handhelds with a strong GPU: after the restart Cartridge asks if it looks right, and goes back to Auto by itself if you can't answer. If the GPU ever fails, Cartridge switches to Compatible by itself. Compatible never uses the GPU.</p>
+            <!-- 0.9.41 (owner): no Rendering choice any more, Cartridge always uses the GPU -->
             <div class="row"><button class="btn" data-focus @click="call('app:fullscreen')"><Icon name="mdiFullscreen" />Toggle fullscreen</button><button class="btn" data-focus @click="clearCache"><Icon name="mdiImageRemove" />Clear image cache</button></div>
             </template>
             </template>
@@ -534,7 +533,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { store, call, go, tab, saveConfig, pickFolder, choose, confirm, toast, openModal, bytes, ago, resync, scanServer, allRoms, romById, cover, resetLogos, askText, activeTabs, TAB_DEFS, consoleName, openTour } from '../store.js';
 import { useView } from '../useView.js';
 import { input, focusFirst, setPointerPref, setRumble, rumble, stopScroll } from '../nav.js';
-import { THEMES, SURFACES, ELEMENTS, elementsOf, TEXTS, FONTS, CARD_SHAPES, CARD_SIZES, DENSITIES, themeFrom, themeOf, paletteOf } from '../themes.js';
+import { THEMES, SURFACES, ELEMENTS, elementsOf, dockOf, TEXTS, FONTS, CARD_SHAPES, CARD_SIZES, DENSITIES, themeFrom, themeOf, paletteOf } from '../themes.js';
 import { BACKGROUNDS, RENDERERS, LEGACY_ART, bgPreview } from '../bgRenderers.js';
 import { setSoundEnabled, setSoundStyle, previewSound, SOUND_PACKS } from '../sfx.js';
 import Icon from '../components/Icon.vue';
@@ -782,7 +781,6 @@ async function resetLook() {
   if (!(await confirm('Reset Look & Feel?', 'Colour, background, fonts, cards, motion and sounds go back to the defaults.', 'Reset'))) return;
   await saveConfig({ ui: { colors: { highlight: '', buttons: '', bars: '', background: '' }, theme: 'cartridge', customColor: '', surface: 'solid', elements: 'plain', text: 'normal', font: 'cartridge', cardShape: 'rounded', density: 'normal', cardTitles: true, gridSize: 'md', bgStyle: 'solid', motion: 'normal', effects: 'auto', soundPack: 'soft', volume: 'medium', rumble: 'none' } });
 }
-const gfx = [{ v: 'auto', l: 'Auto' }, { v: 'gpu', l: 'GPU Always' }, { v: 'software', l: 'Compatible' }];
 const pointers = [{ v: 'auto', l: 'Auto' }, { v: 'touch', l: 'Touch' }, { v: 'mouse', l: 'Mouse' }];
 const homeAchOpts = [{ v: 'all', l: 'All' }, { v: 'ra', l: 'RetroAchievements' }, { v: 'trophies', l: 'Trophies' }, { v: 'off', l: 'Off' }];
 const homeAch = computed(() => ui.value.homeAch || (ui.value.raOnHome === false ? 'trophies' : 'all'));
@@ -1115,11 +1113,6 @@ async function rollBack() {
 }
 async function checkUpdates() { try { await call('update:check'); } catch (e) { toast(e.message, 'info', 4000); } }
 async function setPointer(v) { await saveConfig({ ui: { pointer: v } }); setPointerPref(v === 'auto' && store.info?.gamescope ? 'touch' : v); }
-async function setGraphics(v) {
-  if ((store.config.graphics || 'auto') === v) return;
-  await saveConfig({ graphics: v, gpuKept: false }); // GPU Always starts as a trial that has to be confirmed
-  if (await confirm('Restart Cartridge?', 'The rendering change takes effect after a restart.', 'Restart now')) call('app:relaunch');
-}
 // is Cartridge itself in Steam (null until known)
 const selfAdded = ref(null);
 // the Cartridge cards wait for the rest of the Steam page, so it all appears at once (0.9.32)

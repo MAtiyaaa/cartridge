@@ -146,7 +146,7 @@ onMounted(async () => { await load(); focusFirst(el.value); });
 .aa-latest { margin-bottom: var(--s-4); }
 .aa-unlock { flex: none; width: 360px; display: flex; gap: 14px; padding: 14px; border-radius: var(--r-md); text-align: left; transition: transform 0.14s ease-out; }
 .aa-unlock:focus { transform: scale(1.03); }
-.aa-uicon { width: 64px; height: 64px; border-radius: var(--r-md); flex: none; display: grid; place-items: center; background: rgba(0, 0, 0, 0.25); box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4); overflow: hidden; }
+.aa-uicon { width: 64px; height: 64px; border-radius: var(--r-md); flex: none; display: grid; place-items: center; background: var(--tile-bg, rgba(0, 0, 0, 0.25)); box-shadow: var(--tile-shadow, 0 6px 16px rgba(0, 0, 0, 0.4)); overflow: hidden; }
 .aa-uicon img { width: 100%; height: 100%; object-fit: cover; }
 .aa-ubody { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
 .aa-utitle { font-family: var(--display); font-weight: 600; font-size: var(--t-md); display: flex; gap: 6px; align-items: center;  overflow-wrap: anywhere; }

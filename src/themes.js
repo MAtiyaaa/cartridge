@@ -50,8 +50,8 @@ export const THEMES = {
   graphite: themeFrom('#9aa3b2', 'Graphite'),
   // 0.9.38 (owner): OLED, pure black behind everything with Cartridge's neutral panels; Light, an off-white page
   // (never paper white, it glares on a TV at night) with dark text, a dark highlight and backgrounds drawn in dark ink
-  oled: { label: 'OLED', grad: ['#121214', '#000000', '#000000', '#000000', '#000000', '#000000'], accent: ['#ffffff', '#ffffff', '#d4d4d8'], bgAccent: ['#ef4b23', '#ff7a55'], warm: '#ffb35c', neutral: true, black: true },
-  light: { label: 'Light', grad: ['#f3f2ee', '#e6e5e1', '#dddcd7', '#d3d2cc', '#c9c8c2', '#e9e8e4'], accent: ['#1d1e22', '#3a3c42', '#000000'], bgAccent: ['#d8401c', '#ef6a45'], warm: '#b8651a', neutral: true, light: true },
+  oled: { label: 'OLED', grad: ['#121214', '#000000', '#000000', '#000000', '#000000', '#000000'], accent: ['#ffffff', '#ffffff', '#d4d4d8'], bgAccent: ['#ef4b23', '#ff7a55'], warm: '#ffb35c', neutral: true, black: true, oled: true },
+  light: { label: 'Light', grad: ['#fbfbfc', '#f0f0f3', '#e9e9ed', '#dedee4', '#d4d4db', '#f2f2f5'], accent: ['#1c1c1e', '#3a3a3f', '#000000'], bgAccent: ['#d8401c', '#ef6a45'], warm: '#b8651a', neutral: true, light: true },
 };
 // Swatches for the custom colour picker: 12 hues x 3 shades, plus greys
 export const CUSTOM_SWATCHES = [
@@ -60,22 +60,23 @@ export const CUSTOM_SWATCHES = [
 ];
 
 // Background (ui.surface, 0.9.37 renamed from Panels): the page behind everything. Glass is a darker page that lets
-// the animated background through; OLED Black is pure black.
+// the animated background through. OLED Black moved to the OLED colour (0.9.41, owner).
 export const SURFACES = {
   solid: { label: 'Solid', glassA: 1, bg: '#0c0d10' },
   glass: { label: 'Glass', glassA: 0.62, bg: '#06070b' },
-  oled: { label: 'OLED Black', glassA: 1, bg: '#000000', black: true },
 };
 // Elements (ui.elements, 0.9.37, owner: panels set apart from the background): cards, panels, buttons and the
 // highlight. Unset follows the Background picked before 0.9.37 (Panels did both).
-// 0.9.38 (owner: "OLED Black in Elements doesn't make sense, glass looks grey"): Plain and Glass only (OLED Black
-// stays a Background). Plain is the chosen colour, solid, with text that reads on it; Glass is that colour as
-// frosted glass (apple-design skill, materials): a light fill of it, a bright top edge, depth, the page blurred
-// through it. White picked gives white glass with dark text, never grey.
+// 0.9.42 (owner: build Glass with the liquid-glass skill and only that): Liquid Glass is a material for the
+// navigation and control layer (the Dock, buttons, switches, sheets, toasts, search) floating over the content,
+// never for the content itself, so cards, rows and panels stay solid in Glass too (glassA 1). The material is in
+// styles.css (body.elements-glass, the --lg-* tokens set below).
 export const ELEMENTS = {
   plain: { label: 'Plain', glassA: 1 },
-  glass: { label: 'Glass', glassA: 0.62, glass: true },
+  glass: { label: 'Glass', glassA: 1, glass: true },
 };
+// the Dock's colour when none was picked: Glass with Glass elements, white with Light, else black
+export const dockOf = (ui) => ui?.dockColor || (elementsOf(ui) === 'glass' ? 'glass' : ui?.theme === 'light' ? 'white' : 'black');
 export const elementsOf = (ui) => (ELEMENTS[ui?.elements] ? ui.elements : ui?.surface === 'glass' && !ui?.elements ? 'glass' : 'plain');
 export const TEXTS = {
   // three clearly different sets (0.9.3): High contrast lifts the secondary text right up, Soft is
@@ -85,8 +86,11 @@ export const TEXTS = {
   soft: { label: 'Soft', text: '#cfccc6', muted: '#8a8781', dim: '#5a5853' },
 };
 // the same three on the Light theme (0.9.38): dark ink on the off-white page
-const LIGHT_TEXTS = { normal: { text: '#1d1e22', muted: '#55575d', dim: '#83858b' }, bright: { text: '#000000', muted: '#34363b', dim: '#5c5e64' }, soft: { text: '#3a3934', muted: '#6e6c66', dim: '#93918b' } };
-const LIGHT_S = ['#e6e5e1', '#dcdbd6', '#d2d1cb', '#c7c6c0']; // page, then panels a step darker each (raised = further from the page)
+// 0.9.41 rebuilt (owner: "light looks off, cards look off"): the way light interfaces are layered. A soft grey page
+// (never paper white), cards and panels nearly white and raised with a soft shadow, controls inside them a light grey,
+// dark text in Apple's light greys, the highlight near-black with white text
+const LIGHT_TEXTS = { normal: { text: '#1c1c1e', muted: '#6b6b73', dim: '#9a9aa2' }, bright: { text: '#000000', muted: '#3c3c43', dim: '#6b6b73' }, soft: { text: '#3a3a3c', muted: '#7c7c84', dim: '#a5a5ad' } };
+const LIGHT_S = ['#ebebef', '#fafafb', '#e3e3e8', '#d6d6dc']; // page, cards (raised: lighter), controls, pressed/borders
 // Bundled open-source fonts (SIL Open Font License), display + body
 export const FONTS = {
   cartridge: { label: 'Archivo + Inter', display: "'Archivo Variable', 'Inter Variable', Roboto, sans-serif", body: "'Inter Variable', Roboto, 'Noto Sans', system-ui, sans-serif" },
@@ -126,7 +130,8 @@ export function applyTheme(uiOrName) {
   if (ok(col.bars)) { const [b, bl] = accentOf(col.bars); r.setProperty('--bar', `linear-gradient(90deg, ${b}, ${bl})`); }
   else r.removeProperty('--bar');
   document.body.classList.toggle('custom-bars', ok(col.bars));
-  const surf = SURFACES[ui.surface] || SURFACES.solid;
+  // Light has its own page and panels: Background's Glass doesn't apply to it (0.9.41: Light with Glass went black)
+  const surf = (themeOf(ui).light ? null : SURFACES[ui.surface]) || SURFACES.solid;
   const el = ELEMENTS[elementsOf(ui)] || ELEMENTS.plain;
   const lightT = !!t.light, black = !!(surf.black || t.black);
   const tx = lightT ? LIGHT_TEXTS[ui.text] || LIGHT_TEXTS.normal : TEXTS[ui.text] || TEXTS.normal;
@@ -142,22 +147,18 @@ export function applyTheme(uiOrName) {
   r.setProperty('--primary-l-rgb', rgb(al));
   const light = lum(a) > 0.75;
   r.setProperty('--primary-t', lightT ? a : light ? '#ffffff' : hsl(ah, 0.9, 0.86));
-  r.setProperty('--on-primary', lightT && !light ? '#f4f3ef' : light ? '#0c0d10' : hsl(ah, 0.5, 0.1));
+  r.setProperty('--on-primary', lightT && !light ? '#fafafb' : light ? '#0c0d10' : hsl(ah, 0.5, 0.1));
   r.setProperty('--knob', light ? '#0c0d10' : '#ffffff');
   r.setProperty('--peach', t.warm);
   // 0.9: one flat accent, no gradients. Focus (where you are) is white, or the Highlights colour
   // when one is picked, with text that reads on it (0.9.2)
-  const fo = ok(col.highlight) ? a : lightT ? '#1d1e22' : '#ffffff', foLight = lum(fo) > 0.6;
+  const fo = ok(col.highlight) ? a : lightT ? '#1c1c1e' : '#ffffff', foLight = lum(fo) > 0.6;
   r.setProperty('--grad', `linear-gradient(${a}, ${a})`);
-  // Glass elements (0.9.37, owner: the white highlight glass too, with contrasting text): a frosted fill of the
-  // highlight colour, light text on it; the ring stays solid so where you are is never in doubt
-  // 0.9.38: the glass is mostly the colour itself (0.2 of white over a dark page read as grey), so text is
-  // chosen by the colour's lightness, the same as Plain
-  const glassFocus = el.glass;
-  r.setProperty('--focus', glassFocus ? `rgba(${rgb(fo)}, ${foLight ? 0.74 : 0.66})` : fo);
+  // focus is solid in both (0.9.42): in Glass a focused control becomes prominent glass of this colour (--lg-hi)
+  r.setProperty('--focus', fo);
   r.setProperty('--focus-solid', fo);
-  r.setProperty('--on-focus', foLight ? '#0c0d10' : lightT ? '#f4f3ef' : '#ffffff');
-  r.setProperty('--on-focus-dim', foLight ? 'rgba(12, 13, 16, 0.7)' : lightT ? 'rgba(244, 243, 239, 0.75)' : 'rgba(255, 255, 255, 0.75)');
+  r.setProperty('--on-focus', foLight ? '#0c0d10' : lightT ? '#fafafb' : '#ffffff');
+  r.setProperty('--on-focus-dim', foLight ? 'rgba(12, 13, 16, 0.7)' : lightT ? 'rgba(250, 250, 251, 0.72)' : 'rgba(255, 255, 255, 0.75)');
   r.setProperty('--ring', `0 0 0 3px var(--s0), 0 0 0 6px ${fo}`);
   r.setProperty('--ring-soft', `0 0 0 2px ${fo}`);
   // surfaces: neutral greys, tinted a little towards the theme for the coloured themes
@@ -166,16 +167,23 @@ export function applyTheme(uiOrName) {
   const pageL = black ? 0 : 0.05, elL = el.black ? [0.055, 0.09, 0.14] : [0.085, 0.12, 0.165];
   const S = lightT ? [...LIGHT_S] : [pageL, ...elL].map((l) => hsl(sh[0], ss, l));
   if (surf.bg && !black && !lightT && surf.glassA < 1) S[0] = surf.bg;
+  // OLED (0.9.41, owner: "no difference from Cartridge"): black panels too, set apart by a fine edge (body.theme-oled)
+  if (t.oled) { S[1] = '#000000'; S[2] = '#101012'; S[3] = '#1c1c1f'; }
   // chosen but not where you are: a lighter grey fill (0.9.2, replaces accent stripes)
-  r.setProperty('--sel', lightT ? '#bab9b3' : hsl(sh[0], ss, el.black ? 0.22 : 0.26));
+  r.setProperty('--sel', lightT ? '#d1d1d8' : t.oled ? '#232327' : hsl(sh[0], ss, el.black ? 0.22 : 0.26));
   S.forEach((c, i) => r.setProperty('--s' + i, el.glassA < 1 && i ? `rgba(${rgb(c)}, ${el.glassA})` : c));
   r.setProperty('--xmb', `radial-gradient(120% 90% at 85% 0%, ${g[0]} 0%, transparent 55%), radial-gradient(90% 80% at 0% 100%, ${g[5]} 0%, transparent 60%), linear-gradient(160deg, ${g[1]} 0%, ${g[2]} 38%, ${g[3]} 70%, ${g[4]} 100%)`);
   r.setProperty('--xmb-base', black ? '#000' : g[4]);
   // Cartridge's own theme: a flat page, so art and panels meet it without a seam
   if (t.neutral) { r.setProperty('--xmb', black ? '#000' : S[0]); r.setProperty('--xmb-base', black ? '#000' : S[0]); }
   for (let i = 0; i < 6; i++) r.setProperty('--g' + i, g[i]);
-  r.setProperty('--tint-rgb', black ? '0, 0, 0' : lightT ? '230, 229, 225' : tint);
-  r.setProperty('--glass-bg', el.glassA < 1 ? `rgba(${el.black || black ? '0, 0, 0' : tint}, ${el.glassA})` : S[1]);
+  r.setProperty('--tint-rgb', black ? '0, 0, 0' : lightT ? '235, 235, 239' : tint);
+  r.setProperty('--glass-bg', S[1]);
+  // Liquid Glass tokens (0.9.42): the material's tint (the theme's hue, white glass on Light, black on OLED) and the
+  // prominent colour (the highlight) for focused controls and primary buttons
+  r.setProperty('--lg-tint', lightT ? '255, 255, 255' : black || t.oled ? '0, 0, 0' : tint);
+  r.setProperty('--lg-hi', rgb(fo));
+  r.setProperty('--lg-on-hi', foLight ? '#0c0d10' : '#ffffff');
   r.setProperty('--bg', black ? '#000' : S[0]);
   r.setProperty('--text', tx.text);
   r.setProperty('--muted', tx.muted);
@@ -196,6 +204,7 @@ export function applyTheme(uiOrName) {
   b.toggle('elements-oled', false);
   b.toggle('focus-light', foLight); // glass sheen strength
   b.toggle('theme-light', lightT);
+  b.toggle('theme-oled', !!t.oled);
   document.documentElement.style.colorScheme = lightT ? 'light' : 'dark'; // scrollbars and form controls
   b.toggle('no-titles', ui.cardTitles === false);
 }

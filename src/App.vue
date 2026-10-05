@@ -62,7 +62,7 @@
   <QuickMenu v-if="store.quickMenu" />
   <!-- 0.9.37 (apple-design: interruptible, anchored to where it came from): every pop-up opens from the button that
        asked for it and closes back towards it; one slot, so a pop-up that hands over to another cross-fades -->
-  <Transition name="modal" @enter="modalFrom" @before-leave="modalFrom">
+  <Transition name="modal" @enter="modalFrom" @after-enter="modalIn" @before-leave="modalFrom">
     <Keyboard v-if="store.modal?.type === 'keyboard' && builtinKb()" v-bind="store.modal.props" />
     <TextPrompt v-else-if="store.modal?.type === 'keyboard'" v-bind="store.modal.props" />
     <FolderPicker v-else-if="store.modal?.type === 'folder'" v-bind="store.modal.props" />
@@ -113,7 +113,7 @@ import { computed, onMounted, onBeforeUnmount, ref, watch, nextTick, defineAsync
 import { store, loadConfig, loadLibrary, loadArt, back, tab, go, call, toast, choose, saveConfig, builtinKb, askText, GRADE, activeTabs, TAB_DEFS, romById, isFavourite, download } from './store.js';
 import { pushLayer, focusFirst, input, gameEnded } from './nav.js';
 import { setSoundEnabled, setSoundStyle, sfx } from './sfx.js';
-import { applyTheme, CARD_SIZES } from './themes.js';
+import { applyTheme, CARD_SIZES, dockOf } from './themes.js';
 import { setPointerPref, setRumble, setBackground } from './nav.js';
 import { detectPad } from './pad.js';
 import Icon from './components/Icon.vue';
@@ -220,10 +220,10 @@ function placeInk() {
 watch(() => store.config?.ui?.touchScroll, (v) => document.documentElement.classList.toggle('touch-native', v === 'browser'), { immediate: true });
 // 0.9.28 (owner): the Dock (the bar of tabs) sits at the bottom, centred, as a pill unless chosen otherwise;
 // the strip of button hints is hidden unless turned on; the Dock's colour (pill style)
-watch(() => [store.config?.ui?.barPos || 'bottom', store.config?.ui?.barAlign || 'center', store.config?.ui?.barStyle || 'pill', store.config?.ui?.hints === true || !!store.forceHints, store.config?.ui?.dockColor || 'black'], ([pos, align, style, hints, dock]) => {
+watch(() => [store.config?.ui?.barPos || 'bottom', store.config?.ui?.barAlign || 'center', store.config?.ui?.barStyle || 'pill', store.config?.ui?.hints === true || !!store.forceHints, dockOf(store.config?.ui)], ([pos, align, style, hints, dock]) => { // unpicked: Glass with Glass elements, white with Light, else black (themes.dockOf)
   const b = document.body.classList;
   b.toggle('bar-top', pos === 'top'); b.toggle('hints-on', hints);
-  for (const c of ['white', 'black', 'accent']) b.toggle('dock-' + c, dock === c);
+  for (const c of ['white', 'black', 'accent', 'glass']) b.toggle('dock-' + c, dock === c);
   b.toggle('bar-bottom', pos === 'bottom'); b.toggle('bar-left', pos === 'left');
   b.toggle('bar-center', align === 'center'); b.toggle('bar-pill', style === 'pill'); b.toggle('bar-circle', style === 'circle');
   nextTick(placeInkSoon);
@@ -483,6 +483,10 @@ onMounted(() => document.addEventListener('contextmenu', cardMenu));
 // where a pop-up came from (0.9.37): the focused or pressed thing when it opened, read before it takes focus
 let modalTrigger = null;
 watch(() => store.modal, (m, was) => { if (m && !was) { const r = document.activeElement?.getBoundingClientRect?.(); modalTrigger = r && r.width ? { x: r.left + r.width / 2, y: r.top + r.height / 2 } : null; } }, { flush: 'pre' });
+// 0.9.41 (owner: the More sheet popped out twice): a dialog's own entry animation (pop, sheet-up) is held off only while
+// the pop-up transition runs; when its classes came off, that animation started and the sheet arrived a second time.
+// Marked once in, it never plays
+function modalIn(el) { el.classList?.add('modal-in'); }
 function modalFrom(el) {
   const d = el.querySelector?.('.dialog, .sheet, .menu, .m-sheet') || el.firstElementChild;
   if (!d || !modalTrigger) return;

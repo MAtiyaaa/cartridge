@@ -6,6 +6,18 @@ The branch for 0.9.3 work is `claude/relaxed-fermat-30pigp`. Pull it before star
 
 ---
 
+## 5 Oct 2026 · 0.9.42 Glass (built; carries 0.9.41)
+- 0.9.41 was never published: the Test build sat queued 15 min without a runner and GitHub cancelled it, twice (no step ran; likely Actions minutes or a spending limit on the account). PR #59 stays open and 0.9.42 goes in it, with 0.9.41's notes inside 0.9.42's release notes.
+- Owner: "build the next update based on everything so far" and asked what I recommend for the Game Shelf. Recommended B (Display case): the only one that is a shelf, it scales to every tile size by adding cases, and A's 3D strip and reflection read badly on small tiles while C repeats the cover rows and Spotlight. Built B with A's turn-out (rotateY on a spring).
+- Glass mode with the liquid-glass skill (owner: only that skill for glass): glass only on the navigation and control layer, content solid (`ELEMENTS.glass.glassA` 1), one material (`--lg-*`), containers don't blur again, prominent glass for focused and primary, pressed glow, reduced transparency/contrast/light effects. Dock glass by default with Glass elements (`themes.dockOf`). Edge refraction (SVG displacement in backdrop-filter) tried and left out: it shifted the whole area, not the rim.
+- Checked in Chromium: the shelf at 5x2, 3x2 and 8x2 in Cartridge and Light; Glass on Start, Home, Settings, the game page and its More sheet in Cartridge and Light.
+
+## 5 Oct 2026 · 0.9.41 Light, Rebuilt (built; never published, see 0.9.42)
+- Owner's photos and list: emulator widget emptied after closing shadPS4 (`ser` dropped `emu`); page overview page 1 placeholder (snapshots only of shown pages), lag across rows (transform fight + full-board blur), up/down; Console at a Glance empty space and 1x2 clipping; tick instead of "On this device"; Light glitch with Glass/OLED Black background (OLED Black removed from Background, into the OLED colour); OLED looked like Cartridge; Light "looks off" (rebuilt: raised near-white cards); What's New see-through and no right-stick scroll; More sheet popping twice (keyframe after the transition, measured: sheet-up started at 274 ms); GPU always (owner: GPU Always cured the handheld's sluggishness).
+- Liquid glass skill installed in `.claude/skills/liquid-glass` for the next update, Glass mode only (owner).
+- Checked in Chromium: overview with 6 pages (all snapshotted, focus kept, up/down, 0 slow frames), Console at a Glance at 1x2/2x2/2x3/3x2 (no cover cut, stats never overlap), Light and OLED on every main page, right-stick scroll in What's New (0 to 855 px and back), the sheet's animation timeline before and after, focus-ring clipping audit (none real).
+- Still waiting on the owner: the Game Shelf redesign pick (A Cover Flow, B Display case, C Fan).
+
 ## 5 Oct 2026 · 0.9.40 Pictures That Load (built and released)
 - Owner's photo of the GIF picker: previews not loading, the focus outline clipped, "PS4" finding nothing. Previews now go through romimg:// (fetched in main with webFetch), Commons added beside Openverse, short names spelled out, ring drawn inside. Openverse and Commons are blocked from the container: tested with fakes only, the owner must try a search on the device.
 - Game Shelf: console logo in the label now. The owner asked for a full redesign; three mockups (Cover Flow, Display case, Fan) sent, waiting for a pick before building.
