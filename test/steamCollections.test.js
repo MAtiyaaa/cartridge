@@ -49,3 +49,13 @@ test('collection names are maker then console (0.9.27)', () => {
   assert.strictEqual(by.a.want, 'Sony PlayStation 3');
   assert.strictEqual(by.b.action, 'ok');
 });
+
+// 0.9.36 (owner's photo): Steam ROM Manager's collection names are console collections too
+test('Steam ROM Manager names ("<console> - <emulator>") are matched to their console', () => {
+  const plats = [['nds', 'Nintendo DS'], ['n3ds', 'Nintendo 3DS'], ['wiiu', 'Wii U'], ['ps2', 'PlayStation 2']].map(([key, n]) => ({ key, name: C.fullName(key, n) }));
+  assert.strictEqual(C.consoleOf('Nintendo DS - melonDS (Standalone)', plats), 'nds');
+  assert.strictEqual(C.consoleOf('Nintendo 3DS - Azahar (Standalone)', plats), 'n3ds');
+  assert.strictEqual(C.consoleOf('Nintendo Wii U - Cemu Native', plats), 'wiiu');
+  assert.strictEqual(C.consoleOf('Sony PlayStation 2 - PCSX2', plats), 'ps2');
+  assert.strictEqual(C.consoleOf('Favourites - Couch', plats), null);
+});
