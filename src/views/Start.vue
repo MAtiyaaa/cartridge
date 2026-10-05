@@ -217,8 +217,8 @@
               <div class="st-label"><span class="st-lname">{{ platformById(t.platformId)?.display_name }}</span><span class="st-count">{{ (sel[t.id] || 0) + 1 }} / {{ conList(t.platformId).length }}</span></div>
               <Transition name="st-xf"><div v-if="box(t).pw > box(t).ph * 1.4" :key="mediaOf(t).id" class="st-media-bg" :style="{ backgroundImage: bgUrl(artOf(mediaOf(t)) || cover(mediaOf(t), true)) }" /></Transition>
               <div class="st-media" :class="[isDisc(t) ? 'disc' : 'cart', { wide: box(t).pw > box(t).ph * 1.4 }]">
-                <div class="st-media-stage"><Transition name="st-media"><div :key="mediaOf(t).id" class="st-media-obj">
-                  <div v-if="isDisc(t)" class="st-disc" :style="{ backgroundImage: bgUrl(cover(mediaOf(t), true)) }"><i class="st-disc-sheen" /><i class="st-disc-hub" /></div>
+                <div class="st-media-stage" @click="ejectMedia($event, t)"><Transition name="st-media"><div :key="mediaOf(t).id" class="st-media-obj" :class="{ dev: store.installed[mediaOf(t).id] }">
+                  <div v-if="isDisc(t)" class="st-disc-boost"><div class="st-disc" :style="{ backgroundImage: bgUrl(cover(mediaOf(t), true)) }"><i class="st-disc-sheen" /><i class="st-disc-hub" /></div></div>
                   <div v-else class="st-cart" :style="cartTint(t)"><i class="st-cart-grip" /><div class="st-cart-label" :style="{ backgroundImage: bgUrl(cover(mediaOf(t), true)) }" /></div>
                 </div></Transition></div>
                 <div class="st-media-t"><b>{{ mediaOf(t).name }}</b><span>{{ store.play[mediaOf(t).id]?.min ? playtimeText(store.play[mediaOf(t).id].min) + ' played' : store.installed[mediaOf(t).id] ? 'On this device' : 'In your library' }}</span></div>
@@ -231,7 +231,7 @@
             <template v-if="conList(t.platformId).length">
               <div class="st-label"><span class="st-lname">{{ platformById(t.platformId)?.display_name }} Shelf</span><span class="st-count">{{ (sel[t.id] || 0) + 1 }} / {{ conList(t.platformId).length }}</span></div>
               <div class="st-shelf">
-                <div v-for="r in shelfOf(t)" :key="r.id" class="st-spine" :class="{ out: r.id === conList(t.platformId)[sel[t.id] || 0]?.id }">
+                <div v-for="r in shelfOf(t)" :key="r.id" class="st-spine" :class="{ out: r.id === conList(t.platformId)[sel[t.id] || 0]?.id }" @click="pickSpine($event, t, r)">
                   <img class="st-spine-art" :src="cover(r, true) || BLANK" alt="" loading="lazy" @error="noImg" />
                   <span class="st-spine-t">{{ r.name }}</span>
                 </div>
@@ -558,6 +558,16 @@ const clockShort = computed(() => now.time);
 const rowName = (t) => (t.type === 'cgames' ? `${platformById(t.platformId)?.display_name || 'Console'} Games` : TILES[t.type].name);
 const rowView = (t) => listOf(t).slice(sel[t.id] || 0);
 const achView = (t) => achOf(t).list.slice(sel[t.id] || 0);
+// 0.9.33 (owner: console widgets fun and interactive): tap the disc or cartridge and it goes out and the next
+// one comes in; tap a spine on the shelf and it slides out, tap it again to open the game. Arranging ignores both.
+function ejectMedia(e, t) { if (editing.value) return; e.stopPropagation(); stepTile(t, 1); }
+function pickSpine(e, t, r) {
+  if (editing.value) return;
+  e.stopPropagation();
+  const l = conList(t.platformId), i = l.findIndex((x) => x.id === r.id);
+  if (i === (sel[t.id] || 0)) return go('game', { romId: r.id });
+  sel[t.id] = i; stepped[t.id] = Date.now(); due[t.id] = Date.now() + ROLL_HOLD; sfx.move?.(); focusTile(t);
+}
 function stepTile(t, d) {
   const n = COVER_ROWS[t.type] ? listOf(t).length : t.type === 'trophies' ? achOf(t).list.length : t.type === 'media' || t.type === 'shelf' ? conList(t.platformId).length : 0;
   if (t.type === 'surprise') { deal(); sfx.move?.(); focusTile(t); return true; }
@@ -1597,5 +1607,17 @@ watch(() => store.play, loadWeek);
 .st-spine.out { width: min(36%, calc(86cqh * 0.7)); height: 96%; transform: translateY(-4px); }
 .st-spine.out .st-spine-art { opacity: 1; object-position: center; }
 .st-spine.out .st-spine-t { display: none; }
+.st-spine:not(.out):hover { transform: translateY(-8px); }
+.st-spine { cursor: pointer; }
+.st-media-stage { cursor: pointer; }
+/* focused: the disc spins faster (a second turn on top, so it never jumps) and lifts; the cartridge rises as if
+   pulled from the slot; a game on this device has a soft green glow */
+.st-media-obj { transition: transform 420ms var(--ease-out); }
+.st-tile:focus .st-media-obj, .st-tile:hover .st-media-obj { transform: translateY(-3%) scale(1.04); }
+.st-media-obj.dev .st-disc-boost, .st-media-obj.dev .st-cart { box-shadow: 0 14px 34px rgba(0, 0, 0, 0.55), 0 0 0 2px rgba(127, 224, 160, 0.35), 0 0 24px rgba(127, 224, 160, 0.18); }
+.st-disc-boost { height: 92%; aspect-ratio: 1; border-radius: 50%; display: grid; place-items: center; animation: st-spin 3s linear infinite; animation-play-state: paused; }
+.st-disc-boost > .st-disc { height: 100%; }
+.st-tile:focus .st-disc-boost { animation-play-state: running; }
+:global(body.light-fx .st-disc-boost), :global(body.motion-reduce .st-disc-boost) { animation: none; }
 .st-shelf-board { position: absolute; left: 0; right: 0; bottom: 4px; height: 10px; border-radius: 3px; background: linear-gradient(180deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.04)); box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5); }
 </style>
