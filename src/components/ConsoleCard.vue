@@ -45,11 +45,12 @@ const tileStyle = computed(() => {
 <style>
 /* fills whatever space it's given; the picture and wordmark scale with it */
 .systile.static { width: 100%; height: 100%; min-width: 0; min-height: 0; padding: clamp(10px, 9cqh, 18px) clamp(10px, 7cqw, 20px); container-type: size; }
-.systile.static .sys-top { height: auto; max-width: 70%; }
+.systile.static .sys-top { height: auto; max-width: 70%; flex: 0 1 auto; min-height: 0; max-height: 46cqh; } /* 0.9.32 (owner: no clipping): the name never reaches the maker below */
+.systile.static .sys-top .sys-logo { max-height: min(100%, 40cqh) !important; }
 .systile.static .sys-logo { max-height: min(30px, 26cqh); max-width: 100%; }
 .systile.static .nm { font-size: clamp(12px, 15cqh, 20px); max-width: 100%; }
 .systile.static .glyph { right: calc(7% - var(--gp)); top: calc(10% - var(--gp)); height: 80%; }
-.systile.static .cc-foot { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-width: 0; }
+.systile.static .cc-foot { flex: none; position: relative; z-index: 1; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-width: 0; }
 .systile.static .fam { font-size: clamp(10px, 9cqh, 12px); margin: 0; }
 .systile.static .ct { font-size: clamp(10px, 9cqh, 12px); padding: 3px 7px; }
 @container (max-width: 170px) { .systile.static .cc-games { display: none; } }
