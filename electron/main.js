@@ -3711,7 +3711,10 @@ const handlers = {
         item.setSavePath(file);
         const key = 'web:' + file;
         bgJob(key, { key, state: 'run', kind: 'Add-on Download', title: fname, romId: Number(ctx.romId), icon: 'mdiDownload', pct: null, text: '' });
-        broadcast('toast', { text: `Downloading ${fname}. It installs when it’s done (see Downloads).`, kind: 'info', icon: 'mdiDownload' });
+        broadcast('toast', { text: `Downloading ${fname}: it installs by itself when it’s done`, kind: 'info', icon: 'mdiDownload' });
+        // 0.9.37 (owner: "it didn't take me back, so I downloaded it four times"): the page closes at once and
+        // Cartridge opens Downloads, where the file shows downloading and then installing (the download carries on)
+        setTimeout(() => { try { if (addonBrowser && !addonBrowser.isDestroyed()) addonBrowser.close(); } catch {} broadcast('nav', { tab: 'downloads', closeModal: true }); }, 150);
         item.on('updated', () => { const t = item.getTotalBytes(); bgJob(key, { pct: t ? Math.floor((item.getReceivedBytes() / t) * 100) : null }); });
         item.once('done', async (_ev, state) => {
           if (state !== 'completed') { bgJob(key, { state: 'error', error: state === 'cancelled' ? 'Cancelled.' : 'The download stopped.' }); fs.rmSync(file, { force: true }); return; }

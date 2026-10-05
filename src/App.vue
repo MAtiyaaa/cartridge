@@ -312,6 +312,8 @@ onMounted(async () => {
     if (m.state === 'done' || m.state === 'error') setTimeout(() => { if (store.addonJobs[m.key]?.state === m.state) delete store.addonJobs[m.key]; }, 12000);
   });
   window.cart.on('toast', (t) => t?.text && toast(t.text, t.kind || 'info', 4500, t.icon));
+  // main asks for a page (0.9.37: a download caught on an add-on site shows its progress in Downloads)
+  window.cart.on('nav', (n) => { if (!n?.tab) return; if (n.closeModal && store.modal) { const r = store.modal.resolve; store.modal = null; try { r?.(null); } catch {} } tab(n.tab); });
   setTimeout(steamReport, 2500);
   // 0.9: a new install goes through emulator Setup once, after connecting to RomM (the welcome does it since 0.9.15)
   if (store.config.configured && !store.config.setupDone && !store.welcoming) go('emu-setup', { first: true });
