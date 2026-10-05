@@ -229,7 +229,7 @@
           <!-- Game Shelf (0.9.32): the console's games standing as boxes, spines out; the chosen one slides out to show its cover -->
           <template v-else-if="t.type === 'shelf'">
             <template v-if="conList(t.platformId).length">
-              <div class="st-label"><span class="st-lname">{{ platformById(t.platformId)?.display_name }} Shelf</span><span class="st-count">{{ (sel[t.id] || 0) + 1 }} / {{ conList(t.platformId).length }}</span></div>
+              <div class="st-label"><span class="st-lname st-shelf-mark"><ConsoleMark :slug="platformById(t.platformId)?.slug" :label="platformById(t.platformId)?.display_name" /></span><span class="st-count">{{ (sel[t.id] || 0) + 1 }} / {{ conList(t.platformId).length }}</span></div>
               <div class="st-shelf">
                 <div v-for="r in shelfOf(t)" :key="r.id" class="st-spine" :class="{ out: r.id === conList(t.platformId)[sel[t.id] || 0]?.id }" @click="pickSpine($event, t, r)">
                   <img class="st-spine-art" :src="cover(r, true) || BLANK" alt="" loading="lazy" @error="noImg" />
@@ -1602,6 +1602,7 @@ watch(() => store.play, loadWeek);
 .st-media-leave-to { opacity: 0; transform: translateX(-18%) scale(0.92); }
 :global(body.light-fx .st-disc), :global(body.motion-reduce .st-disc), :global(body.light-fx .st-cart), :global(body.motion-reduce .st-cart) { animation: none; }
 /* Game Shelf (0.9.32): spines on a board; the chosen game stands out with its cover */
+.st-shelf-mark :deep(.cmark) { height: 1.15em; } /* 0.9.39 (owner): the console's logo, not "PlayStation 4 Shelf" */
 .st-shelf { position: relative; flex: 1; min-height: 0; display: flex; align-items: flex-end; gap: 6px; padding: 10px 4px 14px; margin-top: 4px; overflow: hidden; }
 .st-spine { position: relative; flex: none; width: 44px; height: 86%; border-radius: 4px 4px 2px 2px; overflow: hidden; background: #22252c; box-shadow: inset -6px 0 10px rgba(0, 0, 0, 0.45), inset 1px 0 0 rgba(255, 255, 255, 0.12), 0 6px 14px rgba(0, 0, 0, 0.45); transition: width 420ms var(--ease-out), height 420ms var(--ease-out), transform 420ms var(--ease-out); }
 .st-spine-art { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: left center; opacity: 0.55; filter: saturate(1.1); transition: opacity 320ms ease; }

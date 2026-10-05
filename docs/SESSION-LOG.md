@@ -6,6 +6,10 @@ The branch for 0.9.3 work is `claude/relaxed-fermat-30pigp`. Pull it before star
 
 ---
 
+## 5 Oct 2026 · 0.9.40 Pictures That Load (built and released)
+- Owner's photo of the GIF picker: previews not loading, the focus outline clipped, "PS4" finding nothing. Previews now go through romimg:// (fetched in main with webFetch), Commons added beside Openverse, short names spelled out, ring drawn inside. Openverse and Commons are blocked from the container: tested with fakes only, the owner must try a search on the device.
+- Game Shelf: console logo in the label now. The owner asked for a full redesign; three mockups (Cover Flow, Display case, Fan) sent, waiting for a pick before building.
+
 ## 5 Oct 2026 · 0.9.39 Easy on the Eyes (built and released)
 - Owner's photos of the disc widget: the picture behind the disc only on wide tiles, and the spin (a 3 s turn on focus on top of the slow one) made them feel sick. One slow turn a minute, no focus spin, picture at every size. Checked in Chromium with three disc tiles (wide, big, small square).
 
