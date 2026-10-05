@@ -2007,6 +2007,7 @@ const cheatsMod = require('./cheats');
 const webFetch = require('./webFetch'); // outside services through Chromium's network stack (0.9.17: 403s)
 // add-ons Cartridge installed (0.9.17): { key: { dest, files, ... } }; Remove deletes only those files
 const ADDONS_FILE = path.join(USER_DATA, 'addons-installed.json');
+let addonBrowser = null;
 let addonRun = null, addonCache = null, emuGetRun = null;
 const emuGetQ = [];
 async function pumpEmuGet() {
@@ -3556,7 +3557,7 @@ const handlers = {
     return hit.folder;
   },
   // Add-on downloads (0.9.17): what can be installed for a game, from where, and what Cartridge put in
-  'addons:available': async ({ romId }) => {
+  'addons:available': async ({ romId, sort = 'downloads' }) => {
     const rom = romIndexMain().get(Number(romId));
     if (!rom) return { emus: [], packs: [], installed: [] };
     const emus = handlers['addons:forGame']({ romId });
@@ -3582,12 +3583,12 @@ const handlers = {
         else if (!serial) out.error = 'Cartridge couldn’t read this game’s serial, which the packs are matched by.';
         else out.packs = S.ps2For(await S.ps2Catalog({ cacheFile: path.join(USER_DATA, 'addons-ps2-catalog.json') }), serial).map((p) => ({ ...p, serial }));
         // 0.9.18: GameBanana's PS2 texture packs and mods too, after the catalog's (put in the same folder)
-        if (serial) { try { const g = await S.gbGame(rom.name); if (g) { out.gbGame = g; out.packs.push(...(await S.gbMods(g.id))); } } catch {} }
+        if (serial) { try { const g = await S.gbGame(rom.name); if (g) { out.gbGame = g; out.packs.push(...(await S.gbMods(g.id, { sort }))); } } catch {} }
       } else if (emus.length) {
         out.source = 'gb';
         const g = await S.gbGame(rom.name);
         if (!g) out.error = `GameBanana has no game called “${rom.name}”.`;
-        else { out.gbGame = g; out.packs = await S.gbMods(g.id); }
+        else { out.gbGame = g; out.packs = await S.gbMods(g.id, { sort }); }
       }
     } catch (e) { out.error = e.message; }
     return out;
@@ -3650,6 +3651,50 @@ const handlers = {
     finally { addonRun = null; for (const f of [...files, base + '.zip']) fs.rmSync(f, { force: true }); fs.rmSync(base + '.zip.unpacked', { recursive: true, force: true }); fs.rmSync(base + '.unpacked', { recursive: true, force: true }); }
   },
   'addons:cancel': () => { addonRun?.abort.abort(); return true; },
+  // 0.9.32 (owner: a download clicked on a mod's website did nothing): the page opens in a Cartridge
+  // window; a .zip/.7z/.rar it downloads is caught, shown in Downloads, then installed for this game
+  // the same way as Install a Download. The file is deleted after it installs.
+  'addons:browse': ({ url, romId, emuRoot, kind, name }) => {
+    if (!/^https:\/\//i.test(String(url || ''))) throw new Error('That page can’t be opened.');
+    if (addonBrowser && !addonBrowser.isDestroyed()) addonBrowser.close();
+    const { session } = require('electron');
+    const ses = session.fromPartition('persist:addons');
+    const bw = new BrowserWindow({ parent: win, width: 1280, height: 800, fullscreen: !!win?.isFullScreen(), autoHideMenuBar: true, backgroundColor: '#111', title: name || 'Add-on', webPreferences: { session: ses, sandbox: true, contextIsolation: true } });
+    addonBrowser = bw;
+    bw.ctx = { romId, emuRoot, kind: kind || 'tex', name };
+    // links that open a new tab stay in this window; Escape or the floating button closes it
+    bw.webContents.setWindowOpenHandler(({ url: u }) => { if (/^https?:\/\//i.test(u)) bw.loadURL(u); return { action: 'deny' }; });
+    bw.webContents.on('before-input-event', (_e, i) => { if (i.type === 'keyDown' && i.key === 'Escape') bw.close(); });
+    bw.webContents.on('did-finish-load', () => bw.webContents.executeJavaScript(`(() => { if (document.getElementById('cart-back')) return; const b = document.createElement('button'); b.id = 'cart-back'; b.textContent = 'Back to Cartridge'; b.style.cssText = 'position:fixed;z-index:2147483647;right:16px;bottom:16px;padding:12px 20px;border-radius:999px;border:0;background:#fff;color:#111;font:600 16px system-ui,sans-serif;box-shadow:0 4px 18px rgba(0,0,0,.4);cursor:pointer'; b.onclick = () => window.close(); document.body.appendChild(b); })()`).catch(() => {}));
+    if (!ses.cartridgeHooked) {
+      ses.cartridgeHooked = true;
+      ses.on('will-download', (_e, item) => {
+        const ctx = addonBrowser && !addonBrowser.isDestroyed() ? addonBrowser.ctx : null;
+        const fname = item.getFilename() || 'addon.zip';
+        if (!ctx || !/\.(zip|7z|rar)$/i.test(fname)) { item.cancel(); broadcast('toast', { text: ctx ? 'Cartridge installs .zip, .7z and .rar add-ons only.' : 'Open the page from the game’s Add-ons to install from it.', kind: 'error' }); return; }
+        const dir = path.join(USER_DATA, 'addon-downloads'); fs.mkdirSync(dir, { recursive: true });
+        const file = path.join(dir, `web-${Date.now()}-${fname.replace(/[^\w.-]+/g, '_')}`);
+        item.setSavePath(file);
+        const key = 'web:' + file;
+        bgJob(key, { key, state: 'run', kind: 'Add-on Download', title: fname, romId: Number(ctx.romId), icon: 'mdiDownload', pct: null, text: '' });
+        broadcast('toast', { text: `Downloading ${fname}. It installs when it’s done (see Downloads).`, kind: 'info', icon: 'mdiDownload' });
+        item.on('updated', () => { const t = item.getTotalBytes(); bgJob(key, { pct: t ? Math.floor((item.getReceivedBytes() / t) * 100) : null }); });
+        item.once('done', async (_ev, state) => {
+          if (state !== 'completed') { bgJob(key, { state: 'error', error: state === 'cancelled' ? 'Cancelled.' : 'The download stopped.' }); fs.rmSync(file, { force: true }); return; }
+          bgJob(key, { state: 'done', pct: 100 });
+          const base = fname.replace(/\.(zip|7z|rar)$/i, '');
+          try {
+            const r = await handlers['addons:install']({ romId: ctx.romId, emuRoot: ctx.emuRoot, pack: { source: 'local', id: `${base}-${Date.now()}`, name: base, file, kind: ctx.kind, authors: [], sourceUrl: item.getURL() } });
+            broadcast('toast', { text: `${base} is installed`, kind: 'ok', icon: 'mdiCheck' }); broadcast('addon-installed', { romId: Number(ctx.romId), name: base, ...r });
+          } catch (er) { broadcast('toast', { text: er.message || String(er), kind: 'error' }); }
+          finally { fs.rmSync(file, { force: true }); }
+        });
+      });
+    }
+    bw.loadURL(url);
+    bw.on('closed', () => { if (addonBrowser === bw) addonBrowser = null; refocus(); });
+    return true;
+  },
   // 0.9.19 (owner: a green check when a game already has a texture pack, and whether Cartridge put it
   // there): for each game asked about, the emulators whose folder for it holds files, and whether
   // those files are all ones Cartridge installed
