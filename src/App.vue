@@ -300,6 +300,9 @@ onMounted(async () => {
   // hides or blurs the window, so stop the pad, the animated background and every CSS animation here
   window.cart.on('game-run', (g) => gameEnded(g?.state === 'ended'));
   window.cart.on('background', (b) => { setBackground(b?.away); store.away = !!b?.away; document.body.classList.toggle('away', !!b?.away); });
+  // background jobs (0.9.32): what's running now, and every change after; the Downloads page lists them
+  window.cart.on('bg-job', (j) => { if (j.gone) delete store.bgJobs[j.key]; else store.bgJobs[j.key] = j; });
+  call('jobs:list').then((l) => { for (const j of l || []) store.bgJobs[j.key] = j; }).catch(() => {});
   window.cart.on('addon-progress', (m) => {
     if (!m?.key) return;
     store.addonJobs[m.key] = { ...(store.addonJobs[m.key] || {}), ...m, at: Date.now() };

@@ -30,7 +30,23 @@
       </div>
     </section>
 
-    <div v-if="!store.downloads.length && !addonJobs.length" class="empty-dl">
+    <!-- 0.9.32 (owner: leaving a menu shouldn't cancel anything): emulator updates and installs, game updates,
+         shadPS4 versions, BIOS: they carry on here while you go elsewhere -->
+    <section v-if="bgList.length" class="dl-addons">
+      <div class="sec-title">In the Background</div>
+      <div v-for="j in bgList" :key="j.key" class="now-card glass dl-addon dl-bg" data-focus tabindex="0">
+        <div class="now-art"><img v-if="j.romId && romById(j.romId)" :src="cover(romById(j.romId))" alt="" /><Icon v-else :name="j.icon || 'mdiDownload'" :size="40" /></div>
+        <div class="now-body">
+          <div class="eyebrow">{{ j.kind }}</div>
+          <b class="dl-addon-name">{{ j.title }}</b>
+          <span class="muted small">{{ j.state === 'done' ? 'Done' : j.state === 'error' ? j.error || 'It failed' : (j.text || 'Downloading') + (j.pct != null ? ' · ' + j.pct + '%' : '') }}</span>
+          <span v-if="j.state === 'run'" class="bar" :class="{ live: j.pct == null }" style="margin-top: 6px"><i :style="{ width: (j.pct ?? 100) + '%' }" /></span>
+        </div>
+        <Icon class="dl-addon-state" :name="j.state === 'done' ? 'mdiCheckCircle' : j.state === 'error' ? 'mdiAlertCircleOutline' : j.icon || 'mdiDownload'" :size="26" />
+      </div>
+    </section>
+
+    <div v-if="!store.downloads.length && !addonJobs.length && !bgList.length" class="empty-dl">
       <div class="dl-hero">
         <div class="dl-fan"><img v-for="(c, i) in fan" :key="i" :src="c" :style="{ '--i': i - (fan.length - 1) / 2 }" @error="$event.target.style.display = 'none'" /></div>
         <div class="dl-badge"><div class="dl-badge-in"><Icon name="mdiTrayArrowDown" :size="46" class="dl-arrow" /></div></div>
@@ -86,6 +102,7 @@ import Icon from '../components/Icon.vue';
 import Btn from '../components/Btn.vue';
 import GameLogo from '../components/GameLogo.vue';
 const addonJobs = computed(() => Object.values(store.addonJobs || {}).sort((a, b) => b.at - a.at));
+const bgList = computed(() => Object.values(store.bgJobs || {}).sort((a, b) => b.at - a.at));
 
 // three of your games fanned behind the empty-state badge
 const fan = (() => { const l = allRoms().filter((r) => r.path_cover_small || r.url_cover); for (let i = l.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [l[i], l[j]] = [l[j], l[i]]; } return l.slice(0, 3).map((r) => cover(r)); })();
@@ -131,6 +148,7 @@ DlRow.emits = ['act'];
 </script>
 
 <style scoped>
+.dl-bg .now-art { display: grid; place-items: center; color: var(--muted); }
 .dl-head { display: flex; align-items: flex-end; justify-content: space-between; margin: 18px 0 24px; }
 .big { font-size: var(--t-2xl); font-weight: 700; margin: 6px 0 6px; }
 .empty-dl { display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 60px 0; text-align: center; }

@@ -16,9 +16,26 @@ function pickAsset(assets) {
   const score = (n) => (/(x86_64|amd64|x64)/i.test(n) ? 0 : 1) + (/(debug|symbols|test)/i.test(n) ? 5 : 0) + n.length / 1000;
   return ok.sort((a, b) => score(a.name) - score(b.name))[0] || null;
 }
+// 0.9.32 (owner: a GR2 fork with only a Linux .zip): no AppImage, so a Linux archive for x86_64, never Windows,
+// macOS, Android, ARM or the source code; one that names Linux and x86_64 first
+const ARCHIVE = /\.(zip|tar\.(gz|xz|zst|bz2)|tgz|txz|7z)$/i;
+const NOT_LINUX = /\b(win(32|64|dows)?|msvc|mingw|mac(os)?|osx|darwin|apple|android|apk|ios|aarch64|arm64|armhf|armv7|source|src|symbols|pdb)\b/i;
+function pickArchive(assets) {
+  const ok = (assets || []).filter((a) => ARCHIVE.test(a.name) && !NOT_LINUX.test(a.name.replace(/[-_.]+/g, ' ')));
+  const score = (n) => (/linux/i.test(n) ? 0 : 2) + (/(x86_64|amd64|x64)/i.test(n) ? 0 : 1) + (/appimage/i.test(n) ? -1 : 0) + n.length / 1000;
+  return ok.sort((a, b) => score(a.name) - score(b.name))[0] || null;
+}
+// what in an unpacked folder could be the emulator: AppImages first, else programs; libraries, helpers and
+// updaters left out. files: [{ rel, size, appimage, elf }]
+function programsIn(files) {
+  const skip = (r) => /\.(so(\.\d+)*|a|o|py|sh|txt|md|json|ini|png|svg|desktop)$/i.test(r) || /(^|\/)(lib|plugins?|platforms|share)\//i.test(r) || /(updater|crash|helper|uninstall|daemon|launcher-?update)/i.test(r.split('/').pop());
+  const apps = files.filter((f) => f.appimage && !skip(f.rel));
+  const pick = apps.length ? apps : files.filter((f) => f.elf && !skip(f.rel) && f.size > 512 * 1024);
+  return pick.sort((a, b) => a.rel.split('/').length - b.rel.split('/').length || b.size - a.size);
+}
 // file name it's saved under: the repo's name, so updates and other tools find it the same way each time
 function fileName(repo, asset) {
   const base = repo.split('/')[1].replace(/[^\w.-]+/g, '');
   return /\.appimage$/i.test(base) ? base : `${base}.AppImage`;
 }
-module.exports = { repoOf, pickAsset, fileName };
+module.exports = { repoOf, pickAsset, pickArchive, programsIn, fileName };

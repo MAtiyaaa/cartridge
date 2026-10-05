@@ -157,7 +157,7 @@
 import { similarTo } from '../recs.js';
 import { addGame, removeGame, applyChanges, pickEmulator, pickCollections, pickFrameGen } from '../steam.js';
 import { computed, onMounted, onBeforeUnmount, ref, nextTick, watch } from 'vue';
-import { store, heroArt, call, img, go, cover, bytes, year, rating, toast, confirm, download, downloadFor, romById, platformById, isNew, setBg, logoOf, resetLogos, artFor, choose, openModal, allRoms, visible, isFavourite, addToCollection, playOf, playtimeText, ago, loadPlay, askText, saveConfig, backdropOf, wantSharp } from '../store.js';
+import { store, heroArt, call, img, go, cover, bytes, year, rating, toast, confirm, download, downloadFor, romById, platformById, isNew, setBg, logoOf, resetLogos, artFor, choose, openModal, allRoms, visible, isFavourite, addToCollection, playOf, playtimeText, ago, loadPlay, askText, saveConfig, backdropOf, wantSharp, bgJob } from '../store.js';
 import { pinToStart } from '../startTiles.js';
 import { useView } from '../useView.js';
 import { ensureFocus, focusFirst } from '../nav.js';
@@ -269,7 +269,7 @@ async function remove() {
 // the download, whether Cartridge installed it, and the install's progress.
 const pkg = ref(null);
 const pkgProg = ref(null);
-const pkgBusy = computed(() => pkgProg.value?.state === 'running' || pkg.value?.running);
+const pkgBusy = computed(() => pkgProg.value?.state === 'running' || pkg.value?.running || !!bgJob('pkg:' + props.romId)); // 0.9.32: still installing from before
 const needsInstall = computed(() => pkg.value?.pkgs > 0 && !pkg.value.installed);
 const emuName = computed(() => pkg.value?.emuName || 'RPCS3');
 async function loadPkg() { pkg.value = installedPath.value ? await call('pkg:check', { romId: Number(props.romId) }).catch(() => null) : null; }

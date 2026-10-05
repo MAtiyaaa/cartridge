@@ -346,6 +346,25 @@ module.exports = function createSteamManager(ctx) {
     }
     return out;
   }
+  // An EmuDeck launcher counts only while what it starts is there (0.9.32, owner: Vita3K deleted twice and
+  // still "already on this device"): its script stays in tools/launchers after the program is gone.
+  // EmuDeck's scripts name the folder (emufolder="$HOME/Applications/Vita3K") and the program (emuName,
+  // an AppImage path) or run a Flatpak; a script Cartridge can't read is trusted as before.
+  function scriptRuns(script, e) {
+    let t = ''; try { t = fs.readFileSync(script, 'utf8'); } catch { return true; }
+    const home = (x) => x.replace(/\$\{?HOME\}?|^~(?=\/)/g, HOME);
+    if (/flatpak\s+run/.test(t)) { const fps = flatpakApps(); const ids = [...t.matchAll(/flatpak\s+run\s+(?:-\S+\s+)*([\w.-]+\.[\w.-]+)/g)].map((m) => m[1]); if (ids.length) return ids.some((x) => fps.includes(x)); }
+    const folder = (/^\s*emufolder=["']?([^"'\n]+)["']?/m.exec(t) || [])[1], name = (/^\s*emuName=["']?([^"'\n]+)["']?/m.exec(t) || [])[1];
+    const paths = [...t.matchAll(/["']?((?:\$\{?HOME\}?|~)\/[^"'\s]+\.AppImage)["']?/gi)].map((m) => home(m[1])).filter((x) => !x.includes('*') && !x.includes('$'));
+    if (paths.length) return paths.some((x) => exists(x));
+    if (folder && !folder.includes('$(')) {
+      const dir = home(folder);
+      if (!isDir(dir)) return false;
+      const names = ls(dir), want = [name, e.label, ...(e.bin || [])].filter(Boolean).map((x) => x.toLowerCase());
+      return names.some((n) => want.some((w) => n.toLowerCase().startsWith(w)) || (e.app && e.app.test(n)));
+    }
+    return true;
+  }
   let scanning = null;
   function scanEmulators({ drives = false } = {}) {
     if (scanning) return scanning;
@@ -391,7 +410,7 @@ module.exports = function createSteamManager(ctx) {
       // name: what is really installed (a Citra install isn't "Azahar": 0.9.3)
       const mk = (exe, start, src, from, args, version, name) => found.push({ t: { exe, start, pre: e.pre || [], command: true, args: args || argsFor(id, key, src, version), kind: e.kind || kindOf(key), how: src, from }, src, name: name || e.label });
       let wrap = { flatpak: false, appimage: false, text: '' };
-      for (const d of L) for (const sc of e.scripts || []) if (exists(path.join(d, sc)) && !found.length) { mk(path.join(d, sc), d, 'emudeck', `EmuDeck ${e.label}`, null, null, realName(id, sc)); wrap = wraps(path.join(d, sc)); }
+      for (const d of L) for (const sc of e.scripts || []) if (exists(path.join(d, sc)) && !found.length && scriptRuns(path.join(d, sc), e)) { mk(path.join(d, sc), d, 'emudeck', `EmuDeck ${e.label}`, null, null, realName(id, sc)); wrap = wraps(path.join(d, sc)); }
       // One AppImage: the newest copy, found by name in the usual folders or by what's inside it
       // anywhere (Setup's scan). A file whose insides say it's another emulator is skipped.
       const apps = [];

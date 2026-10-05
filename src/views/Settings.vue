@@ -440,7 +440,7 @@
           <template v-else-if="sec === 'steam'">
             <h1>Steam</h1>
             <!-- not in Steam yet: adding Cartridge comes first; once added it moves to the bottom (0.9.3 L) -->
-            <div v-if="selfAdded === false" class="about glass">
+            <div v-if="selfAdded === false && steamReady" class="about glass">
               <img src="../../steam-art/grid.png" class="steam-grid" />
               <div style="display: flex; flex-direction: column; gap: 10px">
                 <div style="font-family: var(--display); font-size: 22px; font-weight: 700">Add Cartridge to Game Mode</div>
@@ -450,8 +450,8 @@
                 </div>
               </div>
             </div>
-            <SteamSettings ref="steamRef" />
-            <template v-if="selfAdded">
+            <SteamSettings ref="steamRef" @ready="steamReady = true" />
+            <template v-if="selfAdded && steamReady">
             <div class="subh" style="margin-top: 10px">Cartridge</div>
             <div class="about glass">
               <img src="../../steam-art/grid.png" class="steam-grid" />
@@ -1045,6 +1045,8 @@ async function setGraphics(v) {
 }
 // is Cartridge itself in Steam (null until known)
 const selfAdded = ref(null);
+// the Cartridge cards wait for the rest of the Steam page, so it all appears at once (0.9.32)
+const steamReady = ref(!!store.steamOv);
 async function loadSelf() { try { selfAdded.value = !!(await call('steam:status')).added; } catch { selfAdded.value = false; } }
 watch(sec, (v) => { if (v === 'steam') loadSelf(); }, { immediate: true });
 async function applyArt() {

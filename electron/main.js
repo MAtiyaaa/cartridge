@@ -2291,6 +2291,42 @@ async function freshCemuPacks(romId) {
   } catch (e) { log('cemu graphic packs download failed:', e.message); return fs.existsSync(path.join(st.dir.root, 'graphicPacks')) ? '' : 'Cemu\'s graphic packs couldn\'t be downloaded: ' + e.message; }
 }
 // a zip unpacked into a folder, no entry outside it (yauzl)
+// An emulator installed from a GitHub link, set up once its program is known (0.9.24, 0.9.32 for folders)
+let customPending = null;
+async function finishCustom({ repo, file, folder, as, of, key, tag, name }) {
+  let setup;
+  if (as === 'fork') { steamMgr.markFork(file, of, name); setup = 'fork'; }
+  else { setup = steamMgr.useFile(key, file); if (setup?.needs) setup = steamMgr.useFile(key, file, { args: '"{ROM}"' }); setup = 'console'; }
+  config.customEmus = [...(config.customEmus || []).filter((x) => x.repo !== repo && x.path !== file), { repo, path: file, folder: folder || null, as, of: as === 'fork' ? of : null, key: as === 'console' ? key : null, tag, at: Date.now() }];
+  saveConfig();
+  try { await steamMgr.scanEmulators(); } catch {}
+  log('emulator from a link', repo, tag, file, setup);
+  return { path: file, tag, name, setup, folder: folder || null };
+}
+// any archive into a folder: zip (no size cap here: AppImages are big), tar.* through tar, 7z/rar through bsdtar or 7-Zip
+async function unpackTo(archive, dir) {
+  fs.mkdirSync(dir, { recursive: true });
+  if (/\.(tar\.(gz|xz|zst|bz2)|tgz|txz)$/i.test(archive)) {
+    await new Promise((ok, bad) => require('child_process').execFile('tar', ['-xf', archive, '-C', dir], { timeout: 30 * 60e3 }, (e) => (e ? bad(new Error('The release couldn’t be unpacked.')) : ok())));
+    return;
+  }
+  const { list, close } = await require('./addonInstall').openArchive(archive, path.join(os.tmpdir(), 'cartridge-unz-' + Date.now()));
+  try {
+    for (const e of list) {
+      const out = path.resolve(dir, e.rel);
+      if (!out.startsWith(path.resolve(dir) + path.sep)) continue; // nothing outside the folder
+      fs.mkdirSync(path.dirname(out), { recursive: true });
+      await new Promise(async (ok, bad) => { try { const rs = await e.read(); const ws = fs.createWriteStream(out); rs.pipe(ws); ws.on('finish', ok); ws.on('error', bad); rs.on('error', bad); } catch (er) { bad(er); } });
+    }
+  } finally { try { close?.(); } catch {} }
+}
+// AppImages and Linux programs in an unpacked folder, four levels down at most
+function programsInFolder(dir) {
+  const D = require('./detect'), files = [];
+  const walk = (d, depth) => { for (const n of (() => { try { return fs.readdirSync(d); } catch { return []; } })()) { const f = path.join(d, n); let st; try { st = fs.lstatSync(f); } catch { continue; } if (st.isSymbolicLink()) continue; if (st.isDirectory()) { if (depth < 4) walk(f, depth + 1); continue; } const appimage = !!D.appImageType(f); files.push({ path: f, rel: path.relative(dir, f).split(path.sep).join('/'), size: st.size, appimage, elf: appimage || !!D.isElf(f) }); } };
+  walk(dir, 0);
+  return require('./customEmu').programsIn(files);
+}
 async function unzipTo(zip, dir) {
   const { list, close } = await require('./addonInstall').openArchive(zip, path.join(os.tmpdir(), 'cartridge-unz-' + Date.now()));
   try {
@@ -2454,7 +2490,7 @@ function detectPad() {
 // ---------------------------------------------------------------- window + ipc
 let win;
 
-function broadcast(ch, data) { if (win && !win.isDestroyed()) win.webContents.send(ch, data); }
+let broadcast = (ch, data) => { if (win && !win.isDestroyed()) win.webContents.send(ch, data); }; // wrapped by the background jobs (0.9.32)
 
 // Interface size. The UI is laid out for 1920x1080 (what the Ally shows in Game Mode). Bigger
 // windows, like a 4K TV, zoom in by the same ratio so text and art keep their size on screen.
@@ -2879,7 +2915,7 @@ const handlers08 = {
     try {
       const games = syncGameList(), names = new Map(games.map((g) => [g.id, g.name]));
       // each file matched on its own, so it carries its game's name; the folder's real path and name decide textures or saves
-      for (const f of b.files) { const one = S.matchGames(games, [{ id: folder, label: b.label, path: b.path + '/' + b.label, files: [f] }]); const gid = Object.keys(one)[0]; if (gid) { f.game = names.get(Number(gid)) || ''; f.romId = Number(gid); f.kind = one[gid].textures.length ? 'Textures' : 'Save'; } }
+      for (const f of b.files) { const one = S.matchGames(games, [{ id: folder, label: b.label, path: b.path + '/' + b.label, files: [f] }]); const gid = Object.keys(one)[0]; if (gid) { f.game = names.get(Number(gid)) || ''; f.romId = Number(gid); f.kind = S.KIND_LABEL[Object.keys(one[gid]).find((k) => one[gid][k].length)] || 'Save'; } }
     } catch {}
     return b;
   },
@@ -3756,29 +3792,54 @@ const handlers = {
     if (emuGetRun) throw new Error('Another emulator is downloading. Wait for it to finish.');
     const rel = await require('./github').release(repo).catch((e) => { throw new Error(`GitHub: ${e.message}`); });
     if (!rel) throw new Error('That project has no releases on GitHub.');
-    const asset = C.pickAsset(rel.assets);
-    if (!asset) throw new Error('Its newest release has no Linux AppImage. Only AppImages can be installed from a link.');
-    const dir = config.emuDir || path.join(os.homedir(), 'Applications'), dest = path.join(dir, C.fileName(repo, asset));
-    const mine = (config.customEmus || []).find((x) => x.path === dest);
+    const asset = C.pickAsset(rel.assets), archive = !asset && C.pickArchive(rel.assets);
+    if (!asset && !archive) throw new Error('Its newest release has no Linux AppImage or Linux archive to install.');
+    const dir = config.emuDir || path.join(os.homedir(), 'Applications');
+    const prev = (config.customEmus || []).find((x) => x.repo === repo);
+    // an AppImage goes in as one file; an archive (0.9.32, owner: GR2 fork as a Linux .zip) unpacks into its own folder there
+    const dest = asset ? path.join(dir, C.fileName(repo, asset)) : path.join(dir, repo.split('/')[1].replace(/[^\w.-]+/g, ''));
+    const mine = (config.customEmus || []).find((x) => x.path === dest || x.folder === dest);
     if (fs.existsSync(dest) && !mine) throw new Error(`${path.basename(dest)} is already in ${dir.replace(os.homedir(), '~')}. Cartridge leaves it as it is.`);
     fs.mkdirSync(dir, { recursive: true });
-    const tmp = dest + '.cartridge-new';
+    const src = asset || archive, tmp = path.join(dir, `.${path.basename(dest)}.cartridge-new${asset ? '' : path.extname(archive.name) || '.zip'}`);
     emuGetRun = { abort: new AbortController() };
     try {
       let got = 0, last = 0;
-      await downloadTo(asset.url, tmp, emuGetRun, (n) => { got += n; const now = Date.now(); if (now - last > 400) { last = now; broadcast('emuget-custom', { pct: asset.size ? Math.min(99, Math.floor((got / asset.size) * 100)) : null }); } }, { plain: true });
-      if (!require('./emuUpdates').looksRunnable(tmp, asset.name)) throw new Error('What came down wasn’t a working AppImage.');
-      fs.chmodSync(tmp, 0o755); fs.renameSync(tmp, dest);
-    } catch (e) { fs.rmSync(tmp, { force: true }); throw e; } finally { emuGetRun = null; }
+      await downloadTo(src.url, tmp, emuGetRun, (n) => { got += n; const now = Date.now(); if (now - last > 400) { last = now; broadcast('emuget-custom', { pct: src.size ? Math.min(99, Math.floor((got / src.size) * 100)) : null }); } }, { plain: true });
+      if (asset) {
+        if (!require('./emuUpdates').looksRunnable(tmp, asset.name)) throw new Error('What came down wasn’t a working AppImage.');
+        fs.chmodSync(tmp, 0o755); fs.renameSync(tmp, dest);
+      } else {
+        broadcast('emuget-custom', { pct: null });
+        const out = dest + '.cartridge-new';
+        fs.rmSync(out, { recursive: true, force: true });
+        await unpackTo(tmp, out);
+        // one folder around everything is taken off, as the emulators' own zips are packed
+        const top = fs.readdirSync(out);
+        const inner = top.length === 1 && isDir(path.join(out, top[0])) ? path.join(out, top[0]) : out;
+        // an update lays the new files over the folder, so anything the emulator keeps there (portable user data) stays
+        fs.mkdirSync(dest, { recursive: true });
+        fs.cpSync(inner, dest, { recursive: true, force: true });
+        fs.rmSync(out, { recursive: true, force: true });
+      }
+    } finally { fs.rmSync(tmp, { force: true }); emuGetRun = null; }
     const name = repo.split('/')[1];
-    let setup;
-    if (as === 'fork') { steamMgr.markFork(dest, of, name); setup = 'fork'; }
-    else { setup = steamMgr.useFile(key, dest); if (setup?.needs) setup = steamMgr.useFile(key, dest, { args: '"{ROM}"' }); setup = 'console'; }
-    config.customEmus = [...(config.customEmus || []).filter((x) => x.path !== dest), { repo, path: dest, as, of: as === 'fork' ? of : null, key: as === 'console' ? key : null, tag: rel.tag, at: Date.now() }];
-    saveConfig();
-    try { await steamMgr.scanEmulators(); } catch {}
-    log('emulator from a link', repo, rel.tag, dest, setup);
-    return { path: dest, tag: rel.tag, name, setup };
+    if (asset) return finishCustom({ repo, file: dest, folder: null, as, of, key, tag: rel.tag, name });
+    // which program in the folder is the emulator: the one used before, the only one, or the user picks
+    const progs = programsInFolder(dest);
+    if (!progs.length) throw new Error(`${name} was unpacked into ${dest.replace(os.homedir(), '~')}, but there’s no AppImage or Linux program in it.`);
+    for (const p of progs) { try { fs.chmodSync(p.path, 0o755); } catch {} } // zips don't keep the run bit
+    const again = prev?.folder === dest && prev.path && progs.find((p) => p.path === prev.path);
+    if (again || progs.length === 1) return finishCustom({ repo, file: (again || progs[0]).path, folder: dest, as, of, key, tag: rel.tag, name });
+    customPending = { repo, folder: dest, as, of, key, tag: rel.tag, name, files: progs.map((p) => p.path) };
+    return { pick: progs.map((p) => ({ path: p.path, rel: p.rel, size: p.size, appimage: p.appimage })), folder: dest, name, tag: rel.tag };
+  },
+  // the program the user picked in an unpacked release (0.9.32)
+  'emuget:customPick': ({ file }) => {
+    const p = customPending;
+    if (!p || !p.files.includes(file)) throw new Error('Pick one of the programs from that release.');
+    customPending = null;
+    return finishCustom({ ...p, file });
   },
   'emuget:cancel': () => { emuGetRun?.abort.abort(); return true; },
   // emulator updates (0.9.16): each installed copy, its version and whether a newer one is out
@@ -4204,6 +4265,57 @@ const handlers = {
   'app:fullscreen': () => win.setFullScreen(!win.isFullScreen()),
   'app:clearCache': async () => { await fsp.rm(IMG_CACHE, { recursive: true, force: true }); await fsp.rm(HERO_DIR, { recursive: true, force: true }); heroCache = {}; await fsp.rm(HERO_FILE, { force: true }); return true; },
 };
+
+// ---- Background jobs (0.9.32, owner: "if I exit the menu it shouldn't cancel, it should move to Downloads").
+// Nothing here was ever stopped by leaving a screen: these run in this process. What was missing is a place
+// that remembers them: each long task is a job (bg-job events, jobs:list) the Downloads page lists and any
+// screen picks up again when it opens. Progress comes from the events each task already sends.
+const bgJobs = new Map(), jobSent = new Map();
+function bgJob(key, o) {
+  const prev = bgJobs.get(key);
+  if (!prev && !o.state) return; // progress for a job that isn't one (or has gone)
+  const j = { ...(prev || { key, at: Date.now() }), ...o, upd: Date.now() };
+  bgJobs.set(key, j);
+  // progress at most every 300 ms; starts and ends at once
+  const now = Date.now();
+  if (o.state || now - (jobSent.get(key) || 0) > 300) { jobSent.set(key, now); broadcast('bg-job', j); }
+  if (o.state === 'done' || o.state === 'error') setTimeout(() => { if (bgJobs.get(key)?.upd === j.upd) { bgJobs.delete(key); jobSent.delete(key); broadcast('bg-job', { key, gone: true }); } }, 20000);
+}
+async function asJob(info, fn) {
+  bgJob(info.key, { ...info, state: 'run', pct: null, text: '', error: '' });
+  try { const r = await fn(); bgJob(info.key, { state: 'done', pct: 100, text: '' }); return r; }
+  catch (e) { bgJob(info.key, { state: 'error', error: e.message || String(e) }); throw e; }
+}
+const emuLabel = (id) => require('./emulators').EMU[String(id || '').split('@')[0]]?.label || String(id || 'Emulator');
+const romName = (id) => romIndexMain().get(Number(id))?.name || 'Game';
+let customJob = '';
+const JOBS = {
+  'emuup:run': (a) => ({ key: 'emu:' + (a.path || a.fp), kind: a.force ? 'Emulator Download' : 'Emulator Update', title: emuLabel(a.id), icon: 'mdiUpdate' }),
+  'emuget:install': (a) => ({ key: `get:${a.key}:${a.id}`, kind: 'Emulator', title: emuLabel(a.id), icon: 'mdiDownload' }),
+  'emuget:custom': (a) => { const repo = require('./customEmu').repoOf(a.link) || String(a.link || ''); customJob = 'custom:' + repo; return { key: customJob, kind: 'Emulator from GitHub', title: repo.split('/').pop() || repo, icon: 'mdiGithub' }; },
+  'shadv:install': (a) => ({ key: 'shadv:' + a.tag, kind: 'shadPS4 Version', title: String(a.tag), icon: 'mdiDownload' }),
+  'ps3up:install': (a) => ({ key: 'ps3:' + a.romId, kind: 'Game Update', title: romName(a.romId), romId: Number(a.romId), icon: 'mdiPackageUp' }),
+  'pkg:install': (a) => ({ key: 'pkg:' + a.romId, kind: 'Install', title: romName(a.romId), romId: Number(a.romId), icon: 'mdiPackageDown' }),
+  'bios:download': (a) => ({ key: 'bios:' + (a.slug || a.platformId), kind: 'BIOS and Firmware', title: String(a.slug || '').toUpperCase(), icon: 'mdiChip' }),
+  'sync:install': () => ({ key: 'sync:install', kind: 'Install', title: 'Syncthing', icon: 'mdiSync' }),
+};
+for (const [ch, info] of Object.entries(JOBS)) {
+  const fn = handlers[ch];
+  if (fn) handlers[ch] = (a = {}) => { let i; try { i = info(a || {}); } catch { return fn(a); } return asJob(i, () => fn(a)); };
+}
+// the progress each task already sends, onto its job
+const JOB_EVENTS = {
+  'emu-update': (m) => ['emu:' + m.path, { pct: m.pct, text: m.text || '' }],
+  'emuget-progress': (m) => [`get:${m.key}:${m.id}`, { pct: m.pct }],
+  'emuget-custom': (m) => [customJob, { pct: m.pct }],
+  'shadv-progress': (m) => ['shadv:' + m.tag, { pct: m.pct }],
+  'ps3-update': (m) => ['ps3:' + m.romId, { pct: m.pct, text: m.state === 'installing' ? `Installing ${m.version || ''}`.trim() : m.version ? `Update ${m.version}` : '' }],
+  'pkg-progress': (m) => ['pkg:' + m.romId, { pct: m.pct, text: m.text || m.step || '' }],
+  'sync-install': (m) => ['sync:install', { pct: m.pct }],
+};
+const sendRaw = broadcast;
+broadcast = (ch, data) => { sendRaw(ch, data); const f = JOB_EVENTS[ch]; if (f && data) { try { const [k, o] = f(data); if (k && bgJobs.has(k)) bgJob(k, Object.fromEntries(Object.entries(o).filter(([, v]) => v != null))); } catch {} } };
+handlers['jobs:list'] = () => [...bgJobs.values()];
 
 for (const [ch, fn] of Object.entries(handlers)) {
   ipcMain.handle(ch, async (_e, arg) => {

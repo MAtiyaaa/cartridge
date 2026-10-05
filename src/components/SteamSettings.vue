@@ -107,7 +107,10 @@ import Toggle from './Toggle.vue';
 import PIcon from './PIcon.vue';
 import Btn from './Btn.vue';
 
-const ov = ref(null);
+// 0.9.32 (owner: the page flashed, then the rest loaded): the last overview is shown at once on every visit
+// after the first, and the fresh one replaces it when Steam has been read again
+const ov = ref(store.steamOv || null);
+const emit = defineEmits(['ready']);
 // Pages (0.9.24, owner: a Collections tab in the Steam section); LB/RB through Settings' step()
 const PAGES = [{ v: 'games', l: 'Games' }, { v: 'cols', l: 'Collections' }];
 const page = ref('games');
@@ -154,7 +157,8 @@ const nameOpts = [{ v: 'clash', l: 'Only on clashes' }, { v: 'always', l: 'Alway
 const inSteam = computed(() => ov.value?.games.filter((g) => g.inSteam).length || 0);
 const notIn = computed(() => (ov.value?.games.length || 0) - inSteam.value);
 async function load() {
-  try { ov.value = await call('steam:overview'); steam.queue = ov.value.queue; } catch (e) { ov.value = { steam: { error: e.message }, games: [], consoles: [] }; }
+  try { ov.value = await call('steam:overview'); steam.queue = ov.value.queue; store.steamOv = ov.value; } catch (e) { ov.value = { steam: { error: e.message }, games: [], consoles: [] }; }
+  emit('ready');
   call('steam:verify').then((m) => (missingCols.value = m || [])).catch(() => {});
 }
 watch(() => steam.queue.total, () => { if (ov.value && !steam.busy) load(); });
@@ -216,7 +220,7 @@ async function removeAll() {
 async function fixCols() {
   try { await call('steam:fixCollections'); toast('Steam is closing to fix the collections.', 'info', 5000, 'mdiSteam'); } catch (e) { toast(e.message, 'error'); }
 }
-onMounted(() => { load(); loadLive(); });
+onMounted(() => { if (ov.value) emit('ready'); load(); loadLive(); });
 </script>
 <style scoped>
 .ss { display: flex; flex-direction: column; gap: 16px; }

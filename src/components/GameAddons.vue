@@ -43,9 +43,9 @@
 // Game Add-ons (0.9.21, owner: game updates, patches and add-ons in one place, one tab each). Only the tabs
 // the game's console has are shown; LB/RB move between them. Mods and Texture Packs are AddonsSheet,
 // Patches (Dolphin: one tab per kind of code) is PatchesSheet, Game Updates is Sony's list for PS3.
-import { computed, nextTick, onMounted, onBeforeUnmount, reactive, ref } from 'vue';
+import { computed, nextTick, onMounted, onBeforeUnmount, reactive, ref, watch } from 'vue';
 import { pushLayer, focusFirst } from '../nav.js';
-import { store, call, closeModal, toast, bytes, romById, cover } from '../store.js';
+import { store, call, closeModal, toast, bytes, romById, cover, bgJob } from '../store.js';
 import Icon from './Icon.vue';
 import Btn from './Btn.vue';
 import AddonsSheet from './AddonsSheet.vue';
@@ -103,10 +103,13 @@ async function loadUp(fresh = false) {
   up.value = null;
   up.value = (await call('ps3up:game', { romId: props.romId, fresh }).catch((e) => ({ error: e.message, todo: [] }))) || { error: 'This game’s serial couldn’t be read.', todo: [] };
 }
+let upCalling = false;
+// 0.9.32: updates installing from an earlier visit show here again, and finish on their own
+watch(() => bgJob('ps3:' + props.romId), (j) => { if (j) { upRun.value = true; upText.value = `${j.text || 'Downloading'}${j.pct != null ? ' · ' + j.pct + '%' : ''}`; } else if (upRun.value && !upCalling) { upRun.value = false; loadUp(); } }, { immediate: true });
 async function installUp() {
-  upRun.value = true; upText.value = 'Starting';
+  upRun.value = true; upText.value = 'Starting'; upCalling = true;
   try { const r = await call('ps3up:install', { romId: props.romId }); toast(`${props.name} updated${r.version ? ' to ' + r.version : ''}`, 'ok', 3500, 'mdiPackageUp'); } catch (e) { toast(e.message, 'error', 6000); }
-  upRun.value = false; loadUp();
+  upCalling = false; upRun.value = false; loadUp();
 }
 
 // the add-ons tab asks before removing, which takes the one modal slot: come back to the same tab
