@@ -6,6 +6,9 @@ The branch for 0.9.3 work is `claude/relaxed-fermat-30pigp`. Pull it before star
 
 ---
 
+## 5 Oct 2026 · 0.9.39 Easy on the Eyes (built and released)
+- Owner's photos of the disc widget: the picture behind the disc only on wide tiles, and the spin (a 3 s turn on focus on top of the slow one) made them feel sick. One slow turn a minute, no focus spin, picture at every size. Checked in Chromium with three disc tiles (wide, big, small square).
+
 ## 5 Oct 2026 · 0.9.38 More Drives, Clearer Glass (built and released)
 - Owner's answers on the pending list, plus a new list with photos. Built: multi-drive (item 17, owner: only if confident; tested in the app with two roots, folder creation and PCSX2.ini), BIOS from RomM by itself after a download (item 7: the code only placed files already on the device), shadPS4/SharpEmu sheets and icons, Flatpak hang (async remote-add, sudo -S with a password typed in Cartridge, time limits; tested with a fake sudo), tour glyphs and pages, sync ring, Elements Plain/Glass with tinted liquid glass (apple-design skill, owner asked), shadPS4 mods (`<game>-mods` overlay read from shadPS4's fs.cpp).
 - Checked in code, no change: add-on site downloads (item 11: caught, page closed, extracted and placed per emulator by content), GPU Always (item 12: trial with confirm, reverts after 25 s).
