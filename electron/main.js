@@ -4130,7 +4130,9 @@ const handlers = {
       for (const [, label, rel] of SV.SYNC[f.of] || []) {
         if (typeof rel !== 'string') continue;
         const donor = baseOf(f.of, rel), fb = L.findForkBase(f.exe, rel, home);
-        const to = donor ? path.join(donor, rel) : null, from = fb ? path.join(fb.base, rel) : null;
+        // 0.9.37: not in its usual places: looked for under the fork's own folder
+        const deep = !fb && L.searchForkFolder(f.exe, rel);
+        const to = donor ? path.join(donor, rel) : null, from = fb ? path.join(fb.base, rel) : deep || null;
         const st = from && to ? L.status(from, to) : { state: !to ? 'no-donor' : 'no-folder' };
         if (recs.some((r) => r.from === from)) continue; // already one of yours
         suggestions.push({ fork: f.name, exe: f.exe, of: f.of, ofName: SV.NAMES[f.of] || f.of, label, rel, from, to, how: fb?.how || null, ...st });
@@ -4138,6 +4140,22 @@ const handlers = {
     }
     const links = recs.map((r) => ({ ...r, ...L.status(r.from, r.to) }));
     return { suggestions, links, home };
+  },
+  // Find and Link Saves (0.9.37, owner: detect the saves and link them by itself, keep the manual way): every fork
+  // ready to link gets its games the original lacks copied across (copies only), then the link
+  'links:auto': ({ dry } = {}) => {
+    const L = require('./folderLinks'), list = handlers['links:list']().suggestions.filter((s) => s.from && s.to && ['folder', 'empty', 'missing'].includes(s.state));
+    if (dry) return list.map((s) => ({ fork: s.fork, ofName: s.ofName, label: s.label, from: s.from, to: s.to, state: s.state }));
+    const out = [];
+    for (const s of list) {
+      try {
+        const m = s.state === 'folder' ? L.mergeInto(s.from, s.to) : { copied: [], skipped: [] };
+        const r = handlers['links:make']({ from: s.from, to: s.to, label: s.label, fork: s.fork, of: s.of });
+        out.push({ fork: s.fork, ofName: s.ofName, label: s.label, copied: m.copied.length, kept: r.kept });
+        log('links auto', s.from, '->', s.to, `${m.copied.length} copied, ${m.skipped.length} already there`);
+      } catch (e) { out.push({ fork: s.fork, ofName: s.ofName, label: s.label, error: e.message }); log('links auto failed', s.from, e.message); }
+    }
+    return out;
   },
   'links:check': ({ from, to }) => { const L = require('./folderLinks'); return { why: L.check(from, to), ...L.status(from, to) }; },
   'links:make': ({ from, to, label, fork, of }) => {
