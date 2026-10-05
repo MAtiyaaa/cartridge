@@ -429,7 +429,7 @@
 // A replay starts from the current settings: done steps show a green check, nothing is reset, and
 // leaving halfway keeps everything as it was.
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { store, call, saveConfig, toast, tab, confirm, openModal, choose, pickFolder, loadLibrary , activeTabs } from '../store.js';
+import { store, call, saveConfig, toast, tab, confirm, openModal, choose, pickFolder, loadLibrary , activeTabs, openTour } from '../store.js';
 import { focusFirst, input } from '../nav.js';
 import { useView } from '../useView.js';
 import Logo from '../components/Logo.vue';
@@ -606,7 +606,7 @@ async function finish() {
   store.welcoming = false;
   // 0.9.24 (owner): onboarding ends on Start, with a short tour of it
   if (store.config.configured) tab(activeTabs().includes('start') ? 'start' : 'home');
-  if (!store.config.ui.toured) { await openModal('tour', { start: activeTabs().includes('start') }); saveConfig({ ui: { toured: true, startTips: 1 } }); }
+  if (!store.config.ui.toured) { await openTour({ start: activeTabs().includes('start') }); saveConfig({ ui: { toured: true, startTips: 1 } }); }
 }
 async function leave() {
   if (only) return close();

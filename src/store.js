@@ -29,6 +29,7 @@ export const store = reactive({
   toasts: [],
   modal: null,
   quickMenu: false,
+  tour: null, // the interactive tour (FirstTour.vue)
   welcoming: false, // the welcome (0.9.15) is on screen
   lastSearch: '',
   logos: {},
@@ -113,6 +114,9 @@ export function closeModal(value) {
   m?.resolve(value);
 }
 export const askText = (props) => openModal('keyboard', props);
+// the tour (0.9.37) lives outside the one pop-up slot, so the pop-ups it teaches can open over it
+export function openTour(props = {}) { return new Promise((resolve) => { store.tour = { props, resolve }; }); }
+export function closeTour(v) { const t = store.tour; store.tour = null; t?.resolve(v); }
 // Built-in on-screen keyboard: always, never (Steam keyboard), or Auto = in Game Mode only
 export function builtinKb() {
   if (store.welcoming) return true; // the welcome always uses Cartridge's own (0.9.17); Auto after it

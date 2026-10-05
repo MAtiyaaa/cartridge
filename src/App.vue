@@ -70,7 +70,6 @@
     <GameTimeline v-else-if="store.modal?.type === 'timeline'" v-bind="store.modal.props" />
     <GameAbout v-else-if="store.modal?.type === 'gameabout'" v-bind="store.modal.props" />
     <ConsoleCollection v-else-if="store.modal?.type === 'consolecol'" v-bind="store.modal.props" />
-    <FirstTour v-else-if="store.modal?.type === 'tour'" v-bind="store.modal.props" />
     <ManualViewer v-else-if="store.modal?.type === 'manual'" v-bind="store.modal.props" />
     <PatchesSheet v-else-if="store.modal?.type === 'patches'" v-bind="store.modal.props" />
     <AddonsSheet v-else-if="store.modal?.type === 'addons'" :key="'addons' + store.modal.props.romId" v-bind="store.modal.props" />
@@ -84,6 +83,7 @@
     <ImageSearch v-else-if="store.modal?.type === 'imgsearch'" v-bind="store.modal.props" />
     <GameSettings v-else-if="store.modal?.type === 'gamesettings'" :key="'gs' + store.modal.props.romId" v-bind="store.modal.props" />
   </Transition>
+  <FirstTour v-if="store.tour" v-bind="store.tour.props" />
   <IdleScreen v-if="store.config?.configured" />
 
   <div class="pops">
@@ -105,7 +105,7 @@
 
 <script setup>
 import { computed, onMounted, onBeforeUnmount, ref, watch, nextTick, defineAsyncComponent } from 'vue';
-import { store, loadConfig, loadLibrary, loadArt, back, tab, go, call, toast, choose, saveConfig, builtinKb, askText, GRADE, activeTabs, TAB_DEFS } from './store.js';
+import { store, loadConfig, loadLibrary, loadArt, back, tab, go, call, toast, choose, saveConfig, builtinKb, askText, GRADE, activeTabs, TAB_DEFS, romById, isFavourite, download } from './store.js';
 import { pushLayer, focusFirst, input, gameEnded } from './nav.js';
 import { setSoundEnabled, setSoundStyle, sfx } from './sfx.js';
 import { applyTheme, CARD_SIZES } from './themes.js';
@@ -346,6 +346,10 @@ onMounted(async () => {
     lt: () => (viewHandler('lt') !== false ? undefined : cycleTab(-1)), // a page can keep LT/RT (0.9.24: Start's page overview)
     rt: () => (viewHandler('rt') !== false ? undefined : cycleTab(1)),
     select: () => (viewHandler('select') !== false ? undefined : tab('downloads')),
+    // the keyboard's own (0.9.37): Ctrl+F or / searches from anywhere, 1 to 9 jump to a tab, F1 or ? lists the keys
+    search: () => focusSearch(),
+    help: () => keysHelp(),
+    ...Object.fromEntries([1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => ['tab' + n, () => { const t = tabs.value[n - 1]; if (t) tab(t.name); }])),
     start: () => { if (viewHandler('start') !== false) return; store.quickMenu = !store.quickMenu; },
   });
 });
@@ -431,6 +435,37 @@ watch(viewKey, async () => {
   focusFirst(root);
 });
 
+// every key and mouse button, one list (0.9.37, owner: overhaul keyboard and mouse controls)
+function keysHelp() {
+  const K = [
+    ['Arrow Keys', 'Move around'], ['Enter or Space', 'Select (A); hold for more'], ['Escape, Backspace or Alt+Left', 'Back (B)'],
+    ['Tab and Shift+Tab', 'Next and previous thing on screen'], ['Ctrl+Tab, Page Up and Down', 'Switch tabs (LT and RT)'], ['1 to 9', 'Jump to a tab'],
+    ['Q and E', 'Sections inside a page (LB and RB)'], ['X', 'Download, or the page’s main action'], ['Y', 'Search, or More on a game'],
+    ['Ctrl+F or /', 'Search from anywhere'], ['Ctrl+J', 'Downloads (Select)'], ['M', 'Quick Menu (Start)'], ['Home and End', 'First and last in a list'],
+    ['Right-click a game', 'Its quick actions'], ['Mouse back button', 'Back'], ['F1 or ?', 'This list'],
+  ];
+  choose({ title: 'Keyboard and Mouse', message: 'A controller, the keyboard, a mouse and touch all work everywhere, and you can switch any time.', options: K.map(([k, d]) => ({ label: k, sub: d, value: null, raw: true })) });
+}
+// right-click a game card (0.9.37): its quick actions where the pointer is
+async function cardMenu(e) {
+  const card = e.target.closest?.('.card[data-key^="rom-"]');
+  if (!card || e.defaultPrevented) return;
+  e.preventDefault();
+  const rom = romById(Number(card.dataset.key.slice(4)));
+  if (!rom) return;
+  card.focus({ preventScroll: true });
+  const here = !!store.installed?.[rom.id], fav = isFavourite(rom.id);
+  const v = await choose({ title: rom.name, options: [
+    { label: 'Open', value: 'open', icon: 'mdiArrowRight' },
+    here ? { label: 'Ready to Play', sub: 'Through Steam', value: 'play', icon: 'mdiPlay' } : { label: 'Download', value: 'dl', icon: 'mdiDownload' },
+    { label: fav ? 'Remove from Favourites' : 'Add to Favourites', value: 'fav', icon: fav ? 'mdiHeart' : 'mdiHeartOutline' },
+  ] });
+  if (v === 'open') go('game', { romId: rom.id });
+  else if (v === 'dl') download(rom);
+  else if (v === 'play') call('steam:play', { romId: rom.id }).catch((err) => toast(err.message, 'error', 5000));
+  else if (v === 'fav') call('fav:set', { romId: rom.id, on: !fav }).then(() => toast(fav ? 'Removed from favourites' : 'Added to favourites', 'ok', 2200, 'mdiHeartOutline')).catch((err) => toast(err.message, 'error', 6000));
+}
+onMounted(() => document.addEventListener('contextmenu', cardMenu));
 // where a pop-up came from (0.9.37): the focused or pressed thing when it opened, read before it takes focus
 let modalTrigger = null;
 watch(() => store.modal, (m, was) => { if (m && !was) { const r = document.activeElement?.getBoundingClientRect?.(); modalTrigger = r && r.width ? { x: r.left + r.width / 2, y: r.top + r.height / 2 } : null; } }, { flush: 'pre' });

@@ -502,6 +502,7 @@
               <p class="muted small" style="margin: 0">Shown on your other devices next to games you played here and trophies you unlocked here, for example "Steam Deck" or "Living Room PC".</p>
             </div>
             <div class="row"><button class="btn" data-focus @click="store.welcoming = true"><Icon name="mdiHandWave" />Run the Welcome Again</button><span class="muted small">Starts from your current settings. Nothing is reset.</span></div>
+            <div class="row"><button class="btn" data-focus @click="openTour({ start: activeTabs().includes('start') })"><Icon name="mdiGestureTapButton" />Take the Tour</button><span class="muted small">Try each control yourself, a step at a time.</span></div>
             <ServerStatus />
             <ControllerTest />
             <ReportProblem />
@@ -521,7 +522,7 @@
 
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { store, call, go, tab, saveConfig, pickFolder, choose, confirm, toast, openModal, bytes, ago, resync, scanServer, allRoms, romById, cover, resetLogos, askText, activeTabs, TAB_DEFS, consoleName } from '../store.js';
+import { store, call, go, tab, saveConfig, pickFolder, choose, confirm, toast, openModal, bytes, ago, resync, scanServer, allRoms, romById, cover, resetLogos, askText, activeTabs, TAB_DEFS, consoleName, openTour } from '../store.js';
 import { useView } from '../useView.js';
 import { input, focusFirst, setPointerPref, setRumble, rumble } from '../nav.js';
 import { THEMES, SURFACES, ELEMENTS, elementsOf, TEXTS, FONTS, CARD_SHAPES, CARD_SIZES, DENSITIES, themeFrom, themeOf, paletteOf } from '../themes.js';
