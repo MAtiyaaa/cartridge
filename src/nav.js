@@ -417,7 +417,22 @@ let lastZone = null;
 document.addEventListener('focusin', (e) => { lastZone = e.target.closest?.('[data-zone]') || null; }, true);
 const rsHeld = {};
 let inBackground = false, gsKnown = false; // declared before the poll loop starts (it reads them at once)
+// what the right stick scrolls: the scrolling box around the focus, else the first one in the top pop-up or the page
+function stickTarget() {
+  const scrolls = (n) => n && n.scrollHeight > n.clientHeight + 2 && /(auto|scroll)/.test(getComputedStyle(n).overflowY);
+  for (let n = document.activeElement; n && n !== document.body; n = n.parentElement) if (scrolls(n)) return n;
+  const base = topLayer()?.el || document.querySelector('main.main');
+  return [...(base?.querySelectorAll('[data-scroll], .view') || [])].find(scrolls) || null;
+}
+function stickScroll(v) {
+  const sc = stickTarget();
+  if (!sc) return;
+  const k = (Math.abs(v) - 0.25) / 0.75; // 0 at the dead zone, 1 pushed all the way
+  sc.scrollTop += Math.sign(v) * (2 + k * k * 22); // up to ~3000 px/s at the 8 ms poll, gentle near the middle
+}
+let rsY = 0;
 function poll() {
+  rsY = 0;
   const now = performance.now();
   const pads = navigator.getGamepads ? [...navigator.getGamepads()].filter(Boolean) : [];
   const merged = {};
@@ -447,6 +462,9 @@ function poll() {
     rh.l = rx < -0.7 || (rh.l && rx < -0.4); rh.r = rx > 0.7 || (rh.r && rx > 0.4);
     if (rh.l) merged.rsleft = true;
     if (rh.r) merged.rsright = true;
+    // Right stick up and down (0.9.41, owner: read the rest of What's New): scrolls, faster the further it's pushed
+    const ry = gp.mapping === 'standard' ? gp.axes[3] ?? 0 : gp.axes.length >= 6 ? gp.axes[4] ?? 0 : 0;
+    if (Math.abs(ry) > 0.25 && Math.abs(ry) > Math.abs(rx)) rsY = ry;
     const [ax = 0, ay = 0] = gp.axes;
     const held = stickHeld[gp.index] || (stickHeld[gp.index] = {});
     const horiz = Math.abs(ax) >= Math.abs(ay);
@@ -456,6 +474,7 @@ function poll() {
     }
   }
   padLive.pads = pads;
+  if (rsY && inFront()) stickScroll(rsY);
   if (inFront()) for (const key of ACTIONS) press(key, !!merged[key], now);
   else for (const key of ACTIONS) if (state[key]) state[key].down = !!merged[key]; // a press held while away doesn't fire on return
 }

@@ -6,6 +6,12 @@ The branch for 0.9.3 work is `claude/relaxed-fermat-30pigp`. Pull it before star
 
 ---
 
+## 5 Oct 2026 · 0.9.41 Light, Rebuilt (built and released)
+- Owner's photos and list: emulator widget emptied after closing shadPS4 (`ser` dropped `emu`); page overview page 1 placeholder (snapshots only of shown pages), lag across rows (transform fight + full-board blur), up/down; Console at a Glance empty space and 1x2 clipping; tick instead of "On this device"; Light glitch with Glass/OLED Black background (OLED Black removed from Background, into the OLED colour); OLED looked like Cartridge; Light "looks off" (rebuilt: raised near-white cards); What's New see-through and no right-stick scroll; More sheet popping twice (keyframe after the transition, measured: sheet-up started at 274 ms); GPU always (owner: GPU Always cured the handheld's sluggishness).
+- Liquid glass skill installed in `.claude/skills/liquid-glass` for the next update, Glass mode only (owner).
+- Checked in Chromium: overview with 6 pages (all snapshotted, focus kept, up/down, 0 slow frames), Console at a Glance at 1x2/2x2/2x3/3x2 (no cover cut, stats never overlap), Light and OLED on every main page, right-stick scroll in What's New (0 to 855 px and back), the sheet's animation timeline before and after, focus-ring clipping audit (none real).
+- Still waiting on the owner: the Game Shelf redesign pick (A Cover Flow, B Display case, C Fan).
+
 ## 5 Oct 2026 · 0.9.40 Pictures That Load (built and released)
 - Owner's photo of the GIF picker: previews not loading, the focus outline clipped, "PS4" finding nothing. Previews now go through romimg:// (fetched in main with webFetch), Commons added beside Openverse, short names spelled out, ring drawn inside. Openverse and Commons are blocked from the container: tested with fakes only, the owner must try a search on the device.
 - Game Shelf: console logo in the label now. The owner asked for a full redesign; three mockups (Cover Flow, Display case, Fan) sent, waiting for a pick before building.

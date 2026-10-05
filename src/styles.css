@@ -497,7 +497,7 @@ body.away *, body.away *::before, body.away *::after { animation-play-state: pau
 .modal-enter-active, .modal-leave-active { transition: opacity 220ms var(--ease-out); } /* fades ease, movement springs */
 .modal-leave-active { transition: opacity 170ms var(--ease-out); pointer-events: none; }
 .modal-enter-from, .modal-leave-to { opacity: 0; }
-.modal-enter-active, .modal-enter-active > .dialog, .modal-leave-active > .dialog { animation: none !important; }
+.modal-enter-active, .modal-enter-active > .dialog, .modal-leave-active > .dialog, .modal-in > .dialog, .modal-in > .dialog.sheet { animation: none !important; }
 .modal-enter-active > .dialog { transition: transform var(--spring-pop-d) var(--spring-pop); }
 .modal-leave-active > .dialog { transition: transform 170ms var(--ease-out); }
 .modal-enter-from > .dialog { transform: scale(0.9); }

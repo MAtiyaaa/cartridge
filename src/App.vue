@@ -62,7 +62,7 @@
   <QuickMenu v-if="store.quickMenu" />
   <!-- 0.9.37 (apple-design: interruptible, anchored to where it came from): every pop-up opens from the button that
        asked for it and closes back towards it; one slot, so a pop-up that hands over to another cross-fades -->
-  <Transition name="modal" @enter="modalFrom" @before-leave="modalFrom">
+  <Transition name="modal" @enter="modalFrom" @after-enter="modalIn" @before-leave="modalFrom">
     <Keyboard v-if="store.modal?.type === 'keyboard' && builtinKb()" v-bind="store.modal.props" />
     <TextPrompt v-else-if="store.modal?.type === 'keyboard'" v-bind="store.modal.props" />
     <FolderPicker v-else-if="store.modal?.type === 'folder'" v-bind="store.modal.props" />
@@ -483,6 +483,10 @@ onMounted(() => document.addEventListener('contextmenu', cardMenu));
 // where a pop-up came from (0.9.37): the focused or pressed thing when it opened, read before it takes focus
 let modalTrigger = null;
 watch(() => store.modal, (m, was) => { if (m && !was) { const r = document.activeElement?.getBoundingClientRect?.(); modalTrigger = r && r.width ? { x: r.left + r.width / 2, y: r.top + r.height / 2 } : null; } }, { flush: 'pre' });
+// 0.9.41 (owner: the More sheet popped out twice): a dialog's own entry animation (pop, sheet-up) is held off only while
+// the pop-up transition runs; when its classes came off, that animation started and the sheet arrived a second time.
+// Marked once in, it never plays
+function modalIn(el) { el.classList?.add('modal-in'); }
 function modalFrom(el) {
   const d = el.querySelector?.('.dialog, .sheet, .menu, .m-sheet') || el.firstElementChild;
   if (!d || !modalTrigger) return;
