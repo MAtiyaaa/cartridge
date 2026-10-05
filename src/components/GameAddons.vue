@@ -14,7 +14,7 @@
       <div ref="body" class="ga-body">
         <AddonsSheet v-if="seen.addons" v-show="tab === 'mods' || tab === 'tex'" :rom-id="romId" :name="name" embedded :kind="tab === 'mods' ? 'mods' : 'tex'" :on-reopen="reopen" />
         <div v-if="seen.patches && !patches && patchTab" class="muted"><Icon name="mdiSync" :size="16" class="spin" /> Reading {{ PATCH_EMU_OF(slug) }}’s list…</div>
-        <PatchesSheet v-if="patches" v-show="patchTab" ref="pt" v-bind="patches" :name="name" :rom-id="romId" embedded :section="sectionOf(tab)" />
+        <PatchesSheet v-if="patches" v-show="patchTab" ref="pt" v-bind="patches" :name="name" :rom-id="romId" embedded :section="sectionOf(tab)" @reload="loadPatches" />
         <template v-if="tab === 'updates'">
           <div class="ga-up">
             <div class="muted small">From Sony’s own update list, installed into RPCS3 one after another, oldest first. Patches made for a game’s last update need it.</div>
@@ -70,7 +70,7 @@ const tabs = computed(() => {
   if (TEXTURES.test(s)) out.push({ k: 'tex', l: 'Texture Packs' });
   const pe = PATCH_EMU_OF(s);
   if (pe === 'Dolphin') out.push(...DOLPHIN);
-  else if (pe === 'Cemu') out.push({ k: 'p:Graphics', l: 'Graphics' }, { k: 'p:Enhancements', l: 'Enhancements' }, { k: 'p:Mods', l: 'Graphic Pack Mods' }, { k: 'p:Workarounds', l: 'Workarounds' }); // 0.9.24: Cemu's graphic packs, as its own window groups them
+  else if (pe === 'Cemu') out.push({ k: 'p:Graphics', l: 'Graphics' }, { k: 'p:Enhancements', l: 'Enhancements' }, { k: 'p:Mods', l: 'Graphic Pack Mods' }, { k: 'p:Workarounds', l: 'Workarounds' }, { k: 'p:Cheats', l: 'Cheats' }); // 0.9.24; Cheats 0.9.32 (Mega Cheats): Cemu's graphic packs, as its own window groups them
   else if (pe === 'shadPS4') out.push({ k: 'p:shadPS4', l: 'shadPS4 Patches' }, { k: 'p:GoldHEN', l: 'GoldHEN' }); // 0.9.23: its two lists, LB/RB between them
   else if (pe) out.push({ k: 'p', l: pe === 'PPSSPP' ? 'Cheats' : 'Patches' });
   if (/ps3/i.test(s)) out.push({ k: 'updates', l: 'Game Updates' });

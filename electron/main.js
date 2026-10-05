@@ -2281,16 +2281,16 @@ function gameSettingsCtx(romId) {
   return { emu: st.emu, why: 'Cartridge can’t change this emulator’s per-game settings yet.' };
 }
 // Cemu's community graphic packs, fetched like Cemu's own download (cemuPacks.downloadCommunity), weekly
-async function freshCemuPacks(romId) {
+async function freshCemuPacks(romId, force = false) {
   const st = patchState(romId);
   if (st.emu !== 'cemu' || !st.dir?.root) return '';
   try {
-    const r = await require('./cemuPacks').downloadCommunity(st.dir.root, { fetchImpl: (...a) => webFetch(...a), unzip: unzipTo });
+    const r = await require('./cemuPacks').downloadCommunity(st.dir.root, { fetchImpl: (...a) => webFetch(...a), unzip: unzipTo, force, release: () => require('./github').release('cemu-project/cemu_graphic_packs') });
     if (r.updated) log('cemu graphic packs downloaded', r.version);
+    if (force) return { version: r.version, updated: r.updated };
     return '';
-  } catch (e) { log('cemu graphic packs download failed:', e.message); return fs.existsSync(path.join(st.dir.root, 'graphicPacks')) ? '' : 'Cemu\'s graphic packs couldn\'t be downloaded: ' + e.message; }
+  } catch (e) { log('cemu graphic packs download failed:', e.message); if (force) throw new Error('Cemu\'s graphic packs couldn\'t be downloaded: ' + e.message); return fs.existsSync(path.join(st.dir.root, 'graphicPacks')) ? '' : 'Cemu\'s graphic packs couldn\'t be downloaded: ' + e.message; }
 }
-// a zip unpacked into a folder, no entry outside it (yauzl)
 // An emulator installed from a GitHub link, set up once its program is known (0.9.24, 0.9.32 for folders)
 let customPending = null;
 async function finishCustom({ repo, file, folder, as, of, key, tag, name }) {
@@ -2327,6 +2327,7 @@ function programsInFolder(dir) {
   walk(dir, 0);
   return require('./customEmu').programsIn(files);
 }
+// a zip unpacked into a folder, no entry outside it (yauzl)
 async function unzipTo(zip, dir) {
   const { list, close } = await require('./addonInstall').openArchive(zip, path.join(os.tmpdir(), 'cartridge-unz-' + Date.now()));
   try {
@@ -4007,6 +4008,8 @@ const handlers = {
   'ps3up:game': ({ romId, fresh }) => ps3UpdateInfo(Number(romId), { fresh: !!fresh }),
   'ps3up:install': ({ romId }) => ps3InstallUpdates(Number(romId)),
   'ps3up:cancel': () => { ps3upRun?.ac.abort(); return true; },
+  // Cemu's own "Download latest community graphic packs" (0.9.32): now, whatever the week says
+  'cemu:packsDownload': ({ romId }) => freshCemuPacks(Number(romId), true),
   'patches:list': async ({ romId }) => {
     const dlErr = (await freshRpcs3Patches(romId)) || (await freshShadPatches(romId)) || (await freshCemuPacks(romId));
     const st = patchState(romId), E = EMU_PATCH[st.emu];
