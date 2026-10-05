@@ -1726,7 +1726,9 @@ async function downloadBios(platformId, slug) {
   let installed = 0;
   if (emu) {
     const cmd = emu === 'rpcs3' ? steamMgr.rpcs3Command() : steamMgr.vita3kCommand();
-    if (!cmd) throw new Error(`The firmware is saved in ${dir}, but ${emu === 'rpcs3' ? 'RPCS3' : 'Vita3K'} wasn't found to install it. Set it up in Settings → Emulators.`);
+    // 0.9.37 (owner: BIOS comes before the emulators in the welcome): kept in the BIOS folder and installed by
+    // biosSetup() as soon as the emulator is installed, instead of failing here
+    if (!cmd) { log('firmware kept for later', emu, dir); return { count: list.length, files: done, dir, installed: 0, emu, placed: 0, pending: true }; }
     for (const f of list.filter((x) => /\.pup$/i.test(x.file_name)).sort((a, b) => /font/i.test(a.file_name) - /font/i.test(b.file_name))) {
       await pkgInst.installFirmware({ emu, cmd, file: path.join(dir, f.file_name) });
       installed++;
@@ -1739,6 +1741,46 @@ async function downloadBios(platformId, slug) {
   if (key === 'switch') placed.push(...(await switchFirmware(list.filter((f) => /\.zip$/i.test(f.file_name)).map((f) => path.join(dir, f.file_name)))));
   if (placed.length) log('bios placed', key, placed.length);
   return { count: list.length, files: done, dir, installed, emu, placed: placed.length };
+}
+// BIOS and firmware put in place by themselves (0.9.37, owner: "after the emulators are downloaded, Cartridge puts
+// the BIOS and firmware where each emulator reads it, or installs it"). From the BIOS folder(s) (yours, EmuDeck's or
+// Cartridge's, and each Emulation root's bios/): copied into every set-up emulator that reads files (never over a
+// file), PS3 and Vita firmware installed through RPCS3/Vita3K when they don't have it, Switch keys and firmware into
+// the yuzu family's keys and NAND. install: false only copies (the quick pass at start).
+let biosRun = null;
+// "in place" means where emulators read it: their own folders, RetroArch's system folder and each Emulation root's
+// bios/ (EmuDeck points its emulators there); Cartridge's BIOS folder alone doesn't count
+async function biosSetup({ install = true } = {}) {
+  if (biosRun) return biosRun;
+  biosRun = (async () => {
+    const B = require('./bios'), roots = emuRootsAll(), steamRoots = steamMgr.steamRoots?.() || [];
+    const dirs = [...new Set([config.biosPath, ...roots.map((r) => path.join(r, 'bios'))].filter((d) => d && isDir(d)))];
+    const filesIn = (re) => dirs.flatMap((d) => { try { return fs.readdirSync(d).filter((n) => re.test(n)).map((n) => path.join(d, n)); } catch { return []; } });
+    const out = [];
+    for (const key of B.KEYS()) {
+      const opts = { roots, steamRoots, extra: [] };
+      const before = B.status(key, opts);
+      let copied = 0, installed = 0, why = '';
+      if (key === 'ps3' || key === 'psvita') {
+        const pups = filesIn(key === 'ps3' ? /^PS3UPDAT\.PUP$/i : /^(PSVUPDAT|PSP2UPDAT)\.PUP$/i).sort((a, b) => /PSP2/i.test(a) - /PSP2/i.test(b));
+        if (!before.ok && pups.length) {
+          const emu = key === 'ps3' ? 'rpcs3' : 'vita3k', cmd = emu === 'rpcs3' ? steamMgr.rpcs3Command() : steamMgr.vita3kCommand();
+          if (!cmd) why = `${emu === 'rpcs3' ? 'RPCS3' : 'Vita3K'} isn’t set up yet: the firmware installs as soon as it is`;
+          else if (!install) why = 'Ready to install';
+          else for (const f of pups) { try { await pkgInst.installFirmware({ emu, cmd, file: f }); installed++; log('firmware installed', emu, path.basename(f)); } catch (e) { why = e.message; log('firmware not installed', emu, e.message); } }
+        } else if (!before.ok) why = 'Not in your BIOS folder: get it from RomM';
+      } else {
+        for (const d of dirs) copied += B.place(key, d, { roots, steamRoots }).length;
+        if (key === 'switch') copied += (await switchFirmware(filesIn(/\.zip$/i).filter((f) => !/^(neogeo|pgm|naomi|awbios|hod2bios|skns|stvbios|cpzn\d|taitofx1|coh\d+)\.zip$/i.test(path.basename(f))))).length; // a zip with .nca files in it
+      }
+      const after = B.status(key, opts);
+      out.push({ key, label: after.label, ok: after.ok, optional: after.optional, where: after.where, look: after.look, names: after.names || [], hint: after.hint, copied, installed, why: after.ok ? '' : why || (after.optional ? '' : 'Not found in your BIOS folder') });
+    }
+    const did = out.reduce((n, x) => n + x.copied + x.installed, 0);
+    if (did) log('bios setup', out.filter((x) => x.copied || x.installed).map((x) => `${x.key}: ${x.copied} copied${x.installed ? ', firmware installed' : ''}`).join('; '));
+    return { list: out, did, dirs };
+  })();
+  try { return await biosRun; } finally { biosRun = null; }
 }
 // Switch firmware from RomM (a zip of .nca files) into each yuzu-family emulator that has none yet
 async function switchFirmware(zips) {
@@ -2574,7 +2616,7 @@ function createWindow() {
   // console collections kept whole by themselves (0.9.34): 30 s after start, and again every 10 minutes, games of a
   // console that are in Steam but not in its collection are put in, only with Steam's interface reachable (no restart)
   const colsAuto = () => { if (!config.steam?.consoleCollections) return; steamMgr.fillCollections({ auto: true }).then((r) => { if (r.count) broadcast('toast', { text: `${r.count} game${r.count === 1 ? '' : 's'} added to ${r.count === 1 ? 'its' : 'their'} console collection in Steam`, kind: 'ok', icon: 'mdiSteam' }); }).catch((e) => log('console collections by itself:', e.message)); };
-  if (!globalThis.__colsAuto) { globalThis.__colsAuto = true; setTimeout(colsAuto, 30000); setInterval(colsAuto, 600000); }
+  if (!globalThis.__colsAuto) { globalThis.__colsAuto = true; setTimeout(colsAuto, 30000); setInterval(colsAuto, 600000); setTimeout(() => biosSetup({ install: false }).catch(() => {}), 45000); }
   win.webContents.once('did-finish-load', () => log('ui loaded', Date.now() - startedAt + 'ms', 'window=' + win.getContentSize().join('x'), 'zoom=' + currentZoom()));
   win.webContents.on('did-finish-load', applyZoom);
   win.on('resize', () => { clearTimeout(zoomT); zoomT = setTimeout(applyZoom, 150); });
@@ -3863,6 +3905,8 @@ const handlers = {
         const moved = (steamMgr.health().problems || []).filter((p) => p.issues.some((x) => x.kind === 'emulator' && x.fix));
         if (moved.length) { const f = await steamMgr.healthFix(moved.map((p) => p.appid)); r.relinked = (f.fixed || 0) + (f.queued || 0); log('relinked after install', id, r.relinked); }
       } catch (e2) { log('relink after install', e2.message); }
+      // its BIOS or firmware, if it's in the BIOS folder, goes in now (0.9.37)
+      biosSetup({ install: true }).then((b) => { const done = b.list.filter((x) => x.copied || x.installed); if (done.length) broadcast('toast', { text: `BIOS and firmware put in place: ${done.map((x) => x.label).join(', ')}`, kind: 'ok', icon: 'mdiChip' }); }).catch((e) => log('bios setup after install:', e.message));
       return r;
     } catch (err) { send({ error: err.message }); throw err; }
     finally { emuGetRun = null; }
@@ -4230,6 +4274,18 @@ const handlers = {
   'dl:resumeAll': () => { for (const it of queue) if (it.status === 'cancelled') { it.status = 'queued'; it.error = null; } emitQueue(); pump(); },
   'dl:clear': () => { for (let i = queue.length - 1; i >= 0; i--) if (!['queued', 'downloading'].includes(queue[i].status)) queue.splice(i, 1); emitQueue(); },
   'bios:download': ({ platformId, slug }) => downloadBios(platformId, slug),
+  'bios:setup': (o) => biosSetup(o || {}),
+  // each console in the library that needs BIOS or firmware, and whether it's where its emulators read it (0.9.37)
+  'bios:status': () => {
+    const B = require('./bios'), opts = { roots: emuRootsAll(), steamRoots: steamMgr.steamRoots?.() || [], extra: [] };
+    const KEY = { ps: 'psx', psx: 'psx', ps2: 'ps2', ps3: 'ps3', psvita: 'psvita', vita: 'psvita', switch: 'switch', segacd: 'segacd', 'sega-cd': 'segacd', megacd: 'segacd', saturn: 'saturn', dc: 'dreamcast', dreamcast: 'dreamcast', 'pc-engine-cd': 'pcenginecd', pcenginecd: 'pcenginecd', 'turbografx-cd': 'pcenginecd', neogeo: 'neogeo', 'neo-geo': 'neogeo', xbox: 'xbox', nds: 'nds', gba: 'gba' };
+    const out = [];
+    for (const p of library?.platforms || []) {
+      const key = KEY[p.slug] || KEY[p.fs_slug]; if (!key || out.some((x) => x.key === key)) continue;
+      const st = B.status(key, opts); if (st) out.push({ ...st, console: p.display_name || p.name, platformId: p.id, slug: p.slug });
+    }
+    return { list: out.sort((a, b) => Number(a.ok) - Number(b.ok) || Number(a.optional) - Number(b.optional) || a.console.localeCompare(b.console)), dir: config.biosPath || '' };
+  },
   'bios:list': ({ platformId }) => api('/api/firmware', { query: { platform_id: platformId } }),
   // 0.9.17: every console's BIOS and firmware from RomM in one go, then into the emulators
   'bios:all': async () => {
@@ -4237,9 +4293,11 @@ const handlers = {
     for (const p of library?.platforms || []) {
       const list = await api('/api/firmware', { query: { platform_id: p.id } }).catch(() => []);
       if (!list?.length) continue;
-      try { const r = await downloadBios(p.id, p.slug); out.push({ name: p.display_name || p.name, files: r.count, placed: r.placed, installed: r.installed }); }
+      try { const r = await downloadBios(p.id, p.slug); out.push({ name: p.display_name || p.name, files: r.count, placed: r.placed, installed: r.installed, pending: r.pending }); }
       catch (e) { out.push({ name: p.display_name || p.name, error: e.message }); }
     }
+    // then everything into place, for emulators that weren't there when a console's files came (0.9.37)
+    try { const b = await biosSetup({ install: true }); for (const x of out) x.after = b.did; } catch (e) { log('bios setup after download:', e.message); }
     return out;
   },
   // 0.9.17: your console folders added to the emulators' game lists (PCSX2, DuckStation, Dolphin)
