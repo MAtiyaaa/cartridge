@@ -177,8 +177,8 @@ body.bar-circle:not(.bar-left) .tab-ink { width: 44px !important; height: 44px; 
 body.bar-circle.bar-left .tab { width: 52px; height: 52px; }
 body.bar-circle.bar-left .tab-ink { border-radius: 50%; }
 /* pages arrive from where the bar sends them: up or down when it's on the left */
-@keyframes viewFromB { from { opacity: 0; transform: translateY(20px); } }
-@keyframes viewFromT { from { opacity: 0; transform: translateY(-20px); } }
+@keyframes viewFromB { from { opacity: 0; transform: translateY(32px); } }
+@keyframes viewFromT { from { opacity: 0; transform: translateY(-32px); } }
 body.bar-left main.main[data-dir='r'] > * { animation-name: viewFromB; }
 body.bar-left main.main[data-dir='l'] > * { animation-name: viewFromT; }
 .statusbar .sys { display: flex; align-items: center; gap: 16px; color: rgba(255, 255, 255, 0.78); font-size: var(--t-sm); font-weight: 600; font-variant-numeric: tabular-nums; }
@@ -203,11 +203,15 @@ body.bar-left main.main[data-dir='l'] > * { animation-name: viewFromT; }
 @keyframes viewIn { from { opacity: 0; } }
 /* pages arrive from where they are (0.9.19): a tab from its side, a deeper page settling in, back
    easing out of the way. Short, one move, then still: no bounce. */
-@keyframes viewFromR { from { opacity: 0; transform: translateX(20px); } }
-@keyframes viewFromL { from { opacity: 0; transform: translateX(-20px); } }
-@keyframes viewDeeper { from { opacity: 0; transform: translateY(10px) scale(0.99); } }
-@keyframes viewBack { from { opacity: 0; transform: scale(1.01); } }
-main.main[data-dir] > * { animation-duration: 360ms; animation-timing-function: var(--ease-out); }
+@keyframes viewFromR { from { opacity: 0; transform: translateX(36px); } }
+@keyframes viewFromL { from { opacity: 0; transform: translateX(-36px); } }
+@keyframes viewDeeper { from { opacity: 0; transform: translateY(18px) scale(0.975); } }
+@keyframes viewBack { from { opacity: 0; transform: scale(1.025); } }
+main.main[data-dir] > * { animation-duration: var(--spring-d, 420ms); animation-timing-function: var(--spring, var(--ease-out)); } /* 0.9.38: on a spring */
+/* without the GPU a whole page moving or fading is the one costly thing (measured in 0.9.38: going back to a full
+   Library doubled the slow frames), so pages keep their short fade there; the picture flying in, the sliding pills,
+   presses and pop-ups carry the motion instead */
+body.light-fx main.main[data-dir] > * { animation-name: viewIn; animation-duration: 160ms; animation-timing-function: ease-out; }
 main.main[data-dir='r'] > * { animation-name: viewFromR; }
 main.main[data-dir='l'] > * { animation-name: viewFromL; }
 main.main[data-dir='in'] > * { animation-name: viewDeeper; }
@@ -427,7 +431,6 @@ body.light-fx .systile, body.light-fx .lrow, body.light-fx .coll .art { box-shad
 /* weaker devices (0.9.24, owner: animations choppy): without the GPU, pages and tiles only fade in, and
    nothing moves or scales while arriving; a repainted transform costs a frame there */
 body.light-fx .view > *, body.light-fx .home > .hero, body.light-fx .home .shelves > .shelf-wrap { animation: viewIn 160ms ease-out backwards; }
-body.light-fx main.main[data-dir] > * { animation-name: viewIn; animation-duration: 160ms; }
 body.light-fx .bg-stage .grain { display: none; }
 body.light-fx .hero-title, body.light-fx .g-title { text-shadow: none; }
 body.light-fx .card .art, body.light-fx .systile { will-change: auto; }
@@ -495,32 +498,49 @@ body.away *, body.away *::before, body.away *::after { animation-play-state: pau
 .modal-leave-active { transition: opacity 170ms var(--ease-out); pointer-events: none; }
 .modal-enter-from, .modal-leave-to { opacity: 0; }
 .modal-enter-active, .modal-enter-active > .dialog, .modal-leave-active > .dialog { animation: none !important; }
-.modal-enter-active > .dialog { transition: transform var(--spring-d) var(--spring); }
+.modal-enter-active > .dialog { transition: transform var(--spring-pop-d) var(--spring-pop); }
 .modal-leave-active > .dialog { transition: transform 170ms var(--ease-out); }
-.modal-enter-from > .dialog { transform: scale(0.94); }
+.modal-enter-from > .dialog { transform: scale(0.9); }
 .modal-leave-to > .dialog { transform: scale(0.97); }
 /* bottom sheets come up and go down the same path */
-.modal-enter-from > .dialog.sheet { transform: translateY(56px); transform-origin: 50% 100% !important; }
+.modal-enter-from > .dialog.sheet { transform: translateY(90px); transform-origin: 50% 100% !important; }
 .modal-leave-to > .dialog.sheet { transform: translateY(40px); }
 /* without the GPU each scaled frame of a big box is repainted: opacity only, short */
-body.light-fx .modal-enter-from > .dialog, body.light-fx .modal-leave-to > .dialog { transform: none; }
 body.light-fx .modal-enter-active { transition-duration: var(--d-med); }
+body.light-fx .modal-enter-active > .dialog { transition: transform var(--spring-snappy-d) var(--spring-snappy); } /* 0.9.38: pop-ups move without the GPU too, just sooner */
 body.motion-reduce .modal-enter-active, body.motion-reduce .modal-leave-active { transition: opacity 120ms linear; }
 body.motion-reduce .modal-enter-from > .dialog, body.motion-reduce .modal-leave-to > .dialog { transform: none; }
 
-/* micro-interactions: the press shows on the press (scale on :active, set above); letting go springs back instead
-   of snapping, and the mouse lifts a card a little before it's picked */
-.btn, .menu-item, .lrow, .seg button { transition: background var(--d-fast), color var(--d-fast), transform var(--spring-snappy-d) var(--spring-snappy); }
-.card .art { transition: transform var(--spring-snappy-d) var(--spring-snappy); }
-body.mouse-mode .card:hover:not(:focus) .art { transform: translateY(-3px); }
-.toggle .sw::after { transition: transform var(--spring-snappy-d) var(--spring-snappy); }
-body.motion-reduce .card .art, body.motion-reduce .btn, body.motion-reduce .lrow { transition-duration: 0ms; }
-
-/* a game card's picture flying into the game page (motion.js morph): the page underneath switches at once, only the
-   picture moves, on a spring */
-:root.morphing::view-transition-old(root), :root.morphing::view-transition-new(root) { animation: none; }
-::view-transition-group(cart-morph) { animation-duration: var(--spring-d); animation-timing-function: var(--spring); z-index: 60; }
-::view-transition-old(cart-morph), ::view-transition-new(cart-morph) { animation-duration: calc(var(--spring-d) * 0.6); height: 100%; object-fit: cover; }
+/* ---------------------------------------------------------------- Fluid motion (0.9.37; 0.9.38, owner: "it feels very
+   minimal, make it more prominent but never jarring"). Springs from motion.js, transform and opacity only, so it all
+   runs the same without the GPU (light effects), where 0.9.37 fell back to plain fades. */
+/* presses: down at once, back on a spring with one small overshoot */
+.btn, .menu-item, .lrow, .seg button, .toggle { transition: background var(--d-fast), color var(--d-fast), transform var(--spring-pop-d) var(--spring-pop); }
+.btn:active, .menu-item:active, .seg button:active, .btn.pressed, .menu-item.pressed { transform: scale(0.95); transition: transform 80ms ease-out, background var(--d-fast), color var(--d-fast); }
+.lrow:active, .lrow.pressed, .toggle:active, .toggle.pressed { transform: scale(0.985); transition: transform 80ms ease-out, background var(--d-fast), color var(--d-fast); } /* wide rows: a smaller squeeze reads the same */
+/* where you are: a button lifts a little as focus lands on it */
+.pad-mode .btn:focus:not(:active):not(.pressed), .btn:focus-visible:not(:active):not(.pressed) { transform: scale(1.03); }
+/* game cards lift on the same spring, and settle back when you move on */
+.card .art { transition: transform var(--spring-pop-d) var(--spring-pop); }
+body.mouse-mode .card:hover:not(:focus) .art { transform: translateY(-4px) scale(1.02); }
+/* toggles: the knob stretches while pressed and lands with a little give */
+.toggle .sw::after { transition: transform var(--spring-pop-d) var(--spring-pop), width 140ms var(--ease-out), background var(--d-fast); }
+.toggle:active .sw::after, .toggle.pressed .sw::after { width: 26px; }
+.toggle.on:active .sw::after, .toggle.on.pressed .sw::after { transform: translateX(14px); }
+/* fields: the focus ring grows in rather than appearing */
+input, textarea, select { transition: box-shadow var(--spring-snappy-d) var(--spring-snappy), background var(--d-fast); }
+/* segmented rows: one pill glides to the choice (motion.js slidingPills) */
+.seg { position: relative; }
+.seg > button { position: relative; z-index: 1; }
+.seg-ink { position: absolute; left: 0; top: 0; z-index: 0; border-radius: var(--r-sm); background: var(--sel); pointer-events: none; }
+.seg-ink.live { transition: transform var(--spring-pop-d) var(--spring-pop), width var(--spring-pop-d) var(--spring-pop), height var(--spring-d) var(--spring), opacity var(--d-fast); }
+.seg.inked > button.on { background: transparent; }
+body.motion-reduce .card .art, body.motion-reduce .btn, body.motion-reduce .lrow, body.motion-reduce .seg-ink, body.motion-reduce .toggle .sw::after { transition-duration: 0ms; }
+body.motion-reduce .btn:focus { transform: none; }
+/* a game card's picture flying into the game page and back (motion.js morph): one picture, moved by transform */
+.morph-fly { position: fixed; z-index: 40; object-fit: cover; transform-origin: 0 0; pointer-events: none; will-change: transform; box-shadow: 0 18px 40px rgba(0, 0, 0, 0.35); }
+body.light-fx .morph-fly { box-shadow: none; }
+body.light-fx .card .art { transition: transform var(--spring-snappy-d) var(--spring-snappy); } /* without the GPU a card repaints while it moves: keep it short */
 
 /* ---------------------------------------------------------------- Light theme (0.9.38, owner: "white, but not the
    white that blinds you"; backgrounds and lines inverted to dark). themes.js sets the page, panels, text and the

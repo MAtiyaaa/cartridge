@@ -63,7 +63,8 @@ export function playtimeText(min) {
 
 // ---------------- routing
 // 0.9.37 (owner: a component morphs into its detail view): a game card's picture flies into the game page's cover,
-// and back into its card on the way out (motion.js morph: GPU only, any press skips it)
+// and back into its card on the way out (motion.js morph: one picture moved by transform, with or without the GPU
+// since 0.9.38; any press finishes it)
 export function go(name, params = {}) {
   const card = name === 'game' && document.activeElement?.closest?.(`.card[data-key="rom-${params.romId}"]`);
   if (card?.querySelector('.art img')) return morph(card.querySelector('.art'), () => goNow(name, params), '.g-cover', nextTick);

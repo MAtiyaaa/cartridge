@@ -3,6 +3,12 @@
 ### New
 - **Games on more than one drive:** Settings → Storage → Games on Other Drives. Add a drive (an SD card or a second disk) and Cartridge makes an Emulation/roms folder on it with a folder for each console you have games for, finds games on every drive, and tells your emulators about the new folders (Flatpak emulators are allowed to read it too). Choose where new games go: the drive with the most free space, this device, or one drive. A drive that isn't plugged in says so and nothing is lost.
 - **Two new colours, OLED and Light** (Settings → Look & Feel → Colour). OLED is pure black behind everything, with Cartridge's grey panels. Light is a soft off-white, never glaring white, with dark text and a dark highlight; animated backgrounds such as Ribbons are drawn in dark lines, console logos turn dark, and anything sitting on a game's picture keeps its white text.
+- **Motion you can see, also on handhelds:** in 0.9.37 most of the motion only ran with the GPU, so in Game Mode on a handheld (where Cartridge draws without it) it was mostly plain fades. Now:
+  - A game's cover flies from its card into the game page, and back into its card when you leave, on every device. Any press finishes it at once.
+  - Every row of choices (Look & Feel pages, Interface size, Dock placement and the rest) has one pill that glides to what you pick and stretches to fit it.
+  - Buttons lift a little as you land on them and spring back with a little give when pressed; toggle knobs stretch as they move; text fields' focus rings grow in.
+  - Pop-ups and bottom sheets arrive on a spring, also without the GPU. With the GPU, pages slide further and settle on a spring.
+  - All of it moves only position and fade, measured against 0.9.37 without the GPU so it costs no extra slow frames. Reduce Motion still turns it off.
 - **Mods for PS4 games in shadPS4:** Game Add-ons now has a Mods tab for PS4 games. A mod goes in the folder shadPS4 lays over the game (`<game folder>-mods`), in the game's own layout, so the game's files are never changed and removing the mod puts everything back.
 - **BIOS from RomM by itself:** when a game is downloaded for a console whose BIOS or firmware isn't set up, Cartridge fetches it from your RomM server once and puts it in place.
 - **The tour shows every page:** Home, Library, Consoles, Achievements and Settings each get a step. Buttons are shown for what you're using: your controller's own buttons, or the keys once you press a key on a keyboard, never both side by side.
@@ -10,6 +16,7 @@
 
 ### Changed
 - **Elements are Plain and Glass:** OLED Black stays under Background only. Glass is now clear glass with a bright edge and a soft shine, tinted by the colour you picked (white by default) instead of grey. Plain is your colour solid. Text on both picks dark or light to stay readable.
+- **About** in a game's More menu is now in the Game tab, last, under Pin to Start (it was under Options).
 - **Installing Flatpak** asks for your device password inside Cartridge, used once and never saved, instead of waiting for a desktop password window that never appears in Game Mode.
 
 ### Fixed
