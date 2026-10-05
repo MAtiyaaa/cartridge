@@ -16,7 +16,6 @@
           <Icon :name="t.icon" :size="21" class="tab-ico" />
           <span class="tab-label"><span>{{ t.label }}</span></span>
           <span v-if="t.name === 'downloads' && activeDl.length" class="tab-badge">{{ activeDl.length }}</span>
-          <span v-if="t.name === 'settings' && store.issues" class="tab-dot" :title="`${store.issues} waiting in Settings → Emulators`" />
         </button>
         <Btn v-if="padMode" b="RT" class="tab-trig" />
         <i class="tab-ink" :style="ink" />
@@ -33,7 +32,7 @@
         <!-- 0.9.29 (owner): adding to Steam is a ring filling round the Steam logo, one fixed size, so nothing in the
              bar moves (the wide "Steam artwork 18/43" pill pushed the search into the Dock); no track, the arc grows -->
         <div v-if="steam.progress" class="item steam-ring" :class="{ wait: steamPct == null }" :title="steamProgressLabel(steam.progress)" :aria-label="steamProgressLabel(steam.progress)">
-          <svg viewBox="0 0 36 36"><circle class="sr-arc" cx="18" cy="18" r="15.5" pathLength="100" :stroke-dasharray="`${steamPct ?? 22} 100`" /></svg>
+          <svg class="sr-ring" viewBox="0 0 36 36"><circle class="sr-arc" cx="18" cy="18" r="15.5" pathLength="100" :stroke-dasharray="`${steamPct ?? 22} 100`" /></svg>
           <Icon name="mdiSteam" :size="17" class="sr-logo" />
         </div>
         <div v-if="activeDl.length" class="item">
@@ -46,7 +45,7 @@
         <div class="clock">{{ clock }}</div>
       </div>
     </header>
-    <main class="main" ref="mainEl" data-zone :data-dir="store.navDir">
+    <main class="main" ref="mainEl" data-zone :data-dir="store.navDir" :data-page="store.route?.name">
       <component :is="views[store.route.name]" :key="viewKey" v-bind="store.route.params" />
     </main>
     <footer class="hintbar">
@@ -208,7 +207,7 @@ function placeInk() {
 watch(() => store.config?.ui?.touchScroll, (v) => document.documentElement.classList.toggle('touch-native', v === 'browser'), { immediate: true });
 // 0.9.28 (owner): the Dock (the bar of tabs) sits at the bottom, centred, as a pill unless chosen otherwise;
 // the strip of button hints is hidden unless turned on; the Dock's colour (pill style)
-watch(() => [store.config?.ui?.barPos || 'bottom', store.config?.ui?.barAlign || 'center', store.config?.ui?.barStyle || 'pill', store.config?.ui?.hints === true || !!store.forceHints, store.config?.ui?.dockColor || ''], ([pos, align, style, hints, dock]) => {
+watch(() => [store.config?.ui?.barPos || 'bottom', store.config?.ui?.barAlign || 'center', store.config?.ui?.barStyle || 'pill', store.config?.ui?.hints === true || !!store.forceHints, store.config?.ui?.dockColor || 'black'], ([pos, align, style, hints, dock]) => {
   const b = document.body.classList;
   b.toggle('bar-top', pos === 'top'); b.toggle('hints-on', hints);
   for (const c of ['white', 'black', 'accent']) b.toggle('dock-' + c, dock === c);
@@ -458,9 +457,9 @@ watch(viewKey, async () => {
 .pop-enter-from { opacity: 0; transform: translateX(40px); }
 .pop-leave-to { opacity: 0; transform: translateY(-12px); }
 .steam-ring { position: relative; flex: none; width: 30px; height: 30px; padding: 0; display: grid; place-items: center; }
-.steam-ring svg { position: absolute; inset: 0; width: 100%; height: 100%; transform: rotate(-90deg); }
+.steam-ring .sr-ring { position: absolute; inset: 0; width: 100%; height: 100%; transform: rotate(-90deg); }
 .sr-arc { fill: none; stroke: var(--text); stroke-width: 3; stroke-linecap: round; transition: stroke-dasharray 600ms var(--ease-out); }
-.steam-ring.wait svg { animation: sr-spin 1.4s linear infinite; }
+.steam-ring.wait .sr-ring { animation: sr-spin 1.4s linear infinite; }
 @keyframes sr-spin { to { transform: rotate(270deg); } }
 .sr-logo { opacity: 0.9; }
 .sync-pill { padding: 5px 12px; border-radius: 999px; background: rgba(var(--primary-rgb), 0.18); color: var(--primary-t); }

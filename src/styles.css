@@ -134,6 +134,10 @@ body:not(.hints-on) .hintbar { display: none; }
 body.bar-top:not(.hints-on) .shell { grid-template-rows: 68px 1fr; grid-template-areas: 'bar' 'main'; }
 body.bar-bottom .shell { grid-template-rows: 1fr 76px; grid-template-areas: 'main' 'bar'; }
 body.bar-bottom.hints-on .shell { grid-template-rows: 1fr 72px 40px; grid-template-areas: 'main' 'bar' 'hints'; }
+/* 0.9.32 (owner: a hard line cut the page above the Dock): scrolling pages fade out over their last stretch
+   instead of stopping at an edge, so what passes under the Dock melts into the background (Start is a fixed
+   board and keeps its edges). The mask is on the page area, which ends at the Dock. */
+body.bar-bottom main.main:not([data-page='start']) { -webkit-mask-image: linear-gradient(180deg, #000 calc(100% - 56px), rgba(0, 0, 0, 0.35) calc(100% - 18px), transparent); mask-image: linear-gradient(180deg, #000 calc(100% - 56px), rgba(0, 0, 0, 0.35) calc(100% - 18px), transparent); }
 body.bar-bottom .statusbar::before { inset: -24px 0 0; background: linear-gradient(0deg, rgba(6, 7, 10, 0.72) 0%, rgba(6, 7, 10, 0.38) 62%, rgba(6, 7, 10, 0) 100%); }
 body.bar-left .shell { grid-template-rows: 1fr; grid-template-columns: 92px 1fr; grid-template-areas: 'bar main'; }
 body.bar-left.hints-on .shell { grid-template-rows: 1fr 46px; grid-template-areas: 'bar main' 'bar hints'; }

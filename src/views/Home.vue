@@ -337,7 +337,10 @@ onMounted(async () => { await nextTick(); ensureFocus(el.value); });
 .shelf { padding: 22px var(--s-7) 18px; margin: -12px calc(-1 * var(--s-7)) 0; scroll-padding: 0 var(--s-7); }
 @media (max-width: 1400px) { .hero { padding-left: 36px; padding-right: 36px; } .hero-leave-active { left: 36px; } .shelves { padding-left: 36px; padding-right: 36px; } .shelf { padding-left: 36px; padding-right: 36px; margin-left: -36px; margin-right: -36px; scroll-padding: 0 36px; } }
 /* rows far below aren't laid out or painted until they come near (0.9.28: smoother on handhelds) */
-.shelves > .shelf-wrap:nth-child(n+3) { content-visibility: auto; contain-intrinsic-size: auto 360px; }
+/* 0.9.32 (owner: the first card's ring was cut): content-visibility clips a row to its own box, which stopped at
+   the page margin; the box now runs to the screen edges (margin out, padding back in), so a lifted card and its ring show */
+.shelves > .shelf-wrap:nth-child(n+3) { content-visibility: auto; contain-intrinsic-size: auto 360px; margin-left: calc(-1 * var(--s-7)); margin-right: calc(-1 * var(--s-7)); padding-left: var(--s-7); padding-right: var(--s-7); }
+@media (max-width: 1400px) { .shelves > .shelf-wrap:nth-child(n+3) { margin-left: -36px; margin-right: -36px; padding-left: 36px; padding-right: 36px; } }
 .hero-enter-active { transition: opacity 0.14s ease-out; }
 .hero-leave-active { transition: opacity 0.1s ease-in; position: absolute; }
 .hero-enter-from, .hero-leave-to { opacity: 0; }
