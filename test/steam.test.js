@@ -246,15 +246,19 @@ test('console collections: games already in Steam count, Cartridge\'s memory of 
   const code = `
     const lib = { platforms: [{ id: 1, slug: 'ps3', fs_slug: 'ps3', name: 'PlayStation 3', display_name: 'PlayStation 3' }], roms: { 1: [1, 2, 3].map((i) => ({ id: i, name: ['A', 'B', 'C'][i - 1] + ' Game', fs_name: ['A', 'B', 'C'][i - 1] + ' Game', platform_id: 1, platform_slug: 'ps3' })) } };
     const inst = { 1: ${JSON.stringify(H + '/roms/ps3/A Game')}, 2: ${JSON.stringify(H + '/roms/ps3/B Game')}, 3: ${JSON.stringify(H + '/roms/ps3/C Game')} };
-    const sm = require(${JSON.stringify(path.join(ROOT, 'electron/steamManager.js'))})({ USER_DATA: ${JSON.stringify(H + '/cfg')}, log() {}, PLATFORM_MAP: {}, getConfig: () => ({ steam: {} }), saveConfig() {}, broadcast() {},
+    // you once kept the old "PlayStation 3" for PS3, then deleted it in Steam
+    const conf = { steam: { collectionNames: { ps3: 'PlayStation 3' } } };
+    const sm = require(${JSON.stringify(path.join(ROOT, 'electron/steamManager.js'))})({ USER_DATA: ${JSON.stringify(H + '/cfg')}, log() {}, PLATFORM_MAP: {}, getConfig: () => conf, saveConfig() {}, broadcast() {},
       emulationRoots: () => [], getLibrary: () => lib, installed: () => inst, romById: () => null, isGamescope: () => false, artFor: () => ({}), MARKED: 'm', markedPath: () => null });
     (async () => {
       const c = await sm.consoleCollection('ps3');
       const r = await sm.fillCollections({ auto: true });
-      console.log(JSON.stringify({ name: c.name, games: c.games.map((g) => g.appid + ':' + g.in), r }));
+      console.log(JSON.stringify({ name: c.name, games: c.games.map((g) => g.appid + ':' + g.in), r, verify: sm.verifyCollections(), kept: conf.steam.collectionNames }));
     })();`;
   const out = JSON.parse(execFileSync(process.execPath, ['-e', code], { env: { ...process.env, HOME: H, XDG_DATA_HOME: '', CARTRIDGE_CEF_PORT: '' }, encoding: 'utf8' }).trim().split('\n').pop());
   assert.strictEqual(out.name, 'Sony PlayStation 3');
   assert.deepStrictEqual(out.games, ['102:false', '103:false', '101:true']);
   assert.deepStrictEqual(out.r, { count: 0, waiting: 2 }); // Steam's interface isn't reachable here: by itself it waits, never restarts Steam
+  assert.deepStrictEqual(out.kept, {}); // the deleted collection you'd kept is forgotten, so it's never made again
+  assert.ok(!out.verify.some((m) => m.collection === 'PlayStation 3')); // and isn't reported as dropped by Steam
 });

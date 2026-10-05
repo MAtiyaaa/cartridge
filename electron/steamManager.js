@@ -1278,6 +1278,7 @@ module.exports = function createSteamManager(ctx) {
     const env = environment();
     if (!env.account) return null;
     const cols = readCollections(env.account);
+    pruneStale(cols, false);
     const missing = [];
     for (const [appid, r] of Object.entries(reg)) {
       for (const c of r.collections || []) {
@@ -1568,9 +1569,27 @@ module.exports = function createSteamManager(ctx) {
   // Cartridge had put it in any collection of that name (reg[].collections, never checked against Steam), and only
   // games Cartridge added were looked at. Now every downloaded game of the console that has a shortcut in Steam
   // (Cartridge's, Steam ROM Manager's, EmuDeck's or your own) is compared with the collection's real contents.
+  // Collections you deleted are forgotten (0.9.34): a name you kept for a console, and the names Cartridge remembers
+  // putting a game in, when no collection of that name is in Steam any more. Without this, the start-up check called
+  // a collection you deleted "dropped by Steam" and its Fix made it again, and a kept name made it again too. A
+  // console's current collection is kept (Steam Cloud can still drop that one). Only from a list that was read.
+  function pruneStale(list, trusted) {
+    if (!list.length && !trusted) return;
+    const names = new Set(list.map((c) => c.name)), c = cfg();
+    let changed = false;
+    for (const [k, n] of Object.entries(c.collectionNames || {})) if (!names.has(n)) { delete c.collectionNames[k]; changed = true; log('kept collection gone from steam, forgotten:', n); }
+    if (changed) ctx.saveConfig();
+    const current = new Set(installedGames().map((g) => colName(g)));
+    let rc = false;
+    for (const r of Object.values(reg)) if (r.collections?.length) { const keep = r.collections.filter((n) => names.has(n) || current.has(n)); if (keep.length !== r.collections.length) { r.collections = keep; rc = true; } }
+    if (rc) saveReg();
+  }
   async function colsNow(env) {
-    if (await live.available(env.account.root).catch(() => false)) { const l = await live.listCollections().catch(() => null); if (l) return { list: l, live: true }; }
-    return { list: readCollections(env.account), live: false };
+    let out = null;
+    if (await live.available(env.account.root).catch(() => false)) { const l = await live.listCollections().catch(() => null); if (l) out = { list: l, live: true }; }
+    out ||= { list: readCollections(env.account), live: false };
+    pruneStale(out.list, out.live);
+    return out;
   }
   function gamesInSteam(env) {
     const idx = inSteamIndex(shortcutsOf(env.account)), out = [];

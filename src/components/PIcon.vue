@@ -17,13 +17,17 @@ const ALIAS = { 'genesis-slash-megadrive': 'genesis', ps: 'psx', 'turbografx16--
 const props = defineProps({ p: Object, size: { type: Number, default: 32 }, aspect: { type: Number, default: 1 } });
 const emit = defineEmits(['shape']);
 const i = ref(0), box = ref(null);
+const FITS = (window.__piconBoxes ||= new Map());
 const cands = computed(() => {
   const names = [...new Set([props.p.slug, props.p.fs_slug, ALIAS[props.p.slug]].filter(Boolean).map((s) => s.toLowerCase()))];
   return [...names.map((n) => `/assets/platforms/${n}.svg`), ...names.map((n) => `/assets/platforms/${n}.ico`)];
 });
-watch(cands, () => { i.value = 0; box.value = null; });
+// 0.9.34 (owner: console pictures glitched on the Emulators page while an emulator updated): pages pass `p` as a new
+// object on every redraw (each progress tick), and watching the list itself reset the measured fit each time while
+// the same picture never loads again to be measured. Only a real change of picture resets it, and one measured
+// before is applied at once.
+watch(() => cands.value.join('|'), () => { i.value = 0; box.value = FITS.get(new URL(img(cands.value[0]), location.href).href) || null; });
 const N = 96;
-const FITS = (window.__piconBoxes ||= new Map());
 const tf = computed(() => {
   const b = box.value; if (!b) return '';
   const a = props.aspect || 1, s = Math.min(1.8, (N * 0.94 * a) / b.bw, (N * 0.94) / b.bh);

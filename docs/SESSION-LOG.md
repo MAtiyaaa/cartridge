@@ -6,6 +6,9 @@ The branch for 0.9.3 work is `claude/relaxed-fermat-30pigp`. Pull it before star
 
 ---
 
+## 5 Oct 2026 · 0.9.35 Steady Pictures (built and released)
+- Owner: console ("system") icons glitch on Settings → Emulators while an emulator updates, again; and the collections request again (already in 0.9.34). Icons: PIcon reset its fit on every redraw (reproduced in the app with bg-job progress events, 30/30 before, 0/30 after). Collections: two more ways a deleted collection came back (kept name, start-up check Fix), fixed and tested.
+
 ## 5 Oct 2026 · 0.9.34 Back in Control (built and released)
 - Owner: the controller is seen but does nothing after a game started from Cartridge closes; and console collections: open one, see its games, add them, plus the bug where games already in Steam had to be added by hand to the new "Sony PlayStation 3".
 - Controller: no device to reproduce on. Read Chromium 152's gamepad code (visibility gates data, not focus). Found and fixed: a closed game's id kept as gamescope's focused app kept the pad off; main's refocus blur cleared `returned` on the desktop. Added Steam "back to running app" when gamescope doesn't name Cartridge, and logging so the next report shows where it stops. Simulated Game Mode with a fake xprop and a fake game process.
