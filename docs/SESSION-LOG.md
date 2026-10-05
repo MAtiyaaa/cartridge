@@ -6,6 +6,11 @@ The branch for 0.9.3 work is `claude/relaxed-fermat-30pigp`. Pull it before star
 
 ---
 
+## 5 Oct 2026 · 0.9.32 In the Background (built and released)
+- One update for everything the owner sent after 0.9.31 (owner: ship it all as one, read every message back first). Items: Vita3K shown after Delete, background jobs, GitHub .zip releases (GR2 fork), Steam settings flash, Syncthing chips and header, Home first-card clip, Cemu categories and Mega Cheats, black Dock for everyone, Settings dot, X360/Latest Trophies tile, no trailing text, Recently Played cover size, storage and week tiles, console widgets, console card overlap, Steam logo rotation, mods sorting and header, downloads caught from add-on sites, a game About, Steam collections rebuilt.
+- Owner's question, answered in the report: texture pack archives Cartridge downloads are deleted once installed (and on failure); a file picked with Install a Download is left where it was.
+- To test on a device: the add-on browser window in Game Mode (does it show in front, does Back to Cartridge return), Steam collections with live changes on and off, and a collection deleted in Steam.
+
 ## 4 Oct 2026 · 0.9.31 Sony's Own Marks (built and released)
 
 Owner (photo of the PS3 card): "make it say Sony like the actual controller ... the PlayStation icon is wrong ... check PS2, PS1 and PS4". Found in RomM's frontend/assets/platforms: ROMMY on psx/ps2/ps3/psp, an R logo on all six Sony pictures, "Rommstation" on psx/ps2. Fixed at load time in sonyArt.js (path hashes, measured boxes), RomM's art not copied into the repo. Checked: renders of all six before and after, the PlayStation card in the app against the mock RomM serving RomM's own SVG, npm test, vite build, launch check. Owner to test: the Consoles page and Start console cards for every Sony console on the TV.

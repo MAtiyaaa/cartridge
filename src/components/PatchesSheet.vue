@@ -18,12 +18,13 @@
         <button class="pt-row" :class="{ on: want[p.key], locked: p.by === 'emulator' }" data-focus data-expand @click="flip(p)">
           <span class="box"><Icon v-if="want[p.key]" name="mdiCheck" :size="18" /></span>
           <span class="pt-mid">
-            <b>{{ p.description }}</b>
-            <span class="pt-sub">{{ [p.by === 'emulator' ? `On in ${emuName}` : '', p.version === 'All' ? 'Any version' : '', p.author ? 'by ' + p.author : '', p.notes].filter(Boolean).join(' · ') }}</span>
+            <b>{{ emuName === 'Cemu' && p.name ? p.name : p.description }}</b>
+            <span class="pt-sub">{{ [p.by === 'emulator' ? `On in ${emuName}` : '', emuName === 'Cemu' && p.name ? String(p.description || '').split('\n')[0] : '', emuName === 'Cemu' && choicesOf(p).length > 1 ? `${choicesOf(p).length} options` : '', p.version === 'All' ? 'Any version' : '', p.author ? 'by ' + p.author : '', p.notes].filter(Boolean).join(' · ') }}</span>
           </span>
         </button>
-        <!-- 0.9.28 (owner: Cemu's resolution pack and others ask for a choice): its choices under it while it's on -->
-          <div v-if="want[p.key] && choicesOf(p).length" class="pt-presets">
+        <!-- 0.9.28 (owner: Cemu's resolution pack and others ask for a choice): its choices under it; 0.9.32 (owner:
+             Mega Cheats has a dozen options) shown off or on, and picking one turns the pack on -->
+          <div v-if="choicesOf(p).length" class="pt-presets" :class="{ off: !want[p.key] }">
             <div v-for="c in choicesOf(p)" :key="c.cat" class="pt-cat">
               <span class="pt-cat-l">{{ c.cat || 'Choice' }}</span>
               <div class="pt-chips"><button v-for="o in c.opts" :key="o" class="pt-chip" :class="{ on: (choice[p.key] || {})[c.cat] === o }" data-focus @click="choose(p, c.cat, o)">{{ o }}</button></div>
@@ -35,8 +36,10 @@
         <button class="btn" data-focus @click="closeModal(null)">{{ list.length ? 'Cancel' : 'Close' }}</button>
         <button v-if="list.length" class="btn primary" data-focus :disabled="!changed" @click="closeModal(changes())"><Icon name="mdiCheck" />Apply</button>
       </div>
-      <div v-else-if="list.length" class="row" style="justify-content: flex-end">
-        <span v-if="changed" class="muted small" style="margin-right: auto">{{ changes().length }} change{{ changes().length === 1 ? '' : 's' }} to apply</span>
+      <div v-else-if="list.length || emuName === 'Cemu'" class="row" style="justify-content: flex-end">
+        <!-- Cemu's own button (0.9.32): its community graphic packs, newest now -->
+        <button v-if="emuName === 'Cemu'" class="btn" data-focus :disabled="packsBusy" style="margin-right: auto" @click="packsDownload"><Icon :name="packsBusy ? 'mdiSync' : 'mdiDownload'" :class="{ spin: packsBusy }" />{{ packsBusy ? 'Downloading Graphic Packs…' : 'Download Latest Community Graphic Packs' }}</button>
+        <span v-if="changed" class="muted small" :style="emuName === 'Cemu' ? '' : 'margin-right: auto'">{{ changes().length }} change{{ changes().length === 1 ? '' : 's' }} to apply</span>
         <button class="btn" data-focus :disabled="!changed || busy" @click="undo">Undo</button>
         <button class="btn primary" data-focus :disabled="!changed || busy" @click="apply"><Icon name="mdiCheck" />Apply</button>
       </div>
@@ -73,10 +76,17 @@ const pickedOf = (p) => Object.fromEntries(Object.entries(p.presets || {}).map((
 const choice = reactive(Object.fromEntries(props.list.filter((p) => p.presets).map((p) => [p.key, pickedOf(p)])));
 const choiceWas = Object.fromEntries(Object.entries(choice).map(([k, v]) => [k, JSON.stringify(v)]));
 const presetsMoved = (p) => p.presets && JSON.stringify(choice[p.key]) !== choiceWas[p.key];
-function choose(p, cat, o) { choice[p.key] = { ...(choice[p.key] || {}), [cat]: o }; }
+function choose(p, cat, o) { choice[p.key] = { ...(choice[p.key] || {}), [cat]: o }; if (!want[p.key] && p.by !== 'emulator') want[p.key] = true; }
 const changed = computed(() => props.list.some((p) => want[p.key] !== was[p.key] || (want[p.key] && presetsMoved(p))));
 const changes = () => props.list.filter((p) => want[p.key] !== was[p.key] || (want[p.key] && presetsMoved(p))).map((p) => ({ key: p.key, on: want[p.key], ...(p.presets ? { presets: { ...choice[p.key] } } : {}) }));
-const busy = ref(false);
+const busy = ref(false), packsBusy = ref(false);
+const emit = defineEmits(['reload']);
+async function packsDownload() {
+  packsBusy.value = true;
+  try { const r = await call('cemu:packsDownload', { romId: props.romId }); toast(r?.updated ? `Cemu's graphic packs are now ${r.version}` : `Cemu's graphic packs are up to date${r?.version ? ' (' + r.version + ')' : ''}`, 'ok', 3500, 'mdiDownload'); emit('reload'); }
+  catch (e) { toast(e.message, 'error', 6000); }
+  packsBusy.value = false;
+}
 function undo() { for (const p of props.list) want[p.key] = was[p.key]; }
 async function apply() {
   busy.value = true;
@@ -122,6 +132,7 @@ onBeforeUnmount(() => layer?.pop());
 .pt-row.on:focus .box .icon { color: var(--focus); }
 .pt-mid { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .pt-sub { font-size: var(--t-sm); opacity: 0.75; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pt-presets.off { opacity: 0.6; }
 .pt-presets { flex: none; display: flex; flex-direction: column; gap: 8px; margin: -4px 0 4px 44px; padding: 10px 12px; border-radius: var(--r-md); background: rgba(255, 255, 255, 0.04); }
 .pt-cat { display: flex; flex-direction: column; gap: 6px; }
 .pt-cat-l { font-size: var(--t-xs); color: var(--muted); font-weight: 600; }

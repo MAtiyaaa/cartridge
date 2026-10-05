@@ -54,3 +54,22 @@ test('community graphic packs are fetched like Cemu does: newest release into do
   assert.strictEqual(C.list({ root, settings: path.join(root, 'settings.xml'), titleIds: [], name: 'The Legend of Zelda: Breath of the Wild (USA)' }).length, 1);
   fs.rmSync(root, { recursive: true, force: true });
 });
+
+// 0.9.32 (owner: Wind Waker's Cheats, Workarounds and Mods missing; packs only half downloaded)
+test('Cheats are their own group, and GitHub\'s release page is used when its API refuses', async () => {
+  const fs = require('fs'), os = require('os'), path = require('path');
+  const C = require('../electron/cemuPacks');
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'cemu-'));
+  const put = (rel, t) => { const f = path.join(root, 'graphicPacks', rel, 'rules.txt'); fs.mkdirSync(path.dirname(f), { recursive: true }); fs.writeFileSync(f, t); };
+  put('MegaCheats', '[Definition]\ntitleIds = 0005000010143500\nname = Cheats\npath = "The Legend of Zelda: The Wind Waker HD/Cheats/Mega Cheats"\n[Preset]\ncategory = Moon Jump (Hold L3)\nname = Off\n[Preset]\ncategory = Moon Jump (Hold L3)\nname = On\n[Preset]\ncategory = Sail Speed Boost (Hold A)\nname = Normal\n[Preset]\ncategory = Sail Speed Boost (Hold A)\nname = 2x\n');
+  put('WindWakerHD_PictoBox', '[Definition]\ntitleIds = 0005000010143500\nname = Picto-Box Fix\npath = "The Legend of Zelda: The Wind Waker HD/Workarounds/Picto-Box Fix"\n');
+  fs.writeFileSync(path.join(root, 'settings.xml'), '<content></content>');
+  const l = C.list({ root, settings: path.join(root, 'settings.xml'), titleIds: ['0005000010143500'] });
+  assert.deepStrictEqual(l.map((x) => [x.section, x.name]), [['Cheats', 'Cheats'], ['Workarounds', 'Picto-Box Fix']]);
+  assert.deepStrictEqual(Object.keys(l[0].presets), ['Moon Jump (Hold L3)', 'Sail Speed Boost (Hold A)']);
+  const fetchImpl = async (url) => (/api\.github/.test(url) ? { ok: false, status: 403 } : { ok: true, arrayBuffer: async () => new ArrayBuffer(4) });
+  const release = async () => ({ tag: 'Github999', assets: [{ name: 'graphicPacks999.zip', url: 'https://github.com/x/graphicPacks999.zip' }] });
+  const r = await C.downloadCommunity(root, { fetchImpl, unzip: async () => {}, release, force: true });
+  assert.deepStrictEqual(r, { updated: true, version: 'Github999' });
+  fs.rmSync(root, { recursive: true, force: true });
+});

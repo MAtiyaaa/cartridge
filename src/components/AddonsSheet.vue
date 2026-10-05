@@ -7,10 +7,14 @@
           <h2>{{ name }}</h2>
         </template>
         <div v-if="emus.length > 1" class="seg" style="margin: 4px 0 8px"><button v-for="e in emus" :key="e.emuRoot" data-focus :class="{ on: emu?.emuRoot === e.emuRoot }" @click="pickEmu(e)">{{ e.name }}{{ e.flatpak ? ' (Flatpak)' : '' }}</button></div>
-        <div v-if="emu" class="muted small mono">{{ emu.folder ? short(emu.folder) : `${short(emu.root)} (this game’s ID couldn’t be read)` }}</div>
-        <div v-if="here && wants(here.mods ? 'mods' : 'tex')" class="ad-here"><Icon name="mdiCheckCircle" :size="18" /><span>{{ here.mods ? 'Mods are' : 'A texture pack is' }} in place for this game ({{ here.files.toLocaleString() }} files), {{ here.by === 'cartridge' ? 'installed by Cartridge' : here.by === 'both' ? 'partly installed by Cartridge' : 'added outside Cartridge' }}.</span></div>
-        <div v-if="emu && !emu.mods && wants('tex')" class="muted small">{{ emu.on ? 'Custom textures are on.' : 'Custom textures are off. Cartridge turns them on when it installs a pack.' }}</div>
-        <div v-if="d?.version && wants('mods')" class="ad-ver"><Icon name="mdiTagOutline" :size="16" /><span>Your copy: <b>{{ d.version.display ? 'version ' + d.version.display : d.version.update ? 'update ' + d.version.update : 'the base game' }}</b><template v-if="d.version.text"> · {{ d.version.text }}</template><template v-else-if="d.version.number != null"> · v{{ d.version.number }}</template><template v-if="d.version.titleId"> · {{ d.version.titleId }}</template>. Mods made for another version may not load.</span></div>
+        <!-- 0.9.32 (owner: the lines between the emulator and the list were cluttered): one card of facts -->
+        <div v-if="emu" class="ad-facts">
+          <div class="ad-fact"><span>Emulator</span><b>{{ emu.name }}{{ emu.flatpak ? ' (Flatpak)' : '' }}</b></div>
+          <div class="ad-fact"><span>Folder</span><b class="mono">{{ emu.folder ? short(emu.folder) : short(emu.root) }}</b><em v-if="!emu.folder">This game’s ID couldn’t be read</em></div>
+          <div v-if="d?.version && wants('mods')" class="ad-fact"><span>Your Copy</span><b>{{ verText }}</b><em>Mods made for another version may not load</em></div>
+          <div v-if="!emu.mods && wants('tex')" class="ad-fact"><span>Custom Textures</span><b>{{ emu.on ? 'On' : 'Off' }}</b><em v-if="!emu.on">Turned on when a pack is installed</em></div>
+          <div v-if="here && wants(here.mods ? 'mods' : 'tex')" class="ad-fact ok"><span>In Place</span><b>{{ here.mods ? 'Mods' : 'A texture pack' }} · {{ here.files.toLocaleString() }} files</b><em>{{ here.by === 'cartridge' ? 'Installed by Cartridge' : here.by === 'both' ? 'Partly installed by Cartridge' : 'Added outside Cartridge' }}</em></div>
+        </div>
       </div>
 
       <div v-if="!d" class="muted"><Icon name="mdiSync" :size="16" class="spin" /> Looking for add-ons…</div>
@@ -34,7 +38,11 @@
             <span class="ad-end">Open Page</span>
           </button>
         </template>
-        <div class="ad-h">{{ kind === 'mods' ? 'Mods from GameBanana' : kind === 'tex' ? 'Texture packs' : d.source === 'ps2' ? (d.gbGame ? 'PS2 texture packs and GameBanana' : 'PS2 texture packs') : 'From GameBanana' }}</div>
+        <div class="ad-hrow">
+          <div class="ad-h">{{ kind === 'mods' ? 'Mods from GameBanana' : kind === 'tex' ? 'Texture packs' : d.source === 'ps2' ? (d.gbGame ? 'PS2 texture packs and GameBanana' : 'PS2 texture packs') : 'From GameBanana' }}</div>
+          <!-- 0.9.32 (owner): sort, most downloaded first -->
+          <div v-if="packs.some((p) => p.source === 'gb')" class="seg ad-sort"><button v-for="o in SORTS" :key="o.v" data-focus :class="{ on: sort === o.v }" @click="setSort(o.v)">{{ o.l }}</button></div>
+        </div>
         <div v-if="d.error && (kind !== 'tex' || d.source === 'ps2')" class="muted small">{{ d.error }}</div>
         <div v-else-if="!packs.length" class="muted small">{{ !d.emus?.length ? 'No emulator for this console is set up here.' : kind === 'tex' ? (d.source === 'ps2' ? 'No texture packs for this game in the catalog yet.' : 'There’s no texture pack catalog for this console yet. A pack you put in the folder above is used once custom textures are on.') : 'No mods for this game on GameBanana.' }}</div>
         <template v-for="p in packs" :key="p.source + p.id">
@@ -73,7 +81,7 @@
 // picked above: PS2 texture packs from the EmuCoreX catalog, other consoles' mods from GameBanana.
 import { computed, onMounted, onBeforeUnmount, ref } from 'vue';
 import { pushLayer, focusFirst } from '../nav.js';
-import { store, call, closeModal, toast, bytes, confirm, pickFolder, openModal, tab } from '../store.js';
+import { store, call, closeModal, toast, bytes, confirm, pickFolder, openModal, tab, saveConfig } from '../store.js';
 import Icon from './Icon.vue';
 
 // embedded (0.9.21): one tab of Game Add-ons (GameAddons.vue); kind 'tex' is the texture pack catalog
@@ -86,7 +94,14 @@ const wants = (k) => !props.kind || props.kind === k;
 const ofKind = (p) => wants(isTex(p) ? 'tex' : 'mods');
 const packs = computed(() => (d.value?.packs || []).filter(ofKind));
 const featured = computed(() => d.value?.featured || []);
-function openPage(f) { window.open(f.page); toast('Opened in your browser. When it’s downloaded, come back and pick Install a Download.', 'info', 5000); }
+// 0.9.32 (owner: clicking a download on the site did nothing): the page opens in a Cartridge window;
+// a .zip/.7z/.rar downloaded there shows in Downloads and installs for this game
+async function openPage(f) { await browse(f.page, f.name); }
+async function browse(url, name) {
+  if (!emu.value) return toast('No emulator for this game is set up here.', 'info');
+  try { await call('addons:browse', { url, name, romId: props.romId, emuRoot: emu.value.emuRoot, kind: props.kind || 'tex' }); toast('Click a download on the page: Cartridge installs it for this game. Escape or Back to Cartridge closes the page.', 'info', 6000, 'mdiDownload'); }
+  catch (e) { toast(e.message, 'error', 5000); }
+}
 // 0.9.23 (owner: Cartridge installs packs itself): a pack downloaded from any site, put in the right folder
 // for this emulator the same way as the catalog's
 async function fromFile() {
@@ -100,7 +115,12 @@ async function fromFile() {
 const mine = computed(() => (d.value?.installed || []).filter((r) => (!emu.value || r.emuRoot === emu.value.emuRoot) && ofKind(r)));
 const short = (p) => String(p || '').replace(store.info?.home || '\0', '~');
 const has = (p) => mine.value.some((r) => String(r.id) === String(p.id));
-const subOf = (p) => [p.authors?.[0] ? 'by ' + p.authors.join(', ') : '', p.size ? bytes(p.size) : '', p.files ? p.files.toLocaleString() + ' textures' : '', p.version, p.category].filter(Boolean).join(' · ');
+const big = (n) => (n >= 1e6 ? (n / 1e6).toFixed(1).replace(/\.0$/, '') + 'M' : n >= 1e3 ? (n / 1e3).toFixed(1).replace(/\.0$/, '') + 'k' : String(n));
+const subOf = (p) => [p.authors?.[0] ? 'by ' + p.authors.join(', ') : '', p.downloads ? big(p.downloads) + ' downloads' : '', p.likes ? big(p.likes) + ' likes' : '', p.size ? bytes(p.size) : '', p.files ? p.files.toLocaleString() + ' textures' : '', p.version, p.category].filter(Boolean).join(' · ');
+const SORTS = [{ v: 'downloads', l: 'Most Downloaded' }, { v: 'updated', l: 'Recently Updated' }, { v: 'newest', l: 'Newest' }, { v: 'liked', l: 'Most Liked' }];
+const sort = ref(store.config.ui?.modSort || 'downloads');
+function setSort(v) { if (sort.value === v) return; sort.value = v; saveConfig({ ui: { modSort: v } }); load(); }
+const verText = computed(() => { const v = d.value?.version; if (!v) return ''; return [v.display ? 'Version ' + v.display : v.update ? 'Update ' + v.update : 'The base game', v.text || (v.number != null ? 'v' + v.number : ''), v.titleId].filter(Boolean).join(' · '); });
 const runText = computed(() => { const r = run.value; if (!r) return ''; return r.state === 'download' ? `Downloading ${r.pct != null ? r.pct + '%' : ''}` : r.state === 'join' ? 'Joining the parts…' : r.state === 'install' ? `Installing ${r.pct || 0}%` : 'Starting…'; });
 
 // what is already in the game's folder (0.9.19), Cartridge's or not
@@ -108,7 +128,7 @@ const present = ref([]);
 const here = computed(() => present.value.find((x) => x.emu === emu.value?.id) || null);
 async function load() {
   call('addons:present', { romIds: [props.romId] }).then((m) => { present.value = m?.[props.romId] || []; }).catch(() => {});
-  try { d.value = await call('addons:available', { romId: props.romId }); } catch (e) { d.value = { emus: [], packs: [], installed: [], error: e.message }; }
+  try { d.value = await call('addons:available', { romId: props.romId, sort: sort.value }); } catch (e) { d.value = { emus: [], packs: [], installed: [], error: e.message }; }
   if (!emu.value) emu.value = (d.value.source === 'ps2' ? emus.value.find((e) => e.id === 'pcsx2') : null) || emus.value[0] || null;
   else emu.value = emus.value.find((e) => e.emuRoot === emu.value.emuRoot) || emus.value[0] || null;
 }
@@ -119,6 +139,7 @@ async function act(p) {
   reopen();
   if (!r) return;
   if (has(p)) return toast('Already installed. Remove it from the list above.', 'info', 3000);
+  if (r.page) return browse(p.url, p.name);
   if (r.file) return install(p, r.file);
   if (r.install && p.source === 'ps2') return install(p, null);
 }
@@ -172,6 +193,15 @@ onBeforeUnmount(() => { layer?.pop(); off?.(); });
 .mono { font-family: ui-monospace, monospace; word-break: break-all; }
 .ad-list { overflow-y: auto; min-height: 0; flex: 1; display: flex; flex-direction: column; gap: var(--s-2); padding: 2px; }
 .ad-h { font-weight: 600; margin-top: var(--s-2); }
+.ad-hrow { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); flex-wrap: wrap; margin-top: var(--s-2); }
+.ad-hrow .ad-h { margin-top: 0; }
+.ad-sort button { font-size: var(--t-xs); }
+.ad-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 2px 18px; margin: 6px 0 4px; padding: 12px 16px; border-radius: var(--r-md); background: rgba(255, 255, 255, 0.04); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06); }
+.ad-fact { display: flex; flex-direction: column; gap: 1px; min-width: 0; padding: 4px 0; }
+.ad-fact > span { font-size: var(--t-xs); color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600; }
+.ad-fact > b { font-size: var(--t-sm); font-weight: 600; overflow-wrap: anywhere; }
+.ad-fact > em { font-style: normal; font-size: var(--t-xs); color: var(--muted); }
+.ad-fact.ok > b { color: #8be0a4; }
 .ad-here { display: flex; align-items: center; gap: 8px; color: #8be0a4; font-size: var(--t-sm); font-weight: 500; margin-top: 4px; }
 .ad-row { flex: none; display: flex; align-items: center; gap: var(--s-3); text-align: left; padding: var(--s-3) var(--s-4); border-radius: var(--r-md); background: var(--s1); color: inherit; border: 0; font: inherit; }
 .ad-row:focus { background: var(--focus); color: var(--on-focus); outline: none; box-shadow: none; }

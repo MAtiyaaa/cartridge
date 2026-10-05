@@ -188,3 +188,38 @@ test('multi-disc games get a playlist in their folder, in disc order', () => {
   assert.strictEqual(fs.readFileSync(out[0], 'utf8'), 'Final Fantasy VII (Disc 1).cue\nFinal Fantasy VII (Disc 2).cue\nFinal Fantasy VII (Disc 3).cue\n');
   assert.strictEqual(out[1], null);
 });
+
+// 0.9.32 (owner: Vita3K deleted twice, still "already on this device"): EmuDeck's launcher stays after the
+// program is gone, so it only counts while what it starts is there
+test('an EmuDeck launcher counts only while its emulator is there', () => {
+  const H = path.join(TMP, 'vita-gone');
+  fs.mkdirSync(H + '/cfg', { recursive: true });
+  fs.mkdirSync(H + '/Emulation/tools/launchers', { recursive: true });
+  fs.mkdirSync(H + '/Applications/Vita3K', { recursive: true });
+  fs.writeFileSync(H + '/Emulation/tools/launchers/vita3k.sh', '#!/bin/bash\nemuName="Vita3K"\nemufolder="$HOME/Applications/Vita3K"\n"${emufolder}/${emuName}" -Fr "$@"\n');
+  fs.writeFileSync(H + '/Applications/Vita3K/Vita3K', '#!/bin/sh\n'); fs.chmodSync(H + '/Applications/Vita3K/Vita3K', 0o755);
+  const run = () => execFileSync(process.execPath, ['-e', `
+    const sm = require(${JSON.stringify(path.join(ROOT, 'electron/steamManager.js'))})({ USER_DATA: ${JSON.stringify(H + '/cfg')}, log() {}, PLATFORM_MAP: {}, getConfig: () => ({}), saveConfig() {}, broadcast() {},
+      emulationRoots: () => [${JSON.stringify(H + '/Emulation')}], getLibrary: () => null, installed: () => ({}), romById: () => null, isGamescope: () => false, artFor: () => ({}), MARKED: 'm', markedPath: () => null });
+    console.log(JSON.stringify((sm.candidatesFor('psvita') || []).map((c) => /vita3k\.sh/.test(c.sub) ? 'emudeck' : c.sub)));`], { env: { ...process.env, HOME: H, XDG_DATA_HOME: '', PATH: '/usr/bin:/bin' }, encoding: 'utf8' }).trim().split('\n').pop();
+  assert.ok(JSON.parse(run()).includes('emudeck'));
+  fs.rmSync(H + '/Applications/Vita3K', { recursive: true, force: true }); // what Cartridge's Delete does
+  assert.ok(!JSON.parse(run()).includes('emudeck'));
+});
+
+// 0.9.32 (owner: a collection deleted in Steam still showed): Steam's local changes file wins over the main one
+test('collections deleted or renamed in Steam\'s .modified.json are read that way', () => {
+  const H = path.join(TMP, 'cols');
+  const S = H + '/.local/share/Steam', C = S + '/userdata/42/config/cloudstorage';
+  fs.mkdirSync(C, { recursive: true }); fs.mkdirSync(S + '/config', { recursive: true }); fs.mkdirSync(H + '/cfg', { recursive: true });
+  fs.writeFileSync(S + '/config/loginusers.vdf', '"users"\n{\n\t"76561197960265770"\n\t{\n\t\t"MostRecent"\t\t"1"\n\t}\n}\n');
+  const row = (id, name, more = {}) => [`user-collections.${id}`, { key: `user-collections.${id}`, value: JSON.stringify({ id, name, added: [1, 2] }), ...more }];
+  fs.writeFileSync(C + '/cloud-storage-namespace-1.json', JSON.stringify([row('a', 'PS3 Games'), row('b', 'Old Stuff'), row('c', 'Favs')]));
+  fs.writeFileSync(C + '/cloud-storage-namespace-1.modified.json', JSON.stringify([[`user-collections.b`, { key: 'user-collections.b', is_deleted: true }], row('c', 'Favourites')]));
+  const code = `
+    const sm = require(${JSON.stringify(path.join(ROOT, 'electron/steamManager.js'))})({ USER_DATA: ${JSON.stringify(H + '/cfg')}, log() {}, PLATFORM_MAP: {}, getConfig: () => ({}), saveConfig() {}, broadcast() {},
+      emulationRoots: () => [], getLibrary: () => null, installed: () => ({}), romById: () => null, isGamescope: () => false, artFor: () => ({}), MARKED: 'm', markedPath: () => null });
+    console.log(JSON.stringify(sm.collections().map((c) => c.name)));`;
+  const out = execFileSync(process.execPath, ['-e', code], { env: { ...process.env, HOME: H, XDG_DATA_HOME: '' }, encoding: 'utf8' }).trim().split('\n').pop();
+  assert.deepStrictEqual(JSON.parse(out), ['Favourites', 'PS3 Games']);
+});

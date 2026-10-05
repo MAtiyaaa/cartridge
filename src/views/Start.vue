@@ -50,7 +50,7 @@
                 <!-- 0.9.24 (owner: empty space when big): what each console's games take up on this device -->
                 <div v-if="byCon.length" class="st-store-cons">
                   <!-- 0.9.28 (owner): the console's small icon, its name only where it fits, and only the rows that fit -->
-                  <div v-for="c in byCon.slice(0, Math.max(1, Math.min(8, Math.floor((box(t).ph - 150) / 24))))" :key="c.name" class="st-store-con"><span class="st-sc-n"><PIcon :p="c.p" :size="16" /><span class="st-sc-name">{{ c.name }}</span></span><i><b :style="{ width: (c.size / byCon[0].size) * 100 + '%' }" /></i><em class="tnum">{{ bytes(c.size) }}</em></div>
+                  <div v-for="c in byCon.slice(0, storeRows(t))" :key="c.name" class="st-store-con"><span class="st-sc-n"><PIcon :p="c.p" :size="16" /><span class="st-sc-name">{{ c.name }}</span></span><i><b :style="{ width: (c.size / byCon[0].size) * 100 + '%' }" /></i><em class="tnum">{{ bytes(c.size) }}</em></div>
                 </div>
               </div>
               <div class="st-gauge" :class="{ low: freePct < 10 }">
@@ -62,6 +62,8 @@
 
           <!-- This week: the total, the day you played most, and a bar for each day (today in white) -->
           <template v-else-if="t.type === 'week'">
+            <!-- 0.9.32 (owner: "extremely empty at 1x1"): the game you played last, soft behind a small tile -->
+            <img v-if="weekArt" class="st-week-bg" :src="weekArt" alt="" />
             <div class="st-week">
               <div class="st-week-text">
                 <div class="st-label">Played This Week</div>
@@ -100,9 +102,9 @@
               <div class="st-row" :class="{ tall: t.h > 1, narrow: t.w <= 2 }">
                 <div class="st-row-info">
                   <div class="st-label"><span class="st-lname">{{ rowName(t) }}</span><span class="st-count">{{ (sel[t.id] || 0) + 1 }} / {{ listOf(t).length }}</span></div>
-                  <div class="st-lead-wrap"><Transition name="st-lead">
+                  <div class="st-lead-wrap" :style="t.h > 1 ? { height: Math.round(Math.min(56, box(t).ph * 0.16) + 30) + 'px' } : null"><Transition name="st-lead">
                     <div :key="rowView(t)[0].id" class="st-row-lead">
-                      <GameLogo :logo="store.config.ui.logos !== false ? logoOf(rowView(t)[0]) : null" :name="rowView(t)[0].name" cls="st-row-name" :area="Math.min(16000, box(t).pw * box(t).ph * 0.07)" :max-w="Math.min(300, box(t).pw * 0.36)" :max-h="Math.min(64, box(t).ph * 0.3)" />
+                      <GameLogo :logo="store.config.ui.logos !== false ? logoOf(rowView(t)[0]) : null" :name="rowView(t)[0].name" cls="st-row-name" :area="Math.min(16000, box(t).pw * box(t).ph * 0.07)" :max-w="Math.min(300, box(t).pw * (t.h > 1 ? 0.5 : 0.36))" :max-h="t.h > 1 ? Math.min(56, box(t).ph * 0.16) : Math.min(64, box(t).ph * 0.3)" />
                       <span class="st-sub">{{ firstLine(t.type, rowView(t)[0]) }}</span>
                     </div>
                   </Transition></div>
@@ -124,15 +126,32 @@
             <div class="st-label"><span class="st-lname">{{ t.console ? consoleFull(t.console) + ' Trophies' : 'Latest Trophies' }}</span><span v-if="achOf(t).week" class="st-count">{{ achOf(t).week }} this week</span></div>
             <template v-if="achOf(t).list.length">
               <!-- 0.9.24 (owner: too much empty space when big): as many unlocks as the tile holds, in columns when wide -->
-              <div class="st-tro" :class="{ one: troFor(t).n === 1, feat: troFor(t).feat }">
+              <div class="st-tro" :class="{ one: troFor(t).n === 1, feat: troFor(t).feat, across: troFor(t).across, solo: achOf(t).list.length > 1 && troFor(t).n === 1 }">
                 <!-- 0.9.28 (owner: big trophy tiles were mostly empty): the newest unlock as a feature card, the rest beside it -->
                 <div v-if="troFor(t).feat" class="st-tro-feat">
+                  <img v-if="troArt(t)" class="st-tro-fbg" :src="troArt(t)" alt="" />
                   <span class="st-tro-fbadge"><img v-if="achView(t)[0].badge" :src="achView(t)[0].badge" alt="" /><Grade v-else :g="achView(t)[0].grade" :size="54" /></span>
                   <b>{{ achView(t)[0].title }}</b>
                   <span v-if="achView(t)[0].desc" class="st-tro-fd">{{ achView(t)[0].desc }}</span>
                   <span class="st-tro-fg">{{ achView(t)[0].game }}<template v-if="achView(t)[0].t"> · {{ agoShort(achView(t)[0].t) }}</template></span>
                 </div>
-                <div class="st-tro-list" :style="{ gridTemplateColumns: `repeat(${troFor(t).cols}, minmax(0, 1fr))` }">
+                <!-- 0.9.32: beside or under it, your games' progress for this console, then more unlocks if there's room -->
+                <div v-if="troFor(t).feat" class="st-tro-side">
+                  <div v-for="(g, i) in troGamesOf(t).slice(0, troFor(t).side)" :key="g.key" class="st-tro-game" :style="{ '--i': i }">
+                    <span class="st-tro-gart"><img v-if="g.art" :src="g.art" alt="" /></span>
+                    <span class="st-tro-gt"><b>{{ g.title }}</b><span class="st-tro-bar"><i :style="{ width: Math.round((g.earned / Math.max(1, g.total)) * 100) + '%' }" /></span></span>
+                    <span class="st-tro-gn">{{ g.earned }}<small>/{{ g.total }}</small></span>
+                  </div>
+                  <!-- room left: the unlocks before the newest, by name, then as badges -->
+                  <div v-for="(a, i) in achView(t).slice(1, 1 + Math.max(0, troFor(t).side - troGamesOf(t).length - 1))" :key="a.key" class="st-tro-main" :style="{ '--i': i + 2 }">
+                    <span class="st-tro-badge"><img v-if="a.badge" :src="a.badge" alt="" /><Grade v-else :g="a.grade" :size="26" /></span>
+                    <span class="st-tro-t"><b>{{ a.title }}</b><span>{{ a.game }}<template v-if="a.t"> · {{ agoShort(a.t) }}</template></span></span>
+                  </div>
+                  <div v-if="achOf(t).list.length > troFor(t).side - troGamesOf(t).length" class="st-tro-mosaic">
+                    <span v-for="(a, i) in achView(t).slice(Math.max(1, troFor(t).side - troGamesOf(t).length), Math.max(1, troFor(t).side - troGamesOf(t).length) + 12)" :key="a.key" class="st-tro-mini" :style="{ '--i': i }" :title="a.title"><img v-if="a.badge" :src="a.badge" alt="" /><Grade v-else :g="a.grade" :size="16" /></span>
+                  </div>
+                </div>
+                <div v-else class="st-tro-list" :style="{ gridTemplateColumns: `repeat(${troFor(t).cols}, minmax(0, 1fr))` }">
                   <div v-for="(a, i) in achView(t).slice(troFor(t).feat ? 1 : 0, troFor(t).n + (troFor(t).feat ? 1 : 0))" :key="a.key" class="st-tro-main" :style="{ '--i': i }">
                     <span class="st-tro-badge"><img v-if="a.badge" :src="a.badge" alt="" /><Grade v-else :g="a.grade" :size="26" /></span>
                     <span class="st-tro-t"><b>{{ a.title }}</b><span>{{ a.game }}<template v-if="a.t"> · {{ agoShort(a.t) }}</template></span></span>
@@ -187,6 +206,36 @@
               <div class="st-pin">
                 <GameLogo :key="spotOf(t).id" :logo="store.config.ui.logos !== false ? logoOf(spotOf(t)) : null" :name="spotOf(t).name" cls="st-pin-name" :area="Math.min(22000, box(t).pw * box(t).ph * 0.12)" :max-w="box(t).pw * 0.7" :max-h="Math.min(110, box(t).ph * 0.32)" />
                 <span class="st-mark">{{ store.play[spotOf(t).id]?.min ? playtimeText(store.play[spotOf(t).id].min) + ' played' : store.installed[spotOf(t).id] ? 'On this device' : '' }}</span>
+              </div>
+            </template>
+            <div v-else class="st-empty small"><span>No games for this console yet</span></div>
+          </template>
+          <!-- Game Disc or Cartridge (0.9.32): the game as it came, a disc spinning with its cover printed on it, or a
+               cartridge with its cover as the label; LB/RB to the next game, A opens it -->
+          <template v-else-if="t.type === 'media'">
+            <template v-if="mediaOf(t)">
+              <div class="st-label"><span class="st-lname">{{ platformById(t.platformId)?.display_name }}</span><span class="st-count">{{ (sel[t.id] || 0) + 1 }} / {{ conList(t.platformId).length }}</span></div>
+              <Transition name="st-xf"><div v-if="box(t).pw > box(t).ph * 1.4" :key="mediaOf(t).id" class="st-media-bg" :style="{ backgroundImage: bgUrl(artOf(mediaOf(t)) || cover(mediaOf(t), true)) }" /></Transition>
+              <div class="st-media" :class="[isDisc(t) ? 'disc' : 'cart', { wide: box(t).pw > box(t).ph * 1.4 }]">
+                <div class="st-media-stage"><Transition name="st-media"><div :key="mediaOf(t).id" class="st-media-obj">
+                  <div v-if="isDisc(t)" class="st-disc" :style="{ backgroundImage: bgUrl(cover(mediaOf(t), true)) }"><i class="st-disc-sheen" /><i class="st-disc-hub" /></div>
+                  <div v-else class="st-cart" :style="cartTint(t)"><i class="st-cart-grip" /><div class="st-cart-label" :style="{ backgroundImage: bgUrl(cover(mediaOf(t), true)) }" /></div>
+                </div></Transition></div>
+                <div class="st-media-t"><b>{{ mediaOf(t).name }}</b><span>{{ store.play[mediaOf(t).id]?.min ? playtimeText(store.play[mediaOf(t).id].min) + ' played' : store.installed[mediaOf(t).id] ? 'On this device' : 'In your library' }}</span></div>
+              </div>
+            </template>
+            <div v-else class="st-empty small"><span>No games for this console yet</span></div>
+          </template>
+          <!-- Game Shelf (0.9.32): the console's games standing as boxes, spines out; the chosen one slides out to show its cover -->
+          <template v-else-if="t.type === 'shelf'">
+            <template v-if="conList(t.platformId).length">
+              <div class="st-label"><span class="st-lname">{{ platformById(t.platformId)?.display_name }} Shelf</span><span class="st-count">{{ (sel[t.id] || 0) + 1 }} / {{ conList(t.platformId).length }}</span></div>
+              <div class="st-shelf">
+                <div v-for="r in shelfOf(t)" :key="r.id" class="st-spine" :class="{ out: r.id === conList(t.platformId)[sel[t.id] || 0]?.id }">
+                  <img class="st-spine-art" :src="cover(r, true) || BLANK" alt="" loading="lazy" @error="noImg" />
+                  <span class="st-spine-t">{{ r.name }}</span>
+                </div>
+                <i class="st-shelf-board" />
               </div>
             </template>
             <div v-else class="st-empty small"><span>No games for this console yet</span></div>
@@ -331,10 +380,11 @@ import EmuIcon from '../components/EmuIcon.vue';
 import PIcon from '../components/PIcon.vue';
 import ConsoleMark from '../components/ConsoleMark.vue';
 import StartClock from '../components/StartClock.vue';
+import { consoleColors } from '../consoleColors.js';
 import { TILES, GROUPS, MANY, DEFAULT, valid, COLS, MAX_H, pack, settle, bottom } from '../startTiles.js';
 
 const ROWS = 4; // rows that fill the screen; more scroll
-const STEPS = new Set(['fresh', 'recent', 'favs', 'recs', 'cgames', 'trophies', 'surprise']);
+const STEPS = new Set(['fresh', 'recent', 'favs', 'recs', 'cgames', 'trophies', 'surprise', 'media', 'shelf']);
 const COVER_ROWS = {
   fresh: { empty: 'Games added to RomM show here' },
   recent: { empty: 'Games you play show here' },
@@ -425,11 +475,19 @@ function fanN(t) {
 // trophies: rows of about 60 px and columns of about 300 px, leaving room for the label and the badge strip
 function troFor(t) {
   const { pw, ph } = box(t), pad = Math.min(22, ph * 0.09), h = ph - pad * 2 - 26 - (ph > 200 ? 46 : 0);
-  // big tiles (0.9.28): a feature card takes the left 40%, the list fills the rest
-  const feat = pw >= 560 && ph >= 230 && achOf(t).list.length > 1, lw = feat ? pw * 0.56 : pw;
-  const cols = Math.max(1, Math.min(4, Math.floor(lw / 300))), rows = Math.max(1, Math.floor(h / 62));
-  return { cols, rows, n: Math.max(1, cols * rows), feat };
+  // big tiles (0.9.28): a feature card and a list beside it. 0.9.32 (owner: "look at all this wasted real estate"):
+  // any big tile, wide or tall, gets the newest unlock as a card and your games' progress filling the rest
+  const feat = achOf(t).list.length > 0 && ((pw >= 560 && ph >= 230) || (pw >= 300 && ph >= 300));
+  const across = feat && pw / ph >= 1.25, lw = across ? pw * 0.56 : pw;
+  const sideH = across ? h : h - Math.min(ph * 0.42, 210);
+  const cols = Math.max(1, Math.min(4, Math.floor(lw / 300))), rows = Math.max(1, Math.floor((feat ? sideH : h) / 62));
+  return { cols, rows, n: Math.max(1, cols * rows), feat, across, side: Math.max(1, Math.floor(Math.max(sideH, 60) / 58)) };
 }
+// the games of a trophy tile with their progress (0.9.32), latest unlock first
+const troGames = ref([]);
+const troGamesOf = (t) => (t.console ? troGames.value.filter((g) => sameConsole(g.console, t.console)) : troGames.value);
+// the newest unlock's game art, behind its card (its cover from the library, else the trophy set's icon, else the badge)
+const troArt = (t) => { const a = achView(t)[0]; if (!a) return ''; const g = troGames.value.find((x) => x.title === a.game); return (g && g.art) || a.badge || ''; };
 // Console Spotlight (0.9.28): the console's games take turns, a new one every 12 seconds
 const spotTick = ref(0);
 const spotOf = (t) => { const l = conList(t.platformId); return l.length ? l[(spotTick.value + (t.id.length % 7)) % l.length] : null; };
@@ -473,6 +531,14 @@ const rowOf = (type) => rows.value[type] || [];
 const sel = reactive({});
 const conList = (pid) => roms.value.filter((r) => r.platform_id === pid).sort((a, b) => (lastPlay(b) - lastPlay(a)) || a.name.localeCompare(b.name));
 const listOf = (t) => (t.type === 'cgames' ? conList(t.platformId) : rowOf(t.type));
+// Disc or Cartridge (0.9.32): consoles whose games came on discs spin; the rest are cartridges
+const DISC = /^(psx|ps|ps2|ps3|ps4|ps5|psp|ngc|gamecube|gc|wii|wiiu|dc|dreamcast|saturn|segacd|sega-cd|xbox|xbox360|xboxone|3do|pc-fx|pcfx|neo-geo-cd|neogeocd|turbografx-cd|tg-cd|pce-cd|cdi|jaguar-cd)$/i;
+// the cartridge shell takes the console's own colour (consoleColors), like the Consoles page cards
+const cartTint = (t) => { const c = consoleColors(platformById(t.platformId) || {}); return c ? { '--sys-a': c[0] } : null; };
+const isDisc = (t) => { const p = platformById(t.platformId); return DISC.test(p?.slug || '') || DISC.test(p?.fs_slug || ''); };
+const mediaOf = (t) => { const l = conList(t.platformId); return l[(sel[t.id] || 0) % Math.max(1, l.length)] || null; };
+// the shelf shows the spines that fit, with the chosen one in view
+const shelfOf = (t) => { const l = conList(t.platformId), n = Math.max(3, Math.floor((box(t).pw - 40) / 52)), i = sel[t.id] || 0, from = Math.max(0, Math.min(i - Math.floor(n / 3), l.length - n)); return l.slice(from, from + n); };
 // the page overview's picture of a tile: a game's cover where the tile shows games, a picture tile's picture,
 // else its icon and name (0.9.28)
 function ovThumb(x) {
@@ -493,7 +559,7 @@ const rowName = (t) => (t.type === 'cgames' ? `${platformById(t.platformId)?.dis
 const rowView = (t) => listOf(t).slice(sel[t.id] || 0);
 const achView = (t) => achOf(t).list.slice(sel[t.id] || 0);
 function stepTile(t, d) {
-  const n = COVER_ROWS[t.type] ? listOf(t).length : t.type === 'trophies' ? achOf(t).list.length : 0;
+  const n = COVER_ROWS[t.type] ? listOf(t).length : t.type === 'trophies' ? achOf(t).list.length : t.type === 'media' || t.type === 'shelf' ? conList(t.platformId).length : 0;
   if (t.type === 'surprise') { deal(); sfx.move?.(); focusTile(t); return true; }
   if (n < 2) return false;
   sel[t.id] = ((sel[t.id] || 0) + d + n) % n; stepped[t.id] = Date.now(); due[t.id] = Date.now() + ROLL_HOLD; sfx.move?.(); focusTile(t); return true;
@@ -555,6 +621,8 @@ const space = ref(null);
 const loadSpace = () => call('fs:space', store.config.romsRoot || store.info?.home || '/').then((s) => { space.value = s; }).catch(() => {});
 const sizeNum = (b) => { const s = bytes(b).split(' '); return s[0]; };
 const sizeUnit = (b) => { const s = bytes(b).split(' '); return s[1] || ''; };
+// how many console rows fit (0.9.32, owner: the last one sat on the edge): in a tall tile the gauge is above them
+const storeRows = (t) => { const { pw, ph } = box(t), tall = pw / ph < 1.2, used = tall ? Math.min(pw, ph * 0.6) + 150 : 160; return Math.max(1, Math.min(8, Math.floor((ph - used) / 28))); };
 const byCon = computed(() => {
   const m = {};
   for (const r of roms.value) if (store.installed[r.id]) { const k = r.platform_display_name || r.platform_slug; m[k] ||= { name: k, size: 0, p: { slug: r.platform_slug, fs_slug: r.platform_fs_slug } }; m[k].size += r.fs_size_bytes || 0; }
@@ -580,6 +648,7 @@ const weekNote = computed(() => {
   if (top === w.length - 1) return 'Most of it today';
   return 'Most on ' + new Date(2026, 0, 4 + w[top].dow).toLocaleDateString(undefined, { weekday: 'long' });
 });
+const weekArt = computed(() => { const r = playing.value[0]; return r ? cover(r, true) : ''; });
 const loadWeek = () => call('play:week').then((w) => { week.value = w || []; }).catch(() => {});
 // latest trophies and achievements
 const ach = ref([]);
@@ -588,7 +657,7 @@ async function loadAch() {
   const out = [];
   await Promise.all([
     store.config.ra?.user ? call('ra:overview').then((o) => { for (const a of o.recent || []) out.push({ key: 'ra' + a.id + a.date, t: raDate(a.date), badge: img(a.badge), title: a.title, desc: a.description || '', game: a.game, console: a.console || '', open: () => go('ra-game', { gameId: a.gameId }) }); }).catch(() => {}) : null,
-    call('trophies:overview').then((o) => { for (const x of o.recent || []) out.push({ key: 'tr' + x.key + x.id, t: x.time || 0, badge: x.icon, grade: x.grade, title: x.name, desc: x.detail || x.desc || '', game: x.game, console: consoleFull(x.short || ''), open: () => go('trophy-game', { tkey: x.key }) }); }).catch(() => {}),
+    call('trophies:overview').then((o) => { troGames.value = (o.games || []).filter((g) => g.earned && !g.hidden).sort((a, b) => b.last - a.last).map((g) => ({ key: g.key, title: g.title, console: consoleFull(g.short || ''), earned: g.earned, total: g.total, art: g.cover ? img(g.cover) : g.icon, last: g.last, open: () => go('trophy-game', { tkey: g.key }) })); for (const x of o.recent || []) out.push({ key: 'tr' + x.key + x.id, t: x.time || 0, badge: x.icon, grade: x.grade, title: x.name, desc: x.detail || x.desc || '', game: x.game, console: consoleFull(x.short || ''), open: () => go('trophy-game', { tkey: x.key }) }); }).catch(() => {}),
   ]);
   ach.value = out.sort((a, b) => b.t - a.t).slice(0, 60);
 }
@@ -658,6 +727,7 @@ function openTile(t, ev) {
   if (T === 'stats') return tab('library');
   if (T === 'cstats') return platformById(t.platformId) && go('platform', { platformId: t.platformId });
   if (T === 'spotlight') { const r = spotOf(t); return r && go('game', { romId: r.id }); }
+  if (T === 'media' || T === 'shelf') { const r = mediaOf(t); return r && go('game', { romId: r.id }); }
   if (T === 'emulator') { if (!t.emu) return; call('emuget:open', t.emu).then(() => toast(`${t.emu.label} is opening`, 'ok', 2500, 'mdiOpenInApp'), (e) => toast(e.message, 'error', 5000)); return; }
   if (T === 'image' || T === 'html') return;
   if (T === 'game') return romById(t.romId) && go('game', { romId: t.romId });
@@ -735,7 +805,7 @@ async function pickGame() {
     if (id !== '__back') return id;
   }
 }
-const SUBS = { game: 'Pin one game', console: 'Pin one console', trophies: 'All, or one console’s', image: 'Search 4K wallpapers or GIFs, or use your own', spotlight: 'One console’s games taking turns, with their art', emulator: 'Open an emulator straight from Start', cgames: 'One console’s games in a row', cstats: 'One console in numbers', html: 'Paste HTML, or start from a note or a countdown', daily: 'A new game from your library every day', stats: 'Games, consoles and hours in numbers' };
+const SUBS = { game: 'Pin one game', console: 'Pin one console', trophies: 'All, or one console’s', image: 'Search 4K wallpapers or GIFs, or use your own', spotlight: 'One console’s games taking turns, with their art', media: 'A console’s game as its disc, spinning, or its cartridge', shelf: 'A console’s games standing on a shelf, spines out', emulator: 'Open an emulator straight from Start', cgames: 'One console’s games in a row', cstats: 'One console in numbers', html: 'Paste HTML, or start from a note or a countdown', daily: 'A new game from your library every day', stats: 'Games, consoles and hours in numbers' };
 async function addTile() {
   const have = new Set(tiles.value.map((t) => t.type));
   const tabsOf = GROUPS.map(([label, keys]) => ({ label, options: keys.filter((k) => MANY.has(k) || !have.has(k)).map((k) => ({ label: TILES[k].name, value: k, icon: TILES[k].icon, sub: SUBS[k] || '' })) })).filter((g) => g.options.length);
@@ -804,6 +874,8 @@ const CONFIG = {
   },
   async cgames(t) { return pickConsole(t); },
   async spotlight(t) { return pickConsole(t); },
+  async media(t) { return pickConsole(t); },
+  async shelf(t) { return pickConsole(t); },
   // an emulator found on this device, opened from Start (0.9.28)
   async emulator(t) {
     const list = (await call('emuup:list', {}).catch(() => [])).filter((u) => u.kind !== 'windows');
@@ -1177,12 +1249,13 @@ watch(() => store.play, loadWeek);
 .st-add:focus .st-add-plus { background: var(--focus); color: var(--on-focus); transform: rotate(90deg); }
 
 /* the parts every tile shares; sizes follow the tile (container units) */
-.st-label { font-size: clamp(11px, min(10cqh, 6cqw), 15px); font-weight: 600; color: var(--muted); letter-spacing: -0.005em; position: relative; z-index: 1; flex: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* 0.9.32 (owner: "no trailing anywhere, a new line is fine"): a tile's name wraps instead of ending in … */
+.st-label { font-size: clamp(11px, min(10cqh, 6cqw), 15px); font-weight: 600; color: var(--muted); letter-spacing: -0.005em; position: relative; z-index: 1; flex: none; line-height: 1.2; text-wrap: balance; overflow-wrap: anywhere; }
 .st-label.on-art { color: rgba(255, 255, 255, 0.86); }
 .st-num { display: flex; align-items: baseline; gap: 4px; margin-top: auto; line-height: 1; }
 .st-big { font-family: var(--display); font-stretch: var(--display-stretch); font-weight: 800; font-size: clamp(22px, min(32cqh, 20cqw), 104px); letter-spacing: -0.02em; }
 .st-unit { font-family: var(--display); font-weight: 700; font-size: clamp(12px, min(11cqh, 7cqw), 24px); color: var(--muted); margin-right: 6px; }
-.st-sub { margin-top: 6px; font-size: clamp(11px, min(9cqh, 6cqw), 15px); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: none; }
+.st-sub { margin-top: 6px; font-size: clamp(11px, min(9cqh, 6cqw), 15px); color: var(--muted); white-space: normal; text-wrap: balance; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; flex: none; }
 .st-quiet { margin-top: auto; }
 .tnum { font-variant-numeric: tabular-nums; }
 .st-meter { height: 4px; margin-top: 10px; border-radius: 2px; background: rgba(255, 255, 255, 0.1); overflow: hidden; flex: none; }
@@ -1231,8 +1304,8 @@ watch(() => store.play, loadWeek);
 .t-surprise { --glow: rgba(255, 120, 190, 0.16); }
 .st-count { margin-left: 8px; padding: 1px 7px; border-radius: 999px; background: rgba(255, 255, 255, 0.08); color: var(--muted); font-size: 0.85em; font-weight: 600; flex: none; white-space: nowrap; }
 /* 0.9.29 (owner: "1 / …" cut off): the name gives way, never the count */
-.st-label:has(.st-lname) { display: flex; align-items: center; min-width: 0; text-overflow: clip; }
-.st-lname { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.st-label:has(.st-lname) { display: flex; align-items: center; min-width: 0; }
+.st-lname { min-width: 0; text-wrap: balance; }
 
 /* pages: the board slides a little and settles, its tiles arriving as they do on opening */
 .st-pg-next-leave-active, .st-pg-prev-leave-active { transition: opacity 140ms ease-out, transform 140ms ease-out; }
@@ -1321,11 +1394,37 @@ watch(() => store.play, loadWeek);
 .st-tro.one .st-tro-badge { width: clamp(36px, 34cqh, 64px); }
 .st-tro-badge img { width: 100%; height: 100%; object-fit: cover; }
 .st-tro-t { display: flex; flex-direction: column; min-width: 0; }
-.st-tro-t b { font-family: var(--display); font-weight: 700; font-size: clamp(12px, 3.4cqh, 18px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.st-tro-t b { font-family: var(--display); font-weight: 700; font-size: clamp(12px, 3.4cqh, 18px); white-space: normal; text-wrap: balance; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
 .st-tro.one .st-tro-t b { font-size: clamp(12px, 12cqh, 18px); }
-.st-tro-t span { font-size: var(--t-xs); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.st-tro-t span { font-size: var(--t-xs); color: var(--muted); white-space: normal; text-wrap: balance; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
 .st-tro-strip { display: flex; gap: 6px; overflow: hidden; }
-.st-tro.feat { flex-direction: row; align-items: stretch; justify-content: flex-start; gap: clamp(14px, 3cqw, 28px); }
+.st-tro.feat { flex-direction: column; align-items: stretch; justify-content: flex-start; gap: clamp(10px, 3cqh, 20px); }
+.st-tro.feat.across { flex-direction: row; gap: clamp(14px, 3cqw, 28px); }
+/* the card takes whatever the list doesn't need, so a tile with few unlocks is never half empty (0.9.32) */
+.st-tro.feat .st-tro-feat { flex: 1 1 0; min-height: 0; justify-content: center; position: relative; overflow: hidden; isolation: isolate; }
+.st-tro-fbg { position: absolute; inset: -10%; width: 120%; height: 120%; object-fit: cover; filter: blur(22px) saturate(1.2); opacity: 0.38; z-index: -1; -webkit-mask-image: linear-gradient(100deg, transparent 10%, #000 70%); mask-image: linear-gradient(100deg, transparent 10%, #000 70%); }
+:global(body.light-fx .st-tro-fbg) { filter: none; opacity: 0.18; }
+.st-tro.feat:not(.across) .st-tro-side { flex: none; }
+.st-tro.feat.across .st-tro-feat { flex: 1 1 0; }
+.st-tro.feat.across .st-tro-side { flex: 1 1 0; }
+.st-tro.feat .st-tro-fbadge { width: clamp(64px, 30cqmin, 150px); }
+.st-tro.feat .st-tro-feat b { font-size: clamp(18px, 6cqmin, 40px); }
+.st-tro.feat .st-tro-fd { font-size: clamp(13px, 2.4cqmin, 17px); }
+.st-tro-side { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; justify-content: center; gap: 10px; }
+.st-tro-game { display: flex; align-items: center; gap: 12px; min-width: 0; animation: st-in 520ms var(--ease-out) both; animation-delay: calc(var(--i) * 35ms + 160ms); }
+.st-tro-gart { width: 44px; height: 44px; flex: none; border-radius: var(--r-sm); overflow: hidden; background: var(--s2); box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35); }
+.st-tro-gart img { width: 100%; height: 100%; object-fit: cover; }
+.st-tro-gt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.st-tro-gt b { font-family: var(--display); font-weight: 700; font-size: var(--t-sm); line-height: 1.2; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.st-tro-bar { height: 5px; border-radius: 3px; background: rgba(255, 255, 255, 0.12); overflow: hidden; }
+.st-tro-bar i { display: block; height: 100%; border-radius: 3px; background: linear-gradient(90deg, #ffd27a, #ffb347); }
+.st-tro-gn { flex: none; font-family: var(--display); font-weight: 800; font-size: var(--t-md); font-variant-numeric: tabular-nums; }
+.st-tro-gn small { font-weight: 600; font-size: var(--t-xs); color: var(--muted); }
+.st-tro-mosaic { display: flex; flex-wrap: wrap; gap: 8px; }
+.st-tro-mosaic .st-tro-mini { width: clamp(36px, 7cqmin, 54px); height: clamp(36px, 7cqmin, 54px); opacity: 1; }
+/* a medium tile with one unlock shown large (0.9.32, owner: make the newest bigger) */
+.st-tro.solo .st-tro-badge { width: clamp(56px, 38cqh, 84px); }
+.st-tro.solo .st-tro-t b { font-size: clamp(14px, 9cqh, 22px); white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 .st-tro.feat .st-tro-list { flex: 1; align-content: center; }
 .st-tro.feat .st-tro-strip { display: none; }
 .st-tro-feat { flex: 0 0 40%; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 6px; padding: clamp(12px, 4cqh, 22px); border-radius: var(--r-lg); background: radial-gradient(120% 90% at 20% 10%, rgba(255, 210, 120, 0.12), transparent 60%), rgba(255, 255, 255, 0.04); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06); animation: st-in 520ms var(--ease-out) both; }
@@ -1371,7 +1470,7 @@ watch(() => store.play, loadWeek);
 .st-stats { flex: 1; min-height: 0; margin-top: 8px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); align-items: end; gap: 10px; }
 .st-stats > div { display: flex; flex-direction: column; min-width: 0; }
 .st-stats b { font-family: var(--display); font-stretch: var(--display-stretch); font-weight: 800; font-size: clamp(18px, min(26cqh, 9cqw), 56px); line-height: 1; letter-spacing: -0.02em; }
-.st-stats span { margin-top: 6px; font-size: clamp(10px, 8cqh, 13px); color: var(--muted); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.st-stats span { margin-top: 6px; font-size: clamp(10px, 8cqh, 13px); color: var(--muted); font-weight: 600; white-space: normal; text-wrap: balance; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
 @container (max-width: 420px) { .st-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); align-content: end; } }
 @container (max-width: 420px) and (max-height: 150px) { .st-stats > div:nth-child(n+3) { display: none; } }
 @container (max-width: 200px) and (max-height: 200px) { .st-stats { grid-template-columns: 1fr; } .st-stats > div:not(:first-child) { display: none; } .st-stats b { font-size: clamp(22px, 34cqh, 64px); } }
@@ -1404,7 +1503,7 @@ watch(() => store.play, loadWeek);
 /* tall: the gauge large in the middle, the numbers and each console's share under it (0.9.24) */
 @container (aspect-ratio < 1.2) { .st-store { flex-direction: column-reverse; justify-content: flex-end; } .st-gauge { height: auto; width: min(100%, 60cqh); max-width: none; aspect-ratio: 1; flex: none; margin: auto; container-type: inline-size; } .st-gauge > span { font-size: clamp(14px, 20cqw, 44px); } .st-store-text .st-num { margin-top: 0; } .st-store-text { flex: none; } }
 @container (max-width: 190px) and (max-height: 190px) { .st-store-text { display: none; } .st-gauge { max-width: none; width: 100%; height: 100%; } }
-.st-store-cons { display: none; flex-direction: column; gap: 7px; margin-top: 14px; }
+.st-store-cons { display: none; flex-direction: column; gap: 7px; margin-top: 14px; padding-bottom: 6px; }
 .st-store-con { display: grid; grid-template-columns: minmax(0, 1fr) 2fr auto; align-items: center; gap: 10px; font-size: var(--t-xs); color: var(--muted); }
 .st-store-con span { white-space: nowrap; overflow: hidden; text-overflow: clip; }
 .st-sc-n { display: flex; align-items: center; gap: 6px; min-width: 0; }
@@ -1432,7 +1531,11 @@ watch(() => store.play, loadWeek);
 :global(body.motion-reduce .st-bar i) { animation: none; }
 @container (aspect-ratio < 1.5) { .st-week { flex-direction: column; gap: var(--s-2); } .st-week-text { max-width: none; } .st-week-text .st-num { margin-top: 6px; } }
 /* 0.9.23 (owner: the bars at 1x1 too): a small tile keeps the bars and the total, without the words */
-@container (max-height: 160px) and (max-width: 240px) { .st-week { flex-direction: column; gap: 4px; } .st-week-text { max-width: none; flex: none; } .st-week-text .st-label, .st-week-text .st-sub { display: none; } .st-week-text .st-num { margin-top: 0; } .st-week .st-big { font-size: clamp(20px, 24cqh, 40px); } .st-bars { padding-top: 4px; gap: 3px; } .st-bar span, .st-bar em { display: none; } }
+@container (max-height: 160px) and (max-width: 240px) { .st-week { flex-direction: column; gap: 4px; } .st-week-text { max-width: none; flex: none; } .st-week-text .st-label { font-size: var(--t-xs); } .st-week-text .st-sub { font-size: var(--t-xs); white-space: normal; } .st-week-text .st-num { margin-top: 0; } .st-week .st-big { font-size: clamp(20px, 24cqh, 40px); } .st-bars { padding-top: 4px; gap: 3px; } .st-bar span, .st-bar em { display: none; } }
+/* the last game's art: only on small and square tiles, where the bars leave room (0.9.32) */
+.st-week-bg { display: none; position: absolute; inset: 0; z-index: -1; width: 100%; height: 100%; object-fit: cover; opacity: 0.22; filter: blur(10px) saturate(1.2); -webkit-mask-image: linear-gradient(200deg, #000 10%, transparent 75%); mask-image: linear-gradient(200deg, #000 10%, transparent 75%); pointer-events: none; }
+@container (aspect-ratio < 1.5) { .st-week-bg { display: block; } }
+:global(body.light-fx .st-week-bg) { filter: none; opacity: 0.12; }
 
 /* consoles: the same cards as the Consoles page */
 .st-cards { flex: 1; min-height: 0; margin-top: 10px; display: grid; gap: clamp(6px, 2cqw, 12px); }
@@ -1455,8 +1558,44 @@ watch(() => store.play, loadWeek);
 .st-ach-row { display: flex; align-items: center; gap: 10px; min-width: 0; animation: st-in 520ms cubic-bezier(0.22, 1, 0.36, 1) both; animation-delay: calc(var(--i) * 40ms + 120ms); }
 .st-ach-img { width: 44px; height: 44px; flex: none; border-radius: var(--r-sm); object-fit: cover; display: grid; place-items: center; background: var(--s2); }
 .st-ach-t { display: flex; flex-direction: column; min-width: 0; }
-.st-ach-t b { font-family: var(--display); font-weight: 700; font-size: var(--t-sm); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.st-ach-t span { font-size: var(--t-xs); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.st-ach-t b { font-family: var(--display); font-weight: 700; font-size: var(--t-sm); white-space: normal; text-wrap: balance; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.st-ach-t span { font-size: var(--t-xs); color: var(--muted); white-space: normal; text-wrap: balance; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
 @container (max-width: 200px) { .st-ach { place-items: center; align-content: center; margin-top: 4px; } .st-ach-t { display: none; } .st-ach-row:not(:first-child) { display: none; } .st-ach-img { width: min(62cqw, 56cqh); height: min(62cqw, 56cqh); border-radius: var(--r-md); } }
 :global(body.motion-reduce .st-ach-row) { animation: none; }
+
+/* Game Disc or Cartridge (0.9.32) */
+.st-media { flex: 1; min-height: 0; display: flex; flex-direction: column; align-items: center; gap: clamp(6px, 3cqh, 14px); margin-top: 6px; }
+.st-media.wide { flex-direction: row; align-items: center; }
+.st-media-stage { flex: 1; min-height: 0; min-width: 0; width: 100%; display: grid; place-items: center; }
+.st-media.wide .st-media-stage { width: auto; height: 100%; aspect-ratio: 1; flex: none; }
+.st-media-obj { grid-area: 1 / 1; height: 100%; max-width: 100%; display: grid; place-items: center; aspect-ratio: 1; }
+.st-disc { position: relative; height: 92%; aspect-ratio: 1; border-radius: 50%; background-size: cover; background-position: center; box-shadow: 0 14px 34px rgba(0, 0, 0, 0.55), 0 0 0 2px rgba(255, 255, 255, 0.08); -webkit-mask-image: radial-gradient(circle, transparent 0 7.5%, #000 8%); mask-image: radial-gradient(circle, transparent 0 7.5%, #000 8%); animation: st-spin 28s linear infinite; }
+.st-disc-sheen { position: absolute; inset: 0; border-radius: 50%; background: conic-gradient(from 20deg, rgba(255, 255, 255, 0) 0deg, rgba(255, 255, 255, 0.28) 30deg, rgba(160, 220, 255, 0.10) 60deg, rgba(255, 255, 255, 0) 100deg, rgba(255, 255, 255, 0) 200deg, rgba(255, 210, 255, 0.22) 230deg, rgba(255, 255, 255, 0) 270deg); mix-blend-mode: screen; }
+.st-disc-hub { position: absolute; inset: 31%; border-radius: 50%; background: radial-gradient(circle, rgba(255, 255, 255, 0) 0 24%, rgba(230, 236, 245, 0.55) 25% 40%, rgba(255, 255, 255, 0.12) 41% 100%); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.25); }
+@keyframes st-spin { to { transform: rotate(360deg); } }
+.st-cart { position: relative; height: 92%; aspect-ratio: 0.86; border-radius: 10% 10% 6% 6% / 8% 8% 5% 5%; background: linear-gradient(180deg, color-mix(in srgb, var(--sys-a, #5b5f6b) 40%, #2b2e36), color-mix(in srgb, var(--sys-a, #5b5f6b) 25%, #17191f)); box-shadow: 0 14px 34px rgba(0, 0, 0, 0.55), inset 0 2px 0 rgba(255, 255, 255, 0.18), inset 0 -3px 0 rgba(0, 0, 0, 0.35); display: flex; flex-direction: column; align-items: center; padding: 8% 9% 11%; animation: st-float 6s ease-in-out infinite; }
+.st-cart-grip { width: 70%; height: 9%; flex: none; margin-bottom: 7%; background: repeating-linear-gradient(90deg, rgba(0, 0, 0, 0.35) 0 3px, rgba(255, 255, 255, 0.06) 3px 7px); border-radius: 3px; }
+.st-cart-label { flex: 1; width: 100%; border-radius: 6px; background-size: cover; background-position: center; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.18), 0 2px 6px rgba(0, 0, 0, 0.4); }
+@keyframes st-float { 50% { transform: translateY(-3%) rotate(-1.5deg); } }
+.st-media-t { flex: none; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 2px; min-width: 0; max-width: 100%; }
+.st-media.wide .st-media-t { align-items: flex-start; text-align: left; flex: 1; gap: 6px; }
+.st-media.wide .st-media-t b { font-size: clamp(18px, 14cqh, 34px); }
+.st-media.wide .st-media-t span { font-size: var(--t-sm); }
+.st-media-bg { position: absolute; inset: 0; z-index: -1; background-size: cover; background-position: center; opacity: 0.5; -webkit-mask-image: linear-gradient(90deg, transparent 25%, #000 85%); mask-image: linear-gradient(90deg, transparent 25%, #000 85%); }
+.st-media-t b { font-family: var(--display); font-weight: 800; font-size: clamp(14px, 7cqmin, 24px); line-height: 1.15; text-wrap: balance; }
+.st-media-t span { color: var(--muted); font-size: var(--t-xs); }
+@container (max-height: 200px) { .st-media:not(.wide) .st-media-t { display: none; } }
+.st-media-enter-active, .st-media-leave-active { transition: opacity 420ms var(--ease-out), transform 520ms var(--ease-out); }
+.st-media-enter-from { opacity: 0; transform: translateX(18%) scale(0.92); }
+.st-media-leave-to { opacity: 0; transform: translateX(-18%) scale(0.92); }
+:global(body.light-fx .st-disc), :global(body.motion-reduce .st-disc), :global(body.light-fx .st-cart), :global(body.motion-reduce .st-cart) { animation: none; }
+/* Game Shelf (0.9.32): spines on a board; the chosen game stands out with its cover */
+.st-shelf { position: relative; flex: 1; min-height: 0; display: flex; align-items: flex-end; gap: 6px; padding: 10px 4px 14px; margin-top: 4px; overflow: hidden; }
+.st-spine { position: relative; flex: none; width: 44px; height: 86%; border-radius: 4px 4px 2px 2px; overflow: hidden; background: #22252c; box-shadow: inset -6px 0 10px rgba(0, 0, 0, 0.45), inset 1px 0 0 rgba(255, 255, 255, 0.12), 0 6px 14px rgba(0, 0, 0, 0.45); transition: width 420ms var(--ease-out), height 420ms var(--ease-out), transform 420ms var(--ease-out); }
+.st-spine-art { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: left center; opacity: 0.55; filter: saturate(1.1); transition: opacity 320ms ease; }
+.st-spine-t { position: absolute; inset: 8px 0; writing-mode: vertical-rl; transform: rotate(180deg); display: flex; align-items: center; justify-content: flex-start; padding: 6px 0; font-family: var(--display); font-weight: 800; font-size: 13px; color: #fff; text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8); overflow: hidden; white-space: nowrap; line-height: 44px; }
+.st-spine.out { width: min(36%, calc(86cqh * 0.7)); height: 96%; transform: translateY(-4px); }
+.st-spine.out .st-spine-art { opacity: 1; object-position: center; }
+.st-spine.out .st-spine-t { display: none; }
+.st-shelf-board { position: absolute; left: 0; right: 0; bottom: 4px; height: 10px; border-radius: 3px; background: linear-gradient(180deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.04)); box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5); }
 </style>
