@@ -6,6 +6,11 @@ The branch for 0.9.3 work is `claude/relaxed-fermat-30pigp`. Pull it before star
 
 ---
 
+## 5 Oct 2026 · 0.9.33 Linked Folders (built and released)
+- Owner's asks: Download Latest for RPCS3 and shadPS4 like Cemu's; a save-link editor for forks (owner picked: a page in Settings → Emulators, fork's saves kept aside as .cartridge-kept); and the three left from 0.9.32 (no "…" anywhere, console logos checked on every console, interactive console widgets).
+- Checked: npm test, vite build, launch check; Linked Folders end to end in the app (fake home with shadPS4 and a portable GR2: suggested, linked, fork saves set aside); 40 consoles with real logos measured for overlaps on the Consoles page and Start (1280x800, 1920x1080); taps on disc and shelf.
+- Owner to test: Linked Folders with a real fork (does the fork read the linked saves; Flatpak emulators may not see a link outside their sandbox), and Download Latest Patches with the real RPCS3 and shadPS4.
+
 ## 5 Oct 2026 · 0.9.32 In the Background (built and released)
 - One update for everything the owner sent after 0.9.31 (owner: ship it all as one, read every message back first). Items: Vita3K shown after Delete, background jobs, GitHub .zip releases (GR2 fork), Steam settings flash, Syncthing chips and header, Home first-card clip, Cemu categories and Mega Cheats, black Dock for everyone, Settings dot, X360/Latest Trophies tile, no trailing text, Recently Played cover size, storage and week tiles, console widgets, console card overlap, Steam logo rotation, mods sorting and header, downloads caught from add-on sites, a game About, Steam collections rebuilt.
 - Owner's question, answered in the report: texture pack archives Cartridge downloads are deleted once installed (and on failure); a file picked with Install a Download is left where it was.
