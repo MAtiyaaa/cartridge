@@ -4,6 +4,7 @@
 // keeps tiles from overlapping and lets them fall up into gaps (settle).
 import { store, saveConfig, toast } from './store.js';
 import { pack, settle, bottom } from './startLayout.js';
+import { IS_ANDROID } from './platform.js';
 export { COLS, MAX_H, collide, pack, settle, bottom } from './startLayout.js';
 
 export const TILES = {
@@ -43,6 +44,8 @@ export const GROUPS = [
   ['At a Glance', ['clock', 'week', 'stats', 'storage', 'downloads', 'trophies']],
   ['Pictures and Fun', ['image', 'surprise', 'daily', 'html']],
 ];
+// Android: An Emulator reads and opens desktop emulators (versions, updates), which aren't there
+if (IS_ANDROID) { delete TILES.emulator; for (const g of GROUPS) g[1] = g[1].filter((k) => TILES[k]); }
 export const MANY = new Set(['game', 'console', 'image', 'html', 'trophies', 'cgames', 'cstats', 'emulator', 'spotlight']);
 
 const DEF = [['continue', 4, 2], ['clock', 2, 1], ['storage', 2, 1], ['week', 4, 1], ['consoles', 4, 1], ['fresh', 4, 1], ['recent', 4, 1], ['trophies', 4, 1]];

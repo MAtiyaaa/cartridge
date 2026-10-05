@@ -316,7 +316,7 @@
             <div class="subh"><Icon name="mdiGamepadVariantOutline" :size="20" />Controls &amp; Display</div>
             <div class="row"><span class="lbl">Touch &amp; mouse</span><div class="seg"><button v-for="p in pointers" :key="p.v" data-focus :class="{ on: (ui.pointer || 'auto') === p.v }" @click="setPointer(p.v)">{{ p.l }}</button></div></div>
             <p class="muted small" style="margin-top: -6px">Auto hides the cursor when you tap the screen and shows it when a mouse moves. Touch never shows a cursor.</p>
-            <div class="row"><span class="lbl">Touch scrolling</span><div class="seg"><button v-for="t in TOUCH_SCROLL" :key="t.v" data-focus :class="{ on: (ui.touchScroll || 'own') === t.v }" @click="saveConfig({ ui: { touchScroll: t.v } })">{{ t.l }}</button></div></div>
+            <div class="row"><span class="lbl">Touch scrolling</span><div class="seg"><button v-for="t in TOUCH_SCROLL" :key="t.v" data-focus :class="{ on: (ui.touchScroll || (IS_ANDROID ? 'browser' : 'own')) === t.v }" @click="saveConfig({ ui: { touchScroll: t.v } })">{{ t.l }}</button></div></div>
             <p class="muted small" style="margin-top: -6px">Cartridge's scrolls with your finger and glides on release, however your system sends touches. The browser's is Chromium's own touch scrolling, for systems where it already works well. Swipe in from the left edge to go back, and swipe along the top bar to change tabs.</p>
             <div class="row"><span class="lbl">Button icons</span><div class="seg"><button v-for="k in buttonOpts" :key="k.v" data-focus :class="{ on: (ui.buttons || 'auto') === k.v }" @click="saveConfig({ ui: { buttons: k.v } })">{{ k.l }}</button></div></div>
             <p class="muted small" style="margin-top: -6px">Auto draws the buttons of the controller you're holding{{ padInfo?.name ? ` (right now: ${padInfo.name})` : '' }}, even when Steam presents it as an Xbox pad. <span class="btn-demo"><Btn b="A" /><Btn b="B" /><Btn b="X" /><Btn b="Y" /><Btn b="LB" /><Btn b="RT" /><Btn b="START" /><Btn b="SELECT" /></span></p>
@@ -339,8 +339,11 @@
 
             <button class="lrow adv-tg" data-focus @click="lookAdv = !lookAdv"><Icon name="mdiTuneVariant" :size="22" /><div class="l-mid"><b>Advanced</b></div><Icon :name="lookAdv ? 'mdiChevronUp' : 'mdiChevronDown'" :size="22" /></button>
             <template v-if="lookAdv">
+            <!-- Electron's GPU or software rendering: the desktop's choice, not Android's WebView -->
+            <template v-if="!IS_ANDROID">
             <div class="row"><span class="lbl">Rendering</span><div class="seg"><button v-for="g in gfx" :key="g.v" data-focus :class="{ on: (store.config.graphics || 'auto') === g.v }" @click="setGraphics(g.v)">{{ g.l }}</button></div></div>
             <p class="muted small" style="margin-top: -6px">Auto uses the GPU from the app menu and on big screens like TVs. On handheld-size screens launched from Steam or Game Mode it uses software rendering, which is proven there. GPU Always uses the GPU there too, which is much smoother on handhelds with a strong GPU: after the restart Cartridge asks if it looks right, and goes back to Auto by itself if you can't answer. If the GPU ever fails, Cartridge switches to Compatible by itself. Compatible never uses the GPU.</p>
+            </template>
             <div class="row"><button class="btn" data-focus @click="call('app:fullscreen')"><Icon name="mdiFullscreen" />Toggle fullscreen</button><button class="btn" data-focus @click="clearCache"><Icon name="mdiImageRemove" />Clear image cache</button></div>
             </template>
             </template>

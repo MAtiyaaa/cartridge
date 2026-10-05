@@ -213,7 +213,8 @@ function placeInk() {
 }
 // where the bar sits and how it looks (Look & Feel → Text and Cards → Top Bar)
 // touch scrolling (0.9.26): Cartridge's engine unless the browser's was picked in Look & Feel → Controls
-watch(() => store.config?.ui?.touchScroll, (v) => document.documentElement.classList.toggle('touch-native', v === 'browser'), { immediate: true });
+// Android: the WebView's own touch scrolling unless Cartridge's is picked (it always scrolled natively there)
+watch(() => store.config?.ui?.touchScroll, (v) => document.documentElement.classList.toggle('touch-native', v === 'browser' || (IS_ANDROID && !v)), { immediate: true });
 // 0.9.28 (owner): the Dock (the bar of tabs) sits at the bottom, centred, as a pill unless chosen otherwise;
 // the strip of button hints is hidden unless turned on; the Dock's colour (pill style)
 watch(() => [store.config?.ui?.barPos || 'bottom', store.config?.ui?.barAlign || 'center', store.config?.ui?.barStyle || 'pill', store.config?.ui?.hints === true || !!store.forceHints, store.config?.ui?.dockColor || ''], ([pos, align, style, hints, dock]) => {

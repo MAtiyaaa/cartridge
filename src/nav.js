@@ -550,7 +550,8 @@ window.addEventListener('pointerdown', (e) => {
   drag = {
     id: e.pointerId, touch, x: e.clientX, y: e.clientY, lx: e.clientX, ly: e.clientY, axis: null, sc: null, target: e.target, hist: [], t0: performance.now(),
     // gestures: from the very left edge (Back), or on the top bar's tabs (next or previous tab)
-    gesture: fingerish && e.clientX <= EDGE ? 'edge' : fingerish && e.target.closest('.statusbar .tabs') ? 'tabs' : null,
+    // Android: the system's own back gesture sends Back already (src/android/app.js), so no edge swipe of ours
+    gesture: fingerish && !ANDROID && e.clientX <= EDGE ? 'edge' : fingerish && e.target.closest('.statusbar .tabs') ? 'tabs' : null,
   };
   nativeAt = 0;
 }, { capture: true, passive: true });

@@ -317,6 +317,7 @@
 // (the D-pad moves a corner, LB/RB pick the corner), Y removes, B is done. Touch and mouse: drag a tile
 // to move it, drag an edge or a corner to resize. Saved in config.ui.start.
 import { computed, ref, reactive, onMounted, onBeforeUnmount, nextTick, watch } from 'vue';
+import { IS_ANDROID } from '../platform.js';
 import { store, heroArt, call, go, tab, openModal, img, cover, logoOf, allRoms, visible, visiblePlatforms, romById, isNew, collections, setBg, backdropOf, wantSharp, bytes, saveConfig, choose, confirm, askText, pickFolder, playtimeText, loadPlay, toast } from '../store.js';
 import { useView } from '../useView.js';
 import { recommend } from '../recs.js';
@@ -435,7 +436,8 @@ const spotTick = ref(0);
 const spotOf = (t) => { const l = conList(t.platformId); return l.length ? l[(spotTick.value + (t.id.length % 7)) % l.length] : null; };
 // An Emulator (0.9.28): its version and whether an update is out, from Settings → Emulators' list
 const emuInfo = ref({});
-call('emuup:list', {}).then((l) => { const m = {}; for (const u of l || []) m[u.path || u.fp] = u; emuInfo.value = m; }).catch(() => {});
+// Android has no An Emulator widget, and this list scans for desktop emulators
+if (!IS_ANDROID) call('emuup:list', {}).then((l) => { const m = {}; for (const u of l || []) m[u.path || u.fp] = u; emuInfo.value = m; }).catch(() => {});
 const emuOf = (t) => (t.emu ? emuInfo.value[t.emu.path || t.emu.fp] || null : null);
 // a row of covers in tall library tiles (0.9.28, owner: empty space): the console's or library's games, played first
 function bandOf(t) {
