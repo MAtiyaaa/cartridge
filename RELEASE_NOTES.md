@@ -1,23 +1,21 @@
-## Cartridge 0.9.25 · Docked
+## Cartridge 0.9.26 · Disc and Shelf
 
-abdu2304's 0.9.24 to 0.9.31. On Linux, Cartridge works exactly as his 0.9.31 does, with this fork's phone remote and Fuse bridge on top.
+abdu2304's 0.9.32 to 0.9.36. On Linux, Cartridge works exactly as his 0.9.36 does, with this fork's phone remote and Fuse bridge on top.
 
 ### New
-- **The Dock:** the bar of tabs sits at the bottom, centred, as a floating pill. Move it to the top or left, align it, and pick Glass, White, Black or Accent in Look & Feel → Text and Cards. The status area (time, battery, connection) is still a button for the Quick Menu on Android.
-- **Start:** game rows move to their next game by themselves, L1/R1 step through a row's games and trophies, and the page overview shows your real pages (L1 and R1 together, or L1/R1 while arranging). A short tour the first time you open Start.
-- **New Start widgets:** A Console's Games, A Console at a Glance and Console Spotlight. The picture widget can search 4K wallpapers (Wallhaven) or GIFs (Openverse). The trophies widget lists every system by its full name. Add a Widget is in tabs.
-- **Sony's own marks:** RomM's Sony controller pictures (PS1 to PS5, PSP) show the real SONY wordmark and PlayStation logo instead of RomM's joke branding, on Android too.
-- **Hold A to read it all:** a menu row whose text trails off opens with all of it. B folds it back.
-- **What's New** in Settings → Updates, and **Licences and Acknowledgements** in About.
-- **Look & Feel → Metadata:** the SteamGridDB key and Fetch All in one place, or only logos, backgrounds, or covers and screenshots.
-- **Linux (from abdu2304):** the Cartridge Installer, Steam collections named maker then console, Open an emulator from Cartridge, emulators from a GitHub link, emulator folders, save sync with Syncthing, GPU Always rendering, Cemu graphic packs, Switch versions read like Eden, frame generation from a game's menu, Saves on This Device.
+- **Game Disc or Cartridge and Game Shelf widgets on Start:** a console's game as its disc or cartridge, or its games as spines on a shelf. Tap the disc for the next game; tap a spine to slide it out and again to open the game. Games on this device glow.
+- **About for every game:** Game More → Options → About shows its console, file, size, regions and where it is (on Linux also its IDs, version, and what is installed or turned on for it). A on a line copies it.
+- **In the Background on Downloads:** long jobs keep going when you leave their screen and are listed on the Downloads page.
+- **Linux (from abdu2304):** Linked Folders (a fork playing with the original emulator's saves), add-on websites in a Cartridge window with downloads caught and installed, mods sorted by downloads, likes or date, Download Latest Patches for RPCS3 and shadPS4, Cemu cheats and community packs, emulators from GitHub as .zip or .tar, Its Games per Steam console collection, collections that fill themselves.
 
 ### Changed
-- **Cards and widgets:** cards sit on the page with a soft shadow, big widgets fill their space, and console pictures are never cut off.
-- **Menus on Start** list consoles and games A to Z.
-- **Android:** touch scrolling stays Android's own (Cartridge's own scrolling can be picked in Look & Feel → Controls), and Back stays the system's gesture.
+- **Latest Trophies tile:** the newest unlock as a card with its game's art, then your games' progress and earlier unlocks.
+- **No text cut off with "…":** names, titles and descriptions wrap onto a new line instead, on Start and everywhere else.
+- **The Dock is black by default**, and pages fade out above it.
+- **Start tiles:** the week tile is filled at 1x1, the storage tile sits clear of the bottom edge, and Recently Played covers keep one size.
 
 ### Fixed
-- **Pages sliding sideways** when a card near the edge was highlighted.
-- **Counts like "1 / 15"** were cut off on Start's rows.
-- **Linux (from abdu2304):** controls after a game closes, touch scrolling in Game Mode, Steam progress as a ring that doesn't move the bar, Switch title IDs.
+- **Console pictures** no longer jump between sizes while a page updates.
+- **Console cards:** the console name and the maker's logo no longer run into each other.
+- **Home rows:** the first card's focus ring is no longer cut off.
+- **Linux (from abdu2304):** the controller after a game started from Cartridge in Game Mode, Steam collections deleted in Steam coming back, the collections check in Setup and Health, Vita3K still shown after Delete.

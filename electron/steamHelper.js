@@ -152,9 +152,16 @@ function writeCollections() {
   if ((!Object.keys(want).length && !Object.keys(rename).length) || !job.cloudFile) return;
   let arr = [];
   if (fs.existsSync(job.cloudFile)) arr = JSON.parse(fs.readFileSync(job.cloudFile, 'utf8'));
+  // 0.9.34: Steam keeps local changes not yet in its cloud in <file>.modified.json, and they win when Steam loads.
+  // A collection deleted there counts as deleted here; one changed there gets the same change, or ours would be lost.
+  const modFile = job.cloudFile.replace(/\.json$/, '.modified.json');
+  let mod = null; try { mod = JSON.parse(fs.readFileSync(modFile, 'utf8')); } catch {}
+  const modRow = (k) => (Array.isArray(mod) ? mod.find(([mk]) => mk === k) : null);
+  const gone = (k) => !!modRow(k)?.[1]?.is_deleted;
+  arr = arr.map((r) => { const m = modRow(r[0]); return m && !m[1].is_deleted && m[1].value ? [r[0], { ...r[1], ...m[1] }] : r; });
   const now = Math.floor(Date.now() / 1000);
   for (const [id, name] of Object.entries(rename)) {
-    const row = arr.find(([k, v]) => k === `user-collections.${id}` && !v.is_deleted && v.value);
+    const row = arr.find(([k, v]) => k === `user-collections.${id}` && !v.is_deleted && !gone(k) && v.value);
     if (!row) continue;
     const v = JSON.parse(row[1].value);
     v.name = name;
@@ -163,7 +170,7 @@ function writeCollections() {
     row[1].version = String((parseInt(row[1].version, 10) || 0) + 1);
   }
   for (const [name, ids] of Object.entries(want)) {
-    let row = arr.find(([k, v]) => k.startsWith('user-collections.') && !v.is_deleted && v.value && (() => { try { return JSON.parse(v.value).name === name; } catch { return false; } })());
+    let row = arr.find(([k, v]) => k.startsWith('user-collections.') && !v.is_deleted && !gone(k) && v.value && (() => { try { return JSON.parse(v.value).name === name; } catch { return false; } })());
     if (!row) {
       const id = 'uc-' + Math.random().toString(36).slice(2, 14);
       row = [`user-collections.${id}`, { key: `user-collections.${id}`, timestamp: now, value: JSON.stringify({ id, name, added: [], removed: [] }), version: '1', conflictResolutionMethod: 'custom', strMethodId: 'union-collections' }];
@@ -178,6 +185,11 @@ function writeCollections() {
   }
   fs.mkdirSync(path.dirname(job.cloudFile), { recursive: true });
   fs.writeFileSync(job.cloudFile, JSON.stringify(arr));
+  if (Array.isArray(mod)) {
+    let changed = false;
+    for (const r of arr) { const m = modRow(r[0]); if (m && !m[1].is_deleted && m[1].value !== r[1].value) { m[1] = { ...m[1], value: r[1].value, timestamp: r[1].timestamp, version: r[1].version }; changed = true; } }
+    if (changed) fs.writeFileSync(modFile, JSON.stringify(mod));
+  }
   log('collections written', [...Object.keys(want), ...Object.values(rename)].join(', '));
 }
 

@@ -177,17 +177,17 @@ onMounted(async () => { await load(); focusFirst(el.value); });
 .ra-who { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .ra-stats { display: flex; gap: 18px; flex-wrap: wrap; color: #d4d8e2; font-size: var(--t-sm); }
 .ra-stats .stat { display: inline-flex; align-items: center; gap: 6px; }
-.ra-presence { display: inline-flex; align-items: center; gap: 8px; font-size: var(--t-sm); color: var(--muted); max-width: 720px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ra-presence { display: inline-flex; align-items: center; gap: 8px; font-size: var(--t-sm); color: var(--muted); max-width: 720px;  overflow-wrap: anywhere; }
 .ra-unlock { flex: none; width: 340px; display: flex; gap: 14px; padding: 14px; border-radius: var(--r-md); text-align: left; transition: transform 0.14s ease-out; }
 .ra-unlock:focus { transform: scale(1.03); }
 .ra-badge { width: 64px; height: 64px; border-radius: var(--r-md); flex: none; box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4); }
 .ra-u-body { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
-.ra-u-title { font-family: var(--display); font-weight: 600; font-size: var(--t-md); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.ra-u-desc { font-size: var(--t-xs); color: #c3c9d4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.ra-u-title { font-family: var(--display); font-weight: 600; font-size: var(--t-md);  overflow-wrap: anywhere; }
+.ra-u-desc { font-size: var(--t-xs); color: #c3c9d4; overflow-wrap: anywhere; }
 .ra-u-meta { display: flex; gap: 10px; align-items: center; font-size: var(--t-xs); color: var(--muted); }
 .ra-u-meta .pts { color: var(--gold); font-weight: 600; }
 .chip.hc { font-size: var(--t-xs); padding: 2px 6px; background: rgba(255, 90, 90, 0.18); color: #ff9b9b; }
-.ra-u-game { font-size: var(--t-xs); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ra-u-game { font-size: var(--t-xs); color: var(--muted);  overflow-wrap: anywhere; }
 .ra-gh { display: flex; align-items: center; gap: var(--s-2); margin: 18px 0 var(--s-3); }
 .ra-gh .spacer { flex: 1; }
 .ra-games { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 14px; padding-bottom: 30px; }
@@ -195,8 +195,8 @@ onMounted(async () => { await load(); focusFirst(el.value); });
 .ra-game:focus { transform: scale(1.02); }
 .ra-gicon { width: 72px; height: 72px; border-radius: var(--r-md); flex: none; object-fit: cover; }
 .ra-g-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 5px; }
-.ra-g-title { font-family: var(--display); font-weight: 600; font-size: var(--t-md); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.ra-g-sub { font-size: var(--t-xs); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ra-g-title { font-family: var(--display); font-weight: 600; font-size: var(--t-md);  overflow-wrap: anywhere; }
+.ra-g-sub { font-size: var(--t-xs); color: var(--muted);  overflow-wrap: anywhere; }
 .inlib { color: var(--green-l); }
 .ra-bar { height: 6px; }
 .ra-bar i { background: linear-gradient(90deg, #f5c542, #ffdf80); }

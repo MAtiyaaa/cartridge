@@ -66,7 +66,9 @@ function list(c, mine = {}) {
     const e = on[rel];
     const cats = {};
     for (const pr of r.presets) { const k = pr.category || ''; (cats[k] ||= []).push(pr.name); }
-    const sec = String(p[1] || '').toLowerCase(), section = { graphics: 'Graphics', enhancements: 'Enhancements', mods: 'Mods', workarounds: 'Workarounds' }[sec] || (/cheat|fps/.test(sec) ? 'Enhancements' : 'Graphics');
+    // the group Cemu's window shows it under (the second part of its path): Graphics, Enhancements, Mods,
+    // Workarounds, Cheats (0.9.32, owner: Wind Waker's Mega Cheats); anything else goes with Enhancements
+    const sec = String(p[1] || '').toLowerCase(), section = { graphics: 'Graphics', enhancements: 'Enhancements', mods: 'Mods', workarounds: 'Workarounds', cheats: 'Cheats' }[sec] || (/cheat/.test(sec) ? 'Cheats' : /fps|enhance/.test(sec) ? 'Enhancements' : 'Graphics');
     const presetText = Object.entries(cats).map(([k, v]) => `${k ? k + ': ' : ''}${(e?.presets?.[k]) || v[0]}`).join(' · ');
     items.push({ key: rel, name: d.name || p[p.length - 1] || path.basename(path.dirname(f)), description: [String(d.description || '').replace(/\\n/g, ' '), presetText].filter(Boolean).join('\n'), section, group: section, on: !!e && !e.disabled, by: e && !e.disabled ? (mine[rel] ? 'cartridge' : 'emulator') : null, presets: cats, chosen: e?.presets || {} });
   }
@@ -112,14 +114,17 @@ function titleIds(gamePath, cemuConfigDir) {
 // cemu-project/cemu_graphic_packs, its first asset (a zip) unpacked into graphicPacks/downloadedGraphicPacks, the
 // release name in version.txt there, so Cemu sees them as current. Only that folder, the one Cemu manages itself.
 const PACKS_REPO = 'https://api.github.com/repos/cemu-project/cemu_graphic_packs/releases/latest';
-async function downloadCommunity(root, { fetchImpl, unzip, force = false } = {}) {
+async function downloadCommunity(root, { fetchImpl, unzip, force = false, release = null } = {}) {
   const dir = path.join(root, 'graphicPacks', 'downloadedGraphicPacks'), vf = path.join(dir, 'version.txt');
   const have = (read(vf) || '').split(/\r?\n/)[0].trim();
   let st = null; try { st = fs.statSync(vf); } catch {}
   if (!force && have && st && Date.now() - st.mtimeMs < 7 * 864e5) return { updated: false, version: have };
-  const r = await fetchImpl(PACKS_REPO, { headers: { 'User-Agent': 'Cartridge', Accept: 'application/vnd.github+json' }, signal: AbortSignal.timeout(20000) });
-  if (!r.ok) throw new Error(`GitHub answered ${r.status} for Cemu's graphic packs.`);
-  const j = await r.json(), name = String(j.name || j.tag_name || '').trim(), url = j.assets?.[0]?.browser_download_url;
+  let name = '', url = '';
+  const r = await fetchImpl(PACKS_REPO, { headers: { 'User-Agent': 'Cartridge', Accept: 'application/vnd.github+json' }, signal: AbortSignal.timeout(20000) }).catch(() => null);
+  if (r?.ok) { const j = await r.json(); name = String(j.name || j.tag_name || '').trim(); url = j.assets?.[0]?.browser_download_url || ''; }
+  // 0.9.32: GitHub's API refuses after a few asks an hour; its release page says the same (github.js release())
+  if (!url && release) { const rel = await release().catch(() => null); const a = rel?.assets?.find((x) => /\.zip$/i.test(x.name)) || rel?.assets?.[0]; if (a) { name = String(rel.name || rel.tag || '').trim(); url = a.url || a.browser_download_url; } }
+  if (!url && !r?.ok) throw new Error(`GitHub answered ${r ? r.status : 'nothing'} for Cemu's graphic packs.`);
   if (!name || !url) throw new Error('Cemu\'s graphic pack release had nothing to download.');
   if (name === have && !force) { try { fs.utimesSync(vf, new Date(), new Date()); } catch {} return { updated: false, version: have }; }
   const z = await fetchImpl(url, { signal: AbortSignal.timeout(120000) });

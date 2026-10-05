@@ -14,7 +14,7 @@
       <div ref="body" class="ga-body">
         <AddonsSheet v-if="seen.addons" v-show="tab === 'mods' || tab === 'tex'" :rom-id="romId" :name="name" embedded :kind="tab === 'mods' ? 'mods' : 'tex'" :on-reopen="reopen" />
         <div v-if="seen.patches && !patches && patchTab" class="muted"><Icon name="mdiSync" :size="16" class="spin" /> Reading {{ PATCH_EMU_OF(slug) }}’s list…</div>
-        <PatchesSheet v-if="patches" v-show="patchTab" ref="pt" v-bind="patches" :name="name" :rom-id="romId" embedded :section="sectionOf(tab)" />
+        <PatchesSheet v-if="patches" v-show="patchTab" ref="pt" v-bind="patches" :name="name" :rom-id="romId" embedded :section="sectionOf(tab)" @reload="loadPatches" />
         <template v-if="tab === 'updates'">
           <div class="ga-up">
             <div class="muted small">From Sony’s own update list, installed into RPCS3 one after another, oldest first. Patches made for a game’s last update need it.</div>
@@ -43,9 +43,9 @@
 // Game Add-ons (0.9.21, owner: game updates, patches and add-ons in one place, one tab each). Only the tabs
 // the game's console has are shown; LB/RB move between them. Mods and Texture Packs are AddonsSheet,
 // Patches (Dolphin: one tab per kind of code) is PatchesSheet, Game Updates is Sony's list for PS3.
-import { computed, nextTick, onMounted, onBeforeUnmount, reactive, ref } from 'vue';
+import { computed, nextTick, onMounted, onBeforeUnmount, reactive, ref, watch } from 'vue';
 import { pushLayer, focusFirst } from '../nav.js';
-import { store, call, closeModal, toast, bytes, romById, cover } from '../store.js';
+import { store, call, closeModal, toast, bytes, romById, cover, bgJob } from '../store.js';
 import Icon from './Icon.vue';
 import Btn from './Btn.vue';
 import AddonsSheet from './AddonsSheet.vue';
@@ -70,7 +70,7 @@ const tabs = computed(() => {
   if (TEXTURES.test(s)) out.push({ k: 'tex', l: 'Texture Packs' });
   const pe = PATCH_EMU_OF(s);
   if (pe === 'Dolphin') out.push(...DOLPHIN);
-  else if (pe === 'Cemu') out.push({ k: 'p:Graphics', l: 'Graphics' }, { k: 'p:Enhancements', l: 'Enhancements' }, { k: 'p:Mods', l: 'Graphic Pack Mods' }, { k: 'p:Workarounds', l: 'Workarounds' }); // 0.9.24: Cemu's graphic packs, as its own window groups them
+  else if (pe === 'Cemu') out.push({ k: 'p:Graphics', l: 'Graphics' }, { k: 'p:Enhancements', l: 'Enhancements' }, { k: 'p:Mods', l: 'Graphic Pack Mods' }, { k: 'p:Workarounds', l: 'Workarounds' }, { k: 'p:Cheats', l: 'Cheats' }); // 0.9.24; Cheats 0.9.32 (Mega Cheats): Cemu's graphic packs, as its own window groups them
   else if (pe === 'shadPS4') out.push({ k: 'p:shadPS4', l: 'shadPS4 Patches' }, { k: 'p:GoldHEN', l: 'GoldHEN' }); // 0.9.23: its two lists, LB/RB between them
   else if (pe) out.push({ k: 'p', l: pe === 'PPSSPP' ? 'Cheats' : 'Patches' });
   if (/ps3/i.test(s)) out.push({ k: 'updates', l: 'Game Updates' });
@@ -103,10 +103,13 @@ async function loadUp(fresh = false) {
   up.value = null;
   up.value = (await call('ps3up:game', { romId: props.romId, fresh }).catch((e) => ({ error: e.message, todo: [] }))) || { error: 'This game’s serial couldn’t be read.', todo: [] };
 }
+let upCalling = false;
+// 0.9.32: updates installing from an earlier visit show here again, and finish on their own
+watch(() => bgJob('ps3:' + props.romId), (j) => { if (j) { upRun.value = true; upText.value = `${j.text || 'Downloading'}${j.pct != null ? ' · ' + j.pct + '%' : ''}`; } else if (upRun.value && !upCalling) { upRun.value = false; loadUp(); } }, { immediate: true });
 async function installUp() {
-  upRun.value = true; upText.value = 'Starting';
+  upRun.value = true; upText.value = 'Starting'; upCalling = true;
   try { const r = await call('ps3up:install', { romId: props.romId }); toast(`${props.name} updated${r.version ? ' to ' + r.version : ''}`, 'ok', 3500, 'mdiPackageUp'); } catch (e) { toast(e.message, 'error', 6000); }
-  upRun.value = false; loadUp();
+  upCalling = false; upRun.value = false; loadUp();
 }
 
 // the add-ons tab asks before removing, which takes the one modal slot: come back to the same tab
@@ -134,7 +137,7 @@ onBeforeUnmount(() => { layer?.pop(); off?.(); });
 .ga-head { display: flex; align-items: center; gap: var(--s-4); }
 .ga-cover { width: 56px; height: 56px; object-fit: cover; border-radius: var(--r-sm); flex: none; }
 .ga-title { min-width: 0; }
-.ga h2 { margin: 2px 0 0; font-size: var(--t-xl); line-height: 1.15; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ga h2 { margin: 2px 0 0; font-size: var(--t-xl); line-height: 1.15;  overflow-wrap: anywhere; }
 .ga-tabs { display: flex; align-items: center; gap: var(--s-2); }
 .ga-tabs .seg { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
 .ga-tabs .seg button { flex: none; white-space: nowrap; }

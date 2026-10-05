@@ -54,7 +54,8 @@ const size = computed(() => props.p.size || (more.value?.files?.length === 1 ? m
 const version = computed(() => props.p.version || more.value?.version || '');
 const text = computed(() => more.value?.text || props.p.description || props.p.notes || '');
 const kindLabel = computed(() => (props.kind === 'tex' || props.p.source === 'ps2' ? 'Texture Pack' : 'Mod'));
-function openPage() { window.open(props.p.url); }
+// 0.9.32: its page opens in Cartridge (AddonsSheet), where a download clicked there installs for this game
+function openPage() { closeModal({ page: true }); }
 let layer;
 onMounted(async () => {
   layer = pushLayer(el.value, { back: () => closeModal(null), start: () => closeModal(null), lb() {}, rb() {}, x() {}, y() {}, select() {}, lt() {}, rt() {} });

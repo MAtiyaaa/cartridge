@@ -400,7 +400,7 @@ onMounted(async () => {
 .plat-view { position: absolute; inset: 0; display: grid; grid-template-rows: auto auto 1fr; padding: 8px 36px 0; animation: viewIn 0.16s ease-out; }
 .ph-head { display: flex; align-items: center; justify-content: space-between; gap: 20px; margin: 6px 0 14px; }
 .sys-switch { display: flex; align-items: center; gap: 16px; min-width: 0; }
-.sys-switch h1 { font-size: var(--t-xl); font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sys-switch h1 { font-size: var(--t-xl); font-weight: 700;  overflow-wrap: anywhere; }
 .sys-switch .head-logo { margin: 4px 0 6px; }
 .sys-switch h1.sys-mark { font-size: 40px; line-height: 1; margin: 4px 0 6px; }
 .sys-switch h1.sys-mark :deep(.cmark) { height: 1em; max-width: min(360px, 100%); object-fit: contain; object-position: left center; opacity: 1; vertical-align: bottom; }

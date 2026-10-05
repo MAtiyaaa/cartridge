@@ -34,19 +34,22 @@ export const TILES = {
   // one console's games taking turns with their art
   emulator: { name: 'An Emulator', icon: 'mdiGamepadVariant', size: [2, 1] },
   spotlight: { name: 'Console Spotlight', icon: 'mdiSpotlightBeam', size: [4, 2] },
+  // 0.9.32 (owner: "cooler, fun console widgets"): a console's game as its disc or cartridge, and its games on a shelf
+  media: { name: 'Game Disc or Cartridge', icon: 'mdiDisc', size: [2, 2] },
+  shelf: { name: 'Game Shelf', icon: 'mdiBookshelf', size: [4, 2] },
 };
 // the add-a-widget sheet, grouped; these can be added more than once (each with its own game, console,
 // picture, page or trophies of one console)
 // 0.9.28 (owner: not one long scroll): tabs in the sheet, LB/RB between them
 export const GROUPS = [
   ['Games', ['continue', 'recent', 'fresh', 'favs', 'recs', 'game']],
-  ['Consoles', ['consoles', 'console', 'cgames', 'cstats', 'spotlight', 'emulator']],
+  ['Consoles', ['consoles', 'console', 'cgames', 'cstats', 'spotlight', 'media', 'shelf', 'emulator']],
   ['At a Glance', ['clock', 'week', 'stats', 'storage', 'downloads', 'trophies']],
   ['Pictures and Fun', ['image', 'surprise', 'daily', 'html']],
 ];
 // Android: An Emulator reads and opens desktop emulators (versions, updates), which aren't there
 if (IS_ANDROID) { delete TILES.emulator; for (const g of GROUPS) g[1] = g[1].filter((k) => TILES[k]); }
-export const MANY = new Set(['game', 'console', 'image', 'html', 'trophies', 'cgames', 'cstats', 'emulator', 'spotlight']);
+export const MANY = new Set(['game', 'console', 'image', 'html', 'trophies', 'cgames', 'cstats', 'emulator', 'spotlight', 'media', 'shelf']);
 
 const DEF = [['continue', 4, 2], ['clock', 2, 1], ['storage', 2, 1], ['week', 4, 1], ['consoles', 4, 1], ['fresh', 4, 1], ['recent', 4, 1], ['trophies', 4, 1]];
 export const DEFAULT = () => pack(DEF.map(([type, w, h]) => ({ id: type, type, w, h })));

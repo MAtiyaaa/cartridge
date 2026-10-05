@@ -99,7 +99,7 @@ onMounted(async () => {
 .up-ic.error { color: var(--red); }
 .up-ic.uploading { color: var(--primary-l); }
 .up-mid { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
-.up-mid b { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.up-mid span { font-size: var(--t-xs); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.up-mid b { font-weight: 500;  overflow-wrap: anywhere; }
+.up-mid span { font-size: var(--t-xs);  overflow-wrap: anywhere; }
 .up-act { flex: none; font-size: var(--t-sm); font-weight: 600; color: var(--primary-t); }
 </style>

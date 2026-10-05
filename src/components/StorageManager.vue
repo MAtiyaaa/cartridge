@@ -127,7 +127,7 @@ onMounted(load);
 .sm-thumb { width: 34px; height: 46px; border-radius: 5px; overflow: hidden; background: #1a1e2a; flex: none; }
 .sm-thumb img { width: 100%; height: 100%; object-fit: cover; }
 .sm-mid { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
-.sm-mid b { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.sm-mid span { font-size: var(--t-xs); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sm-mid b { font-weight: 500;  overflow-wrap: anywhere; }
+.sm-mid span { font-size: var(--t-xs);  overflow-wrap: anywhere; }
 .sm-size { font-family: var(--display); font-weight: 600; font-size: var(--t-sm); flex: none; }
 </style>

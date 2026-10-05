@@ -188,18 +188,18 @@ onMounted(async () => { await load(); focusFirst(el.value); });
 .tp-ticon-game { position: absolute; right: -8px; bottom: -8px; }
 .tp-ticon-game .gicon { box-shadow: 0 0 0 2px rgba(10, 10, 20, 0.9); }
 .tp-u-body { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
-.tp-u-title { font-family: var(--display); font-weight: 600; font-size: var(--t-md); display: flex; gap: 6px; align-items: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.tp-u-desc { font-size: var(--t-xs); color: #c3c9d4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.tp-u-title { font-family: var(--display); font-weight: 600; font-size: var(--t-md); display: flex; gap: 6px; align-items: center;  overflow-wrap: anywhere; }
+.tp-u-desc { font-size: var(--t-xs); color: #c3c9d4; overflow-wrap: anywhere; }
 .tp-u-meta { display: flex; gap: 10px; align-items: center; font-size: var(--t-xs); color: var(--muted); }
 .tp-u-meta .pts { color: #9be38a; font-weight: 600; }
 .dev { display: inline-flex; gap: 4px; align-items: center; color: #9cc3ff; }
-.tp-u-game { font-size: var(--t-xs); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tp-u-game { font-size: var(--t-xs); color: var(--muted);  overflow-wrap: anywhere; }
 .tp-games { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 14px; padding-bottom: 30px; }
 .tp-game { display: flex; gap: 14px; align-items: center; padding: 12px 14px; border-radius: var(--r-md); text-align: left; transition: transform 0.14s ease-out; position: relative; }
 .tp-game:focus { transform: scale(1.02); }
 .tp-g-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 5px; }
-.tp-g-title { font-family: var(--display); font-weight: 600; font-size: var(--t-md); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.tp-g-sub { font-size: var(--t-xs); color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tp-g-title { font-family: var(--display); font-weight: 600; font-size: var(--t-md);  overflow-wrap: anywhere; }
+.tp-g-sub { font-size: var(--t-xs); color: var(--muted);  overflow-wrap: anywhere; }
 .plat { font-weight: 700; color: #cfd6e4; margin-right: 8px; font-size: var(--t-sm); }
 .tp-g-logo.game-logo { margin: 0 0 2px; }
 .inlib { color: var(--green-l); }

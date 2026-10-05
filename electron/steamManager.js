@@ -141,11 +141,21 @@ function readPlaytime(acc) {
   return out;
 }
 // Collections the user made (dynamic, filter-based ones can't hold chosen games)
+// 0.9.32 (owner: a collection deleted in Steam still showed): Steam keeps its local changes, deletions too, in
+// cloud-storage-namespace-1.modified.json until they reach its cloud; those entries win over the main file's
+function cloudRows(file) {
+  const rows = new Map();
+  for (const f of [file, file.replace(/\.json$/, '.modified.json')]) {
+    let arr; try { arr = JSON.parse(fs.readFileSync(f, 'utf8')); } catch { continue; }
+    const list = Array.isArray(arr) ? arr : Object.entries(arr || {});
+    for (const [k, v] of list) if (k && v) rows.set(k, v);
+  }
+  return rows;
+}
 function readCollections(acc) {
   try {
-    const arr = JSON.parse(fs.readFileSync(files(acc).cloud, 'utf8'));
     const out = [];
-    for (const [k, v] of arr) {
+    for (const [k, v] of cloudRows(files(acc).cloud)) {
       if (!k.startsWith('user-collections.') || v.is_deleted || !v.value) continue;
       try { const c = JSON.parse(v.value); if (c.filterSpec) continue; out.push({ id: c.id, name: c.name, added: c.added || [] }); } catch {}
     }
@@ -346,6 +356,25 @@ module.exports = function createSteamManager(ctx) {
     }
     return out;
   }
+  // An EmuDeck launcher counts only while what it starts is there (0.9.32, owner: Vita3K deleted twice and
+  // still "already on this device"): its script stays in tools/launchers after the program is gone.
+  // EmuDeck's scripts name the folder (emufolder="$HOME/Applications/Vita3K") and the program (emuName,
+  // an AppImage path) or run a Flatpak; a script Cartridge can't read is trusted as before.
+  function scriptRuns(script, e) {
+    let t = ''; try { t = fs.readFileSync(script, 'utf8'); } catch { return true; }
+    const home = (x) => x.replace(/\$\{?HOME\}?|^~(?=\/)/g, HOME);
+    if (/flatpak\s+run/.test(t)) { const fps = flatpakApps(); const ids = [...t.matchAll(/flatpak\s+run\s+(?:-\S+\s+)*([\w.-]+\.[\w.-]+)/g)].map((m) => m[1]); if (ids.length) return ids.some((x) => fps.includes(x)); }
+    const folder = (/^\s*emufolder=["']?([^"'\n]+)["']?/m.exec(t) || [])[1], name = (/^\s*emuName=["']?([^"'\n]+)["']?/m.exec(t) || [])[1];
+    const paths = [...t.matchAll(/["']?((?:\$\{?HOME\}?|~)\/[^"'\s]+\.AppImage)["']?/gi)].map((m) => home(m[1])).filter((x) => !x.includes('*') && !x.includes('$'));
+    if (paths.length) return paths.some((x) => exists(x));
+    if (folder && !folder.includes('$(')) {
+      const dir = home(folder);
+      if (!isDir(dir)) return false;
+      const names = ls(dir), want = [name, e.label, ...(e.bin || [])].filter(Boolean).map((x) => x.toLowerCase());
+      return names.some((n) => want.some((w) => n.toLowerCase().startsWith(w)) || (e.app && e.app.test(n)));
+    }
+    return true;
+  }
   let scanning = null;
   function scanEmulators({ drives = false } = {}) {
     if (scanning) return scanning;
@@ -391,7 +420,7 @@ module.exports = function createSteamManager(ctx) {
       // name: what is really installed (a Citra install isn't "Azahar": 0.9.3)
       const mk = (exe, start, src, from, args, version, name) => found.push({ t: { exe, start, pre: e.pre || [], command: true, args: args || argsFor(id, key, src, version), kind: e.kind || kindOf(key), how: src, from }, src, name: name || e.label });
       let wrap = { flatpak: false, appimage: false, text: '' };
-      for (const d of L) for (const sc of e.scripts || []) if (exists(path.join(d, sc)) && !found.length) { mk(path.join(d, sc), d, 'emudeck', `EmuDeck ${e.label}`, null, null, realName(id, sc)); wrap = wraps(path.join(d, sc)); }
+      for (const d of L) for (const sc of e.scripts || []) if (exists(path.join(d, sc)) && !found.length && scriptRuns(path.join(d, sc), e)) { mk(path.join(d, sc), d, 'emudeck', `EmuDeck ${e.label}`, null, null, realName(id, sc)); wrap = wraps(path.join(d, sc)); }
       // One AppImage: the newest copy, found by name in the usual folders or by what's inside it
       // anywhere (Setup's scan). A file whose insides say it's another emulator is skipped.
       const apps = [];
@@ -958,6 +987,12 @@ module.exports = function createSteamManager(ctx) {
     if (await tryRun('flatpak', ['run', 'com.valvesoftware.Steam', url])) return { via: 'url' };
     throw new Error('Steam couldn’t be asked to start it.');
   }
+  // Steam back to its running app after a game (0.9.34, main.js steamFront); only with Steam's interface reachable
+  async function frontRunning(appid) {
+    const env = environment();
+    if (!env.account || !(await live.available(env.account.root).catch(() => false))) return { skipped: 'steam interface not reachable' };
+    return live.frontRunning(appid);
+  }
   function queueInfo() { return { add: queue.add.length, remove: queue.remove.length, total: queue.add.length + queue.remove.length }; }
   function queueAdd(items) { // [{ romId, collections? }]
     for (const it of items) {
@@ -1219,13 +1254,21 @@ module.exports = function createSteamManager(ctx) {
   }
   function hasCmd(c) { return (process.env.PATH || '/usr/bin:/bin').split(':').some((d) => exists(path.join(d, c))); }
   // Put games back into collections Steam dropped
-  function fixCollections() {
+  async function fixCollections() {
     const env = environment();
     if (!env.account) throw new Error('Steam was not found.');
     const miss = verifyCollections() || [];
     if (!miss.length) return { fixed: 0 };
     const collections = {};
     for (const m of miss) (collections[m.collection] ||= []).push(Number(m.appid) >>> 0);
+    for (const m of miss) if (reg[m.appid]) reg[m.appid].collections = [...new Set([...(reg[m.appid].collections || []), m.collection])];
+    saveReg();
+    // with Steam's interface reachable, straight in (no restart)
+    if (await live.available(env.account.root).catch(() => false)) {
+      let done = 0;
+      for (const [name, ids] of Object.entries(collections)) for (const id of ids) if (await live.addToCollections(id, [name]).catch(() => false)) done++;
+      return { fixed: done, live: true };
+    }
     const stamp = new Date().toISOString().replace(/[:.]/g, '-');
     runHelper('last', { id: stamp, stamp, add: [], remove: [], collections, restart: true, gamescope: !!ctx.isGamescope(), flatpakSteam: !!env.account.flatpak, shortcutsFile: files(env.account).shortcuts, cloudFile: files(env.account).cloud, backupDir: BACKUP_DIR, logFile: path.join(USER_DATA, 'steam-apply.log') });
     return { fixed: miss.length, steamWillRestart: steamRunning() };
@@ -1239,18 +1282,30 @@ module.exports = function createSteamManager(ctx) {
     return true;
   }
   // After Steam restarts: were the collections kept? (Steam Cloud can replace the local file)
+  // Games missing from their Steam collections (Settings → Emulators → Issues). 0.9.36 (owner's photo: "129 games are
+  // missing from PlayStation 4, ..., Nintendo DS - melonDS (Standalone)" with a Put Them Back that would make old
+  // collections again): it no longer trusts what Cartridge remembers. Console collections are compared with what Steam
+  // really holds, for every game of the console in Steam, and only with console collections on (the same rule as
+  // filling them); any other collection only while it's still in Steam. Old names (yours, Steam ROM Manager's) are left.
   function verifyCollections() {
     const env = environment();
     if (!env.account) return null;
     const cols = readCollections(env.account);
-    const missing = [];
-    for (const [appid, r] of Object.entries(reg)) {
-      for (const c of r.collections || []) {
-        const col = cols.find((x) => x.name === c);
-        if (!col || !col.added.map((x) => x >>> 0).includes(Number(appid) >>> 0)) missing.push({ appid, name: r.name, collection: c });
-      }
+    pruneStale(cols, false);
+    const plats = libraryPlatforms(), byName = new Map(cols.map((c) => [c.name, c]));
+    const out = new Map();
+    for (const [appid, r] of Object.entries(reg)) for (const n of r.collections || []) {
+      if (SC.consoleOf(n, plats)) continue; // a console's collection: below
+      const col = byName.get(n);
+      if (col && !inCol(col).has(Number(appid) >>> 0)) out.set(appid + '|' + n, { appid, name: r.name, collection: n });
     }
-    return missing;
+    if (cfg().consoleCollections) for (const { g, appid } of gamesInSteam(env)) {
+      const name = colName(g), col = byName.get(name);
+      if (inCol(col).has(appid)) continue;
+      if (!col && cols.some((c) => SC.consoleOf(c.name, plats) === g.key)) continue; // yours, not reviewed yet: the review decides
+      out.set(appid + '|' + name, { appid, name: g.rom.name, collection: name, console: g.key });
+    }
+    return [...out.values()];
   }
   // Test one console's launch setup: does the Target exist and run?
   // Shown once after Cartridge starts: how the last Steam change went, and any collections
@@ -1528,31 +1583,83 @@ module.exports = function createSteamManager(ctx) {
   }
   // Console collections turned on: put the games Cartridge already added into the Steam collection
   // named after their console (live when Steam can be reached, else the helper next time Steam closes)
-  async function syncConsoleCollections() {
+  // Console collections from what Steam really holds (0.9.34, owner: "I deleted my old PS3 collection, Cartridge made
+  // Sony PlayStation 3, and I had to add the games already in Steam by hand"). Before, a game counted as done once
+  // Cartridge had put it in any collection of that name (reg[].collections, never checked against Steam), and only
+  // games Cartridge added were looked at. Now every downloaded game of the console that has a shortcut in Steam
+  // (Cartridge's, Steam ROM Manager's, EmuDeck's or your own) is compared with the collection's real contents.
+  // Collections you deleted are forgotten (0.9.34): a name you kept for a console, and the names Cartridge remembers
+  // putting a game in, when no collection of that name is in Steam any more. Without this, the start-up check called
+  // a collection you deleted "dropped by Steam" and its Fix made it again, and a kept name made it again too. A
+  // console's current collection is kept (Steam Cloud can still drop that one). Only from a list that was read.
+  function pruneStale(list, trusted) {
+    if (!list.length && !trusted) return;
+    const names = new Set(list.map((c) => c.name)), c = cfg();
+    let changed = false;
+    for (const [k, n] of Object.entries(c.collectionNames || {})) if (!names.has(n)) { delete c.collectionNames[k]; changed = true; log('kept collection gone from steam, forgotten:', n); }
+    if (changed) ctx.saveConfig();
+    const current = new Set(installedGames().map((g) => colName(g)));
+    let rc = false;
+    for (const r of Object.values(reg)) if (r.collections?.length) { const keep = r.collections.filter((n) => names.has(n) || current.has(n)); if (keep.length !== r.collections.length) { r.collections = keep; rc = true; } }
+    if (rc) saveReg();
+  }
+  async function colsNow(env) {
+    let out = null;
+    if (await live.available(env.account.root).catch(() => false)) { const l = await live.listCollections().catch(() => null); if (l) out = { list: l, live: true }; }
+    out ||= { list: readCollections(env.account), live: false };
+    pruneStale(out.list, out.live);
+    return out;
+  }
+  function gamesInSteam(env) {
+    const idx = inSteamIndex(shortcutsOf(env.account)), out = [];
+    for (const g of installedGames()) { const sc = idx(g) || liveHit(g); if (sc) out.push({ g, appid: Number(sc.appid) >>> 0 }); }
+    return out;
+  }
+  const inCol = (col) => new Set((col?.added || []).map((x) => Number(x) >>> 0));
+  // one console: its collection and each of its games in Steam, in it or not
+  async function consoleCollection(key) {
     const env = environment();
     if (!env.account) throw new Error('Steam was not found.');
-    const byRom = new Map(installedGames().map((g) => [g.rom.id, g]));
-    const have = new Set(shortcutsOf(env.account).map((s) => s.appid >>> 0));
-    const collections = {};
-    for (const [id, r] of Object.entries(reg)) {
-      const g = byRom.get(r.romId);
-      if (!g || !(have.has(Number(id) >>> 0) || r.live)) continue;
-      const name = colName(g);
-      if ((r.collections || []).includes(name)) continue;
-      (collections[name] ||= []).push(Number(id) >>> 0);
-      r.collections = [...(r.collections || []), name];
+    const { list, live: isLive } = await colsNow(env);
+    const games = gamesInSteam(env).filter((x) => x.g.key === key);
+    const plat = libraryPlatforms().find((p) => p.key === key);
+    const name = games.length ? colName(games[0].g) : SC.nameFor(key, plat?.name || key, cfg().collectionNames);
+    const col = list.find((c) => c.name === name), have = inCol(col);
+    return { key, name, exists: !!col, live: isLive, games: games.map(({ g, appid }) => ({ romId: g.rom.id, name: g.rom.name, appid, in: have.has(appid), ours: !!reg[appid] })).sort((a, b) => Number(a.in) - Number(b.in) || a.name.localeCompare(b.name)) };
+  }
+  // puts games in their console's collection: all missing ones, or only some consoles / appids. auto: never restarts
+  // Steam (only with its interface reachable), for the check Cartridge runs by itself
+  async function fillCollections({ keys = null, appids = null, auto = false } = {}) {
+    const env = environment();
+    if (!env.account) throw new Error('Steam was not found.');
+    const { list, live: isLive } = await colsNow(env);
+    const collections = {}, plats = libraryPlatforms();
+    for (const { g, appid } of gamesInSteam(env)) {
+      if (keys && !keys.includes(g.key)) continue;
+      if (appids && !appids.map((x) => Number(x) >>> 0).includes(appid)) continue;
+      const name = colName(g), col = list.find((c) => c.name === name);
+      if (inCol(col).has(appid)) continue;
+      // by itself it never makes a console collection next to one of yours for that console ("SNES" before it's
+      // reviewed): that's the review's choice (Use yours, or Rename)
+      if (auto && !col && list.some((c) => SC.consoleOf(c.name, plats) === g.key)) continue;
+      (collections[name] ||= []).push(appid);
     }
     const n = Object.values(collections).flat().length;
     if (!n) return { count: 0 };
+    if (auto && !isLive) return { count: 0, waiting: n };
+    for (const [name, ids] of Object.entries(collections)) for (const id of ids) if (reg[id]) reg[id].collections = [...new Set([...(reg[id].collections || []), name])];
     saveReg();
-    if (await live.available(env.account.root).catch(() => false)) {
-      for (const [name, ids] of Object.entries(collections)) for (const id of ids) await live.addToCollections(id, [name]).catch((e) => log('steam live console collection', e.message));
-      return { count: n, live: true };
+    log('console collections', auto ? '(by itself)' : '', Object.entries(collections).map(([k, v]) => `${k}: ${v.length}`).join(', '));
+    if (isLive) {
+      let done = 0;
+      for (const [name, ids] of Object.entries(collections)) for (const id of ids) if (await live.addToCollections(id, [name]).catch((e) => { log('steam live console collection', e.message); return false; })) done++;
+      return { count: done, live: true };
     }
     const stamp = new Date().toISOString().replace(/[:.]/g, '-');
     runHelper('last', { id: stamp, stamp, add: [], remove: [], collections, restart: true, gamescope: !!ctx.isGamescope(), flatpakSteam: !!env.account.flatpak, shortcutsFile: files(env.account).shortcuts, cloudFile: files(env.account).cloud, backupDir: BACKUP_DIR, logFile: path.join(USER_DATA, 'steam-apply.log') });
     return { count: n, steamWillRestart: steamRunning() };
   }
+  const syncConsoleCollections = () => fillCollections();
   // ---------------------------------------------------------------- collections review (0.9.24)
   // A console's Steam collection: the name the user kept in the review, else RomM's (Cartridge's) name
   // 0.9.27: maker then console ("Sony PlayStation 3"); a collection already in Steam under RomM's plain name
@@ -1569,7 +1676,7 @@ module.exports = function createSteamManager(ctx) {
   };
   function libraryPlatforms() {
     const seen = new Map();
-    for (const p of ctx.getLibrary()?.platforms || []) { const key = keyOf(p.slug, p.fs_slug); if (!seen.has(key)) seen.set(key, { key, name: SC.fullName(key, p.display_name || p.name) }); }
+    for (const p of ctx.getLibrary()?.platforms || []) { const key = keyOf(p.slug, p.fs_slug); if (!seen.has(key)) seen.set(key, { key, name: SC.fullName(key, p.display_name || p.name), plain: p.display_name || p.name }); }
     return [...seen.values()];
   }
   // The user's collections, each matched to a console with the name Cartridge would give it
@@ -1577,31 +1684,39 @@ module.exports = function createSteamManager(ctx) {
   // stayed at 0): renames Steam hasn't written to its file yet are shown as done (pendingRenames, dropped once the
   // file has them), and every console in the library is listed with the collection its games go into and how
   // many of its games are in Steam (the file's count, else the shortcuts Cartridge added there)
-  function collectionsReview() {
+  // 0.9.32 (owner: redesign, a deleted collection still showed): read from Steam itself when its interface is
+  // reachable (what Steam shows now), else from its files with the local changes; `source` says which
+  async function collectionsReview() {
     const env = environment();
     if (!env.account) throw new Error('Steam was not found.');
     const c = cfg(), pending = c.pendingRenames || {};
-    const cols = readCollections(env.account);
+    let cols = null, source = 'file';
+    if (await live.available(env.account.root).catch(() => false)) { cols = await live.listCollections().catch((e) => { log('steam live collections', e.message); return null; }); if (cols) source = 'live'; }
+    if (!cols) cols = readCollections(env.account);
     for (const col of cols) { if (pending[col.id] && col.name === pending[col.id]) delete pending[col.id]; else if (pending[col.id]) { col.was = col.name; col.name = pending[col.id]; } }
     for (const id of Object.keys(pending)) if (!cols.some((x) => x.id === id)) delete pending[id];
-    const plats = libraryPlatforms();
-    const counts = {};
-    for (const r of Object.values(reg)) for (const n of r.collections || []) counts[n] = (counts[n] || 0) + 1;
+    // a kept collection that's gone from Steam: its console goes back to Cartridge's name
+    if (cols.length || source === 'live') for (const [k, n] of Object.entries(c.collectionNames || {})) if (!cols.some((x) => x.name === n)) { delete c.collectionNames[k]; ctx.saveConfig(); }
+    const plats = libraryPlatforms(), inSteam = gamesInSteam(env);
     const consoles = plats.map((p) => {
-      const name = SC.nameFor(p.key, p.name, c.collectionNames);
+      // the same rule as colName: RomM's plain name ("PlayStation") stays in use while it's there and Cartridge's isn't
+      let name = SC.nameFor(p.key, p.name, c.collectionNames);
+      if (!c.collectionNames?.[p.key] && !cols.some((x) => x.name === name) && p.plain && cols.some((x) => x.name === p.plain)) name = p.plain;
       const col = cols.find((x) => x.name === name);
-      const games = Object.values(reg).filter((r) => r.console === p.key).length;
-      return { key: p.key, name, exists: !!col, count: Math.max(col ? col.added.length : 0, counts[name] || 0), games };
+      const mine = inSteam.filter((x) => x.g.key === p.key), have = inCol(col);
+      return { key: p.key, name, full: p.name, kept: !!c.collectionNames?.[p.key], exists: !!col, id: col?.id || null, count: col ? col.added.length : 0, games: mine.length, missing: mine.filter((x) => !have.has(x.appid)).length };
     }).sort((a, b) => a.name.localeCompare(b.name));
-    return { list: SC.analyse(cols, plats).map((x) => ({ ...x, pending: !!cols.find((y) => y.id === x.id)?.was })), consoles, integrated: !!c.collectionsIntegrated, kept: c.collectionNames || {} };
+    return { list: SC.analyse(cols, plats).map((x) => ({ ...x, pending: !!cols.find((y) => y.id === x.id)?.was })), consoles, source, at: Date.now(), integrated: !!c.collectionsIntegrated, kept: c.collectionNames || {} };
   }
   // renames: [{ id, from, to, key }]; keep: [{ key, name }] (collections left as they are, still used for that console)
-  async function collectionsApply({ renames = [], keep = [] } = {}) {
+  // reset: [key] (0.9.32): back to Cartridge's name for that console
+  async function collectionsApply({ renames = [], keep = [], reset = [] } = {}) {
     const env = environment();
     if (!env.account) throw new Error('Steam was not found.');
     const c = cfg();
     c.collectionNames ||= {};
     for (const k of keep) if (k.key && k.name) c.collectionNames[k.key] = k.name;
+    for (const k of reset) delete c.collectionNames[k];
     for (const r of renames) delete c.collectionNames[r.key];
     // games Cartridge put in a renamed collection follow it (verifyCollections compares names)
     const swap = Object.fromEntries(renames.map((r) => [r.from, r.to]));
@@ -1622,6 +1737,15 @@ module.exports = function createSteamManager(ctx) {
     const stamp = new Date().toISOString().replace(/[:.]/g, '-');
     runHelper('last', { id: stamp, stamp, add: [], remove: [], rename: left, restart: true, gamescope: !!ctx.isGamescope(), flatpakSteam: !!env.account.flatpak, shortcutsFile: files(env.account).shortcuts, cloudFile: files(env.account).cloud, backupDir: BACKUP_DIR, logFile: path.join(USER_DATA, 'steam-apply.log') });
     return { count: renames.length, steamWillRestart: steamRunning() };
+  }
+  // every fork found on this device (0.9.33, Linked Folders): [{ of, name, exe, how }]
+  function forksAll() {
+    const seen = new Map(), keys = new Set(Object.values(EMU).flatMap((e) => e.for || []));
+    for (const k of keys) for (const c of candidates(k)) if (c.fork && c.t?.exe && !seen.has(c.t.exe)) {
+      const id = String(c.id).split('@')[0];
+      seen.set(c.t.exe, { of: EMU[id]?.forkOf || id, name: String(c.label).split(' · ')[0], exe: c.t.exe, how: c.t.how });
+    }
+    return [...seen.values()];
   }
   // A plain-text summary for bug reports: what was found and chosen, with personal details taken out
   function setupReport() {
@@ -1742,7 +1866,7 @@ module.exports = function createSteamManager(ctx) {
     liveInfo: async () => { const env = environment(); if (!env.account) return { on: false, flag: false }; return { on: await live.available(env.account.root), flag: live.flagOn(env.account.root) }; },
     liveEnable: () => { const env = environment(); if (!env.account) throw new Error('Steam was not found.'); fs.writeFileSync(path.join(env.account.root, live.FLAG), ''); return true; },
     installedEmulators, addRomToCollections, onDownloaded, onDeleted, lastStatus, writeScript, startupReport, forRom, fixCollections, played, playtime, steamRoots, refreshArt,
-    play, scanEmulators, rpcs3Command, vita3kCommand, setupOverview, confirm, markFork, useFile, health, healthFix, movedEmulators, setupReport, syncConsoleCollections, collectionsReview, collectionsApply, preflight: (key) => preflight(key, templateFor(key)),
+    play, scanEmulators, rpcs3Command, vita3kCommand, setupOverview, confirm, markFork, useFile, health, healthFix, movedEmulators, setupReport, syncConsoleCollections, fillCollections, consoleCollection, collectionsReview, collectionsApply, forksAll, frontRunning, preflight: (key) => preflight(key, templateFor(key)),
     candidatesFor: (key) => az(candidates(key).map((c) => ({ id: c.id, label: c.label, sub: shortPath(c.t.how === 'flatpak' ? c.t.from : c.t.exe), fork: !!c.fork }))),
     // one game's own Target, Start in and Launch options (console page, 0.9.15); null goes back
     setGameTemplate: (romId, t) => { const c = cfg(); c.gameTemplates ||= {}; if (t) c.gameTemplates[romId] = parseTemplate(t); else delete c.gameTemplates[romId]; ctx.saveConfig(); return true; },

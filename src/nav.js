@@ -474,9 +474,29 @@ export function setBackground(v) { inBackground = !!v; gsKnown = true; }
 // the pad is read only while the window has focus, and after a game Steam keeps it. Main watches the game it
 // started and says when it ended; from then the pad works even before the window gets its focus back, until
 // Cartridge loses a focus it had (you switched to something else) or another game starts.
-let returned = false;
-export function gameEnded(v) { returned = !!v; }
-window.addEventListener('blur', () => { returned = false; });
+let returned = false, returnedAt = 0;
+export function gameEnded(v) { returned = !!v; returnedAt = v ? performance.now() : 0; if (v) watchReturn(); }
+// 0.9.34: main's own focus attempts after a game blur the window on purpose (refocus); those mustn't switch the pad
+// off again, so only a blur well after the return counts as you switching away
+window.addEventListener('blur', () => { if (performance.now() - returnedAt > 10000) returned = false; });
+// After a game (0.9.34, owner: the pad is seen but does nothing): for 20 s, note whether the pad sends anything and
+// what Cartridge thinks of its window, then write one line to the log, so a device report says where it stops
+function watchReturn() {
+  const t0 = performance.now(), seen = new Map();
+  let changes = 0, firstInput = null, samples = 0;
+  const tick = () => {
+    const pads = navigator.getGamepads ? [...navigator.getGamepads()].filter(Boolean) : [];
+    for (const gp of pads) {
+      const sig = gp.buttons.map((b) => (b.pressed ? 1 : 0)).join('') + gp.axes.map((a) => Math.round(a * 4)).join(',');
+      if (seen.has(gp.index) && seen.get(gp.index) !== sig) { changes++; if (firstInput == null) firstInput = Math.round(performance.now() - t0); }
+      seen.set(gp.index, sig);
+    }
+    if (++samples < 80) return setTimeout(tick, 250);
+    const line = `after the game: pads ${pads.length} [${pads.map((p) => p.id.slice(0, 40)).join('; ')}], input changes ${changes}${firstInput != null ? ' (first after ' + firstInput + ' ms)' : ''}, focus ${document.hasFocus()}, visible ${document.visibilityState}, in front ${inFront()}, gamescope ${gsKnown ? (inBackground ? 'away' : 'front') : 'unknown'}`;
+    try { window.cart?.call('app:log', { text: line }); } catch {}
+  };
+  setTimeout(tick, 250);
+}
 // In Game Mode gamescope says when Cartridge is in front, which is truer than window focus: after a game
 // the window can be in front without focus, and the pad went dead (0.9.24)
 function inFront() { return gsKnown ? !inBackground : (document.hasFocus() || returned) && !inBackground; }
