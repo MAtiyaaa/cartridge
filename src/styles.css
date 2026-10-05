@@ -87,6 +87,9 @@ img { -webkit-user-drag: none; }
 .bg-stage { position: fixed; inset: 0; z-index: 0; overflow: hidden; background: var(--bg); }
 .bg-stage .layer { position: absolute; inset: -60px; background-size: cover; background-position: center 30%; opacity: 0; transition: opacity 0.9s var(--ease), transform 12s linear; filter: saturate(1.15); }
 .bg-stage .layer.on { opacity: 1; transform: scale(1.06); }
+/* 0.9.37: game art behind the pages drifts as slowly as the header (GPU only; still without it) */
+body:not(.light-fx):not(.motion-reduce) .bg-stage .layer.on:not(.blur):not(.wall) { animation: bg-drift 70s var(--ease-in-out, ease-in-out) 12s infinite alternate; will-change: transform; }
+@keyframes bg-drift { from { transform: scale(1.06); } to { transform: scale(1.11) translate(-1%, 0.6%); } }
 .bg-stage .layer.blur { filter: blur(26px) saturate(1.3) brightness(0.8); }
 /* without the GPU a 26px blur over the whole screen is redrawn on every change: a lighter one (0.9.28) */
 body.light-fx .bg-stage .layer.blur { filter: blur(10px) brightness(0.72); }
@@ -249,7 +252,12 @@ body.motion-reduce .view > *, body.motion-reduce .home > .hero, body.motion-redu
 .chip.red { background: rgba(255, 107, 97, 0.14); color: #ffa39c; }
 .chip.new { background: var(--primary); color: var(--on-primary); font-weight: 800; font-size: var(--t-xs); height: 22px; letter-spacing: 0.04em; }
 .glass { background: var(--s1); border-radius: var(--r-lg); }
-body.surface-glass .glass { background: var(--glass-bg); border: 1px solid var(--line); }
+body.surface-glass .glass, body.elements-glass .glass { background: var(--glass-bg); border: 1px solid var(--line); }
+/* Glass elements (0.9.37): the frosted highlight blurs what's behind it and gets a fine light edge; without the GPU
+   (light effects) the blur is left out, the see-through fill and edge stay */
+body.elements-glass :is(.btn, .lrow, .card .art, .seg button, .ad-row, .cc-row, .lf-card, .menu-item, .tab, .eg-drive, .eg-emu):focus { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.38); }
+body.elements-glass:not(.light-fx) :is(.btn, .lrow, .seg button, .ad-row, .cc-row, .lf-card, .menu-item, .eg-drive, .eg-emu):focus { -webkit-backdrop-filter: blur(14px) saturate(1.5); backdrop-filter: blur(14px) saturate(1.5); }
+body.elements-oled .glass, body.elements-oled .dialog { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.07); }
 
 .btn { display: inline-flex; align-items: center; gap: 10px; height: 48px; padding: 0 22px; border-radius: var(--r-md); background: var(--s2); font-size: var(--t-md); font-weight: 600; transition: background var(--d-fast), color var(--d-fast); white-space: nowrap; }
 .btn:hover { background: var(--s3); }

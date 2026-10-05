@@ -55,17 +55,27 @@ export const CUSTOM_SWATCHES = [
   '#e6e8ee', '#9aa3b2', '#5a6273',
 ];
 
-// Surfaces: how see-through panels are, and how dark the page behind them is
+// Background (ui.surface, 0.9.37 renamed from Panels): the page behind everything. Glass is a darker page that lets
+// the animated background through; OLED Black is pure black.
 export const SURFACES = {
   solid: { label: 'Solid', glassA: 1, bg: '#0c0d10' },
   glass: { label: 'Glass', glassA: 0.62, bg: '#06070b' },
-  oled: { label: 'OLED black', glassA: 1, bg: '#000000', black: true },
+  oled: { label: 'OLED Black', glassA: 1, bg: '#000000', black: true },
 };
+// Elements (ui.elements, 0.9.37, owner: panels set apart from the background): cards, panels, buttons and the
+// highlight. Glass: see-through panels and a frosted highlight with light text; OLED Black: black panels.
+// Unset follows the Background picked before 0.9.37 (Panels did both).
+export const ELEMENTS = {
+  plain: { label: 'Plain', glassA: 1 },
+  glass: { label: 'Glass', glassA: 0.62, glass: true },
+  oled: { label: 'OLED Black', glassA: 1, black: true },
+};
+export const elementsOf = (ui) => ui?.elements || { glass: 'glass', oled: 'oled' }[ui?.surface] || 'plain';
 export const TEXTS = {
   // three clearly different sets (0.9.3): High contrast lifts the secondary text right up, Soft is
   // dimmer and slightly warm for dark rooms
   normal: { label: 'Standard', text: '#f4f4f5', muted: '#a4a6ad', dim: '#6c6f77' },
-  bright: { label: 'High contrast', text: '#ffffff', muted: '#e6e7eb', dim: '#b9bcc4' },
+  bright: { label: 'High Contrast', text: '#ffffff', muted: '#e6e7eb', dim: '#b9bcc4' },
   soft: { label: 'Soft', text: '#cfccc6', muted: '#8a8781', dim: '#5a5853' },
 };
 // Bundled open-source fonts (SIL Open Font License), display + body
@@ -78,7 +88,7 @@ export const FONTS = {
   grotesk: { label: 'Space Grotesk', display: "'Space Grotesk Variable', Roboto, sans-serif", body: "Roboto, 'Noto Sans', system-ui, sans-serif" },
   lexend: { label: 'Lexend', display: "'Lexend Variable', Roboto, sans-serif", body: "'Lexend Variable', Roboto, sans-serif" },
 };
-export const CARD_SHAPES = { rounded: { label: 'Rounded', r: '6px' }, square: { label: 'Square', r: '2px' }, soft: { label: 'Soft', r: '14px' }, round: { label: 'Extra round', r: '22px' } };
+export const CARD_SHAPES = { rounded: { label: 'Rounded', r: '6px' }, square: { label: 'Square', r: '2px' }, soft: { label: 'Soft', r: '14px' }, round: { label: 'Extra Round', r: '22px' } };
 export const CARD_SIZES = { sm: { label: 'Small', w: '128px' }, md: { label: 'Medium', w: '152px' }, lg: { label: 'Large', w: '184px' }, xl: { label: 'Huge', w: '220px' } };
 export const DENSITIES = { compact: { label: 'Compact', x: '12px', y: '14px' }, normal: { label: 'Normal', x: '18px', y: '22px' }, spacious: { label: 'Spacious', x: '28px', y: '34px' } };
 
@@ -108,6 +118,7 @@ export function applyTheme(uiOrName) {
   else r.removeProperty('--bar');
   document.body.classList.toggle('custom-bars', ok(col.bars));
   const surf = SURFACES[ui.surface] || SURFACES.solid;
+  const el = ELEMENTS[elementsOf(ui)] || ELEMENTS.plain;
   const tx = TEXTS[ui.text] || TEXTS.normal;
   const g = t.grad;
   const rgb = (h) => hex2rgb(h).join(', ');
@@ -128,26 +139,31 @@ export function applyTheme(uiOrName) {
   // when one is picked, with text that reads on it (0.9.2)
   const fo = ok(col.highlight) ? a : '#ffffff', foLight = lum(fo) > 0.6;
   r.setProperty('--grad', `linear-gradient(${a}, ${a})`);
-  r.setProperty('--focus', fo);
-  r.setProperty('--on-focus', foLight ? '#0c0d10' : '#ffffff');
-  r.setProperty('--on-focus-dim', foLight ? 'rgba(12, 13, 16, 0.7)' : 'rgba(255, 255, 255, 0.75)');
+  // Glass elements (0.9.37, owner: the white highlight glass too, with contrasting text): a frosted fill of the
+  // highlight colour, light text on it; the ring stays solid so where you are is never in doubt
+  const glassFocus = el.glass;
+  r.setProperty('--focus', glassFocus ? `rgba(${rgb(fo)}, ${foLight ? 0.2 : 0.42})` : fo);
+  r.setProperty('--focus-solid', fo);
+  r.setProperty('--on-focus', glassFocus ? '#ffffff' : foLight ? '#0c0d10' : '#ffffff');
+  r.setProperty('--on-focus-dim', glassFocus ? 'rgba(255, 255, 255, 0.8)' : foLight ? 'rgba(12, 13, 16, 0.7)' : 'rgba(255, 255, 255, 0.75)');
   r.setProperty('--ring', `0 0 0 3px var(--s0), 0 0 0 6px ${fo}`);
   r.setProperty('--ring-soft', `0 0 0 2px ${fo}`);
   // surfaces: neutral greys, tinted a little towards the theme for the coloured themes
   const sh = rgb2hsl(...hex2rgb(g[2])), ss = t.neutral ? 0 : Math.min(0.16, sh[1] * 0.25);
-  const surfL = surf.black ? [0, 0.055, 0.09, 0.14] : [0.05, 0.085, 0.12, 0.165];
-  const S = surfL.map((l) => hsl(sh[0], ss, l));
+  // the page (s0) follows Background, the panels (s1 to s3) follow Elements (0.9.37)
+  const pageL = surf.black ? 0 : 0.05, elL = el.black ? [0.055, 0.09, 0.14] : [0.085, 0.12, 0.165];
+  const S = [pageL, ...elL].map((l) => hsl(sh[0], ss, l));
   if (surf.bg && !surf.black && surf.glassA < 1) S[0] = surf.bg;
   // chosen but not where you are: a lighter grey fill (0.9.2, replaces accent stripes)
-  r.setProperty('--sel', hsl(sh[0], ss, surf.black ? 0.22 : 0.26));
-  S.forEach((c, i) => r.setProperty('--s' + i, surf.glassA < 1 && i ? `rgba(${rgb(c)}, ${surf.glassA})` : c));
+  r.setProperty('--sel', hsl(sh[0], ss, el.black ? 0.22 : 0.26));
+  S.forEach((c, i) => r.setProperty('--s' + i, el.glassA < 1 && i ? `rgba(${rgb(c)}, ${el.glassA})` : c));
   r.setProperty('--xmb', `radial-gradient(120% 90% at 85% 0%, ${g[0]} 0%, transparent 55%), radial-gradient(90% 80% at 0% 100%, ${g[5]} 0%, transparent 60%), linear-gradient(160deg, ${g[1]} 0%, ${g[2]} 38%, ${g[3]} 70%, ${g[4]} 100%)`);
   r.setProperty('--xmb-base', surf.black ? '#000' : g[4]);
   // Cartridge's own theme: a flat page, so art and panels meet it without a seam
   if (t.neutral) { r.setProperty('--xmb', surf.black ? '#000' : S[0]); r.setProperty('--xmb-base', surf.black ? '#000' : S[0]); }
   for (let i = 0; i < 6; i++) r.setProperty('--g' + i, g[i]);
   r.setProperty('--tint-rgb', surf.black ? '0, 0, 0' : tint);
-  r.setProperty('--glass-bg', surf.glassA < 1 ? `rgba(${surf.black ? '0, 0, 0' : tint}, ${surf.glassA})` : S[1]);
+  r.setProperty('--glass-bg', el.glassA < 1 ? `rgba(${el.black || surf.black ? '0, 0, 0' : tint}, ${el.glassA})` : S[1]);
   r.setProperty('--bg', surf.black ? '#000' : S[0]);
   r.setProperty('--text', tx.text);
   r.setProperty('--muted', tx.muted);
@@ -164,6 +180,8 @@ export function applyTheme(uiOrName) {
   b.toggle('motion-reduce', ui.motion === 'reduce');
   b.toggle('surface-oled', !!surf.black);
   b.toggle('surface-glass', surf.glassA < 1 && !surf.black);
+  b.toggle('elements-glass', !!el.glass);
+  b.toggle('elements-oled', !!el.black);
   b.toggle('no-titles', ui.cardTitles === false);
 }
 // Colours the animated backgrounds draw with

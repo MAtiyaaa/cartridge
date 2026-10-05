@@ -243,7 +243,8 @@
               </button>
               <button v-if="Object.values(ui.colors || {}).some(Boolean)" class="btn small" data-focus @click="saveConfig({ ui: { colors: { highlight: '', buttons: '', bars: '', background: '' } } })"><Icon name="mdiRestore" :size="16" />Use theme colours</button>
             </div>
-            <div class="row"><span class="lbl">Panels</span><div class="seg"><button v-for="(v, k) in SURFACES" :key="k" data-focus :class="{ on: (ui.surface || 'solid') === k }" @click="saveConfig({ ui: { surface: k } })">{{ v.label }}</button></div></div>
+            <div class="row"><span class="lbl">Background</span><div class="seg"><button v-for="(v, k) in SURFACES" :key="k" data-focus :class="{ on: (ui.surface || 'solid') === k }" @click="saveConfig({ ui: { surface: k, elements: elementsOf(ui) } })">{{ v.label }}</button></div></div>
+            <div class="row"><span class="lbl">Elements</span><div class="seg"><button v-for="(v, k) in ELEMENTS" :key="k" data-focus :class="{ on: elementsOf(ui) === k }" @click="saveConfig({ ui: { elements: k } })">{{ v.label }}</button></div></div>
             <div class="row"><span class="lbl">Text</span><div class="seg"><button v-for="(v, k) in TEXTS" :key="k" data-focus :class="{ on: (ui.text || 'normal') === k }" @click="saveConfig({ ui: { text: k } })">{{ v.label }}</button></div></div>
 
             </template>
@@ -523,7 +524,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { store, call, go, tab, saveConfig, pickFolder, choose, confirm, toast, openModal, bytes, ago, resync, scanServer, allRoms, romById, cover, resetLogos, askText, activeTabs, TAB_DEFS, consoleName } from '../store.js';
 import { useView } from '../useView.js';
 import { input, focusFirst, setPointerPref, setRumble, rumble } from '../nav.js';
-import { THEMES, SURFACES, TEXTS, FONTS, CARD_SHAPES, CARD_SIZES, DENSITIES, themeFrom, themeOf, paletteOf } from '../themes.js';
+import { THEMES, SURFACES, ELEMENTS, elementsOf, TEXTS, FONTS, CARD_SHAPES, CARD_SIZES, DENSITIES, themeFrom, themeOf, paletteOf } from '../themes.js';
 import { BACKGROUNDS, RENDERERS, LEGACY_ART, bgPreview } from '../bgRenderers.js';
 import { setSoundEnabled, setSoundStyle, previewSound, SOUND_PACKS } from '../sfx.js';
 import Icon from '../components/Icon.vue';
@@ -736,7 +737,7 @@ function moveTab(n, d) {
   [l[i], l[j]] = [l[j], l[i]];
   saveConfig({ ui: { tabs: l } });
 }
-const LOOK_KEYS = ['theme', 'customColor', 'colors', 'idle', 'surface', 'text', 'font', 'bgStyle', 'wallDim', 'cardShape', 'density', 'gridSize', 'cardTitles', 'mediaBar', 'mediaSize', 'logos', 'motion', 'effects', 'sounds', 'soundPack', 'volume', 'rumble'];
+const LOOK_KEYS = ['theme', 'customColor', 'colors', 'idle', 'surface', 'elements', 'text', 'font', 'bgStyle', 'wallDim', 'cardShape', 'density', 'gridSize', 'cardTitles', 'mediaBar', 'mediaSize', 'logos', 'motion', 'effects', 'sounds', 'soundPack', 'volume', 'rumble'];
 const presets = computed(() => store.config.lookPresets || []);
 const presetStyle = (p) => { const g = themeOf(p.ui).grad; return { background: `linear-gradient(135deg, ${g[0]}, ${g[2]} 60%, ${g[4]})` }; };
 function lookNow() { const o = {}; for (const k of LOOK_KEYS) if (ui.value[k] !== undefined) o[k] = JSON.parse(JSON.stringify(ui.value[k])); return o; }
@@ -769,7 +770,7 @@ async function presetMenu(p, i) {
 }
 async function resetLook() {
   if (!(await confirm('Reset Look & Feel?', 'Colour, background, fonts, cards, motion and sounds go back to the defaults.', 'Reset'))) return;
-  await saveConfig({ ui: { colors: { highlight: '', buttons: '', bars: '', background: '' }, theme: 'cartridge', customColor: '', surface: 'solid', text: 'normal', font: 'cartridge', cardShape: 'rounded', density: 'normal', cardTitles: true, gridSize: 'md', bgStyle: 'solid', motion: 'normal', effects: 'auto', soundPack: 'soft', volume: 'medium', rumble: 'none' } });
+  await saveConfig({ ui: { colors: { highlight: '', buttons: '', bars: '', background: '' }, theme: 'cartridge', customColor: '', surface: 'solid', elements: 'plain', text: 'normal', font: 'cartridge', cardShape: 'rounded', density: 'normal', cardTitles: true, gridSize: 'md', bgStyle: 'solid', motion: 'normal', effects: 'auto', soundPack: 'soft', volume: 'medium', rumble: 'none' } });
 }
 const gfx = [{ v: 'auto', l: 'Auto' }, { v: 'gpu', l: 'GPU Always' }, { v: 'software', l: 'Compatible' }];
 const pointers = [{ v: 'auto', l: 'Auto' }, { v: 'touch', l: 'Touch' }, { v: 'mouse', l: 'Mouse' }];
