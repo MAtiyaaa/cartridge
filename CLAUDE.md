@@ -402,6 +402,7 @@ LT/RT switch top tabs. LB/RB only switch sections inside a page. A select, B bac
 - Tour: `FirstTour.vue` `{A}`-style tokens rendered as `Btn` (keys `KEYS` in mouse mode), `PAGES` steps with `go:` tab names.
 - Sync ring: App.vue `.steam-ring.sync-ring`, `syncPct`, `syncEnding` (900 ms tick).
 - Elements: `ELEMENTS` plain/glass only (`elements-oled` gone; old values fall to plain). Glass `--focus` is the chosen colour at 0.66 to 0.74 alpha, `body.focus-light`, `--on-focus` by lightness; styles.css glass: sheen gradient, top inset edge, `blur(18px) saturate(1.8)`, solid under `prefers-reduced-transparency`.
+- Settings: a `sec` watch sets `.pane` scrollTop 0 after `stopScroll(el)` (new nav.js export: ends a running glide); the pane is shared by all sections.
 - shadPS4 mods: `addons:forGame` adds a shadPS4 entry for PS4 games (folder `<game dir>-mods`, the dir holding eboot.bin; shadPS4's read-only overlay); `addonInstall.plan` kind `shadps4` maps by the game's top folders (`opts.tops`, never sce_sys/eboot.bin). GameAddons/Settings add-on slugs include ps4.
 
 ## Releases (full steps: HANDOFF D8)

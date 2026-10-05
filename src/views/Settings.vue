@@ -533,7 +533,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { store, call, go, tab, saveConfig, pickFolder, choose, confirm, toast, openModal, bytes, ago, resync, scanServer, allRoms, romById, cover, resetLogos, askText, activeTabs, TAB_DEFS, consoleName, openTour } from '../store.js';
 import { useView } from '../useView.js';
-import { input, focusFirst, setPointerPref, setRumble, rumble } from '../nav.js';
+import { input, focusFirst, setPointerPref, setRumble, rumble, stopScroll } from '../nav.js';
 import { THEMES, SURFACES, ELEMENTS, elementsOf, TEXTS, FONTS, CARD_SHAPES, CARD_SIZES, DENSITIES, themeFrom, themeOf, paletteOf } from '../themes.js';
 import { BACKGROUNDS, RENDERERS, LEGACY_ART, bgPreview } from '../bgRenderers.js';
 import { setSoundEnabled, setSoundStyle, previewSound, SOUND_PACKS } from '../sfx.js';
@@ -989,6 +989,9 @@ async function removeRoot(r) {
 }
 async function setRootTo(v) { await call('roots:to', { to: v }); rootTo.value = v; }
 watch(sec, (v) => { if (v === 'storage') loadRoots(); }, { immediate: true });
+// 0.9.38 (owner: Look & Feel opened at the depth Achievements was scrolled to): every section shares the one .pane
+// scroll box and only its contents change, so a new section starts at the top
+watch(sec, () => { const el = paneEl.value; if (el) { stopScroll(el); el.scrollTop = 0; } });
 async function browseBios() {
   const p = await pickFolder({ title: 'Choose your BIOS folder', start: store.config.biosPath || undefined });
   if (p) await saveConfig({ biosPath: p });

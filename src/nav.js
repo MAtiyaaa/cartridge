@@ -38,6 +38,8 @@ export function glideBy(sc, dx = 0, dy = 0) {
   if (dy || a.sy.raf) springTo(a.sy, ty, { response: rows ? 0.3 : 0.2, apply: (v) => { sc.scrollTop = v; }, done: end });
 }
 export const glideTo = (sc, top) => sc && glideBy(sc, 0, top - (anims.get(sc)?.ty ?? sc.scrollTop));
+// 0.9.38: a glide still running would carry on over whatever the box shows next (Settings' pane between sections)
+export function stopScroll(sc) { const a = sc && anims.get(sc); if (a) { stopSpring(a.sx); stopSpring(a.sy); anims.delete(sc); } }
 const layers = [];
 
 export function pushLayer(el, handlers = {}) {

@@ -12,6 +12,7 @@ The branch for 0.9.3 work is `claude/relaxed-fermat-30pigp`. Pull it before star
 - LT/RT at launch: worked in the app about 100 ms after start every time (even with 30,000 games). Base layer now pushed before config loads; a "triggers at start" log line added. Ask the owner for it.
 - Controller dead after a game: no device; ask for the "gamescope focus" and "after the game" log lines.
 - Answers for the owner: Syncthing should keep running while playing (it waits for files to settle); PSN isn't needed for PS4 names (they come from the other device's RomM notes).
+- Added on request before the merge: Settings sections opened at the previous section's scroll depth (one shared `.pane`); reset on section change. Reproduced in Chromium with the built app (Achievements scrolled, then Look & Feel at 73 px before, 0 after).
 - Plans, not built: RPCS3 mods, Nexus Mods, two-device link via RomM and Syncthing: `docs/plan-0.9.39.md`.
 - Owner to test: Add a Drive on an SD card, games found and downloaded there, emulators seeing it; glass and plain with a coloured highlight; the tour on the device; Flatpak install on a distro without it; BIOS toast after downloading a game for a console without its BIOS; sync ring; shadPS4/SharpEmu sheets; a shadPS4 mod from GameBanana.
 
