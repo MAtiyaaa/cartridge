@@ -2091,6 +2091,18 @@ async function shadDefaultVersion() {
   SV.setDefaultIfNone(have[have.length - 1].path);
   return have[have.length - 1].name;
 }
+// into the Trash (0.9.37): the desktop's own, else the freedesktop Trash in ~/.local/share/Trash by hand (Game Mode
+// has no gio); a folder on another drive than home is refused rather than copied across
+async function toTrash(p) {
+  try { await shell.trashItem(p); return; } catch (e) { log('trashItem', e.message); }
+  const T = path.join(process.env.XDG_DATA_HOME || path.join(os.homedir(), '.local/share'), 'Trash');
+  fs.mkdirSync(path.join(T, 'files'), { recursive: true }); fs.mkdirSync(path.join(T, 'info'), { recursive: true });
+  let name = path.basename(p), n = 1;
+  while (fs.existsSync(path.join(T, 'files', name)) || fs.existsSync(path.join(T, 'info', name + '.trashinfo'))) name = `${path.basename(p)}.${++n}`;
+  fs.writeFileSync(path.join(T, 'info', name + '.trashinfo'), `[Trash Info]\nPath=${encodeURI(p)}\nDeletionDate=${new Date().toISOString().slice(0, 19)}\n`);
+  try { fs.renameSync(p, path.join(T, 'files', name)); }
+  catch (e) { fs.rmSync(path.join(T, 'info', name + '.trashinfo'), { force: true }); throw new Error(e.code === 'EXDEV' ? 'That folder is on another drive, so it can’t go to the Trash. Delete it from a file manager.' : e.message); }
+}
 async function pumpEmuGet() {
   // a Flatpak wanted and no Flatpak here (0.9.37): it's installed first, once, while the AppImages carry on
   const G = require('./emuGet');
@@ -3827,6 +3839,19 @@ const handlers = {
       await new Promise((r) => setImmediate(r)); // a long list never holds up the window
     }
     return out;
+  },
+  // Delete what's in a game's add-on folder (0.9.37, owner: delete installed mods and texture packs), Cartridge's
+  // or not: the game's own folder (never the emulator's shared one) goes to the Trash, so it can be put back
+  'addons:clear': async ({ romId, emu }) => {
+    const e = (handlers['addons:forGame']({ romId }) || []).find((x) => x.id === emu);
+    if (!e?.folder || !e.has) throw new Error('There’s nothing in its folder.');
+    if (path.resolve(e.folder) === path.resolve(e.root) || path.resolve(e.folder) === path.resolve(e.emuRoot || '/')) throw new Error('That folder is shared by every game, so it’s left as it is.');
+    if (require('./raLogin').running().has(e.id)) throw new Error(`Close ${e.name} first.`);
+    await toTrash(e.folder);
+    const recs = addonRecs(); for (const [k, r] of Object.entries(recs)) if (r.romId === Number(romId) && r.emuRoot === e.emuRoot) delete recs[k];
+    saveJson(ADDONS_FILE, recs);
+    log('add-on folder to Trash', e.folder);
+    return { folder: e.folder };
   },
   'addons:installed': () => Object.entries(addonRecs()).map(([key, r]) => ({ key, ...r, files: undefined, count: r.files.length })),
   'addons:remove': async ({ key }) => {

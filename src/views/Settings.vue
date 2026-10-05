@@ -872,7 +872,7 @@ function presentText(id) {
   return f.map((x) => `${x.mods ? 'Mods' : 'Texture pack'} in ${x.name}, ${BY_TEXT[x.by]}${!x.mods && !x.on ? ' (textures are off there)' : ''}`).join(' · ');
 }
 async function removeAddon(a) {
-  if (!(await confirm('Remove this add-on?', `${a.name} (${a.game})\n\nOnly the ${a.count} files Cartridge put in ${a.emuName}’s folder are deleted.`, 'Remove', true))) return;
+  if (!(await confirm('Delete this add-on?', `${a.name} (${a.game})\n\nOnly the ${a.count} files Cartridge put in ${a.emuName}’s folder are deleted.`, 'Delete', true))) return;
   try { await call('addons:remove', { key: a.key }); toast('Add-on removed', 'ok', 2500); } catch (e) { toast(e.message, 'error', 5000); }
   loadAddons();
 }
