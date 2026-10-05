@@ -159,6 +159,25 @@ module.exports = function steamLive({ log = () => {} } = {}) {
   // What SteamGridDB's Decky plugin does after changing artwork
   const restart = () => run('SteamClient.User.StartRestart(false), true', 5000);
   // start a game the way the library's Play button does (0.9.21): 64-bit game id of a shortcut
+  // Back to the app Steam has running (0.9.34): what its Resume does in Game Mode. Steam's UI changes between versions,
+  // so each known way is tried and what was there is returned for the log.
+  async function frontRunning(appid) {
+    return run(`(() => {
+      const s = window.SteamUIStore, out = {};
+      try {
+        out.main = s?.MainRunningApp?.appid ?? null;
+        out.running = (s?.RunningApps || []).map((a) => a.appid);
+        const ws = [s?.ActiveWindowInstance, s?.WindowStore?.GamepadUIMainWindowInstance, s?.WindowStore?.SteamUIWindows?.[0]].filter(Boolean);
+        for (const w of ws) {
+          if (typeof w.NavigateToRunningApp === 'function') { w.NavigateToRunningApp(true); out.did = 'window.NavigateToRunningApp'; break; }
+          if (typeof w.Navigator?.RunningApp === 'function') { w.Navigator.RunningApp(); out.did = 'Navigator.RunningApp'; break; }
+        }
+        if (!out.did && typeof s?.NavigateToRunningApp === 'function') { s.NavigateToRunningApp(true); out.did = 'store.NavigateToRunningApp'; }
+        out.ours = out.running.includes(${Number(appid)});
+      } catch (e) { out.err = String(e).slice(0, 200); }
+      return out;
+    })()`, 5000);
+  }
   async function runGame(gameId) { return run(`SteamClient.Apps.RunGame(${JSON.stringify(String(gameId))}, '', -1, 100); true`); }
-  return { runGame, available, addShortcut, removeShortcut, updateShortcut, settle, setArtwork, restart, flagOn, FLAG, addToCollections, renameCollection, listCollections };
+  return { runGame, frontRunning, available, addShortcut, removeShortcut, updateShortcut, settle, setArtwork, restart, flagOn, FLAG, addToCollections, renameCollection, listCollections };
 };

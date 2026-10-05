@@ -987,6 +987,12 @@ module.exports = function createSteamManager(ctx) {
     if (await tryRun('flatpak', ['run', 'com.valvesoftware.Steam', url])) return { via: 'url' };
     throw new Error('Steam couldn’t be asked to start it.');
   }
+  // Steam back to its running app after a game (0.9.34, main.js steamFront); only with Steam's interface reachable
+  async function frontRunning(appid) {
+    const env = environment();
+    if (!env.account || !(await live.available(env.account.root).catch(() => false))) return { skipped: 'steam interface not reachable' };
+    return live.frontRunning(appid);
+  }
   function queueInfo() { return { add: queue.add.length, remove: queue.remove.length, total: queue.add.length + queue.remove.length }; }
   function queueAdd(items) { // [{ romId, collections? }]
     for (const it of items) {
@@ -1786,7 +1792,7 @@ module.exports = function createSteamManager(ctx) {
     liveInfo: async () => { const env = environment(); if (!env.account) return { on: false, flag: false }; return { on: await live.available(env.account.root), flag: live.flagOn(env.account.root) }; },
     liveEnable: () => { const env = environment(); if (!env.account) throw new Error('Steam was not found.'); fs.writeFileSync(path.join(env.account.root, live.FLAG), ''); return true; },
     installedEmulators, addRomToCollections, onDownloaded, onDeleted, lastStatus, writeScript, startupReport, forRom, fixCollections, played, playtime, steamRoots, refreshArt,
-    play, scanEmulators, rpcs3Command, vita3kCommand, setupOverview, confirm, markFork, useFile, health, healthFix, movedEmulators, setupReport, syncConsoleCollections, collectionsReview, collectionsApply, forksAll, preflight: (key) => preflight(key, templateFor(key)),
+    play, scanEmulators, rpcs3Command, vita3kCommand, setupOverview, confirm, markFork, useFile, health, healthFix, movedEmulators, setupReport, syncConsoleCollections, collectionsReview, collectionsApply, forksAll, frontRunning, preflight: (key) => preflight(key, templateFor(key)),
     candidatesFor: (key) => az(candidates(key).map((c) => ({ id: c.id, label: c.label, sub: shortPath(c.t.how === 'flatpak' ? c.t.from : c.t.exe), fork: !!c.fork }))),
     // one game's own Target, Start in and Launch options (console page, 0.9.15); null goes back
     setGameTemplate: (romId, t) => { const c = cfg(); c.gameTemplates ||= {}; if (t) c.gameTemplates[romId] = parseTemplate(t); else delete c.gameTemplates[romId]; ctx.saveConfig(); return true; },
