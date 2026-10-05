@@ -19,7 +19,7 @@ The repo is public. Nothing private is in this document: no usernames, paths fro
 - **Latest release:** v0.9.37 "Cartridge 0.9.37 · Set Up for You" (5 Oct 2026). See Part 4 for every release.
 - **Branch:** all work on `claude/relaxed-fermat-30pigp`. Each PR merges it into `main`; after each merge the branch is reset to `main` (`git fetch origin main && git checkout -B claude/relaxed-fermat-30pigp origin/main && git push --force-with-lease`). Start from `main`.
 - **package.json:** `version` 0.9.37, `versionName` "0.9.37", `build.releaseInfo.releaseName` "Cartridge 0.9.37". Version names equal the number again (no lettered parts since 0.9.15).
-- **Tests:** 178 pass (`npm test`, node:test, 28 files in `test/`). CI runs them before every build.
+- **Tests:** 179 pass (`npm test`, node:test, 28 files in `test/`). CI runs them before every build.
 - **Build:** `npm ci --ignore-scripts && npx vite build`.
 - **Big change in tooling:** in this stretch the cloud container **could run Electron** (`node_modules/electron/dist/electron`, Electron 44, Chromium 152). I drove the real app with Playwright's `_electron` against a mock RomM. The launch check `CARTRIDGE_SMOKE=1` also ran locally. See Part 3. If your container can't, the old stubbed-browser harness from the previous handover still works.
 
