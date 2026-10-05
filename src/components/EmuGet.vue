@@ -1,21 +1,65 @@
 <template>
   <div class="eg">
+    <!-- Cartridge Installer (0.9.24, owner: feel like an installer): where, what, installing, done -->
+    <div v-if="flow" class="eg-steps">
+      <template v-for="(t, i) in STEP_NAMES" :key="t"><span v-if="i || !fresh || fresh.fresh" class="eg-step" :class="{ on: stepAt === i, past: stepAt > i }"><i>{{ stepAt > i ? '✓' : fresh && !fresh.fresh ? i : i + 1 }}</i>{{ t }}</span></template>
+    </div>
     <!-- 1: where emulators live (the welcome, or when no Emulation folder was made yet) -->
     <template v-if="phase === 'where'">
-      <div class="eg-intro"><b>Where should your emulators live?</b><span class="muted">Cartridge makes an Emulation folder there, laid out like ES-DE: roms (a folder per console), bios and emulators.</span></div>
+      <div class="eg-intro"><b>Where should your emulators live?</b><span class="muted">Cartridge makes an Emulation folder there, laid out like ES-DE and EmuDeck: roms (a folder per console), bios, saves and storage.</span></div>
       <div v-if="!drives" class="muted small"><Icon name="mdiSync" :size="16" class="spin" /> Looking at your drives…</div>
       <div v-else class="eg-drives">
-        <button v-for="d in drives" :key="d.path" class="eg-drive" data-focus :disabled="busy" @click="pickDrive(d)">
+        <button v-for="d in drives" :key="d.path" class="eg-drive" data-focus :disabled="busy || (d.emulation && store.config.emulationRoot !== d.path + '/Emulation')" @click="pickDrive(d)">
           <Icon :name="d.internal ? 'mdiHarddisk' : 'mdiSd'" :size="34" />
           <b>{{ d.label }}</b>
           <span class="muted small mono">{{ short(d.path) }}/Emulation</span>
           <span v-if="d.total" class="eg-space"><i :style="{ width: Math.round(((d.total - d.free) / d.total) * 100) + '%' }" /></span>
-          <span class="muted small">{{ d.total ? `${bytes(d.free)} free of ${bytes(d.total)}` : '' }}{{ d.emulation ? ' · has an Emulation folder' : '' }}</span>
+          <span class="muted small">{{ d.total ? `${bytes(d.free)} free of ${bytes(d.total)}` : '' }}{{ d.emulation ? ' · already has an Emulation folder, left as it is' : '' }}</span>
         </button>
       </div>
     </template>
 
-    <!-- 2: every console's emulators -->
+    <!-- 2 (installer): tick the emulators to install; the first of each console without one is ticked -->
+    <template v-else-if="phase === 'pick'">
+      <div class="eg-bar">
+        <div class="eg-sum"><b>{{ picked.length ? `${picked.length} to install` : 'Pick emulators' }}</b><span class="muted small">AppImages go in {{ short(store.config.emuDir) || '~/Applications' }}, where EmuDeck keeps them. Flatpaks install for your user.<template v-if="fresh && !fresh.fresh">{{ ' ' + existingNote }}</template></span></div>
+        <button v-if="fresh?.fresh" class="btn" data-focus @click="phase = 'where'; loadDrives(false)"><Icon name="mdiArrowLeft" :size="18" />Location</button>
+        <button class="btn primary" data-focus :disabled="!picked.length" @click="install"><Icon name="mdiDownload" :size="18" />Install {{ picked.length || '' }}</button>
+      </div>
+      <div v-if="!list" class="muted small"><Icon name="mdiSync" :size="16" class="spin" /> Looking at what's installed…</div>
+      <div v-else class="eg-grid">
+        <section v-for="c in list" :key="c.key" class="eg-con">
+          <div class="eg-head"><PIcon v-if="SLUG[c.key]" :p="{ slug: SLUG[c.key], fs_slug: SLUG[c.key] }" :size="30" /><Icon v-else name="mdiGamepadSquareOutline" :size="28" /><b>{{ c.name }}</b></div>
+          <button v-for="e in c.emus" :key="c.key + e.id" class="eg-emu" :class="{ have: e.installed }" data-focus @click="togglePick(c, e)">
+            <EmuIcon :id="e.id" :size="34" fallback="mdiGamepadVariantOutline" />
+            <span class="eg-mid"><b>{{ e.label }}</b><span class="muted small">{{ e.from }}</span></span>
+            <span v-if="e.installed" class="status ok"><Icon name="mdiCheck" :size="14" />Installed</span>
+            <span v-else class="eg-tick" :class="{ on: picks.has(c.key + '|' + e.id) }"><Icon v-if="picks.has(c.key + '|' + e.id)" name="mdiCheck" :size="18" /></span>
+          </button>
+        </section>
+      </div>
+    </template>
+
+    <!-- 3 (installer): one row per emulator with its own bar, in the background order -->
+    <template v-else-if="phase === 'install' || phase === 'done'">
+      <div class="eg-bar">
+        <div class="eg-sum"><b>{{ phase === 'done' ? (failed.length ? `${doneJobs.length - failed.length} of ${doneJobs.length} installed` : 'All installed') : `Installing ${Math.min(doneJobs.length + 1, jobs.length)} of ${jobs.length}` }}</b><span class="muted small">{{ phase === 'done' ? doneNote : 'You can keep using Cartridge: installs carry on in the background.' }}</span></div>
+        <button v-if="phase === 'done'" class="btn" data-focus @click="phase = 'pick'; load()"><Icon name="mdiPlus" :size="18" />Install More</button>
+      </div>
+      <div class="eg-jobs">
+        <div v-for="j in jobs" :key="j.key + j.id" class="eg-emu eg-job" data-focus tabindex="0">
+          <EmuIcon :id="j.id" :size="34" fallback="mdiGamepadVariantOutline" />
+          <span class="eg-mid"><b>{{ j.label }}</b><span class="muted small">{{ jobNote(j) }}</span></span>
+          <span v-if="j.s?.state === 'done'" class="status ok"><Icon name="mdiCheck" :size="14" />Installed</span>
+          <span v-else-if="j.s?.state === 'error'" class="status warn">Didn’t install</span>
+          <span v-else-if="j.s?.state === 'run'" class="status">{{ j.s.pct != null ? j.s.pct + '%' : 'Starting' }}</span>
+          <span v-else class="status">Waiting</span>
+          <i v-if="j.s?.state === 'run'" class="eg-bar-fill" :class="{ live: j.s.pct == null }" :style="{ width: (j.s.pct ?? 100) + '%' }" />
+        </div>
+      </div>
+    </template>
+
+    <!-- every console's emulators (Settings → Emulators: updates and installs in one list) -->
     <template v-else>
       <div class="eg-bar">
         <div class="eg-sum"><b>{{ haveCount }} of {{ allCount }}</b><span class="muted small">emulators on this device{{ store.config.emuDir ? ' · new ones go in ' + short(store.config.emuDir) : '' }}</span></div>
@@ -56,6 +100,29 @@
             <i v-if="upRun === (u.path || u.fp)" class="eg-bar-fill" :class="{ live: upPct == null }" :style="{ width: (upPct ?? 100) + '%' }" />
           </button>
         </section>
+        <!-- From a GitHub link (0.9.24, owner): the last card; any project's AppImage, set up as a fork or for a console -->
+        <section v-if="updates" class="eg-con eg-gh" :class="{ open: gh.open }">
+          <button v-if="!gh.open" class="eg-emu" data-focus @click="gh.open = true">
+            <Icon name="mdiGithub" :size="34" />
+            <span class="eg-mid"><b>From a GitHub Link</b><span class="muted small">A fork or another emulator: paste its GitHub link</span></span>
+            <Icon name="mdiPlus" :size="22" />
+          </button>
+          <template v-else>
+            <div class="eg-head"><Icon name="mdiGithub" :size="28" /><b>From a GitHub Link</b></div>
+            <TextField v-model="gh.link" label="GitHub link" placeholder="github.com/owner/project" icon="mdiLink" />
+            <div class="seg"><button data-focus :class="{ on: gh.as === 'fork' }" @click="gh.as = 'fork'">A Fork Of</button><button data-focus :class="{ on: gh.as === 'console' }" @click="gh.as = 'console'">For a Console</button></div>
+            <div class="eg-chips">
+              <template v-if="gh.as === 'fork'"><button v-for="x in forkTargets" :key="x.id" class="eg-chip" data-focus :class="{ on: gh.of === x.id }" @click="gh.of = x.id">{{ x.label }}</button></template>
+              <template v-else><button v-for="c in list || []" :key="c.key" class="eg-chip" data-focus :class="{ on: gh.key === c.key }" @click="gh.key = c.key">{{ c.name }}</button></template>
+            </div>
+            <p class="muted small" style="margin: 0">{{ gh.as === 'fork' ? 'It starts games the way the emulator it comes from does, and shows as that emulator’s fork when you pick emulators for a console.' : 'It becomes that console’s emulator for new Steam shortcuts. If Cartridge doesn’t know it, games are given to it as a file path.' }} The newest Linux AppImage from its releases goes in {{ short(store.config.emuDir) || '~/Applications' }}.</p>
+            <div v-if="gh.busy" class="eg-ghbar"><i :class="{ live: gh.pct == null }" :style="{ width: (gh.pct ?? 100) + '%' }" /></div>
+            <div class="row" style="gap: 10px; justify-content: flex-end">
+              <button class="btn" data-focus :disabled="gh.busy" @click="gh.open = false">Cancel</button>
+              <button class="btn primary" data-focus :disabled="gh.busy || !gh.link || (gh.as === 'fork' ? !gh.of : !gh.key)" @click="installLink"><Icon name="mdiDownload" />{{ gh.busy ? (gh.pct != null ? gh.pct + '%' : 'Downloading…') : 'Install' }}</button>
+            </div>
+          </template>
+        </section>
       </div>
       <p class="muted small">Each comes from the emulator's own releases: its AppImage from GitHub, or its Flatpak from Flathub. Downloads keep going in the background while you use Cartridge.</p>
     </template>
@@ -66,14 +133,16 @@
 // Get emulators (0.9.17, owner: a sleek page, every console's emulators, downloads in the background,
 // Download all; first where they live, as an ES-DE style Emulation folder on the drive you pick).
 // Used by the welcome (flow) and Settings → Emulators → Get Emulators.
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { store, call, toast, bytes, confirm, choose, openModal } from '../store.js';
 import { focusFirst } from '../nav.js';
 import Icon from './Icon.vue';
 import EmuIcon from './EmuIcon.vue';
 import PIcon from './PIcon.vue';
+import TextField from './TextField.vue';
 
 const props = defineProps({ flow: Boolean, updates: Boolean });
+defineEmits(['done']);
 // 0.9.21 (owner: merge Get Emulators and the emulators' updates): in Settings each installed emulator also
 // says whether it's up to date, and picking one with an update installs it (same channels as before)
 const ups = ref(null), upBusy = ref(false), upRun = ref(''), upPct = ref(null);
@@ -95,23 +164,30 @@ async function runUpdate(u, force = false) {
 // 0.9.23 (owner: delete and download emulators again, stable or pre-release, shadPS4's versions):
 // an installed emulator opens one sheet with everything you can do to it
 const CH = { stable: 'Stable releases', pre: 'Pre-releases', rolling: 'Rolling build', flathub: '' };
+const PATH_IDS = new Set(['pcsx2', 'duckstation', 'dolphin', 'eden', 'citron', 'yuzu', 'azahar', 'citra', 'ryujinx', 'cemu', 'rpcs3', 'shadps4', 'vita3k']);
 async function manage(u) {
   if (!u) return;
   const ch = u.channels || [];
   const opts = [
+    // 0.9.25 (owner): start the emulator itself, for its own settings
+    ...(u.kind !== 'windows' && !u.broken ? [{ label: 'Open', sub: `Start ${u.label} on its own, for its own settings`, value: 'open', icon: 'mdiOpenInApp' }] : []),
     ...(u.broken ? [{ label: 'Repair', sub: 'It can’t start on this system', value: 'repair', icon: 'mdiWrench' }] : u.update ? [{ label: 'Update', sub: `${u.version || 'This copy'} → ${u.update.version || u.update.tag || 'newest'}`, value: 'update', icon: 'mdiUpdate' }] : []),
     ...(u.kind === 'flatpak' || u.latest ? [{ label: 'Download Again', sub: u.kind === 'flatpak' ? 'Reinstall from Flathub' : `The newest ${CH[u.channel] ? CH[u.channel].toLowerCase().replace(/s$/, '') : 'build'}`, value: 'again', icon: 'mdiDownload' }] : []),
     ...(ch.length > 1 ? ch.map((c) => ({ heading: c === ch[0] ? 'Updates Follow' : undefined, label: CH[c], sub: c === 'pre' ? 'Nightlies and test builds' : 'Releases the project calls finished', value: 'ch:' + c, icon: c === 'pre' ? 'mdiFlask' : 'mdiCheckDecagram', selected: u.channel === c })) : []),
+    // the emulator's own folders: games, installed content, saves, textures (0.9.24)
+    ...(PATH_IDS.has(u.id) ? [{ label: 'Folders', sub: 'Where it keeps games, installed content and saves', value: 'folders', icon: 'mdiFolderCogOutline' }] : []),
     ...(u.id === 'shadps4' ? [{ label: 'Versions', sub: 'Which games use which, and more to add', value: 'versions', icon: 'mdiLayersTriple' }] : []),
     ...(u.page ? [{ label: 'Open Its Releases Page', value: 'page', icon: 'mdiOpenInNew' }] : []),
     { label: 'Delete', sub: u.kind === 'flatpak' ? 'Uninstall the Flatpak' : 'Your saves and settings stay', value: 'delete', icon: 'mdiDeleteOutline', danger: true },
   ];
   const v = await choose({ title: u.label, message: [u.version ? 'Version ' + u.version : '', CH[u.channel] || (u.kind === 'flatpak' ? 'Flatpak from Flathub' : ''), u.path ? short(u.path) : ''].filter(Boolean).join(' · '), options: opts, sheet: true });
   if (!v) return;
+  if (v === 'open') { try { await call('emuget:open', { id: u.id, kind: u.kind, fp: u.fp, path: u.path }); toast(`${u.label} is opening`, 'ok', 2500, 'mdiOpenInApp'); } catch (err) { toast(err.message, 'error', 6000); } return; }
   if (v === 'repair' || v === 'update') return runUpdate(u);
   if (v === 'again') return runUpdate(u, true);
   if (v.startsWith('ch:')) { await call('emuup:setChannel', { id: u.id, channel: v.slice(3) }); toast(`${u.label} follows ${CH[v.slice(3)].toLowerCase()} now`, 'ok', 3000); return loadUps(true); }
   if (v === 'versions') return openModal('shadversions', {});
+  if (v === 'folders') return openModal('emupaths', { id: u.id, name: u.label });
   if (v === 'page') return window.open(u.page);
   if (v === 'delete') {
     if (!(await confirm(`Delete ${u.label}?`, `${u.kind === 'flatpak' ? 'Its Flatpak is uninstalled.' : 'The program is deleted.'} Saves and settings stay. Steam shortcuts that used it will show up in Shortcut health.`, 'Delete', true))) return;
@@ -119,8 +195,49 @@ async function manage(u) {
     await load(); await loadUps();
   }
 }
+// From a GitHub link (0.9.24)
+const gh = ref({ open: false, link: '', as: 'fork', of: '', key: '', busy: false, pct: null });
+const forkTargets = computed(() => uniq.value.map((x) => ({ id: x.e.id, label: x.e.label })).filter((x) => x.id !== 'retroarch'));
+async function installLink() {
+  const g = gh.value;
+  g.busy = true; g.pct = null;
+  const off = window.cart.on('emuget-custom', (m) => { g.pct = m.pct; });
+  try {
+    const r = await call('emuget:custom', { link: g.link.trim(), as: g.as, of: g.of, key: g.key });
+    const what = g.as === 'fork' ? `as a fork of ${forkTargets.value.find((x) => x.id === g.of)?.label}: pick it on a console’s page` : `for ${(list.value || []).find((c) => c.key === g.key)?.name}`;
+    toast(`${r.name} ${r.tag} is in ${short(r.path.replace(/\/[^/]+$/, ''))}, set up ${what}`, 'ok', 7000, 'mdiGithub');
+    gh.value = { open: false, link: '', as: 'fork', of: '', key: '', busy: false, pct: null };
+    await load(); await loadUps(true);
+  } catch (e) { toast(e.message, 'error', 7000); g.busy = false; }
+  off?.();
+}
 const SLUG = { psx: 'psx', ps2: 'ps2', ps3: 'ps3', ps4: 'ps4', psp: 'psp', psvita: 'psvita', gc: 'ngc', wiiu: 'wiiu', switch: 'switch', n3ds: '3ds', nds: 'nds', gba: 'gba', n64: 'n64', xbox: 'xbox', dreamcast: 'dc', xbox360: 'xbox360', saturn: 'saturn', arcade: 'arcade' };
-const phase = ref(props.flow && !store.config.emuDir ? 'where' : 'list');
+const phase = ref(props.flow ? (store.config.emuDir ? 'pick' : 'where') : 'list');
+// the installer's steps and what was ticked (0.9.24)
+const STEP_NAMES = ['Location', 'Emulators', 'Installing', 'Done'];
+const stepAt = computed(() => ({ where: 0, pick: 1, install: 2, done: 3 })[phase.value] ?? 1);
+const picks = ref(new Set()), jobKeys = ref([]);
+const picked = computed(() => [...picks.value]);
+function togglePick(c, e) {
+  if (e.installed) return toast(`${e.label} is already on this device.`, 'info', 2500);
+  const k = c.key + '|' + e.id, n = new Set(picks.value);
+  if (n.has(k)) n.delete(k); else n.add(k);
+  picks.value = n;
+}
+function preselect() { picks.value = new Set((list.value || []).filter((c) => !c.emus.some((e) => e.installed)).map((c) => c.key + '|' + c.emus[0].id)); }
+const jobs = computed(() => jobKeys.value.map((k) => { const [key, id] = k.split('|'); const x = all.value.find((y) => y.c.key === key && y.e.id === id); return { key, id, label: x?.e.label || id, s: q.value.filter((y) => y.key === key && y.id === id).pop() }; }));
+const doneJobs = computed(() => jobs.value.filter((j) => /done|error/.test(j.s?.state || '')));
+const failed = computed(() => jobs.value.filter((j) => j.s?.state === 'error'));
+const linked = computed(() => jobs.value.reduce((n, j) => n + (j.s?.links || 0), 0));
+const doneNote = computed(() => [linked.value ? `Saves and textures are linked in ${short(store.config.emulationRoot)}/saves and storage` : '', 'Steam shortcuts use them from now on'].filter(Boolean).join('. ') + '.');
+const jobNote = (j) => j.s?.state === 'error' ? j.s.error || 'Try again later' : j.s?.state === 'done' ? [short(j.s.where), j.s.relinked ? `${j.s.relinked} Steam shortcut${j.s.relinked === 1 ? '' : 's'} fixed` : ''].filter(Boolean).join(' · ') : '';
+async function install() {
+  const items = picked.value.map((k) => { const [key, id] = k.split('|'); return { key, id }; });
+  jobKeys.value = picked.value; picks.value = new Set(); phase.value = 'install';
+  q.value = await call('emuget:queue', { items }).catch((err) => { toast(err.message, 'error'); return q.value; });
+  await nextTick(); focusFirst(document.querySelector('.eg'), '.eg-job');
+}
+watch(() => doneJobs.value.length, (n) => { if (phase.value === 'install' && jobs.value.length && n === jobs.value.length) phase.value = 'done'; });
 const drives = ref(null), list = ref(null), q = ref([]), busy = ref(false);
 const el = ref(null);
 const short = (p) => String(p || '').replace(store.info?.home || '\0', '~');
@@ -135,11 +252,22 @@ const running = computed(() => q.value.find((x) => x.state === 'run'));
 const waiting = computed(() => q.value.filter((x) => x.state === 'wait').length);
 const runningName = computed(() => all.value.find((x) => x.c.key === running.value?.key && x.e.id === running.value?.id)?.e.label || '');
 
-async function loadDrives() { drives.value = await call('emuget:drives').catch(() => []); }
-async function load() { list.value = await call('emuget:list').catch(() => []); q.value = await call('emuget:state').catch(() => []); }
+// 0.9.24 (owner): the Emulation folder and links are only for a fresh setup. With EmuDeck, RetroDECK or any
+// emulator already here, Location is skipped and nothing but the new emulators is added.
+const fresh = ref(null);
+const existingNote = computed(() => `Your ${fresh.value?.emudeck ? 'EmuDeck' : fresh.value?.retrodeck ? 'RetroDECK' : 'emulator'} setup stays as it is: no folders or links are made.`);
+async function loadDrives(auto = true) {
+  if (props.flow) fresh.value ||= await call('emuget:fresh').catch(() => ({ fresh: false }));
+  if (props.flow && !fresh.value.fresh && !fresh.value.emudeck) { await call('emuget:useExisting').catch(() => {}); store.config = await call('config:get'); phase.value = 'pick'; await load(); return; }
+  // EmuDeck found: use its folders and say so, instead of asking for a drive (0.9.24)
+  const ed = auto && (await call('emuget:emudeck').catch(() => null));
+  if (ed) { try { await call('emuget:useEmuDeck'); store.config = await call('config:get'); toast(`Using EmuDeck’s setup in ${short(ed.root)}: new emulators go beside its own`, 'ok', 4500, 'mdiCheck'); phase.value = props.flow ? 'pick' : 'list'; await load(); return; } catch {} }
+  drives.value = await call('emuget:drives').catch(() => []);
+}
+async function load() { list.value = await call('emuget:list').catch(() => []); q.value = await call('emuget:state').catch(() => []); if (phase.value === 'pick' && !picks.value.size) preselect(); }
 async function pickDrive(d) {
   busy.value = true;
-  try { const r = await call('emuget:prepare', { base: d.path }); store.config = await call('config:get'); toast(`Made ${short(r.root)}`, 'ok', 3000, 'mdiFolderPlus'); phase.value = 'list'; await load(); await nextTick(); focusFirst(document.querySelector('.eg'), '.eg-bar .btn'); }
+  try { const r = await call('emuget:prepare', { base: d.path }); store.config = await call('config:get'); toast(`Made ${short(r.root)}`, 'ok', 3000, 'mdiFolderPlus'); phase.value = props.flow ? 'pick' : 'list'; await load(); await nextTick(); focusFirst(document.querySelector('.eg'), '.eg-bar .btn.primary'); }
   catch (e) { toast(e.message, 'error', 5000); }
   busy.value = false;
 }
@@ -156,15 +284,20 @@ async function getAll() {
   toast(`${items.length} emulator${items.length === 1 ? '' : 's'} downloading in the background`, 'ok', 3000, 'mdiDownloadMultiple');
 }
 let off = null, offP = null, offU = null, lastDone = 0;
+const told = new Set();
 onMounted(async () => {
   off = window.cart.on('emuget-state', (s) => {
     q.value = s;
     const done = s.filter((x) => x.state === 'done' || x.state === 'error').length;
-    if (done !== lastDone) { lastDone = done; load(); }
+    if (done !== lastDone) {
+      // say where it went, and how many Steam shortcuts now point at it (0.9.24)
+      if (done > lastDone && !props.flow) for (const x of s.filter((y) => y.state === 'done' && y.where && !told.has(y.key + y.id))) { told.add(x.key + x.id); toast(`Installed to ${String(x.where).replace(store.info?.home || '\0', '~')}${x.relinked ? ` · ${x.relinked} Steam shortcut${x.relinked === 1 ? '' : 's'} now use it` : ''}`, 'ok', 6000, 'mdiCheck'); }
+      lastDone = done; load();
+    }
   });
   offP = window.cart.on('emuget-progress', (m) => { const x = q.value.find((y) => y.key === m.key && y.id === m.id && y.state === 'run'); if (x && m.pct != null) x.pct = m.pct; });
   offU = window.cart.on('emu-update', (m) => { if (m.path === upRun.value && m.pct != null) upPct.value = m.pct; });
-  if (phase.value === 'where') await loadDrives(); else await load();
+  if (phase.value === 'where') await loadDrives(); else { if (props.flow) fresh.value = await call('emuget:fresh').catch(() => ({ fresh: false })); await load(); }
   loadUps();
 });
 onBeforeUnmount(() => { off?.(); offP?.(); offU?.(); });
@@ -175,6 +308,26 @@ defineExpose({ load });
 .eg { display: flex; flex-direction: column; gap: var(--s-4); text-align: left; }
 .small { font-size: var(--t-sm); }
 .mono { font-family: ui-monospace, monospace; word-break: break-all; }
+.eg-steps { display: flex; gap: var(--s-2); flex-wrap: wrap; justify-content: center; }
+.eg-step { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px 6px 6px; border-radius: 999px; background: var(--s1); color: var(--muted); font-size: var(--t-sm); }
+.eg-step i { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-style: normal; font-weight: 700; font-size: var(--t-xs); background: var(--s2); }
+.eg-step.on { color: var(--text); background: var(--s2); }
+.eg-step.on i { background: var(--focus); color: var(--on-focus); }
+.eg-step.past i { background: rgba(87, 211, 100, 0.25); color: #8fe39a; }
+.eg-tick { width: 26px; height: 26px; border-radius: 8px; display: grid; place-items: center; border: 2px solid rgba(255, 255, 255, 0.28); flex: none; }
+.eg-tick.on { background: currentColor; border-color: currentColor; }
+.eg-tick.on :deep(svg) { color: #0b0d12; }
+.eg-emu:focus .eg-tick { border-color: rgba(0, 0, 0, 0.35); }
+.eg-emu:focus .eg-tick.on :deep(svg) { color: var(--focus); }
+.eg-jobs { display: flex; flex-direction: column; gap: 6px; }
+.eg-gh.open { grid-column: 1 / -1; gap: var(--s-3); }
+.eg-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.eg-chip { padding: 8px 14px; border-radius: 999px; border: 0; background: var(--s2); color: inherit; font: inherit; font-size: var(--t-sm); }
+.eg-chip.on { background: var(--sel); }
+.eg-chip:focus { background: var(--focus); color: var(--on-focus); outline: none; }
+.eg-ghbar { height: 6px; border-radius: 3px; background: rgba(255, 255, 255, 0.12); overflow: hidden; }
+.eg-ghbar i { display: block; height: 100%; background: currentColor; transition: width 0.3s ease; }
+.eg-ghbar i.live { animation: egLive 1.2s ease-in-out infinite; transform-origin: left; }
 .eg-intro { display: flex; flex-direction: column; gap: 6px; text-align: center; }
 .eg-intro b { font-size: var(--t-lg); }
 .eg-drives { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: var(--s-3); }

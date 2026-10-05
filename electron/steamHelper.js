@@ -148,10 +148,20 @@ function writeCompat() {
 // Collections live in Steam's cloud storage file: [[key, {key, timestamp, value, version, ...}], ...]
 function writeCollections() {
   const want = job.collections || {}; // name -> [appids]
-  if (!Object.keys(want).length || !job.cloudFile) return;
+  const rename = job.rename || {}; // collection id -> new name (0.9.24: Cartridge's console names)
+  if ((!Object.keys(want).length && !Object.keys(rename).length) || !job.cloudFile) return;
   let arr = [];
   if (fs.existsSync(job.cloudFile)) arr = JSON.parse(fs.readFileSync(job.cloudFile, 'utf8'));
   const now = Math.floor(Date.now() / 1000);
+  for (const [id, name] of Object.entries(rename)) {
+    const row = arr.find(([k, v]) => k === `user-collections.${id}` && !v.is_deleted && v.value);
+    if (!row) continue;
+    const v = JSON.parse(row[1].value);
+    v.name = name;
+    row[1].value = JSON.stringify(v);
+    row[1].timestamp = now;
+    row[1].version = String((parseInt(row[1].version, 10) || 0) + 1);
+  }
   for (const [name, ids] of Object.entries(want)) {
     let row = arr.find(([k, v]) => k.startsWith('user-collections.') && !v.is_deleted && v.value && (() => { try { return JSON.parse(v.value).name === name; } catch { return false; } })());
     if (!row) {
@@ -168,7 +178,7 @@ function writeCollections() {
   }
   fs.mkdirSync(path.dirname(job.cloudFile), { recursive: true });
   fs.writeFileSync(job.cloudFile, JSON.stringify(arr));
-  log('collections written', Object.keys(want).join(', '));
+  log('collections written', [...Object.keys(want), ...Object.values(rename)].join(', '));
 }
 
 // One run per job. Cartridge starts the helper as a user service and, if that stays silent for 5 s,

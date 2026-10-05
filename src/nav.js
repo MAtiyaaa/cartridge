@@ -160,6 +160,12 @@ function move(dir) {
       if (score < bestScore) { bestScore = score; best = el; }
     }
   }
+  // In a pop-up's long list, right with nothing to the right jumps to the button at its bottom right (Apply,
+  // Done...), so a long list never has to be walked to its end (0.9.24, owner). Pages aren't pop-ups.
+  if (!best && dir === 'right' && layer && layer.el !== document.body && cur.closest('[data-scroll]')) {
+    const out = focusables(scope).filter((el) => !el.closest('[data-scroll]'));
+    best = out[out.length - 1] || null;
+  }
   if (best) {
     sfx.move();
     rumble();
@@ -233,15 +239,24 @@ function scrollIntoViewSmart(el) {
   else if (r.bottom > s.bottom - vpad) glideFit(sc, 0, r.bottom - s.bottom + vpad);
 }
 
-export function dispatch(action) {
+export function dispatch(action, { keepMode = false } = {}) {
   lastInput = performance.now();
   const layer = topLayer();
-  setMode('pad');
+  if (!keepMode) setMode('pad'); // a touch gesture (0.9.26) keeps touch mode: no focus rings appear
   const h = layer?.handlers?.[action];
   if (action === 'accept') { sfx.accept(); rumble(true); }
   else if (action === 'back') sfx.back();
   else if (['lb', 'rb'].includes(action)) { sfx.tab(); rumble('tab'); }
   else if (['lt', 'rt'].includes(action)) rumble('tab');
+  // hold A to read it all, B to fold it back (0.9.29, owner: patch names and descriptions that trail off):
+  // anything marked data-expand opens as a card with its whole text
+  if (action === 'back' && layer) { const open = layer.el.querySelector('.expanded[data-expand]'); if (open) { open.classList.remove('expanded'); open.focus({ preventScroll: true }); return; } }
+  if (action === 'hold' && document.activeElement?.hasAttribute?.('data-expand') && !document.activeElement.hasAttribute('data-hold')) {
+    const el = document.activeElement;
+    for (const o of (layer?.el || document).querySelectorAll('.expanded[data-expand]')) if (o !== el) o.classList.remove('expanded');
+    el.classList.toggle('expanded'); rumble(true);
+    return;
+  }
   if (h && h(document.activeElement) !== false) return;
   // A held on something that has a held meaning (data-hold, 0.9.19: Start's tiles): it tells itself
   if (action === 'hold') { document.activeElement?.dispatchEvent(new CustomEvent('cart-hold', { bubbles: true })); return; }
@@ -290,7 +305,7 @@ const KEYMAP = {
 // A on something with a held meaning ([data-hold]): a press opens it on release, a hold of 450 ms
 // does the held thing instead (0.9.19, owner: hold a Start tile to arrange the menu)
 const HOLD_MS = 450;
-const holdable = () => { const el = document.activeElement, l = topLayer(); return !!(el?.hasAttribute?.('data-hold') && l && inScope(el, l.el)); };
+const holdable = () => { const el = document.activeElement, l = topLayer(); return !!((el?.hasAttribute?.('data-hold') || el?.hasAttribute?.('data-expand')) && l && inScope(el, l.el)); };
 let keyHold = null;
 window.addEventListener('keydown', (ev) => {
   const t = ev.target;
@@ -407,6 +422,7 @@ export function rumble(strong = false) {
 let lastZone = null;
 document.addEventListener('focusin', (e) => { lastZone = e.target.closest?.('[data-zone]') || null; }, true);
 const rsHeld = {};
+let inBackground = false, gsKnown = false; // declared before the poll loop starts (it reads them at once)
 function poll() {
   const now = performance.now();
   const pads = navigator.getGamepads ? [...navigator.getGamepads()].filter(Boolean) : [];
@@ -446,15 +462,24 @@ function poll() {
     }
   }
   padLive.pads = pads;
-  if (document.hasFocus() && !inBackground) for (const key of ACTIONS) press(key, !!merged[key], now);
+  if (inFront()) for (const key of ACTIONS) press(key, !!merged[key], now);
   else for (const key of ACTIONS) if (state[key]) state[key].down = !!merged[key]; // a press held while away doesn't fire on return
 }
 // Every 8 ms while Cartridge is in front; when it isn't (a game is running, or you switched away)
 // only a few times a second, so it costs the system nothing in the background (A14)
-(function loop() { poll(); setTimeout(loop, document.hasFocus() && !inBackground ? 8 : 250); })();
+(function loop() { poll(); setTimeout(loop, inFront() ? 8 : 250); })();
 // Game Mode: Steam's menu is in front while Cartridge keeps its window focus (main.js watchGamescopeFocus)
-let inBackground = false;
-export function setBackground(v) { inBackground = !!v; }
+export function setBackground(v) { inBackground = !!v; gsKnown = true; }
+// Outside Game Mode (0.9.29, owner: "on a PC with a controller, after the game closes the controls don't work"):
+// the pad is read only while the window has focus, and after a game Steam keeps it. Main watches the game it
+// started and says when it ended; from then the pad works even before the window gets its focus back, until
+// Cartridge loses a focus it had (you switched to something else) or another game starts.
+let returned = false;
+export function gameEnded(v) { returned = !!v; }
+window.addEventListener('blur', () => { returned = false; });
+// In Game Mode gamescope says when Cartridge is in front, which is truer than window focus: after a game
+// the window can be in front without focus, and the pad went dead (0.9.24)
+function inFront() { return gsKnown ? !inBackground : (document.hasFocus() || returned) && !inBackground; }
 
 export function ensureFocus(root) {
   if (!root) return;
@@ -465,15 +490,32 @@ export function ensureFocus(root) {
 }
 export function jump(dir, n = 4) { for (let i = 0; i < n; i++) move(dir); }
 
+// 0.9.28 (owner's photos: Home shifted off the left edge, rows clipped at the sides): scrollIntoView also scrolls
+// boxes that clip (overflow hidden), which are never meant to move, so a focused card dragged a whole page sideways.
+// Any such box that moves is put straight back.
+document.addEventListener('scroll', (e) => {
+  const t = e.target;
+  if (!(t instanceof Element) || (!t.scrollLeft && !t.scrollTop)) return;
+  const cs = getComputedStyle(t);
+  if (t.scrollLeft && (cs.overflowX === 'hidden' || cs.overflowX === 'clip')) t.scrollLeft = 0;
+  if (t.scrollTop && (cs.overflowY === 'hidden' || cs.overflowY === 'clip')) t.scrollTop = 0;
+}, { capture: true, passive: true });
+
 // ---------------- touch and drag scrolling
-// Real touches scroll natively (touch-action pan-x/pan-y in styles.css): the browser's own
-// scrolling is composited, so it tracks your finger and glides like a phone even without the GPU.
-// Game Mode can deliver touches as mouse events instead; those, and mouse drags, go through the
-// drag below: it follows the finger once per frame and keeps momentum on release. A drag swallows
-// the click that ends it, so a swipe never opens a game.
+// 0.9.26, the touch update (owner: "touch never worked, only taps"). Touches reach Cartridge in one of
+// three ways depending on the system: as real touches the browser scrolls itself, as real touches it
+// doesn't scroll (seen on some X11/XWayland setups), or as a mouse (Game Mode's touch modes). One engine
+// handles all three: when the browser starts scrolling a touch itself it says so (pointercancel, or a
+// scroll event) and the engine steps back; otherwise, once the finger has clearly moved, the engine
+// scrolls the nearest scrollable box itself, once per frame, with momentum on release. A drag swallows
+// the click that ends it, so a swipe never opens a game. Gestures: swipe in from the left edge = Back,
+// swipe along the top bar = next or previous tab.
 export const lastPointer = { type: '' }; // for the controller test
-const DRAG_START = 10;
-let drag = null, glide = 0, pend = 0, pendRaf = 0;
+export const touchInfo = { touch: 0, pen: 0, mouse: 0, touchEvents: 0, moves: 0, native: 0, ours: 0, gestures: 0, last: '' }; // Settings → About → Touch check
+window.cartTouch = touchInfo; // readable from the dev tools when checking a device
+const DRAG_START = 10, TOUCH_START = 18, EDGE = 28;
+const nativeTouch = () => document.documentElement.classList.contains('touch-native');
+let drag = null, glide = 0, pend = 0, pendRaf = 0, nativeAt = 0;
 function scrollerFor(el, axis) {
   for (let n = el; n && n !== document.documentElement; n = n.parentElement) {
     const cs = getComputedStyle(n);
@@ -489,19 +531,42 @@ function flush() {
   if (drag.axis === 'x') drag.sc.scrollLeft += pend; else drag.sc.scrollTop += pend;
   pend = 0;
 }
+// the browser scrolled something by itself while a finger was down: it has this touch
+document.addEventListener('scroll', () => { if (drag?.touch && !drag.axis) nativeAt = performance.now(); }, { capture: true, passive: true });
+window.addEventListener('touchstart', () => { touchInfo.touchEvents++; }, { capture: true, passive: true });
+const eatClick = () => {
+  const eat = (ev) => { ev.preventDefault(); ev.stopPropagation(); };
+  window.addEventListener('click', eat, { capture: true, once: true });
+  setTimeout(() => window.removeEventListener('click', eat, { capture: true }), 120);
+};
 window.addEventListener('pointerdown', (e) => {
   lastPointer.type = e.pointerType;
+  touchInfo[e.pointerType] = (touchInfo[e.pointerType] || 0) + 1;
   stopGlide();
-  // real touches and pens: the browser scrolls natively
-  if (e.pointerType === 'touch' || e.pointerType === 'pen') { drag = null; return; }
-  if (e.button !== 0 || e.target.closest('input, textarea, [data-nodrag]')) { drag = null; return; }
-  drag = { id: e.pointerId, x: e.clientX, y: e.clientY, lx: e.clientX, ly: e.clientY, axis: null, sc: null, target: e.target, hist: [] };
+  const touch = e.pointerType === 'touch' || e.pointerType === 'pen';
+  if (!touch && e.button !== 0) { drag = null; return; }
+  if (e.target.closest('input, textarea, [data-nodrag]')) { drag = null; return; }
+  const fingerish = touch || input.mode === 'touch';
+  drag = {
+    id: e.pointerId, touch, x: e.clientX, y: e.clientY, lx: e.clientX, ly: e.clientY, axis: null, sc: null, target: e.target, hist: [], t0: performance.now(),
+    // gestures: from the very left edge (Back), or on the top bar's tabs (next or previous tab)
+    gesture: fingerish && e.clientX <= EDGE ? 'edge' : fingerish && e.target.closest('.statusbar .tabs') ? 'tabs' : null,
+  };
+  nativeAt = 0;
 }, { capture: true, passive: true });
-window.addEventListener('pointermove', (e) => {
-  if (!drag || e.pointerId !== drag.id) return;
-  const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+// 0.9.28 (owner: "touch still only swipes on Start"): Start's page swipe only compares where the finger went
+// down and came up, so on that device the moves in between never reached the engine (none arrive, or they come
+// under another pointer, a touch, or a mouse with the button held). Moves are taken from all of those now, and
+// a swipe with no moves at all still scrolls when the finger lifts (swipeJump).
+function feed(x, y) {
+  if (!drag) return;
+  touchInfo.moves++;
+  const dx = x - drag.x, dy = y - drag.y;
+  if (drag.gesture) { drag.lx = x; drag.ly = y; return; }
   if (!drag.axis) {
-    if (Math.abs(dx) < DRAG_START && Math.abs(dy) < DRAG_START) return;
+    const need = drag.touch && nativeTouch() ? TOUCH_START : DRAG_START; // the browser's own scrolling gets its slop first
+    if (Math.abs(dx) < need && Math.abs(dy) < need) return;
+    if (drag.touch && nativeAt) { drag = null; touchInfo.native++; return; } // the browser is scrolling it
     const want = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y';
     drag.axis = want;
     drag.sc = scrollerFor(drag.target, want) || scrollerFor(drag.target, want === 'x' ? 'y' : 'x');
@@ -509,24 +574,51 @@ window.addEventListener('pointermove', (e) => {
     if (!drag.sc) { drag = null; return; }
     const a = anims.get(drag.sc); if (a) { cancelAnimationFrame(a.raf); anims.delete(drag.sc); }
     document.body.classList.add('dragging');
+    touchInfo.ours++; touchInfo.last = drag.touch ? 'touch, scrolled by Cartridge' : 'mouse-style drag, scrolled by Cartridge';
+    // catch up with the finger: everything it moved before the drag was recognised
+    pend += drag.axis === 'x' ? drag.x - drag.lx : drag.y - drag.ly;
   }
-  const m = drag.axis === 'x' ? drag.lx - e.clientX : drag.ly - e.clientY;
-  drag.lx = e.clientX; drag.ly = e.clientY;
+  if (drag.jump) { drag.lx = x; drag.ly = y; return; } // a move-less swipe: swipeJump glides it
+  const m = drag.axis === 'x' ? drag.lx - x : drag.ly - y;
+  drag.lx = x; drag.ly = y;
+  if (!m) return;
   pend += m;
   if (!pendRaf) pendRaf = requestAnimationFrame(flush);
   const now = performance.now();
   drag.hist.push([now, m]);
   while (drag.hist.length && now - drag.hist[0][0] > 100) drag.hist.shift();
-}, { capture: true, passive: true });
+}
+window.addEventListener('pointermove', (e) => { if (drag && (e.pointerId === drag.id || e.pointerType === 'touch' || e.buttons & 1)) feed(e.clientX, e.clientY); }, { capture: true, passive: true });
+window.addEventListener('touchmove', (e) => { const t = e.touches[0]; if (t && drag) feed(t.clientX, t.clientY); }, { capture: true, passive: true });
+window.addEventListener('mousemove', (e) => { if (drag && e.buttons & 1) feed(e.clientX, e.clientY); }, { capture: true, passive: true });
+function finishGesture(d) {
+  const dx = d.lx - d.x, dy = d.ly - d.y, quick = performance.now() - d.t0 < 900;
+  if (d.gesture === 'edge' && dx > 80 && Math.abs(dy) < dx * 0.6 && quick) { eatClick(); touchInfo.gestures++; touchInfo.last = 'swipe from the edge: Back'; dispatch('back', { keepMode: true }); }
+  else if (d.gesture === 'tabs' && Math.abs(dx) > 60 && Math.abs(dy) < Math.abs(dx) * 0.6 && quick) { eatClick(); touchInfo.gestures++; touchInfo.last = 'swipe on the top bar: tab'; dispatch(dx < 0 ? 'rt' : 'lt', { keepMode: true }); }
+}
+// the browser took a gesture's touch for scrolling (pointercancel): touch events still arrive, so follow those
+function followTouches(d) {
+  const mv = (ev) => { const t = ev.touches[0]; if (t) { d.lx = t.clientX; d.ly = t.clientY; } };
+  const end = () => { window.removeEventListener('touchmove', mv, true); window.removeEventListener('touchend', end, true); window.removeEventListener('touchcancel', end, true); finishGesture(d); };
+  window.addEventListener('touchmove', mv, { capture: true, passive: true });
+  window.addEventListener('touchend', end, { capture: true, passive: true });
+  window.addEventListener('touchcancel', end, { capture: true, passive: true });
+}
 function endDrag(e) {
-  if (!drag || e.pointerId !== drag.id) return;
+  if (!drag) return; // any pointer's up ends it: on some systems the moves and the up come under another pointer
+  drag.jump = !drag.axis && !drag.gesture && !drag.hist.length; // nothing moved it yet
+  if (drag.jump) pend = 0;
+  if (e.type === 'touchend') { const t = e.changedTouches?.[0]; if (t) feed(t.clientX, t.clientY); }
+  else feed(e.clientX, e.clientY); // the last position, in case no move came before it
+  if (drag?.jump) pend = 0;
+  if (!drag) return; // nothing there to scroll
   flush();
   const d = drag; drag = null;
+  if (d.gesture) return finishGesture(d);
   if (!d.axis) return;
+  if (d.jump) return swipeJump(d); // no moves arrived: scroll by the whole swipe now
   document.body.classList.remove('dragging');
-  const eat = (ev) => { ev.preventDefault(); ev.stopPropagation(); };
-  window.addEventListener('click', eat, { capture: true, once: true });
-  setTimeout(() => window.removeEventListener('click', eat, { capture: true }), 80);
+  eatClick();
   // momentum like a phone: starts at your finger's speed and eases out over about a second
   const span = d.hist.length > 1 ? d.hist[d.hist.length - 1][0] - d.hist[0][0] : 0;
   let v = span > 0 ? d.hist.reduce((s, h) => s + h[1], 0) / span : 0; // px per ms
@@ -542,9 +634,28 @@ function endDrag(e) {
   glide = requestAnimationFrame(step);
 }
 window.addEventListener('pointerup', endDrag, { capture: true, passive: true });
-window.addEventListener('pointercancel', (e) => { if (drag && e.pointerId === drag.id) { drag = null; document.body.classList.remove('dragging'); } }, { capture: true, passive: true });
+window.addEventListener('touchend', endDrag, { capture: true, passive: true });
+window.addEventListener('mouseup', endDrag, { capture: true, passive: true });
+// a swipe whose moves never arrived: glide the scroller by what the finger covered, plus some momentum
+function swipeJump(d) {
+  document.body.classList.remove('dragging');
+  eatClick();
+  const dist = d.axis === 'x' ? d.x - d.lx : d.y - d.ly, ms = Math.max(60, performance.now() - d.t0);
+  const total = dist + Math.max(-1200, Math.min(1200, (dist / ms) * 280));
+  touchInfo.last = 'swipe without moves, scrolled when the finger lifted';
+  glideBy(d.sc, d.axis === 'x' ? total : 0, d.axis === 'y' ? total : 0);
+}
+// the browser took the touch over for its own scrolling: it scrolls, the engine steps back
+window.addEventListener('pointercancel', (e) => {
+  if (!drag || e.pointerId !== drag.id) return;
+  if (drag.touch && !drag.axis && !drag.gesture) { touchInfo.native++; touchInfo.last = 'touch, scrolled by the browser'; }
+  if (drag.gesture && drag.touch) followTouches(drag);
+  drag = null; document.body.classList.remove('dragging');
+}, { capture: true, passive: true });
 window.addEventListener('wheel', stopGlide, { passive: true });
 window.addEventListener('touchstart', stopGlide, { passive: true });
+// pictures and links never start the browser's own drag-and-drop: on a touch screen that stole the swipe
+window.addEventListener('dragstart', (e) => { if (!e.target.closest?.('[draggable="true"]')) e.preventDefault(); }, { capture: true });
 // With touch, a tap should open things without also yanking the view around to "focus" them.
 window.addEventListener('mousedown', (e) => {
   if (input.mode === 'touch' && !e.target.closest('input, textarea')) e.preventDefault();

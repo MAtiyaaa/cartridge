@@ -2,6 +2,8 @@
   <span v-if="b.includes('+')" class="padpair"><Btn :b="b.split('+')[0]" /><Btn :b="b.split('+')[1]" /></span>
   <span v-else class="pb" :class="[cls, 'k-' + kind]" :title="label" :data-b="b">
     <svg v-if="face && kind === 'playstation'" viewBox="0 0 20 20" class="pb-shape"><path :d="PS[b]" /></svg>
+    <!-- sticks (0.9.24, owner: RS should look like a thumbstick, not a square key): a round cap seen from above -->
+    <svg v-else-if="stick" viewBox="0 0 22 22" class="pb-stick"><circle cx="11" cy="11" r="10" class="st-base" /><circle cx="11" cy="11" r="6.6" class="st-cap" /><text x="11" y="11" class="st-l">{{ stick }}</text></svg>
     <svg v-else-if="icon === 'menu'" viewBox="0 0 20 20" class="pb-ico"><path d="M5 6.5h10M5 10h10M5 13.5h10" /></svg>
     <svg v-else-if="icon === 'view'" viewBox="0 0 20 20" class="pb-ico"><rect x="4" y="4.5" width="8" height="7" rx="1.5" /><rect x="8" y="8.5" width="8" height="7" rx="1.5" /></svg>
     <svg v-else-if="icon === 'plus'" viewBox="0 0 20 20" class="pb-ico"><path d="M10 5v10M5 10h10" /></svg>
@@ -38,7 +40,9 @@ const val = computed(() => map.value[props.b] ?? props.b);
 const icon = computed(() => (['menu', 'view', 'share', 'plus', 'minus'].includes(val.value) ? val.value : ''));
 const text = computed(() => val.value);
 const label = computed(() => NAMES[val.value] || val.value);
+const stick = computed(() => ({ LS: 'L', RS: 'R', L3: 'L', R3: 'R' })[props.b] || '');
 const cls = computed(() => {
+  if (stick.value) return 'stick';
   if (face.value) return 'face f-' + props.b.toLowerCase();
   if (['LB', 'RB', 'LT', 'RT'].includes(props.b)) return 'shoulder';
   if (['START', 'SELECT'].includes(props.b)) return 'sys';
@@ -53,6 +57,11 @@ const cls = computed(() => {
 .pb { text-box: trim-both cap alphabetic; }
 .pb.shoulder, .pb.sys, .pb.other { border-radius: var(--r-sm); background: #c7cdd8; font-size: var(--t-xs); }
 .pb.shoulder { min-width: 28px; }
+.pb.stick { width: 22px; padding: 0; border-radius: 50%; background: none; box-shadow: none; }
+.pb-stick { width: 22px; height: 22px; display: block; }
+.pb-stick .st-base { fill: #c7cdd8; }
+.pb-stick .st-cap { fill: #e4e8ef; stroke: #8d95a3; stroke-width: 1.2; }
+.pb-stick .st-l { font: 800 8px/1 var(--body), sans-serif; fill: #0b0d12; text-anchor: middle; dominant-baseline: central; }
 .pb.sys { width: 28px; padding: 0; }
 .pb-ico { width: 14px; height: 14px; fill: none; stroke: #0b0d12; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .pb-shape { width: 13px; height: 13px; fill: none; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }

@@ -57,7 +57,7 @@ const rom = computed(() => romById(props.romId));
 const slug = computed(() => `${rom.value?.platform_slug || ''} ${rom.value?.platform_fs_slug || ''}`);
 const art = computed(() => (rom.value ? cover(rom.value) : ''));
 const ADDONS = /\b(ps2|psx|ngc|gamecube|wii|psp|3ds|n3ds|switch|wiiu)\b/i, TEXTURES = /\b(ps2|psx|ngc|gamecube|wii|psp|3ds|n3ds)\b/i;
-const PATCHES = [[/ps3/i, 'RPCS3'], [/ps4/i, 'shadPS4'], [/\bps2\b/i, 'PCSX2'], [/\b(ngc|gamecube|gc|wii)\b/i, 'Dolphin'], [/\bpsp\b/i, 'PPSSPP']];
+const PATCHES = [[/ps3/i, 'RPCS3'], [/ps4/i, 'shadPS4'], [/\bps2\b/i, 'PCSX2'], [/\b(ngc|gamecube|gc|wii)\b/i, 'Dolphin'], [/\bpsp\b/i, 'PPSSPP'], [/\bwiiu\b/i, 'Cemu']];
 const PATCH_EMU_OF = (s) => (PATCHES.find(([re]) => re.test(s)) || [])[1] || '';
 // Dolphin's kinds of code, as its game properties shows them
 const DOLPHIN = [{ k: 'p:OnFrame', l: 'Patches' }, { k: 'p:ActionReplay', l: 'AR Codes' }, { k: 'p:Gecko', l: 'Gecko Codes' }, { k: 'p:GraphicMods', l: 'Graphics Mods' }];
@@ -70,6 +70,7 @@ const tabs = computed(() => {
   if (TEXTURES.test(s)) out.push({ k: 'tex', l: 'Texture Packs' });
   const pe = PATCH_EMU_OF(s);
   if (pe === 'Dolphin') out.push(...DOLPHIN);
+  else if (pe === 'Cemu') out.push({ k: 'p:Graphics', l: 'Graphics' }, { k: 'p:Enhancements', l: 'Enhancements' }, { k: 'p:Mods', l: 'Graphic Pack Mods' }, { k: 'p:Workarounds', l: 'Workarounds' }); // 0.9.24: Cemu's graphic packs, as its own window groups them
   else if (pe === 'shadPS4') out.push({ k: 'p:shadPS4', l: 'shadPS4 Patches' }, { k: 'p:GoldHEN', l: 'GoldHEN' }); // 0.9.23: its two lists, LB/RB between them
   else if (pe) out.push({ k: 'p', l: pe === 'PPSSPP' ? 'Cheats' : 'Patches' });
   if (/ps3/i.test(s)) out.push({ k: 'updates', l: 'Game Updates' });

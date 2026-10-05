@@ -10,7 +10,7 @@
           <div v-if="o.heading" class="menu-h">{{ o.heading }}</div>
           <button
             class="menu-item" :class="{ danger: o.danger, selected: o.selected }"
-            data-focus :data-autofocus="(o.selected || (i === 0 && !anySelected)) ? '' : undefined" @click="closeModal(o.value)"
+            data-focus data-expand :data-autofocus="(o.selected || (i === 0 && !anySelected)) ? '' : undefined" @click="closeModal(o.value)"
           >
             <img v-if="o.img" :src="o.img" class="menu-img" alt="" />
             <Icon v-else-if="o.icon" :name="o.icon" />

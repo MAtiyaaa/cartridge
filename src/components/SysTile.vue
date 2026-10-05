@@ -2,7 +2,7 @@
   <button class="systile" data-focus :data-key="'sys-' + p.id" @click="$emit('open', p)" @focus="$emit('focused', p)" :style="tileStyle">
     <!-- the controller picture sits in its own clipped layer: while the tile is zoomed on focus it
          otherwise slips past the rounded corners (software rendering) -->
-    <div class="sys-clip"><div class="glyph"><PIcon :p="p" :size="150" /></div></div>
+    <div class="sys-clip"><div class="glyph" :class="{ wide }"><PIcon :p="p" :size="150" :aspect="wide ? 1.5 : 1" @shape="(r) => (wide = r > 1.3)" /></div></div>
     <div class="sys-top">
       <img v-if="logo && !logoFail" class="sys-logo" :src="logo" :alt="p.display_name" :style="logoSize" @error="logoFail = true" />
       <template v-else>
@@ -23,6 +23,7 @@ import { consoleColors } from '../consoleColors.js';
 import PIcon from './PIcon.vue';
 import { MAKERS, makerOf } from '../makers.js';
 import { opticalOf } from '../consoleOptical.js';
+const wide = ref(false); // a wide drawing (Switch with its Joy-Cons) gets a wide box, so it isn't small (0.9.24)
 const props = defineProps({ p: Object });
 defineEmits(['open', 'focused']);
 // the maker as its logo, at the height of the text (0.9.16); the family name stays text when there's none

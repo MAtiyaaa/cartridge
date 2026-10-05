@@ -75,6 +75,8 @@ async function getAppImage(e, download, opts = {}) {
     await download(rel.url, tmp, rel.size);
     if (rel.size && fs.statSync(tmp).size !== rel.size) { fs.rmSync(tmp, { force: true }); throw new Error('The download was incomplete. Try again.'); }
   }
+  // never put a broken download in place (0.9.24): an AppImage must be one, a program a real program
+  if (!require('./emuUpdates').looksRunnable(tmp, rel.name || name)) { fs.rmSync(tmp, { force: true }); throw new Error('What came down wasn’t a working program. Try again later.'); }
   fs.chmodSync(tmp, 0o755); fs.renameSync(tmp, dest);
   return { path: dest, version: rel.version };
 }

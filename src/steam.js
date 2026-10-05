@@ -11,7 +11,9 @@ export function steamProgressLabel(p) {
   return p.step === 'art' ? `Steam artwork ${p.done + 1}/${p.total}` : 'Waiting for Steam…';
 }
 window.cart.on('steam-auto', (e) => {
-  toast(e.action === 'add' ? `${e.name || 'Game'} is waiting to be added to Steam. Apply from Settings → Steam.` : 'Removed game is waiting to come off Steam. Apply from Settings → Steam.', 'info', 4500, 'mdiSteam');
+  if (e.action === 'applied') return toast('Added to Steam', 'ok', 3000, 'mdiSteam');
+  // with Steam reachable live it's applied in a moment by itself (0.9.24); otherwise Steam has to close first
+  toast(e.action === 'add' ? `${e.name || 'Game'} goes into Steam: at once when Steam can be changed live, else Apply in Settings → Steam.` : 'Removed game is waiting to come off Steam. Apply from Settings → Steam.', 'info', 4500, 'mdiSteam');
 });
 // An emulator list with the forks behind one "Forks" entry that opens their own page (0.9.15):
 // returns the picked id, or null. first: entries above the list (for example "Same as its console").
@@ -127,4 +129,29 @@ export async function steamReport() {
     else if (r.last?.state === 'error') toast('Steam changes failed: ' + r.last.error, 'error', 7000);
     // games missing from their collections: Settings → Emulators → Issues (0.9.3), no pop-up
   } catch {}
+}
+
+// Frame generation for one game (0.9.28, owner: couldn't find it): from the game's More → Steam, or its Game
+// Settings. Says why when it can't apply instead of leaving the option out.
+const FGL = { lsfg: 'Lossless Scaling (lsfg-vk)', mako: 'mako-run', off: 'Off' };
+export async function frameGenFor(romId) {
+  const r = await call('steam:frameGen').catch(() => null);
+  if (!r) return { why: 'Steam wasn’t found.' };
+  if (!r.found?.lsfg && !r.found?.mako) return { why: 'Frame generation needs lsfg-vk or mako-run on this device (Settings → Steam → Frame Generation).' };
+  const g = r.games.find((x) => x.romId === Number(romId));
+  if (!g) return { why: 'Add this game to Steam with Cartridge first: frame generation goes in its Steam shortcut.' };
+  return { found: r.found, own: g.own, uses: g.uses, consoleOwn: !!(r.conf.consoles || {})[g.console] };
+}
+export async function pickFrameGen(romId, f = null) {
+  f ||= await frameGenFor(romId);
+  if (f.why) { toast(f.why, 'info', 6000, 'mdiAnimationPlay'); return false; }
+  const v = await choose({ title: 'Frame Generation', message: 'For this game only. Its Steam shortcut is updated at once.', sheet: true, options: [
+    { label: 'Follow the Default', sub: `Now ${FGL[f.uses] || 'Off'}`, value: '__base', icon: 'mdiArrowULeftTop', selected: !f.own },
+    ...(f.found.lsfg ? [{ label: FGL.lsfg, value: 'lsfg', selected: f.own === 'lsfg', raw: true }] : []),
+    ...(f.found.mako ? [{ label: FGL.mako, value: 'mako', selected: f.own === 'mako', raw: true }] : []),
+    { label: 'Off', value: 'off', icon: 'mdiClose', selected: f.own === 'off' },
+  ] });
+  if (!v) return false;
+  try { await call('steam:setFrameGen', { scope: 'game', id: Number(romId), value: v === '__base' ? null : v }); toast('Saved. Its Steam shortcut is being updated.', 'ok', 2800, 'mdiAnimationPlay'); return true; }
+  catch (e) { toast(e.message, 'error', 5000); return false; }
 }
