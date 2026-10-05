@@ -141,11 +141,21 @@ function readPlaytime(acc) {
   return out;
 }
 // Collections the user made (dynamic, filter-based ones can't hold chosen games)
+// 0.9.32 (owner: a collection deleted in Steam still showed): Steam keeps its local changes, deletions too, in
+// cloud-storage-namespace-1.modified.json until they reach its cloud; those entries win over the main file's
+function cloudRows(file) {
+  const rows = new Map();
+  for (const f of [file, file.replace(/\.json$/, '.modified.json')]) {
+    let arr; try { arr = JSON.parse(fs.readFileSync(f, 'utf8')); } catch { continue; }
+    const list = Array.isArray(arr) ? arr : Object.entries(arr || {});
+    for (const [k, v] of list) if (k && v) rows.set(k, v);
+  }
+  return rows;
+}
 function readCollections(acc) {
   try {
-    const arr = JSON.parse(fs.readFileSync(files(acc).cloud, 'utf8'));
     const out = [];
-    for (const [k, v] of arr) {
+    for (const [k, v] of cloudRows(files(acc).cloud)) {
       if (!k.startsWith('user-collections.') || v.is_deleted || !v.value) continue;
       try { const c = JSON.parse(v.value); if (c.filterSpec) continue; out.push({ id: c.id, name: c.name, added: c.added || [] }); } catch {}
     }
@@ -1596,31 +1606,37 @@ module.exports = function createSteamManager(ctx) {
   // stayed at 0): renames Steam hasn't written to its file yet are shown as done (pendingRenames, dropped once the
   // file has them), and every console in the library is listed with the collection its games go into and how
   // many of its games are in Steam (the file's count, else the shortcuts Cartridge added there)
-  function collectionsReview() {
+  // 0.9.32 (owner: redesign, a deleted collection still showed): read from Steam itself when its interface is
+  // reachable (what Steam shows now), else from its files with the local changes; `source` says which
+  async function collectionsReview() {
     const env = environment();
     if (!env.account) throw new Error('Steam was not found.');
     const c = cfg(), pending = c.pendingRenames || {};
-    const cols = readCollections(env.account);
+    let cols = null, source = 'file';
+    if (await live.available(env.account.root).catch(() => false)) { cols = await live.listCollections().catch((e) => { log('steam live collections', e.message); return null; }); if (cols) source = 'live'; }
+    if (!cols) cols = readCollections(env.account);
     for (const col of cols) { if (pending[col.id] && col.name === pending[col.id]) delete pending[col.id]; else if (pending[col.id]) { col.was = col.name; col.name = pending[col.id]; } }
     for (const id of Object.keys(pending)) if (!cols.some((x) => x.id === id)) delete pending[id];
+    // a kept collection that's gone from Steam: its console goes back to Cartridge's name
+    if (cols.length || source === 'live') for (const [k, n] of Object.entries(c.collectionNames || {})) if (!cols.some((x) => x.name === n)) { delete c.collectionNames[k]; ctx.saveConfig(); }
     const plats = libraryPlatforms();
-    const counts = {};
-    for (const r of Object.values(reg)) for (const n of r.collections || []) counts[n] = (counts[n] || 0) + 1;
     const consoles = plats.map((p) => {
       const name = SC.nameFor(p.key, p.name, c.collectionNames);
       const col = cols.find((x) => x.name === name);
       const games = Object.values(reg).filter((r) => r.console === p.key).length;
-      return { key: p.key, name, exists: !!col, count: Math.max(col ? col.added.length : 0, counts[name] || 0), games };
+      return { key: p.key, name, full: p.name, kept: !!c.collectionNames?.[p.key], exists: !!col, id: col?.id || null, count: col ? col.added.length : 0, games };
     }).sort((a, b) => a.name.localeCompare(b.name));
-    return { list: SC.analyse(cols, plats).map((x) => ({ ...x, pending: !!cols.find((y) => y.id === x.id)?.was })), consoles, integrated: !!c.collectionsIntegrated, kept: c.collectionNames || {} };
+    return { list: SC.analyse(cols, plats).map((x) => ({ ...x, pending: !!cols.find((y) => y.id === x.id)?.was })), consoles, source, at: Date.now(), integrated: !!c.collectionsIntegrated, kept: c.collectionNames || {} };
   }
   // renames: [{ id, from, to, key }]; keep: [{ key, name }] (collections left as they are, still used for that console)
-  async function collectionsApply({ renames = [], keep = [] } = {}) {
+  // reset: [key] (0.9.32): back to Cartridge's name for that console
+  async function collectionsApply({ renames = [], keep = [], reset = [] } = {}) {
     const env = environment();
     if (!env.account) throw new Error('Steam was not found.');
     const c = cfg();
     c.collectionNames ||= {};
     for (const k of keep) if (k.key && k.name) c.collectionNames[k.key] = k.name;
+    for (const k of reset) delete c.collectionNames[k];
     for (const r of renames) delete c.collectionNames[r.key];
     // games Cartridge put in a renamed collection follow it (verifyCollections compares names)
     const swap = Object.fromEntries(renames.map((r) => [r.from, r.to]));

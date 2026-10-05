@@ -6,28 +6,27 @@
       <template v-else>
         <div class="ss-pages"><Btn b="LB" /><div class="seg"><button v-for="pg in PAGES" :key="pg.v" data-focus :data-key="'ssp-' + pg.v" :class="{ on: page === pg.v }" @click="setPage(pg.v)">{{ pg.l }}</button></div><Btn b="RB" /></div>
         <template v-if="page === 'cols'">
-          <p class="muted small" style="margin: 0">Cartridge reads the collections you already have in Steam and finds the ones made for a console. Rename them to Cartridge's names, or keep yours: either way new games go into the collection you already have, never a second one.</p>
-          <div v-if="!review" class="muted small"><Icon name="mdiSync" :size="16" class="spin" /> Reading your Steam collections…</div>
-          <div v-else-if="review.error" class="ss-warn glass"><Icon name="mdiAlertOutline" :size="20" />{{ review.error }}</div>
-          <template v-else>
-            <div v-if="!consoleCols.length" class="muted small">None of your Steam collections look like they're for a console in your library.</div>
-            <div v-for="c in consoleCols" :key="c.id" class="lrow" :class="{ on: c.pick === 'rename' }" data-focus tabindex="0" @click="flip(c)">
-              <span class="l-mid"><b>{{ c.name }}</b><span class="l-sub">{{ subOf(c) }}</span></span>
-              <span class="l-end"><span class="status" :class="{ ok: c.pending || c.action === 'ok' }">{{ c.pending ? 'Renamed' : c.action !== 'rename' ? (c.action === 'ok' ? 'Already Cartridge\'s name' : 'Kept') : c.pick === 'rename' ? 'Will Rename' : 'Will Keep Mine' }}</span></span>
+          <!-- 0.9.32 (owner: redesign it from the start, with a refresh): one row per console, the Steam collection its
+               games go into; A changes it. Read from Steam itself when it's reachable. -->
+          <div class="sc-head">
+            <div class="sc-head-t">
+              <b>Console Collections</b>
+              <span class="muted small">{{ !review ? 'Reading your Steam collections…' : review.error ? '' : `${review.source === 'live' ? 'Read from Steam' : 'Read from Steam\'s files'} ${ago(review.at)}` }}</span>
             </div>
-            <p v-if="consoleCols.some((c) => c.action === 'rename' && !c.pending)" class="muted small" style="margin: 0">A switches a collection between Rename and Keep Mine, then the button below applies your choices.</p>
-            <div v-if="otherCols.length" class="muted small">Left as they are: {{ otherCols.map((c) => c.name).join(', ') }}.</div>
-            <div class="row wrap">
-              <button class="btn primary" data-focus :disabled="busyCols" @click="applyCols"><Icon name="mdiCheck" />{{ renameCount ? `Rename ${renameCount} in Steam` : 'Use These Collections' }}</button>
+            <button class="btn" data-focus :disabled="loadingCols" @click="loadReview(true)"><Icon name="mdiRefresh" :class="{ spin: loadingCols }" />Refresh</button>
+          </div>
+          <div v-if="review?.error" class="ss-warn glass"><Icon name="mdiAlertOutline" :size="20" />{{ review.error }}</div>
+          <template v-else-if="review">
+            <div v-if="!rows.length" class="muted small">No consoles in your library yet.</div>
+            <button v-for="r in rows" :key="r.key" class="lrow sc-row" data-focus :data-key="'col-' + r.key" @click="pickFor(r)">
+              <span class="l-mid"><b>{{ r.title }}</b><span class="l-sub">{{ r.sub }}</span></span>
+              <span class="l-end"><span class="status" :class="r.tone">{{ r.state }}</span></span>
+            </button>
+            <Toggle :model-value="!!sc.consoleCollections" label="Put new games in their console's collection" desc="Games Cartridge adds to Steam go into the collection shown above for their console. Collections you made yourself are never renamed unless you pick that." @update:model-value="setConsoleCols" />
+            <div v-if="otherCols.length" class="sc-other">
+              <div class="muted small">Your other collections, left as they are</div>
+              <div class="sc-chips"><span v-for="c in otherCols" :key="c.id" class="chip">{{ c.name }} · {{ c.count }}</span></div>
             </div>
-            <!-- 0.9.29 (owner): every console in your library, with the collection its games go into, before any game is added -->
-            <div class="subh"><Icon name="mdiFolderOutline" :size="20" />Your Consoles</div>
-            <div v-for="c in review.consoles || []" :key="c.key" class="lrow" data-focus tabindex="0">
-              <span class="l-mid"><b>{{ c.name }}</b><span class="l-sub">{{ c.count ? `${c.count} game${c.count === 1 ? '' : 's'} in this collection` : c.games ? `${c.games} game${c.games === 1 ? '' : 's'} in Steam, not in a collection yet` : 'Made in Steam when its first game is added' }}</span></span>
-              <span class="l-end"><span class="status" :class="{ ok: c.exists }">{{ c.exists ? 'In Steam' : 'Not Yet' }}</span></span>
-            </div>
-            <div class="subh"><Icon name="mdiFolderOutline" :size="20" />New Games</div>
-            <Toggle :model-value="!!sc.consoleCollections" :disabled="!colsReady" label="Add downloaded games to their console's collection" :desc="colsReady ? 'Games Cartridge adds also go into the Steam collection for their console, the one you kept or Cartridge\'s name. Your Cartridge collections are never copied into Steam.' : 'Review your collections above first (Use These Collections), so Cartridge puts games into the ones you already have instead of making new ones next to them.'" @update:model-value="setConsoleCols" />
           </template>
         </template>
         <template v-else>
@@ -100,7 +99,7 @@
 
 <script setup>
 import { computed, onMounted, onBeforeUnmount, ref, watch } from 'vue';
-import { store, call, confirm, toast, go, romById, choose } from '../store.js';
+import { store, call, confirm, toast, go, romById, choose, ago } from '../store.js';
 import { steam, applyChanges, restartSteam } from '../steam.js';
 import Icon from './Icon.vue';
 import Toggle from './Toggle.vue';
@@ -114,40 +113,58 @@ const emit = defineEmits(['ready']);
 // Pages (0.9.24, owner: a Collections tab in the Steam section); LB/RB through Settings' step()
 const PAGES = [{ v: 'games', l: 'Games' }, { v: 'cols', l: 'Collections' }];
 const page = ref('games');
-function setPage(v) { page.value = v; if (v === 'cols') loadReview(); }
+function setPage(v) { page.value = v; if (v === 'cols' && !loadingCols.value) loadReview(); }
 function step(d) { const i = PAGES.findIndex((p) => p.v === page.value); setPage(PAGES[(i + d + PAGES.length) % PAGES.length].v); }
 defineExpose({ step });
-// Collections review: each of the user's collections matched to a console (steamCollections.js)
-const review = ref(null), busyCols = ref(false);
-const consoleCols = computed(() => (review.value?.list || []).filter((c) => c.action !== 'other'));
+// Collections (0.9.32 redesign): one row per console in the library with the Steam collection its games go into
+// (steamCollections.js matches yours to consoles); A offers Cartridge's name, keeping yours, or another of yours
+const review = ref(null), loadingCols = ref(false);
 const otherCols = computed(() => (review.value?.list || []).filter((c) => c.action === 'other'));
-const renameCount = computed(() => consoleCols.value.filter((c) => c.pick === 'rename').length);
-const colsReady = computed(() => !!review.value?.integrated || !!sc.value.consoleCollections);
-// read again while the page is open and after games go into Steam, keeping the choices you made (0.9.29)
-async function loadReview() {
-  const picks = Object.fromEntries((review.value?.list || []).map((c) => [c.id, c.pick]));
-  try { const r = await call('steam:colReview'); r.list.forEach((c) => { c.pick = picks[c.id] || (c.action === 'rename' && !c.pending ? 'rename' : 'keep'); }); review.value = r; } catch (e) { review.value = { error: e.message }; }
+const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
+const rows = computed(() => (review.value?.consoles || []).map((c) => {
+  const mine = (review.value.list || []).filter((x) => x.key === c.key);
+  const used = mine.find((x) => x.name === c.name) || null;
+  const suggest = !c.exists ? mine.filter((x) => x.action !== 'other').sort((a, b) => b.count - a.count)[0] || null : null;
+  const title = c.full || c.name;
+  if (c.exists) return { ...c, title, mine, sub: `${c.name === title ? 'Cartridge’s name' : `Yours: “${c.name}”`} · ${plural(c.count, 'game')}`, state: used?.pending ? 'Renamed' : 'In Steam', tone: 'ok' };
+  if (suggest) return { ...c, title, mine, suggest, sub: `Your “${suggest.name}” (${plural(suggest.count, 'game')}) looks like this console’s · A to use it or rename it`, state: 'Choose', tone: 'warn' };
+  return { ...c, title, mine, sub: c.games ? `${plural(c.games, 'game')} in Steam, made when the next one is added` : `Made in Steam when its first game is added, as “${c.name}”`, state: 'Not Yet', tone: '' };
+}));
+async function loadReview(asked) {
+  loadingCols.value = true;
+  try { review.value = await call('steam:colReview'); if (asked) toast('Collections read again', 'ok', 1800, 'mdiRefresh'); } catch (e) { review.value = { error: e.message }; }
+  loadingCols.value = false;
 }
 let colT = null;
-watch(page, (v) => { clearInterval(colT); if (v === 'cols') colT = setInterval(loadReview, 8000); });
+watch(page, (v) => { clearInterval(colT); if (v === 'cols') colT = setInterval(() => loadReview(), 15000); });
 const offAuto = window.cart.on('steam-auto', () => { if (page.value === 'cols') loadReview(); });
 onBeforeUnmount(() => { clearInterval(colT); offAuto?.(); });
-const subOf = (c) => [`${c.count} game${c.count === 1 ? '' : 's'}`, c.action === 'rename' ? `${c.pick === 'rename' ? 'Becomes' : 'Cartridge would call it'} ${c.want}` : c.action === 'taken' ? `${c.want} is already a collection, so this one stays` : c.action === 'shared' ? `Another collection is also for ${c.want}` : 'For ' + c.want].join(' · ');
-function flip(c) { if (c.action === 'rename' && !c.pending) c.pick = c.pick === 'rename' ? 'keep' : 'rename'; }
-async function applyCols() {
-  const list = consoleCols.value;
-  const renames = list.filter((c) => c.pick === 'rename').map((c) => ({ id: c.id, from: c.name, to: c.want, key: c.key }));
-  // a kept collection is the one new games go into (the bigger one when two are for one console)
-  const keep = list.filter((c) => c.pick !== 'rename' && c.action !== 'ok' && !list.some((o) => o.key === c.key && (o.pick === 'rename' || o.action === 'ok'))).sort((a, b) => b.count - a.count)
-    .filter((c, i, a) => a.findIndex((o) => o.key === c.key) === i).map((c) => ({ key: c.key, name: c.name }));
-  busyCols.value = true;
+// A on a console: the collection its games go into
+async function pickFor(r) {
+  const yours = (review.value.list || []).filter((x) => x.name !== r.name);
+  const own = r.mine.filter((x) => x.name !== r.name);
+  const v = await choose({ title: r.title, message: r.exists ? `Its games go into “${r.name}” in Steam.` : 'Pick the collection its games go into.', options: [
+    ...own.map((x) => ({ label: `Use “${x.name}”`, sub: `Yours, ${plural(x.count, 'game')}, kept as it is`, value: 'keep:' + x.id, icon: 'mdiBookmarkCheckOutline', raw: true })),
+    ...own.filter(() => !r.exists).map((x) => ({ label: `Rename “${x.name}” to “${r.full || r.name}”`, sub: 'Its games stay in it', value: 'ren:' + x.id, icon: 'mdiRenameOutline', raw: true })),
+    ...(r.kept ? [{ label: `Use Cartridge’s name, “${r.full}”`, sub: 'Made in Steam when the next game is added', value: 'default', icon: 'mdiRestore', raw: true }] : []),
+    ...(yours.length ? [{ label: 'Use Another of Your Collections', sub: 'Any collection you made in Steam', value: 'other', icon: 'mdiBookmarkMultipleOutline' }] : []),
+  ] });
+  if (!v) return;
+  let keep = [], renames = [];
+  if (v.startsWith('keep:')) { const x = own.find((y) => 'keep:' + y.id === v); keep = [{ key: r.key, name: x.name }]; }
+  else if (v.startsWith('ren:')) { const x = own.find((y) => 'ren:' + y.id === v); renames = [{ id: x.id, from: x.name, to: r.full || r.name, key: r.key }]; }
+  else if (v === 'default') renames = [];
+  else if (v === 'other') {
+    const id = await choose({ title: `Collection for ${r.title}`, options: yours.map((x) => ({ label: x.name, sub: plural(x.count, 'game'), value: x.id, icon: 'mdiBookmarkOutline', raw: true })) });
+    const x = yours.find((y) => y.id === id);
+    if (!x) return;
+    keep = [{ key: r.key, name: x.name }];
+  }
   try {
-    const r = await call('steam:colApply', { renames, keep });
-    review.value.list.forEach((c) => { if (c.pick === 'rename') c.pick = 'keep'; }); // done: the reload shows them as Renamed
-    toast(!r.count ? 'Cartridge will use these collections' : r.live ? `${r.count} collection${r.count === 1 ? '' : 's'} renamed in Steam` : `${r.count} collection${r.count === 1 ? '' : 's'} will be renamed when Steam restarts`, 'ok', 4000, 'mdiSteam');
+    const res = await call('steam:colApply', { renames, keep, reset: v === 'default' ? [r.key] : [] });
+    store.config.steam = { ...sc.value, collectionsIntegrated: true };
+    toast(renames.length ? (res.live ? 'Renamed in Steam' : 'Renamed when Steam restarts') : `${r.title} uses “${keep[0]?.name || r.full}”`, 'ok', 3000, 'mdiSteam');
   } catch (e) { toast(e.message, 'error'); }
-  busyCols.value = false;
-  store.config.steam = { ...sc.value, collectionsIntegrated: true };
   loadReview();
 }
 const missingCols = ref([]);
@@ -196,6 +213,10 @@ async function refreshArt() {
 async function setC(patch) { store.config.steam = await call('steam:setConfig', patch); }
 // turning console collections on: offer to sort the games already in Steam too
 async function setConsoleCols(v) {
+  if (v && !review.value?.integrated) {
+    const keep = rows.value.filter((r) => r.suggest).map((r) => ({ key: r.key, name: r.suggest.name }));
+    try { await call('steam:colApply', { renames: [], keep }); } catch {}
+  }
   await setC({ consoleCollections: v });
   if (!v || !ov.value?.ours) return;
   if (!(await confirm('Sort the games already in Steam?', `Puts the ${ov.value.ours} game${ov.value.ours === 1 ? '' : 's'} Cartridge added into their console's collection now.`, 'Sort them'))) return;
@@ -247,5 +268,12 @@ onMounted(() => { if (ov.value) emit('ready'); load(); loadLive(); });
 .subh { display: flex; align-items: center; gap: 10px; font-family: var(--display); font-size: var(--t-lg); font-weight: 700; margin-top: 4px; }
 .lbl { width: 130px; color: var(--muted); font-size: var(--t-sm); flex: none; }
 .small { font-size: var(--t-xs); }
+.sc-head { display: flex; align-items: center; gap: var(--s-3); }
+.sc-head-t { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.sc-head-t b { font-family: var(--display); font-size: var(--t-lg); }
+.sc-row { width: 100%; text-align: left; }
+.status.warn { background: rgba(245, 197, 66, 0.18); color: #ffd978; }
+.sc-other { display: flex; flex-direction: column; gap: var(--s-2); margin-top: var(--s-2); }
+.sc-chips { display: flex; flex-wrap: wrap; gap: var(--s-2); }
 .wrap { flex-wrap: wrap; }
 </style>

@@ -103,6 +103,18 @@ module.exports = function steamLive({ log = () => {} } = {}) {
       return true;
     })()`);
   }
+  // The user's collections as Steam shows them now (0.9.32): [{ id, name, added: [appid] }], dynamic ones left out
+  async function listCollections() {
+    const r = await run(`(() => {
+      const cs = window.collectionStore;
+      if (!cs || !cs.userCollections) return null;
+      return cs.userCollections.filter((c) => !c.bIsDynamic && !c.m_bIsDynamic).map((c) => {
+        const apps = c.apps instanceof Map ? [...c.apps.keys()] : Array.isArray(c.allApps) ? c.allApps.map((a) => a.appid) : [];
+        return { id: c.id, name: c.displayName, added: apps };
+      });
+    })()`);
+    return Array.isArray(r) ? r.sort((a, b) => String(a.name).localeCompare(String(b.name))) : null;
+  }
   // Rename one of the user's collections (0.9.24). Steam's collection objects keep their name in
   // m_strName (SetName where a build has it); false when it didn't stick, so the caller uses the helper.
   async function renameCollection(id, name) {
@@ -148,5 +160,5 @@ module.exports = function steamLive({ log = () => {} } = {}) {
   const restart = () => run('SteamClient.User.StartRestart(false), true', 5000);
   // start a game the way the library's Play button does (0.9.21): 64-bit game id of a shortcut
   async function runGame(gameId) { return run(`SteamClient.Apps.RunGame(${JSON.stringify(String(gameId))}, '', -1, 100); true`); }
-  return { runGame, available, addShortcut, removeShortcut, updateShortcut, settle, setArtwork, restart, flagOn, FLAG, addToCollections, renameCollection };
+  return { runGame, available, addShortcut, removeShortcut, updateShortcut, settle, setArtwork, restart, flagOn, FLAG, addToCollections, renameCollection, listCollections };
 };
