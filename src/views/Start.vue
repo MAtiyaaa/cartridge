@@ -1672,7 +1672,7 @@ watch(() => store.play, loadWeek);
 .st-media-enter-from { opacity: 0; transform: translateX(18%) scale(0.92); }
 .st-media-leave-to { opacity: 0; transform: translateX(-18%) scale(0.92); }
 :global(body.light-fx .st-disc), :global(body.motion-reduce .st-disc), :global(body.light-fx .st-cart), :global(body.motion-reduce .st-cart) { animation: none; }
-.st-shelf-mark :deep(.cmark) { height: 1.15em; } /* 0.9.39 (owner): the console's logo, not "PlayStation 4 Shelf" */
+.st-shelf-mark :deep(.cmark) { --cm-h: 1.15em; } /* 0.9.39 (owner): the console's logo, not "PlayStation 4 Shelf" */
 /* Game Shelf (0.9.42, option B): cases on a lit shelf. Each case is a spine with the console's band on top and its
    cover showing faintly through; the picked one turns out (rotateY, spring) to show its whole cover. The spot and
    the blurred cover behind light it. Springs, not keyframes, so a quick L1/R1 run retargets smoothly. */

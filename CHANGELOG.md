@@ -18,6 +18,7 @@ Every Cartridge release, newest first. Each GitHub release only lists its own ch
   - With Glass picked, the Dock is glass too (unless you picked a Dock colour).
   - Light makes it white glass. Reduced transparency in your system makes it frosted and solid, and higher contrast gives it a clear edge.
 - **"On this device" is the green tick** on the disc and cartridge widget too.
+- **The Nintendo Switch logo is bigger** so it reads as large as PlayStation's. On the Game Shelf it was drawn at the same height as PS4's, and its small "SWITCH" letters looked tiny next to it.
 
 ## Cartridge 0.9.41 · Light, Rebuilt
 
