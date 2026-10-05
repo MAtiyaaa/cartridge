@@ -215,7 +215,7 @@
           <template v-else-if="t.type === 'media'">
             <template v-if="mediaOf(t)">
               <div class="st-label"><span class="st-lname">{{ platformById(t.platformId)?.display_name }}</span><span class="st-count">{{ (sel[t.id] || 0) + 1 }} / {{ conList(t.platformId).length }}</span></div>
-              <Transition name="st-xf"><div v-if="box(t).pw > box(t).ph * 1.4" :key="mediaOf(t).id" class="st-media-bg" :style="{ backgroundImage: bgUrl(artOf(mediaOf(t)) || cover(mediaOf(t), true)) }" /></Transition>
+              <Transition name="st-xf"><div :key="mediaOf(t).id" class="st-media-bg" :class="{ tall: box(t).pw <= box(t).ph * 1.4 }" :style="{ backgroundImage: bgUrl(artOf(mediaOf(t)) || cover(mediaOf(t), true)) }" /></Transition>
               <div class="st-media" :class="[isDisc(t) ? 'disc' : 'cart', { wide: box(t).pw > box(t).ph * 1.4 }]">
                 <div class="st-media-stage" @click="ejectMedia($event, t)"><Transition name="st-media"><div :key="mediaOf(t).id" class="st-media-obj" :class="{ dev: store.installed[mediaOf(t).id] }">
                   <div v-if="isDisc(t)" class="st-disc-boost"><div class="st-disc" :style="{ backgroundImage: bgUrl(cover(mediaOf(t), true)) }"><i class="st-disc-sheen" /><i class="st-disc-hub" /></div></div>
@@ -1579,7 +1579,7 @@ watch(() => store.play, loadWeek);
 .st-media-stage { flex: 1; min-height: 0; min-width: 0; width: 100%; display: grid; place-items: center; }
 .st-media.wide .st-media-stage { width: auto; height: 100%; aspect-ratio: 1; flex: none; }
 .st-media-obj { grid-area: 1 / 1; height: 100%; max-width: 100%; display: grid; place-items: center; aspect-ratio: 1; }
-.st-disc { position: relative; height: 92%; aspect-ratio: 1; border-radius: 50%; background-size: cover; background-position: center; box-shadow: 0 14px 34px rgba(0, 0, 0, 0.55), 0 0 0 2px rgba(255, 255, 255, 0.08); -webkit-mask-image: radial-gradient(circle, transparent 0 7.5%, #000 8%); mask-image: radial-gradient(circle, transparent 0 7.5%, #000 8%); animation: st-spin 28s linear infinite; }
+.st-disc { position: relative; height: 92%; aspect-ratio: 1; border-radius: 50%; background-size: cover; background-position: center; box-shadow: 0 14px 34px rgba(0, 0, 0, 0.55), 0 0 0 2px rgba(255, 255, 255, 0.08); -webkit-mask-image: radial-gradient(circle, transparent 0 7.5%, #000 8%); mask-image: radial-gradient(circle, transparent 0 7.5%, #000 8%); animation: st-spin 60s linear infinite; } /* 0.9.39 (owner: the spin made them feel sick): one slow, even turn a minute */
 .st-disc-sheen { position: absolute; inset: 0; border-radius: 50%; background: conic-gradient(from 20deg, rgba(255, 255, 255, 0) 0deg, rgba(255, 255, 255, 0.28) 30deg, rgba(160, 220, 255, 0.10) 60deg, rgba(255, 255, 255, 0) 100deg, rgba(255, 255, 255, 0) 200deg, rgba(255, 210, 255, 0.22) 230deg, rgba(255, 255, 255, 0) 270deg); mix-blend-mode: screen; }
 .st-disc-hub { position: absolute; inset: 31%; border-radius: 50%; background: radial-gradient(circle, rgba(255, 255, 255, 0) 0 24%, rgba(230, 236, 245, 0.55) 25% 40%, rgba(255, 255, 255, 0.12) 41% 100%); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.25); }
 @keyframes st-spin { to { transform: rotate(360deg); } }
@@ -1592,6 +1592,8 @@ watch(() => store.play, loadWeek);
 .st-media.wide .st-media-t b { font-size: clamp(18px, 14cqh, 34px); }
 .st-media.wide .st-media-t span { font-size: var(--t-sm); }
 .st-media-bg { position: absolute; inset: 0; z-index: -1; background-size: cover; background-position: center; opacity: 0.5; -webkit-mask-image: linear-gradient(90deg, transparent 25%, #000 85%); mask-image: linear-gradient(90deg, transparent 25%, #000 85%); }
+/* 0.9.39 (owner: the picture should show at every size): square and tall tiles fade it down behind the title */
+.st-media-bg.tall { opacity: 0.42; -webkit-mask-image: linear-gradient(180deg, #000 10%, transparent 92%); mask-image: linear-gradient(180deg, #000 10%, transparent 92%); }
 .st-media-t b { font-family: var(--display); font-weight: 800; font-size: clamp(14px, 7cqmin, 24px); line-height: 1.15; text-wrap: balance; }
 .st-media-t span { color: var(--muted); font-size: var(--t-xs); }
 @container (max-height: 200px) { .st-media:not(.wide) .st-media-t { display: none; } }
@@ -1615,9 +1617,8 @@ watch(() => store.play, loadWeek);
 .st-media-obj { transition: transform 420ms var(--ease-out); }
 .st-tile:focus .st-media-obj, .st-tile:hover .st-media-obj { transform: translateY(-3%) scale(1.04); }
 .st-media-obj.dev .st-disc-boost, .st-media-obj.dev .st-cart { box-shadow: 0 14px 34px rgba(0, 0, 0, 0.55), 0 0 0 2px rgba(127, 224, 160, 0.35), 0 0 24px rgba(127, 224, 160, 0.18); }
-.st-disc-boost { height: 92%; aspect-ratio: 1; border-radius: 50%; display: grid; place-items: center; animation: st-spin 3s linear infinite; animation-play-state: paused; }
+.st-disc-boost { height: 92%; aspect-ratio: 1; border-radius: 50%; display: grid; place-items: center; } /* 0.9.39: no faster spin on focus any more */
 .st-disc-boost > .st-disc { height: 100%; }
-.st-tile:focus .st-disc-boost { animation-play-state: running; }
-:global(body.light-fx .st-disc-boost), :global(body.motion-reduce .st-disc-boost) { animation: none; }
+:global(body.motion-reduce .st-disc) { animation: none; }
 .st-shelf-board { position: absolute; left: 0; right: 0; bottom: 4px; height: 10px; border-radius: 3px; background: linear-gradient(180deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.04)); box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5); }
 </style>
