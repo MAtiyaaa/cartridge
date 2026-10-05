@@ -70,7 +70,13 @@ const tabs = computed(() => {
   if (TEXTURES.test(s)) out.push({ k: 'tex', l: 'Texture Packs' });
   const pe = PATCH_EMU_OF(s);
   if (pe === 'Dolphin') out.push(...DOLPHIN);
-  else if (pe === 'Cemu') out.push({ k: 'p:Graphics', l: 'Graphics' }, { k: 'p:Enhancements', l: 'Enhancements' }, { k: 'p:Mods', l: 'Graphic Pack Mods' }, { k: 'p:Workarounds', l: 'Workarounds' }, { k: 'p:Cheats', l: 'Cheats' }); // 0.9.24; Cheats 0.9.32 (Mega Cheats): Cemu's graphic packs, as its own window groups them
+  // 0.9.24; Cheats 0.9.32 (Mega Cheats): Cemu's graphic packs, as its own window groups them. 0.9.37 (owner: "they're
+  // not there"): once the packs are read, only the groups this game has, each with its count (Graphics always)
+  else if (pe === 'Cemu') {
+    const all = [['Graphics', 'Graphics'], ['Enhancements', 'Enhancements'], ['Mods', 'Graphic Pack Mods'], ['Workarounds', 'Workarounds'], ['Cheats', 'Cheats']];
+    const l = patches.value?.list;
+    for (const [k, label] of all) { const n = l ? l.filter((p) => p.section === k).length : null; if (n === null || n || k === 'Graphics') out.push({ k: 'p:' + k, l: n ? `${label} · ${n}` : label }); }
+  }
   else if (pe === 'shadPS4') out.push({ k: 'p:shadPS4', l: 'shadPS4 Patches' }, { k: 'p:GoldHEN', l: 'GoldHEN' }); // 0.9.23: its two lists, LB/RB between them
   else if (pe) out.push({ k: 'p', l: pe === 'PPSSPP' ? 'Cheats' : 'Patches' });
   if (/ps3/i.test(s)) out.push({ k: 'updates', l: 'Game Updates' });

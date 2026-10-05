@@ -46,6 +46,9 @@ function entries(settings) {
   }
   return out;
 }
+// the group Cemu's window shows a pack under (the second part of its path): Graphics, Enhancements, Mods,
+// Workarounds, Cheats (0.9.32, owner: Wind Waker's Mega Cheats); anything else goes with Enhancements
+function sectionOf(seg) { const sec = String(seg || '').toLowerCase(); return { graphics: 'Graphics', enhancements: 'Enhancements', mods: 'Mods', workarounds: 'Workarounds', workaround: 'Workarounds', cheats: 'Cheats', fixes: 'Workarounds' }[sec] || (/cheat/.test(sec) ? 'Cheats' : /fps|enhance/.test(sec) ? 'Enhancements' : 'Graphics'); }
 const norm = (s) => String(s || '').toLowerCase().replace(/&/g, 'and').replace(/[^a-z0-9]+/g, '');
 // a game's packs: { root: Cemu's data folder, settings: settings.xml, titleIds: [...], name }
 function list(c, mine = {}) {
@@ -68,7 +71,7 @@ function list(c, mine = {}) {
     for (const pr of r.presets) { const k = pr.category || ''; (cats[k] ||= []).push(pr.name); }
     // the group Cemu's window shows it under (the second part of its path): Graphics, Enhancements, Mods,
     // Workarounds, Cheats (0.9.32, owner: Wind Waker's Mega Cheats); anything else goes with Enhancements
-    const sec = String(p[1] || '').toLowerCase(), section = { graphics: 'Graphics', enhancements: 'Enhancements', mods: 'Mods', workarounds: 'Workarounds', cheats: 'Cheats' }[sec] || (/cheat/.test(sec) ? 'Cheats' : /fps|enhance/.test(sec) ? 'Enhancements' : 'Graphics');
+    const section = sectionOf(p[1]);
     const presetText = Object.entries(cats).map(([k, v]) => `${k ? k + ': ' : ''}${(e?.presets?.[k]) || v[0]}`).join(' · ');
     items.push({ key: rel, name: d.name || p[p.length - 1] || path.basename(path.dirname(f)), description: [String(d.description || '').replace(/\\n/g, ' '), presetText].filter(Boolean).join('\n'), section, group: section, on: !!e && !e.disabled, by: e && !e.disabled ? (mine[rel] ? 'cartridge' : 'emulator') : null, presets: cats, chosen: e?.presets || {} });
   }
@@ -96,18 +99,41 @@ function set(c, todo, mine = {}) {
   return n;
 }
 // a Wii U game's title IDs: its own meta/meta.xml (folder games), else Cemu's title list cache by path
-function titleIds(gamePath, cemuConfigDir) {
+// 0.9.37 (owner: Enhancements, Mods and Cheats empty): paths are compared as real paths (Cemu keeps /var/home/...
+// on Bazzite and Fedora Atomic where Cartridge has /home/...), and a title Cemu lists under the game's own name
+// counts too, so the game's title ID is known and its packs match the way Cemu matches them
+const realp = (p) => { try { return fs.realpathSync(p); } catch { return p; } };
+function titleIds(gamePath, cemuConfigDir, name = '') {
   const out = new Set();
   const tryMeta = (f) => { const m = /<title_id[^>]*>([0-9A-Fa-f]{16})<\/title_id>/.exec(read(f) || ''); if (m) out.add(m[1].toUpperCase()); };
   if (gamePath) { tryMeta(path.join(gamePath, 'meta', 'meta.xml')); try { for (const n of fs.readdirSync(gamePath)) tryMeta(path.join(gamePath, n, 'meta', 'meta.xml')); } catch {} }
   const cache = read(path.join(cemuConfigDir || '', 'title_list_cache.xml')) || '';
+  const gp = gamePath ? realp(gamePath) : '', want = norm(String(name || '').replace(/\s*[([].*$/, '')), byName = [];
   for (const m of cache.matchAll(/<title\b[^>]*titleId="([0-9A-Fa-f]{16})"[^>]*>([\s\S]*?)<\/title>/g)) {
-    const p = unXml((/<path>([^<]*)<\/path>/.exec(m[2]) || [])[1] || '');
-    if (p && gamePath && (p === gamePath || p.startsWith(gamePath + '/'))) out.add(m[1].toUpperCase());
+    const raw = unXml((/<path>([^<]*)<\/path>/.exec(m[2]) || [])[1] || ''), p = raw ? realp(raw) : '';
+    if (p && gamePath && (p === gp || p.startsWith(gp + '/') || raw === gamePath || raw.startsWith(gamePath + '/'))) out.add(m[1].toUpperCase());
+    const n = norm(unXml((/<name>([^<]*)<\/name>/.exec(m[2]) || [])[1] || ''));
+    if (want.length >= 4 && n && (n === want || (n.length >= 8 && want.includes(n)) || (want.length >= 8 && n.includes(want)))) byName.push(m[1].toUpperCase());
   }
+  if (!out.size) for (const id of byName) out.add(id);
   // updates and DLC carry the same game: 0005000E/0005000C share the low half with the game's 00050000
   for (const id of [...out]) out.add('00050000' + id.slice(8));
   return [...out];
+}
+// packs for this game's name that list other regions' title IDs only (Cemu won't load them for this copy): per group
+function otherRegions(c) {
+  const ids = new Set((c.titleIds || []).map((x) => String(x).toUpperCase())), nameKey = norm(String(c.name || '').replace(/\s*[([].*$/, ''));
+  const out = {};
+  if (!ids.size || nameKey.length < 4) return out;
+  for (const f of findRules(path.join(c.root, 'graphicPacks'))) {
+    const d = parseRules(read(f)).def, p = String(d.path || '').split('/').filter(Boolean), pk = norm(p[0] || '');
+    if (!pk || !(pk === nameKey || (pk.length >= 8 && nameKey.includes(pk)) || (nameKey.length >= 8 && pk.includes(nameKey)))) continue;
+    const tids = String(d.titleids || '').split(',').map((x) => x.trim().toUpperCase()).filter(Boolean);
+    if (tids.some((t) => ids.has(t))) continue;
+    const sec = sectionOf(p[1]);
+    out[sec] = (out[sec] || 0) + 1;
+  }
+  return out;
 }
 // Cemu's community graphic packs (0.9.29, owner: "Cemu patches still aren't appearing"): fetched the way Cemu's own
 // Download Community Graphic Packs does (gui/wxgui/DownloadGraphicPacksWindow.cpp): the newest release of
@@ -140,4 +166,4 @@ async function downloadCommunity(root, { fetchImpl, unzip, force = false, releas
   } finally { try { fs.rmSync(tmp, { force: true }); } catch {} }
   return { updated: true, version: name };
 }
-module.exports = { parseRules, findRules, entries, list, set, titleIds, downloadCommunity };
+module.exports = { otherRegions, sectionOf, parseRules, findRules, entries, list, set, titleIds, downloadCommunity };

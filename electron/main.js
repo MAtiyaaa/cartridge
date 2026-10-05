@@ -2222,7 +2222,7 @@ function patchState(romId) {
     const e = require('./addons').emulators().find((x) => x.id === 'cemu');
     if (!e) return { emu: 'cemu', why: 'Cemu’s settings weren’t found on this device. Open Cemu once, then come back.' };
     const where = installedMap[romId];
-    const ids = require('./cemuPacks').titleIds(where && where !== MARKED ? where : '', path.dirname(e.settings));
+    const ids = require('./cemuPacks').titleIds(where && where !== MARKED ? where : '', path.dirname(e.settings), r?.name);
     return { emu: 'cemu', serial: ids[0] || r?.name, dir: { root: e.root, settings: e.settings }, ids, title: r?.name };
   }
   if (/^ps2$/i.test(r?.platform_slug || '') || /^ps2$/i.test(r?.platform_fs_slug || '')) return ps2PatchState(romId);
@@ -4180,7 +4180,10 @@ const handlers = {
     if (st.emu === 'ppsspp') { try { const r = await cheatsMod.ppssppDownloadDb(st.dir); if (r.updated) log('ppsspp cheat.db downloaded', r.url); } catch (e) { log('ppsspp cheat.db download failed:', e.message); } }
     const list = await E.list(st, patchMine[st.emu] || {});
     const why = dlErr && !list.length ? dlErr : st.emu === 'ppsspp' && !fs.existsSync(path.join(st.dir.cheats, 'cheat.db')) ? 'PPSSPP has no cheats for this game here. They come from cheat.db: put it in PSP/Cheats in PPSSPP’s folder (or add codes in PPSSPP’s Cheats), then come back.' : '';
-    return { emu: st.emu, emuName: E.name, serial: st.serial, version: st.version, why, list };
+    // Cemu (0.9.37): which title ID it matched by, and packs for this game that only list other regions
+    let other = null;
+    if (st.emu === 'cemu') { try { other = require('./cemuPacks').otherRegions({ root: st.dir.root, titleIds: st.ids, name: st.title }); } catch {} log('cemu packs', st.title, 'ids', (st.ids || []).join(',') || 'none', 'packs', list.length, other && Object.keys(other).length ? 'other regions ' + JSON.stringify(other) : ''); }
+    return { emu: st.emu, emuName: E.name, serial: st.serial, version: st.version, why, list, other, ids: st.emu === 'cemu' ? st.ids || [] : undefined };
   },
   // changes: [{ key, on }]. Patches turned on in RPCS3 itself are never turned off here.
   'patches:apply': async ({ romId, changes }) => {
