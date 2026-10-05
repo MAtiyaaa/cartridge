@@ -138,7 +138,9 @@ function ensureFlatpak(onLine = () => {}) {
     p.on('error', (e) => reject(new Error(`Flatpak couldn't be installed: ${e.message}`)));
     p.on('close', (code) => {
       if (code === 0 && hasFlatpak()) return resolve({ installed: true, pm: plan.pm });
-      reject(new Error(code === 126 || code === 127 ? 'Flatpak wasn’t installed: the password prompt was closed.' : `Flatpak couldn't be installed: ${(tail.trim().split('\n').pop() || 'the package manager failed').slice(0, 160)}`));
+      // no password prompt on this desktop (no polkit agent), or it was closed: say the command to run instead
+      const by = `Install it with: sudo ${plan.cmd.slice(1).join(' ')}`;
+      reject(new Error(code === 126 || code === 127 || /authentication agent|not authorized/i.test(tail) ? `Flatpak wasn’t installed (no password was given). ${by}` : `Flatpak couldn't be installed: ${(tail.trim().split('\n').pop() || 'the package manager failed').slice(0, 160)}. ${by}`));
     });
   }).finally(() => { flatpakRun = null; });
   return flatpakRun;

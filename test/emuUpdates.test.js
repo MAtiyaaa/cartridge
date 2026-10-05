@@ -48,3 +48,17 @@ test('a PS5 folder build is laid over its folder, keeping what the emulator keep
   assert.ok(U.REPOS.kytyps5.asset.test('KytyPS5-2026-10-05-72e4989-Linux-x86_64.tar.gz') && !U.REPOS.kytyps5.asset.test('KytyPS5-2026-10-05-72e4989-Windows-x64.zip'));
   assert.ok(U.REPOS.sharpemu.asset.test('sharpemu-0.0.2-beta.2-linux-x64.tar.gz') && !U.REPOS.sharpemu.asset.test('sharpemu-0.0.2-beta.2-osx-x64.tar.gz'));
 });
+
+test('shadPS4 launcher: its builds are all pre-releases, so the newest one is used, Linux zip found', async () => {
+  const fetchImpl = async (url) => {
+    if (/releases\?per_page/.test(url)) return { ok: true, status: 200, json: async () => [
+      { tag_name: 'shadPS4QtLauncher-2026-10-04-abc', prerelease: true, published_at: '2026-10-04', assets: [
+        { name: 'shadPS4QtLauncher-win64-qt-2026-10-04-abc.zip', browser_download_url: 'https://x/w.zip', size: 1 },
+        { name: 'shadPS4QtLauncher-linux-qt-2026-10-04-abc.zip', browser_download_url: 'https://x/l.zip', size: 2 }] }] };
+    if (/releases\/latest/.test(url)) return { ok: true, status: 200, json: async () => ({ tag_name: 'v.0.1.0-old', assets: [{ name: 'shadps4-win64.zip', browser_download_url: 'https://x/o.zip' }] }) };
+    return { ok: false, status: 404 };
+  };
+  const rel = await U.latestRelease('shadps4', { fetchImpl, channel: 'stable' });
+  assert.strictEqual(rel.url, 'https://x/l.zip');
+  assert.deepStrictEqual(U.channelsOf('shadps4'), { def: 'pre', options: ['pre'] });
+});

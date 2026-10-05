@@ -16,12 +16,13 @@
 ### Changed
 - **Trophies synced from other devices show up sooner:** every game on a trophy console is checked every 30 minutes (and when you press Sync), not only the ones the library last knew had notes, so trophies earned elsewhere appear even where that emulator or game isn't installed.
 - **The Cartridge Installer installs Flatpak first** when you pick a Flatpak emulator and it's missing (your password is asked once); the AppImages carry on meanwhile.
-- **shadPS4 installs ready to play:** the launcher comes with the newest shadPS4 release as its default version, instead of empty.
 - **Downloads from add-on sites:** the moment a download starts, the page closes and Downloads opens.
 - **Cemu's Add-ons tabs** show only the groups a game has, each with its count.
 - **OLED Black, High Contrast and Extra Round** in Title Case.
 
 ### Fixed
+- **shadPS4 not installing ("No Linux build in shadps4-qtlauncher's newest release"):** every build of shadPS4's launcher is published as a pre-release, and Cartridge asked GitHub for the latest full release, which found an old one without a Linux build. It reads the newest pre-release now, and the launcher installs with the newest shadPS4 as its default version.
+- **Flatpak missing:** when Cartridge can't install it (no password prompt on that desktop), it says the exact command to run.
 - **The Cartridge Installer skipping to the next welcome step after you picked a location:** while the Emulation folder was made the drive button lost focus, so the next press landed on Continue. It keeps focus now, and Continue only shows once installing has started.
 - **Emulator updates slow to open and not up to date:** what was known shows at once, then every emulator is checked at the same time, and checks are reused for 10 minutes instead of 6 hours. RPCS3's build number now counts (every build is 0.0.38, so a newer one was never seen), and the build RPCS3 says it runs is the one compared.
 - **Cemu Enhancements, Mods, Workarounds and Cheats coming up empty** on Bazzite and other systems where home is a link.

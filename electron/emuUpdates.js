@@ -33,7 +33,9 @@ const REPOS = {
   // 0.9.19: file names checked against the projects' own install scripts (EmuDeck reads the same releases):
   // shadPS4's launcher ships a linux-qt .zip with the AppImage inside; Eden and Ryujinx publish on their
   // own Forgejo servers first (git.eden-emu.org, git.ryujinx.app), GitHub second
-  shadps4: { repo: 'shadps4-emu/shadps4-qtlauncher', asset: /linux-qt.*\.zip$|qt.?launcher.*\.AppImage$/i, zipped: /\.AppImage$/i, only: /qt.?launcher/i },
+  // 0.9.37 (owner's photo: "No Linux build in shadps4-qtlauncher's newest release"): every launcher build is published
+  // as a pre-release (its build.yml), so GitHub's "latest" skipped them all and found an old release without Linux
+  shadps4: { repo: 'shadps4-emu/shadps4-qtlauncher', asset: /linux-qt.*\.zip$|qt.?launcher.*\.AppImage$/i, zipped: /\.AppImage$/i, only: /qt.?launcher/i, pre: true, preOnly: true },
   // 0.9.21 (owner: "couldn't check"): Eden's server is git.eden-emu.dev; .org kept as the older name
   eden: { repo: 'eden-emulator/Releases', asset: /(amd64|x86_64|x64|steamdeck|rog).*\.AppImage$|linux.*\.AppImage$/i, forge: [['https://git.eden-emu.dev', 'eden-emu/eden'], ['https://git.eden-emu.org', 'eden-emu/eden']], first: 'forge' },
   ryujinx: { repo: 'Ryubing/Stable-Releases', asset: /x64.*\.AppImage$/i, forge: [['https://git.ryujinx.app', 'Ryubing/Stable'], ['https://git.ryujinx.app', 'ryubing/ryujinx']], first: 'forge' },
@@ -129,10 +131,11 @@ function channelsOf(id, file = '') {
   const r = specFor(id, file);
   if (!r) return { def: null, options: [] };
   if (r.tag) return { def: 'rolling', options: ['rolling'] };
+  if (r.preOnly) return { def: 'pre', options: ['pre'] }; // only ever pre-releases (shadPS4's launcher): no stable to pick
   return { def: r.pre ? 'pre' : 'stable', options: ['stable', 'pre'] };
 }
 function withChannel(r, id, channel) {
-  if (!r || !channel || r.tag || channel === 'rolling') return r;
+  if (!r || !channel || r.tag || r.preOnly || channel === 'rolling') return r;
   const extra = CHANNEL_REPOS[id]?.[channel];
   return { ...r, ...(extra || {}), pre: channel === 'pre' };
 }

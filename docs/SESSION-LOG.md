@@ -8,9 +8,9 @@ The branch for 0.9.3 work is `claude/relaxed-fermat-30pigp`. Pull it before star
 
 ## 5 Oct 2026 · 0.9.37 Set Up for You (built and released, one update with the second list) · handover written
 - First list (owner's photo of a game's About and more): row focus without the clipped ring; Cemu groups (symlinked home, region-only packs, checked against the real community packs); BIOS and firmware put in place automatically plus a Setup and Health section; add-on site downloads close the page and open Downloads; mod layouts per emulator (Azahar mods, Switch patches). Download Latest Patches retracted by the owner (it was there).
-- Second list, same release (owner: "release it all as one update"; the images they mentioned never came through, so items were read from the text):
+- Second list, same release (owner: "release it all as one update"; the photos arrived in a later message and changed the shadPS4 fix):
   - Installer skipping to the next welcome step after Location: reproduced in the app; the drive lost focus while its folder was made and a press landed on the welcome's Continue. Fixed (focus kept, Continue only once installing).
-  - Flatpak missing: installed first through pkexec and the package manager, in the background. shadPS4 "shouldn't be like this": read as the Qt launcher arriving with no version, so the newest release goes in as its default. Ask the owner what the photo showed if it was something else.
+  - Flatpak missing: installed first through pkexec and the package manager, in the background; without a password prompt the exact command is shown. shadPS4 (the photo, which arrived later: "No Linux build in shadps4-qtlauncher's newest release"): its builds are all pre-releases and Cartridge asked for the latest full release; now pre-releases, plus the newest shadPS4 as the launcher's default version.
   - Emulator updates slow and not live: parallel checks, cached first, 10-minute reuse; RPCS3's build number (the reason "up to date" was wrong), and RPCS3's log for what really runs.
   - PS5: SharpEmu and KytyPS5 from their own sources (arguments read from SharpEmu.CLI/Program.cs and KytyPS5 src/main.cpp), folder builds, icons; KytyPS5 trophies (package format from its trophies.cpp).
   - Linked Folders: Find and Link Saves (copies what only the fork has, then links).
