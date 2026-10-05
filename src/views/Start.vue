@@ -205,7 +205,7 @@
               <div class="st-label on-art">{{ platformById(t.platformId)?.display_name }} Spotlight</div>
               <div class="st-pin">
                 <GameLogo :key="spotOf(t).id" :logo="store.config.ui.logos !== false ? logoOf(spotOf(t)) : null" :name="spotOf(t).name" cls="st-pin-name" :area="Math.min(22000, box(t).pw * box(t).ph * 0.12)" :max-w="box(t).pw * 0.7" :max-h="Math.min(110, box(t).ph * 0.32)" />
-                <span class="st-mark">{{ store.play[spotOf(t).id]?.min ? playtimeText(store.play[spotOf(t).id].min) + ' played' : store.installed[spotOf(t).id] ? 'On this device' : '' }}</span>
+                <span class="st-mark">{{ store.play[spotOf(t).id]?.min ? playtimeText(store.play[spotOf(t).id].min) + ' played' : '' }}<i v-if="store.installed[spotOf(t).id]" class="st-dev-tick" title="On this device"><Icon name="mdiCheckBold" :size="13" /></i></span>
               </div>
             </template>
             <div v-else class="st-empty small"><span>No games for this console yet</span></div>
@@ -258,8 +258,8 @@
           <template v-else-if="t.type === 'cstats'">
             <template v-if="platformById(t.platformId)">
               <div class="st-cs-mark"><ConsoleMark :slug="platformById(t.platformId).slug" :label="platformById(t.platformId).display_name" /></div>
-              <div v-if="t.h >= 2" class="st-band"><img v-for="r in bandOf(t)" :key="r.id" :src="cover(r, true)" alt="" loading="lazy" /></div>
-              <div class="st-stats">
+              <div v-if="t.h >= 2" class="st-band fit" :style="{ '--n': bandOf(t).length }"><img v-for="r in bandOf(t)" :key="r.id" :src="cover(r, true)" alt="" loading="lazy" /></div>
+              <div class="st-stats cs">
                 <div><b class="tnum">{{ cstats(t).games }}</b><span>Games</span></div>
                 <div><b class="tnum">{{ cstats(t).hours }}</b><span>Hours Played</span></div>
                 <div><b class="tnum">{{ cstats(t).device }}</b><span>On This Device</span></div>
@@ -275,7 +275,7 @@
               <div class="st-label on-art">Game of the Day</div>
               <div class="st-pin">
                 <GameLogo :logo="store.config.ui.logos !== false ? logoOf(daily) : null" :name="daily.name" cls="st-pin-name" :area="Math.min(22000, box(t).pw * box(t).ph * 0.12)" :max-w="box(t).pw * 0.8" :max-h="Math.min(110, box(t).ph * 0.32)" />
-                <span class="st-mark"><ConsoleMark :slug="daily.platform_slug" :label="daily.platform_display_name" />{{ store.installed[daily.id] ? ' · On this device' : '' }}</span>
+                <span class="st-mark"><ConsoleMark :slug="daily.platform_slug" :label="daily.platform_display_name" /><i v-if="store.installed[daily.id]" class="st-dev-tick" title="On this device"><Icon name="mdiCheckBold" :size="13" /></i></span>
               </div>
             </template>
             <div v-else class="st-empty small"><span>Your games show here, one a day</span></div>
@@ -399,7 +399,9 @@ const pages = ref(savedPages.map((l, i) => (l.length ? pack(l.map((t) => ({ ...t
 const page = ref(Math.max(0, Math.min(store.startPage || 0, pages.value.length - 1)));
 const tiles = computed({ get: () => pages.value[page.value] || [], set: (v) => { pages.value[page.value] = v; } });
 let saveT = 0;
-const ser = (list) => list.map(({ id, type, x, y, w, h, romId, platformId, src, console: con }) => ({ id, type, x, y, w, h, ...(romId ? { romId } : {}), ...(platformId ? { platformId } : {}), ...(src ? { src } : {}), ...(con ? { console: con } : {}) }));
+// 0.9.41 (owner: the emulator widget emptied after the emulator closed): the picked emulator (emu) is saved too; it
+// lived only in memory, so Start coming back (after a game or an emulator) found the tile without it
+const ser = (list) => list.map(({ id, type, x, y, w, h, romId, platformId, src, console: con, emu }) => ({ id, type, x, y, w, h, ...(romId ? { romId } : {}), ...(platformId ? { platformId } : {}), ...(src ? { src } : {}), ...(con ? { console: con } : {}), ...(emu ? { emu } : {}) }));
 function save() { clearTimeout(saveT); saveT = setTimeout(() => saveConfig({ ui: { start: { tiles: ser(pages.value[0] || []), more: pages.value.slice(1).map(ser) } } }), 400); }
 
 const el = ref(null), scroller = ref(null);
@@ -498,7 +500,12 @@ const emuOf = (t) => (t.emu ? emuInfo.value[t.emu.path || t.emu.fp] || null : nu
 // a row of covers in tall library tiles (0.9.28, owner: empty space): the console's or library's games, played first
 function bandOf(t) {
   const list = (t.type === 'cstats' ? conList(t.platformId) : [...playing.value, ...rowOf('fresh')]).filter((r) => cover(r, true));
-  const n = Math.max(2, Math.min(12, Math.floor(box(t).pw / 120)));
+  // 0.9.41 (owner: room for more at 2x2, the second cut off at 1x2): as many covers as fit side by side at the size the
+  // tile gives them (about 45% of its height, 2:3), never fewer than fit whole, never one cut off
+  // the row's height: the tile less its padding, the logo and the stats under it (two lines of two, or one line of four)
+  const { pw, ph } = box(t), statsH = pw < 460 ? 120 : 70, markH = Math.min(40, Math.max(18, ph * 0.14)) + 12;
+  const h = Math.min(260, Math.max(60, ph - 44 - markH - statsH)), w = h * (2 / 3) + 10;
+  const n = pw < 200 ? 1 : Math.max(1, Math.min(12, Math.ceil((pw - 24) / w - 0.25))); // one more, smaller, rather than a quarter of the row empty; one-column tiles show one
   return [...new Map(list.map((r) => [r.id, r])).values()].slice(0, n);
 }
 const stripN = (t) => Math.max(0, Math.min(12, Math.floor((box(t).pw - 36) / 40)));
@@ -947,7 +954,8 @@ function goPage(i) {
   page.value = i; store.startPage = i;
   sfx.tab?.(); rumble('tab'); // a page turn is felt, as a tab change is (0.9.24)
 }
-function afterPage() { const f = el.value?.querySelector(editing.value && !tiles.value.length ? '[data-key="st-add"]' : '.st-board [data-focus]'); f?.focus({ preventScroll: true }); if (f) focusTile(tiles.value.find((t) => t.id === f.dataset.id) || {}); }
+function afterPage() { if (filling || ov.value) return; afterPageNow(); } // the overview covers the board: focus stays in it
+function afterPageNow() { const f = el.value?.querySelector(editing.value && !tiles.value.length ? '[data-key="st-add"]' : '.st-board [data-focus]'); f?.focus({ preventScroll: true }); if (f) focusTile(tiles.value.find((t) => t.id === f.dataset.id) || {}); }
 function addPage() { pages.value.push([]); save(); goPage(pages.value.length - 1); }
 async function removePage() {
   if (pages.value.length < 2) return;
@@ -974,15 +982,45 @@ function openOv() {
   if (mode.value) setMode('');
   snapPage();
   ov.value = { moving: null };
+  const here = page.value; // fillSnaps shows other pages behind the overview for a moment
+  fillSnaps();
   nextTick(() => {
     const m = ovEl.value?.querySelector('.st-ov-map'); if (m) ovW.value = m.clientWidth;
     ovLayer = pushLayer(ovEl.value, {
       back: () => (ov.value.moving != null ? (ov.value.moving = null) : closeOv()),
       lt() {}, rt() {}, start: closeOv, select() {}, x() {}, y() {}, lb: ovShoulder, rb: ovShoulder,
       left: () => (ov.value.moving != null ? ovMove(-1) : false), right: () => (ov.value.moving != null ? ovMove(1) : false),
+      // 0.9.41 (owner): pages on more than one row move up and down too, a whole row at a time
+      up: () => (ov.value.moving != null ? ovMove(-ovPerRow()) : false), down: () => (ov.value.moving != null ? ovMove(ovPerRow()) : false),
     });
-    focusFirst(ovEl.value, `[data-key="pg-${page.value}"]`);
+    focusFirst(ovEl.value, `[data-key="pg-${here}"]`);
   });
+}
+// 0.9.41 (owner: page 1 showed the placeholder while the others showed their widgets): a page gets its picture when it
+// is on screen, so pages not shown since Cartridge started had none. Opening the overview now shows each of those
+// pages once, behind it (no animation, focus left alone), and takes its picture
+let filling = false;
+async function fillSnaps() {
+  if (filling) return;
+  const want = pages.value.map((pg, i) => (pg.length && !snapOf(pg) ? i : -1)).filter((i) => i >= 0);
+  if (!want.length) return;
+  filling = true;
+  const back = page.value, dir = pageDir.value;
+  const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+  try {
+    pageDir.value = 'none';
+    for (const i of want) {
+      if (!ov.value) break;
+      page.value = i;
+      await nextTick(); await frame(); await new Promise((r) => setTimeout(r, 140)); // covers already loaded come from the cache
+      snapPage();
+    }
+  } finally {
+    const keep = document.activeElement?.dataset?.key; // wherever you have moved to in the overview meanwhile
+    page.value = back; await nextTick(); await frame(); pageDir.value = dir;
+    filling = false;
+    if (ov.value && keep && document.activeElement?.dataset?.key !== keep) focusKey(keep);
+  }
 }
 function ovShoulder() { if (performance.now() - ovAt >= OV_GUARD) { ovAt = performance.now(); closeOv(); } }
 function closeOv() {
@@ -994,11 +1032,14 @@ function ovPick(i) {
   ov.value.moving = null; page.value = Math.min(page.value, pages.value.length - 1); save(); sfx.accept?.();
   nextTick(() => focusKey('pg-' + i));
 }
+// how many page cards sit on one row of the overview (they wrap)
+function ovPerRow() { const c = [...(ovEl.value?.querySelectorAll('.st-ov-page') || [])]; const top = c[0]?.offsetTop; const n = c.filter((x) => x.offsetTop === top).length; return Math.max(1, n); }
 function ovMove(d) {
-  const i = ov.value.moving, j = i + d;
-  if (j < 0 || j >= pages.value.length) { sfx.error?.(); return; }
+  const i = ov.value.moving, j = Math.max(0, Math.min(pages.value.length - 1, i + d));
+  if (j === i) { sfx.error?.(); return; }
   const cur = pages.value[page.value];
-  const list = [...pages.value]; [list[i], list[j]] = [list[j], list[i]]; pages.value = list;
+  // up/down carry the page a row (the ones between shift along by one); left/right swap neighbours
+  const list = [...pages.value]; const [m] = list.splice(i, 1); list.splice(j, 0, m); pages.value = list;
   page.value = list.indexOf(cur); ov.value.moving = j; store.startPage = page.value; sfx.move?.();
   nextTick(() => focusKey('pg-' + j));
 }
@@ -1325,15 +1366,19 @@ watch(() => store.play, loadWeek);
 .st-pg-next-enter-from { opacity: 0; transform: translateX(4%); }
 .st-pg-prev-enter-from { opacity: 0; transform: translateX(-4%); }
 :global(body.motion-reduce .st-board) { transition: none !important; transform: none !important; }
-.st-ov { position: absolute; inset: 0; z-index: 20; display: flex; flex-direction: column; gap: var(--s-5); padding: var(--s-6) var(--s-7); background: color-mix(in srgb, var(--s0) 88%, transparent); backdrop-filter: blur(14px); animation: viewIn 220ms var(--ease-out); }
+/* 0.9.41 (owner: moving pages across rows went laggy): no blur of the whole board behind (it was redrawn every frame of
+   a move), a nearly solid page instead */
+.st-ov { position: absolute; inset: 0; z-index: 20; display: flex; flex-direction: column; gap: var(--s-5); padding: var(--s-6) var(--s-7); background: color-mix(in srgb, var(--s0) 96%, transparent); animation: viewIn 220ms var(--ease-out); }
 .st-ov-head { display: flex; align-items: baseline; gap: var(--s-4); }
 .st-ov-head b { font-family: var(--display); font-size: var(--t-xl); }
 .st-ov-list { display: flex; gap: var(--s-4); flex-wrap: wrap; align-content: flex-start; }
 .st-ov-page { width: clamp(200px, 22vw, 360px); display: flex; flex-direction: column; gap: 10px; padding: 12px; border-radius: var(--r-lg); background: var(--s1); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06); transition: transform 260ms var(--ease-out), box-shadow 160ms ease; }
 .st-ov-page.on { box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.35); }
 .st-ov-page:focus { box-shadow: var(--ring); }
-.st-ov-page.moving { transform: translateY(-8px) scale(1.04); box-shadow: var(--ring), 0 24px 50px rgba(0, 0, 0, 0.55); }
-.st-ov-map { position: relative; aspect-ratio: 16 / 9; border-radius: var(--r-md); background: rgba(255, 255, 255, 0.03); overflow: hidden; }
+/* the lift uses translate/scale, not transform: the slide to a new place (TransitionGroup) writes transform, and the
+   two used to overwrite each other every frame, worst on long moves between rows */
+.st-ov-page.moving { translate: 0 -8px; scale: 1.04; box-shadow: var(--ring), 0 24px 50px rgba(0, 0, 0, 0.55); }
+.st-ov-map { position: relative; aspect-ratio: 16 / 9; border-radius: var(--r-md); background: rgba(255, 255, 255, 0.03); overflow: hidden; contain: layout paint; } /* a page's copy never relayouts the others */
 .st-ov-map i { position: absolute; box-sizing: border-box; border: 2px solid transparent; background: rgba(255, 255, 255, 0.12); border-radius: 6px; background-clip: padding-box; background-size: cover; background-position: center 30%; overflow: hidden; display: flex; align-items: flex-end; padding: 4px; }
 .st-ov-map i.pic { background-color: #111; }
 .st-ov-snap { position: absolute; left: 0; top: 0; transform-origin: 0 0; pointer-events: none; }
@@ -1342,10 +1387,10 @@ watch(() => store.play, loadWeek);
 .st-ov-tag { display: flex; align-items: center; gap: 4px; min-width: 0; color: rgba(255, 255, 255, 0.8); font-size: 10px; font-weight: 600; }
 .st-ov-tag em { font-style: normal; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .st-ov-clock { align-self: center; margin: auto; font-family: var(--display); font-weight: 800; font-size: clamp(12px, 1.4vw, 22px); color: #fff; }
-.st-ov-page { position: relative; transition: transform 260ms var(--ease-out), box-shadow 260ms var(--ease-out), opacity 200ms ease; }
+.st-ov-page { position: relative; transition: translate var(--spring-pop-d, 300ms) var(--spring-pop, ease-out), scale var(--spring-pop-d, 300ms) var(--spring-pop, ease-out), box-shadow 260ms var(--ease-out), opacity 200ms ease; }
 .st-ov-page.dim { opacity: 0.55; }
 .st-ov-carry { position: absolute; top: -12px; left: 50%; transform: translateX(-50%); display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; background: var(--focus); color: var(--on-focus); font-size: var(--t-xs); font-weight: 700; box-shadow: 0 6px 16px rgba(0, 0, 0, 0.45); }
-.st-ovm-move { transition: transform 300ms cubic-bezier(0.32, 0.72, 0, 1); }
+.st-ovm-move { transition: transform var(--spring-d, 420ms) var(--spring, cubic-bezier(0.32, 0.72, 0, 1)); }
 .st-ov-n { display: flex; justify-content: space-between; font-weight: 700; font-family: var(--display); }
 .st-ov-n em { font-style: normal; font-weight: 500; color: var(--muted); font-family: var(--body); font-size: var(--t-sm); }
 .st-pages { flex: none; align-self: center; display: flex; align-items: center; gap: 8px; padding: 6px 0 10px; } /* its own row under the board: never over a tile (0.9.24) */
@@ -1459,6 +1504,18 @@ watch(() => store.play, loadWeek);
 .st-band { flex: 1; min-height: 0; display: flex; gap: 10px; align-items: center; margin: 10px 0 4px; overflow: hidden; mask-image: linear-gradient(90deg, #000 80%, transparent); }
 .st-band img { height: min(100%, 220px); aspect-ratio: 2 / 3; object-fit: cover; border-radius: var(--r-md); box-shadow: var(--weight-edge), var(--weight); animation: st-in 520ms var(--ease-out) both; }
 .st-band:empty { display: none; }
+/* 0.9.41 (owner): "On this device" is the same green tick the game cards carry */
+.st-dev-tick { display: inline-grid; place-items: center; width: 22px; height: 22px; margin-left: 10px; border-radius: 50%; background: var(--green); color: #fff; vertical-align: middle; box-shadow: 0 0 0 2px rgba(6, 7, 11, 0.55); }
+/* 0.9.41: in Console at a Glance the covers share the row exactly (--n of them), so none is cut and none is missing;
+   the stats under them take only the room they need */
+.st-band.fit { mask-image: none; justify-content: space-between; container-type: size; align-self: stretch; }
+/* each cover: its share of the row, or as wide as the row's height allows at 2:3, whichever is smaller */
+.st-band.fit img { flex: none; width: min(calc((100cqw - (var(--n) - 1) * 10px) / var(--n)), 66.6cqh); height: auto; aspect-ratio: 2 / 3; }
+.st-stats.cs { flex: none; }
+.st-cs-mark :deep(.cmark) { max-width: 100%; }
+@container (max-width: 220px) { .st-cs-mark { text-align: center; } .st-band.fit { justify-content: center; } }
+/* a one-column tile: two numbers, one per line, whole words */
+@container (max-width: 200px) { .st-stats.cs { grid-template-columns: 1fr; text-align: center; } .st-stats.cs > div { align-items: center; } .st-stats.cs > div:nth-child(n+3) { display: none; } .st-stats.cs span { overflow-wrap: normal; } }
 .st-tro-mini { width: 34px; height: 34px; flex: none; border-radius: var(--r-sm); overflow: hidden; display: grid; place-items: center; background: var(--s2); opacity: calc(1 - var(--i) * 0.06); animation: st-in 420ms var(--ease-out) both; animation-delay: calc(var(--i) * 30ms + 200ms); }
 .st-tro-mini img { width: 100%; height: 100%; object-fit: cover; }
 @container (max-height: 84px) { .st-tro-strip { display: none; } }

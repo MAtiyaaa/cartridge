@@ -183,7 +183,7 @@ onMounted(async () => { await load(); focusFirst(el.value); });
 .tp-meta { display: flex; flex-direction: column; gap: 4px; align-items: flex-end; font-size: var(--t-sm); }
 .tp-unlock { flex: none; width: 360px; display: flex; gap: 14px; padding: 14px; border-radius: var(--r-md); text-align: left; transition: transform 0.14s ease-out; }
 .tp-unlock:focus { transform: scale(1.03); }
-.tp-ticon { position: relative; width: 64px; height: 64px; border-radius: var(--r-md); flex: none; display: grid; place-items: center; overflow: visible; background: rgba(0, 0, 0, 0.25); box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4); }
+.tp-ticon { position: relative; width: 64px; height: 64px; border-radius: var(--r-md); flex: none; display: grid; place-items: center; overflow: visible; background: var(--tile-bg, rgba(0, 0, 0, 0.25)); box-shadow: var(--tile-shadow, 0 6px 16px rgba(0, 0, 0, 0.4)); }
 .tp-ticon > img { width: 100%; height: 100%; object-fit: cover; border-radius: var(--r-md); }
 .tp-ticon-game { position: absolute; right: -8px; bottom: -8px; }
 .tp-ticon-game .gicon { box-shadow: 0 0 0 2px rgba(10, 10, 20, 0.9); }

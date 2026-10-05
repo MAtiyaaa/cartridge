@@ -546,14 +546,26 @@ body.light-fx .card .art { transition: transform var(--spring-snappy-d) var(--sp
    white that blinds you"; backgrounds and lines inverted to dark). themes.js sets the page, panels, text and the
    dark highlight; these are the colours written for a dark page elsewhere. Text over pictures stays white. */
 body.theme-light {
-  --line: rgba(0, 0, 0, 0.1);
-  --glass: rgba(236, 235, 231, 0.7); --glass-hi: rgba(214, 213, 207, 0.85);
+  --line: rgba(0, 0, 0, 0.08);
+  --glass: rgba(250, 250, 251, 0.78); --glass-2: rgba(250, 250, 251, 0.86); --glass-hi: rgba(255, 255, 255, 0.92);
   --green: #1f8a3a; --green-l: #1b7a33; --red: #c8332a; --gold: #9a6b00;
-  --text-2: #3d3f45; --score: #1b7a33; --danger-t: #b3261c; --ondev: #1b7a33; --faint: rgba(0, 0, 0, 0.5); --line-2: rgba(0, 0, 0, 0.14);
-  --shadow-card: 0 10px 24px rgba(40, 38, 32, 0.18);
+  --text-2: #3c3c43; --score: #1b7a33; --danger-t: #c0281f; --ondev: #1b7a33; --faint: rgba(0, 0, 0, 0.5); --line-2: rgba(0, 0, 0, 0.12);
+  /* 0.9.41 rebuilt: soft, cool shadows that lift near-white cards off the grey page, a fine edge instead of a glow */
+  --shadow-card: 0 1px 2px rgba(20, 20, 30, 0.06), 0 10px 24px -6px rgba(20, 20, 30, 0.16);
+  --shadow-pop: 0 2px 6px rgba(20, 20, 30, 0.06), 0 24px 60px -12px rgba(20, 20, 30, 0.24);
+  --weight: 0 1px 2px rgba(20, 20, 30, 0.06), 0 8px 20px -8px rgba(20, 20, 30, 0.16);
+  --weight-edge: inset 0 0 0 1px rgba(0, 0, 0, 0.05);
+  --tile-bg: #e3e3e8; --tile-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.05), 0 4px 10px -4px rgba(20, 20, 30, 0.18);
 }
-body.theme-light .statusbar::before { background: linear-gradient(180deg, rgba(230, 229, 225, 0.85) 0%, rgba(230, 229, 225, 0.45) 62%, rgba(230, 229, 225, 0) 100%); }
-body.theme-light.bar-bottom .statusbar::before { background: linear-gradient(0deg, rgba(230, 229, 225, 0.85) 0%, rgba(230, 229, 225, 0.45) 62%, rgba(230, 229, 225, 0) 100%); }
+/* Light: cards, rows and dialogs are raised; what's chosen is a grey fill, where you are is near-black */
+body.theme-light :is(.lrow, .toggle, .glass, .st-face, .systile, .eg-con, .card .art, .coll .art) { box-shadow: var(--weight-edge), var(--weight); }
+body.theme-light :is(.dialog, .toast, .menu-sheet) { box-shadow: var(--shadow-pop); }
+body.theme-light :is(.lrow, .toggle):is(:focus-visible, .pad-mode :focus) { box-shadow: var(--weight); }
+body.theme-light .btn:not(.primary) { box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.06); }
+body.theme-light .scrim { background: rgba(235, 235, 239, 0.6); }
+body.theme-light .statusbar::before { background: linear-gradient(180deg, rgba(235, 235, 239, 0.9) 0%, rgba(235, 235, 239, 0.5) 62%, rgba(235, 235, 239, 0) 100%); }
+body.theme-light.bar-bottom .statusbar::before { background: linear-gradient(0deg, rgba(235, 235, 239, 0.9) 0%, rgba(235, 235, 239, 0.5) 62%, rgba(235, 235, 239, 0) 100%); }
+body.theme-light.bar-pill.dock-white .tabs { background: rgba(255, 255, 255, 0.92); box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.06), 0 10px 30px -10px rgba(20, 20, 30, 0.28); }
 body.theme-light .card:focus .title { color: var(--text); }
 /* console wordmarks: dark on the page, white where they sit on a picture or the idle screen */
 body.theme-light .cmark { filter: brightness(0); opacity: 0.78; }
@@ -562,6 +574,11 @@ body.theme-light :is(.idle, .st-face:has(.st-scrim), .st-face:has(.st-art)) .cma
 body.theme-light .st-face:has(.st-scrim) { color: #f4f4f5; --text: #f4f4f5; --muted: rgba(255, 255, 255, 0.8); --dim: rgba(255, 255, 255, 0.6); }
 /* Played This Week: dark bars on the light tile */
 body.theme-light .st-bar i { background: linear-gradient(to top, rgba(0, 0, 0, 0.1), rgba(0, 0, 0, 0.22)); }
-body.theme-light .st-bar.today i { background: linear-gradient(to top, rgba(29, 30, 34, 0.75), #1d1e22); }
+body.theme-light .st-bar.today i { background: linear-gradient(to top, rgba(28, 28, 30, 0.75), #1c1c1e); }
 body.theme-light .st-bar.none i { background: rgba(0, 0, 0, 0.1); }
 body.theme-light .swatch.on { box-shadow: 0 0 0 3px var(--s0), 0 0 0 5px rgba(0, 0, 0, 0.5); } /* the chosen colour's ring */
+
+/* OLED (0.9.41, owner: "no difference between Cartridge and OLED"): everything black, panels set apart only by a fine
+   grey edge, so a black screen stays black and nothing glows */
+body.theme-oled :is(.lrow, .toggle, .glass, .st-face, .eg-con, .dialog, .menu-sheet, .toast, .seg, .btn:not(.primary)) { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1); }
+body.theme-oled .statusbar::before { background: linear-gradient(0deg, #000 0%, rgba(0, 0, 0, 0.6) 62%, rgba(0, 0, 0, 0) 100%); }

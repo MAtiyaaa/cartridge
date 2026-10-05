@@ -76,6 +76,8 @@ const freshConfig = !fs.existsSync(CONFIG_FILE);
 let config = loadJson(CONFIG_FILE, {});
 const rawVersion = freshConfig ? DEFAULT_CONFIG.configVersion : config.configVersion || 1; // a new install starts on today's defaults
 config = deepMerge(DEFAULT_CONFIG, config);
+// 0.9.41 (owner): OLED Black left Background for the OLED colour; whoever had it keeps a black page that way
+if (config.ui?.surface === 'oled') { config.ui.surface = 'solid'; if (!config.ui.theme || config.ui.theme === 'cartridge') config.ui.theme = 'oled'; }
 if (rawVersion < 2) {
   // 0.1.1/0.1.2 saved 'software' as a default, not a user choice: move everyone to Auto (GPU)
   config.graphics = 'auto'; // whatever 0.1.x saved (HANDOFF B8: the two old lines did exactly this)
@@ -332,10 +334,11 @@ const autoSoftware = (inGamescope || fromSteam) && !bigScreen;
 // 'gpu' (0.9.29, owner: "choppy on my ROG Ally"): the user's own choice to use the GPU where Auto keeps
 // software (Game Mode on handheld-size screens). Auto is unchanged. Game Mode on big screens already runs
 // the GPU, so it works there; a trial that isn't confirmed within GPU_TRIAL_MS goes back to Auto by itself.
-const gpuChosen = config.graphics === 'gpu';
-const forceSoftware = (autoSoftware && !gpuChosen) || process.argv.includes('--disable-gpu') || process.env.CARTRIDGE_SAFE_GPU === '1';
-const useGpu = !forceSoftware && config.graphics !== 'software';
-const gpuTrial = useGpu && autoSoftware && gpuChosen && !config.gpuKept;
+// 0.9.41 (owner: "every handheld has a GPU; GPU Always fixed all the sluggishness"): always the GPU, the setting is
+// gone. Software only for one launch after the GPU process died at start-up (relaunched with --disable-gpu, never saved).
+const forceSoftware = process.argv.includes('--disable-gpu') || process.env.CARTRIDGE_SAFE_GPU === '1';
+const useGpu = !forceSoftware;
+const gpuTrial = false;
 const GPU_TRIAL_MS = 25000;
 const startedAt = Date.now();
 if (!useGpu) app.disableHardwareAcceleration();
@@ -4783,7 +4786,7 @@ app.whenReady().then(() => {
   // Safety net if the display could not be read up front: a big window drawn in software is
   // unusably slow, so restart once with the GPU. A user or crash-chosen "software" is respected.
   setTimeout(() => {
-    if (useGpu || config.graphics === 'software' || process.env.CARTRIDGE_BIG === '1' || process.argv.includes('--disable-gpu')) return;
+    if (useGpu || process.env.CARTRIDGE_BIG === '1' || process.argv.includes('--disable-gpu')) return;
     const [w, h] = win.getContentSize();
     if (w >= 2500 || h >= 1400) { log('big window in software mode', w + 'x' + h, 'restarting with the GPU'); process.env.CARTRIDGE_BIG = '1'; relaunch(); }
   }, 2500);
@@ -4792,10 +4795,10 @@ app.on('child-process-gone', (_e, d) => {
   log('child gone', d.type, d.reason, d.exitCode);
   // If the GPU dies early, remember it and restart without the GPU so the window is never blank
   if (d.type === 'GPU' && useGpu && d.reason !== 'clean-exit' && Date.now() - startedAt < 20000) {
-    config.graphics = 'software';
-    try { saveConfig(); } catch {}
-    log('gpu failed at startup, relaunching in software mode');
-    relaunch();
+    log('gpu failed at startup, relaunching in software mode for this launch');
+    const args = process.argv.slice(1).concat('--disable-gpu');
+    if (process.env.APPIMAGE) app.relaunch({ execPath: process.env.APPIMAGE, args }); else app.relaunch({ args });
+    app.exit(0);
   }
 });
 app.on('window-all-closed', () => app.quit());

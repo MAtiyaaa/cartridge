@@ -220,7 +220,7 @@ function placeInk() {
 watch(() => store.config?.ui?.touchScroll, (v) => document.documentElement.classList.toggle('touch-native', v === 'browser'), { immediate: true });
 // 0.9.28 (owner): the Dock (the bar of tabs) sits at the bottom, centred, as a pill unless chosen otherwise;
 // the strip of button hints is hidden unless turned on; the Dock's colour (pill style)
-watch(() => [store.config?.ui?.barPos || 'bottom', store.config?.ui?.barAlign || 'center', store.config?.ui?.barStyle || 'pill', store.config?.ui?.hints === true || !!store.forceHints, store.config?.ui?.dockColor || 'black'], ([pos, align, style, hints, dock]) => {
+watch(() => [store.config?.ui?.barPos || 'bottom', store.config?.ui?.barAlign || 'center', store.config?.ui?.barStyle || 'pill', store.config?.ui?.hints === true || !!store.forceHints, store.config?.ui?.dockColor || (store.config?.ui?.theme === 'light' ? 'white' : 'black')], ([pos, align, style, hints, dock]) => { // Light's own Dock is white unless you picked one
   const b = document.body.classList;
   b.toggle('bar-top', pos === 'top'); b.toggle('hints-on', hints);
   for (const c of ['white', 'black', 'accent']) b.toggle('dock-' + c, dock === c);
