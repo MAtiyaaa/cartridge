@@ -441,10 +441,10 @@ body.light-fx .coll .art, body.light-fx .coll .mosaic { transition-property: tra
 .status.none { background: var(--s3); color: var(--muted); }
 /* on a selected row (white, or the Highlights colour) the pills keep their meaning but read against it
    (0.9.21, owner: "up to date" and the orange version didn't show on a selected row) */
-:is(.lrow, .up-row, .menu-item, .prow, .ss-emu):is(:focus-visible, .pad-mode :focus) .status, .pad-mode :is(.lrow, .up-row, .menu-item, .prow, .ss-emu):focus .status { background: color-mix(in srgb, var(--on-focus) 10%, transparent); color: var(--on-focus); }
-.pad-mode :is(.lrow, .up-row, .menu-item, .prow, .ss-emu):focus .status.ok, :is(.lrow, .up-row, .menu-item, .prow, .ss-emu):focus-visible .status.ok { background: color-mix(in srgb, #1f9d45 18%, transparent); color: color-mix(in srgb, var(--on-focus) 45%, #138a3a); }
-.pad-mode :is(.lrow, .up-row, .menu-item, .prow, .ss-emu):focus .status.warn, :is(.lrow, .up-row, .menu-item, .prow, .ss-emu):focus-visible .status.warn { background: color-mix(in srgb, #e08a00 20%, transparent); color: color-mix(in srgb, var(--on-focus) 40%, #a35f00); }
-.pad-mode :is(.lrow, .up-row, .menu-item, .prow, .ss-emu):focus .status.bad, :is(.lrow, .up-row, .menu-item, .prow, .ss-emu):focus-visible .status.bad { background: color-mix(in srgb, #d93a2f 18%, transparent); color: color-mix(in srgb, var(--on-focus) 40%, #b3261c); }
+:is(.lrow, .up-row, .menu-item, .prow, .ss-emu, .cc-row, .lf-card):is(:focus-visible, .pad-mode :focus) .status, .pad-mode :is(.lrow, .up-row, .menu-item, .prow, .ss-emu, .cc-row, .lf-card):focus .status { background: color-mix(in srgb, var(--on-focus) 10%, transparent); color: var(--on-focus); }
+.pad-mode :is(.lrow, .up-row, .menu-item, .prow, .ss-emu, .cc-row, .lf-card):focus .status.ok, :is(.lrow, .up-row, .menu-item, .prow, .ss-emu, .cc-row, .lf-card):focus-visible .status.ok { background: color-mix(in srgb, #1f9d45 18%, transparent); color: color-mix(in srgb, var(--on-focus) 45%, #138a3a); }
+.pad-mode :is(.lrow, .up-row, .menu-item, .prow, .ss-emu, .cc-row, .lf-card):focus .status.warn, :is(.lrow, .up-row, .menu-item, .prow, .ss-emu, .cc-row, .lf-card):focus-visible .status.warn { background: color-mix(in srgb, #e08a00 20%, transparent); color: color-mix(in srgb, var(--on-focus) 40%, #a35f00); }
+.pad-mode :is(.lrow, .up-row, .menu-item, .prow, .ss-emu, .cc-row, .lf-card):focus .status.bad, :is(.lrow, .up-row, .menu-item, .prow, .ss-emu, .cc-row, .lf-card):focus-visible .status.bad { background: color-mix(in srgb, #d93a2f 18%, transparent); color: color-mix(in srgb, var(--on-focus) 40%, #b3261c); }
 .page-head { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--s-5); margin: var(--s-4) 0 var(--s-5); }
 .page-head h1 { font-size: var(--t-2xl); line-height: 1.05; margin: 4px 0 var(--s-2); }
 .page-head .lead { color: var(--muted); font-size: var(--t-md); max-width: 720px; }
@@ -454,7 +454,7 @@ body.light-fx .coll .art, body.light-fx .coll .mosaic { transition-property: tra
 /* section titles are words only (docs/design.md): the icons some screens put in front are hidden */
 .subh > svg.icon:first-child { display: none; }
 /* rows that turn white on focus don't also get the ring */
-.pad-mode :is(.menu-item, .rail-item, .prow, .qm-item, .up-row, .sm-row, .ss-emu, .lrow, .toggle, .tab):focus, :is(.menu-item, .rail-item, .prow, .qm-item, .up-row, .sm-row, .ss-emu, .lrow):focus-visible { box-shadow: none; }
+.pad-mode :is(.menu-item, .rail-item, .prow, .qm-item, .up-row, .sm-row, .ss-emu, .lrow, .toggle, .tab, .ga-row, .cc-row, .lf-card, .tl-e):focus, :is(.menu-item, .rail-item, .prow, .qm-item, .up-row, .sm-row, .ss-emu, .lrow, .ga-row, .cc-row, .lf-card, .tl-e):focus-visible { box-shadow: none; } /* rows: the fill is the focus (0.9.37: About, Its Games, Linked Folders had the ring too) */
 
 /* a small count on a page tab (Emulators → Updates, 0.9.16) */
 .count-dot { display: inline-grid; place-items: center; min-width: 1.4em; height: 1.4em; padding: 0 0.35em; margin-left: 6px; border-radius: 999px; background: #f5c542; color: #1a1400; font-size: 0.75em; font-weight: 700; }
