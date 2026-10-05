@@ -431,6 +431,7 @@ LT/RT switch top tabs. LB/RB only switch sections inside a page. A select, B bac
 
 ## 0.9.43 · Steady Home (5 Oct 2026)
 - Home's header row is `max(300px, 34vh)`: `minmax(min-content, --hero-h)` really sized it to each game's text (the 1fr row took the rest, so `mediaSize` never applied), and a long title or summary grew it for ~5 frames until fitHero shrank the logo: the rows jumped (measured 70 px). Text titles (no logo) shrink by `--title-k` set on the `.hero-in` element in `fitHero` (before paint, up to 4 passes, min 0.5); logos keep `logoMaxH`. `fitHero` no longer waits for the crossfade.
+- `detect.walk` takes its roots in the order given (home first; the stack was popping /opt first). CI failed "AppImages anywhere" when a slow runner spent the 25 s budget in /opt's tool cache; reproduced with a 75,000-folder /opt.
 
 ## Releases (full steps: HANDOFF D8)
 Only when the owner asks. Bump `version` and `build.releaseInfo.releaseName` ("Cartridge X.Y.Z") in `package.json`, and set `versionName` (what Settings → About and update messages show). **0.9.3 is shipped in parts (owner, 1 Oct 2026):** the number goes up as usual (0.9.4, 0.9.5...) but `versionName` and the release title are "0.9.3 B", "0.9.3 C"... until the 0.9.3 plan is done; notes heading `## Cartridge 0.9.3 B · Title`. Then put only this version's notes in `RELEASE_NOTES.md` (heading `## Cartridge X.Y.Z · Title`), add them to the top of `CHANGELOG.md`, grouped as New / Changed / Fixed with bold lead-ins. CI builds, launch-checks and publishes.
