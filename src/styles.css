@@ -650,6 +650,16 @@ body.elements-glass.theme-light.bar-pill.dock-glass .tab { color: rgba(28, 28, 3
 body.elements-glass.theme-light.bar-pill.dock-glass .tab:hover { color: #1c1c1e; }
 body.elements-glass.theme-light.bar-pill.dock-glass .tab-trig { filter: invert(1); }
 /* interactive: pressed glass lights up from inside */
+/* ...and a band of light sweeps across it (liquid-glass skill: interactive glass scales, bounces and shimmers) */
+body.elements-glass .btn.lg-shine::after { background: var(--lg-gloss), linear-gradient(105deg, rgba(255, 255, 255, 0) 38%, rgba(255, 255, 255, 0.42) 50%, rgba(255, 255, 255, 0) 62%) no-repeat; background-size: auto, 260% 100%; animation: lg-shine 620ms cubic-bezier(0.45, 0, 0.3, 1) both; }
+@keyframes lg-shine { from { background-position: 0 0, 115% 0; } to { background-position: 0 0, -15% 0; } }
+body.elements-glass.motion-reduce .btn.lg-shine::after { animation: none; background: var(--lg-gloss); }
+@media (prefers-reduced-motion: reduce) { body.elements-glass .btn.lg-shine::after { animation: none; background: var(--lg-gloss); } }
+/* clear glass over the game's art (the skill's .clear: media-rich backgrounds): more see-through and brighter, the
+   label kept legible by a soft shadow */
+body.elements-glass:not(.light-fx):not(.theme-light) .g-actions .btn:not(.primary):not(:focus) { background: rgba(255, 255, 255, 0.025); -webkit-backdrop-filter: blur(12px) saturate(2) brightness(1.18); backdrop-filter: blur(12px) saturate(2) brightness(1.18); text-shadow: 0 1px 8px rgba(0, 0, 0, 0.55); }
+/* concentric corners: a shape inside another follows its curve (outer radius less the gap) */
+body.elements-glass .seg-ink { border-radius: calc(var(--r-md) - 4px); }
 body.elements-glass :is(.btn, .seg button):is(:active, .pressed) { box-shadow: var(--lg-bevel), inset 0 0 24px rgba(255, 255, 255, 0.3), var(--lg-drop); }
 /* without blur: every layer stays, the fill gets denser so it still reads */
 body.elements-glass.light-fx :is(.tabs, .top-search, .dialog, .toast, .btn) { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
