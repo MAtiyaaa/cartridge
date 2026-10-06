@@ -111,8 +111,14 @@ function keepFocus() {
   const { el } = kept;
   if (el.isConnected && !el.disabled && el.offsetParent !== null && inScope(el, l.el)) { el.focus({ preventScroll: true }); return; }
   if (el.isConnected && el.disabled && l.el.contains(el) && performance.now() - kept.t < 20000) return; // still busy: wait for it
+  // 0.9.49 (owner: opening Missing from Steam unfolded the search first): while a new page loads it has nothing to
+  // focus, and the nearest thing was the Dock's search, which opens on focus. On the page itself, only the page is a
+  // fallback; nothing there yet means wait for it (up to the 20 s above)
+  const main = l.el === document.body ? document.querySelector('main.main') : null;
+  if (main && main.contains(el) === false && !el.isConnected && performance.now() - kept.t < 20000 && !focusables(main).length) return;
   let best = null, bd = Infinity;
-  for (const [c, r] of focusables(l.el, true)) { const d = Math.hypot(r.left + r.width / 2 - kept.x, r.top + r.height / 2 - kept.y); if (d < bd) { bd = d; best = c; } }
+  for (const [c, r] of focusables(main || l.el, true)) { const d = Math.hypot(r.left + r.width / 2 - kept.x, r.top + r.height / 2 - kept.y); if (d < bd) { bd = d; best = c; } }
+  if (!best && main && performance.now() - kept.t < 20000) return; // the page is still loading
   kept = null;
   best?.focus({ preventScroll: true });
 }

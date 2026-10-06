@@ -337,10 +337,10 @@
     </div>
     <!-- the pages at a glance (0.9.24; 0.9.28: L1/R1 in Arrange): A picks a page up, left and right move it -->
     <div v-if="ov" class="st-ov" ref="ovEl">
-      <div class="st-ov-head"><b>Pages</b><span class="muted">{{ ov.moving != null ? 'Left and right move it. A puts it down.' : 'A picks a page up to move it. B goes back to arranging.' }}</span></div>
+      <div class="st-ov-head"><b>Pages</b><span class="muted">{{ ov.moving != null ? 'The D-pad moves it, any way. A puts it down.' : 'A picks a page up to move it. B goes back to arranging.' }}</span></div>
       <!-- 0.9.28 (owner): each page in miniature with its real tiles (covers, the clock, pictures, names), and the page
            you carry lifts while the others slide out of its way -->
-      <TransitionGroup tag="div" name="st-ovm" class="st-ov-list">
+      <TransitionGroup tag="div" :name="ovJump ? 'st-ovj' : 'st-ovm'" class="st-ov-list">
         <button v-for="(pg, i) in pages" :key="pgKey(pg, i)" class="st-ov-page" :class="{ on: i === page, moving: ov.moving === i, dim: ov.moving != null && ov.moving !== i }" data-focus :data-key="'pg-' + i" @click="ovPick(i)">
           <span class="st-ov-map">
             <!-- 0.9.29 (owner: "it doesn't show the whole actual widgets"): a still copy of the page itself, taken when
@@ -352,7 +352,13 @@
             </i></template>
           </span>
           <span class="st-ov-n">Page {{ i + 1 }}<em>{{ pg.length }} {{ pg.length === 1 ? 'widget' : 'widgets' }}</em></span>
-          <span v-if="ov.moving === i" class="st-ov-carry"><Icon name="mdiArrowLeftRight" :size="16" />Moving</span>
+          <!-- 0.9.49 (owner): four arrows, as a page moves up, down, left and right -->
+          <span v-if="ov.moving === i" class="st-ov-carry"><Icon name="mdiArrowAll" :size="16" />Moving</span>
+        </button>
+        <!-- 0.9.49 (owner): a card after the last page adds one, from here too -->
+        <button v-if="ov.moving == null" key="st-ov-add" class="st-ov-page st-ov-addpg" data-focus data-key="pg-add" @click="ovAdd">
+          <span class="st-ov-map st-ov-addmap"><span class="st-ov-plus"><Icon name="mdiPlus" :size="30" /></span></span>
+          <span class="st-ov-n">Add Page<em>An empty page to fill</em></span>
         </button>
       </TransitionGroup>
     </div>
@@ -960,7 +966,9 @@ function snapPage() {
   const b = boardReady(page.value), pg = pages.value[page.value];
   if (!b || !pg?.length) return;
   const c = b.cloneNode(true);
-  c.querySelectorAll('.st-handle, .st-slot, .st-ghost, .st-slots').forEach((n) => n.remove());
+  // 0.9.49 (owner's photo: "Add widget" bars in some pages' pictures): everything that belongs to arranging comes out,
+  // the add-a-widget button, sizes and the edit buttons too, so a page's picture is the page as you use it
+  c.querySelectorAll('.st-handle, .st-slot, .st-ghost, .st-slots, .st-add, .st-size, .st-ctl').forEach((n) => n.remove());
   c.querySelectorAll('[data-focus], [tabindex], [data-key], [data-hold]').forEach((n) => { n.removeAttribute('data-focus'); n.removeAttribute('tabindex'); n.removeAttribute('data-key'); n.removeAttribute('data-hold'); });
   c.style.height = '';
   snaps.set(pageSig(pg), { html: c.outerHTML, w: b.offsetWidth, h: Math.max(b.offsetHeight, 1) });
@@ -1056,10 +1064,22 @@ function ovPick(i) {
   nextTick(() => focusKey('pg-' + i));
 }
 // how many page cards sit on one row of the overview (they wrap)
-function ovPerRow() { const c = [...(ovEl.value?.querySelectorAll('.st-ov-page') || [])]; const top = c[0]?.offsetTop; const n = c.filter((x) => x.offsetTop === top).length; return Math.max(1, n); }
+function ovPerRow() { const c = [...(ovEl.value?.querySelectorAll('.st-ov-page:not(.st-ov-addpg)') || [])]; const top = c[0]?.offsetTop; const n = c.filter((x) => x.offsetTop === top).length; return Math.max(1, n); }
+// 0.9.49 (owner: with five pages or more, moving a page into another row looked awful): within a row the pages glide
+// aside; across rows they trade places with a short fade instead of every card in between flying diagonally
+const ovJump = ref(false);
+let ovJumpT = 0;
+function ovAdd() { pages.value.push([]); save(); sfx.accept?.(); nextTick(() => focusKey('pg-' + (pages.value.length - 1))); }
 function ovMove(d) {
   const i = ov.value.moving, j = Math.max(0, Math.min(pages.value.length - 1, i + d));
   if (j === i) { sfx.error?.(); return; }
+  const per = ovPerRow();
+  ovJump.value = Math.floor(i / per) !== Math.floor(j / per);
+  clearTimeout(ovJumpT);
+  if (ovJump.value) {
+    ovJumpT = setTimeout(() => (ovJump.value = false), 320);
+    nextTick(() => { for (const c of ovEl.value?.querySelectorAll('.st-ov-page:not(.st-ov-addpg)') || []) c.animate([{ opacity: 0.35 }, { opacity: 1 }], { duration: 240, easing: 'cubic-bezier(0.23, 1, 0.32, 1)' }); });
+  }
   const cur = pages.value[page.value];
   // up/down carry the page a row (the ones between shift along by one); left/right swap neighbours
   const list = [...pages.value]; const [m] = list.splice(i, 1); list.splice(j, 0, m); pages.value = list;
@@ -1421,6 +1441,11 @@ watch(() => store.play, loadWeek);
 .st-ov-page { position: relative; transition: translate var(--spring-pop-d, 300ms) var(--spring-pop, ease-out), scale var(--spring-pop-d, 300ms) var(--spring-pop, ease-out), box-shadow 260ms var(--ease-out), opacity 200ms ease; }
 .st-ov-page.dim { opacity: 0.55; }
 .st-ov-carry { position: absolute; top: -12px; left: 50%; transform: translateX(-50%); display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; background: var(--focus); color: var(--on-focus); font-size: var(--t-xs); font-weight: 700; box-shadow: 0 6px 16px rgba(0, 0, 0, 0.45); }
+.st-ovj-move { transition: none; }
+.st-ov-addpg { box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, 0.14); background: transparent; }
+.st-ov-addmap { display: grid; place-items: center; }
+.st-ov-plus { width: 56px; height: 56px; border-radius: 50%; display: grid; place-items: center; background: var(--s2); color: var(--text); box-shadow: var(--weight-edge, inset 0 0 0 1px rgba(255, 255, 255, 0.08)); }
+.st-ov-addpg:focus .st-ov-plus { background: var(--focus); color: var(--on-focus); }
 .st-ovm-move { transition: transform var(--spring-d, 420ms) var(--spring, cubic-bezier(0.32, 0.72, 0, 1)); }
 .st-ov-n { display: flex; justify-content: space-between; font-weight: 700; font-family: var(--display); }
 .st-ov-n em { font-style: normal; font-weight: 500; color: var(--muted); font-family: var(--body); font-size: var(--t-sm); }

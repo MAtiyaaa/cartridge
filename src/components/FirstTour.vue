@@ -85,6 +85,9 @@ async function go(n) {
   i.value = n; did.value = false; s0 = { route: store.route.name }; seen = {};
   await nextTick(); place(); setTimeout(place, 380); // again once the page it points at has arrived
   focusFirst(el.value, '[data-autofocus]');
+  // 0.9.49 (owner: after Continue, A did nothing until right was pressed): a step that opens a page lets that page focus
+  // its first item a moment later, which took the focus off the card; it comes back to Continue once the page is there
+  for (const t of [120, 420, 800]) setTimeout(() => { if (store.tour && !store.modal && !store.quickMenu && el.value && !el.value.contains(document.activeElement)) focusFirst(el.value, '[data-autofocus]'); }, t);
 }
 const next = () => go(i.value + 1);
 // where the spotlight goes: the step's element, padded; none centres the card

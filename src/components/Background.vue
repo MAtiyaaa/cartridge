@@ -83,22 +83,30 @@ function setup() {
   frame = rendererOf(mode.value)(ctx, w, h, S, pal, light.value);
   return true;
 }
-// CAE governor (0.9.47): idle (nothing pressed for a minute) draws 8 times a second from a timer instead of waking
-// every frame; and if drawing gets expensive (a slow device, a 4K screen) the rate halves by itself
-let idleT = 0, cost = 0;
-function stop() { cancelAnimationFrame(raf); clearTimeout(idleT); raf = 0; idleT = 0; }
-function next() { if (governor.mode === 'idle') idleT = setTimeout(() => { idleT = 0; raf = requestAnimationFrame(loop); }, 125); else raf = requestAnimationFrame(loop); }
+// CAE governor (0.9.47) and the idle glide (0.9.49, owner: after a while idle the background "looks like vomit"): idle
+// used to draw 8 times a second, which made the motion judder. Now the background's own clock slows to a stop over
+// about a second, at full smoothness, and then nothing is drawn at all (cheaper than before); any input and it eases
+// back into motion. If drawing gets expensive (a slow device, a 4K screen) the rate halves by itself.
+let idleT = 0, cost = 0, tv = 0, speed = 1, prevT = 0;
+function stop() { cancelAnimationFrame(raf); clearInterval(idleT); raf = 0; idleT = 0; prevT = 0; }
+function next() { raf = requestAnimationFrame(loop); }
+function park() { raf = 0; prevT = 0; clearInterval(idleT); idleT = setInterval(() => { if (governor.mode !== 'idle') { clearInterval(idleT); idleT = 0; if (!raf) raf = requestAnimationFrame(loop); } }, 200); }
 function loop(t) {
+  const want = governor.mode === 'idle' ? 0 : 1;
+  const dt = prevT ? Math.min(100, t - prevT) : 16; prevT = t;
+  speed += (want - speed) * Math.min(1, dt / (want ? 450 : 380)); // eases out of idle a little slower than into it
+  tv += dt * speed;
+  if (!want && speed < 0.015) { speed = 0; park(); return; }
   next();
   const gap = (light.value ? 50 : 33) * (cost > 8 ? 2 : 1); // ~30fps (20 in light mode) is plenty for a slow ambient drift
-  if (governor.mode !== 'idle' && t - last < gap) return;
+  if (t - last < gap) return;
   // without the GPU, give every frame to the interface while you move around; the background
   // picks up again a moment after you stop
   if (light.value && t - lastInput < 900) return;
   last = t;
   if (!setup()) return;
   const s = performance.now();
-  frame((t - t0) / 1000);
+  frame(tv / 1000);
   cost = cost * 0.9 + (performance.now() - s) * 0.1;
 }
 function start() {
