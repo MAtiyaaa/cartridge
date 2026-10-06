@@ -2,6 +2,10 @@
 // frame for a given time. They are all original designs, only loosely inspired by console menus,
 // and they are kept cheap: a handful of paths or pre-rendered sprites per frame, no CSS filters.
 
+// 0.9.38 (owner): on the Light theme the same lines are drawn in dark ink, laid over the page normally instead of
+// added together (adding light to an off-white page shows nothing). Set by setInk() before a renderer is made.
+let INK = '255,255,255', COMP = 'lighter';
+export function setInk(ink) { INK = ink || '255,255,255'; COMP = ink ? 'source-over' : 'lighter'; }
 const rgba = (hex, a) => { const n = parseInt(hex.slice(1), 16); return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`; };
 function sprite(color, size = 128) {
   const c = document.createElement('canvas');
@@ -29,15 +33,15 @@ function waves(g, w, h, S) {
   const STEP = 18;
   const grads = WAVES.map((wv) => {
     const gr = g.createLinearGradient(0, 0, w, 0);
-    gr.addColorStop(0, 'rgba(255,255,255,0)');
-    gr.addColorStop(0.3, `rgba(255,255,255,${wv.al})`);
-    gr.addColorStop(0.7, `rgba(255,255,255,${wv.al * 1.3})`);
-    gr.addColorStop(1, 'rgba(255,255,255,0)');
+    gr.addColorStop(0, `rgba(${INK},0)`);
+    gr.addColorStop(0.3, `rgba(${INK},${wv.al})`);
+    gr.addColorStop(0.7, `rgba(${INK},${wv.al * 1.3})`);
+    gr.addColorStop(1, `rgba(${INK},0)`);
     return gr;
   });
   return (time) => {
     g.clearRect(0, 0, w, h);
-    g.globalCompositeOperation = 'lighter';
+    g.globalCompositeOperation = COMP;
     WAVES.forEach((wv, wi) => {
       const top = [], bot = [];
       for (let x = 0; x <= w + STEP; x += STEP) {
@@ -52,7 +56,7 @@ function waves(g, w, h, S) {
       g.closePath(); g.fillStyle = grads[wi]; g.fill();
       g.beginPath();
       for (let i = 0; i < top.length; i += 2) (i ? g.lineTo(top[i], top[i + 1]) : g.moveTo(top[i], top[i + 1]));
-      g.strokeStyle = `rgba(255,255,255,${wv.al * 1.6})`; g.lineWidth = 1.5 * S; g.stroke();
+      g.strokeStyle = `rgba(${INK},${wv.al * 1.6})`; g.lineWidth = 1.5 * S; g.stroke();
     });
   };
 }
@@ -61,10 +65,10 @@ function waves(g, w, h, S) {
 function ribbons(g, w, h, S, pal, light) {
   const N = light ? 14 : 26, STEP = light ? 32 : 20;
   const glow = g.createLinearGradient(0, 0, w, 0);
-  glow.addColorStop(0, 'rgba(255,255,255,0)'); glow.addColorStop(0.5, 'rgba(255,255,255,0.09)'); glow.addColorStop(1, 'rgba(255,255,255,0)');
+  glow.addColorStop(0, `rgba(${INK},0)`); glow.addColorStop(0.5, `rgba(${INK},0.09)`); glow.addColorStop(1, `rgba(${INK},0)`);
   return (time) => {
     g.clearRect(0, 0, w, h);
-    g.globalCompositeOperation = 'lighter';
+    g.globalCompositeOperation = COMP;
     const yOf = (u, k) => h * (0.6 + 0.07 * Math.sin(u * 2.6 + time * 0.22 + k * 0.05) + 0.05 * Math.sin(u * 5.1 - time * 0.31 + k * 0.11)) + (k - N / 2) * h * (light ? 0.014 : 0.009) * (1 + 0.8 * Math.sin(u * 3 + time * 0.4));
     // soft body of the band
     g.beginPath();
@@ -74,7 +78,7 @@ function ribbons(g, w, h, S, pal, light) {
     g.lineWidth = 1.1 * S;
     for (let k = 0; k <= N; k++) {
       const edge = Math.abs(k - N / 2) / (N / 2);
-      g.strokeStyle = `rgba(255,255,255,${0.07 + 0.22 * (1 - edge)})`;
+      g.strokeStyle = `rgba(${INK},${0.07 + 0.22 * (1 - edge)})`;
       g.beginPath();
       for (let x = 0; x <= w + STEP; x += STEP) { const y = yOf(x / w, k); x ? g.lineTo(x, y) : g.moveTo(x, y); }
       g.stroke();
@@ -113,7 +117,7 @@ function aurora(g, w, h, S, pal, light) {
   const body = glow(acc, Math.round(h * 0.7));
   return (t) => {
     g.clearRect(0, 0, w, h);
-    g.globalCompositeOperation = 'lighter';
+    g.globalCompositeOperation = COMP;
     g.lineWidth = 2.2 * S; // softer, wider rays read as light rather than strands
     for (const c of CURT) {
       const fold = (u) => h * (c.y + c.amp * Math.sin(u * 3.1 + t * c.sp + c.off) + c.amp * 0.45 * Math.sin(u * 7.3 - t * c.sp * 1.6));
@@ -147,7 +151,7 @@ function contours(g, w, h, S, pal, light) {
       f[j * (C + 1) + i] = 0.55 * Math.sin(x * 1.3 + T * 1.7 + Math.sin(y * 1.1 - T)) + 0.45 * Math.cos(y * 1.9 - T * 1.3 + Math.sin(x * 0.7 + T * 0.6)) * Math.sin(x * 0.5 + y * 0.4 + T * 0.4);
     }
     g.clearRect(0, 0, w, h);
-    g.globalCompositeOperation = 'lighter';
+    g.globalCompositeOperation = COMP;
     g.lineWidth = 1.05 * S;
     LEVELS.forEach((L, li) => {
       g.beginPath();
@@ -167,7 +171,7 @@ function contours(g, w, h, S, pal, light) {
       // every fourth line heavier, as maps draw their index lines; the middle one in your colour
       const idx = li % 4 === 0, mid = li === (LEVELS.length - 1) / 2;
       g.lineWidth = (idx ? 1.6 : 1) * S;
-      g.strokeStyle = mid ? `rgba(${acc},0.34)` : `rgba(255,255,255,${(idx ? 0.13 : 0.065) * (1.1 - Math.abs(L) * 0.5)})`;
+      g.strokeStyle = mid ? `rgba(${acc},0.34)` : `rgba(${INK},${(idx ? 0.13 : 0.065) * (1.1 - Math.abs(L) * 0.5)})`;
       g.stroke();
     });
     // the lines fade towards the left, where the page's words are
@@ -183,11 +187,11 @@ function drift(g, w, h, S, pal, light) {
   const R = rng(11), N = light ? 30 : 64;
   const acc = rgbOf(pal?.accent);
   // small motes white, the out-of-focus ones in your colour
-  const sprites = [glow('255,255,255', 36 * S), glow(acc, 140 * S), glow(acc, 320 * S)];
+  const sprites = [glow(INK, 36 * S), glow(acc, 140 * S), glow(acc, 320 * S)];
   const pts = Array.from({ length: N }, () => { const z = R(); return { x: R(), y: R(), z, d: z < 0.55 ? 0 : z < 0.88 ? 1 : 2, ph: R() * TAU, sp: 0.4 + R() * 0.6 }; });
   return (t) => {
     g.clearRect(0, 0, w, h);
-    g.globalCompositeOperation = 'lighter';
+    g.globalCompositeOperation = COMP;
     for (const p of pts) {
       const v = (0.006 + p.z * 0.018) * p.sp;
       const x = ((p.x + t * v) % 1.2 - 0.1) * w + Math.sin(t * 0.3 + p.ph) * 14 * S;
@@ -207,13 +211,13 @@ function tide(g, w, h, S, pal, light) {
   const acc = rgbOf(pal?.accent);
   return (t) => {
     g.clearRect(0, 0, w, h);
-    g.globalCompositeOperation = 'lighter';
+    g.globalCompositeOperation = COMP;
     const horizon = h * 0.46, sz = 1.6 * S;
     for (let r = 0; r < ROWS; r++) {
       const z = 1 + r * 0.42; // depth: near rows first
       const persp = 1 / z;
       const a = Math.min(0.75, 0.9 * persp) * (r < 2 ? 0.6 : 1);
-      g.fillStyle = r % 7 === 3 ? `rgba(${acc},${a})` : `rgba(255,255,255,${a * 0.75})`;
+      g.fillStyle = r % 7 === 3 ? `rgba(${acc},${a})` : `rgba(${INK},${a * 0.75})`;
       for (let c = 0; c <= COLS; c++) {
         const xw = (c / COLS - 0.5) * 2.6;
         const yw = 0.22 * Math.sin(xw * 1.7 + t * 0.32 + z * 0.55) * Math.cos(z * 0.33 - t * 0.21) + 0.08 * Math.sin(xw * 4.1 - t * 0.5 + z);
@@ -282,15 +286,19 @@ export function bgPreview(v, pal, w = 320, h = 180) {
   const g = c.getContext('2d');
   const base = g.createLinearGradient(0, 0, w, h);
   const css = BG_BASE[v] || '';
-  const stops = css.match(/#[0-9a-f]{6}/gi) || ['#0c0e15', pal?.accent || '#2a2f45', '#07080c'];
+  const ink = pal?.ink || ''; // the Light theme's previews look like its page (0.9.38)
+  const stops = css.match(/#[0-9a-f]{6}/gi) || (ink ? ['#f0efeb', '#e4e3de', '#d8d7d1'] : ['#0c0e15', pal?.accent || '#2a2f45', '#07080c']);
   stops.forEach((col, i) => base.addColorStop(i / Math.max(1, stops.length - 1), col));
   g.fillStyle = base; g.fillRect(0, 0, w, h);
-  if (!BG_BASE[v]) { g.fillStyle = 'rgba(5, 6, 10, 0.55)'; g.fillRect(0, 0, w, h); }
+  if (!BG_BASE[v] && !ink) { g.fillStyle = 'rgba(5, 6, 10, 0.55)'; g.fillRect(0, 0, w, h); }
   const R = RENDERERS[v];
   if (R) {
     const layer = document.createElement('canvas');
     layer.width = w; layer.height = h;
+    const was = [INK, COMP];
+    setInk(ink);
     try { R(layer.getContext('2d'), w, h, w / 1920, pal, true)(4000); g.drawImage(layer, 0, 0); } catch {}
+    [INK, COMP] = was; // the live background keeps its own
   }
   return c.toDataURL('image/png');
 }

@@ -29,7 +29,12 @@
       </label>
       <!-- Android: the status area is a button that opens the Quick Menu, which shows the same things in more detail -->
       <component :is="IS_ANDROID ? 'button' : 'div'" class="sys" v-bind="IS_ANDROID ? { tabindex: -1, 'aria-label': 'Quick Menu' } : {}" v-on="IS_ANDROID ? { click: () => (store.quickMenu = !store.quickMenu) } : {}">
-        <div v-if="syncBusy" class="item sync-pill"><Icon name="mdiSync" :size="16" class="spin" />{{ syncLabel }}</div>
+        <!-- 0.9.38 (owner: "Syncing 12/21" was long; make it like the Steam ring): the library sync is a ring too,
+             filling round the sync arrows; it closes the circle and settles away when the sync is done -->
+        <Transition name="ring-out"><div v-if="syncBusy || syncEnding" class="item steam-ring sync-ring" :class="{ wait: syncPct == null && !syncEnding, done: syncEnding }" :title="syncLabel" :aria-label="syncLabel">
+          <svg class="sr-ring" viewBox="0 0 36 36"><circle class="sr-arc" cx="18" cy="18" r="15.5" pathLength="100" :stroke-dasharray="`${syncEnding ? 100 : syncPct ?? 22} 100`" /></svg>
+          <Icon :name="syncEnding ? 'mdiCheck' : 'mdiSync'" :size="16" class="sr-logo" />
+        </div></Transition>
         <!-- 0.9.29 (owner): adding to Steam is a ring filling round the Steam logo, one fixed size, so nothing in the
              bar moves (the wide "Steam artwork 18/43" pill pushed the search into the Dock); no track, the arc grows -->
         <div v-if="steam.progress" class="item steam-ring" :class="{ wait: steamPct == null }" :title="steamProgressLabel(steam.progress)" :aria-label="steamProgressLabel(steam.progress)">
@@ -57,31 +62,35 @@
 
   <QuickMenu v-if="store.quickMenu" />
   <PairOverlay />
-  <Keyboard v-if="store.modal?.type === 'keyboard' && builtinKb()" v-bind="store.modal.props" />
-  <TextPrompt v-else-if="store.modal?.type === 'keyboard'" v-bind="store.modal.props" />
-  <FolderPicker v-if="store.modal?.type === 'folder'" v-bind="store.modal.props" />
-  <Menu v-if="store.modal?.type === 'menu'" v-bind="store.modal.props" />
-  <ColorPicker v-if="store.modal?.type === 'color'" v-bind="store.modal.props" />
-  <SteamCollections v-if="store.modal?.type === 'steam-collections'" :key="JSON.stringify(store.modal.props.selected) + (store.modal.props.extra || []).join()" v-bind="store.modal.props" />
-  <SteamPreview v-if="store.modal?.type === 'steam-preview'" v-bind="store.modal.props" />
-  <SteamEmu v-if="store.modal?.type === 'steam-emu'" :key="JSON.stringify(store.modal.props)" v-bind="store.modal.props" />
-  <ArtPicker v-if="store.modal?.type === 'art'" :key="store.modal.props.query || ''" v-bind="store.modal.props" />
-  <GameTimeline v-if="store.modal?.type === 'timeline'" v-bind="store.modal.props" />
-  <GameAbout v-if="store.modal?.type === 'gameabout'" v-bind="store.modal.props" />
-  <ConsoleCollection v-if="store.modal?.type === 'consolecol'" v-bind="store.modal.props" />
-  <FirstTour v-if="store.modal?.type === 'tour'" v-bind="store.modal.props" />
-  <ManualViewer v-if="store.modal?.type === 'manual'" v-bind="store.modal.props" />
-  <PatchesSheet v-if="store.modal?.type === 'patches'" v-bind="store.modal.props" />
-  <AddonsSheet v-if="store.modal?.type === 'addons'" :key="'addons' + store.modal.props.romId" v-bind="store.modal.props" />
-  <GameAddons v-if="store.modal?.type === 'gameaddons'" :key="'ga' + store.modal.props.romId" v-bind="store.modal.props" />
-  <ShadVersions v-if="store.modal?.type === 'shadversions'" v-bind="store.modal.props" />
-  <WhatsNew v-if="store.modal?.type === 'whatsnew'" v-bind="store.modal.props" />
-  <EmuPaths v-if="store.modal?.type === 'emupaths'" v-bind="store.modal.props" />
-  <AddonDetail v-if="store.modal?.type === 'addondetail'" v-bind="store.modal.props" />
-  <Licenses v-if="store.modal?.type === 'licenses'" />
-  <Installer v-if="store.modal?.type === 'installer'" />
-  <ImageSearch v-if="store.modal?.type === 'imgsearch'" v-bind="store.modal.props" />
-  <GameSettings v-if="store.modal?.type === 'gamesettings'" :key="'gs' + store.modal.props.romId" v-bind="store.modal.props" />
+  <!-- 0.9.37 (apple-design: interruptible, anchored to where it came from): every pop-up opens from the button that
+       asked for it and closes back towards it; one slot, so a pop-up that hands over to another cross-fades -->
+  <Transition name="modal" @enter="modalFrom" @after-enter="modalIn" @before-leave="modalFrom">
+    <Keyboard v-if="store.modal?.type === 'keyboard' && builtinKb()" v-bind="store.modal.props" />
+    <TextPrompt v-else-if="store.modal?.type === 'keyboard'" v-bind="store.modal.props" />
+    <FolderPicker v-else-if="store.modal?.type === 'folder'" v-bind="store.modal.props" />
+    <Menu v-else-if="store.modal?.type === 'menu'" v-bind="store.modal.props" />
+    <ColorPicker v-else-if="store.modal?.type === 'color'" v-bind="store.modal.props" />
+    <SteamCollections v-else-if="store.modal?.type === 'steam-collections'" :key="JSON.stringify(store.modal.props.selected) + (store.modal.props.extra || []).join()" v-bind="store.modal.props" />
+    <SteamPreview v-else-if="store.modal?.type === 'steam-preview'" v-bind="store.modal.props" />
+    <SteamEmu v-else-if="store.modal?.type === 'steam-emu'" :key="JSON.stringify(store.modal.props)" v-bind="store.modal.props" />
+    <ArtPicker v-else-if="store.modal?.type === 'art'" :key="store.modal.props.query || ''" v-bind="store.modal.props" />
+    <GameTimeline v-else-if="store.modal?.type === 'timeline'" v-bind="store.modal.props" />
+    <GameAbout v-else-if="store.modal?.type === 'gameabout'" v-bind="store.modal.props" />
+    <ConsoleCollection v-else-if="store.modal?.type === 'consolecol'" v-bind="store.modal.props" />
+    <ManualViewer v-else-if="store.modal?.type === 'manual'" v-bind="store.modal.props" />
+    <PatchesSheet v-else-if="store.modal?.type === 'patches'" v-bind="store.modal.props" />
+    <AddonsSheet v-else-if="store.modal?.type === 'addons'" :key="'addons' + store.modal.props.romId" v-bind="store.modal.props" />
+    <GameAddons v-else-if="store.modal?.type === 'gameaddons'" :key="'ga' + store.modal.props.romId" v-bind="store.modal.props" />
+    <ShadVersions v-else-if="store.modal?.type === 'shadversions'" v-bind="store.modal.props" />
+    <WhatsNew v-else-if="store.modal?.type === 'whatsnew'" v-bind="store.modal.props" />
+    <EmuPaths v-else-if="store.modal?.type === 'emupaths'" v-bind="store.modal.props" />
+    <AddonDetail v-else-if="store.modal?.type === 'addondetail'" v-bind="store.modal.props" />
+    <Licenses v-else-if="store.modal?.type === 'licenses'" />
+    <Installer v-else-if="store.modal?.type === 'installer'" />
+    <ImageSearch v-else-if="store.modal?.type === 'imgsearch'" v-bind="store.modal.props" />
+    <GameSettings v-else-if="store.modal?.type === 'gamesettings'" :key="'gs' + store.modal.props.romId" v-bind="store.modal.props" />
+  </Transition>
+  <FirstTour v-if="store.tour" v-bind="store.tour.props" />
   <IdleScreen v-if="store.config?.configured" />
 
   <div class="pops">
@@ -103,11 +112,11 @@
 
 <script setup>
 import { computed, onMounted, onBeforeUnmount, ref, watch, nextTick, defineAsyncComponent } from 'vue';
-import { store, loadConfig, loadLibrary, loadArt, back, rootBack, tab, go, call, toast, choose, saveConfig, builtinKb, askText, GRADE, activeTabs, TAB_DEFS } from './store.js';
+import { store, loadConfig, loadLibrary, loadArt, back, rootBack, tab, go, call, toast, choose, saveConfig, builtinKb, askText, GRADE, activeTabs, TAB_DEFS, romById, isFavourite, download } from './store.js';
 import { desktopLinks } from './links.js';
 import { pushLayer, focusFirst, input, gameEnded } from './nav.js';
 import { setSoundEnabled, setSoundStyle, sfx } from './sfx.js';
-import { applyTheme, CARD_SIZES } from './themes.js';
+import { applyTheme, CARD_SIZES, dockOf } from './themes.js';
 import { setPointerPref, setRumble, setBackground } from './nav.js';
 import { detectPad } from './pad.js';
 import Icon from './components/Icon.vue';
@@ -220,10 +229,10 @@ function placeInk() {
 watch(() => store.config?.ui?.touchScroll, (v) => document.documentElement.classList.toggle('touch-native', v === 'browser' || (IS_ANDROID && !v)), { immediate: true });
 // 0.9.28 (owner): the Dock (the bar of tabs) sits at the bottom, centred, as a pill unless chosen otherwise;
 // the strip of button hints is hidden unless turned on; the Dock's colour (pill style)
-watch(() => [store.config?.ui?.barPos || 'bottom', store.config?.ui?.barAlign || 'center', store.config?.ui?.barStyle || 'pill', store.config?.ui?.hints === true || !!store.forceHints, store.config?.ui?.dockColor || 'black'], ([pos, align, style, hints, dock]) => {
+watch(() => [store.config?.ui?.barPos || 'bottom', store.config?.ui?.barAlign || 'center', store.config?.ui?.barStyle || 'pill', store.config?.ui?.hints === true || !!store.forceHints, dockOf(store.config?.ui)], ([pos, align, style, hints, dock]) => { // unpicked: Glass with Glass elements, white with Light, else black (themes.dockOf)
   const b = document.body.classList;
   b.toggle('bar-top', pos === 'top'); b.toggle('hints-on', hints);
-  for (const c of ['white', 'black', 'accent']) b.toggle('dock-' + c, dock === c);
+  for (const c of ['white', 'black', 'accent', 'glass']) b.toggle('dock-' + c, dock === c);
   b.toggle('bar-bottom', pos === 'bottom'); b.toggle('bar-left', pos === 'left');
   b.toggle('bar-center', align === 'center'); b.toggle('bar-pill', style === 'pill'); b.toggle('bar-circle', style === 'circle');
   nextTick(placeInkSoon);
@@ -244,6 +253,11 @@ const dlPct = computed(() => {
   return t ? Math.floor((r / t) * 100) : 0;
 });
 const syncBusy = computed(() => ['running', 'scanning'].includes(store.sync.state));
+const syncPct = computed(() => { const s = store.sync; return s.state === 'running' && s.total ? Math.max(4, Math.min(100, ((s.done + 1) / s.total) * 100)) : null; });
+// the ring closes and shows a tick for a moment after the sync, instead of vanishing mid-arc
+const syncEnding = ref(false);
+let syncEndT;
+watch(syncBusy, (v, was) => { clearTimeout(syncEndT); if (v) syncEnding.value = false; else if (was) { syncEnding.value = true; syncEndT = setTimeout(() => (syncEnding.value = false), 900); } });
 const syncLabel = computed(() => {
   const s = store.sync;
   if (s.state === 'scanning') return (s.label || 'Scanning server').slice(0, 42);
@@ -264,6 +278,7 @@ function tick() { clock.value = new Date().toLocaleTimeString([], { hour: '2-dig
 
 function cycleTab(dir) {
   const list = tabs.value;
+  if (!list.length) return; // nothing to switch to yet (still starting)
   const i = list.findIndex((t) => t.name === activeTab.value);
   // on a page whose tab is switched off, RT goes to the first tab and LT to the last
   tab(list[i < 0 ? (dir > 0 ? 0 : list.length - 1) : (i + dir + list.length) % list.length].name);
@@ -276,6 +291,31 @@ function viewHandler(action) {
 watch([() => activeTab.value, () => tabs.value.length, padMode], () => nextTick(() => { placeInkSoon(); if (inkWatch && tabsEl.value) for (const b of tabsEl.value.querySelectorAll('.tab')) inkWatch.observe(b); }));
 window.addEventListener('resize', () => nextTick(placeInk));
 onMounted(async () => {
+  // 0.9.38 (owner: LT/RT still dead at launch until another button): the app's own layer (LT/RT, Start, Y...)
+  // was added only after the config and the whole library had loaded, seconds on a big library, so a
+  // trigger pulled before then had nothing to go to; other buttons still moved focus on their own
+  pushLayer(document.body, {
+    back: () => { if (viewHandler('back') !== false) return; if (!back()) rootBack(); },
+    // Bumpers only switch sections inside a page (Achievements, consoles, collections). Top tabs are LT / RT.
+    lb: () => { viewHandler('lb'); },
+    rb: () => { viewHandler('rb'); },
+    y: () => (viewHandler('y') !== false ? undefined : focusSearch()),
+    accept: (a) => (a === searchEl.value ? toResults() : viewHandler('accept')),
+    hold: () => viewHandler('hold'),
+    // the page can take the D-pad over (0.9.19: Start moves a picked-up tile); otherwise focus moves
+    up: () => viewHandler('up'), down: () => viewHandler('down'), left: () => viewHandler('left'), right: () => viewHandler('right'),
+    x: () => viewHandler('x'),
+    rsleft: () => { viewHandler('rsleft'); }, rsright: () => { viewHandler('rsright'); }, // right stick: Start's pages
+    // Triggers always move between the top tabs; bumpers belong to the page (consoles, collections)
+    lt: () => (viewHandler('lt') !== false ? undefined : cycleTab(-1)), // a page can keep LT/RT (0.9.24: Start's page overview)
+    rt: () => (viewHandler('rt') !== false ? undefined : cycleTab(1)),
+    select: () => (viewHandler('select') !== false ? undefined : tab('downloads')),
+    // the keyboard's own (0.9.37): Ctrl+F or / searches from anywhere, 1 to 9 jump to a tab, F1 or ? lists the keys
+    search: () => focusSearch(),
+    help: () => keysHelp(),
+    ...Object.fromEntries([1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => ['tab' + n, () => { const t = tabs.value[n - 1]; if (t) tab(t.name); }])),
+    start: () => { if (viewHandler('start') !== false) return; store.quickMenu = !store.quickMenu; },
+  });
   tick(); clockT = setInterval(tick, 10000);
   navigator.getBattery?.().then((b) => {
     const upd = () => { battery.value = b.level === 1 && b.charging && !b.dischargingTime ? null : { level: Math.round(b.level * 100), charging: b.charging, toFull: b.chargingTime, toEmpty: b.dischargingTime }; store.battery = battery.value; };
@@ -331,6 +371,8 @@ onMounted(async () => {
     if (m.state === 'done' || m.state === 'error') setTimeout(() => { if (store.addonJobs[m.key]?.state === m.state) delete store.addonJobs[m.key]; }, 12000);
   });
   window.cart.on('toast', (t) => t?.text && toast(t.text, t.kind || 'info', 4500, t.icon));
+  // main asks for a page (0.9.37: a download caught on an add-on site shows its progress in Downloads)
+  window.cart.on('nav', (n) => { if (!n?.tab) return; if (n.closeModal && store.modal) { const r = store.modal.resolve; store.modal = null; try { r?.(null); } catch {} } tab(n.tab); });
   if (steamOn) setTimeout(steamReport, 2500);
   // 0.9: a new install goes through emulator Setup once, after connecting to RomM (the welcome does it since 0.9.15)
   if (steamOn && store.config.configured && !store.config.setupDone && !store.welcoming) go('emu-setup', { first: true });
@@ -343,24 +385,6 @@ onMounted(async () => {
   if (steamOn) setTimeout(setupNotice, 3500);
   if (!IS_ANDROID) gpuCheck(); // the GPU Always trial is the desktop's rendering choice
   if (store.config.configured) call('server:status').then((c) => (store.connection = c)).catch(() => {});
-  pushLayer(document.body, {
-    back: () => { if (viewHandler('back') !== false) return; if (!back()) rootBack(); },
-    // Bumpers only switch sections inside a page (Achievements, consoles, collections). Top tabs are LT / RT.
-    lb: () => { viewHandler('lb'); },
-    rb: () => { viewHandler('rb'); },
-    y: () => (viewHandler('y') !== false ? undefined : focusSearch()),
-    accept: (a) => (a === searchEl.value ? toResults() : viewHandler('accept')),
-    hold: () => viewHandler('hold'),
-    // the page can take the D-pad over (0.9.19: Start moves a picked-up tile); otherwise focus moves
-    up: () => viewHandler('up'), down: () => viewHandler('down'), left: () => viewHandler('left'), right: () => viewHandler('right'),
-    x: () => viewHandler('x'),
-    rsleft: () => { viewHandler('rsleft'); }, rsright: () => { viewHandler('rsright'); }, // right stick: Start's pages
-    // Triggers always move between the top tabs; bumpers belong to the page (consoles, collections)
-    lt: () => (viewHandler('lt') !== false ? undefined : cycleTab(-1)), // a page can keep LT/RT (0.9.24: Start's page overview)
-    rt: () => (viewHandler('rt') !== false ? undefined : cycleTab(1)),
-    select: () => (viewHandler('select') !== false ? undefined : tab('downloads')),
-    start: () => { if (viewHandler('start') !== false) return; store.quickMenu = !store.quickMenu; },
-  });
 });
 // connected for the first time (the RomM step just finished): emulators next
 watch(() => store.config?.configured, (v, was) => {
@@ -458,6 +482,53 @@ watch(viewKey, async () => {
   focusFirst(root);
   if (IS_ANDROID) { root.scrollTop = 0; root.scrollLeft = 0; }
 });
+
+// every key and mouse button, one list (0.9.37, owner: overhaul keyboard and mouse controls)
+function keysHelp() {
+  const K = [
+    ['Arrow Keys', 'Move around'], ['Enter or Space', 'Select (A); hold for more'], ['Escape, Backspace or Alt+Left', 'Back (B)'],
+    ['Tab and Shift+Tab', 'Next and previous thing on screen'], ['Ctrl+Tab, Page Up and Down', 'Switch tabs (LT and RT)'], ['1 to 9', 'Jump to a tab'],
+    ['Q and E', 'Sections inside a page (LB and RB)'], ['X', 'Download, or the page’s main action'], ['Y', 'Search, or More on a game'],
+    ['Ctrl+F or /', 'Search from anywhere'], ['Ctrl+J', 'Downloads (Select)'], ['M', 'Quick Menu (Start)'], ['Home and End', 'First and last in a list'],
+    ['Right-click a game', 'Its quick actions'], ['Mouse back button', 'Back'], ['F1 or ?', 'This list'],
+  ];
+  choose({ title: 'Keyboard and Mouse', message: 'A controller, the keyboard, a mouse and touch all work everywhere, and you can switch any time.', options: K.map(([k, d]) => ({ label: k, sub: d, value: null, raw: true })) });
+}
+// right-click a game card (0.9.37): its quick actions where the pointer is
+async function cardMenu(e) {
+  const card = e.target.closest?.('.card[data-key^="rom-"]');
+  if (!card || e.defaultPrevented) return;
+  e.preventDefault();
+  const rom = romById(Number(card.dataset.key.slice(4)));
+  if (!rom) return;
+  card.focus({ preventScroll: true });
+  const here = !!store.installed?.[rom.id], fav = isFavourite(rom.id);
+  const v = await choose({ title: rom.name, options: [
+    { label: 'Open', value: 'open', icon: 'mdiArrowRight' },
+    here ? { label: 'Ready to Play', sub: 'Through Steam', value: 'play', icon: 'mdiPlay' } : { label: 'Download', value: 'dl', icon: 'mdiDownload' },
+    { label: fav ? 'Remove from Favourites' : 'Add to Favourites', value: 'fav', icon: fav ? 'mdiHeart' : 'mdiHeartOutline' },
+  ] });
+  if (v === 'open') go('game', { romId: rom.id });
+  else if (v === 'dl') download(rom);
+  else if (v === 'play') call('steam:play', { romId: rom.id }).catch((err) => toast(err.message, 'error', 5000));
+  else if (v === 'fav') call('fav:set', { romId: rom.id, on: !fav }).then(() => toast(fav ? 'Removed from favourites' : 'Added to favourites', 'ok', 2200, 'mdiHeartOutline')).catch((err) => toast(err.message, 'error', 6000));
+}
+onMounted(() => document.addEventListener('contextmenu', cardMenu));
+// where a pop-up came from (0.9.37): the focused or pressed thing when it opened, read before it takes focus
+let modalTrigger = null;
+watch(() => store.modal, (m, was) => { if (m && !was) { const r = document.activeElement?.getBoundingClientRect?.(); modalTrigger = r && r.width ? { x: r.left + r.width / 2, y: r.top + r.height / 2 } : null; } }, { flush: 'pre' });
+// 0.9.41 (owner: the More sheet popped out twice): a dialog's own entry animation (pop, sheet-up) is held off only while
+// the pop-up transition runs; when its classes came off, that animation started and the sheet arrived a second time.
+// Marked once in, it never plays
+function modalIn(el) { el.classList?.add('modal-in'); }
+function modalFrom(el) {
+  const d = el.querySelector?.('.dialog, .sheet, .menu, .m-sheet') || el.firstElementChild;
+  if (!d || !modalTrigger) return;
+  const r = d.getBoundingClientRect(), w = r.width || 1, h = r.height || 1;
+  // the origin is the trigger, kept within reach of the box so the scale reads as coming from it, not flying in
+  const ox = Math.max(-0.25 * w, Math.min(1.25 * w, modalTrigger.x - r.left)), oy = Math.max(-0.25 * h, Math.min(1.25 * h, modalTrigger.y - r.top));
+  d.style.transformOrigin = `${ox}px ${oy}px`;
+}
 </script>
 
 <style scoped>
@@ -500,5 +571,11 @@ watch(viewKey, async () => {
 .steam-ring.wait .sr-ring { animation: sr-spin 1.4s linear infinite; }
 @keyframes sr-spin { to { transform: rotate(270deg); } }
 .sr-logo { opacity: 0.9; }
-.sync-pill { padding: 5px 12px; border-radius: 999px; background: rgba(var(--primary-rgb), 0.18); color: var(--primary-t); }
+/* the sync ring (0.9.38): the Steam ring's look, its arc on the spring; done = a tick, then it settles away */
+.sync-ring .sr-arc { transition: stroke-dasharray var(--spring-soft-d, 600ms) var(--spring-soft, var(--ease-out)); }
+.sync-ring .sr-logo { transition: transform var(--spring-d, 300ms) var(--spring-bounce, var(--ease-out)); }
+.sync-ring.done .sr-logo { transform: scale(1.12); }
+.ring-out-enter-active { transition: opacity 220ms var(--ease-out), transform var(--spring-d, 300ms) var(--spring, var(--ease-out)); }
+.ring-out-leave-active { transition: opacity 260ms var(--ease-in-out), transform 260ms var(--ease-in-out); }
+.ring-out-enter-from, .ring-out-leave-to { opacity: 0; transform: scale(0.7); }
 </style>

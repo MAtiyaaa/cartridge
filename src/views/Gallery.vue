@@ -417,7 +417,7 @@ onMounted(async () => {
 .d-cover img { width: 100%; height: 100%; object-fit: cover; }
 .noart { height: 100%; display: grid; place-items: center; padding: 10px; text-align: center; color: var(--muted); font-size: var(--t-sm); }
 .detail h2 { font-size: var(--t-lg); line-height: 1.15; }
-.d-sum { margin: 0; color: #c3c9d4; font-size: var(--t-sm); line-height: 1.55; display: -webkit-box; -webkit-line-clamp: 6; -webkit-box-orient: vertical; overflow: hidden; }
+.d-sum { margin: 0; color: var(--text-2, #c3c9d4); font-size: var(--t-sm); line-height: 1.55; display: -webkit-box; -webkit-line-clamp: 6; -webkit-box-orient: vertical; overflow: hidden; }
 .d-hints { display: flex; gap: 16px; color: var(--muted); font-size: var(--t-xs); }
 .fadeup-enter-active, .fadeup-leave-active { transition: opacity 0.16s, transform 0.22s var(--ease); }
 .fadeup-enter-from { opacity: 0; transform: translateY(8px); }

@@ -145,3 +145,32 @@ test('mods that aren’t textures land in the emulator’s other folders, and co
   assert.ok(S.featuredFor({ gameId: 'GZLP01' }).some((f) => /Wind Waker/.test(f.name)));
   assert.deepStrictEqual(S.featuredFor({ gameId: 'XXXX01' }), []);
 });
+
+// 0.9.37 (owner: "do you know how to install them for each emulator? read their guides"): Azahar mods go in
+// load/mods/<title ID> (not the textures), Switch mods arranged the way Eden/yuzu and Ryujinx load them
+test('mod layouts from the emulators\' own guides: Azahar mods, Switch exefs patches and cheats', () => {
+  const L = (rels) => rels.map((rel) => ({ rel, size: 1 }));
+  const to = (rels, kind, o) => I.plan(L(rels), kind, o).map((x) => x.to).sort();
+  const T = '0004000000055D00';
+  assert.deepStrictEqual(to(['Mod v1/' + T + '/romfs/a.bin', 'Mod v1/' + T + '/code.ips', 'Mod v1/readme.txt'], 'azahar', { id: T }), ['@mods3ds/code.ips', '@mods3ds/romfs/a.bin']);
+  assert.deepStrictEqual(to(['romfs/b.bin', 'exefs/code.bin'], 'citra', { id: T }), ['@mods3ds/exefs/code.bin', '@mods3ds/romfs/b.bin']);
+  assert.deepStrictEqual(to(['Pack/' + T + '/tex1.png'], 'azahar', { id: T }), ['tex1.png']); // a texture pack still goes in the textures
+  const S = '0100F2C0115B6000';
+  assert.deepStrictEqual(to(['atmosphere/exefs_patches/60fps/abcd.ips'], 'switch', { id: S, name: 'Smooth' }), ['60fps/exefs/abcd.ips']);
+  assert.deepStrictEqual(to(['Dynamic FPS.pchtxt', 'readme.md'], 'switch', { id: S, name: 'Dynamic FPS' }), ['Dynamic FPS/exefs/Dynamic FPS.pchtxt', 'readme.md']);
+  assert.deepStrictEqual(to(['0123456789ABCDEF.txt'], 'switch', { id: S, name: 'Cheats' }), ['Cheats/cheats/0123456789ABCDEF.txt']);
+  assert.deepStrictEqual(to(['My Mod/romfs_ext/x.bfres'], 'switch', { id: S, name: 'My Mod' }), ['My Mod/romfs_ext/x.bfres']);
+  assert.deepStrictEqual(to(['atmosphere/contents/' + S + '/romfs/Model/a.bfres'], 'switch', { id: S, name: 'Hair' }), ['Hair/romfs/Model/a.bfres']);
+});
+
+// 0.9.38 (owner: mods for shadPS4, without breaking games): shadPS4 lays <game folder>-mods over the game read only
+// (fs.cpp probe_overlay "-mods"), so a mod's files go there in the game's own layout, matched by its top folders
+test('shadPS4 mods mirror the game\'s own folders, whatever wraps them', () => {
+  const L = (rels) => rels.map((rel) => ({ rel, size: 1 }));
+  const to = (rels, o) => I.plan(L(rels), 'shadps4', o).map((x) => x.to).sort();
+  const tops = ['eboot.bin', 'sce_sys', 'dvdroot_ps4', 'sce_module'];
+  assert.deepStrictEqual(to(['My Mod v2/CUSA00900/dvdroot_ps4/chr/c0000.bin', 'My Mod v2/readme.txt'], { tops }), ['dvdroot_ps4/chr/c0000.bin']);
+  assert.deepStrictEqual(to(['DVDROOT_PS4/map/m1.bin'], { tops }), ['dvdroot_ps4/map/m1.bin']); // the game's own spelling
+  assert.deepStrictEqual(to(['loose/thing.bin'], { tops }), []); // nothing matches the game: not installed anywhere
+  assert.deepStrictEqual(to(['Mod/sce_sys/param.sfo'], { tops }), []); // never the game's own system files
+});

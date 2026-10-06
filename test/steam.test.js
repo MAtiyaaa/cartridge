@@ -267,3 +267,18 @@ test('console collections: games already in Steam count, Cartridge\'s memory of 
   // with console collections on, the Issues check names what's really missing from the console's collection
   assert.deepStrictEqual(out.verifyOn, ['102:Sony PlayStation 3', '103:Sony PlayStation 3']);
 });
+
+test('shadPS4 launcher default version is set only when none is, keeping the rest of qt_ui.ini', () => {
+  const SV = require(path.join(ROOT, 'electron/shadVersions.js'));
+  const H = path.join(TMP, 'sv'), d = path.join(H, '.local/share/shadPS4QtLauncher');
+  const save = process.env.XDG_DATA_HOME; delete process.env.XDG_DATA_HOME;
+  try {
+    assert.strictEqual(SV.setDefaultIfNone('/v/a/Shadps4-sdl.AppImage', H), true);
+    assert.strictEqual(SV.settings(H).selected, '/v/a/Shadps4-sdl.AppImage');
+    assert.strictEqual(SV.setDefaultIfNone('/v/b/Shadps4-sdl.AppImage', H), false);
+    fs.writeFileSync(path.join(d, 'qt_ui.ini'), '[General]\ntheme=1\n\n[version_manager]\nversionPath=/vp\n');
+    SV.setDefaultIfNone('/vp/x/Shadps4-sdl.AppImage', H);
+    const ini = fs.readFileSync(path.join(d, 'qt_ui.ini'), 'utf8');
+    assert.match(ini, /theme=1/); assert.strictEqual(SV.settings(H).versionPath, '/vp'); assert.strictEqual(SV.settings(H).selected, '/vp/x/Shadps4-sdl.AppImage');
+  } finally { if (save !== undefined) process.env.XDG_DATA_HOME = save; }
+});

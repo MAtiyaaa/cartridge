@@ -36,6 +36,12 @@ const EMU = {
   // Vita3K's own parser (vita3k/config/src/config.cpp): -F fullscreen, -r <title ID of an installed app>.
   // EmuDeck's vita3k.sh adds "-Fr" itself, so it gets only the title ID (0.9.3 L).
   vita3k: { label: 'Vita3K', scripts: ['vita3k.sh'], app: /vita3k/i, fp: [], bin: ['Vita3K', 'vita3k'], args: '-F -r {SERIAL}', argsBy: { emudeck: '{SERIAL}' }, kind: 'vitaid', for: ['psvita'] },
+  // PS5 (0.9.37, owner): both ship as a .tar.gz of a folder (the program with its libraries), unpacked into
+  // ~/Applications/<dir>. SharpEmu (src/SharpEmu.CLI/Program.cs): SharpEmu [options] <path to eboot.bin>,
+  // --window-mode=borderless for fullscreen; saves in <its folder>/user/savedata unless SHARPEMU_SAVEDATA_DIR.
+  // KytyPS5 (src/main.cpp): kyty_emulator --game <dir|elf|zar> --fullscreen (launcher is its Qt front end).
+  sharpemu: { label: 'SharpEmu', dir: ['SharpEmu', 'sharpemu'], bin: ['SharpEmu'], args: '--window-mode=borderless "{ROM}/eboot.bin"', for: ['ps5'] },
+  kytyps5: { label: 'KytyPS5', dir: ['KytyPS5', 'kytyps5'], bin: ['kyty_emulator'], args: '--fullscreen --game "{ROM}"', for: ['ps5'] },
   mgba: { label: 'mGBA', scripts: ['mgba.sh'], app: /mgba/i, fp: ['io.mgba.mGBA'], bin: ['mgba-qt', 'mgba'], args: '-f "{ROM}"', for: ['gb', 'gbc', 'gba'] },
   rmg: { label: "Rosalie's Mupen GUI", scripts: ['rosaliesmupengui.sh'], app: /(^rmg|rosalie)/i, fp: ['com.github.Rosalie241.RMG'], bin: ['RMG'], args: '--fullscreen --nogui --quit-after-emulation "{ROM}"', for: ['n64'] },
   simple64: { label: 'simple64', app: /simple64/i, fp: ['io.github.simple64.simple64'], bin: ['simple64-gui'], args: '"{ROM}"', for: ['n64'] },

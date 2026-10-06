@@ -83,4 +83,38 @@ function unlink(rec) {
   return true;
 }
 
-module.exports = { KEPT, forkBases, findForkBase, status, check, link, unlink };
+// Smart linking (0.9.37, owner: find the saves and link them by itself): before a fork's folder is set aside, the
+// games it has saves for that the original hasn't are copied across, so nothing goes missing behind the link.
+// Copies only: never over a file, never deletes. A game's folder (a serial, a title ID) is copied whole or not at
+// all, so one game's save is never a mix of both emulators' files.
+const GAME_DIR = /^([A-Z]{4}\d{5}|[A-Z]{4}-?\d{5}|CUSA\d{5}|PPSA\d{5}|NP[A-Z]{2}\d{5}|[0-9A-Fa-f]{16}|[0-9A-Fa-f]{8})([_-].*)?$/;
+const isGame = (n) => GAME_DIR.test(n) && !/^0+$/.test(n); // Switch's 0000000000000000 save-type folder isn't a game
+function mergeInto(from, to, depth = 0) {
+  const out = { copied: [], skipped: [] };
+  if (depth > 6 || !lst(from)?.isDirectory() || lst(from).isSymbolicLink()) return out;
+  fs.mkdirSync(to, { recursive: true });
+  for (const n of entries(from)) {
+    const a = path.join(from, n), b = path.join(to, n), sa = lst(a), sb = lst(b);
+    if (!sa || sa.isSymbolicLink()) continue;
+    if (!sb) { fs.cpSync(a, b, { recursive: true, errorOnExist: false, force: false, preserveTimestamps: true }); out.copied.push(n); continue; }
+    if (sa.isDirectory() && sb.isDirectory() && !isGame(n)) { const r = mergeInto(a, b, depth + 1); out.copied.push(...r.copied.map((x) => n + '/' + x)); out.skipped.push(...r.skipped.map((x) => n + '/' + x)); continue; }
+    out.skipped.push(n); // both have it: the original's stays
+  }
+  return out;
+}
+// a fork's save folder when its usual places don't have it: looked for under the fork's own folder, a few levels down
+function searchForkFolder(exe, rel, maxDepth = 3) {
+  const parts = String(rel).split('/'), last = parts.slice(-2).join('/');
+  const root = path.dirname(exe), seen = new Set();
+  const walk = (d, n) => {
+    if (n > maxDepth || seen.has(d)) return null; seen.add(d);
+    const hit = path.join(d, rel);
+    if (lst(hit)?.isDirectory()) return hit;
+    if (parts.length > 1 && path.basename(d) === parts[parts.length - 2] && lst(path.join(d, parts[parts.length - 1]))?.isDirectory()) return path.join(d, parts[parts.length - 1]);
+    for (const c of entries(d)) { const p = path.join(d, c); if (lst(p)?.isDirectory() && !/^(lib|plugins|translations|shaders|cache|log)s?$/i.test(c)) { const r = walk(p, n + 1); if (r) return r; } }
+    return null;
+  };
+  return last ? walk(root, 0) : null;
+}
+
+module.exports = { KEPT, forkBases, findForkBase, status, check, link, unlink, mergeInto, searchForkFolder, GAME_DIR };

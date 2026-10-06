@@ -87,7 +87,7 @@
 
 <script setup>
 import { computed, onMounted, onBeforeUnmount, ref, nextTick } from 'vue';
-import { call, toast, go, choose, confirm, askText, pickFolder, store, romsOf, visiblePlatforms, openModal, saveConfig } from '../store.js';
+import { call, toast, go, choose, confirm, askText, pickFolder, store, romsOf, visiblePlatforms, openModal, saveConfig, openTour } from '../store.js';
 import { addGame } from '../steam.js';
 import { useView } from '../useView.js';
 import { ensureFocus } from '../nav.js';
@@ -296,7 +296,7 @@ async function finish() {
   if (props.welcome) return emit('done'); // the welcome goes on and shows the tour at its end
   go('home');
   // then the few controls worth knowing, once
-  if (!store.config.ui.toured) { await openModal('tour'); saveConfig({ ui: { toured: true } }); }
+  if (!store.config.ui.toured) { await openTour(); saveConfig({ ui: { toured: true } }); }
 }
 
 useView({ x: () => scan(), y: () => more(), ...(props.first || props.welcome ? { start: () => finish() } : {}), ...(props.welcome ? { back: () => emit('back') } : {}) }, () => [{ b: 'A', label: 'Open' }, { b: 'X', label: 'Scan again' }, { b: 'Y', label: 'More' }, ...(props.first || props.welcome ? [{ b: 'START', label: 'Done' }] : [{ b: 'B', label: 'Back' }])]);

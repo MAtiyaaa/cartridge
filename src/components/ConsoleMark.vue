@@ -12,7 +12,7 @@ const cache = (globalThis.__sysLogos ||= new Map());
 const url = ref('');
 const optical = computed(() => {
   const f = opticalOf(url.value, props.slug);
-  return f === 1 ? null : { height: `${(0.8 * f).toFixed(2)}em`, marginBlock: `${(-0.4 * (f - 1)).toFixed(2)}em` };
+  return f === 1 ? null : { '--opt': f }; // 0.9.42: a factor on the height the page asks for (--cm-h), not a fixed one
 });
 const bad = ref(false);
 watch(() => props.slug, (k) => {
@@ -23,6 +23,7 @@ watch(() => props.slug, (k) => {
 }, { immediate: true });
 </script>
 <style>
-.cmark { display: inline-block; height: 0.8em; width: auto; vertical-align: middle; filter: brightness(0) invert(1); opacity: 0.92; }
+/* a page sizes the mark with --cm-h; the optical factor (--opt) scales on top, the margins keep the line height */
+.cmark { display: inline-block; height: calc(var(--cm-h, 0.8em) * var(--opt, 1)); margin-block: calc(var(--cm-h, 0.8em) * (1 - var(--opt, 1)) / 2); width: auto; vertical-align: middle; filter: brightness(0) invert(1); opacity: 0.92; }
 .cmark-t { font-weight: 700; }
 </style>

@@ -60,3 +60,42 @@ test('Xbox 360 title IDs are named from x360db, alternative IDs too, cached (0.9
   assert.strictEqual(asked, 1);
   fs.rmSync(dir, { recursive: true, force: true });
 });
+
+test('PS5 (KytyPS5): trophy package read, unlocks from _SaveData, names from the game folder (0.9.37)', () => {
+  const fs = require('fs'), os = require('os'), path = require('path');
+  const H = fs.mkdtempSync(path.join(os.tmpdir(), 'kyty-'));
+  // a .ucp as KytyPS5 reads it: magic, version 1, size, count, table offset, 0x40-byte entries from table + 0x20
+  const files = [
+    ['tropconf.json', Buffer.from(JSON.stringify({ defaultLanguage: 'en-US', trophies: [{ id: 0, grade: 'P' }, { id: 1, grade: 'B', hidden: true }, { id: 2, grade: 'G' }] }))],
+    ['tropmeta_en-US.json', Buffer.from(JSON.stringify({ metadata: { titleMetadata: { name: 'Space Bot' }, trophyMetadata: [{ id: 0, name: 'All Done', detail: 'Everything' }, { id: 1, name: 'First Jump', detail: 'Jump' }, { id: 2, name: 'Gold Run' }] } }))],
+    ['trop0001.png', PNG],
+  ];
+  const toc = 0x40, head = Buffer.alloc(toc + 0x20 + files.length * 0x40);
+  head.writeUInt32BE(0xb228c60a, 0); head.writeUInt32BE(1, 4); head.writeUInt32BE(files.length, 0x10); head.writeUInt32BE(toc, 0x14);
+  let pos = head.length;
+  files.forEach(([n, d], i) => { const e = toc + 0x20 + i * 0x40; head.write(n, e, 'latin1'); head.writeBigUInt64BE(BigInt(pos), e + 0x20); head.writeBigUInt64BE(BigInt(d.length), e + 0x28); pos += d.length; });
+  head.writeBigUInt64BE(BigInt(pos), 8);
+  const ucp = Buffer.concat([head, ...files.map((f) => f[1])]);
+  const u = T.readUcp(ucp);
+  assert.strictEqual(u.title, 'Space Bot');
+  assert.deepStrictEqual(u.trophies.map((t) => [t.id, t.grade, t.name]), [[0, 'P', 'All Done'], [1, 'B', 'First Jump'], [2, 'G', 'Gold Run']]);
+  assert.strictEqual(T.readUcp(Buffer.alloc(100)), null);
+  // KytyPS5's folder and a downloaded game with that title ID
+  const kyty = path.join(H, 'Applications/KytyPS5'), game = path.join(H, 'roms/ps5/Space Bot');
+  fs.mkdirSync(path.join(kyty, '_SaveData/PPSA01234'), { recursive: true });
+  fs.writeFileSync(path.join(kyty, '_SaveData/PPSA01234/trophies_1000_0.json'), JSON.stringify({ unlockedTrophies: [1, 2] }));
+  fs.mkdirSync(path.join(game, 'sce_sys/trophy2'), { recursive: true });
+  fs.writeFileSync(path.join(game, 'sce_sys/param.json'), JSON.stringify({ titleId: 'PPSA01234' }));
+  fs.writeFileSync(path.join(game, 'sce_sys/trophy2/trophy00.ucp'), ucp);
+  T.setTrpCacheDir(path.join(H, 'cache')); T.setIconCacheDir(path.join(H, 'icons')); T.setPs5Games(() => [game]);
+  assert.strictEqual(T.validate('kytyps5', kyty), kyty);
+  const [g] = T.readSource('kytyps5', [kyty]);
+  assert.strictEqual(g.set, 'PPSA01234_00'); assert.strictEqual(g.title, 'Space Bot');
+  assert.deepStrictEqual(g.trophies.map((t) => [t.name, t.unlocked]), [['All Done', false], ['First Jump', true], ['Gold Run', true]]);
+  assert.ok(g.trophies[1].icon.startsWith('romimg://') && g.trophies[1].time > 0);
+  // first-seen times stay put on the next read
+  const t1 = g.trophies[1].time; T.setPs5Games(() => []);
+  const [g2] = T.readSource('kytyps5', [kyty]);
+  assert.strictEqual(g2.trophies.find((t) => t.id === 1).time, t1);
+  assert.strictEqual(g2.title, 'Space Bot'); // remembered name without the game folder
+});

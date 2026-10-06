@@ -74,6 +74,16 @@
                 <button class="btn small" data-focus @click="browseRoot"><Icon name="mdiFolderOpen" :size="18" />Browse</button>
               </div>
             </div>
+            <!-- games on more than one drive (0.9.38): extra ES-DE roms folders; one short block, the rest is automatic.
+                 Android has its own drives below (Install to) -->
+            <div v-if="!IS_ANDROID" class="pathrow glass" style="flex-wrap: wrap">
+              <div style="min-width: 0; flex: 1"><div class="lbl2">Games on Other Drives</div>
+                <div v-if="!xroots.length" class="muted small">Add an SD card or another drive: Cartridge makes a games folder on it and adds it to your emulators.</div>
+                <div v-for="r in xroots" :key="r.path" class="xroot"><span class="mono">{{ r.path }}</span><span class="muted small">{{ r.here ? `${bytes(r.free)} free` : 'Not plugged in' }}</span><button class="btn small" data-focus @click="removeRoot(r)"><Icon name="mdiClose" :size="16" />Remove</button></div>
+                <div v-if="xroots.length" class="row" style="margin-top: 8px; gap: 8px"><span class="muted small">New games go to</span><div class="seg"><button data-focus :class="{ on: rootTo === 'most' }" @click="setRootTo('most')">Most Free Space</button><button v-for="r in allRoots" :key="r.path" data-focus :class="{ on: rootTo === r.path }" @click="setRootTo(r.path)">{{ r.main ? 'This Device' : rootLabel(r.path) }}</button></div></div>
+              </div>
+              <button class="btn small" data-focus @click="addRoot"><Icon name="mdiHarddiskPlus" :size="18" />Add a Drive</button>
+            </div>
             <div class="pathrow glass">
               <div style="min-width: 0"><div class="lbl2">BIOS folder</div><div class="mono">{{ store.config.biosPath || 'Not set' }}</div></div>
               <button class="btn small" data-focus @click="browseBios"><Icon name="mdiFolderOpen" :size="18" />Browse</button>
@@ -108,6 +118,23 @@
                 <span class="l-end"><Btn b="A" />{{ { collections: 'See them', health: 'Shortcut health', setup: 'Emulator setup', romm: 'RomM settings', fpsteam: 'Allow' }[i.fix] }}</span>
               </button>
             </div>
+            <!-- 0.9.37 (owner: BIOS and firmware put where each emulator reads it, by itself): each console that needs some -->
+            <div class="subh">BIOS and Firmware</div>
+            <div v-if="!biosSt" class="muted small"><Icon name="mdiSync" :size="16" class="spin" /> Checking…</div>
+            <template v-else>
+              <p class="muted small" style="margin: 0">Cartridge puts them in place by itself: copied into every emulator that reads them from a folder, PS3 and Vita firmware installed in RPCS3 and Vita3K, Switch keys and firmware put where Eden and its family read them. It runs after an emulator is installed and after files come from RomM. Nothing is ever replaced.</p>
+              <div class="stack">
+                <div v-for="b in biosSt.list" :key="b.key" class="lrow" data-focus tabindex="0">
+                  <Icon :name="b.ok ? 'mdiCheckCircleOutline' : 'mdiChip'" :size="24" :style="{ color: b.ok ? '#7fe0a0' : b.optional ? 'var(--muted)' : '#ffd978' }" />
+                  <div class="l-mid"><b>{{ b.console }} · {{ b.label }}</b><span class="l-sub">{{ b.ok ? 'In place: ' + shortHome(b.where) : b.optional ? 'Optional: most emulators run without it' : b.hint || ('Not where its emulators read it' + (b.names?.length ? ` (${b.names.slice(0, 3).join(', ')})` : '')) }}</span></div>
+                  <span class="status" :class="b.ok ? 'ok' : b.optional ? '' : 'warn'">{{ b.ok ? 'Ready' : b.optional ? 'Optional' : 'Missing' }}</span>
+                </div>
+              </div>
+              <div class="row wrap">
+                <button class="btn primary" data-focus :disabled="!!biosBusy" @click="biosPlace"><Icon :name="biosBusy === 'place' ? 'mdiSync' : 'mdiFolderArrowRightOutline'" :class="{ spin: biosBusy === 'place' }" />{{ biosBusy === 'place' ? 'Putting Them in Place…' : 'Put Everything in Place' }}</button>
+                <button class="btn" data-focus :disabled="!!biosBusy" @click="biosGet"><Icon :name="biosBusy === 'get' ? 'mdiSync' : 'mdiDownload'" :class="{ spin: biosBusy === 'get' }" />{{ biosBusy === 'get' ? 'Getting Them from RomM…' : 'Get Them from RomM' }}</button>
+              </div>
+            </template>
             <div class="stack">
               <button class="lrow" data-focus @click="openModal('installer')"><Icon name="mdiPackageDown" :size="24" /><div class="l-mid"><b>Cartridge Installer</b><span class="l-sub">An Emulation folder on the drive you pick, then the emulators you tick, set up like EmuDeck</span></div><Icon name="mdiChevronRight" :size="22" class="muted" /></button>
               <button class="lrow" data-focus @click="go('emu-setup')"><Icon name="mdiRadar" :size="24" /><div class="l-mid"><b>Emulator setup</b><span class="l-sub">Find emulators wherever they are, pick one per console, check BIOS and access</span></div><Icon name="mdiChevronRight" :size="22" /></button>
@@ -210,7 +237,7 @@
 
             <div class="subh"><Icon name="mdiPaletteOutline" :size="20" />Colour</div>
             <div class="swatches">
-              <button v-for="(t, k) in THEMES" :key="k" class="swatch" data-focus :class="{ on: (ui.theme || 'cartridge') === k }" :style="{ background: `linear-gradient(135deg, ${t.grad[0]}, ${t.grad[2]} 60%, ${t.grad[4]})` }" :title="t.label" @click="saveConfig({ ui: { theme: k, gameTheme: null } })"><i :style="{ background: t.accent[0] }" /><span>{{ t.label }}</span></button>
+              <button v-for="(t, k) in THEMES" :key="k" class="swatch" data-focus :class="{ on: (ui.theme || 'cartridge') === k, ink: t.light }" :style="{ background: `linear-gradient(135deg, ${t.grad[0]}, ${t.grad[2]} 60%, ${t.grad[4]})` }" :title="t.label" @click="saveConfig({ ui: { theme: k, gameTheme: null } })"><i :style="{ background: t.accent[0] }" /><span>{{ t.label }}</span></button>
               <button class="swatch custom" data-focus :class="{ on: ui.theme === 'custom' }" :style="ui.customColor ? { background: `linear-gradient(135deg, ${customT.grad[0]}, ${customT.grad[2]} 60%, ${customT.grad[4]})` } : {}" @click="pickColor"><Icon name="mdiEyedropperVariant" :size="18" /><span>Custom</span></button>
             </div>
             <!-- the background is part of the theme (owner, 0.9.21: one page, not two) -->
@@ -235,7 +262,8 @@
               </button>
               <button v-if="Object.values(ui.colors || {}).some(Boolean)" class="btn small" data-focus @click="saveConfig({ ui: { colors: { highlight: '', buttons: '', bars: '', background: '' } } })"><Icon name="mdiRestore" :size="16" />Use theme colours</button>
             </div>
-            <div class="row"><span class="lbl">Panels</span><div class="seg"><button v-for="(v, k) in SURFACES" :key="k" data-focus :class="{ on: (ui.surface || 'solid') === k }" @click="saveConfig({ ui: { surface: k } })">{{ v.label }}</button></div></div>
+            <div class="row"><span class="lbl">Background</span><div class="seg"><button v-for="(v, k) in SURFACES" :key="k" data-focus :class="{ on: (ui.surface || 'solid') === k }" @click="saveConfig({ ui: { surface: k, elements: elementsOf(ui) } })">{{ v.label }}</button></div></div>
+            <div class="row"><span class="lbl">Elements</span><div class="seg"><button v-for="(v, k) in ELEMENTS" :key="k" data-focus :class="{ on: elementsOf(ui) === k }" @click="saveConfig({ ui: { elements: k } })">{{ v.label }}</button></div></div>
             <div class="row"><span class="lbl">Text</span><div class="seg"><button v-for="(v, k) in TEXTS" :key="k" data-focus :class="{ on: (ui.text || 'normal') === k }" @click="saveConfig({ ui: { text: k } })">{{ v.label }}</button></div></div>
 
             </template>
@@ -255,7 +283,7 @@
             <div class="row"><span class="lbl">Placement</span><div class="seg"><button v-for="m in BAR_POS" :key="m.v" data-focus :class="{ on: (ui.barPos || 'bottom') === m.v }" @click="saveConfig({ ui: { barPos: m.v } })">{{ m.l }}</button></div></div>
             <div class="row"><span class="lbl">Tabs</span><div class="seg"><button v-for="m in BAR_ALIGN" :key="m.v" data-focus :class="{ on: (ui.barAlign || 'center') === m.v }" @click="saveConfig({ ui: { barAlign: m.v } })">{{ m.l }}</button></div></div>
             <div class="row"><span class="lbl">Style</span><div class="seg"><button v-for="m in BAR_STYLE" :key="m.v" data-focus :class="{ on: (ui.barStyle || 'pill') === m.v }" @click="saveConfig({ ui: { barStyle: m.v } })">{{ m.l }}</button></div></div>
-            <div v-if="(ui.barStyle || 'pill') === 'pill'" class="row"><span class="lbl">Colour</span><div class="seg"><button v-for="m in DOCK_COLOR" :key="m.v" data-focus :class="{ on: (ui.dockColor || 'black') === m.v }" @click="saveConfig({ ui: { dockColor: m.v } })">{{ m.l }}</button></div></div>
+            <div v-if="(ui.barStyle || 'pill') === 'pill'" class="row"><span class="lbl">Colour</span><div class="seg"><button v-for="m in DOCK_COLOR" :key="m.v" data-focus :class="{ on: dockOf(ui) === m.v }" @click="saveConfig({ ui: { dockColor: m.v } })">{{ m.l }}</button></div></div>
             <Toggle :model-value="ui.hints === true" label="Button hints" desc="A strip along the bottom with what each button does on this page (A Open, Y Search…)" @update:model-value="(v) => saveConfig({ ui: { hints: v } })" />
             <div class="subh"><Icon name="mdiViewGridOutline" :size="20" />Games &amp; Cards</div>
             <div class="row"><span class="lbl">Box art size</span><div class="seg"><button v-for="(v, k) in CARD_SIZES" :key="k" data-focus :class="{ on: (ui.gridSize || 'md') === k }" @click="saveConfig({ ui: { gridSize: k } })">{{ v.label }}</button></div></div>
@@ -340,11 +368,7 @@
 
             <button class="lrow adv-tg" data-focus @click="lookAdv = !lookAdv"><Icon name="mdiTuneVariant" :size="22" /><div class="l-mid"><b>Advanced</b></div><Icon :name="lookAdv ? 'mdiChevronUp' : 'mdiChevronDown'" :size="22" /></button>
             <template v-if="lookAdv">
-            <!-- Electron's GPU or software rendering: the desktop's choice, not Android's WebView -->
-            <template v-if="!IS_ANDROID">
-            <div class="row"><span class="lbl">Rendering</span><div class="seg"><button v-for="g in gfx" :key="g.v" data-focus :class="{ on: (store.config.graphics || 'auto') === g.v }" @click="setGraphics(g.v)">{{ g.l }}</button></div></div>
-            <p class="muted small" style="margin-top: -6px">Auto uses the GPU from the app menu and on big screens like TVs. On handheld-size screens launched from Steam or Game Mode it uses software rendering, which is proven there. GPU Always uses the GPU there too, which is much smoother on handhelds with a strong GPU: after the restart Cartridge asks if it looks right, and goes back to Auto by itself if you can't answer. If the GPU ever fails, Cartridge switches to Compatible by itself. Compatible never uses the GPU.</p>
-            </template>
+            <!-- 0.9.41 (owner): no Rendering choice any more, Cartridge always uses the GPU -->
             <div class="row"><button class="btn" data-focus @click="call('app:fullscreen')"><Icon name="mdiFullscreen" />Toggle fullscreen</button><button class="btn" data-focus @click="clearCache"><Icon name="mdiImageRemove" />Clear image cache</button></div>
             </template>
             </template>
@@ -510,6 +534,7 @@
               <p class="muted small" style="margin: 0">Shown on your other devices next to games you played here and trophies you unlocked here, for example "Steam Deck" or "Living Room PC".</p>
             </div>
             <div class="row"><button class="btn" data-focus @click="store.welcoming = true"><Icon name="mdiHandWave" />Run the Welcome Again</button><span class="muted small">Starts from your current settings. Nothing is reset.</span></div>
+            <div class="row"><button class="btn" data-focus @click="openTour({ start: activeTabs().includes('start') })"><Icon name="mdiGestureTapButton" />Take the Tour</button><span class="muted small">Try each control yourself, a step at a time.</span></div>
             <ServerStatus />
             <ControllerTest />
             <ReportProblem />
@@ -529,11 +554,11 @@
 
 <script setup>
 import { computed, defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { store, call, go, tab, saveConfig, pickFolder, choose, confirm, toast, openModal, bytes, ago, resync, scanServer, allRoms, romById, cover, resetLogos, askText, activeTabs, TAB_DEFS, consoleName, MEDIA_DEFAULT } from '../store.js';
+import { store, call, go, tab, saveConfig, pickFolder, choose, confirm, toast, openModal, bytes, ago, resync, scanServer, allRoms, romById, cover, resetLogos, askText, activeTabs, TAB_DEFS, consoleName, MEDIA_DEFAULT, openTour } from '../store.js';
 import PhoneRemote from './PhoneRemote.vue';
 import { useView } from '../useView.js';
-import { input, focusFirst, setPointerPref, setRumble, rumble } from '../nav.js';
-import { THEMES, SURFACES, TEXTS, FONTS, CARD_SHAPES, CARD_SIZES, DENSITIES, themeFrom, themeOf, paletteOf } from '../themes.js';
+import { input, focusFirst, setPointerPref, setRumble, rumble, stopScroll } from '../nav.js';
+import { THEMES, SURFACES, ELEMENTS, elementsOf, dockOf, TEXTS, FONTS, CARD_SHAPES, CARD_SIZES, DENSITIES, themeFrom, themeOf, paletteOf } from '../themes.js';
 import { BACKGROUNDS, RENDERERS, LEGACY_ART, bgPreview } from '../bgRenderers.js';
 import { setSoundEnabled, setSoundStyle, previewSound, SOUND_PACKS } from '../sfx.js';
 import Icon from '../components/Icon.vue';
@@ -758,7 +783,7 @@ function moveTab(n, d) {
   [l[i], l[j]] = [l[j], l[i]];
   saveConfig({ ui: { tabs: l } });
 }
-const LOOK_KEYS = ['theme', 'customColor', 'colors', 'idle', 'surface', 'text', 'font', 'bgStyle', 'wallDim', 'cardShape', 'density', 'gridSize', 'cardTitles', 'mediaBar', 'mediaSize', 'logos', 'motion', 'effects', 'sounds', 'soundPack', 'volume', 'rumble'];
+const LOOK_KEYS = ['theme', 'customColor', 'colors', 'idle', 'surface', 'elements', 'text', 'font', 'bgStyle', 'wallDim', 'cardShape', 'density', 'gridSize', 'cardTitles', 'mediaBar', 'mediaSize', 'logos', 'motion', 'effects', 'sounds', 'soundPack', 'volume', 'rumble'];
 const presets = computed(() => store.config.lookPresets || []);
 const presetStyle = (p) => { const g = themeOf(p.ui).grad; return { background: `linear-gradient(135deg, ${g[0]}, ${g[2]} 60%, ${g[4]})` }; };
 function lookNow() { const o = {}; for (const k of LOOK_KEYS) if (ui.value[k] !== undefined) o[k] = JSON.parse(JSON.stringify(ui.value[k])); return o; }
@@ -791,9 +816,8 @@ async function presetMenu(p, i) {
 }
 async function resetLook() {
   if (!(await confirm('Reset Look & Feel?', 'Colour, background, fonts, cards, motion and sounds go back to the defaults.', 'Reset'))) return;
-  await saveConfig({ ui: { colors: { highlight: '', buttons: '', bars: '', background: '' }, theme: 'cartridge', customColor: '', surface: 'solid', text: 'normal', font: 'cartridge', cardShape: 'rounded', density: 'normal', cardTitles: true, gridSize: 'md', bgStyle: 'solid', motion: 'normal', effects: 'auto', soundPack: 'soft', volume: 'medium', rumble: 'none' } });
+  await saveConfig({ ui: { colors: { highlight: '', buttons: '', bars: '', background: '' }, theme: 'cartridge', customColor: '', surface: 'solid', elements: 'plain', text: 'normal', font: 'cartridge', cardShape: 'rounded', density: 'normal', cardTitles: true, gridSize: 'md', bgStyle: 'solid', motion: 'normal', effects: 'auto', soundPack: 'soft', volume: 'medium', rumble: 'none' } });
 }
-const gfx = [{ v: 'auto', l: 'Auto' }, { v: 'gpu', l: 'GPU Always' }, { v: 'software', l: 'Compatible' }];
 const pointers = [{ v: 'auto', l: 'Auto' }, { v: 'touch', l: 'Touch' }, { v: 'mouse', l: 'Mouse' }];
 const homeAchOpts = [{ v: 'all', l: 'All' }, { v: 'ra', l: 'RetroAchievements' }, { v: 'trophies', l: 'Trophies' }, { v: 'off', l: 'Off' }];
 const homeAch = computed(() => ui.value.homeAch || (ui.value.raOnHome === false ? 'trophies' : 'all'));
@@ -868,7 +892,7 @@ const ISSUE_ICON = { collections: 'mdiFolderSyncOutline', moved: 'mdiLinkVariant
 async function loadIssues() { issues.value = await call('issues:list').catch(() => []); store.issues = issues.value.length; texEmus.value = (await call('addons:emulators').catch(() => null)) || []; }
 const texEmus = ref([]);
 // Add-ons page (0.9.17): installed games of consoles with add-ons, by console, and what Cartridge installed
-const ADDON_SLUGS = /^(ps2|psx|ngc|gamecube|wii|psp|3ds|n3ds|switch|wiiu)$/i;
+const ADDON_SLUGS = /^(ps2|psx|ngc|gamecube|wii|psp|3ds|n3ds|switch|wiiu|ps4)$/i;
 const addonGames = computed(() => {
   const by = new Map();
   for (const r of allRoms()) {
@@ -894,7 +918,7 @@ function presentText(id) {
   return f.map((x) => `${x.mods ? 'Mods' : 'Texture pack'} in ${x.name}, ${BY_TEXT[x.by]}${!x.mods && !x.on ? ' (textures are off there)' : ''}`).join(' · ');
 }
 async function removeAddon(a) {
-  if (!(await confirm('Remove this add-on?', `${a.name} (${a.game})\n\nOnly the ${a.count} files Cartridge put in ${a.emuName}’s folder are deleted.`, 'Remove', true))) return;
+  if (!(await confirm('Delete this add-on?', `${a.name} (${a.game})\n\nOnly the ${a.count} files Cartridge put in ${a.emuName}’s folder are deleted.`, 'Delete', true))) return;
   try { await call('addons:remove', { key: a.key }); toast('Add-on removed', 'ok', 2500); } catch (e) { toast(e.message, 'error', 5000); }
   loadAddons();
 }
@@ -904,6 +928,26 @@ async function flipTextures(e) {
   if (e.on && !e.mine) return toast(`Custom textures were turned on in ${e.name}. Turn them off there if you want to.`, 'info', 4500);
   try { await call('addons:setTextures', { root: e.root, on: !e.on }); toast(e.on ? `Custom textures off in ${e.name}` : `Custom textures on in ${e.name}`, 'ok', 3000, 'mdiTextureBox'); texEmus.value = await call('addons:emulators'); }
   catch (err) { toast(err.message, 'error', 5000); }
+}
+// BIOS and firmware (0.9.37)
+const biosSt = ref(null), biosBusy = ref('');
+const shortHome = (p) => String(p || '').replace(store.info?.home || '\u0000', '~');
+async function loadBios() { biosSt.value = await call('bios:status').catch(() => ({ list: [] })); }
+async function biosPlace() {
+  biosBusy.value = 'place';
+  try {
+    const r = await call('bios:setup', { install: true });
+    const done = r.list.filter((x) => x.copied || x.installed);
+    toast(done.length ? `Put in place: ${done.map((x) => x.label).join(', ')}` : r.list.some((x) => !x.ok && !x.optional) ? 'Nothing new to put in place: get the missing ones from RomM' : 'Everything is already in place', done.length ? 'ok' : 'info', 5000, 'mdiChip');
+  } catch (e) { toast(e.message, 'error', 6000); }
+  biosBusy.value = ''; loadBios();
+}
+async function biosGet() {
+  biosBusy.value = 'get';
+  toast('Getting BIOS and firmware from RomM. PS3 and Vita firmware takes a minute to install.', 'info', 5000, 'mdiChip');
+  try { const r = await call('bios:all'); const bad = r.filter((x) => x.error); toast(!r.length ? 'Your RomM server has no BIOS or firmware files.' : `${r.length - bad.length} console${r.length - bad.length === 1 ? '' : 's'} done${bad.length ? `. Not done: ${bad.map((x) => `${x.name} (${x.error})`).join(', ')}` : ''}`, bad.length ? 'info' : 'ok', 7000, 'mdiChip'); }
+  catch (e) { toast(e.message, 'error', 6000); }
+  biosBusy.value = ''; loadBios();
 }
 async function fixIssue(i) {
   if (i.fix === 'health') return go('steam-health');
@@ -922,7 +966,7 @@ async function fixIssue(i) {
   if (v !== 'fix') return;
   try { const r = await call('steam:fixCollections'); toast(r.live ? `${r.fixed} put in their collections` : 'Putting them in their collections: Steam restarts for a moment', 'ok', 3500, 'mdiSteam'); loadIssues(); } catch (e) { toast(e.message, 'error'); }
 }
-watch(sec, (v) => { store.settingsSection = v; if (v === 'emu' && !IS_ANDROID) loadIssues(); }, { immediate: true }); // Android: AndroidEmulators has its own
+watch(sec, (v) => { store.settingsSection = v; if (v === 'emu' && !IS_ANDROID) { loadIssues(); loadBios(); } }, { immediate: true }); // Android: AndroidEmulators has its own
 
 
 function enter() { focusFirst(paneEl.value); }
@@ -961,6 +1005,30 @@ async function browseRoot() {
   await saveConfig({ romsRoot: p });
   await afterPath();
 }
+// games on more than one drive (0.9.38)
+const allRoots = ref([]), rootTo = ref('most');
+// a drive's name from its folder: /run/media/deck/SD/Emulation/roms -> SD
+const rootLabel = (p) => { const parts = p.split('/').filter(Boolean); while (parts.length > 1 && /^(roms|emulation)$/i.test(parts[parts.length - 1])) parts.pop(); return parts[parts.length - 1] || p; };
+const xroots = computed(() => allRoots.value.filter((r) => !r.main));
+async function loadRoots() { const r = await call('roots:list').catch(() => null); if (r) { allRoots.value = r.roots; rootTo.value = r.to; } }
+async function addRoot() {
+  const dir = await pickFolder({ title: 'Choose a drive (or a folder on it)', subtitle: 'An Emulation/roms folder is made there, with a folder per console', start: '/run/media' });
+  if (!dir) return;
+  try {
+    const r = await call('roots:add', { dir });
+    toast(`Games folder ready: ${r.root}${r.lists.length ? `. Added to ${r.lists.join(', ')}` : ''}`, 'ok', 5000, 'mdiHarddiskPlus');
+  } catch (e) { toast(e.message, 'error', 5000); }
+  await loadRoots(); storageKey.value++;
+}
+async function removeRoot(r) {
+  if (!(await confirm('Stop using this folder?', `${r.path}\n\nNothing is deleted: its games stay on the drive, and Cartridge stops looking there.`, 'Stop Using'))) return;
+  await call('roots:remove', { dir: r.path }); await loadRoots(); storageKey.value++;
+}
+async function setRootTo(v) { await call('roots:to', { to: v }); rootTo.value = v; }
+watch(sec, (v) => { if (v === 'storage') loadRoots(); }, { immediate: true });
+// 0.9.38 (owner: Look & Feel opened at the depth Achievements was scrolled to): every section shares the one .pane
+// scroll box and only its contents change, so a new section starts at the top
+watch(sec, () => { const el = paneEl.value; if (el) { stopScroll(el); el.scrollTop = 0; } });
 async function browseBios() {
   const p = await pickFolder({ title: 'Choose your BIOS folder', start: store.config.biosPath || undefined });
   if (p) await saveConfig({ biosPath: p });
@@ -1085,11 +1153,6 @@ async function rollBack() {
 }
 async function checkUpdates() { try { await call('update:check'); } catch (e) { toast(e.message, 'info', 4000); } }
 async function setPointer(v) { await saveConfig({ ui: { pointer: v } }); setPointerPref(v === 'auto' && store.info?.gamescope ? 'touch' : v); }
-async function setGraphics(v) {
-  if ((store.config.graphics || 'auto') === v) return;
-  await saveConfig({ graphics: v, gpuKept: false }); // GPU Always starts as a trial that has to be confirmed
-  if (await confirm('Restart Cartridge?', 'The rendering change takes effect after a restart.', 'Restart now')) call('app:relaunch');
-}
 // is Cartridge itself in Steam (null until known)
 const selfAdded = ref(null);
 // the Cartridge cards wait for the rest of the Steam page, so it all appears at once (0.9.32)
@@ -1141,6 +1204,7 @@ onMounted(() => {
 .lbl2 { font-size: var(--t-xs); color: var(--muted); margin-bottom: 4px; font-weight: 600; }
 .small { font-size: var(--t-xs); }
 .wrap { flex-wrap: wrap; }
+.xroot { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 6px; }
 .pathrow { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 18px; }
 .plist { display: flex; flex-direction: column; gap: 6px; }
 .prow { display: grid; grid-template-columns: 30px 210px 1fr auto; align-items: center; gap: 14px; padding: 10px 14px; border-radius: var(--r-md); background: var(--s2); }
@@ -1155,6 +1219,7 @@ onMounted(() => {
 .swatch.on { box-shadow: 0 0 0 3px var(--s0), 0 0 0 5px rgba(255, 255, 255, 0.45); }
 .swatch { position: relative; }
 .swatch i { position: absolute; top: 6px; right: 6px; width: 12px; height: 12px; border-radius: 50%; box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.7); }
+.swatch.ink { color: #1d1e22; text-shadow: none; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12); } /* Light's swatch (0.9.38) */
 .swatch.custom { background: conic-gradient(from 90deg, #f55, #fd5, #5f8, #5df, #85f, #f5c, #f55); flex-direction: column; justify-content: space-between; align-items: flex-start; }
 .btn-demo { display: inline-flex; gap: 4px; vertical-align: middle; margin-left: 6px; }
 .finetune { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }

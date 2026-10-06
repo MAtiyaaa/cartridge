@@ -60,3 +60,25 @@ test('refuses home itself, folders inside each other, other links and a folder a
   assert.ok(fs.statSync(path.join(H, 'linkdir/a')).isDirectory());
   assert.throws(() => L.unlink({ from: path.join(H, 'linkdir/a'), to }), /left as it is/);
 });
+
+test('Find and Link Saves copies only the games the original lacks, whole, and finds a fork folder further down', () => {
+  const FL = require('../electron/folderLinks');
+  const H = fs.mkdtempSync(path.join(os.tmpdir(), 'cartridge-merge-'));
+  const fork = path.join(H, 'fork/savedata'), orig = path.join(H, 'orig/savedata');
+  for (const [d, f, t] of [[fork, 'CUSA00001/s.dat', 'fork1'], [fork, 'CUSA00002/s.dat', 'fork2'], [fork, 'CUSA00002/extra.dat', 'forkx'], [orig, 'CUSA00002/s.dat', 'orig2']]) { fs.mkdirSync(path.dirname(path.join(d, f)), { recursive: true }); fs.writeFileSync(path.join(d, f), t); }
+  const r = FL.mergeInto(fork, orig);
+  assert.deepStrictEqual(r.copied, ['CUSA00001']);
+  assert.deepStrictEqual(r.skipped, ['CUSA00002']);
+  assert.strictEqual(fs.readFileSync(path.join(orig, 'CUSA00001/s.dat'), 'utf8'), 'fork1');
+  assert.strictEqual(fs.readFileSync(path.join(orig, 'CUSA00002/s.dat'), 'utf8'), 'orig2');
+  assert.ok(!fs.existsSync(path.join(orig, 'CUSA00002/extra.dat'))); // never a mix of both
+  // Switch: the all-zero save-type folder is gone into, title IDs inside are games
+  const sf = path.join(H, 'sf/nand/user/save/0000000000000000/AB12'), so = path.join(H, 'so/nand/user/save/0000000000000000/AB12');
+  fs.mkdirSync(path.join(sf, '0100000000010000'), { recursive: true }); fs.writeFileSync(path.join(sf, '0100000000010000/a'), 'x');
+  fs.mkdirSync(path.join(so, '01000000000AAAA0'), { recursive: true });
+  assert.deepStrictEqual(FL.mergeInto(path.join(H, 'sf/nand/user/save'), path.join(H, 'so/nand/user/save')).copied, ['0000000000000000/AB12/0100000000010000']);
+  // the fork's folder a few levels under its program
+  const exe = path.join(H, 'apps/GR2/shadPS4-gr2.AppImage');
+  fs.mkdirSync(path.join(H, 'apps/GR2/data/portable/user/savedata'), { recursive: true }); fs.writeFileSync(exe, '');
+  assert.strictEqual(FL.searchForkFolder(exe, 'user/savedata'), path.join(H, 'apps/GR2/data/portable/user/savedata'));
+});

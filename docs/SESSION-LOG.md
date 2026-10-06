@@ -6,6 +6,60 @@ The branch for 0.9.3 work is `claude/relaxed-fermat-30pigp`. Pull it before star
 
 ---
 
+## 5 Oct 2026 · 0.9.43 Steady Home
+- Owner: the screen shakes scrolling games on Home fast. Measured in Chromium (shelves' top per frame while pressing right/left every 70 ms, games with long titles and summaries): it jumped 70 px for ~5 frames on long ones. Cause and fix in CLAUDE.md 0.9.43. After: one position for every frame at 1280x800 and 1920x1080; the header keeps its old height (300 / 367 px); a long text title fits in two lines.
+- GitHub had no runners for about an hour (billing was fine, the owner checked: public repo, 0 of 2,000 minutes); 0.9.42 was merged so its release ran as soon as they came back.
+
+## 5 Oct 2026 · 0.9.42 Glass (built; carries 0.9.41)
+- 0.9.41 was never published: the Test build sat queued 15 min without a runner and GitHub cancelled it, twice (no step ran; likely Actions minutes or a spending limit on the account). PR #59 stays open and 0.9.42 goes in it, with 0.9.41's notes inside 0.9.42's release notes.
+- Owner: "build the next update based on everything so far" and asked what I recommend for the Game Shelf. Recommended B (Display case): the only one that is a shelf, it scales to every tile size by adding cases, and A's 3D strip and reflection read badly on small tiles while C repeats the cover rows and Spotlight. Built B with A's turn-out (rotateY on a spring).
+- Glass mode with the liquid-glass skill (owner: only that skill for glass): glass only on the navigation and control layer, content solid (`ELEMENTS.glass.glassA` 1), one material (`--lg-*`), containers don't blur again, prominent glass for focused and primary, pressed glow, reduced transparency/contrast/light effects. Dock glass by default with Glass elements (`themes.dockOf`). Edge refraction (SVG displacement in backdrop-filter) tried and left out: it shifted the whole area, not the rim.
+- Checked in Chromium: the shelf at 5x2, 3x2 and 8x2 in Cartridge and Light; Glass on Start, Home, Settings, the game page and its More sheet in Cartridge and Light.
+
+## 5 Oct 2026 · 0.9.41 Light, Rebuilt (built; never published, see 0.9.42)
+- Owner's photos and list: emulator widget emptied after closing shadPS4 (`ser` dropped `emu`); page overview page 1 placeholder (snapshots only of shown pages), lag across rows (transform fight + full-board blur), up/down; Console at a Glance empty space and 1x2 clipping; tick instead of "On this device"; Light glitch with Glass/OLED Black background (OLED Black removed from Background, into the OLED colour); OLED looked like Cartridge; Light "looks off" (rebuilt: raised near-white cards); What's New see-through and no right-stick scroll; More sheet popping twice (keyframe after the transition, measured: sheet-up started at 274 ms); GPU always (owner: GPU Always cured the handheld's sluggishness).
+- Liquid glass skill installed in `.claude/skills/liquid-glass` for the next update, Glass mode only (owner).
+- Checked in Chromium: overview with 6 pages (all snapshotted, focus kept, up/down, 0 slow frames), Console at a Glance at 1x2/2x2/2x3/3x2 (no cover cut, stats never overlap), Light and OLED on every main page, right-stick scroll in What's New (0 to 855 px and back), the sheet's animation timeline before and after, focus-ring clipping audit (none real).
+- Still waiting on the owner: the Game Shelf redesign pick (A Cover Flow, B Display case, C Fan).
+
+## 5 Oct 2026 · 0.9.40 Pictures That Load (built and released)
+- Owner's photo of the GIF picker: previews not loading, the focus outline clipped, "PS4" finding nothing. Previews now go through romimg:// (fetched in main with webFetch), Commons added beside Openverse, short names spelled out, ring drawn inside. Openverse and Commons are blocked from the container: tested with fakes only, the owner must try a search on the device.
+- Game Shelf: console logo in the label now. The owner asked for a full redesign; three mockups (Cover Flow, Display case, Fan) sent, waiting for a pick before building.
+
+## 5 Oct 2026 · 0.9.39 Easy on the Eyes (built and released)
+- Owner's photos of the disc widget: the picture behind the disc only on wide tiles, and the spin (a 3 s turn on focus on top of the slow one) made them feel sick. One slow turn a minute, no focus spin, picture at every size. Checked in Chromium with three disc tiles (wide, big, small square).
+
+## 5 Oct 2026 · 0.9.38 More Drives, Clearer Glass (built and released)
+- Owner's answers on the pending list, plus a new list with photos. Built: multi-drive (item 17, owner: only if confident; tested in the app with two roots, folder creation and PCSX2.ini), BIOS from RomM by itself after a download (item 7: the code only placed files already on the device), shadPS4/SharpEmu sheets and icons, Flatpak hang (async remote-add, sudo -S with a password typed in Cartridge, time limits; tested with a fake sudo), tour glyphs and pages, sync ring, Elements Plain/Glass with tinted liquid glass (apple-design skill, owner asked), shadPS4 mods (`<game>-mods` overlay read from shadPS4's fs.cpp).
+- Checked in code, no change: add-on site downloads (item 11: caught, page closed, extracted and placed per emulator by content), GPU Always (item 12: trial with confirm, reverts after 25 s).
+- LT/RT at launch: worked in the app about 100 ms after start every time (even with 30,000 games). Base layer now pushed before config loads; a "triggers at start" log line added. Ask the owner for it.
+- Controller dead after a game: no device; ask for the "gamescope focus" and "after the game" log lines.
+- Answers for the owner: Syncthing should keep running while playing (it waits for files to settle); PSN isn't needed for PS4 names (they come from the other device's RomM notes).
+- Added on request before the merge: Settings sections opened at the previous section's scroll depth (one shared `.pane`); reset on section change. Reproduced in Chromium with the built app (Achievements scrolled, then Look & Feel at 73 px before, 0 after).
+- Owner's photo before the merge: shadPS4's Emulators row squeezed to one letter per line by the Update pill (tag `shadPS4QtLauncher-<date>-<commit>`, nowrap). Short version in the pill, width caps, focused-row pill colours; checked in Chromium at 1280x800 and 1920x1080 with that tag.
+- Owner's photo before the merge: the tour's Quick Menu step showed the Start glyph plus "· M on a keyboard". Now one or the other (`input.keys`); the step texts' Start and B are tokens too. Checked in Chromium with a fake pad: pad press shows the glyph only, a key press shows M only, a pad press brings the glyph back.
+- Owner (photo of Look & Feel) before the merge: two new colours, OLED and Light (off-white, dark text, backgrounds inverted to dark lines). Checked in Chromium on Start, Home, Library, Consoles, Achievements, Downloads, Settings and a game page, with a script that lists pale text on a light page (only text over game pictures remains, as intended); OLED and the default Cartridge theme re-checked unchanged.
+- Owner before the merge: the motion felt minimal; make it more prominent, not jarring, no performance cost (asked for the apple-design skill; it can only be started by the owner with /apple-design, so the work followed the owner's four points). Cause found: 0.9.37's morph and most movement were GPU only, and handhelds in Game Mode use light effects. Built FLIP morph, sliding pills, spring-pop presses and pop-ups (details in CLAUDE.md). Measured in Chromium with light effects against 0.9.37 (frames over 20 ms in 1.5 s windows, 4 to 5 runs each): opening a game and going back the same as before once whole-page moves were kept to the GPU path; pills 0. Also: game More → About moved to the Game tab under Pin to Start.
+- Plans, not built: RPCS3 mods, Nexus Mods, two-device link via RomM and Syncthing: `docs/plan-0.9.39.md`.
+- Owner to test: Add a Drive on an SD card, games found and downloaded there, emulators seeing it; glass and plain with a coloured highlight; the tour on the device; Flatpak install on a distro without it; BIOS toast after downloading a game for a console without its BIOS; sync ring; shadPS4/SharpEmu sheets; a shadPS4 mod from GameBanana.
+
+## 5 Oct 2026 · 0.9.37 Set Up for You (built and released, one update with the second list) · handover written
+- First list (owner's photo of a game's About and more): row focus without the clipped ring; Cemu groups (symlinked home, region-only packs, checked against the real community packs); BIOS and firmware put in place automatically plus a Setup and Health section; add-on site downloads close the page and open Downloads; mod layouts per emulator (Azahar mods, Switch patches). Download Latest Patches retracted by the owner (it was there).
+- Second list, same release (owner: "release it all as one update"; the photos arrived in a later message and changed the shadPS4 fix):
+  - Installer skipping to the next welcome step after Location: reproduced in the app; the drive lost focus while its folder was made and a press landed on the welcome's Continue. Fixed (focus kept, Continue only once installing).
+  - Flatpak missing: installed first through pkexec and the package manager, in the background; without a password prompt the exact command is shown. shadPS4 (the photo, which arrived later: "No Linux build in shadps4-qtlauncher's newest release"): its builds are all pre-releases and Cartridge asked for the latest full release; now pre-releases, plus the newest shadPS4 as the launcher's default version.
+  - Emulator updates slow and not live: parallel checks, cached first, 10-minute reuse; RPCS3's build number (the reason "up to date" was wrong), and RPCS3's log for what really runs.
+  - PS5: SharpEmu and KytyPS5 from their own sources (arguments read from SharpEmu.CLI/Program.cs and KytyPS5 src/main.cpp), folder builds, icons; KytyPS5 trophies (package format from its trophies.cpp).
+  - Linked Folders: Find and Link Saves (copies what only the fork has, then links).
+  - Trophies "truly cloud synced": the system already synced PS3, PS4, Xbox 360 and Vita through RomM notes; the gap was other devices reading only 80 games the library knew had notes. Now every trophy-console game every 30 minutes and on Sync; PS5 added.
+  - Look: Background vs Elements, glass highlight, Title Case; slow drift on game pictures (GPU only).
+  - Motion engine with the apple-design skill (owner asked for it): spring tokens, velocity-keeping scroll spring, anchored interruptible pop-ups, card-to-game morph (GPU only).
+  - Tour rebuilt as an interactive, spotlighted walk-through; keyboard and mouse overhaul (Tab now steps focus; Downloads moved from Tab to Ctrl+J).
+  - Mid-way addition: delete installed mods and texture packs, including ones added outside Cartridge (to the Trash).
+- Checked here: npm test (all pass), vite build, launch check; in the app: installer focus with repeated presses, Find and Link Saves end to end, the tour end to end with keys, every new key and the right-click menu, the glass highlight variables, the card morph (forced GPU path) and modal origins, the spring scroll settling.
+- Not checkable here (owner to test): Flatpak install on a distro without it (pkexec prompt); a real shadPS4 install; SharpEmu/KytyPS5 downloads and games (GitHub was blocked from the container for their releases); RPCS3 update detection on the device; KytyPS5 trophies with a real game; the morph and drift with the GPU in Game Mode and on a TV; delete-to-Trash in Game Mode.
+- Owner is switching accounts for a few days: `docs/HANDOVER-0.9.22-to-0.9.37.md` (updated for the second list), linked from the top of CLAUDE.md.
+
 ## 5 Oct 2026 · 0.9.36 Collections, Checked Properly (built and released)
 - Owner's photo: Issues said 129 games were missing from a long list of old collection names (RomM plain names, SRM's "Nintendo DS - melonDS (Standalone)"). The check read Cartridge's memory (reg[].collections), not Steam. Rewritten to the same rules as the console collection fill; SRM names matched to consoles. Tested in npm test.
 

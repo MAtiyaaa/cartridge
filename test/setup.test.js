@@ -221,7 +221,7 @@ test('GitHub: when the API answers 403, the release pages are read (0.9.17)', as
   assert.deepStrictEqual(r.assets.map((a) => a.name), ['rpcs3-v0.0.38-1234_linux64.AppImage']);
   const U = require('../electron/emuUpdates.js');
   const rel = await U.latestRelease('rpcs3', { fetchImpl });
-  assert.strictEqual(rel.version, '0.0.38');
+  assert.strictEqual(rel.version, '0.0.38.1234'); // 0.9.37: the build number counts
 });
 
 test('Without RomM: a library from the console folders already on the device (0.9.17)', () => {

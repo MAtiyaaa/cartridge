@@ -70,7 +70,7 @@ const filters = [{ v: 'all', l: 'All' }, { v: 'unlocked', l: 'Unlocked' }, { v: 
 const l = computed(() => g.value?.light || {});
 const pct = computed(() => (l.value.total ? Math.round((l.value.earned / l.value.total) * 100) : 0));
 const rom = computed(() => romById(g.value?.romId));
-const SLUG = { rpcs3: 'ps3', shadps4: 'ps4', xenia: 'xbox360', vita3k: 'psvita' };
+const SLUG = { rpcs3: 'ps3', shadps4: 'ps4', xenia: 'xbox360', vita3k: 'psvita', kytyps5: 'ps5' };
 const hash = (t) => { let h = 5381; for (const c of String(t)) h = ((h * 33) ^ c.charCodeAt(0)) >>> 0; return h.toString(36); };
 const gameLogo = computed(() => (!g.value ? null : rom.value ? logoOf(rom.value) : logoOf({ id: 'tro' + hash(g.value.title), name: g.value.title.replace(/[™®©]/g, '') })));
 const totals = computed(() => { const o = { P: 0, G: 0, S: 0, B: 0 }; for (const t of g.value?.trophies || []) if (o[t.grade] !== undefined) o[t.grade]++; return o; });
@@ -156,9 +156,9 @@ onMounted(async () => { await load(); focusFirst(el.value); });
 .tg-body { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
 .tg-ticon { border-radius: var(--r-md); }
 .tg-t-title { font-family: var(--display); font-weight: 600; font-size: var(--t-md); display: flex; gap: 6px; align-items: center; }
-.tg-t-desc { font-size: var(--t-xs); color: #c3c9d4; }
+.tg-t-desc { font-size: var(--t-xs); color: var(--text-2, #c3c9d4); }
 .tg-t-meta { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; font-size: var(--t-xs); color: var(--muted); }
-.tg-t-meta .pts { color: #9be38a; font-weight: 600; }
+.tg-t-meta .pts { color: var(--score, #9be38a); font-weight: 600; }
 .gr-P { color: #cfe0ff; } .gr-G { color: #ffd978; } .gr-S { color: #dfe4ea; } .gr-B { color: #e8a878; }
 .dev { display: inline-flex; gap: 4px; align-items: center; color: #9cc3ff; }
 @media (max-width: 1100px) { .tg-icon { width: 180px; } }

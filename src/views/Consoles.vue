@@ -52,10 +52,10 @@ watch(() => store.libVersion, async () => { await nextTick(); ensureFocus(el.val
 .stats { display: flex; align-items: stretch; gap: 22px; }
 .stats > div { display: flex; flex-direction: column; gap: 4px; }
 .stats b { font-family: var(--display); font-size: var(--t-xl); font-weight: 700; line-height: 1; letter-spacing: -0.01em; }
-.stats .ondev { color: #b9f6ca; }
+.stats .ondev { color: var(--ondev, #b9f6ca); }
 .stats .sync b { font-family: var(--font); font-size: var(--t-md); font-weight: 500; padding-top: 7px; line-height: 23px; }
-.stats span { font-size: var(--t-xs); color: rgba(255, 255, 255, 0.5); font-weight: 600; }
-.stats i { width: 1px; background: rgba(255, 255, 255, 0.14); }
+.stats span { font-size: var(--t-xs); color: var(--faint, rgba(255, 255, 255, 0.5)); font-weight: 600; }
+.stats i { width: 1px; background: var(--line-2, rgba(255, 255, 255, 0.14)); }
 .sys-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 18px; }
 .sys-grid :deep(.systile) { width: auto; height: 168px; }
 </style>
