@@ -20,7 +20,17 @@ function pressFx(el) {
   if (!el?.classList) return;
   el.classList.add('pressed');
   setTimeout(() => el.classList.remove('pressed'), 110);
+  shine(el);
 }
+// 0.9.44 (liquid-glass skill: interactive glass shimmers when pressed): a light sweep across a glass button, longer
+// than the squeeze, so it gets its own class; only drawn in Glass (styles.css .lg-shine)
+function shine(el) {
+  const b = el?.closest?.('.btn');
+  if (!b || !document.body.classList.contains('elements-glass')) return;
+  b.classList.remove('lg-shine'); void b.offsetWidth; b.classList.add('lg-shine');
+  clearTimeout(b._shine); b._shine = setTimeout(() => b.classList.remove('lg-shine'), 650);
+}
+if (typeof document !== 'undefined') document.addEventListener('pointerdown', (e) => shine(e.target), true);
 export function glideBy(sc, dx = 0, dy = 0) {
   if (!sc || (!dx && !dy)) return;
   let a = anims.get(sc);

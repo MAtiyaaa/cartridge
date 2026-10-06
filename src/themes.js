@@ -73,7 +73,9 @@ export const SURFACES = {
 // styles.css (body.elements-glass, the --lg-* tokens set below).
 export const ELEMENTS = {
   plain: { label: 'Plain', glassA: 1 },
-  glass: { label: 'Glass', glassA: 1, glass: true },
+  // 0.9.44 (owner, photos of 0.9.37: the solid near-black panels didn't sit well): cards and panels are see-through again,
+  // grey over the background as before; the Liquid Glass material stays on controls, the Dock and pop-ups
+  glass: { label: 'Glass', glassA: 0.62, glass: true },
 };
 // the Dock's colour when none was picked: Glass with Glass elements, white with Light, else black
 export const dockOf = (ui) => ui?.dockColor || (elementsOf(ui) === 'glass' ? 'glass' : ui?.theme === 'light' ? 'white' : 'black');
@@ -178,7 +180,7 @@ export function applyTheme(uiOrName) {
   if (t.neutral) { r.setProperty('--xmb', black ? '#000' : S[0]); r.setProperty('--xmb-base', black ? '#000' : S[0]); }
   for (let i = 0; i < 6; i++) r.setProperty('--g' + i, g[i]);
   r.setProperty('--tint-rgb', black ? '0, 0, 0' : lightT ? '235, 235, 239' : tint);
-  r.setProperty('--glass-bg', S[1]);
+  r.setProperty('--glass-bg', el.glassA < 1 ? `rgba(${black ? '0, 0, 0' : tint}, ${el.glassA})` : S[1]);
   // Liquid Glass tokens (0.9.42): the material's tint (the theme's hue, white glass on Light, black on OLED) and the
   // prominent colour (the highlight) for focused controls and primary buttons
   r.setProperty('--lg-tint', lightT ? '255, 255, 255' : black || t.oled ? '0, 0, 0' : tint);
