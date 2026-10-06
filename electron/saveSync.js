@@ -293,6 +293,21 @@ async function syncUnit(u, rpc, ledger, opts = {}) {
   return { key: u.key, result: 'down' };
 }
 
+// an older version from RomM, put back: downloaded and checked like any other, then uploaded as the newest, so every
+// device gets it next (owner: guard rails; the save it replaces is backed up first)
+async function restore(u, save, rpc, ledger, opts = {}) {
+  if (running(u.emu, opts.procs)) return { key: u.key, result: 'busy' };
+  const target = u.path || placeFor(u.emu, u.key, opts);
+  if (!target) return { key: u.key, result: 'unplaced' };
+  const files = unzip(await rpc.download(save.id));
+  if (save.content_hash && hashArchive(files) !== save.content_hash) return { key: u.key, result: 'damaged' };
+  writeUnit({ ...u, path: target }, files, target, opts.backupsRoot);
+  const now = { ...u, path: target, files: u.kind === 'files' ? files.filter(([, b]) => b).map(([n]) => n) : u.files };
+  const local = hashUnit(now), r = await rpc.upload({ ...u, path: target }, zip(entriesOf(now)), path.basename(save.file_name || 'save.zip').replace(/ \[[\d_-]+\]/, ''), { overwrite: true, hash: local });
+  ledger.set(u.key, { hash: local, remoteId: r?.id ?? null, remoteHash: r?.content_hash || local, at: Date.now() });
+  return { key: u.key, result: 'restored' };
+}
+
 // units RomM has that this device doesn't (from another device), so they can be brought here: remote saves whose
 // slot is ours and whose key isn't among the local units
 function remoteOnly(remotes, localKeys) {
@@ -306,4 +321,4 @@ function remoteOnly(remotes, localKeys) {
   return [...out.values()];
 }
 
-module.exports = { units, shape, slotOf, placeFor, entriesOf, hashEntries, hashUnit, hashArchive, changedAt, zip, unzip, decide, backup, writeUnit, running, syncUnit, remoteOnly, retroarchStates, retroarchDirs, CONSOLE, LABEL, SUPPORTED };
+module.exports = { restore, units, shape, slotOf, placeFor, entriesOf, hashEntries, hashUnit, hashArchive, changedAt, zip, unzip, decide, backup, writeUnit, running, syncUnit, remoteOnly, retroarchStates, retroarchDirs, CONSOLE, LABEL, SUPPORTED };

@@ -193,6 +193,7 @@ function watchGameRun(romId) {
     if (!on && seen) {
       clearInterval(runT); runOn = false; gameFocus.endedAt = Date.now(); log('game ended', romId);
       broadcast('game-run', { state: 'ended', romId });
+      saveSyncAfter(romId); // Cartridge Save Sync (0.9.51)
       bringBack();
       if (isGamescope()) setTimeout(steamFront, 1500);
     }
@@ -259,6 +260,7 @@ function watchGamescopeFocus() {
         // back in front after a game (0.9.24, owner: controls dead after closing a game): the window came back
         // without focus (showInactive), and the page only reads the pad while focused
         if (!away && win && !win.isDestroyed()) refocus();
+        if (!away) saveSyncBack(); // back from a game started anywhere (Steam too): its saves go to RomM (0.9.51)
       }
       gameFocus.away = away && m[1] !== '769'; if (gameFocus.away) gameFocus.otherAt = Date.now(); // 769 is Steam's own menu, where Exit game for Cartridge is
       // F11: a game Steam just started has no window yet, so gamescope shows the one it has (ours).
@@ -2445,6 +2447,94 @@ async function savesList(fresh) {
   savesCache = { at: Date.now(), list };
   return list;
 }
+// ---- Cartridge Save Sync (0.9.51): saves on your RomM, brought to every device (electron/saveSync.js does the work,
+// this gives it the library, RomM and the timing). A device uses this or Syncthing for saves, never both (owner).
+const SAVESYNC_FILE = path.join(USER_DATA, 'save-sync.json'), SAVE_BACKUPS = path.join(USER_DATA, 'save-backups');
+let ssData = loadJson(SAVESYNC_FILE, { ledger: {}, last: null });
+let ssSaveT = null;
+const ssLedger = { get: (k) => ssData.ledger[k], set: (k, v) => { ssData.ledger[k] = v; clearTimeout(ssSaveT); ssSaveT = setTimeout(() => saveJson(SAVESYNC_FILE, ssData, false), 500); } };
+const syncthingSaves = () => !!config.syncthing?.role; // Cartridge set Syncthing up for saves (main or joined)
+const saveSyncOn = () => config.saveSync === 'cartridge' && !syncthingSaves() && config.configured && !config.localOnly;
+// RomM's console slugs for each emulator's console, for the carrier game of a whole memory card
+const SS_CONSOLES = { switch: ['switch'], ps3: ['ps3'], psp: ['psp'], psvita: ['psvita', 'vita'], ps4: ['ps4'], ps2: ['ps2'], psx: ['psx', 'ps1', 'ps'], ngc: ['ngc', 'gc', 'gamecube'], wiiu: ['wiiu'], '3ds': ['3ds', 'n3ds'], xbox360: ['xbox360'] };
+const ssConsoleOf = (r) => Object.keys(SS_CONSOLES).find((c) => SS_CONSOLES[c].includes(r?.platform_slug) || SS_CONSOLES[c].includes(r?.platform_fs_slug)) || null;
+function ssCarriers() {
+  const out = {};
+  for (const r of romIndexMain().values()) { const c = ssConsoleOf(r); if (c && (out[c] == null || r.id < out[c])) out[c] = r.id; }
+  return out;
+}
+// the library for matching: every ID read from the game, plus the game's file name (RetroArch names saves after it)
+function ssGames() {
+  const list = savesGameList();
+  for (const r of romIndexMain().values()) { const stem = String(r.fs_name || '').replace(/\.[^.]+$/, ''); if (stem) list.push({ id: r.id, name: stem, ids: [], discIds: [] }); }
+  return list;
+}
+function ssRpc(devId) {
+  const dq = devId ? { device_id: devId } : {};
+  const fetchRomm = async (pathname, query, init = {}) => {
+    const url = new URL((await resolveBase()) + pathname);
+    for (const [k, v] of Object.entries(query || {})) if (v != null) url.searchParams.set(k, String(v));
+    const r = await fetch(url, { ...init, headers: { ...authHeaders(), ...(init.headers || {}) }, signal: AbortSignal.timeout(180000) });
+    if (r.status === 401 || r.status === 403) throw Object.assign(new Error('RomM didn’t let Cartridge read or write saves. Sign in with your password, or pair again so Cartridge can ask for save access.'), { code: 'auth' });
+    return r;
+  };
+  return {
+    list: async (romId, slot) => { const r = await fetchRomm('/api/saves', { rom_id: romId, slot, ...dq }); if (!r.ok) throw new Error(`RomM error ${r.status} listing saves`); return r.json(); },
+    upload: async (u, buf, name, { overwrite, hash } = {}) => {
+      const fd = new FormData(); fd.append('saveFile', new Blob([buf], { type: 'application/zip' }), name);
+      const r = await fetchRomm('/api/saves', { rom_id: u.romId, emulator: u.emu, slot: u.slot, autocleanup: 'true', autocleanup_limit: 10, content_hash: hash, overwrite: overwrite ? 'true' : null, ...dq }, { method: 'POST', body: fd });
+      if (r.status === 409) return { conflict: true };
+      if (!r.ok) throw new Error(`RomM error ${r.status} saving ${name}`);
+      return r.json();
+    },
+    download: async (id) => { const r = await fetchRomm(`/api/saves/${id}/content`, dq); if (!r.ok) throw new Error(`RomM error ${r.status} downloading a save`); return Buffer.from(await r.arrayBuffer()); },
+    confirm: async (id, hash) => { if (devId) await fetchRomm(`/api/saves/${id}/downloaded`, {}, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ device_id: devId, content_hash: hash }) }).catch(() => {}); },
+  };
+}
+// a game's saves: its own, plus the whole memory card of its console
+const ssFor = (u, romId) => { if (romId == null) return true; if (u.romId === romId) return true; const r = romIndexMain().get(romId); return u.card && require('./saveSync').CONSOLE[u.emu] === ssConsoleOf(r); };
+let ssBusy = null;
+async function saveSyncRun({ romId = null, key = null, choice = null, dry = false, why = 'run' } = {}) {
+  if (!saveSyncOn()) return { off: true, syncthing: syncthingSaves() };
+  if (ssBusy) return ssBusy; // one sync at a time; a second ask shares the running one
+  ssBusy = (async () => {
+    const SS = require('./saveSync'), extra = saveExtras();
+    romId = romId == null ? null : Number(romId);
+    const local = SS.units({ extra, games: ssGames(), carriers: ssCarriers() });
+    let remotes = [];
+    try { remotes = await (await ssRpcList(romId)); } catch (e) { log('save sync: RomM unreachable', e.message); return { offline: true, error: e.message }; }
+    const devId = await rommDevice(), rpc = ssRpc(devId);
+    const todo = [...local, ...SS.remoteOnly(remotes, new Set(local.map((u) => u.key)))].filter((u) => ssFor(u, romId) && (!key || u.key === key));
+    const results = [];
+    broadcast('savesync', { state: 'run', done: 0, of: todo.length, why, romId });
+    for (const [i, u] of todo.entries()) {
+      let r;
+      try { r = await SS.syncUnit(u, rpc, ssLedger, { extra, backupsRoot: SAVE_BACKUPS, choice: key ? choice : null, dry }); } catch (e) { r = { key: u.key, result: e.code === 'auth' ? 'auth' : 'error', error: e.message }; }
+      results.push({ ...r, label: u.label || u.key, emu: u.emu, emuName: SS.LABEL[u.emu] || u.emu, romId: u.romId, card: u.card, states: !!u.states });
+      if (!['none', 'same', 'unmatched'].includes(r.result)) log('save sync:', u.key, r.result, r.error || '');
+      broadcast('savesync', { state: 'run', done: i + 1, of: todo.length, why, romId });
+      if (r.result === 'auth') break;
+    }
+    const counts = {}; for (const r of results) counts[r.result] = (counts[r.result] || 0) + 1;
+    if (romId == null && !dry) { ssData.last = { at: Date.now(), counts, conflicts: results.filter((r) => r.result === 'conflict').map((r) => ({ key: r.key, label: r.label, emuName: r.emuName, romId: r.romId })) }; saveJson(SAVESYNC_FILE, ssData, false); }
+    broadcast('savesync', { state: 'done', counts, why, romId });
+    return { results, counts };
+  })().finally(() => { ssBusy = null; });
+  return ssBusy;
+}
+// every save of ours in RomM (or one game's): what other devices put there
+async function ssRpcList(romId) {
+  // one game: its saves and its console's carrier game (where the whole memory card is)
+  const ids = romId == null ? [null] : [...new Set([romId, ssCarriers()[ssConsoleOf(romIndexMain().get(romId))]].filter((x) => x != null))];
+  const all = [];
+  for (const id of ids) all.push(...((await api('/api/saves', { query: id == null ? {} : { rom_id: id } })) || []));
+  return all.filter((s) => String(s.slot || '').startsWith('cartridge:'));
+}
+// after a game: its saves go up a few seconds after it closes (emulators write on exit)
+function saveSyncAfter(romId) { if (saveSyncOn()) setTimeout(() => saveSyncRun({ romId, why: 'after' }).catch(() => {}), 4000); }
+let ssBackAt = 0;
+function saveSyncBack() { if (saveSyncOn() && Date.now() - ssBackAt > 120000) { ssBackAt = Date.now(); setTimeout(() => saveSyncRun({ why: 'back' }).catch(() => {}), 6000); } }
+
 function patchState(romId) {
   const r = romIndexMain().get(Number(romId));
   const slugs = `${r?.platform_slug} ${r?.platform_fs_slug}`;
@@ -2810,6 +2900,7 @@ function createWindow() {
   // 0.9.48: on the scheduler (electron/scheduler.js), so both wait while a game runs and run once it has ended
   if (!globalThis.__colsAuto) {
     globalThis.__colsAuto = true;
+    scheduler.add('save-sync', { every: 30 * 60000, firstAfter: 40000, deferWhilePlaying: true, run: () => saveSyncRun({ why: 'scheduled' }) }); // 0.9.51
     scheduler.add('steam-collections', { every: 600000, firstAfter: 30000, deferWhilePlaying: true, run: async () => colsAuto() });
     scheduler.add('bios-check', { once: true, firstAfter: 45000, deferWhilePlaying: true, run: () => biosSetup({ install: true }).catch(() => {}) }); // 0.9.38: firmware too, when an emulator lacks it
   }
@@ -3223,6 +3314,40 @@ const handlers08 = {
   'syncsaves:restore': ({ id, files }) => { log('syncthing: restore', id, Object.keys(files || {}).join(' ')); savesCache = null; return require('./syncthing').restore(id, files); },
   // every save on this device with the game it belongs to (0.9.29); read only
   'saves:list': ({ fresh } = {}) => savesList(fresh),
+  // Cartridge Save Sync (0.9.51)
+  'savesync:status': () => ({ mode: config.saveSync || null, on: saveSyncOn(), syncthing: syncthingSaves(), busy: !!ssBusy, last: ssData.last, saved: Object.keys(ssData.ledger).length, backups: SAVE_BACKUPS }),
+  'savesync:set': ({ on } = {}) => {
+    if (on && syncthingSaves()) throw new Error('This device syncs saves with Syncthing. Stop using Syncthing for saves first: a device uses one or the other.');
+    config.saveSync = on ? 'cartridge' : null; saveConfig();
+    if (on) setTimeout(() => saveSyncRun({ why: 'on' }).catch(() => {}), 1500);
+    return handlers['savesync:status']();
+  },
+  // Syncthing stops being this device's way to sync saves: Cartridge stops managing it; Syncthing itself and its
+  // folders are left as they are (remove the folders in Syncthing if you don't want them any more)
+  'savesync:leaveSyncthing': () => { config.syncthing = { ...(config.syncthing || {}), role: null, mainId: null }; saveConfig(); clearInterval(joinT); return handlers['savesync:status'](); },
+  'savesync:run': (o = {}) => saveSyncRun(o),
+  // Cartridge Cloud Sync before a game starts: this game's saves checked against RomM, the newest brought here
+  'savesync:before': ({ romId }) => saveSyncRun({ romId: Number(romId), why: 'before' }),
+  'savesync:resolve': ({ key, choice, romId }) => saveSyncRun({ key, choice: choice === 'mine' ? 'mine' : 'theirs', romId: romId == null ? null : Number(romId), why: 'resolve' }),
+  // older versions of a game's saves in RomM, and putting one back
+  'savesync:versions': async ({ romId }) => {
+    const SS = require('./saveSync');
+    return (await ssRpcList(Number(romId))).map((x) => { const m = /^cartridge:([^:]+):(dir|file|files):(.+)$/.exec(x.slot) || []; return { id: x.id, key: m[3], emu: m[1], emuName: SS.LABEL[m[1]] || m[1], at: x.updated_at, size: x.file_size_bytes, device: x.device_syncs?.find((d) => d.device_id === x.origin_device_id)?.device_name || '' }; }).sort((a, b) => String(b.at).localeCompare(String(a.at)));
+  },
+  'savesync:restore': async ({ id, romId }) => {
+    if (!saveSyncOn()) throw new Error('Cartridge Save Sync is off.');
+    const SS = require('./saveSync'), extra = saveExtras();
+    const saves = await ssRpcList(Number(romId)), save = saves.find((x) => x.id === Number(id));
+    if (!save) throw new Error('That version isn’t in RomM any more.');
+    const local = SS.units({ extra, games: ssGames(), carriers: ssCarriers() });
+    const u = local.find((x) => x.slot === save.slot) || SS.remoteOnly([save], new Set())[0];
+    const r = await SS.restore(u, save, ssRpc(await rommDevice()), ssLedger, { extra, backupsRoot: SAVE_BACKUPS });
+    if (r.result === 'busy') throw new Error(`Close ${SS.LABEL[u.emu] || u.emu} first: Cartridge never changes saves while the emulator is open.`);
+    if (r.result === 'unplaced') throw new Error(`${SS.LABEL[u.emu] || u.emu} hasn’t made its save folders on this device yet. Open it once, then try again.`);
+    if (r.result === 'damaged') throw new Error('That version didn’t match RomM’s check, so nothing was changed.');
+    log('save sync: restored', u.key, 'version', id);
+    return r;
+  },
   'saves:forRom': async ({ romId }) => (await savesList()).filter((s) => (s.romIds || []).includes(Number(romId))),
   'sync:server': () => require('./syncthing').server(config.syncthing?.server || {}),
   'sync:setServer': async (srv) => {
@@ -3626,7 +3751,7 @@ const handlers = {
     const r = await fetch(`${b}/api/auth/device/init`, {
       method: 'POST', headers: { ...authHeaders({ ...config.server, auth: 'none', username: '' }), 'Content-Type': 'application/json' }, signal: AbortSignal.timeout(15000),
       body: JSON.stringify({ client_device_identifier: config.deviceId, name: `Cartridge on ${os.hostname()}`.slice(0, 255), client: 'Cartridge', platform: 'linux', client_version: app.getVersion(),
-        requested_scopes: ['me.read', 'roms.read', 'roms.user.read', 'roms.user.write', 'platforms.read', 'assets.read', 'firmware.read', 'collections.read', 'collections.write', 'roms.write', 'devices.read', 'devices.write'] }),
+        requested_scopes: ['me.read', 'roms.read', 'roms.user.read', 'roms.user.write', 'platforms.read', 'assets.read', 'assets.write', 'firmware.read', 'collections.read', 'collections.write', 'roms.write', 'devices.read', 'devices.write'] }),
     });
     if (r.status === 404 || r.status === 405) throw new Error('This RomM version has no QR pairing. Use a pairing code instead.');
     if (r.status === 429) throw new Error('RomM is limiting pairing requests. Try again in a minute.');
