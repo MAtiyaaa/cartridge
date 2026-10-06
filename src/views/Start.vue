@@ -11,7 +11,7 @@
     </div>
     <div class="st-scroll" data-scroll ref="scroller" @pointerdown="swipeDown">
       <Transition :name="'st-pg-' + pageDir" mode="out-in" @after-enter="afterPage">
-      <div class="st-board" :key="page" :style="{ height: boardH + 'px' }">
+      <div class="st-board" :key="page" :data-pg="page" :style="{ height: boardH + 'px' }">
         <!-- arranging: the grid's empty cells show, and where the held tile will land -->
         <div v-if="editing" class="st-slots" aria-hidden="true"><i v-for="c in slots" :key="c.k" :style="c.s" /></div>
         <div v-if="ghost" class="st-ghost" :style="ghost" aria-hidden="true" />
@@ -949,8 +949,13 @@ const pageDir = ref('next');
 const snaps = reactive(new Map()), ovW = ref(300);
 const pageSig = (pg) => pg.map((x) => `${x.id}:${x.x},${x.y},${x.w},${x.h}:${x.src || x.platformId || x.romId || ''}`).sort().join('|');
 const snapOf = (pg) => snaps.get(pageSig(pg)) || null;
+// the page's own board, settled: not the old page still sliding out, not one of the overview's copies
+const boardReady = (i) => { const b = scroller.value?.querySelector(`:scope > .st-board[data-pg="${i}"]`); return b && !/-(enter|leave)-/.test(b.className) ? b : null; };
 function snapPage() {
-  const b = el.value?.querySelector('.st-board'), pg = pages.value[page.value];
+  // 0.9.44 (owner: two pages in the overview showed the same picture): only the board of the page being saved, and not
+  // while it slides. A quick second page turn landed during the first one's slide out (out-in), when the only board on
+  // screen was still the old page, and its picture was kept under the new page's layout
+  const b = boardReady(page.value), pg = pages.value[page.value];
   if (!b || !pg?.length) return;
   const c = b.cloneNode(true);
   c.querySelectorAll('.st-handle, .st-slot, .st-ghost, .st-slots').forEach((n) => n.remove());
@@ -1026,7 +1031,9 @@ async function fillSnaps() {
     for (const i of want) {
       if (!ov.value) break;
       page.value = i;
-      await nextTick(); await frame(); await new Promise((r) => setTimeout(r, 140)); // covers already loaded come from the cache
+      // the old board leaves first (out-in, the board's own height transition), so wait for this page's own board
+      for (let t = 0; t < 90 && !boardReady(i); t++) await frame();
+      await new Promise((r) => setTimeout(r, 140)); // covers already loaded come from the cache
       snapPage();
     }
   } finally {

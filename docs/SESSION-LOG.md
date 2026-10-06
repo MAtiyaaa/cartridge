@@ -8,6 +8,7 @@ The branch for 0.9.3 work is `claude/relaxed-fermat-30pigp`. Pull it before star
 
 ## 6 Oct 2026 · 0.9.44 Real Glass
 - Owner: "Glass mode looks like absolute shit, really cheap", with three reference pictures and the image-to-code skill to install (now in `.claude/skills/image-to-code`, MIT). What the references have that 0.9.42 lacked: a near-clear fill instead of a tint, a light-catching rim with hotspots, thickness, a hard-edged reflection, grain on big panes, a wide soft shadow. Rebuilt in CSS (details in CLAUDE.md 0.9.44); menu rows in sheets no longer grey blocks. Screenshots checked in dark and Light.
+- Owner's photo: two pages in Start's overview with the same picture (different widget counts). Reproduced in Chromium and fixed (CLAUDE.md 0.9.44).
 - Owner: "also use the liquid ui skill". Added what the reference build lacked from it: shimmer on press, clear glass over media, concentric corners, reduced motion for the shimmer.
 
 ## 5 Oct 2026 · 0.9.43 Steady Home

@@ -12,3 +12,6 @@
 - **Glass buttons shimmer when pressed:** a band of light sweeps across, as Apple's interactive glass does (not with reduced motion).
 - **Clearer glass over game art:** the buttons on a game's page are more see-through so the art shows, with a soft shadow keeping their labels readable.
 - **Rounded shapes nest properly:** the highlight inside a switch follows the switch's own curve.
+
+### Fixed
+- **Start's page overview showing the same picture for two different pages:** a page's picture was sometimes taken while the previous page was still sliding away, so it was saved as the other page's. This happened when the overview pictured pages you hadn't opened yet, and on two quick page turns. Each page now waits for its own board before its picture is taken.
