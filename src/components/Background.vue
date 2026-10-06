@@ -23,7 +23,7 @@
 import { computed, reactive, ref, watch, onBeforeUnmount, nextTick } from 'vue';
 import { store, allRoms, cover } from '../store.js';
 import { romimg } from '../platform.js';
-import { RENDERERS, DARK_BASE, BG_BASE, LEGACY_ART, artPan } from '../bgRenderers.js';
+import { RENDERERS, DARK_BASE, BG_BASE, LEGACY_ART, artPan, setInk } from '../bgRenderers.js';
 import { consoleColors } from '../consoleColors.js';
 import { paletteOf, lightEffects } from '../themes.js';
 import { lastInput } from '../nav.js';
@@ -78,13 +78,14 @@ function setup() {
   const S = scale();
   const w = Math.floor(innerWidth * S), h = Math.floor(innerHeight * S);
   const pal = paletteOf(store.config?.ui);
-  const k = [mode.value, w, h, pal.accent, pal.warm, light.value].join('|');
+  const k = [mode.value, w, h, pal.accent, pal.warm, pal.ink, light.value].join('|');
   if (k === key && frame) return true;
   key = k;
   c.width = w; c.height = h;
   // not desynchronized on Android: the WebView then only shows a new frame when something else repaints,
   // so the background stood still unless you tapped around
   ctx = c.getContext('2d', { alpha: true, desynchronized: !ANDROID });
+  setInk(pal.ink);
   frame = rendererOf(mode.value)(ctx, w, h, S, pal, light.value);
   return true;
 }

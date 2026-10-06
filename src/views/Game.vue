@@ -658,11 +658,12 @@ async function more() {
     { label: 'Add to a collection', sub: 'Yours in RomM, or a new one', value: 'col', icon: 'mdiBookmarkPlusOutline' },
     { label: 'Timeline', sub: 'Added, downloaded, played, trophies', value: 'timeline', icon: 'mdiTimelineClockOutline' },
     { label: 'Pin to Start', sub: 'A tile of its own on Start', value: 'pin', icon: 'mdiPinOutline' },
+    // 0.9.38 (owner): About belongs with the game, last, under Pin to Start (it was in Options)
+    { label: 'About', sub: 'Console, ID, version, and what’s installed for it', value: 'about', icon: 'mdiInformationOutline' },
   ];
   if (detail.value?.path_manual) details.unshift({ label: 'Manual', sub: 'The game’s manual from RomM', value: 'manual', icon: 'mdiBookOpenPageVariantOutline' });
   // Options (0.9.16): hide, re-download and delete, out of the header
   const options = [
-    { label: 'About', sub: 'Console, ID, version, and what’s installed for it', value: 'about', icon: 'mdiInformationOutline' },
     { label: u?.hidden ? 'Unhide game' : 'Hide game', sub: u?.hidden ? 'Show it in lists again' : 'Keep it out of Home, Library and Search', value: 'hide', icon: u?.hidden ? 'mdiEyeOutline' : 'mdiEyeOffOutline' },
     ...(installedPath.value && !marked.value ? [
       { label: 'Re-download', sub: 'The copy on this device is replaced', value: 'redownload', icon: 'mdiRefresh' },

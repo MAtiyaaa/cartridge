@@ -53,6 +53,9 @@ function iconFor(id, emu, { appImages = [], cacheDir, home = os.homedir(), readA
 // from the emulator's own repository, fetched once and kept (0.9.17; each URL checked)
 const GH = 'https://raw.githubusercontent.com/';
 const ICON_URLS = {
+  // 0.9.37: PS5. 0.9.38 (owner: no SharpEmu icon): its logo is in assets/images (the old path was a 404);
+  // KytyPS5 has no logo of its own, so its project picture (avatars host: github.com/<name>.png redirects)
+  sharpemu: GH + 'sharpemu/sharpemu/main/assets/images/logo_transparent.png', kytyps5: 'https://avatars.githubusercontent.com/KytyPS5?size=256',
   rpcs3: GH + 'RPCS3/rpcs3/master/rpcs3/rpcs3.svg', xenia: GH + 'xenia-canary/xenia-canary/canary_experimental/assets/icon/256.png',
   shadps4: GH + 'shadps4-emu/shadPS4/main/.github/shadps4.png', cemu: GH + 'cemu-project/Cemu/main/dist/linux/info.cemu.Cemu.png',
   xemu: GH + 'xemu-project/xemu/master/ui/icons/xemu_256x256.png', azahar: GH + 'azahar-emu/azahar/master/dist/azahar.svg',
@@ -66,7 +69,8 @@ const ICON_URLS = {
   primehack: GH + 'shiiion/dolphin/master/Data/dolphin-emu.svg', vita3k: GH + 'Vita3K/Vita3K/master/vita3k/Vita3K.png',
   rmg: GH + 'Rosalie241/RMG/master/Package/com.github.Rosalie241.RMG.svg', supermodel: GH + 'trzy/Supermodel/master/Docs/Images/Real3D_Logo.png',
   // Ryujinx (Ryubing) is on its own Forgejo too; not checkable from where this was written
-  ryujinx: ['https://git.ryujinx.app/ryubing/ryujinx/raw/branch/master/distribution/misc/Logo.svg', 'https://git.ryujinx.app/ryubing/ryujinx/raw/branch/master/src/Ryujinx/Assets/UIImages/Logo_Ryujinx.png'],
+  // 0.9.38 (owner: no Ryujinx icon): then the Ryubing project's own picture on GitHub (checked), when its server doesn't answer
+  ryujinx: ['https://git.ryujinx.app/ryubing/ryujinx/raw/branch/master/distribution/misc/Logo.svg', 'https://git.ryujinx.app/ryubing/ryujinx/raw/branch/master/src/Ryujinx/Assets/UIImages/Logo_Ryujinx.png', 'https://avatars.githubusercontent.com/Ryubing?size=256'],
   // Eden lives on its own Forgejo (git.eden-emu.dev), not GitHub (0.9.21, owner: no Eden logo); the
   // first of these that answers with an image is kept
   eden: ['https://git.eden-emu.dev/eden-emu/eden/raw/branch/master/dist/dev.eden_emu.eden.svg', 'https://git.eden-emu.dev/eden-emu/eden/raw/branch/master/dist/eden.svg', 'https://git.eden-emu.dev/eden-emu/eden/raw/branch/master/dist/eden.png', 'https://git.eden-emu.dev/eden-emu/eden/raw/branch/master/dist/qt_themes/default/icons/256x256/eden.png'],

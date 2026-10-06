@@ -205,7 +205,7 @@
               <div class="st-label on-art">{{ platformById(t.platformId)?.display_name }} Spotlight</div>
               <div class="st-pin">
                 <GameLogo :key="spotOf(t).id" :logo="store.config.ui.logos !== false ? logoOf(spotOf(t)) : null" :name="spotOf(t).name" cls="st-pin-name" :area="Math.min(22000, box(t).pw * box(t).ph * 0.12)" :max-w="box(t).pw * 0.7" :max-h="Math.min(110, box(t).ph * 0.32)" />
-                <span class="st-mark">{{ store.play[spotOf(t).id]?.min ? playtimeText(store.play[spotOf(t).id].min) + ' played' : store.installed[spotOf(t).id] ? 'On this device' : '' }}</span>
+                <span class="st-mark">{{ store.play[spotOf(t).id]?.min ? playtimeText(store.play[spotOf(t).id].min) + ' played' : '' }}<i v-if="store.installed[spotOf(t).id]" class="st-dev-tick" title="On this device"><Icon name="mdiCheckBold" :size="13" /></i></span>
               </div>
             </template>
             <div v-else class="st-empty small"><span>No games for this console yet</span></div>
@@ -215,23 +215,29 @@
           <template v-else-if="t.type === 'media'">
             <template v-if="mediaOf(t)">
               <div class="st-label"><span class="st-lname">{{ platformById(t.platformId)?.display_name }}</span><span class="st-count">{{ (sel[t.id] || 0) + 1 }} / {{ conList(t.platformId).length }}</span></div>
-              <Transition name="st-xf"><div v-if="box(t).pw > box(t).ph * 1.4" :key="mediaOf(t).id" class="st-media-bg" :style="{ backgroundImage: bgUrl(artOf(mediaOf(t)) || cover(mediaOf(t), true)) }" /></Transition>
+              <Transition name="st-xf"><div :key="mediaOf(t).id" class="st-media-bg" :class="{ tall: box(t).pw <= box(t).ph * 1.4 }" :style="{ backgroundImage: bgUrl(artOf(mediaOf(t)) || cover(mediaOf(t), true)) }" /></Transition>
               <div class="st-media" :class="[isDisc(t) ? 'disc' : 'cart', { wide: box(t).pw > box(t).ph * 1.4 }]">
                 <div class="st-media-stage" @click="ejectMedia($event, t)"><Transition name="st-media"><div :key="mediaOf(t).id" class="st-media-obj" :class="{ dev: store.installed[mediaOf(t).id] }">
                   <div v-if="isDisc(t)" class="st-disc-boost"><div class="st-disc" :style="{ backgroundImage: bgUrl(cover(mediaOf(t), true)) }"><i class="st-disc-sheen" /><i class="st-disc-hub" /></div></div>
                   <div v-else class="st-cart" :style="cartTint(t)"><i class="st-cart-grip" /><div class="st-cart-label" :style="{ backgroundImage: bgUrl(cover(mediaOf(t), true)) }" /></div>
                 </div></Transition></div>
-                <div class="st-media-t"><b>{{ mediaOf(t).name }}</b><span>{{ store.play[mediaOf(t).id]?.min ? playtimeText(store.play[mediaOf(t).id].min) + ' played' : store.installed[mediaOf(t).id] ? 'On this device' : 'In your library' }}</span></div>
+                <div class="st-media-t"><b>{{ mediaOf(t).name }}</b><span>{{ store.play[mediaOf(t).id]?.min ? playtimeText(store.play[mediaOf(t).id].min) + ' played' : 'In your library' }}<i v-if="store.installed[mediaOf(t).id]" class="st-dev-tick" title="On this device"><Icon name="mdiCheckBold" :size="11" /></i></span></div>
               </div>
             </template>
             <div v-else class="st-empty small"><span>No games for this console yet</span></div>
           </template>
-          <!-- Game Shelf (0.9.32): the console's games standing as boxes, spines out; the chosen one slides out to show its cover -->
+          <!-- Game Shelf (0.9.42, owner asked for a redesign; option B, a display case): the console's games as cases on a
+               lit shelf, spines out with the console's coloured band; the picked one turns out to show its cover -->
           <template v-else-if="t.type === 'shelf'">
             <template v-if="conList(t.platformId).length">
-              <div class="st-label"><span class="st-lname">{{ platformById(t.platformId)?.display_name }} Shelf</span><span class="st-count">{{ (sel[t.id] || 0) + 1 }} / {{ conList(t.platformId).length }}</span></div>
-              <div class="st-shelf">
-                <div v-for="r in shelfOf(t)" :key="r.id" class="st-spine" :class="{ out: r.id === conList(t.platformId)[sel[t.id] || 0]?.id }" @click="pickSpine($event, t, r)">
+              <div v-if="mediaOf(t)" class="st-shelf-amb" :style="{ backgroundImage: `url(&quot;${cover(mediaOf(t), true)}&quot;)` }" />
+              <div class="st-label st-shelf-head">
+                <span class="st-lname st-shelf-mark"><ConsoleMark :slug="platformById(t.platformId)?.slug" :label="platformById(t.platformId)?.display_name" /></span><span class="st-count">{{ (sel[t.id] || 0) + 1 }} / {{ conList(t.platformId).length }}</span>
+                <span v-if="mediaOf(t)" class="st-shelf-t"><b>{{ mediaOf(t).name }}</b><span>{{ store.play[mediaOf(t).id]?.min ? playtimeText(store.play[mediaOf(t).id].min) + ' played' : 'Not started' }}<i v-if="store.installed[mediaOf(t).id]" class="st-dev-tick" title="On this device"><Icon name="mdiCheckBold" :size="11" /></i></span></span>
+              </div>
+              <div class="st-shelf" :style="{ '--case': caseOf(t.platformId) }">
+                <i class="st-shelf-spot" />
+                <div v-for="r in shelfOf(t)" :key="r.id" class="st-spine" :class="{ out: r.id === mediaOf(t)?.id }" @click="pickSpine($event, t, r)">
                   <img class="st-spine-art" :src="cover(r, true) || BLANK" alt="" loading="lazy" @error="noImg" />
                   <span class="st-spine-t">{{ r.name }}</span>
                 </div>
@@ -258,8 +264,8 @@
           <template v-else-if="t.type === 'cstats'">
             <template v-if="platformById(t.platformId)">
               <div class="st-cs-mark"><ConsoleMark :slug="platformById(t.platformId).slug" :label="platformById(t.platformId).display_name" /></div>
-              <div v-if="t.h >= 2" class="st-band"><img v-for="r in bandOf(t)" :key="r.id" :src="cover(r, true)" alt="" loading="lazy" /></div>
-              <div class="st-stats">
+              <div v-if="t.h >= 2" class="st-band fit" :style="{ '--n': bandOf(t).length }"><img v-for="r in bandOf(t)" :key="r.id" :src="cover(r, true)" alt="" loading="lazy" /></div>
+              <div class="st-stats cs">
                 <div><b class="tnum">{{ cstats(t).games }}</b><span>Games</span></div>
                 <div><b class="tnum">{{ cstats(t).hours }}</b><span>Hours Played</span></div>
                 <div><b class="tnum">{{ cstats(t).device }}</b><span>On This Device</span></div>
@@ -275,7 +281,7 @@
               <div class="st-label on-art">Game of the Day</div>
               <div class="st-pin">
                 <GameLogo :logo="store.config.ui.logos !== false ? logoOf(daily) : null" :name="daily.name" cls="st-pin-name" :area="Math.min(22000, box(t).pw * box(t).ph * 0.12)" :max-w="box(t).pw * 0.8" :max-h="Math.min(110, box(t).ph * 0.32)" />
-                <span class="st-mark"><ConsoleMark :slug="daily.platform_slug" :label="daily.platform_display_name" />{{ store.installed[daily.id] ? ' · On this device' : '' }}</span>
+                <span class="st-mark"><ConsoleMark :slug="daily.platform_slug" :label="daily.platform_display_name" /><i v-if="store.installed[daily.id]" class="st-dev-tick" title="On this device"><Icon name="mdiCheckBold" :size="13" /></i></span>
               </div>
             </template>
             <div v-else class="st-empty small"><span>Your games show here, one a day</span></div>
@@ -367,7 +373,7 @@
 // to move it, drag an edge or a corner to resize. Saved in config.ui.start.
 import { computed, ref, reactive, onMounted, onBeforeUnmount, nextTick, watch } from 'vue';
 import { IS_ANDROID } from '../platform.js';
-import { store, heroArt, call, go, tab, openModal, img, cover, logoOf, allRoms, visible, visiblePlatforms, romById, isNew, collections, setBg, backdropOf, wantSharp, bytes, saveConfig, choose, confirm, askText, pickFolder, playtimeText, loadPlay, toast } from '../store.js';
+import { store, heroArt, call, go, tab, openModal, img, cover, logoOf, allRoms, visible, visiblePlatforms, romById, isNew, collections, setBg, backdropOf, wantSharp, bytes, saveConfig, choose, confirm, askText, pickFolder, playtimeText, loadPlay, toast, openTour } from '../store.js';
 import { useView } from '../useView.js';
 import { recommend } from '../recs.js';
 import { ensureFocus, input, pushLayer, focusFirst, rumble } from '../nav.js';
@@ -400,7 +406,9 @@ const pages = ref(savedPages.map((l, i) => (l.length ? pack(l.map((t) => ({ ...t
 const page = ref(Math.max(0, Math.min(store.startPage || 0, pages.value.length - 1)));
 const tiles = computed({ get: () => pages.value[page.value] || [], set: (v) => { pages.value[page.value] = v; } });
 let saveT = 0;
-const ser = (list) => list.map(({ id, type, x, y, w, h, romId, platformId, src, console: con }) => ({ id, type, x, y, w, h, ...(romId ? { romId } : {}), ...(platformId ? { platformId } : {}), ...(src ? { src } : {}), ...(con ? { console: con } : {}) }));
+// 0.9.41 (owner: the emulator widget emptied after the emulator closed): the picked emulator (emu) is saved too; it
+// lived only in memory, so Start coming back (after a game or an emulator) found the tile without it
+const ser = (list) => list.map(({ id, type, x, y, w, h, romId, platformId, src, console: con, emu }) => ({ id, type, x, y, w, h, ...(romId ? { romId } : {}), ...(platformId ? { platformId } : {}), ...(src ? { src } : {}), ...(con ? { console: con } : {}), ...(emu ? { emu } : {}) }));
 function save() { clearTimeout(saveT); saveT = setTimeout(() => saveConfig({ ui: { start: { tiles: ser(pages.value[0] || []), more: pages.value.slice(1).map(ser) } } }), 400); }
 
 const el = ref(null), scroller = ref(null);
@@ -500,7 +508,12 @@ const emuOf = (t) => (t.emu ? emuInfo.value[t.emu.path || t.emu.fp] || null : nu
 // a row of covers in tall library tiles (0.9.28, owner: empty space): the console's or library's games, played first
 function bandOf(t) {
   const list = (t.type === 'cstats' ? conList(t.platformId) : [...playing.value, ...rowOf('fresh')]).filter((r) => cover(r, true));
-  const n = Math.max(2, Math.min(12, Math.floor(box(t).pw / 120)));
+  // 0.9.41 (owner: room for more at 2x2, the second cut off at 1x2): as many covers as fit side by side at the size the
+  // tile gives them (about 45% of its height, 2:3), never fewer than fit whole, never one cut off
+  // the row's height: the tile less its padding, the logo and the stats under it (two lines of two, or one line of four)
+  const { pw, ph } = box(t), statsH = pw < 460 ? 120 : 70, markH = Math.min(40, Math.max(18, ph * 0.14)) + 12;
+  const h = Math.min(260, Math.max(60, ph - 44 - markH - statsH)), w = h * (2 / 3) + 10;
+  const n = pw < 200 ? 1 : Math.max(1, Math.min(12, Math.ceil((pw - 24) / w - 0.25))); // one more, smaller, rather than a quarter of the row empty; one-column tiles show one
   return [...new Map(list.map((r) => [r.id, r])).values()].slice(0, n);
 }
 const stripN = (t) => Math.max(0, Math.min(12, Math.floor((box(t).pw - 36) / 40)));
@@ -540,7 +553,15 @@ const cartTint = (t) => { const c = consoleColors(platformById(t.platformId) || 
 const isDisc = (t) => { const p = platformById(t.platformId); return DISC.test(p?.slug || '') || DISC.test(p?.fs_slug || ''); };
 const mediaOf = (t) => { const l = conList(t.platformId); return l[(sel[t.id] || 0) % Math.max(1, l.length)] || null; };
 // the shelf shows the spines that fit, with the chosen one in view
-const shelfOf = (t) => { const l = conList(t.platformId), n = Math.max(3, Math.floor((box(t).pw - 40) / 52)), i = sel[t.id] || 0, from = Math.max(0, Math.min(i - Math.floor(n / 3), l.length - n)); return l.slice(from, from + n); };
+// 0.9.42: cases 36px + 5px apart, the turned-out one as wide as its cover at the shelf's height
+const shelfOf = (t) => {
+  const { pw, ph } = box(t), l = conList(t.platformId), outW = Math.min(pw * 0.36, Math.max(60, ph - 96) * 0.7);
+  const n = Math.max(3, Math.floor((pw - 48 - outW) / 41) + 1), i = (sel[t.id] || 0) % Math.max(1, l.length), from = Math.max(0, Math.min(i - Math.floor(n / 3), l.length - n));
+  return l.slice(from, from + n);
+};
+// the band at the top of a case, as the real ones (PS4 blue, PS5 white, Switch red, Xbox green); else the console's colour
+const CASE = { ps4: '#1667d8', ps5: '#eef1f5', ps3: '#15171b', ps2: '#15171b', psvita: '#1b56b8', switch: '#e60012', xbox: '#2a8f2a', xbox360: '#6cc72b', xboxone: '#1c8a1c', wii: '#f2f3f5', wiiu: '#0e94d0', '3ds': '#e8eaee', n3ds: '#e8eaee', nds: '#e8eaee', ngc: '#15171b', gc: '#15171b' };
+const caseOf = (pid) => { const p = platformById(pid); return CASE[p?.slug] || CASE[p?.fs_slug] || consoleColors(p)?.[0] || '#3a3f47'; };
 // the page overview's picture of a tile: a game's cover where the tile shows games, a picture tile's picture,
 // else its icon and name (0.9.28)
 function ovThumb(x) {
@@ -949,7 +970,8 @@ function goPage(i) {
   page.value = i; store.startPage = i;
   sfx.tab?.(); rumble('tab'); // a page turn is felt, as a tab change is (0.9.24)
 }
-function afterPage() { const f = el.value?.querySelector(editing.value && !tiles.value.length ? '[data-key="st-add"]' : '.st-board [data-focus]'); f?.focus({ preventScroll: true }); if (f) focusTile(tiles.value.find((t) => t.id === f.dataset.id) || {}); }
+function afterPage() { if (filling || ov.value) return; afterPageNow(); } // the overview covers the board: focus stays in it
+function afterPageNow() { const f = el.value?.querySelector(editing.value && !tiles.value.length ? '[data-key="st-add"]' : '.st-board [data-focus]'); f?.focus({ preventScroll: true }); if (f) focusTile(tiles.value.find((t) => t.id === f.dataset.id) || {}); }
 function addPage() { pages.value.push([]); save(); goPage(pages.value.length - 1); }
 async function removePage() {
   if (pages.value.length < 2) return;
@@ -976,15 +998,45 @@ function openOv() {
   if (mode.value) setMode('');
   snapPage();
   ov.value = { moving: null };
+  const here = page.value; // fillSnaps shows other pages behind the overview for a moment
+  fillSnaps();
   nextTick(() => {
     const m = ovEl.value?.querySelector('.st-ov-map'); if (m) ovW.value = m.clientWidth;
     ovLayer = pushLayer(ovEl.value, {
       back: () => (ov.value.moving != null ? (ov.value.moving = null) : closeOv()),
       lt() {}, rt() {}, start: closeOv, select() {}, x() {}, y() {}, lb: ovShoulder, rb: ovShoulder,
       left: () => (ov.value.moving != null ? ovMove(-1) : false), right: () => (ov.value.moving != null ? ovMove(1) : false),
+      // 0.9.41 (owner): pages on more than one row move up and down too, a whole row at a time
+      up: () => (ov.value.moving != null ? ovMove(-ovPerRow()) : false), down: () => (ov.value.moving != null ? ovMove(ovPerRow()) : false),
     });
-    focusFirst(ovEl.value, `[data-key="pg-${page.value}"]`);
+    focusFirst(ovEl.value, `[data-key="pg-${here}"]`);
   });
+}
+// 0.9.41 (owner: page 1 showed the placeholder while the others showed their widgets): a page gets its picture when it
+// is on screen, so pages not shown since Cartridge started had none. Opening the overview now shows each of those
+// pages once, behind it (no animation, focus left alone), and takes its picture
+let filling = false;
+async function fillSnaps() {
+  if (filling) return;
+  const want = pages.value.map((pg, i) => (pg.length && !snapOf(pg) ? i : -1)).filter((i) => i >= 0);
+  if (!want.length) return;
+  filling = true;
+  const back = page.value, dir = pageDir.value;
+  const frame = () => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+  try {
+    pageDir.value = 'none';
+    for (const i of want) {
+      if (!ov.value) break;
+      page.value = i;
+      await nextTick(); await frame(); await new Promise((r) => setTimeout(r, 140)); // covers already loaded come from the cache
+      snapPage();
+    }
+  } finally {
+    const keep = document.activeElement?.dataset?.key; // wherever you have moved to in the overview meanwhile
+    page.value = back; await nextTick(); await frame(); pageDir.value = dir;
+    filling = false;
+    if (ov.value && keep && document.activeElement?.dataset?.key !== keep) focusKey(keep);
+  }
 }
 function ovShoulder() { if (performance.now() - ovAt >= OV_GUARD) { ovAt = performance.now(); closeOv(); } }
 function closeOv() {
@@ -996,11 +1048,14 @@ function ovPick(i) {
   ov.value.moving = null; page.value = Math.min(page.value, pages.value.length - 1); save(); sfx.accept?.();
   nextTick(() => focusKey('pg-' + i));
 }
+// how many page cards sit on one row of the overview (they wrap)
+function ovPerRow() { const c = [...(ovEl.value?.querySelectorAll('.st-ov-page') || [])]; const top = c[0]?.offsetTop; const n = c.filter((x) => x.offsetTop === top).length; return Math.max(1, n); }
 function ovMove(d) {
-  const i = ov.value.moving, j = i + d;
-  if (j < 0 || j >= pages.value.length) { sfx.error?.(); return; }
+  const i = ov.value.moving, j = Math.max(0, Math.min(pages.value.length - 1, i + d));
+  if (j === i) { sfx.error?.(); return; }
   const cur = pages.value[page.value];
-  const list = [...pages.value]; [list[i], list[j]] = [list[j], list[i]]; pages.value = list;
+  // up/down carry the page a row (the ones between shift along by one); left/right swap neighbours
+  const list = [...pages.value]; const [m] = list.splice(i, 1); list.splice(j, 0, m); pages.value = list;
   page.value = list.indexOf(cur); ov.value.moving = j; store.startPage = page.value; sfx.move?.();
   nextTick(() => focusKey('pg-' + j));
 }
@@ -1155,7 +1210,7 @@ onMounted(async () => {
   spotT = setInterval(() => { if (!store.away) spotTick.value++; }, 12000);
   rollT = setInterval(roll, 1000);
   // 0.9.28 (owner: hints are hidden now, so first-timers get Start's tips once, in a short tour)
-  if (store.config.ui.toured && !store.config.ui.startTips) setTimeout(async () => { if (store.modal || store.route.name !== 'start') return; saveConfig({ ui: { startTips: 1 } }); await openModal('tour', { start: true, only: true }); }, 900);
+  if (store.config.ui.toured && !store.config.ui.startTips) setTimeout(async () => { if (store.modal || store.route.name !== 'start') return; saveConfig({ ui: { startTips: 1 } }); await openTour({ start: true, only: true }); }, 900);
   loadSpace(); spaceT = setInterval(loadSpace, 60000);
   loadWeek(); loadAch();
   measure();
@@ -1327,15 +1382,19 @@ watch(() => store.play, loadWeek);
 .st-pg-next-enter-from { opacity: 0; transform: translateX(4%); }
 .st-pg-prev-enter-from { opacity: 0; transform: translateX(-4%); }
 :global(body.motion-reduce .st-board) { transition: none !important; transform: none !important; }
-.st-ov { position: absolute; inset: 0; z-index: 20; display: flex; flex-direction: column; gap: var(--s-5); padding: var(--s-6) var(--s-7); background: color-mix(in srgb, var(--s0) 88%, transparent); backdrop-filter: blur(14px); animation: viewIn 220ms var(--ease-out); }
+/* 0.9.41 (owner: moving pages across rows went laggy): no blur of the whole board behind (it was redrawn every frame of
+   a move), a nearly solid page instead */
+.st-ov { position: absolute; inset: 0; z-index: 20; display: flex; flex-direction: column; gap: var(--s-5); padding: var(--s-6) var(--s-7); background: color-mix(in srgb, var(--s0) 96%, transparent); animation: viewIn 220ms var(--ease-out); }
 .st-ov-head { display: flex; align-items: baseline; gap: var(--s-4); }
 .st-ov-head b { font-family: var(--display); font-size: var(--t-xl); }
 .st-ov-list { display: flex; gap: var(--s-4); flex-wrap: wrap; align-content: flex-start; }
 .st-ov-page { width: clamp(200px, 22vw, 360px); display: flex; flex-direction: column; gap: 10px; padding: 12px; border-radius: var(--r-lg); background: var(--s1); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06); transition: transform 260ms var(--ease-out), box-shadow 160ms ease; }
 .st-ov-page.on { box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.35); }
 .st-ov-page:focus { box-shadow: var(--ring); }
-.st-ov-page.moving { transform: translateY(-8px) scale(1.04); box-shadow: var(--ring), 0 24px 50px rgba(0, 0, 0, 0.55); }
-.st-ov-map { position: relative; aspect-ratio: 16 / 9; border-radius: var(--r-md); background: rgba(255, 255, 255, 0.03); overflow: hidden; }
+/* the lift uses translate/scale, not transform: the slide to a new place (TransitionGroup) writes transform, and the
+   two used to overwrite each other every frame, worst on long moves between rows */
+.st-ov-page.moving { translate: 0 -8px; scale: 1.04; box-shadow: var(--ring), 0 24px 50px rgba(0, 0, 0, 0.55); }
+.st-ov-map { position: relative; aspect-ratio: 16 / 9; border-radius: var(--r-md); background: rgba(255, 255, 255, 0.03); overflow: hidden; contain: layout paint; } /* a page's copy never relayouts the others */
 .st-ov-map i { position: absolute; box-sizing: border-box; border: 2px solid transparent; background: rgba(255, 255, 255, 0.12); border-radius: 6px; background-clip: padding-box; background-size: cover; background-position: center 30%; overflow: hidden; display: flex; align-items: flex-end; padding: 4px; }
 .st-ov-map i.pic { background-color: #111; }
 .st-ov-snap { position: absolute; left: 0; top: 0; transform-origin: 0 0; pointer-events: none; }
@@ -1344,10 +1403,10 @@ watch(() => store.play, loadWeek);
 .st-ov-tag { display: flex; align-items: center; gap: 4px; min-width: 0; color: rgba(255, 255, 255, 0.8); font-size: 10px; font-weight: 600; }
 .st-ov-tag em { font-style: normal; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .st-ov-clock { align-self: center; margin: auto; font-family: var(--display); font-weight: 800; font-size: clamp(12px, 1.4vw, 22px); color: #fff; }
-.st-ov-page { position: relative; transition: transform 260ms var(--ease-out), box-shadow 260ms var(--ease-out), opacity 200ms ease; }
+.st-ov-page { position: relative; transition: translate var(--spring-pop-d, 300ms) var(--spring-pop, ease-out), scale var(--spring-pop-d, 300ms) var(--spring-pop, ease-out), box-shadow 260ms var(--ease-out), opacity 200ms ease; }
 .st-ov-page.dim { opacity: 0.55; }
 .st-ov-carry { position: absolute; top: -12px; left: 50%; transform: translateX(-50%); display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; background: var(--focus); color: var(--on-focus); font-size: var(--t-xs); font-weight: 700; box-shadow: 0 6px 16px rgba(0, 0, 0, 0.45); }
-.st-ovm-move { transition: transform 300ms cubic-bezier(0.32, 0.72, 0, 1); }
+.st-ovm-move { transition: transform var(--spring-d, 420ms) var(--spring, cubic-bezier(0.32, 0.72, 0, 1)); }
 .st-ov-n { display: flex; justify-content: space-between; font-weight: 700; font-family: var(--display); }
 .st-ov-n em { font-style: normal; font-weight: 500; color: var(--muted); font-family: var(--body); font-size: var(--t-sm); }
 .st-pages { flex: none; align-self: center; display: flex; align-items: center; gap: 8px; padding: 6px 0 10px; } /* its own row under the board: never over a tile (0.9.24) */
@@ -1461,6 +1520,18 @@ watch(() => store.play, loadWeek);
 .st-band { flex: 1; min-height: 0; display: flex; gap: 10px; align-items: center; margin: 10px 0 4px; overflow: hidden; mask-image: linear-gradient(90deg, #000 80%, transparent); }
 .st-band img { height: min(100%, 220px); aspect-ratio: 2 / 3; object-fit: cover; border-radius: var(--r-md); box-shadow: var(--weight-edge), var(--weight); animation: st-in 520ms var(--ease-out) both; }
 .st-band:empty { display: none; }
+/* 0.9.41 (owner): "On this device" is the same green tick the game cards carry */
+.st-dev-tick { display: inline-grid; place-items: center; width: 22px; height: 22px; margin-left: 10px; border-radius: 50%; background: var(--green); color: #fff; vertical-align: middle; box-shadow: 0 0 0 2px rgba(6, 7, 11, 0.55); }
+/* 0.9.41: in Console at a Glance the covers share the row exactly (--n of them), so none is cut and none is missing;
+   the stats under them take only the room they need */
+.st-band.fit { mask-image: none; justify-content: space-between; container-type: size; align-self: stretch; }
+/* each cover: its share of the row, or as wide as the row's height allows at 2:3, whichever is smaller */
+.st-band.fit img { flex: none; width: min(calc((100cqw - (var(--n) - 1) * 10px) / var(--n)), 66.6cqh); height: auto; aspect-ratio: 2 / 3; }
+.st-stats.cs { flex: none; }
+.st-cs-mark :deep(.cmark) { max-width: 100%; }
+@container (max-width: 220px) { .st-cs-mark { text-align: center; } .st-band.fit { justify-content: center; } }
+/* a one-column tile: two numbers, one per line, whole words */
+@container (max-width: 200px) { .st-stats.cs { grid-template-columns: 1fr; text-align: center; } .st-stats.cs > div { align-items: center; } .st-stats.cs > div:nth-child(n+3) { display: none; } .st-stats.cs span { overflow-wrap: normal; } }
 .st-tro-mini { width: 34px; height: 34px; flex: none; border-radius: var(--r-sm); overflow: hidden; display: grid; place-items: center; background: var(--s2); opacity: calc(1 - var(--i) * 0.06); animation: st-in 420ms var(--ease-out) both; animation-delay: calc(var(--i) * 30ms + 200ms); }
 .st-tro-mini img { width: 100%; height: 100%; object-fit: cover; }
 @container (max-height: 84px) { .st-tro-strip { display: none; } }
@@ -1581,7 +1652,7 @@ watch(() => store.play, loadWeek);
 .st-media-stage { flex: 1; min-height: 0; min-width: 0; width: 100%; display: grid; place-items: center; }
 .st-media.wide .st-media-stage { width: auto; height: 100%; aspect-ratio: 1; flex: none; }
 .st-media-obj { grid-area: 1 / 1; height: 100%; max-width: 100%; display: grid; place-items: center; aspect-ratio: 1; }
-.st-disc { position: relative; height: 92%; aspect-ratio: 1; border-radius: 50%; background-size: cover; background-position: center; box-shadow: 0 14px 34px rgba(0, 0, 0, 0.55), 0 0 0 2px rgba(255, 255, 255, 0.08); -webkit-mask-image: radial-gradient(circle, transparent 0 7.5%, #000 8%); mask-image: radial-gradient(circle, transparent 0 7.5%, #000 8%); animation: st-spin 28s linear infinite; }
+.st-disc { position: relative; height: 92%; aspect-ratio: 1; border-radius: 50%; background-size: cover; background-position: center; box-shadow: 0 14px 34px rgba(0, 0, 0, 0.55), 0 0 0 2px rgba(255, 255, 255, 0.08); -webkit-mask-image: radial-gradient(circle, transparent 0 7.5%, #000 8%); mask-image: radial-gradient(circle, transparent 0 7.5%, #000 8%); animation: st-spin 60s linear infinite; } /* 0.9.39 (owner: the spin made them feel sick): one slow, even turn a minute */
 .st-disc-sheen { position: absolute; inset: 0; border-radius: 50%; background: conic-gradient(from 20deg, rgba(255, 255, 255, 0) 0deg, rgba(255, 255, 255, 0.28) 30deg, rgba(160, 220, 255, 0.10) 60deg, rgba(255, 255, 255, 0) 100deg, rgba(255, 255, 255, 0) 200deg, rgba(255, 210, 255, 0.22) 230deg, rgba(255, 255, 255, 0) 270deg); mix-blend-mode: screen; }
 .st-disc-hub { position: absolute; inset: 31%; border-radius: 50%; background: radial-gradient(circle, rgba(255, 255, 255, 0) 0 24%, rgba(230, 236, 245, 0.55) 25% 40%, rgba(255, 255, 255, 0.12) 41% 100%); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.25); }
 @keyframes st-spin { to { transform: rotate(360deg); } }
@@ -1594,6 +1665,8 @@ watch(() => store.play, loadWeek);
 .st-media.wide .st-media-t b { font-size: clamp(18px, 14cqh, 34px); }
 .st-media.wide .st-media-t span { font-size: var(--t-sm); }
 .st-media-bg { position: absolute; inset: 0; z-index: -1; background-size: cover; background-position: center; opacity: 0.5; -webkit-mask-image: linear-gradient(90deg, transparent 25%, #000 85%); mask-image: linear-gradient(90deg, transparent 25%, #000 85%); }
+/* 0.9.39 (owner: the picture should show at every size): square and tall tiles fade it down behind the title */
+.st-media-bg.tall { opacity: 0.42; -webkit-mask-image: linear-gradient(180deg, #000 10%, transparent 92%); mask-image: linear-gradient(180deg, #000 10%, transparent 92%); }
 .st-media-t b { font-family: var(--display); font-weight: 800; font-size: clamp(14px, 7cqmin, 24px); line-height: 1.15; text-wrap: balance; }
 .st-media-t span { color: var(--muted); font-size: var(--t-xs); }
 @container (max-height: 200px) { .st-media:not(.wide) .st-media-t { display: none; } }
@@ -1601,25 +1674,45 @@ watch(() => store.play, loadWeek);
 .st-media-enter-from { opacity: 0; transform: translateX(18%) scale(0.92); }
 .st-media-leave-to { opacity: 0; transform: translateX(-18%) scale(0.92); }
 :global(body.light-fx .st-disc), :global(body.motion-reduce .st-disc), :global(body.light-fx .st-cart), :global(body.motion-reduce .st-cart) { animation: none; }
-/* Game Shelf (0.9.32): spines on a board; the chosen game stands out with its cover */
-.st-shelf { position: relative; flex: 1; min-height: 0; display: flex; align-items: flex-end; gap: 6px; padding: 10px 4px 14px; margin-top: 4px; overflow: hidden; }
-.st-spine { position: relative; flex: none; width: 44px; height: 86%; border-radius: 4px 4px 2px 2px; overflow: hidden; background: #22252c; box-shadow: inset -6px 0 10px rgba(0, 0, 0, 0.45), inset 1px 0 0 rgba(255, 255, 255, 0.12), 0 6px 14px rgba(0, 0, 0, 0.45); transition: width 420ms var(--ease-out), height 420ms var(--ease-out), transform 420ms var(--ease-out); }
-.st-spine-art { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: left center; opacity: 0.55; filter: saturate(1.1); transition: opacity 320ms ease; }
-.st-spine-t { position: absolute; inset: 8px 0; writing-mode: vertical-rl; transform: rotate(180deg); display: flex; align-items: center; justify-content: flex-start; padding: 6px 0; font-family: var(--display); font-weight: 800; font-size: 13px; color: #fff; text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8); overflow: hidden; white-space: nowrap; line-height: 44px; }
-.st-spine.out { width: min(36%, calc(86cqh * 0.7)); height: 96%; transform: translateY(-4px); }
-.st-spine.out .st-spine-art { opacity: 1; object-position: center; }
-.st-spine.out .st-spine-t { display: none; }
-.st-spine:not(.out):hover { transform: translateY(-8px); }
-.st-spine { cursor: pointer; }
+.st-shelf-mark :deep(.cmark) { --cm-h: 1.15em; } /* 0.9.39 (owner): the console's logo, not "PlayStation 4 Shelf" */
+/* Game Shelf (0.9.42, option B): cases on a lit shelf. Each case is a spine with the console's band on top and its
+   cover showing faintly through; the picked one turns out (rotateY, spring) to show its whole cover. The spot and
+   the blurred cover behind light it. Springs, not keyframes, so a quick L1/R1 run retargets smoothly. */
+.st-shelf-amb { position: absolute; inset: -40px; z-index: -1; background-size: cover; background-position: center; filter: blur(40px) saturate(1.3); opacity: 0.34; transition: background-image 600ms var(--ease-out); pointer-events: none; }
+.st-shelf-head { display: flex; align-items: center; gap: 0; }
+.st-shelf-t { margin-left: auto; padding-left: 12px; text-align: right; min-width: 0; display: flex; flex-direction: column; align-items: flex-end; }
+.st-shelf-t b { font-family: var(--display); font-weight: 800; font-size: clamp(13px, 1.4em, 19px); color: var(--text); line-height: 1.15; overflow-wrap: anywhere; text-wrap: balance; }
+.st-shelf-t span { display: inline-flex; align-items: center; font-size: 0.85em; font-weight: 500; color: var(--muted); margin-top: 2px; }
+.st-shelf-t .st-dev-tick { width: 18px; height: 18px; margin-left: 8px; }
+@container (max-width: 380px) { .st-shelf-t { display: none; } }
+.st-shelf { position: relative; flex: 1; min-height: 0; display: flex; align-items: flex-end; gap: 5px; padding: 8px 10px 16px; margin-top: 6px; perspective: 900px; overflow: hidden; }
+.st-shelf-spot { position: absolute; left: 0; top: -30%; width: 60%; height: 130%; background: radial-gradient(55% 55% at 35% 0, rgba(255, 255, 255, 0.14), transparent 70%); pointer-events: none; }
+.st-spine { position: relative; flex: none; width: 36px; height: 90%; border-radius: 3px; overflow: hidden; cursor: pointer; background: #1c1d22; transform-origin: right center;
+  box-shadow: inset 1px 0 0 rgba(255, 255, 255, 0.18), inset -8px 0 12px rgba(0, 0, 0, 0.5), 0 6px 10px rgba(0, 0, 0, 0.4);
+  transition: width 560ms var(--spring), height 560ms var(--spring), transform 560ms var(--spring), margin 560ms var(--spring), box-shadow 300ms ease; }
+.st-spine::after { content: ''; position: absolute; left: 0; right: 0; top: 0; height: clamp(14px, 9%, 24px); background: linear-gradient(color-mix(in srgb, var(--case) 100%, #fff 12%), var(--case)); box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.22), 0 1px 0 rgba(0, 0, 0, 0.35); z-index: 2; }
+.st-spine-art { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: left center; opacity: 0.5; filter: blur(1px); transition: opacity 320ms ease, filter 320ms ease; }
+.st-spine-t { position: absolute; inset: clamp(22px, 13%, 32px) 0 8px; z-index: 1; writing-mode: vertical-rl; transform: rotate(180deg); display: flex; align-items: center; justify-content: flex-start; font-family: var(--display); font-weight: 700; font-size: 12px; color: #fff; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9); overflow: hidden; white-space: nowrap; line-height: 36px; }
+.st-spine.out { width: min(36%, calc((100cqh - 96px) * 0.7)); min-width: 60px; height: 100%; margin: 0 12px 0 6px; transform: rotateY(-12deg); border-radius: 4px;
+  box-shadow: 0 24px 40px rgba(0, 0, 0, 0.6), inset 0 0 0 1px rgba(255, 255, 255, 0.2); }
+.st-spine.out .st-spine-art { opacity: 1; filter: none; object-position: center; }
+.st-spine.out .st-spine-t { opacity: 0; }
+.st-spine:not(.out):hover, .st-tile:focus .st-spine:not(.out):hover { transform: translateY(-8px); }
+.st-tile:focus .st-spine.out { transform: rotateY(-6deg) translateY(-4px); }
+.st-shelf-board { position: absolute; left: 0; right: 0; bottom: 4px; height: 12px; border-radius: 4px; background: linear-gradient(180deg, rgba(255, 255, 255, 0.28), rgba(255, 255, 255, 0.06)); box-shadow: 0 14px 24px rgba(0, 0, 0, 0.55); }
+:global(body.light-fx .st-shelf-amb) { display: none; }
+:global(body.light-fx .st-spine-art) { filter: none; }
+:global(body.motion-reduce .st-spine) { transition: none; }
+:global(body.theme-light .st-shelf-board) { background: linear-gradient(180deg, #fff, #d6d6dc); box-shadow: 0 10px 18px rgba(30, 30, 40, 0.22); }
+:global(body.theme-light .st-shelf-spot) { display: none; }
+:global(body.theme-light .st-shelf-amb) { opacity: 0.2; }
 .st-media-stage { cursor: pointer; }
 /* focused: the disc spins faster (a second turn on top, so it never jumps) and lifts; the cartridge rises as if
    pulled from the slot; a game on this device has a soft green glow */
 .st-media-obj { transition: transform 420ms var(--ease-out); }
 .st-tile:focus .st-media-obj, .st-tile:hover .st-media-obj { transform: translateY(-3%) scale(1.04); }
 .st-media-obj.dev .st-disc-boost, .st-media-obj.dev .st-cart { box-shadow: 0 14px 34px rgba(0, 0, 0, 0.55), 0 0 0 2px rgba(127, 224, 160, 0.35), 0 0 24px rgba(127, 224, 160, 0.18); }
-.st-disc-boost { height: 92%; aspect-ratio: 1; border-radius: 50%; display: grid; place-items: center; animation: st-spin 3s linear infinite; animation-play-state: paused; }
+.st-disc-boost { height: 92%; aspect-ratio: 1; border-radius: 50%; display: grid; place-items: center; } /* 0.9.39: no faster spin on focus any more */
 .st-disc-boost > .st-disc { height: 100%; }
-.st-tile:focus .st-disc-boost { animation-play-state: running; }
-:global(body.light-fx .st-disc-boost), :global(body.motion-reduce .st-disc-boost) { animation: none; }
-.st-shelf-board { position: absolute; left: 0; right: 0; bottom: 4px; height: 10px; border-radius: 3px; background: linear-gradient(180deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.04)); box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5); }
+:global(body.motion-reduce .st-disc) { animation: none; }
 </style>

@@ -17,6 +17,7 @@ const SOURCES = {
   shadps4: { id: 'shadps4', name: 'shadPS4', platform: 'PlayStation 4', short: 'PS4', slugs: ['ps4'], kind: 'trophy' },
   xenia: { id: 'xenia', name: 'Xenia', platform: 'Xbox 360', short: 'X360', slugs: ['xbox360'], kind: 'gamerscore' },
   vita3k: { id: 'vita3k', name: 'Vita3K', platform: 'PlayStation Vita', short: 'Vita', slugs: ['psvita'], kind: 'trophy' },
+  kytyps5: { id: 'kytyps5', name: 'KytyPS5', platform: 'PlayStation 5', short: 'PS5', slugs: ['ps5'], kind: 'trophy' },
 };
 
 const HOME = os.homedir();
@@ -359,7 +360,7 @@ function titles() {
   return titleMem;
 }
 function rememberTitle(np, title) {
-  if (!trpCacheDir || !/^NPWR\d{5}_\d{2}$/.test(np || '') || !title || /^NPWR\d{5}_\d{2}$/.test(title) || titles()[np] === title) return;
+  if (!trpCacheDir || !/^(NPWR\d{5}_\d{2}|PPSA\d{5}_\d{2})$/.test(np || '') || !title || /^NPWR\d{5}_\d{2}$/.test(title) || titles()[np] === title) return;
   titles()[np] = title;
   try { fs.mkdirSync(trpCacheDir, { recursive: true }); fs.writeFileSync(path.join(trpCacheDir, 'titles.json'), JSON.stringify(titleMem)); } catch {}
 }
@@ -546,9 +547,88 @@ function parseXenia(contentRoot) {
   return [...byTitle.values()];
 }
 
+// ---------------------------------------------------------------- KytyPS5 (PS5, 0.9.37)
+// From KytyPS5's src/common/trophies.cpp: unlocks are <working folder>/_SaveData/<title ID>/trophies_<user>_<label>.json
+// ({"unlockedTrophies":[ids]}, no times); names are in the game's sce_sys/trophy2/trophy<label>.ucp: big-endian magic
+// 0xb228c60a, version 1, size (8 bytes at 8), file count (at 0x10), table offset (at 0x14), entries of 0x40 bytes
+// from table + 0x20 (name 0x20, offset 8, length 8) holding tropconf.json (ids, grades) and tropmeta_<locale>.json.
+// KytyPS5 keeps no times, so an unlock's time is when Cartridge first saw it (the file's time on the first read).
+let ps5Games = () => [];
+function setPs5Games(fn) { ps5Games = fn || (() => []); }
+function readUcp(buf) {
+  if (!buf || buf.length < 0x40 || buf.readUInt32BE(0) !== 0xb228c60a || buf.readUInt32BE(4) !== 1) return null;
+  const size = Number(buf.readBigUInt64BE(8)), count = buf.readUInt32BE(0x10), toc = buf.readUInt32BE(0x14);
+  if (size < 0x40 || size > buf.length || count > 4096 || toc > size || 0x20 + count * 0x40 > size - toc) return null;
+  const files = new Map();
+  for (let i = 0; i < count; i++) {
+    const e = toc + 0x20 + i * 0x40, name = buf.toString('latin1', e, e + 0x20).replace(/\0.*$/s, '');
+    const off = Number(buf.readBigUInt64BE(e + 0x20)), len = Number(buf.readBigUInt64BE(e + 0x28));
+    if (off > size || len > size - off) return null;
+    files.set(name, buf.subarray(off, off + len));
+  }
+  const json = (n) => { try { return JSON.parse(files.get(n).toString('utf8')); } catch { return null; } };
+  const conf = json('tropconf.json');
+  if (!conf || !Array.isArray(conf.trophies)) return null;
+  const meta = (json('tropmeta_en-US.json') || json('tropmeta_en-GB.json') || json(`tropmeta_${conf.defaultLanguage}.json`))?.metadata || {};
+  const text = new Map((meta.trophyMetadata || []).map((t) => [Number(t.id), t]));
+  return {
+    title: meta.titleMetadata?.name || '',
+    trophies: conf.trophies.map((t) => ({ id: Number(t.id), grade: 'PGSB'.includes(t.grade) ? t.grade : null, hidden: !!t.hidden, name: text.get(Number(t.id))?.name || `Trophy ${t.id}`, desc: text.get(Number(t.id))?.detail || '' })),
+    icon: files.get('icon0.png') ? 'icon0.png' : null,
+    png: (n) => files.get(n) || null,
+  };
+}
+function kytyRoots() {
+  const out = [];
+  for (const d of APP_DIRS()) for (const n of ['KytyPS5', 'kytyps5']) if (isDir(path.join(d, n, '_SaveData'))) out.push({ dir: path.join(d, n), how: 'config' });
+  return out;
+}
+const ucpCache = new Map(); // file -> { mt, v }
+function ps5TitleFolders() {
+  const out = new Map();
+  for (const g of ps5Games() || []) {
+    try { const j = JSON.parse(fs.readFileSync(path.join(g, 'sce_sys', 'param.json'), 'utf8')); const id = j.titleId || j.titleID; if (id) out.set(String(id).toUpperCase(), g); } catch {}
+  }
+  return out;
+}
+let seenFile = null;
+function parseKyty(root) {
+  const games = [], folders = ps5TitleFolders();
+  seenFile ||= trpCacheDir ? path.join(trpCacheDir, 'kyty-seen.json') : null;
+  let seen = {}; try { seen = JSON.parse(fs.readFileSync(seenFile, 'utf8')) || {}; } catch {}
+  let dirty = false;
+  for (const tid of ls(path.join(root, '_SaveData'))) {
+    for (const f of ls(path.join(root, '_SaveData', tid))) {
+      const m = /^trophies_(\d+)_(\d+)\.json$/.exec(f);
+      if (!m) continue;
+      const file = path.join(root, '_SaveData', tid, f), label = Number(m[2]);
+      let ids = []; try { ids = (JSON.parse(fs.readFileSync(file, 'utf8')).unlockedTrophies || []).map(Number); } catch { continue; }
+      const set = `${tid.toUpperCase()}_${String(label).padStart(2, '0')}`, ft = mtime(file);
+      const game = folders.get(tid.toUpperCase());
+      const ucpF = game && path.join(game, 'sce_sys', 'trophy2', `trophy${String(label).padStart(2, '0')}.ucp`);
+      let ucp = null;
+      if (ucpF && exists(ucpF)) { const c = ucpCache.get(ucpF); if (c && c.mt === mtime(ucpF)) ucp = c.v; else { try { ucp = readUcp(fs.readFileSync(ucpF)); } catch {} ucpCache.set(ucpF, { mt: mtime(ucpF), v: ucp }); } }
+      // pictures out of the package into the icon cache, once
+      const pic = (n, key) => { const d = ucp?.png(n); if (!d || !iconCacheDir) return ''; const out = path.join(iconCacheDir, `ps5-${set}-${key}.png`); try { if (!exists(out)) { fs.mkdirSync(iconCacheDir, { recursive: true }); fs.writeFileSync(out, d); } } catch { return ''; } return iconToken(out); };
+      const time = (id) => { const k = `${set}:${id}`; if (!seen[k]) { seen[k] = Math.round(ft) || Date.now(); dirty = true; } return seen[k]; };
+      const unlocked = new Set(ids);
+      const list = ucp ? ucp.trophies : ids.map((id) => ({ id, grade: null, hidden: false, name: `Trophy ${id}`, desc: '' }));
+      const title = ucp?.title || titles()[set] || tid.toUpperCase();
+      if (ucp?.title) rememberTitle(set, ucp.title);
+      games.push({
+        src: 'kytyps5', set, title, titleId: tid.toUpperCase(), icon: pic('icon0.png', 'game'),
+        trophies: list.map((t) => ({ ...t, icon: pic(`trop${String(t.id).padStart(4, '0')}.png`, t.id), unlocked: unlocked.has(t.id), time: unlocked.has(t.id) ? time(t.id) : null })),
+        files: [file],
+      });
+    }
+  }
+  if (dirty && seenFile) { try { fs.mkdirSync(path.dirname(seenFile), { recursive: true }); fs.writeFileSync(seenFile, JSON.stringify(seen)); } catch {} }
+  return games;
+}
+
 // ---------------------------------------------------------------- detection + scanning
-const DETECT = { rpcs3: rpcs3Roots, shadps4: shadps4Roots, xenia: xeniaRoots, vita3k: vita3kRoots };
-const PARSE = { rpcs3: parseRpcs3, shadps4: parseShadps4, xenia: parseXenia, vita3k: parseVita3k };
+const DETECT = { rpcs3: rpcs3Roots, shadps4: shadps4Roots, xenia: xeniaRoots, vita3k: vita3kRoots, kytyps5: kytyRoots };
+const PARSE = { rpcs3: parseRpcs3, shadps4: parseShadps4, xenia: parseXenia, vita3k: parseVita3k, kytyps5: parseKyty };
 
 // Does this folder hold data for the given source? Returns the root to use (it may be a parent
 // or child of what the user picked), or null.
@@ -585,6 +665,10 @@ function validateAt(src, dir) {
   }
   if (src === 'xenia') {
     for (const d of [dir, path.join(dir, 'content'), ...tryDirs]) if (xeniaProfiles(d).length) return d;
+    return null;
+  }
+  if (src === 'kytyps5') {
+    for (const d of [dir, ...tryDirs]) if (ls(path.join(d, '_SaveData')).some((t) => ls(path.join(d, '_SaveData', t)).some((f) => /^trophies_\d+_\d+\.json$/.test(f)))) return d;
     return null;
   }
   return null;
@@ -670,4 +754,4 @@ function signature(dirs) {
   return s;
 }
 
-module.exports = { rememberTitle, readTrp, shadTrophyKey, setTrpCacheDir, APP_DIRS, emulationRoots, registerIcon: iconToken, shadKeyState, watchPaths, SOURCES, DETECT, validate, scan, readSource, signature, iconPath, setIconCacheDir, readTropusrPS3, readTropusrVita, parseTrophyXml, parseGpd, readXdbf };
+module.exports = { readUcp, setPs5Games, rememberTitle, readTrp, shadTrophyKey, setTrpCacheDir, APP_DIRS, emulationRoots, registerIcon: iconToken, shadKeyState, watchPaths, SOURCES, DETECT, validate, scan, readSource, signature, iconPath, setIconCacheDir, readTropusrPS3, readTropusrVita, parseTrophyXml, parseGpd, readXdbf };

@@ -1,9 +1,9 @@
 <template>
   <div class="lf">
-    <p class="muted small" style="margin: 0">Link a fork’s save folder to the emulator it comes from, and both play with the same saves. Nothing is deleted: a fork’s own saves are set aside and come back when you remove the link.</p>
+    <p class="muted small" style="margin: 0">Link a fork’s save folder to the emulator it comes from, and both play with the same saves. Find and Link Saves does every fork at once; pick one below to do it yourself. Nothing is deleted: a fork’s own saves are set aside and come back when you remove the link.</p>
     <div v-if="!d" class="muted small"><Icon name="mdiSync" :size="16" class="spin" /> Looking for forks and their folders…</div>
     <template v-else>
-      <div class="lf-head"><b>Suggested</b><span class="muted small">{{ d.suggestions.length ? 'Forks found on this device' : '' }}</span></div>
+      <div class="lf-head"><b>Suggested</b><button v-if="ready.length" class="btn primary" data-focus :disabled="auto" @click="findAndLink"><Icon :name="auto ? 'mdiSync' : 'mdiAutoFix'" :class="{ spin: auto }" />Find and Link Saves</button><span v-else class="muted small">{{ d.suggestions.length ? 'Forks found on this device' : '' }}</span></div>
       <div v-if="!d.suggestions.length && d.links.some((l) => l.fork)" class="muted small">Every fork found is linked.</div>
       <div v-else-if="!d.suggestions.length" class="muted small">No forks found. Mark a copy as a fork in Emulator setup, or install one from a GitHub link, and it shows up here.</div>
       <button v-for="s in d.suggestions" :key="s.exe + s.rel" class="lf-card" data-focus @click="suggest(s)">
@@ -31,11 +31,13 @@
 <script setup>
 // Settings → Emulators → Linked Folders (0.9.33, owner): forks sharing the original emulator's saves through a
 // link (electron/folderLinks.js). Suggestions for each fork found; New Link for any two folders.
-import { onMounted, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { call, toast, confirm, choose, pickFolder, ago, store } from '../store.js';
 import Icon from './Icon.vue';
 
-const d = ref(null);
+const d = ref(null), auto = ref(false);
+// ready to link by themselves: both folders known, nothing in the way (0.9.37)
+const ready = computed(() => (d.value?.suggestions || []).filter((s) => s.from && s.to && ['folder', 'empty', 'missing'].includes(s.state)));
 const NAMES = { shadps4: 'shadPS4', rpcs3: 'RPCS3', eden: 'Eden', yuzu: 'yuzu', citron: 'Citron', dolphin: 'Dolphin', pcsx2: 'PCSX2', ppsspp: 'PPSSPP', vita3k: 'Vita3K', cemu: 'Cemu', duckstation: 'DuckStation', azahar: 'Azahar', ryujinx: 'Ryujinx', xenia: 'Xenia' };
 const nameOf = (id) => NAMES[id] || id;
 const short = (p) => (p ? p.replace(d.value?.home || store.info?.home || '\u0000', '~') : '');
@@ -73,6 +75,22 @@ async function suggest(s) {
   }
   await make(from, s.to, { label: s.label, fork: s.fork, of: s.of });
 }
+// 0.9.37 (owner: a smart button that finds the saves and links them; the manual way stays): every fork ready to
+// link at once; games only the fork has saves for are copied to the original first, so none go missing
+async function findAndLink() {
+  const list = await call('links:auto', { dry: true }).catch((e) => { toast(e.message, 'error'); return []; });
+  if (!list.length) return toast('Nothing to link right now', 'info', 3000);
+  const lines = list.map((s) => `${s.fork} → ${s.ofName} · ${s.label}`).join('\n');
+  if (!(await confirm(`Link ${list.length} folder${list.length === 1 ? '' : 's'}?`, `${lines}\n\nGames only a fork has saves for are copied to the original first (copies only, nothing is overwritten). Each fork’s own folder is set aside and comes back if you remove its link. Close the emulators first.`, 'Find and Link'))) return;
+  auto.value = true;
+  try {
+    const r = await call('links:auto', {});
+    const ok = r.filter((x) => !x.error), bad = r.filter((x) => x.error), copied = ok.reduce((n, x) => n + x.copied, 0);
+    toast(ok.length ? `Linked ${ok.length}${copied ? ` · ${copied} game${copied === 1 ? '' : 's'} copied across first` : ''}${bad.length ? ` · ${bad.length} couldn’t be linked: ${bad[0].error}` : ''}` : `Couldn’t link: ${bad[0]?.error || 'nothing was ready'}`, ok.length ? 'ok' : 'error', 6000, 'mdiLinkVariant');
+  } catch (e) { toast(e.message, 'error', 6000); }
+  auto.value = false;
+  load();
+}
 async function newLink() {
   const from = await pickFolder({ title: 'The folder to replace', subtitle: 'Usually the fork’s save folder. It becomes a link; what’s in it is set aside.', hidden: true });
   if (!from) return;
@@ -99,7 +117,7 @@ defineExpose({ load });
 <style scoped>
 .lf { display: flex; flex-direction: column; gap: var(--s-3); }
 .lf-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); margin-top: var(--s-2); }
-.lf-head b { font-family: var(--display); font-size: var(--t-lg); }
+.lf-head b { font-family: var(--display); font-size: var(--t-lg); margin-right: auto; }
 .lf-card { display: flex; flex-direction: column; gap: var(--s-2); padding: 14px 16px; border-radius: var(--r-md); background: var(--s2); text-align: left; width: 100%; }
 .lf-card:focus { background: var(--focus); color: var(--on-focus); }
 .lf-card:focus .lf-path, .lf-card:focus .lf-note { color: var(--on-focus-dim); }

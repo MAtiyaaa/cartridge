@@ -7,7 +7,7 @@ const T = require('./trophies');
 
 const NOTE_TITLE = 'Cartridge trophies';
 const NOTE_TAG = 'cartridge-trophies';
-const ORDER = ['rpcs3', 'shadps4', 'xenia', 'vita3k'];
+const ORDER = ['rpcs3', 'shadps4', 'xenia', 'vita3k', 'kytyps5'];
 
 module.exports = function createTrophyService(ctx) {
   const { USER_DATA, api, broadcast, log, loadJson } = ctx;
@@ -197,7 +197,7 @@ module.exports = function createTrophyService(ctx) {
   // A device that only has a code for a game (shadPS4 keeps names with the installed game, so a synced
   // user folder gives NPWR12345_00; Xenia sometimes has no title) takes the name another device wrote
   // to RomM, else the linked library game's (0.9.3 K, E1). Nothing is written into emulator folders.
-  const isCode = (t) => !t || /^(NPWR\d{5}_\d{2}|[0-9A-F]{8}|CUSA\d{5}|[A-Z]{4}\d{5}|PCS[A-Z]\d{5})$/i.test(String(t).trim());
+  const isCode = (t) => !t || /^(NPWR\d{5}_\d{2}|[0-9A-F]{8}|CUSA\d{5}|PPSA\d{5}(_\d{2})?|[A-Z]{4}\d{5}|PCS[A-Z]\d{5})$/i.test(String(t).trim());
   // 0.9.29: then a built-in name for the code (titleNames: Xbox 360 title IDs from x360db)
   const nameOf = (title, remTitle, romId, src) => (!isCode(title) ? title : !isCode(remTitle) ? remTitle : romById(romId)?.name || ctx.codeName?.(src, title || remTitle) || title || remTitle || 'Unknown game');
   function merged(k) {
@@ -362,7 +362,10 @@ module.exports = function createTrophyService(ctx) {
     }
     remote.set(k, { romId, noteId: noteId || null, data: changed ? data : note?.data || data });
   }
-  async function sync() {
+  const NOTED_FILE = path.join(USER_DATA, 'trophy-noted.json');
+  const noted = new Set(loadJson(NOTED_FILE, [])); // ROMs seen with trophy notes (any device)
+  let lastFull = 0;
+  async function sync({ force } = {}) {
     if (cfg().sync === false) { syncState = { state: 'off' }; return syncState; }
     if (!ctx.getConfig().configured) return syncState;
     syncState = { state: 'running', at: syncState.at };
@@ -379,9 +382,19 @@ module.exports = function createTrophyService(ctx) {
       const localRoms = new Set([...games.values()].map(autoLink).filter(Boolean));
       // consoles with a game known here only by its code are read first, so the 80 cover them
       const coded = new Set([...games.values()].filter((g) => isCode(g.title)).map((g) => g.src));
-      const withNotes = [...ORDER.filter((id) => coded.has(id)), ...ORDER.filter((id) => !coded.has(id))].flatMap((id) => romsFor(id)).filter((r) => r.has_notes && !localRoms.has(r.id)).slice(0, 80);
+      // 0.9.37 (owner: truly cloud synced, even where the emulator or the game isn't installed): every 30 minutes (and
+      // when asked) every game on a trophy console is read, not only the ones the library last said had notes, so a
+      // game another device just played shows up without a library refresh; between those, the ones known to have notes
+      const full = force || Date.now() - lastFull > 30 * 60e3;
+      const pool = [...ORDER.filter((id) => coded.has(id)), ...ORDER.filter((id) => !coded.has(id))].flatMap((id) => romsFor(id)).filter((r) => !localRoms.has(r.id));
+      const withNotes = full ? pool : pool.filter((r) => r.has_notes || noted.has(r.id));
+      const reads = new Map();
+      const read = async (r) => { try { reads.set(r.id, await notesAll(r.id)); } catch (e) { if (/404/.test(e.message)) reads.set(r.id, []); else throw e; } };
+      for (let i = 0; i < withNotes.length; i += 6) await Promise.all(withNotes.slice(i, i + 6).map(read));
+      if (full) lastFull = Date.now();
       for (const r of withNotes) {
-        const all = await notesAll(r.id);
+        const all = reads.get(r.id) || [];
+        if (all.some((x) => x.data.cartridge === 'trophies')) noted.add(r.id); else noted.delete(r.id);
         for (const n of all.filter((x) => x.data.cartridge === 'trophies' && x.title === NOTE_TITLE)) {
           const k = `${n.data.src}:${n.data.set}`;
           if (!T.SOURCES[n.data.src]) continue;
@@ -397,7 +410,8 @@ module.exports = function createTrophyService(ctx) {
         }
       }
       saveRemote();
-      syncState = { state: 'ok', at: Date.now(), pushed, pulled };
+      try { fs.writeFileSync(NOTED_FILE, JSON.stringify([...noted])); } catch {}
+      syncState = { state: 'ok', at: Date.now(), pushed, pulled, full };
     } catch (e) {
       const msg = /Authentication/.test(e.message) ? 'Your RomM login cannot write notes (needs the roms.user.write permission)'
         : /Server error 404|Server error 405/.test(e.message) ? 'This RomM version has no notes, update RomM to sync trophies' : e.message;
@@ -457,7 +471,7 @@ module.exports = function createTrophyService(ctx) {
       broadcast('trophies', { changed: true });
       return true;
     },
-    'trophies:sync': () => sync(),
+    'trophies:sync': () => sync({ force: true }),
   };
   function stop() { clearInterval(pollT); clearTimeout(syncT); }
   return { start, stop, handlers, iconPath: T.iconPath, refresh };

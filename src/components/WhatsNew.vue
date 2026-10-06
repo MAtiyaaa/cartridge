@@ -6,7 +6,7 @@
           <div class="eyebrow">What’s New</div>
           <h2>Cartridge {{ cur?.title }}</h2>
         </div>
-        <div class="wn-nav"><Btn b="LB" /><span class="muted small">{{ i + 1 }} of {{ versions.length }}</span><Btn b="RB" /></div>
+        <div class="wn-nav"><Btn b="LB" /><span class="muted small">{{ i + 1 }} of {{ versions.length }}</span><Btn b="RB" /><span class="wn-rs muted small"><Btn b="RS" /> Scroll</span></div>
       </div>
       <div class="wn-body" data-scroll ref="body">
         <template v-for="(b, k) in cur?.blocks || []" :key="i + ':' + k">
@@ -59,9 +59,13 @@ onBeforeUnmount(() => layer?.pop());
 </script>
 <style scoped>
 .wn { width: min(880px, 94vw); max-height: 88vh; display: flex; flex-direction: column; gap: var(--s-3); }
+/* 0.9.41 (owner: the page behind showed through): a long read gets a solid card, also with Glass elements */
+.dialog.wn { background: linear-gradient(var(--s1), var(--s1)), var(--bg); backdrop-filter: none; }
 .wn-head { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--s-4); }
 .wn-head h2 { margin: 2px 0 0; font-size: var(--t-xl); }
 .wn-nav { display: flex; align-items: center; gap: 8px; }
+.wn-rs { display: inline-flex; align-items: center; gap: 6px; margin-left: 10px; }
+:global(body:not(.pad-mode) .wn-rs) { display: none; }
 .wn-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding-right: 6px; }
 .cl-h { font-weight: 700; margin: var(--s-3) 0 var(--s-1); text-transform: uppercase; letter-spacing: 0.06em; font-size: var(--t-xs); color: var(--muted); }
 .cl-list { margin: 0; padding-left: 1.1em; display: flex; flex-direction: column; gap: 6px; line-height: 1.45; }

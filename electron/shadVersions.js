@@ -141,4 +141,19 @@ function lastRun(home = os.homedir(), extra = []) {
   }
   return best;
 }
-module.exports = { lastRun, launcherDir, settings, installed, available, addRelease, remove, folderName, iniValue, EXE };
+// the launcher's default version (qt_ui.ini [version_manager] versionSelected), set only when none is: the other
+// lines of the file stay as they are (QSettings ini)
+function setDefaultIfNone(exePath, home) {
+  const f = path.join(launcherDir(home), 'qt_ui.ini');
+  let ini = ''; try { ini = fs.readFileSync(f, 'utf8'); } catch {}
+  if (iniValue(ini, 'version_manager', 'versionSelected')) return false;
+  const lines = ini ? ini.split(/\r?\n/) : [];
+  const at = lines.findIndex((l) => l.trim() === '[version_manager]');
+  if (at >= 0) { const i = lines.findIndex((l, j) => j > at && /^versionSelected\s*=/.test(l.trim())); if (i >= 0) lines[i] = `versionSelected=${exePath}`; else lines.splice(at + 1, 0, `versionSelected=${exePath}`); }
+  else { if (lines.length && lines[lines.length - 1] !== '') lines.push(''); lines.push('[version_manager]', `versionSelected=${exePath}`, ''); }
+  fs.mkdirSync(path.dirname(f), { recursive: true });
+  fs.writeFileSync(f + '.cartridge-new', lines.join('\n')); fs.renameSync(f + '.cartridge-new', f);
+  return true;
+}
+
+module.exports = { setDefaultIfNone, lastRun, launcherDir, settings, installed, available, addRelease, remove, folderName, iniValue, EXE };

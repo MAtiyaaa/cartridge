@@ -92,7 +92,7 @@ import ConsoleMark from '../components/ConsoleMark.vue';
 // Trophies and achievements that emulators keep on this device (plus other devices, via RomM)
 const el = ref(null);
 const data = ref(null);
-const SLUG = { rpcs3: 'ps3', shadps4: 'ps4', xenia: 'xbox360', vita3k: 'psvita' };
+const SLUG = { rpcs3: 'ps3', shadps4: 'ps4', xenia: 'xbox360', vita3k: 'psvita', kytyps5: 'ps5' };
 // the game's logo: the library game's own, or one looked up by name for games only in trophies
 const hash = (t) => { let h = 5381; for (const c of String(t)) h = ((h * 33) ^ c.charCodeAt(0)) >>> 0; return h.toString(36); };
 function logoFor(g) {
@@ -120,7 +120,7 @@ const syncText = computed(() => {
 
 // Show: every console or one; Sort: latest unlock, most or least complete, name
 const show = ref('all'), sort = ref('latest'), withHidden = ref(false);
-const PLAT = { rpcs3: 'PS3', shadps4: 'PS4', xenia: 'Xbox 360', vita3k: 'PS Vita' };
+const PLAT = { rpcs3: 'PS3', shadps4: 'PS4', xenia: 'Xbox 360', vita3k: 'PS Vita', kytyps5: 'PS5' };
 const SORTS = [{ v: 'latest', l: 'Latest', icon: 'mdiClockOutline' }, { v: 'most', l: 'Most complete', icon: 'mdiProgressCheck' }, { v: 'least', l: 'Least complete', icon: 'mdiProgressClock' }, { v: 'name', l: 'A–Z', icon: 'mdiSortAlphabeticalAscending' }];
 const showLabel = computed(() => (show.value === 'all' ? 'All consoles' : PLAT[show.value]));
 const games = computed(() => {
@@ -183,15 +183,15 @@ onMounted(async () => { await load(); focusFirst(el.value); });
 .tp-meta { display: flex; flex-direction: column; gap: 4px; align-items: flex-end; font-size: var(--t-sm); }
 .tp-unlock { flex: none; width: 360px; display: flex; gap: 14px; padding: 14px; border-radius: var(--r-md); text-align: left; transition: transform 0.14s ease-out; }
 .tp-unlock:focus { transform: scale(1.03); }
-.tp-ticon { position: relative; width: 64px; height: 64px; border-radius: var(--r-md); flex: none; display: grid; place-items: center; overflow: visible; background: rgba(0, 0, 0, 0.25); box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4); }
+.tp-ticon { position: relative; width: 64px; height: 64px; border-radius: var(--r-md); flex: none; display: grid; place-items: center; overflow: visible; background: var(--tile-bg, rgba(0, 0, 0, 0.25)); box-shadow: var(--tile-shadow, 0 6px 16px rgba(0, 0, 0, 0.4)); }
 .tp-ticon > img { width: 100%; height: 100%; object-fit: cover; border-radius: var(--r-md); }
 .tp-ticon-game { position: absolute; right: -8px; bottom: -8px; }
 .tp-ticon-game .gicon { box-shadow: 0 0 0 2px rgba(10, 10, 20, 0.9); }
 .tp-u-body { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
 .tp-u-title { font-family: var(--display); font-weight: 600; font-size: var(--t-md); display: flex; gap: 6px; align-items: center;  overflow-wrap: anywhere; }
-.tp-u-desc { font-size: var(--t-xs); color: #c3c9d4; overflow-wrap: anywhere; }
+.tp-u-desc { font-size: var(--t-xs); color: var(--text-2, #c3c9d4); overflow-wrap: anywhere; }
 .tp-u-meta { display: flex; gap: 10px; align-items: center; font-size: var(--t-xs); color: var(--muted); }
-.tp-u-meta .pts { color: #9be38a; font-weight: 600; }
+.tp-u-meta .pts { color: var(--score, #9be38a); font-weight: 600; }
 .dev { display: inline-flex; gap: 4px; align-items: center; color: #9cc3ff; }
 .tp-u-game { font-size: var(--t-xs); color: var(--muted);  overflow-wrap: anywhere; }
 .tp-games { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 14px; padding-bottom: 30px; }
@@ -205,7 +205,7 @@ onMounted(async () => { await load(); focusFirst(el.value); });
 .inlib { color: var(--green-l); }
 .tp-bar { height: 6px; }
 .tp-bar i { background: linear-gradient(90deg, #7fa8ff, #cfe0ff); }
-.tp-g-prog { font-size: var(--t-xs); color: #c3c9d4; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.tp-g-prog { font-size: var(--t-xs); color: var(--text-2, #c3c9d4); display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .tp-mini { display: inline-flex; gap: 8px; margin-left: 6px; }
 .tp-mini span { display: inline-flex; gap: 3px; align-items: center; }
 .tp-plat { flex: none; }

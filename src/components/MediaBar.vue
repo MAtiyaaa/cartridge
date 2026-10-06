@@ -44,7 +44,13 @@ watch(() => props.src, async (v) => {
 .media.empty { background: transparent; }
 .media.empty::after { display: none; }
 .media img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center 30%; opacity: 0; transition: opacity var(--d-med) ease-out; }
-.media img.on { opacity: 1; animation: media-settle 1100ms var(--ease-out) both; }
+/* 0.9.37 (owner: game backgrounds not a still, subtle, never jarring): after it settles, the picture drifts and
+   zooms very slowly (60 s each way, a few percent), on its own layer so it's the compositor's work. Only with the
+   GPU: without it an endless animation keeps the CPU busy, so there it stays still; never while Cartridge is behind
+   a game (body.away pauses all animation) or with reduced motion. */
+.media img.on { opacity: 1; animation: media-settle 1100ms var(--ease-out) both, media-drift 60s var(--ease-in-out, ease-in-out) 1100ms infinite alternate; transform-origin: 62% 38%; }
+@keyframes media-drift { from { transform: none; } to { transform: scale(1.07) translate(-1.2%, 0.8%); } }
+:global(body.light-fx .media img.on) { animation: media-settle 1100ms var(--ease-out) both; }
 /* 0.9.19: each new picture settles in from slightly closer, once (a weighted arrival, not a loop) */
 @keyframes media-settle { from { transform: scale(1.025); } to { transform: none; } } /* 0.9.23: calmer, it changes with every game you pass */
 :global(body.motion-reduce .media img.on) { animation: none; }

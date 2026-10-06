@@ -16,10 +16,15 @@ async function release(repo, { tag, pre, fetchImpl = webFetch } = {}) {
     return { tag: j.tag_name, date: j.published_at || j.created_at || '', assets: (j.assets || []).map((a) => ({ name: a.name, url: a.browser_download_url, size: a.size || 0, date: a.updated_at })) };
   }
   if (r && r.status === 404) return null;
-  return fromPages(repo, tag, fetchImpl);
+  return fromPages(repo, tag, fetchImpl, pre);
 }
-async function fromPages(repo, tag, fetchImpl = webFetch) {
+async function fromPages(repo, tag, fetchImpl = webFetch, pre = false) {
   const H = { 'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) Cartridge' };
+  // pre-releases count (0.9.37): the newest one listed on the releases page, which "latest" never names
+  if (!tag && pre) {
+    const r = await fetchImpl(`https://github.com/${repo}/releases`, { headers: H, signal: AbortSignal.timeout(20000) });
+    if (r.ok) tag = decodeURIComponent((/\/releases\/tag\/([^"/?#]+)/.exec(await r.text()) || [])[1] || '');
+  }
   if (!tag) {
     const r = await fetchImpl(`https://github.com/${repo}/releases/latest`, { headers: H, redirect: 'follow', signal: AbortSignal.timeout(20000) });
     if (!r.ok) throw new Error(`GitHub answered ${r.status}. Try again in a while.`);
