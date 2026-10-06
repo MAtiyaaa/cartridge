@@ -2469,28 +2469,8 @@ function ssGames() {
   for (const r of romIndexMain().values()) { const stem = String(r.fs_name || '').replace(/\.[^.]+$/, ''); if (stem) list.push({ id: r.id, name: stem, ids: [], discIds: [] }); }
   return list;
 }
-function ssRpc(devId) {
-  const dq = devId ? { device_id: devId } : {};
-  const fetchRomm = async (pathname, query, init = {}) => {
-    const url = new URL((await resolveBase()) + pathname);
-    for (const [k, v] of Object.entries(query || {})) if (v != null) url.searchParams.set(k, String(v));
-    const r = await fetch(url, { ...init, headers: { ...authHeaders(), ...(init.headers || {}) }, signal: AbortSignal.timeout(180000) });
-    if (r.status === 401 || r.status === 403) throw Object.assign(new Error('RomM didn’t let Cartridge read or write saves. Sign in with your password, or pair again so Cartridge can ask for save access.'), { code: 'auth' });
-    return r;
-  };
-  return {
-    list: async (romId, slot) => { const r = await fetchRomm('/api/saves', { rom_id: romId, slot, ...dq }); if (!r.ok) throw new Error(`RomM error ${r.status} listing saves`); return r.json(); },
-    upload: async (u, buf, name, { overwrite, hash } = {}) => {
-      const fd = new FormData(); fd.append('saveFile', new Blob([buf], { type: 'application/zip' }), name);
-      const r = await fetchRomm('/api/saves', { rom_id: u.romId, emulator: u.emu, slot: u.slot, autocleanup: 'true', autocleanup_limit: 10, content_hash: hash, overwrite: overwrite ? 'true' : null, ...dq }, { method: 'POST', body: fd });
-      if (r.status === 409) return { conflict: true };
-      if (!r.ok) throw new Error(`RomM error ${r.status} saving ${name}`);
-      return r.json();
-    },
-    download: async (id) => { const r = await fetchRomm(`/api/saves/${id}/content`, dq); if (!r.ok) throw new Error(`RomM error ${r.status} downloading a save`); return Buffer.from(await r.arrayBuffer()); },
-    confirm: async (id, hash) => { if (devId) await fetchRomm(`/api/saves/${id}/downloaded`, {}, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ device_id: devId, content_hash: hash }) }).catch(() => {}); },
-  };
-}
+// RomM's saves API (electron/saveSync.js rommRpc, tested against a fake RomM server)
+const ssRpc = (devId) => require('./saveSync').rommRpc({ base: resolveBase, headers: authHeaders, devId });
 // a game's saves: its own, plus the whole memory card of its console
 const ssFor = (u, romId) => { if (romId == null) return true; if (u.romId === romId) return true; const r = romIndexMain().get(romId); return u.card && require('./saveSync').CONSOLE[u.emu] === ssConsoleOf(r); };
 let ssBusy = null;

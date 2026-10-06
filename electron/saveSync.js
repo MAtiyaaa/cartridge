@@ -308,6 +308,31 @@ async function restore(u, save, rpc, ledger, opts = {}) {
   return { key: u.key, result: 'restored' };
 }
 
+// RomM's saves API (backend/endpoints/saves.py): base() -> the server, headers() -> sign-in headers, devId: this
+// device in RomM (its sync records and the 409 on a slot another device saved since)
+function rommRpc({ base, headers, devId = null, fetchImpl = fetch }) {
+  const dq = devId ? { device_id: devId } : {};
+  const go = async (pathname, query, init = {}) => {
+    const url = new URL((await base()) + pathname);
+    for (const [k, v] of Object.entries(query || {})) if (v != null) url.searchParams.set(k, String(v));
+    const r = await fetchImpl(url, { ...init, headers: { ...headers(), ...(init.headers || {}) }, signal: AbortSignal.timeout(180000) });
+    if (r.status === 401 || r.status === 403) throw Object.assign(new Error('RomM didn’t let Cartridge read or write saves. Sign in with your password, or pair again so Cartridge can ask for save access.'), { code: 'auth' });
+    return r;
+  };
+  return {
+    list: async (romId, slot) => { const r = await go('/api/saves', { rom_id: romId, slot, ...dq }); if (!r.ok) throw new Error(`RomM error ${r.status} listing saves`); return r.json(); },
+    upload: async (u, buf, name, { overwrite, hash } = {}) => {
+      const fd = new FormData(); fd.append('saveFile', new Blob([buf], { type: 'application/zip' }), name);
+      const r = await go('/api/saves', { rom_id: u.romId, emulator: u.emu, slot: u.slot, autocleanup: 'true', autocleanup_limit: 10, content_hash: hash, overwrite: overwrite ? 'true' : null, ...dq }, { method: 'POST', body: fd });
+      if (r.status === 409) return { conflict: true };
+      if (!r.ok) throw new Error(`RomM error ${r.status} saving ${name}`);
+      return r.json();
+    },
+    download: async (id) => { const r = await go(`/api/saves/${id}/content`, dq); if (!r.ok) throw new Error(`RomM error ${r.status} downloading a save`); return Buffer.from(await r.arrayBuffer()); },
+    confirm: async (id, hash) => { if (devId) await go(`/api/saves/${id}/downloaded`, {}, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ device_id: devId, content_hash: hash }) }).catch(() => {}); },
+  };
+}
+
 // units RomM has that this device doesn't (from another device), so they can be brought here: remote saves whose
 // slot is ours and whose key isn't among the local units
 function remoteOnly(remotes, localKeys) {
@@ -321,4 +346,4 @@ function remoteOnly(remotes, localKeys) {
   return [...out.values()];
 }
 
-module.exports = { restore, units, shape, slotOf, placeFor, entriesOf, hashEntries, hashUnit, hashArchive, changedAt, zip, unzip, decide, backup, writeUnit, running, syncUnit, remoteOnly, retroarchStates, retroarchDirs, CONSOLE, LABEL, SUPPORTED };
+module.exports = { rommRpc, restore, units, shape, slotOf, placeFor, entriesOf, hashEntries, hashUnit, hashArchive, changedAt, zip, unzip, decide, backup, writeUnit, running, syncUnit, remoteOnly, retroarchStates, retroarchDirs, CONSOLE, LABEL, SUPPORTED };
