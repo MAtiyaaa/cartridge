@@ -76,7 +76,7 @@ Three states, set from input and from main's `background` event:
 | State | When | What runs |
 |---|---|---|
 | active | you're using Cartridge | everything; controller read every 8 ms |
-| idle | nothing pressed for 60 s | decorative loops paused (`body.cae-idle`: background drift, cover drift, clock clouds and stars, picture drift); the animated background draws 8 times a second from a timer instead of waking every frame; controller read every 16 ms |
+| idle | nothing pressed for 60 s | decorative loops paused (`body.cae-idle`: background drift, cover drift, clock clouds and stars, picture drift); the animated background eases to a stop over about a second and then draws nothing (0.9.49: 8 frames a second judders and made people feel sick); controller read every 16 ms |
 | away | a game or another app is in front, or the window is hidden | CSS animations paused (`body.away`), the background stops drawing, the controller is read 4 times a second |
 
 The animated background also halves its own frame rate when drawing a frame starts costing more than 8 ms (a slow device or a 4K screen). Any input wakes it at once.

@@ -6,6 +6,11 @@ The branch for 0.9.3 work is `claude/relaxed-fermat-30pigp`. Pull it before star
 
 ---
 
+## 6 Oct 2026 · 0.9.50 The Rule Book
+- Owner, after 0.9.49: "Continue building and read everything I sent in between and package this to the update as well". Read every message since the credits ran out again: all were in 0.9.49; the design rule set (asked to confirm first) is taken as approved by "continue building" and built here.
+- `docs/design-rules.md` + `test/designRules.test.js` (see CLAUDE.md 0.9.50). The move-to-drive report ("chose This Device, it went to the SD card") is the 0.9.49 drive-naming fix; `New Games Go To` now lists drives by name.
+- Checked: npm test, vite build, launch check. Owner: read the rules and say what to change; anything there that you don't agree with is a one-line edit.
+
 ## 6 Oct 2026 · 0.9.49 Every Corner (one update, owner: package everything sent since the credits ran out)
 - Everything the owner sent after 0.9.48 in one update: Part 1 (tour glyphs and spotlight, top vignette, trophies as one page, Light/Glass looks, Arrange ring, clipping), Part 2 (Vita3K rebuilt, PS3 SONY, page overview, manual RS hint, Settings touch, masonry D-pad, green tick, storage drives and Always Ask, colour picker, Home line, flicker and back stutter, onboarding RS), unnamed PS4 names, CEE with Supermodel/Citron/PPSSPP, the notes 500, the Settings refresh (owner: "do what you think is best"), then the later list: RomM on this device (linked state, folders multi-select), the SD card download bug, Quick Menu, the greeting in the Dock, tour A, saves choice, Missing from Steam search, page overview Add Page, the idle background ("like vomit").
 - Causes found: the main games folder was labelled This Device wherever it was (owner's is on the microSD); RomM rom_notes are unique per (rom, user, title) and the carrier ROM got several games under one title; the glass lens picture isn't drawn in some backdrop filters, so the displacement shifted everything and the page showed through as bands (the keyboard photo); the whole-screen art zoom (12 s after a page settled) plus an 8 fps idle background; Vita3K copies that pass ldd but die on a Qt symbol (EmuDeck's Qt 6 zip build on a Qt 6 system); RommLocal's chosen-row fill beat the focus fill by load order (grey with dark text).
