@@ -157,7 +157,7 @@
 import { similarTo } from '../recs.js';
 import { addGame, removeGame, applyChanges, pickEmulator, pickCollections, pickFrameGen } from '../steam.js';
 import { computed, onMounted, onBeforeUnmount, ref, nextTick, watch } from 'vue';
-import { store, heroArt, call, img, go, cover, bytes, year, rating, toast, confirm, download, downloadFor, romById, platformById, isNew, setBg, logoOf, resetLogos, artFor, choose, openModal, allRoms, visible, isFavourite, addToCollection, playOf, playtimeText, ago, loadPlay, askText, saveConfig, backdropOf, wantSharp, bgJob } from '../store.js';
+import { store, heroArt, call, img, go, cover, bytes, year, rating, toast, confirm, download, downloadFor, romById, platformById, isNew, setBg, logoOf, resetLogos, artFor, choose, openModal, allRoms, visible, isFavourite, addToCollection, playOf, playtimeText, ago, loadPlay, askText, saveConfig, backdropOf, wantSharp, bgJob, playGame, saveSyncOn } from '../store.js';
 import { pinToStart } from '../startTiles.js';
 import { useView } from '../useView.js';
 import { ensureFocus, focusFirst } from '../nav.js';
@@ -554,6 +554,22 @@ async function pickGameEmu() {
 let steamInfo = null;
 // Syncthing's older versions of one save (0.9.29): grouped by when they were replaced; restoring puts that
 // version back through Syncthing (its own versioning), the only time Cartridge asks for a save to change
+// Cartridge Save Sync for this game (0.9.51): sync now, or put an older version back (it becomes the newest everywhere;
+// the save it replaces is kept here first)
+async function cloudSaves() {
+  const id = Number(props.romId);
+  let list = []; try { list = await call('savesync:versions', { romId: id }); } catch (e) { toast(e.message, 'error', 5000); return; }
+  const fmt = (t) => { try { return new Date(t).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }); } catch { return t; } };
+  const v = await choose({ title: 'Saves in RomM', message: list.length ? 'The newest of each save is what your devices get. Pick an older one to put it back.' : 'No saves of this game in RomM yet. They go there after you play.', options: [{ label: 'Sync Now', sub: 'Check this game’s saves with RomM', value: 'sync', icon: 'mdiSync' }, ...list.map((x, i) => ({ label: `${x.emuName} · ${fmt(x.at)}`, sub: `${i === list.findIndex((y) => y.key === x.key) ? 'Newest' : 'Older version'} · ${bytes(x.size || 0)}${x.device ? ' · from ' + x.device : ''}`, value: 'v' + x.id, icon: 'mdiHistory', raw: true }))] });
+  if (!v) return;
+  if (v === 'sync') {
+    try { const r = await call('savesync:run', { romId: id }); const c = r?.counts || {}; toast(r?.offline ? 'RomM couldn’t be reached' : c.conflict ? 'A save changed on two devices: choose in Settings → Saves and Sync' : c.down ? 'The newest save is here' : c.up ? 'Saved to RomM' : 'Up to date', r?.offline || c.conflict ? 'error' : 'ok', 4000, 'mdiCloudSyncOutline'); } catch (e) { toast(e.message, 'error', 5000); }
+    return;
+  }
+  const x = list.find((y) => 'v' + y.id === v);
+  if (!(await confirm('Put This Version Back?', `${x.emuName}'s save from ${fmt(x.at)} becomes the newest on every device. The save on this device now is kept as an older version first.`, 'Put It Back'))) return;
+  try { await call('savesync:restore', { id: x.id, romId: id }); toast('That version is back', 'ok', 3000, 'mdiHistory'); } catch (e) { toast(e.message, 'error', 6000); }
+}
 async function olderVersions(x) {
   let all = {};
   try { all = (await call('syncsaves:versions', { id: x.synced.id })) || {}; } catch (e) { toast(e.message, 'error', 5000); return; }
@@ -622,6 +638,7 @@ async function more() {
     sub: /ps4/i.test(slugs) ? 'Patches from shadPS4 and GoldHEN' : /ps3/i.test(slugs) ? 'Patches and game updates' : /\bps2\b/i.test(slugs) ? 'Texture packs and patches' : /\bpsp\b/i.test(slugs) ? 'Mods and cheats' : 'Mods, packs and patches, and what’s installed' });
   // 0.9.29 (The Syncthing Update): this game's saves on this device, found by the save's own ID
   const sv = await Promise.race([call('saves:forRom', { romId: Number(props.romId) }).catch(() => []), new Promise((r) => setTimeout(() => r(null), 1500))]);
+  if (saveSyncOn()) play.push({ label: 'Saves in RomM', sub: 'Cartridge Save Sync: sync now, or put an older version back', value: 'cloudsaves', icon: 'mdiCloudSyncOutline' }); // 0.9.51
   if (sv?.length) play.push({ label: 'Saves on This Device', sub: `${sv.length} ${sv.length === 1 ? 'save' : 'saves'} · ${sv.some((x) => x.synced) ? 'synced with Syncthing' : 'not synced'} · changed ${ago(Math.max(...sv.map((x) => x.at || 0)))}`, value: 'saves', icon: 'mdiContentSaveOutline' });
   if (installedPath.value) play.push({ label: 'Show file location', value: 'path', icon: 'mdiFolderOutline' });
   const top = [
@@ -686,9 +703,10 @@ async function more() {
   if (v === 'mark' || v === 'unmark') { await setMark(v === 'mark'); return; }
   if (v === 'trophies') { await linkTrophies(); return; }
   if (v === 'path') { toast(installedPath.value, 'info', 5000, 'mdiFolder'); return; }
+  if (v === 'cloudsaves') return cloudSaves();
   if (v === 'saves') {
     const list = sv || [];
-    const p = await choose({ title: 'Saves on This Device', message: 'Read only: Cartridge never changes a save. A to copy where it is.', options: list.map((x) => ({ label: x.emuName + (x.shared ? ' · Memory Card' : ''), sub: `${bytes(x.size || 0)} · changed ${ago(x.at)} · ${x.synced ? 'synced in ' + x.synced.label : 'not synced'}${x.conflicts ? ` · ${x.conflicts} conflict ${x.conflicts === 1 ? 'copy' : 'copies'} from two devices` : ''}`, value: x.path, icon: x.synced ? 'mdiSync' : 'mdiContentSaveOutline', raw: true })) });
+    const p = await choose({ title: 'Saves on This Device', message: saveSyncOn() ? 'Cartridge Save Sync keeps these in step with RomM. A to copy where one is.' : 'Read only: Cartridge never changes a save. A to copy where it is.', options: list.map((x) => ({ label: x.emuName + (x.shared ? ' · Memory Card' : ''), sub: `${bytes(x.size || 0)} · changed ${ago(x.at)} · ${x.synced ? 'synced in ' + x.synced.label : 'not synced'}${x.conflicts ? ` · ${x.conflicts} conflict ${x.conflicts === 1 ? 'copy' : 'copies'} from two devices` : ''}`, value: x.path, icon: x.synced ? 'mdiSync' : 'mdiContentSaveOutline', raw: true })) });
     const x = list.find((y) => y.path === p);
     if (!x) return;
     // a save in one of Cartridge's synced folders can go back to an older version Syncthing kept (0.9.29)
@@ -734,7 +752,7 @@ async function more() {
 }
 // Ready to play (0.9.21, owner: it did nothing): starts the game's Steam shortcut; not in Steam yet: offers to add it
 async function playNow() {
-  try { await call('steam:play', { romId: Number(props.romId) }); toast('Starting through Steam…', 'info', 2500, 'mdiPlay'); }
+  try { await playGame(Number(props.romId)); toast('Starting through Steam…', 'info', 2500, 'mdiPlay'); }
   catch (e) {
     if (/Add it to Steam/.test(e.message) && (await confirm('Add to Steam to play?', 'Cartridge starts games through their Steam shortcut, so they launch with your emulator setup.', 'Add to Steam'))) return addGame({ ...base.value, id: Number(props.romId) });
     toast(e.message, 'error', 5000);

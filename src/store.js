@@ -30,6 +30,7 @@ export const store = reactive({
   modal: null,
   quickMenu: false,
   tour: null, // the interactive tour (FirstTour.vue)
+  cloudSync: null, // Cartridge Cloud Sync before a game (CloudSync.vue, 0.9.51)
   welcoming: false, // the welcome (0.9.15) is on screen
   welcomeBg: false, // a background was picked in the welcome's Look step (0.9.47), so it shows instead of Ribbons
   lastSearch: '',
@@ -143,6 +144,37 @@ export function titleCase(s) {
   return s.replace(/(^|[\s(“"])([a-z]+)(?=$|[\s,.:;!?)”"…])/g, (m, pre, w, off) => (off > 0 && SMALL.has(w) ? m : pre + w[0].toUpperCase() + w.slice(1)));
 }
 export const choose = (props) => openModal('menu', props);
+// Play, with Cartridge Cloud Sync first (0.9.51, owner: like Steam Cloud before a game): with Cartridge Save Sync on,
+// the game's saves are checked against RomM and the newest is brought here before the emulator starts. A conflict
+// is never guessed: you pick which save to keep. RomM out of reach: the game starts with this device's save.
+export const saveSyncOn = () => store.config?.saveSync === 'cartridge' && !store.config?.syncthing?.role && !store.config?.localOnly;
+export async function playGame(romId) {
+  romId = Number(romId);
+  if (saveSyncOn()) {
+    const game = romById(romId)?.name || '';
+    const show = (o) => { store.cloudSync = { ...(store.cloudSync || {}), game, ...o }; };
+    const t0 = Date.now();
+    show({ state: 'check', label: 'Checking your saves with RomM', done: 0, of: 0 });
+    const off = window.cart.on('savesync', (p) => { if (p?.why === 'before' && store.cloudSync && p.state === 'run') show({ done: p.done, of: p.of, label: p.of ? `Checking your saves (${p.done} of ${p.of})` : 'Checking your saves with RomM' }); });
+    let r; try { r = await call('savesync:before', { romId }); } catch (e) { r = { error: e.message }; }
+    off?.();
+    for (const c of (r?.results || []).filter((x) => x.result === 'conflict')) {
+      show({ state: 'conflict', label: `${c.label || 'A save'} changed here and on another device` });
+      const v = await choose({ title: 'Which Save?', message: `${c.label || 'This save'} (${c.emuName}) changed on this device and on another one since they last synced. The one you don't pick is kept as an older version.`, options: [{ label: 'Use the One From RomM', sub: 'The save from your other device', value: 'theirs', icon: 'mdiCloudDownloadOutline' }, { label: 'Keep This Device’s', sub: 'It goes to RomM as the newest', value: 'mine', icon: 'mdiCellphoneArrowDown' }] });
+      if (!v) { store.cloudSync = null; return; } // B: nothing changes and the game doesn't start
+      show({ state: 'check', label: v === 'mine' ? 'Saving this device’s save to RomM' : 'Bringing the save from RomM' });
+      try { await call('savesync:resolve', { key: c.key, choice: v, romId }); } catch (e) { toast(e.message, 'error', 5000); }
+    }
+    const res = r?.results || [], n = (k) => res.filter((x) => x.result === k).length;
+    const busy = n('busy'), auth = res.find((x) => x.result === 'auth');
+    if (r?.offline || r?.error || auth) show({ state: 'offline', label: auth ? auth.error : 'RomM couldn’t be reached. Playing with this device’s save.' });
+    else if (busy) show({ state: 'error', label: 'The emulator is already open, so its saves weren’t changed.' });
+    else show({ state: 'done', label: n('down') ? 'Your latest save is here' : n('up') ? 'Your save is in RomM' : 'Your saves are up to date', done: 1, of: 1 });
+    await new Promise((ok) => setTimeout(ok, Math.max(r?.offline || auth ? 1800 : 700, 1100 - (Date.now() - t0))));
+    store.cloudSync = null;
+  }
+  return call('steam:play', { romId });
+}
 export const confirm = (title, message, okLabel = 'Confirm', danger = false) =>
   openModal('menu', { title, message, options: [{ label: okLabel, value: true, danger, icon: danger ? 'mdiAlertOutline' : 'mdiCheck' }, { label: 'Cancel', value: false, icon: 'mdiClose' }] });
 

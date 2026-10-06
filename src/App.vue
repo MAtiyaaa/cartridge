@@ -93,6 +93,7 @@
     <GameSettings v-else-if="store.modal?.type === 'gamesettings'" :key="'gs' + store.modal.props.romId" v-bind="store.modal.props" />
   </Transition>
   <FirstTour v-if="store.tour" v-bind="store.tour.props" />
+  <CloudSync v-if="store.cloudSync" />
   <IdleScreen v-if="store.config?.configured" />
   <PerfOverlay v-if="store.config?.ui?.perfOverlay && !store.away" />
 
@@ -115,7 +116,7 @@
 
 <script setup>
 import { computed, onMounted, onBeforeUnmount, ref, watch, nextTick, defineAsyncComponent } from 'vue';
-import { store, loadConfig, loadLibrary, loadArt, back, tab, go, call, toast, choose, saveConfig, builtinKb, askText, GRADE, activeTabs, TAB_DEFS, romById, isFavourite, download } from './store.js';
+import { store, loadConfig, loadLibrary, loadArt, back, tab, go, call, toast, choose, saveConfig, builtinKb, askText, GRADE, activeTabs, TAB_DEFS, romById, isFavourite, download, playGame } from './store.js';
 import { pushLayer, focusFirst, input, gameEnded } from './nav.js';
 import { governorAway } from './motion.js';
 import { setSoundEnabled, setSoundStyle, sfx } from './sfx.js';
@@ -138,6 +139,7 @@ import GameTimeline from './components/GameTimeline.vue';
 import GameAbout from './components/GameAbout.vue';
 import ConsoleCollection from './components/ConsoleCollection.vue';
 import FirstTour from './components/FirstTour.vue';
+import CloudSync from './components/CloudSync.vue';
 // the manual reader brings pdf.js: loaded the first time a manual opens, not at start
 const ManualViewer = defineAsyncComponent(() => import('./components/ManualViewer.vue'));
 import PatchesSheet from './components/PatchesSheet.vue';
@@ -370,6 +372,14 @@ onMounted(async () => {
     if (m.state === 'done' || m.state === 'error') setTimeout(() => { if (store.addonJobs[m.key]?.state === m.state) delete store.addonJobs[m.key]; }, 12000);
   });
   window.cart.on('toast', (t) => t?.text && toast(t.text, t.kind || 'info', 4500, t.icon));
+  // Cartridge Save Sync in the background (0.9.51): a word when saves moved after a game, and when two devices
+  // changed the same save (it waits for you in Settings → Saves and Sync)
+  window.cart.on('savesync', (p) => {
+    if (p?.state !== 'done' || !['after', 'back', 'scheduled'].includes(p.why)) return;
+    const c = p.counts || {};
+    if (c.conflict) toast(`${c.conflict === 1 ? 'A save' : `${c.conflict} saves`} changed on two devices. Choose which to keep in Settings → Saves and Sync.`, 'info', 7000, 'mdiCallSplit');
+    else if (c.up || c.down) toast([c.up && `${c.up} ${c.up === 1 ? 'save' : 'saves'} sent to RomM`, c.down && `${c.down} brought here`].filter(Boolean).join(' · '), 'ok', 3200, 'mdiCloudCheckOutline');
+  });
   // main asks for a page (0.9.37: a download caught on an add-on site shows its progress in Downloads)
   window.cart.on('nav', (n) => { if (!n?.tab) return; if (n.closeModal && store.modal) { const r = store.modal.resolve; store.modal = null; try { r?.(null); } catch {} } tab(n.tab); });
   setTimeout(steamReport, 2500);
@@ -494,7 +504,7 @@ async function cardMenu(e) {
   ] });
   if (v === 'open') go('game', { romId: rom.id });
   else if (v === 'dl') download(rom);
-  else if (v === 'play') call('steam:play', { romId: rom.id }).catch((err) => toast(err.message, 'error', 5000));
+  else if (v === 'play') playGame(rom.id).catch((err) => toast(err.message, 'error', 5000));
   else if (v === 'fav') call('fav:set', { romId: rom.id, on: !fav }).then(() => toast(fav ? 'Removed from favourites' : 'Added to favourites', 'ok', 2200, 'mdiHeartOutline')).catch((err) => toast(err.message, 'error', 6000));
 }
 onMounted(() => document.addEventListener('contextmenu', cardMenu));
