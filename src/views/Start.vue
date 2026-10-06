@@ -11,7 +11,7 @@
     </div>
     <div class="st-scroll" data-scroll ref="scroller" @pointerdown="swipeDown">
       <Transition :name="'st-pg-' + pageDir" mode="out-in" @after-enter="afterPage">
-      <div class="st-board" :key="page" :data-pg="page" :style="{ height: boardH + 'px' }">
+      <div class="st-board" :key="page" :data-pg="page" :style="{ height: boardH + 'px' }" @transitionend="tileSettled">
         <!-- arranging: the grid's empty cells show, and where the held tile will land -->
         <div v-if="editing" class="st-slots" aria-hidden="true"><i v-for="c in slots" :key="c.k" :style="c.s" /></div>
         <div v-if="ghost" class="st-ghost" :style="ghost" aria-hidden="true" />
@@ -784,6 +784,8 @@ function focusTile(t) {
 // 0.9.23 (owner: moving a tile past another and back pushed tiles away and ruined the layout): while a
 // tile is held, moved or resized, every other tile is laid out again from where it was when you picked
 // it up, so taking a tile back where it was puts everything back as it was.
+// CAE (0.9.47, owner): a soft rumble when a tile you moved or resized comes to rest in its place (once per settle)
+function tileSettled(e) { if (editing.value && e.target.classList?.contains('st-tile') && e.propertyName === 'transform' && !e.pseudoElement) rumble('settle'); }
 let base = null;
 function snap() { base = new Map(tiles.value.map((t) => [t.id, { x: t.x, y: t.y, w: t.w, h: t.h }])); }
 function relayout(fixedId) {

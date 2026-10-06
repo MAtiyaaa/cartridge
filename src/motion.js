@@ -126,7 +126,7 @@ export function morph(fromEl, change, toSel, nextTick) {
         const x = a.left + (c.left - a.left) * p, y = a.top + (c.top - a.top) * p, wd = a.width + (c.width - a.width) * p, ht = a.height + (c.height - a.height) * p;
         Object.assign(fly.style, { left: c.left + 'px', top: c.top + 'px', width: c.width + 'px', height: c.height + 'px', transform: `translate(${x - c.left}px, ${y - c.top}px) scale(${wd / c.width}, ${ht / c.height})` });
       }
-      if (p >= 1) { end(); return false; }
+      if (p >= 1) { end(); dispatchEvent(new Event('cae-settle')); return false; } // landed: a soft rumble (nav.js)
       return true;
     };
     running = { end };

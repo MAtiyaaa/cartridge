@@ -174,9 +174,15 @@ function move(dir) {
   } else if (vertical) {
     // Nothing further: scroll the container so hidden content becomes reachable
     const sc = cur.closest('[data-scroll]');
-    if (sc) glideBy(sc, 0, dir === 'down' ? 200 : -200);
-  }
+    const room = sc ? (dir === 'down' ? sc.scrollHeight - sc.clientHeight - sc.scrollTop : sc.scrollTop) > 1 : false;
+    if (room) glideBy(sc, 0, dir === 'down' ? 200 : -200);
+    else edgeBump(cur);
+  } else edgeBump(cur);
 }
+// the end of a list: one soft settle the first time you push against it, not a buzz while the direction is held
+let edgeEl = null, edgeAt = 0;
+function edgeBump(cur) { const t = performance.now(); if (cur !== edgeEl || t - edgeAt > 900) rumble('settle'); edgeEl = cur; edgeAt = t; }
+if (typeof addEventListener !== 'undefined') addEventListener('cae-settle', () => rumble('settle'));
 
 // Up and down (0.9.16, owner): always the very next row, never one further down because it happened
 // to line up better. Landing in a game row (a sideways shelf) goes to its first game; in another
@@ -445,12 +451,17 @@ const RUMBLE = { low: 0.12, medium: 0.25, high: 0.45 };
 let rumbleLevel = 'none', lastPad = -1;
 export function setRumble(v) { rumbleLevel = RUMBLE[v] ? v : 'none'; }
 // kind: false (moving), true (A), 'tab' (0.9.21, owner: haptics when switching between menus in the bars:
-// LB/RB and LT/RT): a short, firmer click on both motors, so a page change feels different from a step
+// LB/RB and LT/RT): a short, firmer click on both motors, so a page change feels different from a step.
+// 'settle' (CAE 0.9.47, owner: "the slight rumble when the spring settles"): a soft tap on the heavy motor only, when
+// something comes to rest: a tile snapping into its place on Start, a cover landing on the game page, a list
+// reaching its end. At most one every 250 ms.
+let settledAt = 0;
 export function rumble(strong = false) {
   const m = RUMBLE[rumbleLevel];
   if (!m || lastPad < 0) return;
+  if (strong === 'settle') { const t = performance.now(); if (t - settledAt < 250) return; settledAt = t; }
   const gp = navigator.getGamepads?.()[lastPad];
-  const fx = strong === 'tab' ? { duration: 26, weakMagnitude: Math.min(1, m * 1.2), strongMagnitude: m * 0.9 } : { duration: strong ? 32 : 18, weakMagnitude: m, strongMagnitude: strong ? m * 0.6 : 0 };
+  const fx = strong === 'settle' ? { duration: 22, weakMagnitude: 0, strongMagnitude: m * 0.55 } : strong === 'tab' ? { duration: 26, weakMagnitude: Math.min(1, m * 1.2), strongMagnitude: m * 0.9 } : { duration: strong ? 32 : 18, weakMagnitude: m, strongMagnitude: strong ? m * 0.6 : 0 };
   try { gp?.vibrationActuator?.playEffect('dual-rumble', fx)?.catch?.(() => {}); } catch {}
 }
 // the part of the screen focus was last in (a [data-zone]), for when the focused element goes away

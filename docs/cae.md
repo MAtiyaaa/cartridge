@@ -32,7 +32,8 @@ These are the rules every new motion must follow. If something can't follow them
    effects (no GPU) keep pages to a 160 ms fade, because a moving full page doubled slow frames there (measured).
 9. **Plain and Glass are separate.** A motion made for Glass (the liquid morph of pop-ups, the light on the rim)
    never leaks into Plain, and the other way round.
-10. **Quiet when nobody is looking.** The governor (below) pauses decoration when you're idle and stops nearly
+10. **Felt, not just seen.** With Rumble on, a soft tap on the heavy motor when something comes to rest: a Start tile settling into place, a cover landing on its page, the first push against the end of a list (`rumble('settle')`, at most one every 250 ms). Never a buzz while a direction is held.
+11. **Quiet when nobody is looking.** The governor (below) pauses decoration when you're idle and stops nearly
     everything while a game is in front.
 
 ## The parts
@@ -79,6 +80,8 @@ Three states, set from input and from main's `background` event:
 | away | a game or another app is in front, or the window is hidden | CSS animations paused (`body.away`), the background stops drawing, the controller is read 4 times a second |
 
 The animated background also halves its own frame rate when drawing a frame starts costing more than 8 ms (a slow device or a 4K screen). Any input wakes it at once.
+
+A stand-in game (one hashing process per CPU core, 10 s runs, six interleaved pairs) ran 0.5% slower with Cartridge behind it than with Cartridge frozen, inside the runs' own spread (about 4%). Pausing pages under full-screen sheets and dropping image caches while a game runs were left out: there was nothing left to win, and dropped caches would make coming back stutter.
 
 Measured in the real app (software rendering, Aurora, Glass): about 6.7% of one CPU core in use with nothing pressed, 3.3% idle, 2.1% with a game in front; about 550 MB across all of Electron's processes. In the main process, the Game Mode focus watcher checks every 1.5 s instead of 0.6 s
 while another app is in front, and the trophy service skips 3 of every 4 checks while a game runs.

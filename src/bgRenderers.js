@@ -286,6 +286,86 @@ function tide(g, w, h, S, pal, light) {
   };
 }
 
+// ---------------------------------------------------------------- scenes with their own colours (0.9.47)
+// Owner asked for more backgrounds at Waves/Ribbons quality, from formal presets. Each is one of the two originals'
+// constructions with its numbers written down: a wave scene is Waves' layered bands (a sum of sines for the centre
+// line, a breathing thickness, the front layer brightest and the back ones wider and fainter); a ribbon scene is
+// Ribbons' band of hair-fine lines (each line offset from the centre curve, brightest in the middle) with a
+// specular glint travelling along it. They keep their own colours over their own dark base (BG_BASE), in every
+// theme, and are pure functions of time like the rest.
+const SCENES = {
+  midnight: { kind: 'ribbon', cols: ['#5ef2ff', '#9b7bff'], n: 22, spread: 0.010, y: 0.58, fold: [{ A: 0.08, k: 2.6, w: 0.2, ph: 0 }, { A: 0.045, k: 5.3, w: -0.29, ph: 1.1 }], twist: 0.9, glint: 0.1, line: 1.1, alpha: 0.42 },
+  solar: { kind: 'wave', cols: ['#ff9d3c', '#ffd56b', '#ff6a2b'], speed: 0.6, layers: [{ a: 0.10, k: 1.3, s: 0.07, y: 0.6, h: 0.24, al: 0.16 }, { a: 0.07, k: 2.1, s: -0.05, y: 0.64, h: 0.14, al: 0.12 }, { a: 0.12, k: 0.9, s: 0.04, y: 0.56, h: 0.3, al: 0.07 }, { a: 0.05, k: 2.9, s: 0.09, y: 0.67, h: 0.06, al: 0.2 }] },
+  nordic: { kind: 'ribbon', cols: ['#3dffa8', '#2bd4d0'], n: 26, spread: 0.016, y: 0.5, fold: [{ A: 0.12, k: 1.9, w: 0.12, ph: 0.4 }, { A: 0.05, k: 4.4, w: -0.17, ph: 2.0 }], twist: 1.6, glint: 0.06, line: 1.1, alpha: 0.3, sway: 0.06 },
+  cyber: { kind: 'wave', cols: ['#a24bff', '#ff3fb4', '#6a5bff'], speed: 1.25, layers: [{ a: 0.09, k: 1.8, s: 0.11, y: 0.6, h: 0.15, al: 0.14 }, { a: 0.07, k: 2.6, s: -0.09, y: 0.63, h: 0.09, al: 0.12 }, { a: 0.11, k: 1.2, s: 0.06, y: 0.56, h: 0.22, al: 0.07 }, { a: 0.04, k: 3.6, s: 0.15, y: 0.66, h: 0.04, al: 0.22 }] },
+  titanium: { kind: 'ribbon', cols: ['#eef2f8', '#8a93a3'], n: 34, spread: 0.008, y: 0.6, fold: [{ A: 0.07, k: 2.2, w: 0.16, ph: 0.8 }, { A: 0.04, k: 5.9, w: -0.22, ph: 0.2 }], twist: 1.1, glint: 0.08, line: 0.9, alpha: 0.26 },
+};
+function sceneWave(cfg) {
+  return (g, w, h, S) => {
+    const STEP = 18;
+    const grads = cfg.layers.map((wv, i) => {
+      const c = rgbOf(cfg.cols[i % cfg.cols.length]), gr = g.createLinearGradient(0, 0, w, 0);
+      gr.addColorStop(0, `rgba(${c},0)`); gr.addColorStop(0.3, `rgba(${c},${wv.al})`); gr.addColorStop(0.7, `rgba(${c},${wv.al * 1.3})`); gr.addColorStop(1, `rgba(${c},0)`);
+      return { gr, c };
+    });
+    return (time) => {
+      const t = time * cfg.speed;
+      g.clearRect(0, 0, w, h);
+      g.globalCompositeOperation = 'lighter';
+      cfg.layers.forEach((wv, wi) => {
+        const top = [], bot = [];
+        for (let x = 0; x <= w + STEP; x += STEP) {
+          const u = x / w;
+          const base = wv.y * h + Math.sin(u * Math.PI * wv.k + t * wv.s * 6) * wv.a * h + Math.sin(u * Math.PI * wv.k * 0.5 - t * wv.s * 3) * wv.a * 0.5 * h;
+          const thick = wv.h * h * (0.55 + 0.45 * Math.sin(u * Math.PI * 1.3 + t * wv.s * 4));
+          top.push(x, base - thick / 2); bot.push(x, base + thick / 2);
+        }
+        g.beginPath();
+        for (let i = 0; i < top.length; i += 2) (i ? g.lineTo(top[i], top[i + 1]) : g.moveTo(top[i], top[i + 1]));
+        for (let i = bot.length - 2; i >= 0; i -= 2) g.lineTo(bot[i], bot[i + 1]);
+        g.closePath(); g.fillStyle = grads[wi].gr; g.fill();
+        g.beginPath();
+        for (let i = 0; i < top.length; i += 2) (i ? g.lineTo(top[i], top[i + 1]) : g.moveTo(top[i], top[i + 1]));
+        g.strokeStyle = `rgba(${grads[wi].c},${wv.al * 1.8})`; g.lineWidth = 1.5 * S; g.stroke();
+      });
+      g.globalCompositeOperation = 'source-over';
+    };
+  };
+}
+function sceneRibbon(cfg) {
+  return (g, w, h, S) => {
+    const N = cfg.n, STEP = 20, a = rgbOf(cfg.cols[0]), b = rgbOf(cfg.cols[1]);
+    const lineGrad = (al) => { const gr = g.createLinearGradient(0, 0, w, 0); gr.addColorStop(0, `rgba(${b},0)`); gr.addColorStop(0.25, `rgba(${b},${al})`); gr.addColorStop(0.7, `rgba(${a},${al})`); gr.addColorStop(1, `rgba(${a},${al * 0.4})`); return gr; };
+    const grads = Array.from({ length: N + 1 }, (_, k) => lineGrad(cfg.alpha * (0.3 + 0.7 * (1 - Math.abs(k - N / 2) / (N / 2)))));
+    const glintS = glow(a, Math.round(h * 0.32));
+    const body = g.createLinearGradient(0, 0, w, 0); body.addColorStop(0, `rgba(${b},0)`); body.addColorStop(0.5, `rgba(${a},0.06)`); body.addColorStop(1, `rgba(${a},0)`);
+    return (t) => {
+      g.clearRect(0, 0, w, h);
+      g.globalCompositeOperation = 'lighter';
+      const sway = cfg.sway ? Math.sin(t * 0.09) * cfg.sway : 0; // Nordic: the whole band drifts up and down
+      const yOf = (u, k) => h * (cfg.y + sway + fsum(cfg.fold, u * 2, t * 0.5)) + (k - N / 2) * h * cfg.spread * (1 + 0.8 * Math.sin(u * 3 * cfg.twist + t * 0.35));
+      g.beginPath();
+      for (let x = 0; x <= w + STEP; x += STEP) { const u = x / w; x ? g.lineTo(x, yOf(u, 0) - h * 0.03) : g.moveTo(x, yOf(u, 0) - h * 0.03); }
+      for (let x = Math.ceil((w + STEP) / STEP) * STEP; x >= 0; x -= STEP) g.lineTo(x, yOf(x / w, N) + h * 0.03);
+      g.closePath(); g.fillStyle = body; g.fill();
+      g.lineWidth = cfg.line * S;
+      for (let k = 0; k <= N; k++) {
+        g.strokeStyle = grads[k];
+        g.beginPath();
+        for (let x = 0; x <= w + STEP; x += STEP) { const y = yOf(x / w, k); x ? g.lineTo(x, y) : g.moveTo(x, y); }
+        g.stroke();
+      }
+      // the specular glint: a soft light travelling along the band's middle, once every ~40 s
+      const gu = ((t * 0.025) % 1.4) - 0.2;
+      g.globalAlpha = cfg.glint * Math.sin(Math.PI * clamp01((gu + 0.2) / 1.4)) * 4;
+      g.drawImage(glintS, gu * w - glintS.width / 2, yOf(gu, N / 2) - glintS.height / 2);
+      g.globalAlpha = 1;
+      g.globalCompositeOperation = 'source-over';
+    };
+  };
+}
+const SCENE_R = Object.fromEntries(Object.entries(SCENES).map(([k, c]) => [k, (c.kind === 'wave' ? sceneWave : sceneRibbon)(c)]));
+
 export function artPan(urls, rgb = '150,150,170') {
   const imgs = [];
   for (const u of urls.slice(0, 24)) { const im = new Image(); im.crossOrigin = 'anonymous'; im.src = u; imgs.push(im); }
@@ -312,7 +392,7 @@ export function artPan(urls, rgb = '150,150,170') {
   };
 }
 
-export const RENDERERS = { waves, ribbons, aurora, contours, drift, tide };
+export const RENDERERS = { waves, ribbons, aurora, contours, drift, tide, ...SCENE_R };
 // Backgrounds from before 0.9.15 whose console now shows its own game art (A)
 export const LEGACY_ART = { wiiu: 'wiiu', ds: 'nds', n3ds: '3ds', xbox: 'xbox', ps2: 'ps2', gc: 'ngc', wii: 'wii', xbox360: 'xbox360', switch: 'switch' }; // 0.9.19: the console scenes retired too (owner)
 // Picker entries. The first two follow your theme colours, the console ones use their own.
@@ -323,6 +403,11 @@ export const BACKGROUNDS = [
   { v: 'contours', l: 'Contours', sub: 'Slow height lines, like a map', group: 'Theme' },
   { v: 'drift', l: 'Drift', sub: 'Soft lights floating by', group: 'Theme' },
   { v: 'tide', l: 'Tide', sub: 'A sea of points rising and falling', group: 'Theme' },
+  { v: 'midnight', l: 'Midnight', sub: 'Neon glass ribbons on obsidian', group: 'Scenes' },
+  { v: 'solar', l: 'Solar Flare', sub: 'Slow amber and gold waves', group: 'Scenes' },
+  { v: 'nordic', l: 'Nordic Aurora', sub: 'Emerald and teal ribbons drifting', group: 'Scenes' },
+  { v: 'cyber', l: 'Cyber Gradient', sub: 'Purple and magenta waves', group: 'Scenes' },
+  { v: 'titanium', l: 'Liquid Titanium', sub: 'Chrome ribbons catching the light', group: 'Scenes' },
   { v: 'solid', l: 'Still', sub: 'A still gradient, no motion', group: 'Other' },
   { v: 'art', l: 'Game artwork', sub: 'The highlighted game', group: 'Other' },
   { v: 'wallpaper', l: 'Wallpaper', sub: 'An image of your own', group: 'Other' },
@@ -330,6 +415,11 @@ export const BACKGROUNDS = [
 // The console backgrounds' own base colours (under the canvas)
 export const BG_BASE = {
   art: 'linear-gradient(180deg, #0b0b0d 0%, #070708 100%)',
+  midnight: 'linear-gradient(160deg, #0b0d1a 0%, #05060c 60%, #020206 100%)',
+  solar: 'linear-gradient(170deg, #2a0e04 0%, #160703 55%, #0a0402 100%)',
+  nordic: 'linear-gradient(170deg, #04201c 0%, #021210 55%, #010807 100%)',
+  cyber: 'linear-gradient(160deg, #2a0838 0%, #15041f 55%, #090210 100%)',
+  titanium: 'linear-gradient(170deg, #1b1d22 0%, #0f1013 55%, #070708 100%)',
 };
 // darker base for renderers that need contrast (theme gradient under the canvas)
 export const DARK_BASE = new Set([]);

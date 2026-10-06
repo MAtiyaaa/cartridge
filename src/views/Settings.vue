@@ -715,18 +715,18 @@ const topConsoles = computed(() => {
   return (store.lib?.platforms || []).filter((p) => score[p.slug]).sort((a, b) => score[b.slug].min - score[a.slug].min || score[b.slug].inst - score[a.slug].inst).slice(0, 5);
 });
 const allBgs = computed(() => {
-  const theme = BACKGROUNDS.filter((b) => b.group === 'Theme'), other = BACKGROUNDS.filter((b) => b.group === 'Other');
+  const theme = BACKGROUNDS.filter((b) => b.group === 'Theme'), scenes = BACKGROUNDS.filter((b) => b.group === 'Scenes'), other = BACKGROUNDS.filter((b) => b.group === 'Other');
   const top = topConsoles.value.map((p) => ({ v: 'art:' + p.slug, l: consoleName(p), sub: 'Your games, slowly panning', group: 'Top' }));
   const used = new Set(top.map((b) => b.v));
-  return [...theme, ...top, ...artBgs.value.filter((b) => !used.has(b.v)), ...other];
+  return [...theme, ...scenes, ...top, ...artBgs.value.filter((b) => !used.has(b.v)), ...other];
 });
 const bgNow = computed(() => { const v = ui.value.bgStyle || 'solid'; const m = LEGACY_ART[v] ? 'art:' + LEGACY_ART[v] : v; return allBgs.value.find((b) => b.v === m) || BACKGROUNDS[0]; });
-const BG_ICON = { Theme: 'mdiWaves', Top: 'mdiStarOutline', Consoles: 'mdiGamepadVariantOutline', Art: 'mdiImageMultipleOutline', Other: 'mdiImageOutline' };
+const BG_ICON = { Theme: 'mdiWaves', Scenes: 'mdiWaves', Top: 'mdiStarOutline', Consoles: 'mdiGamepadVariantOutline', Art: 'mdiImageMultipleOutline', Other: 'mdiImageOutline' };
 async function pickBg() {
   let last = '';
   const pal = paletteOf(ui.value);
   // a picture of each animated one (0.9.3 L); still, artwork and wallpaper keep their icon
-  const options = allBgs.value.map((b) => { const o = { label: b.l, sub: b.sub, value: b.v, icon: BG_ICON[b.group], img: RENDERERS[b.v] ? bgPreview(b.v, pal) : '', selected: bgNow.value.v === b.v, raw: b.group === 'Art' || (b.group === 'Top' && b.v.startsWith('art:')), heading: b.group !== last ? { Theme: 'Your theme colours', Top: 'Your most played consoles', Art: 'Your games', Other: 'Other' }[b.group] : '' }; last = b.group; return o; });
+  const options = allBgs.value.map((b) => { const o = { label: b.l, sub: b.sub, value: b.v, icon: BG_ICON[b.group], img: RENDERERS[b.v] ? bgPreview(b.v, pal) : '', selected: bgNow.value.v === b.v, raw: b.group === 'Art' || (b.group === 'Top' && b.v.startsWith('art:')), heading: b.group !== last ? { Theme: 'Your theme colours', Scenes: 'Their own colours', Top: 'Your most played consoles', Art: 'Your games', Other: 'Other' }[b.group] : '' }; last = b.group; return o; });
   const v = await choose({ title: 'Background', options });
   if (v) await setBg(v);
 }

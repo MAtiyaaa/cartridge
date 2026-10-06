@@ -85,7 +85,7 @@ Finds your emulators however they're installed (EmuDeck, Flatpak, AppImages, pac
 <td valign="top">
 
 **🎨 Make it yours**<br>
-Two styles, designed separately: **Plain** (solid and matte) and **Glass** (see-through, with real refraction). 17 colours including OLED black and Light, or any colour you like. Animated backgrounds (Ribbons, XMB Waves, Aurora, Contours, Drift, Tide), a still one, game artwork, a pan over a console's covers or your own wallpaper. Seven fonts, card sizes, corners and spacing, motion and sound styles, and a Start page of tiles you arrange yourself. Custom covers, logos and backgrounds per game from SteamGridDB. The first-run welcome lets you pick the style, colour and background before anything else.
+Two styles, designed separately: **Plain** (solid and matte) and **Glass** (see-through, with real refraction). 17 colours including OLED black and Light, or any colour you like. Animated backgrounds in your colours (Ribbons, XMB Waves, Aurora, Contours, Drift, Tide) or their own (Midnight, Solar Flare, Nordic Aurora, Cyber Gradient, Liquid Titanium), a still one, game artwork, a pan over a console's covers or your own wallpaper. Seven fonts, card sizes, corners and spacing, motion and sound styles, and a Start page of tiles you arrange yourself. Custom covers, logos and backgrounds per game from SteamGridDB. The first-run welcome lets you pick the style, colour and background before anything else.
 
 </td>
 <td valign="top">
