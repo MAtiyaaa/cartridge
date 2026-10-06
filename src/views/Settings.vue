@@ -25,8 +25,8 @@
             </div>
             <div class="subh"><Icon name="mdiServerNetwork" :size="20" />Connection</div>
             <div class="card-s glass">
-              <div class="kv"><span>Local</span><span class="mono">{{ srv.localUrl || '—' }}</span></div>
-              <div class="kv"><span>Remote</span><span class="mono">{{ srv.remoteUrl || '—' }}</span></div>
+              <div class="kv"><span>Local</span><span class="mono">{{ srv.localUrl || 'Not set' }}</span></div>
+              <div class="kv"><span>Remote</span><span class="mono">{{ srv.remoteUrl || 'Not set' }}</span></div>
               <div class="kv"><span>Using now</span><span class="row" style="gap: 8px"><span class="dot" :class="store.connection.route === 'local' ? 'ok' : 'remote'" />{{ store.connection.base || 'Not connected' }}</span></div>
               <div class="kv"><span>Signed in</span><span>{{ srv.auth === 'token' ? 'API token' : srv.username }}</span></div>
             </div>
@@ -205,7 +205,7 @@
               <button v-for="p in folderList" :key="p.slug" class="prow" data-focus :data-key="'pf-' + p.slug" @click="editPath(p)">
                 <PIcon :p="p" :size="30" />
                 <div class="pn">{{ p.display_name || p.name }}<span v-if="p.rom_count && !showAll" class="muted small"> · {{ p.rom_count }}</span></div>
-                <div class="mono pp">{{ p.target?.path || '—' }}</div>
+                <div class="mono pp">{{ p.target?.path || 'Not set' }}</div>
                 <span class="chip" :class="p.target?.source === 'custom' ? 'primary' : p.target?.exists ? 'green' : ''">{{ p.target?.source === 'custom' ? 'Custom' : p.target?.exists ? 'Found' : p.target?.path ? 'Will create' : 'Not set' }}</span>
               </button>
             </div>
