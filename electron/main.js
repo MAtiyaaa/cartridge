@@ -546,12 +546,34 @@ function scanMounts() {
   return found.filter((p) => !p.includes('/.'));
 }
 
+// 0.9.49 (owner: "Detected ROM folders, I don't know what that means"; the list showed one folder twice, under /media and
+// /run/media, and EmuDeck's entry pointed at the drive itself): a found folder is the games folder on it (a drive or an
+// Emulation folder becomes its roms folder), the same real folder is listed once, and each says which drive it's on and
+// how many consoles and games it holds, so the choice is plain.
+const KNOWN_DIRS = new Set(Object.values(PLATFORM_MAP).flat().map((x) => x.toLowerCase()));
+function romsFolderStats(dir) {
+  let consoles = 0, games = 0;
+  for (const n of listDirNames(dir)) {
+    if (!KNOWN_DIRS.has(n.toLowerCase())) continue;
+    let k = 0; try { k = fs.readdirSync(path.join(dir, n)).filter((f) => !f.startsWith('.') && !/^(media|metadata\.txt|systeminfo\.txt)$/i.test(f)).length; } catch {}
+    consoles++; games += k;
+  }
+  return { consoles, games };
+}
 function detectRoots() {
   const out = [];
+  const real = (x) => { try { return fs.realpathSync(x); } catch { return path.resolve(x); } };
+  const list = mounts();
   const add = (p, source) => {
     if (!p) return;
-    const norm = path.resolve(p);
-    if (!out.find((o) => o.path === norm)) out.push({ path: norm, source, exists: isDir(norm) });
+    let norm = path.resolve(p);
+    // a drive or an Emulation folder: the games folder in it
+    if (romsFolderStats(norm).consoles < 2) for (const sub of ['roms', 'Emulation/roms']) if (isDir(path.join(norm, sub)) && romsFolderStats(path.join(norm, sub)).consoles >= 2) { norm = path.join(norm, sub); break; }
+    const r = real(norm);
+    const had = out.find((o) => o.real === r);
+    if (had) { if (!had.source.includes(source)) had.source += ` · ${source}`; return; }
+    const dv = isDir(norm) ? driveOf(norm, list) : null;
+    out.push({ path: norm, real: r, source, exists: isDir(norm), drive: dv ? (dv.label === 'This device' ? 'Main Drive' : dv.label) : '', ...romsFolderStats(norm) });
   };
   const emu = readEmuDeckSettings();
   if (emu.romsPath) add(emu.romsPath, 'EmuDeck settings');
@@ -566,7 +588,7 @@ function detectRoots() {
     const r = out.find((o) => o.exists);
     if (r) { const b = path.join(path.dirname(r.path), 'bios'); if (isDir(b)) bios = b; }
   }
-  return { roots: out, bios };
+  return { roots: out.filter((o) => o.exists), bios };
 }
 
 function listDirNames(dir) {
@@ -607,12 +629,16 @@ function platformDirs(p) {
   return [main, ...extraRoots().filter((r) => isDir(r)).map((r) => rootFolder(r, p))].filter(Boolean);
 }
 // where a new download goes: the folder picked in Storage, else the drive with the most free space
-function downloadDir(p, need = 0) {
+// root: a games folder picked for this one download (0.9.49, Always Ask), else the one picked in Storage
+function downloadDir(p, need = 0, root = null) {
   const main = platformPath(p).path;
   const roots = extraRoots().filter((r) => isDir(r));
   if (!roots.length || config.paths[p.slug]) return main; // one drive, or a folder you set for this console
   const opts = [main, ...roots.map((r) => rootFolder(r, p))].filter(Boolean);
-  const pick = config.downloadRoot && config.downloadRoot !== 'most' ? opts.find((d) => path.resolve(d).startsWith(path.resolve(config.downloadRoot) + path.sep)) : null;
+  const want = root || (config.downloadRoot && config.downloadRoot !== 'most' ? config.downloadRoot : null);
+  // the main games folder (config.romsRoot) holds main, which may sit under another path than romsRoot's (a console
+  // folder set by name), so the main root picks main itself
+  const pick = want ? (path.resolve(want) === path.resolve(config.romsRoot || '') ? main : opts.find((d) => path.resolve(d).startsWith(path.resolve(want) + path.sep))) : null;
   if (pick) return pick;
   const free = (d) => { let x = d; while (x && !isDir(x)) { const up = path.dirname(x); if (up === x) break; x = up; } try { const st = fs.statfsSync(x || '/'); return st.bavail * st.bsize; } catch { return 0; } };
   const ranked = opts.map((d) => ({ d, f: free(d) })).sort((a, b) => b.f - a.f);
@@ -1696,7 +1722,7 @@ async function runJob(it) {
   let lastT = Date.now(), lastB = 0;
   try {
     const rom = await api(`/api/roms/${it.romId}`);
-    const target = downloadDir({ slug: rom.platform_slug, fs_slug: rom.platform_fs_slug }, rom.fs_size_bytes || 0); // 0.9.38: any drive
+    const target = downloadDir({ slug: rom.platform_slug, fs_slug: rom.platform_fs_slug }, rom.fs_size_bytes || 0, it.root || null); // 0.9.38: any drive; 0.9.49: the one asked for
     if (!target) throw new Error('No folder set for this platform. Set it in Settings.');
     await fsp.mkdir(target, { recursive: true });
     const files = (rom.files || []).slice().sort((a, b) => a.full_path.localeCompare(b.full_path));
@@ -4592,11 +4618,17 @@ const handlers = {
   'fs:mkdir': async (dir) => { await fsp.mkdir(dir, { recursive: true }); return true; },
   'storage:overview': () => storageOverview(),
   // the space where a console's next download would go (0.9.38: any drive with a games folder)
-  'fs:downloadSpace': async ({ slug, fs_slug, need = 0 } = {}) => { const d = downloadDir({ slug, fs_slug }, need); const sp = await handlers['fs:space'](d); return sp && { ...sp, dir: d }; },
+  'fs:downloadSpace': async ({ slug, fs_slug, need = 0, root = null } = {}) => { const d = downloadDir({ slug, fs_slug }, need, root); const sp = await handlers['fs:space'](d); return sp && { ...sp, dir: d }; },
   // the games folders: this device's and each extra drive's, with free space (Settings → Storage, 0.9.38)
   'roots:list': async () => {
-    const one = async (p, main) => { const sp = await handlers['fs:space'](p); return { path: p, main, here: isDir(p), free: sp?.free || 0, total: sp?.total || 0 }; };
-    return { roots: [await one(config.romsRoot, true), ...(await Promise.all(extraRoots().map((r) => one(r, false))))].filter((r) => r.path), to: config.downloadRoot || 'most' };
+    // 0.9.49 (owner: "This Device" was the main games folder, which was on the MicroSD, so games went there): each
+    // folder is named after the drive it's really on: Main Drive for this device's own disk, else the drive's name
+    const list = mounts();
+    const one = async (p, main) => { const sp = await handlers['fs:space'](p); const dv = p && isDir(p) ? driveOf(p, list) : null; return { path: p, main, here: isDir(p), free: sp?.free || 0, total: sp?.total || 0, drive: dv ? (dv.label === 'This device' ? 'Main Drive' : dv.label) : path.basename(path.dirname(path.dirname(p || '')) || '') || 'Drive', mount: dv?.mount || '' }; };
+    const roots = [await one(config.romsRoot, true), ...(await Promise.all(extraRoots().map((r) => one(r, false))))].filter((r) => r.path);
+    // two folders on one drive: the drive's name and the folder's
+    for (const r of roots) if (roots.filter((x) => x.drive === r.drive).length > 1) r.drive = `${r.drive} · ${path.basename(path.dirname(r.path)) === 'Emulation' ? path.basename(path.dirname(path.dirname(r.path))) : path.basename(path.dirname(r.path))}`;
+    return { roots, to: config.downloadRoot || 'most', ask: !!config.downloads?.askWhere };
   },
   // a drive picked: an ES-DE roms folder made on it (a folder per console in the library), added to every
   // set-up emulator's game list that has one, and opened to Flatpak emulators; never moves or deletes a game

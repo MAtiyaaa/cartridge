@@ -42,10 +42,10 @@ function stub(ui, extra = {}) {
 }
 // open the built UI with a look: { theme, style } (style 'plain' | 'glass')
 // dist: another build to load (the visual check opens the last release's build too); freeze: a fixed clock and no motion
-async function open({ theme = 'cartridge', style = 'plain', bg = 'ribbons', width = 1280, height = 800, dist = '', freeze = false, ui = {}, long = false } = {}) {
+async function open({ theme = 'cartridge', style = 'plain', bg = 'ribbons', width = 1280, height = 800, dist = '', freeze = false, ui = {}, long = false, touch = false } = {}) {
   const { chromium } = playwright();
   const browser = await chromium.launch({ executablePath: process.env.CHROMIUM || undefined, args: ['--allow-file-access-from-files'] });
-  const page = await browser.newPage({ viewport: { width, height } });
+  const page = await browser.newPage({ viewport: { width, height }, hasTouch: touch });
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
   if (freeze) await page.clock.setFixedTime(new Date('2026-01-15T10:30:00'));

@@ -2,7 +2,8 @@
   <div class="set-view" ref="el">
     <nav class="rail">
       <div class="eyebrow" style="padding: 0 14px 10px">Settings</div>
-      <button v-for="s in sections" :key="s.id" class="rail-item" :class="{ on: sec === s.id }" data-focus :data-key="'sec-' + s.id" :data-autofocus="sec === s.id ? '' : undefined" @focus="sec = s.id" @click="enter">
+      <button class="rail-item rail-find" data-focus @click="searchSettings"><Icon name="mdiMagnify" :size="20" />Find a Setting</button>
+      <button v-for="s in sections" :key="s.id" class="rail-item" :class="{ on: sec === s.id }" data-focus :data-key="'sec-' + s.id" :data-autofocus="sec === s.id ? '' : undefined" @focus="sec = s.id" @click="pick(s.id)">
         <SyncthingLogo v-if="s.id === 'syncthing'" :size="20" mono class="rail-st" /><Icon v-else :name="s.icon" :size="20" />{{ s.label }}
       </button>
     </nav>
@@ -10,9 +11,12 @@
       <!-- the old page goes at once, so a quick press to the right always lands on the new one (A13) -->
       <Transition name="fadeup">
         <div :key="sec" class="pane-in">
+          <!-- every section opens the same way (0.9.49): its name, one short line, then its pages if it has them -->
+          <header class="sec-head"><h1>{{ sections.find((x) => x.id === sec)?.label }}</h1><p v-if="lead" class="sec-lead">{{ lead }}</p></header>
+          <div v-if="sec === 'library'" class="lookpages"><Btn b="LB" /><div class="seg"><button v-for="p in LIB_PAGES" :key="p.v" data-focus :data-key="'lib-' + p.v" :class="{ on: libPage === p.v }" @click="libPage = p.v">{{ p.l }}</button></div><Btn b="RB" /></div>
+          <div v-if="sec === 'dlup'" class="lookpages"><Btn b="LB" /><div class="seg"><button v-for="p in DLUP_PAGES" :key="p.v" data-focus :data-key="'dlup-' + p.v" :class="{ on: dlupPage === p.v }" @click="dlupPage = p.v">{{ p.l }}</button></div><Btn b="RB" /></div>
           <!-- one RomM tab (0.9.3 G1): connection, library and sync, upload -->
-          <template v-if="sec === 'romm'">
-            <h1>RomM</h1>
+          <template v-if="sec === 'library' && libPage === 'server'">
             <!-- 0.9.17: using Cartridge without RomM: one press to connect -->
             <div v-if="store.config.localOnly" class="card-s glass local-card">
               <Icon name="mdiFolderPlayOutline" :size="28" />
@@ -56,33 +60,42 @@
               <div class="row wrap"><button class="btn" data-focus :disabled="rlBusy" @click="rommLocalUpdate"><Icon name="mdiUpdate" />{{ rlBusy ? 'Updating…' : 'Update RomM' }}</button></div>
               <p class="muted small">Reachable while this device is on and online. Update RomM gets the newest version; your games, database and account stay.</p>
             </template>
-            <template v-else>
+              <template v-else>
               <p class="muted small">No server? Cartridge can run RomM here in the background with Podman. It's only reachable while this device is on and online.</p>
               <div class="row"><button class="btn" data-focus @click="store.welcoming = 'romm-local'"><Icon name="mdiServerPlus" />Set Up RomM on This Device</button></div>
             </template>
             <div style="margin-top: 14px"><RommUpload /></div>
           </template>
-          <template v-else-if="sec === 'storage'">
-            <h1>Storage</h1>
-            <div class="pathrow glass">
-              <div style="min-width: 0"><div class="lbl2">ROMs folder</div><div class="mono">{{ store.config.romsRoot || 'Not set' }}</div><div v-if="space" class="muted small">{{ bytes(space.free) }} free of {{ bytes(space.total) }}</div></div>
-              <div class="row">
-                <button class="btn small" data-focus @click="detect"><Icon name="mdiAutoFix" :size="18" />Auto-detect</button>
-                <button class="btn small" data-focus @click="browseRoot"><Icon name="mdiFolderOpen" :size="18" />Browse</button>
+          <template v-else-if="sec === 'library' && libPage === 'folders'">
+            <!-- 0.9.49 (owner): every games folder on one card, named after its drive; new games by drive name; Always Ask -->
+            <div class="subh">Games Folders</div>
+            <p class="muted small" style="margin-top: -6px">Cartridge finds your games in every one of these, and your emulators are told about each.</p>
+            <div class="gf-list">
+              <div v-for="r in rootsShown" :key="r.path" class="gf glass">
+                <Icon :name="r.main ? 'mdiHarddisk' : 'mdiSdCard'" :size="26" class="gf-ico" />
+                <div class="l-mid">
+                  <b class="gf-name">{{ r.drive }}<span v-if="r.main" class="status">Main Folder</span></b>
+                  <span class="mono small gf-path">{{ short(r.path) }}</span>
+                  <span v-if="r.here && r.total" class="bar gf-bar"><i :style="{ width: Math.round((1 - r.free / r.total) * 100) + '%' }" /></span>
+                  <span class="muted small">{{ r.here ? `${bytes(r.free)} free of ${bytes(r.total)}` : 'Not plugged in' }}</span>
+                </div>
+                <button v-if="r.main" class="btn small" data-focus @click="browseRoot"><Icon name="mdiFolderOpen" :size="18" />Change</button>
+                <button v-else class="btn small" data-focus @click="removeRoot(r)"><Icon name="mdiClose" :size="16" />Remove</button>
               </div>
             </div>
-            <!-- games on more than one drive (0.9.38): extra ES-DE roms folders; one short block, the rest is automatic -->
-            <div class="pathrow glass" style="flex-wrap: wrap">
-              <div style="min-width: 0; flex: 1"><div class="lbl2">Games on Other Drives</div>
-                <div v-if="!xroots.length" class="muted small">Add an SD card or another drive: Cartridge makes a games folder on it and adds it to your emulators.</div>
-                <div v-for="r in xroots" :key="r.path" class="xroot"><span class="mono">{{ r.path }}</span><span class="muted small">{{ r.here ? `${bytes(r.free)} free` : 'Not plugged in' }}</span><button class="btn small" data-focus @click="removeRoot(r)"><Icon name="mdiClose" :size="16" />Remove</button></div>
-                <div v-if="xroots.length" class="row" style="margin-top: 8px; gap: 8px"><span class="muted small">New games go to</span><div class="seg"><button data-focus :class="{ on: rootTo === 'most' }" @click="setRootTo('most')">Most Free Space</button><button v-for="r in allRoots" :key="r.path" data-focus :class="{ on: rootTo === r.path }" @click="setRootTo(r.path)">{{ r.main ? 'This Device' : rootLabel(r.path) }}</button></div></div>
-              </div>
-              <button class="btn small" data-focus @click="addRoot"><Icon name="mdiHarddiskPlus" :size="18" />Add a Drive</button>
+            <div class="row wrap">
+              <button class="btn" data-focus @click="addRoot"><Icon name="mdiHarddiskPlus" :size="18" />Add a Drive</button>
+              <button class="btn" data-focus @click="detect"><Icon name="mdiAutoFix" :size="18" />Find Games Folders</button>
             </div>
+            <template v-if="allRoots.length > 1">
+              <div class="subh">New Games Go To</div>
+              <div class="seg wrap-seg"><button data-focus :class="{ on: rootTo === 'most' }" @click="setRootTo('most')">Most Free Space</button><button v-for="r in allRoots" :key="r.path" data-focus :class="{ on: rootTo === r.path }" @click="setRootTo(r.path)">{{ r.drive }}</button></div>
+              <Toggle :model-value="!!dls.askWhere" label="Always Ask" desc="Each download asks which drive it goes to" @update:model-value="(v) => saveConfig({ downloads: { askWhere: v } })" />
+            </template>
+            <div class="subh">BIOS Folder</div>
             <div class="pathrow glass">
-              <div style="min-width: 0"><div class="lbl2">BIOS folder</div><div class="mono">{{ store.config.biosPath || 'Not set' }}</div></div>
-              <button class="btn small" data-focus @click="browseBios"><Icon name="mdiFolderOpen" :size="18" />Browse</button>
+              <div style="min-width: 0"><div class="mono">{{ store.config.biosPath ? short(store.config.biosPath) : 'Not set' }}</div><div class="muted small">BIOS and firmware files your emulators need</div></div>
+              <button class="btn small" data-focus @click="browseBios"><Icon name="mdiFolderOpen" :size="18" />Change</button>
             </div>
             <StorageManager :key="storageKey" />
             <LibraryCheck />
@@ -94,7 +107,6 @@
           </template>
 
           <template v-else-if="sec === 'emu'">
-            <h1>Emulators</h1>
             <!-- pages like Look & Feel (0.9.16, owner): LB/RB move between them -->
             <div class="lookpages"><Btn b="LB" /><div class="seg"><button v-for="p in EMU_PAGES" :key="p.v" data-focus :data-key="'emup-' + p.v" :class="{ on: emuPage === p.v }" @click="setEmuPage(p.v)">{{ p.l }}<span v-if="p.v === 'addons' && ps3UpCount" class="count-dot">{{ ps3UpCount }}</span></button></div><Btn b="RB" /></div>
             <template v-if="emuPage === 'overview'">
@@ -113,7 +125,7 @@
             <div class="subh">BIOS and Firmware</div>
             <div v-if="!biosSt" class="muted small"><Icon name="mdiSync" :size="16" class="spin" /> Checking…</div>
             <template v-else>
-              <p class="muted small" style="margin: 0">Cartridge puts them in place by itself: copied into every emulator that reads them from a folder, PS3 and Vita firmware installed in RPCS3 and Vita3K, Switch keys and firmware put where Eden and its family read them. It runs after an emulator is installed and after files come from RomM. Nothing is ever replaced.</p>
+              <p class="muted small" style="margin: 0">Cartridge puts these in place for every emulator by itself, after installs and downloads. Nothing is ever replaced.</p>
               <div class="stack">
                 <div v-for="b in biosSt.list" :key="b.key" class="lrow" data-focus tabindex="0">
                   <Icon :name="b.ok ? 'mdiCheckCircleOutline' : 'mdiChip'" :size="24" :style="{ color: b.ok ? '#7fe0a0' : b.optional ? 'var(--muted)' : '#ffd978' }" />
@@ -134,7 +146,7 @@
             </template>
             <template v-else-if="emuPage === 'emus'">
               <!-- 0.9.21 (owner): Get Emulators and emulator updates in one list; installed ones show Up to date or their update -->
-              <p class="muted small" style="margin-top: -6px">Emulators for each console. The ones on this device show whether they're up to date: Flatpaks update from Flathub, AppImages from the emulator's own releases (the new file goes where the old one was, so Steam shortcuts keep working). EmuDeck's launchers update through EmuDeck.</p>
+              <p class="muted small" style="margin-top: -6px">Every console’s emulators. Updates go where the old copy was, so Steam shortcuts keep working.</p>
               <EmuGet updates />
             </template>
             <template v-else-if="emuPage === 'addons'">
@@ -200,8 +212,7 @@
             </template>
           </template>
 
-          <template v-else-if="sec === 'dl'">
-            <h1>Downloads</h1>
+          <template v-else-if="sec === 'dlup' && dlupPage === 'downloads'">
             <div class="row"><span class="lbl">At once</span><div class="seg"><button v-for="n in [1, 2, 3, 4]" :key="n" data-focus :class="{ on: dls.concurrency === n }" @click="saveConfig({ downloads: { concurrency: n } })">{{ n }}</button></div></div>
             <div class="row"><span class="lbl">Speed limit</span><div class="seg"><button v-for="n in [0, 5, 10, 25, 50]" :key="n" data-focus :class="{ on: (dls.limitMBs || 0) === n }" @click="saveConfig({ downloads: { limitMBs: n } })">{{ n ? n + ' MB/s' : 'Off' }}</button></div></div>
             <Toggle :model-value="dls.esdeM3uFolders" label="ES-DE multi-disc folders" desc="Save multi-disc games as “Game.m3u/” so ES-DE shows one entry" @update:model-value="(v) => saveConfig({ downloads: { esdeM3uFolders: v } })" />
@@ -209,7 +220,6 @@
           </template>
 
           <template v-else-if="sec === 'ui'">
-            <h1>Look &amp; Feel</h1>
             <!-- four short pages (0.9.3 K, G4; Background folded into Theme in 0.9.21): LB/RB move between them; rarely used options under Advanced -->
             <div class="lookpages"><Btn b="LB" /><div class="seg"><button v-for="p in LOOK_PAGES" :key="p.v" data-focus :data-key="'look-' + p.v" :class="{ on: lookPage === p.v }" @click="setLookPage(p.v)">{{ p.l }}</button></div><Btn b="RB" /></div>
 
@@ -330,44 +340,12 @@
             <button class="lrow adv-tg" data-focus @click="lookAdv = !lookAdv"><Icon name="mdiTuneVariant" :size="22" /><div class="l-mid"><b>Advanced</b></div><Icon :name="lookAdv ? 'mdiChevronUp' : 'mdiChevronDown'" :size="22" /></button>
             <template v-if="lookAdv">
             <div class="row"><span class="lbl">Effects</span><div class="seg"><button v-for="m in effectsOpts" :key="m.v" data-focus :class="{ on: (ui.effects || 'auto') === m.v }" @click="saveConfig({ ui: { effects: m.v } })">{{ m.l }}</button></div></div>
-            <p class="muted small" style="margin-top: -6px">Reduced turns off movement, including the animated background, which then shows a still frame. Light effects draw backgrounds at a lower resolution and frame rate and skip blur. Auto uses light effects when the GPU is off (software rendering), so it stays smooth everywhere. {{ store.info.gpu === false ? 'The GPU is off right now, so Auto is using light effects.' : '' }}</p>
-            </template>
-            </template>
-            <template v-else-if="lookPage === 'controls'">
-            <div class="subh"><Icon name="mdiGamepadVariantOutline" :size="20" />Controls &amp; Display</div>
-            <div class="row"><span class="lbl">Touch &amp; mouse</span><div class="seg"><button v-for="p in pointers" :key="p.v" data-focus :class="{ on: (ui.pointer || 'auto') === p.v }" @click="setPointer(p.v)">{{ p.l }}</button></div></div>
-            <p class="muted small" style="margin-top: -6px">Auto hides the cursor when you tap the screen and shows it when a mouse moves. Touch never shows a cursor.</p>
-            <div class="row"><span class="lbl">Touch scrolling</span><div class="seg"><button v-for="t in TOUCH_SCROLL" :key="t.v" data-focus :class="{ on: (ui.touchScroll || 'own') === t.v }" @click="saveConfig({ ui: { touchScroll: t.v } })">{{ t.l }}</button></div></div>
-            <p class="muted small" style="margin-top: -6px">Cartridge's scrolls with your finger and glides on release, however your system sends touches. The browser's is Chromium's own touch scrolling, for systems where it already works well. Swipe in from the left edge to go back, and swipe along the top bar to change tabs.</p>
-            <div class="row"><span class="lbl">Button icons</span><div class="seg"><button v-for="k in buttonOpts" :key="k.v" data-focus :class="{ on: (ui.buttons || 'auto') === k.v }" @click="saveConfig({ ui: { buttons: k.v } })">{{ k.l }}</button></div></div>
-            <p class="muted small" style="margin-top: -6px">Auto draws the buttons of the controller you're holding{{ padInfo?.name ? ` (right now: ${padInfo.name})` : '' }}, even when Steam presents it as an Xbox pad. <span class="btn-demo"><Btn b="A" /><Btn b="B" /><Btn b="X" /><Btn b="Y" /><Btn b="LB" /><Btn b="RT" /><Btn b="START" /><Btn b="SELECT" /></span></p>
-            <div class="row"><span class="lbl">On-screen keyboard</span><div class="seg"><button v-for="k in keyboards" :key="k.v" data-focus :class="{ on: (ui.keyboard || 'auto') === k.v }" @click="saveConfig({ ui: { keyboard: k.v } })">{{ k.l }}</button></div></div>
-            <p class="muted small" style="margin-top: -6px">Auto uses the built-in keyboard in Game Mode and your real keyboard on the desktop. Steam leaves typing to the Steam keyboard (Steam + X).</p>
-
-            <div class="subh"><Icon name="mdiDockTop" :size="20" />Top Bar</div>
-            <div class="row"><span class="lbl">Open on</span><div class="seg"><button v-for="t in tabsOn.filter((n) => n !== 'settings')" :key="t" data-focus :class="{ on: (ui.openOn || 'start') === t }" @click="saveConfig({ ui: { openOn: t } })">{{ TAB_DEFS[t].label }}</button></div></div>
-            <p class="muted small" style="margin-top: -6px">The menu Cartridge shows when it starts.</p>
-            <p class="muted small" style="margin-top: -6px">Pick which tabs show at the top and their order. LT and RT move through them in this order. Settings always stays.</p>
-            <div class="tabs-edit">
-              <div v-for="(t, i) in tabRows" :key="t.name" class="tab-row" :class="{ off: !t.on }">
-                <Icon :name="t.icon" :size="20" /><span class="tab-lbl">{{ t.label }}</span>
-                <button class="btn small" data-focus :disabled="!t.on || i === 0" :aria-label="'Move ' + t.label + ' up'" @click="moveTab(t.name, -1)"><Icon name="mdiChevronUp" :size="18" /></button>
-                <button class="btn small" data-focus :disabled="!t.on || i >= tabsOn.length - 1" :aria-label="'Move ' + t.label + ' down'" @click="moveTab(t.name, 1)"><Icon name="mdiChevronDown" :size="18" /></button>
-                <button class="btn small tab-tg" data-focus :class="{ primary: t.on }" :disabled="t.name === 'settings'" @click="toggleTab(t.name)">{{ t.on ? 'Shown' : 'Hidden' }}</button>
-              </div>
-            </div>
-            <button class="btn small" data-focus style="align-self: flex-start" @click="saveConfig({ ui: { tabs: null } })"><Icon name="mdiRestore" :size="18" />Default tabs</button>
-
-            <button class="lrow adv-tg" data-focus @click="lookAdv = !lookAdv"><Icon name="mdiTuneVariant" :size="22" /><div class="l-mid"><b>Advanced</b></div><Icon :name="lookAdv ? 'mdiChevronUp' : 'mdiChevronDown'" :size="22" /></button>
-            <template v-if="lookAdv">
-            <!-- 0.9.41 (owner): no Rendering choice any more, Cartridge always uses the GPU -->
-            <div class="row"><button class="btn" data-focus @click="call('app:fullscreen')"><Icon name="mdiFullscreen" />Toggle fullscreen</button><button class="btn" data-focus @click="clearCache"><Icon name="mdiImageRemove" />Clear image cache</button></div>
+            <p class="muted small" style="margin-top: -6px">Reduced stops movement; Light draws the background more simply. {{ store.info.gpu === false ? 'The GPU is off right now, so Auto uses Light.' : '' }}</p>
             </template>
             </template>
           </template>
 
-          <template v-else-if="sec === 'updates'">
-            <h1>Updates</h1>
+          <template v-else-if="sec === 'dlup' && dlupPage === 'updates'">
             <div class="about glass">
               <Logo :size="64" />
               <div style="display: flex; flex-direction: column; gap: 6px; flex: 1">
@@ -389,7 +367,6 @@
           </template>
 
           <template v-else-if="sec === 'ra'">
-            <h1>Achievements</h1>
             <div class="row"><span class="lbl">On Home</span><div class="seg"><button v-for="m in homeAchOpts" :key="m.v" data-focus :class="{ on: homeAch === m.v }" @click="saveConfig({ ui: { homeAch: m.v } })">{{ m.l }}</button></div></div>
             <p class="muted small" style="margin-top: -6px">A row of your newest achievements and trophies on Home, newest first.</p>
             <div class="subh"><img src="../assets/ra-logo.png" class="ra-mk" />RetroAchievements</div>
@@ -425,7 +402,7 @@
             </template>
 
             <div class="subh" style="margin-top: 14px"><Grade g="P" :size="22" />Trophies &amp; Gamerscore</div>
-            <p class="muted small" style="margin-top: -8px">Trophies and achievements that emulators keep on this device. Cartridge reads each emulator's own settings first, then looks through your home, emulation and SD card folders. Nothing is ever written to the emulators' files.</p>
+            <p class="muted small" style="margin-top: -8px">Trophies your emulators keep on this device. Cartridge only reads them.</p>
             <div class="srcs">
               <div v-for="s in trophySrc" :key="s.id" class="src glass">
                 <div class="src-top">
@@ -467,7 +444,6 @@
           </template>
 
           <template v-else-if="sec === 'steam'">
-            <h1>Steam</h1>
             <!-- not in Steam yet: adding Cartridge comes first; once added it moves to the bottom (0.9.3 L) -->
             <div v-if="selfAdded === false && steamReady" class="about glass">
               <img src="../../steam-art/grid.png" class="steam-grid" />
@@ -497,8 +473,40 @@
             </template>
           </template>
 
+          <template v-else-if="sec === 'controls'">
+            <div class="subh"><Icon name="mdiGamepadVariantOutline" :size="20" />Controls &amp; Display</div>
+            <div class="row"><span class="lbl">Touch &amp; mouse</span><div class="seg"><button v-for="p in pointers" :key="p.v" data-focus :class="{ on: (ui.pointer || 'auto') === p.v }" @click="setPointer(p.v)">{{ p.l }}</button></div></div>
+            <p class="muted small" style="margin-top: -6px">Auto hides the cursor when you tap the screen and shows it when a mouse moves. Touch never shows a cursor.</p>
+            <div class="row"><span class="lbl">Touch scrolling</span><div class="seg"><button v-for="t in TOUCH_SCROLL" :key="t.v" data-focus :class="{ on: (ui.touchScroll || 'own') === t.v }" @click="saveConfig({ ui: { touchScroll: t.v } })">{{ t.l }}</button></div></div>
+            <p class="muted small" style="margin-top: -6px">Swipe in from the left edge to go back. Use the browser's only if Cartridge's feels wrong on your device.</p>
+            <div class="row"><span class="lbl">Button icons</span><div class="seg"><button v-for="k in buttonOpts" :key="k.v" data-focus :class="{ on: (ui.buttons || 'auto') === k.v }" @click="saveConfig({ ui: { buttons: k.v } })">{{ k.l }}</button></div></div>
+            <p class="muted small" style="margin-top: -6px">Auto draws the buttons of the controller you're holding{{ padInfo?.name ? ` (right now: ${padInfo.name})` : '' }}, even when Steam presents it as an Xbox pad. <span class="btn-demo"><Btn b="A" /><Btn b="B" /><Btn b="X" /><Btn b="Y" /><Btn b="LB" /><Btn b="RT" /><Btn b="START" /><Btn b="SELECT" /></span></p>
+            <div class="row"><span class="lbl">On-screen keyboard</span><div class="seg"><button v-for="k in keyboards" :key="k.v" data-focus :class="{ on: (ui.keyboard || 'auto') === k.v }" @click="saveConfig({ ui: { keyboard: k.v } })">{{ k.l }}</button></div></div>
+            <p class="muted small" style="margin-top: -6px">Auto uses the built-in keyboard in Game Mode and your real keyboard on the desktop. Steam leaves typing to the Steam keyboard (Steam + X).</p>
+
+            <div class="subh"><Icon name="mdiDockTop" :size="20" />Top Bar</div>
+            <div class="row"><span class="lbl">Open on</span><div class="seg"><button v-for="t in tabsOn.filter((n) => n !== 'settings')" :key="t" data-focus :class="{ on: (ui.openOn || 'start') === t }" @click="saveConfig({ ui: { openOn: t } })">{{ TAB_DEFS[t].label }}</button></div></div>
+            <p class="muted small" style="margin-top: -6px">The menu Cartridge shows when it starts.</p>
+            <p class="muted small" style="margin-top: -6px">Pick which tabs show at the top and their order. LT and RT move through them in this order. Settings always stays.</p>
+            <div class="tabs-edit">
+              <div v-for="(t, i) in tabRows" :key="t.name" class="tab-row" :class="{ off: !t.on }">
+                <Icon :name="t.icon" :size="20" /><span class="tab-lbl">{{ t.label }}</span>
+                <button class="btn small" data-focus :disabled="!t.on || i === 0" :aria-label="'Move ' + t.label + ' up'" @click="moveTab(t.name, -1)"><Icon name="mdiChevronUp" :size="18" /></button>
+                <button class="btn small" data-focus :disabled="!t.on || i >= tabsOn.length - 1" :aria-label="'Move ' + t.label + ' down'" @click="moveTab(t.name, 1)"><Icon name="mdiChevronDown" :size="18" /></button>
+                <button class="btn small tab-tg" data-focus :class="{ primary: t.on }" :disabled="t.name === 'settings'" @click="toggleTab(t.name)">{{ t.on ? 'Shown' : 'Hidden' }}</button>
+              </div>
+            </div>
+            <button class="btn small" data-focus style="align-self: flex-start" @click="saveConfig({ ui: { tabs: null } })"><Icon name="mdiRestore" :size="18" />Default tabs</button>
+
+            <button class="lrow adv-tg" data-focus @click="lookAdv = !lookAdv"><Icon name="mdiTuneVariant" :size="22" /><div class="l-mid"><b>Advanced</b></div><Icon :name="lookAdv ? 'mdiChevronUp' : 'mdiChevronDown'" :size="22" /></button>
+            <template v-if="lookAdv">
+            <!-- 0.9.41 (owner): no Rendering choice any more, Cartridge always uses the GPU -->
+            <div class="row"><button class="btn" data-focus @click="call('app:fullscreen')"><Icon name="mdiFullscreen" />Toggle fullscreen</button><button class="btn" data-focus @click="clearCache"><Icon name="mdiImageRemove" />Clear image cache</button></div>
+            </template>
+            <ControllerTest />
+          </template>
+
           <template v-else>
-            <h1>About</h1>
             <div class="about glass">
               <Logo :size="64" />
               <div><div style="font-family: var(--display); font-size: 26px; font-weight: 700">Cartridge</div><div class="muted">Version {{ store.info.version }} · a RomM client for the couch</div></div>
@@ -514,7 +522,6 @@
             <div class="row"><button class="btn" data-focus @click="store.welcoming = true"><Icon name="mdiHandWave" />Run the Welcome Again</button><span class="muted small">Starts from your current settings. Nothing is reset.</span></div>
             <div class="row"><button class="btn" data-focus @click="openTour({ start: activeTabs().includes('start') })"><Icon name="mdiGestureTapButton" />Take the Tour</button><span class="muted small">Try each control yourself, a step at a time.</span></div>
             <ServerStatus />
-            <ControllerTest />
             <Toggle :model-value="ui.perfOverlay === true" label="Performance Overlay" desc="Frame rate, slowest frame, CPU and memory in a corner of the screen, to see how Cartridge runs on this device" @update:model-value="(v) => saveConfig({ ui: { perfOverlay: v } })" />
             <ReportProblem />
             <div class="card-s glass">
@@ -563,20 +570,74 @@ import { padInfo } from '../pad.js';
 
 const el = ref(null);
 const paneEl = ref(null), syncRef = ref(null), steamRef = ref(null);
-const OLD_SEC = { folders: 'emu', conn: 'romm', sync: 'romm' }; // sections merged in 0.9.3
-const sec = ref(OLD_SEC[store.settingsSection] || store.settingsSection || 'romm');
+// 0.9.49 Settings refresh (owner: "cluttered, difficult to figure out what's what; do what you think is best"): fewer
+// sections, each about one thing, with pages (LB/RB) where a section holds more than one screen. Old names still open
+// the right place (other screens ask for 'storage', 'romm', 'dl'...).
+const OLD_SEC = { folders: ['emu'], conn: ['library', 'server'], sync: ['library', 'server'], romm: ['library', 'server'], storage: ['library', 'folders'], dl: ['dlup', 'downloads'], updates: ['dlup', 'updates'] };
+const startSec = OLD_SEC[store.settingsSection] || [store.settingsSection || 'library'];
+const sec = ref(startSec[0]);
 const sections = [
-  { id: 'romm', label: 'RomM', icon: 'mdiServerNetwork' },
-  { id: 'storage', label: 'Storage', icon: 'mdiHarddisk' },
-  { id: 'emu', label: 'Emulators', icon: 'mdiGamepadVariantOutline' },
-  { id: 'dl', label: 'Downloads', icon: 'mdiTrayArrowDown' },
-  { id: 'syncthing', label: 'Syncthing', icon: 'mdiSync' },
-  { id: 'ui', label: 'Look & Feel', icon: 'mdiPaletteOutline' },
-  { id: 'ra', label: 'Achievements', icon: 'mdiTrophyOutline' },
-  { id: 'steam', label: 'Steam', icon: 'mdiSteam' },
-  { id: 'updates', label: 'Updates', icon: 'mdiUpdate' },
-  { id: 'about', label: 'About', icon: 'mdiInformationOutline' },
+  { id: 'library', label: 'Library', icon: 'mdiBookshelf', lead: 'Your RomM server, your games folders and the space they use.' },
+  { id: 'emu', label: 'Emulators', icon: 'mdiGamepadVariantOutline', lead: 'Get, update and set up emulators, and add-ons for your games.' },
+  { id: 'steam', label: 'Steam', icon: 'mdiSteam', lead: 'Your games in Steam, with their artwork and collections.' },
+  { id: 'ra', label: 'Achievements', icon: 'mdiTrophyOutline', lead: 'RetroAchievements and the trophies your emulators keep.' },
+  { id: 'syncthing', label: 'Saves and Sync', icon: 'mdiSync', lead: 'Keep saves and more in step between your devices.' },
+  { id: 'ui', label: 'Look & Feel', icon: 'mdiPaletteOutline', lead: 'Colour, style, background, text and motion.' },
+  { id: 'controls', label: 'Controls', icon: 'mdiGamepadVariant', lead: 'Controller, touch, keyboard and the Dock.' },
+  { id: 'dlup', label: 'Downloads and Updates', icon: 'mdiTrayArrowDown', lead: 'How games download, and Cartridge’s own updates.' },
+  { id: 'about', label: 'Help and About', icon: 'mdiInformationOutline', lead: 'The tour, the welcome, reporting a problem, and this device.' },
 ];
+const lead = computed(() => sections.find((x) => x.id === sec.value)?.lead || '');
+// pages in Library and Downloads and Updates
+const LIB_PAGES = [{ v: 'server', l: 'RomM Server' }, { v: 'folders', l: 'Games and Storage' }];
+const DLUP_PAGES = [{ v: 'downloads', l: 'Downloads' }, { v: 'updates', l: 'Cartridge Updates' }];
+const libPage = ref(startSec[0] === 'library' && startSec[1] ? startSec[1] : 'server');
+const dlupPage = ref(startSec[0] === 'dlup' && startSec[1] ? startSec[1] : 'downloads');
+// Settings search (0.9.49, owner's Settings refresh): Y lists every setting by name; picking one opens its section and
+// page and puts the highlight on it. [what, where it is, section, page]
+const SEARCH = [
+  ['RomM server address', 'Library · RomM Server', 'library', 'server'], ['Sign out of RomM', 'Library · RomM Server', 'library', 'server'],
+  ['Resync library', 'Library · RomM Server', 'library', 'server'], ['Scan server for new ROMs', 'Library · RomM Server', 'library', 'server'],
+  ['Auto resync', 'Library · RomM Server', 'library', 'server'], ['RomM on this device', 'Library · RomM Server', 'library', 'server'], ['Upload games to RomM', 'Library · RomM Server', 'library', 'server'],
+  ['Games folders and drives', 'Library · Games and Storage', 'library', 'folders'], ['Add a drive', 'Library · Games and Storage', 'library', 'folders'],
+  ['New games go to', 'Library · Games and Storage', 'library', 'folders'], ['Always ask where downloads go', 'Library · Games and Storage', 'library', 'folders'],
+  ['BIOS folder', 'Library · Games and Storage', 'library', 'folders'], ['Free up space, storage manager', 'Library · Games and Storage', 'library', 'folders'], ['Check downloaded games', 'Library · Games and Storage', 'library', 'folders'],
+  ['Get and update emulators', 'Emulators', 'emu', 'emus'], ['Vita3K, RPCS3, shadPS4, Dolphin, PCSX2...', 'Emulators', 'emu', 'emus'],
+  ['Game add-ons, mods, texture packs, patches', 'Emulators · Game Add-ons', 'emu', 'addons'], ['BIOS and firmware', 'Emulators · Setup and Health', 'emu', 'overview'],
+  ['Shortcut health, issues', 'Emulators · Setup and Health', 'emu', 'overview'], ['Console folders', 'Emulators · Console Folders', 'emu', 'folders'], ['Linked folders, share saves with a fork', 'Emulators · Linked Folders', 'emu', 'links'],
+  ['Add games to Steam', 'Steam', 'steam'], ['Steam collections', 'Steam', 'steam'], ['Add Cartridge to Steam', 'Steam', 'steam'], ['Frame generation', 'Steam', 'steam'],
+  ['RetroAchievements sign in', 'Achievements', 'ra'], ['Sign in to emulators', 'Achievements', 'ra'], ['Trophy folders', 'Achievements', 'ra'], ['Hidden games', 'Achievements', 'ra'], ['Trophy sync', 'Achievements', 'ra'],
+  ['Syncthing', 'Saves and Sync', 'syncthing'], ['Save sync', 'Saves and Sync', 'syncthing'],
+  ['Colour, theme', 'Look & Feel · Theme', 'ui', 'theme'], ['Plain or Glass style', 'Look & Feel · Theme', 'ui', 'theme'], ['Background', 'Look & Feel · Theme', 'ui', 'theme'], ['Light, OLED', 'Look & Feel · Theme', 'ui', 'theme'],
+  ['Font, text size', 'Look & Feel · Text and Cards', 'ui', 'cards'], ['Interface size, scale', 'Look & Feel · Text and Cards', 'ui', 'cards'], ['Card shape and size', 'Look & Feel · Text and Cards', 'ui', 'cards'],
+  ['Logos, SteamGridDB key', 'Look & Feel · Metadata', 'ui', 'meta'], ['Idle screen', 'Look & Feel · Motion and Sound', 'ui', 'motion'], ['Sounds', 'Look & Feel · Motion and Sound', 'ui', 'motion'], ['Rumble', 'Look & Feel · Motion and Sound', 'ui', 'motion'], ['Reduced motion, effects', 'Look & Feel · Motion and Sound', 'ui', 'motion'],
+  ['Button icons, controller', 'Controls', 'controls'], ['Touch and mouse', 'Controls', 'controls'], ['On-screen keyboard', 'Controls', 'controls'], ['Tabs in the Dock, open on', 'Controls', 'controls'], ['Controller test', 'Controls', 'controls'],
+  ['Downloads at once, speed limit', 'Downloads and Updates', 'dlup', 'downloads'], ['Multi-disc folders', 'Downloads and Updates', 'dlup', 'downloads'],
+  ['Check for updates', 'Downloads and Updates · Cartridge Updates', 'dlup', 'updates'], ['Roll back to an earlier version', 'Downloads and Updates · Cartridge Updates', 'dlup', 'updates'], ['What’s New', 'Downloads and Updates · Cartridge Updates', 'dlup', 'updates'],
+  ['Device name', 'Help and About', 'about'], ['Take the tour', 'Help and About', 'about'], ['Run the welcome again', 'Help and About', 'about'], ['Report a problem', 'Help and About', 'about'], ['Performance overlay', 'Help and About', 'about'], ['Licences', 'Help and About', 'about'], ['Quit Cartridge', 'Help and About', 'about'],
+];
+async function searchSettings() {
+  const q = await askText({ title: 'Find a Setting', placeholder: 'Drive, rumble, Vita3K, colour...' });
+  if (!q) return;
+  const words = q.toLowerCase().split(/\s+/).filter(Boolean);
+  const hits = SEARCH.filter(([w, where]) => words.every((x) => (w + ' ' + where).toLowerCase().includes(x)));
+  if (!hits.length) return toast(`No setting matches “${q}”`, 'info', 3000);
+  const pick = hits.length === 1 ? hits[0] : await choose({ sheet: true, title: `Settings for “${q}”`, options: hits.map((h, i) => ({ label: h[0], sub: h[1], value: i, icon: sections.find((x) => x.id === h[2])?.icon, raw: true })) }).then((i) => (i == null ? null : hits[i]));
+  if (!pick) return;
+  const [w, , id, page] = pick;
+  sec.value = id;
+  await nextTick();
+  if (page) { if (id === 'library') libPage.value = page; else if (id === 'dlup') dlupPage.value = page; else if (id === 'emu') setEmuPage(page); else if (id === 'ui') setLookPage(page); }
+  await nextTick(); await new Promise((r) => setTimeout(r, 120));
+  // the row whose words are closest: a button or row naming it, else the page's first control
+  const first = w.split(/[,(]/)[0].trim().toLowerCase().split(' ').slice(0, 2).join(' ');
+  const cands = [...(paneEl.value?.querySelectorAll('[data-focus], .row, .subh') || [])];
+  const hit = cands.find((e) => e.textContent.toLowerCase().includes(first));
+  const target = hit?.matches('[data-focus]') ? hit : hit?.querySelector('[data-focus]') || hit?.parentElement?.querySelector('[data-focus]');
+  if (target) { target.focus({ preventScroll: true }); target.scrollIntoView({ block: 'center' }); target.classList.add('found'); setTimeout(() => target.classList.remove('found'), 1600); }
+  else focusFirst(paneEl.value);
+}
+function stepPages(list, r, key, d) { const i = list.findIndex((p) => p.v === r.value), n = list[(i + d + list.length) % list.length].v; r.value = n; nextTick(() => focusFirst(paneEl.value, `[data-key="${key}-${n}"]`)); }
 const showAll = ref(false);
 const supported = ref([]);
 const space = ref(null);
@@ -850,8 +911,8 @@ function paneLeft() {
   if (more) return false;
   focusFirst(el.value, `[data-key="sec-${sec.value}"]`);
 }
-useView({ right: railRight, left: paneLeft, back: () => { if (!document.activeElement?.closest('.rail')) { focusFirst(el.value, `[data-key="sec-${sec.value}"]`); return; } return false; }, lb: () => (sec.value === 'emu' ? stepEmu(-1) : sec.value === 'syncthing' ? syncRef.value?.step(-1) : sec.value === 'steam' ? steamRef.value?.step(-1) : stepLook(-1)), rb: () => (sec.value === 'emu' ? stepEmu(1) : sec.value === 'syncthing' ? syncRef.value?.step(1) : sec.value === 'steam' ? steamRef.value?.step(1) : stepLook(1)) },
-  [{ b: 'A', label: 'Select' }, { b: 'B', label: 'Back' }, { b: 'LT+RT', label: 'Tabs' }]);
+useView({ right: railRight, left: paneLeft, back: () => { if (!document.activeElement?.closest('.rail')) { focusFirst(el.value, `[data-key="sec-${sec.value}"]`); return; } return false; }, lb: () => (sec.value === 'emu' ? stepEmu(-1) : sec.value === 'library' ? stepPages(LIB_PAGES, libPage, 'lib', -1) : sec.value === 'dlup' ? stepPages(DLUP_PAGES, dlupPage, 'dlup', -1) : sec.value === 'syncthing' ? syncRef.value?.step(-1) : sec.value === 'steam' ? steamRef.value?.step(-1) : stepLook(-1)), rb: () => (sec.value === 'emu' ? stepEmu(1) : sec.value === 'library' ? stepPages(LIB_PAGES, libPage, 'lib', 1) : sec.value === 'dlup' ? stepPages(DLUP_PAGES, dlupPage, 'dlup', 1) : sec.value === 'syncthing' ? syncRef.value?.step(1) : sec.value === 'steam' ? steamRef.value?.step(1) : stepLook(1)), y: () => searchSettings() },
+  [{ b: 'A', label: 'Select' }, { b: 'B', label: 'Back' }, { b: 'Y', label: 'Find a Setting' }, { b: 'LT+RT', label: 'Tabs' }]);
 // Settings → Emulators → Issues
 const issues = ref(null);
 const ISSUE_ICON = { collections: 'mdiFolderSyncOutline', moved: 'mdiLinkVariantOff', game: 'mdiFileHidden', core: 'mdiPuzzleRemoveOutline', setup: 'mdiRadar', bios: 'mdiChip', romm: 'mdiServerOutline', fpsteam: 'mdiSteam' };
@@ -936,6 +997,9 @@ watch(sec, (v) => { store.settingsSection = v; if (v === 'emu') { loadIssues(); 
 
 
 function enter() { focusFirst(paneEl.value); }
+// a press on a section: with a controller or keys it was already focused (and chosen), so A goes in; a tap or click
+// chooses it (0.9.49, owner: tapping the left list did nothing; a touch never moves focus, so @focus never ran)
+function pick(id) { if (sec.value !== id) { sec.value = id; if (input.mode === 'pad') nextTick(enter); return; } enter(); }
 async function setMode(mode) { await saveConfig({ server: { mode } }); reconnect(); }
 async function reconnect() {
   try { const r = await call('server:reconnect'); toast(`Connected · ${r.base}`, 'ok', 2600, 'mdiLanConnect'); } catch (e) { toast(e.message, 'error'); }
@@ -956,7 +1020,8 @@ async function afterPath() {
 async function detect() {
   const d = await call('fs:detect');
   if (!d.roots.length) { toast('No EmuDeck / ES-DE roms folder found', 'error'); return; }
-  const pick = await choose({ title: 'Detected ROM folders', options: d.roots.map((r) => ({ label: r.path, sub: r.source, value: r.path, icon: 'mdiFolderSearchOutline', selected: r.path === store.config.romsRoot })) });
+  // 0.9.49: what each is, in plain words: its drive, what's in it, and who said it's a games folder
+  const pick = await choose({ sheet: true, title: 'Games Folders Found', message: 'Pick the one Cartridge should use as its main games folder. Your others can be added with Add a Drive.', options: d.roots.map((r) => ({ label: `${r.drive || 'Folder'} · ${short(r.path)}`, raw: true, sub: `${r.consoles} console folder${r.consoles === 1 ? '' : 's'}, ${r.games} game${r.games === 1 ? '' : 's'} · from ${r.source}`, value: r.path, icon: /main/i.test(r.drive) ? 'mdiHarddisk' : 'mdiSdCard', selected: r.real === store.config.romsRoot || r.path === store.config.romsRoot })) });
   if (!pick) return;
   const patch = { romsRoot: pick };
   if (!store.config.biosPath && d.bios) patch.biosPath = d.bios;
@@ -971,6 +1036,8 @@ async function browseRoot() {
 }
 // games on more than one drive (0.9.38)
 const allRoots = ref([]), rootTo = ref('most');
+const rootsShown = computed(() => (allRoots.value.length ? allRoots.value : store.config.romsRoot ? [{ path: store.config.romsRoot, main: true, drive: 'Games Folder', here: true, free: 0, total: 0 }] : []));
+const short = (p) => String(p || '').replace(store.info?.home || '\0', '~'); // paths with ~ for home
 // a drive's name from its folder: /run/media/deck/SD/Emulation/roms -> SD
 const rootLabel = (p) => { const parts = p.split('/').filter(Boolean); while (parts.length > 1 && /^(roms|emulation)$/i.test(parts[parts.length - 1])) parts.pop(); return parts[parts.length - 1] || p; };
 const xroots = computed(() => allRoots.value.filter((r) => !r.main));
@@ -989,7 +1056,7 @@ async function removeRoot(r) {
   await call('roots:remove', { dir: r.path }); await loadRoots(); storageKey.value++;
 }
 async function setRootTo(v) { await call('roots:to', { to: v }); rootTo.value = v; }
-watch(sec, (v) => { if (v === 'storage') loadRoots(); }, { immediate: true });
+watch([sec, libPage], ([v, p]) => { if (v === 'library' && p === 'folders') loadRoots(); }, { immediate: true });
 // 0.9.38 (owner: Look & Feel opened at the depth Achievements was scrolled to): every section shares the one .pane
 // scroll box and only its contents change, so a new section starts at the top
 watch(sec, () => { const el = paneEl.value; if (el) { stopScroll(el); el.scrollTop = 0; } });
@@ -1085,10 +1152,10 @@ function pickTheme(k) {
 const DOCK_COLOR = [{ v: 'black', l: 'Black' }, { v: 'white', l: 'White' }, { v: 'accent', l: 'Accent' }]; // Plain only: in Glass the Dock is glass (0.9.45)
 const BAR_ALIGN = [{ v: 'start', l: 'Aligned' }, { v: 'center', l: 'Centred' }];
 const BAR_STYLE = [{ v: 'plain', l: 'Plain' }, { v: 'pill', l: 'Floating Pill' }, { v: 'circle', l: 'Circles' }];
-const LOOK_PAGES = [{ v: 'theme', l: 'Theme' }, { v: 'cards', l: 'Text and Cards' }, { v: 'meta', l: 'Metadata' }, { v: 'motion', l: 'Motion and Sound' }, { v: 'controls', l: 'Controls' }];
+const LOOK_PAGES = [{ v: 'theme', l: 'Theme' }, { v: 'cards', l: 'Text and Cards' }, { v: 'meta', l: 'Metadata' }, { v: 'motion', l: 'Motion and Sound' }]; // Controls is its own section (0.9.49)
 const lookPage = ref(sec.value === 'ui' && backTo ? backTo : 'theme'), lookAdv = ref(false);
-watch(sec, (v, was) => { if (was && v !== was) { emuPage.value = 'emus'; lookPage.value = 'theme'; lookAdv.value = false; } }); // a section always opens on its first page
-watch([sec, emuPage, lookPage], () => { store.settingsPage = sec.value === 'emu' ? emuPage.value : sec.value === 'ui' ? lookPage.value : null; }, { immediate: true });
+watch(sec, (v, was) => { if (was && v !== was) { emuPage.value = 'emus'; lookPage.value = 'theme'; lookAdv.value = false; libPage.value = 'server'; dlupPage.value = 'downloads'; } }); // a section always opens on its first page
+watch([sec, emuPage, lookPage, libPage, dlupPage], () => { store.settingsPage = sec.value === 'emu' ? emuPage.value : sec.value === 'ui' ? lookPage.value : sec.value === 'library' ? libPage.value : sec.value === 'dlup' ? dlupPage.value : null; }, { immediate: true });
 function setLookPage(v) { lookPage.value = v; lookAdv.value = false; }
 function stepLook(d) {
   if (sec.value !== 'ui') return false;
@@ -1259,6 +1326,20 @@ onMounted(() => {
 .subh { display: flex; align-items: center; gap: 10px; font-family: var(--display); font-size: var(--t-lg); font-weight: 700; margin-top: 4px; }
 /* LB, the pages and RB always on one row (owner: RB fell to a second row on Emulators' seven pages);
    the pages scroll sideways when they don't fit */
+/* a setting found with Y: a moment of light on it */
+.pane :deep(.found) { animation: found 1.6s var(--ease-out); }
+@keyframes found { 0%, 40% { box-shadow: 0 0 0 3px var(--focus); } 100% { box-shadow: 0 0 0 3px transparent; } }
+.rail-find { color: var(--text-2, var(--muted)); margin-bottom: 6px; }
+.sec-head { display: flex; flex-direction: column; gap: 4px; margin: 0 0 var(--s-3); }
+.sec-head h1 { margin: 0; }
+.sec-lead { margin: 0; color: var(--text-2, var(--muted)); font-size: var(--t-sm); }
+.gf-list { display: flex; flex-direction: column; gap: var(--s-2); }
+.gf { display: flex; align-items: center; gap: var(--s-3); padding: 14px 16px; border-radius: var(--r-md); }
+.gf-ico { flex: none; color: var(--text-2, var(--muted)); }
+.gf-name { display: flex; align-items: center; gap: 10px; font-family: var(--display); font-size: var(--t-md); }
+.gf-path { overflow-wrap: anywhere; color: var(--text-2, var(--muted)); }
+.gf-bar { display: block; height: 5px; max-width: 320px; margin: 6px 0 2px; }
+.wrap-seg { flex-wrap: wrap; align-self: flex-start; }
 .lookpages { display: flex; align-items: center; gap: var(--s-2); flex-wrap: nowrap; min-width: 0; }
 .lookpages > * { flex: none; }
 .lookpages .seg { flex: 0 1 auto; flex-wrap: nowrap; min-width: 0; overflow-x: auto; scrollbar-width: none; }
