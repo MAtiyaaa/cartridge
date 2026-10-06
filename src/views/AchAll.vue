@@ -235,7 +235,7 @@ onMounted(async () => {
 .aa-c-title { font-family: var(--display); font-weight: 600; font-size: var(--t-md); overflow-wrap: anywhere; }
 .aa-c-sub { font-size: var(--t-xs); color: var(--text-2, var(--muted)); overflow-wrap: anywhere; }
 .aa-c-prog { font-size: var(--t-xs); color: var(--text-2, var(--muted)); }
-.aa-card:focus .aa-c-sub, .aa-card:focus .aa-c-prog { color: var(--on-focus-dim, inherit); }
+/* focus is the ring and the lift, not a fill, so the lines keep their colours (0.9.49: they turned dark on the dark card) */
 /* Stack */
 .aa-list { display: flex; flex-direction: column; gap: 4px; padding-bottom: 30px; }
 .aa-row { display: grid; grid-template-columns: 44px minmax(0, 1fr) 120px 64px minmax(80px, 180px) 48px 24px; align-items: center; gap: var(--s-3); padding: 8px 12px; border-radius: var(--r-md); text-align: left; }
