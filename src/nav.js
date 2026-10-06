@@ -230,7 +230,14 @@ export function dispatch(action, { keepMode = false } = {}) {
   if (action === 'hold' && document.activeElement?.hasAttribute?.('data-expand') && !document.activeElement.hasAttribute('data-hold')) {
     const el = document.activeElement;
     for (const o of (layer?.el || document).querySelectorAll('.expanded[data-expand]')) if (o !== el) o.classList.remove('expanded');
-    el.classList.toggle('expanded'); rumble(true);
+    // 0.9.46 (owner: a row that already showed all of its text still took two presses of B to leave): open it only
+    // if opening shows more. Measured straight after (one layout, nothing painted in between); no taller, no card.
+    if (!el.classList.contains('expanded')) {
+      const h = el.getBoundingClientRect().height;
+      el.classList.add('expanded');
+      if (el.getBoundingClientRect().height <= h + 2) { el.classList.remove('expanded'); return; }
+    } else el.classList.remove('expanded');
+    rumble(true);
     return;
   }
   if (h && h(document.activeElement) !== false) return;

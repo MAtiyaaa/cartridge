@@ -6,6 +6,11 @@ The branch for 0.9.3 work is `claude/relaxed-fermat-30pigp`. Pull it before star
 
 ---
 
+## 6 Oct 2026 · 0.9.46 Every Setting
+- Owner: typed settings (shadPS4 DMEM in Advanced) missing from Game Settings, "place every setting advanced or not"; back from Window Width went to the Steam tab; hold A on a row that fits needed B twice; Show File Location's toast clipped.
+- Done: All Settings tab from the emulator's own file (six emulators), return to tab and row, expand only when it reveals more, toast text wraps. Checked in Chromium with a stub (tab and row after typing, one B after hold A) and a text-clipping audit of every tab, every Settings section and its pages, the game page and each More tab (nothing cut). Test added to test/gameSettings.test.js.
+- Owner to test on a device: All Settings for a real shadPS4/RPCS3/PCSX2 game, values written are picked up by the emulator.
+
 ## 6 Oct 2026 · 0.9.45 Plain and Glass
 - Owner: Plain and Glass are two different modes, don't merge them; fewer, clearer options; design every element for both; "add it to your memories and any handovers, never forget this point". Done: one Style setting, Plain designed on its own, the rule in CLAUDE.md (owner's rules), the 0.9.22-0.9.37 handover and docs/design.md.
 - Owner: opening a game from a card lands offset, then snaps (both ways). Measured 39/52 px; morph now tracks its target every frame (0 to 4 px). Dock pill checked too.
