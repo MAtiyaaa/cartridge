@@ -74,8 +74,9 @@
                 <button class="btn small" data-focus @click="browseRoot"><Icon name="mdiFolderOpen" :size="18" />Browse</button>
               </div>
             </div>
-            <!-- games on more than one drive (0.9.38): extra ES-DE roms folders; one short block, the rest is automatic -->
-            <div class="pathrow glass" style="flex-wrap: wrap">
+            <!-- games on more than one drive (0.9.38): extra ES-DE roms folders; one short block, the rest is automatic.
+                 Android has its own drives below (Install to) -->
+            <div v-if="!IS_ANDROID" class="pathrow glass" style="flex-wrap: wrap">
               <div style="min-width: 0; flex: 1"><div class="lbl2">Games on Other Drives</div>
                 <div v-if="!xroots.length" class="muted small">Add an SD card or another drive: Cartridge makes a games folder on it and adds it to your emulators.</div>
                 <div v-for="r in xroots" :key="r.path" class="xroot"><span class="mono">{{ r.path }}</span><span class="muted small">{{ r.here ? `${bytes(r.free)} free` : 'Not plugged in' }}</span><button class="btn small" data-focus @click="removeRoot(r)"><Icon name="mdiClose" :size="16" />Remove</button></div>

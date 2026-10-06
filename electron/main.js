@@ -2092,7 +2092,7 @@ async function runJob(it) {
     // a re-download is the same game as before: Steam already has it, so no automatic add
     if (!it.redo && it.notice !== 'pkg') rpcs3Settings(rom.id);
     if (!it.redo && it.notice !== 'pkg') try { if (steamMgr.onDownloaded(rom.id)) broadcast('steam-auto', { romId: rom.id, name: rom.name, action: 'add' }); } catch (e) { log('steam auto add', e.message); }
-    autoBios(rom.platform_id, rom.platform_slug); // in the background, never holds the download up
+    if (!onAndroid) autoBios(rom.platform_id, rom.platform_slug); // in the background, never holds the download up (Android: its own BIOS check)
   } catch (e) {
     // stopped on purpose: keep a status set since (paused, or queued again by Resume)
     if (ac.signal.aborted) { if (!['paused', 'queued'].includes(it.status)) it.status = 'cancelled'; }
@@ -3173,7 +3173,7 @@ function createWindow() {
   // console collections kept whole by themselves (0.9.34): 30 s after start, and again every 10 minutes, games of a
   // console that are in Steam but not in its collection are put in, only with Steam's interface reachable (no restart)
   const colsAuto = () => { if (!config.steam?.consoleCollections) return; steamMgr.fillCollections({ auto: true }).then((r) => { if (r.count) broadcast('toast', { text: `${r.count} game${r.count === 1 ? '' : 's'} added to ${r.count === 1 ? 'its' : 'their'} console collection in Steam`, kind: 'ok', icon: 'mdiSteam' }); }).catch((e) => log('console collections by itself:', e.message)); };
-  if (!globalThis.__colsAuto) { globalThis.__colsAuto = true; setTimeout(colsAuto, 30000); setInterval(colsAuto, 600000); setTimeout(() => biosSetup({ install: true }).catch(() => {}), 45000); /* 0.9.38: firmware too, when an emulator lacks it */ }
+  if (!globalThis.__colsAuto) { globalThis.__colsAuto = true; setTimeout(colsAuto, 30000); setInterval(colsAuto, 600000); if (!onAndroid) setTimeout(() => biosSetup({ install: true }).catch(() => {}), 45000); /* Android: its own BIOS check (android:bios) */ /* 0.9.38: firmware too, when an emulator lacks it */ }
   win.webContents.once('did-finish-load', () => log('ui loaded', Date.now() - startedAt + 'ms', 'window=' + win.getContentSize().join('x'), 'zoom=' + currentZoom()));
   win.webContents.on('did-finish-load', applyZoom);
   win.on('resize', () => { clearTimeout(zoomT); zoomT = setTimeout(applyZoom, 150); });
