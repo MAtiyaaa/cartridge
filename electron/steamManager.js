@@ -1260,7 +1260,7 @@ module.exports = function createSteamManager(ctx) {
   async function fixCollections() {
     const env = environment();
     if (!env.account) throw new Error('Steam was not found.');
-    const miss = verifyCollections() || [];
+    const miss = (await verifyCollections()) || [];
     if (!miss.length) return { fixed: 0 };
     const collections = {};
     for (const m of miss) (collections[m.collection] ||= []).push(Number(m.appid) >>> 0);
@@ -1290,11 +1290,13 @@ module.exports = function createSteamManager(ctx) {
   // collections again): it no longer trusts what Cartridge remembers. Console collections are compared with what Steam
   // really holds, for every game of the console in Steam, and only with console collections on (the same rule as
   // filling them); any other collection only while it's still in Steam. Old names (yours, Steam ROM Manager's) are left.
-  function verifyCollections() {
+  // 0.9.44 (owner: "72 games aren't in their Steam collection" while they were): live first, as fill and fix do. Games
+  // put in a collection live are in Steam's memory long before its collections file is written, so the file alone
+  // reported them missing
+  async function verifyCollections() {
     const env = environment();
     if (!env.account) return null;
-    const cols = readCollections(env.account);
-    pruneStale(cols, false);
+    const { list: cols } = await colsNow(env);
     const plats = libraryPlatforms(), byName = new Map(cols.map((c) => [c.name, c]));
     const out = new Map();
     for (const [appid, r] of Object.entries(reg)) for (const n of r.collections || []) {
@@ -1313,7 +1315,7 @@ module.exports = function createSteamManager(ctx) {
   // Test one console's launch setup: does the Target exist and run?
   // Shown once after Cartridge starts: how the last Steam change went, and any collections
   // Steam dropped (Steam Cloud can replace the local collections file)
-  function startupReport() {
+  async function startupReport() {
     const last = lastStatus();
     const c = cfg();
     let report = null;
@@ -1322,7 +1324,7 @@ module.exports = function createSteamManager(ctx) {
       c.seenJob = last.job + ':' + last.state; ctx.saveConfig();
     }
     let missing = [];
-    try { if (Object.keys(reg).length) missing = verifyCollections() || []; } catch {}
+    try { if (Object.keys(reg).length) missing = (await verifyCollections()) || []; } catch {}
     try { reconcile(last); } catch (e) { log('steam reconcile', e.message); }
     return { last: report, missing };
   }

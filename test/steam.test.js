@@ -253,9 +253,9 @@ test('console collections: games already in Steam count, Cartridge\'s memory of 
     (async () => {
       const c = await sm.consoleCollection('ps3');
       const r = await sm.fillCollections({ auto: true });
-      const verify = sm.verifyCollections();
+      const verify = await sm.verifyCollections();
       conf.steam.consoleCollections = true;
-      const verifyOn = sm.verifyCollections().map((m) => m.appid + ':' + m.collection).sort();
+      const verifyOn = (await sm.verifyCollections()).map((m) => m.appid + ':' + m.collection).sort();
       console.log(JSON.stringify({ name: c.name, games: c.games.map((g) => g.appid + ':' + g.in), r, verify, verifyOn, kept: conf.steam.collectionNames }));
     })();`;
   const out = JSON.parse(execFileSync(process.execPath, ['-e', code], { env: { ...process.env, HOME: H, XDG_DATA_HOME: '', CARTRIDGE_CEF_PORT: '' }, encoding: 'utf8' }).trim().split('\n').pop());

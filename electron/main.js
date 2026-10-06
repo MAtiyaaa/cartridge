@@ -3859,7 +3859,7 @@ const handlers09 = {
     // Settings → Emulators was open. Android's own issues come from src/android/issues.js.
     if (onAndroid) return out;
     try {
-      const miss = steamMgr.verifyCollections() || [];
+      const miss = (await steamMgr.verifyCollections()) || [];
       if (miss.length) { const names = [...new Set(miss.map((m) => m.collection))]; add('collections', `${miss.length} game${miss.length === 1 ? ' isn’t' : 's aren’t'} in ${names.length === 1 ? 'its' : 'their'} Steam collection${names.length === 1 ? '' : 's'}: ${names.slice(0, 3).join(', ')}${names.length > 3 ? ` and ${names.length - 3} more` : ''}`, miss.some((m) => m.console) ? 'Games in Steam that aren’t in their console’s collection yet' : 'Steam Cloud may have replaced your Steam collections', 'collections'); out[out.length - 1].items = miss.map((m) => ({ name: m.name, collection: m.collection })); }
     } catch {}
     try {

@@ -113,7 +113,7 @@ function start() {
   raf = requestAnimationFrame(loop);
 }
 const restart = async () => { cancelAnimationFrame(raf); await nextTick(); start(); };
-watch([mode, reduce, light, () => store.config?.ui?.theme, () => store.config?.ui?.customColor, () => store.config?.ui?.surface, () => JSON.stringify(store.config?.ui?.colors || {})], restart, { immediate: true });
+watch([mode, reduce, light, () => store.config?.ui?.theme, () => store.config?.ui?.customColor, () => store.config?.ui?.surface, () => store.config?.ui?.style, () => JSON.stringify(store.config?.ui?.colors || {})], restart, { immediate: true });
 // art backgrounds pick up the library once it's loaded or changes
 watch(() => store.libVersion, () => { artCache.clear(); if (mode.value.startsWith('art:')) restart(); });
 const onResize = () => { if (reduce.value || light.value) restart(); };

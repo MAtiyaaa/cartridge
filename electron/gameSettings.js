@@ -138,7 +138,7 @@ function files(ctx) {
   if (e === 'duckstation') return { file: path.join(ctx.duckRoot, 'gamesettings', `${ctx.serial}.ini`), base: [path.join(ctx.duckRoot, 'settings.ini')], kind: 'ini' };
   if (e === 'dolphin') return { file: path.join(ctx.dolphin.user, 'GameSettings', `${ctx.serial}.ini`), base: [path.join(ctx.dolphin.config, 'GFX.ini'), path.join(ctx.dolphin.config, 'Dolphin.ini')], kind: 'ini', dolphin: true };
   if (e === 'ppsspp') return { file: path.join(ctx.ppsspp.root, 'PSP', 'SYSTEM', `${ctx.serial}_ppsspp.ini`), base: [ctx.ppsspp.ini], kind: 'ini', copyBase: true };
-  if (e === 'shadps4') return { file: path.join(ctx.shadUser, 'custom_configs', `${ctx.serial}.json`), base: [], kind: 'json' };
+  if (e === 'shadps4') return { file: path.join(ctx.shadUser, 'custom_configs', `${ctx.serial}.json`), base: [path.join(ctx.shadUser, 'config.json')], kind: 'json' };
   return null;
 }
 // Dolphin's game sections live under other names in its main files
@@ -149,19 +149,61 @@ function getIn(kind, text, sec, key) {
   if (kind === 'json') { try { const v = JSON.parse(text)?.[sec]?.[key]; return v == null ? undefined : String(v); } catch { return undefined; } }
   return iniGet(text, sec, key);
 }
+// ---- every other setting (0.9.46, owner: "a setting that takes a typed value isn't there, place every setting,
+// advanced or not"): besides the picked ones above, every key the emulator's own settings file has in the sections
+// its per-game file can override, typed from the value it holds now (on/off, a number, or text)
+const ALL = {
+  rpcs3: /^(Core|Video|Audio|System|Savestate|Miscellaneous)$/, // custom_configs take the whole config.yml (two levels here)
+  pcsx2: /^(EmuCore(\/.*)?|SPU2\/.*)$/,
+  duckstation: /^(CPU|GPU|Display|Audio|Console|Hacks|PGXP|TextureReplacements)$/,
+  dolphin: /^(Video_Settings|Video_Enhancements|Video_Hacks|Core)$/,
+  ppsspp: /^(Graphics|CPU|Sound|SpeedHacks|SystemParam)$/,
+  shadps4: /^(GPU|Vulkan|General)$/, // ApplyGroupOverrides
+};
+const DOLPHIN_GAME = Object.fromEntries(Object.entries(DOLPHIN_BASE).map(([g, b]) => [b, g]));
+// the keys and values of a settings file, as [section, key, value]
+function entriesOf(kind, text) {
+  const out = [];
+  if (text == null) return out;
+  if (kind === 'ini') { let cur = null; for (const raw of String(text).split(/\r?\n/)) { const l = raw.trim(), m = /^\[(.+)\]$/.exec(l); if (m) { cur = m[1]; continue; } const i = l.indexOf('='); if (cur && i > 0 && !l.startsWith('#') && !l.startsWith(';')) out.push([cur, l.slice(0, i).trim(), l.slice(i + 1).trim()]); } }
+  else if (kind === 'yml') { try { const y = require('js-yaml').load(String(text), { schema: require('js-yaml').FAILSAFE_SCHEMA }) || {}; for (const [sec, o] of Object.entries(y)) if (o && typeof o === 'object' && !Array.isArray(o)) for (const [k, v] of Object.entries(o)) if (v == null || typeof v !== 'object') out.push([sec, k, v == null ? '' : String(v)]); } catch {} }
+  else if (kind === 'json') { try { const j = JSON.parse(text) || {}; for (const [sec, o] of Object.entries(j)) if (o && typeof o === 'object' && !Array.isArray(o)) for (const [k, v] of Object.entries(o)) if (v == null || typeof v !== 'object') out.push([sec, k, v == null ? '' : String(v)]); } catch {} }
+  return out;
+}
+// "extra_dmem_in_mbytes" -> "Extra dmem in mbytes", "ResolutionScale" -> "Resolution scale"
+const human = (k) => { const w = String(k).replace(/([a-z0-9])([A-Z])/g, '$1 $2').replace(/[_\-]+/g, ' ').replace(/\s+/g, ' ').trim(); return w ? w[0].toUpperCase() + w.slice(1) : k; };
+function moreItems(ctx, F, known) {
+  const rx = ALL[ctx.emu]; if (!rx) return [];
+  const seen = new Set(known), out = [];
+  for (const f of F.base) {
+    for (const [s0, key, v] of entriesOf(F.kind, read(f))) {
+      const sec = F.dolphin ? DOLPHIN_GAME[s0] || s0 : s0;
+      if (!rx.test(sec) || key.includes('.') || seen.has(sec + '.' + key)) continue;
+      seen.add(sec + '.' + key);
+      const it = { id: sec + '.' + key, tab: 'All Settings', group: sec, label: human(key), sub: key, more: true };
+      if (/^(true|false)$/i.test(v)) Object.assign(it, B(v[0] === 'T' ? 'True' : 'true', v[0] === 'T' ? 'False' : 'false'), { json: 'bool' });
+      else if (/^-?\d+$/.test(v)) Object.assign(it, { options: [], json: 'int', num: { min: -2147483648, max: 2147483647 } });
+      else if (/^-?\d*\.\d+$/.test(v)) Object.assign(it, { options: [], json: 'num', num: { min: -1e9, max: 1e9, decimals: true } });
+      else Object.assign(it, { options: [], type: 'text' });
+      out.push(it);
+    }
+  }
+  return out;
+}
+const itemsOf = (ctx, F) => { const S = SCHEMA[ctx.emu]; return [...S.items, ...moreItems(ctx, F, S.items.map((x) => x.id))]; };
 // what the screen shows: each setting with the game's value (or none) and the emulator's own
 function describe(ctx) {
   const S = SCHEMA[ctx.emu], F = files(ctx);
   if (!S || !F) return null;
   const own = read(F.file);
   const bases = F.base.map(read);
-  const items = S.items.map((it) => {
+  const items = itemsOf(ctx, F).map((it) => {
     const [sec, key] = split(it.id);
     const game = own != null && !(F.copyBase && !ownMarked(ctx, F.file, it.id)) ? getIn(F.kind, own, sec, key) : undefined;
     let base;
     for (const t of bases) { base = getIn(F.kind, t, F.dolphin ? DOLPHIN_BASE[sec] || sec : sec, key); if (base !== undefined) break; }
-    const opts = it.type === 'bool' ? [[it.on, 'On'], [it.off, 'Off']] : it.options.map((o) => (Array.isArray(o) ? o : [o, o]));
-    return { id: it.id, tab: it.tab || (/^(Video|EmuCore\/GS|GPU|Graphics|Video_\w+)$/.test(sec) ? 'Graphics' : 'System'), label: it.label, sub: it.sub || '', options: opts.map(([v, l]) => ({ value: v, label: l })), game: game ?? null, base: base ?? null, type: it.type || 'choice', num: it.num || null };
+    const opts = it.type === 'bool' ? [[it.on, 'On'], [it.off, 'Off']] : (it.options || []).map((o) => (Array.isArray(o) ? o : [o, o]));
+    return { id: it.id, tab: it.tab || (/^(Video|EmuCore\/GS|GPU|Graphics|Video_\w+)$/.test(sec) ? 'Graphics' : 'System'), label: it.label, sub: it.sub || '', options: opts.map(([v, l]) => ({ value: v, label: l })), game: game ?? null, base: base ?? null, type: it.type || 'choice', num: it.num || null, group: it.group || null };
   });
   return { emu: ctx.emu, name: S.name, file: F.file, exists: own != null, items };
 }
@@ -181,14 +223,16 @@ function apply(ctx, changes) {
     text = F.copyBase && F.base[0] ? read(F.base[0]) || '' : F.kind === 'json' ? '{}' : '';
     rec.copied = !!(F.copyBase && text);
   }
+  const all = itemsOf(ctx, F);
   for (const c of changes) {
-    const it = S.items.find((x) => x.id === c.id);
+    const it = all.find((x) => x.id === c.id);
     if (!it) continue;
     const [sec, key] = split(it.id);
     let value = c.value == null ? undefined : String(c.value);
     // a typed number (0.9.29): any value in the emulator's own range
     const typed = it.num && value !== undefined && /^-?\d+(\.\d+)?$/.test(value) && (it.num.decimals || !value.includes('.')) && Number(value) >= it.num.min && Number(value) <= it.num.max;
-    if (value !== undefined && it.type !== 'bool' && !typed && !(it.options || []).some((o) => String(Array.isArray(o) ? o[0] : o) === value)) throw new Error(it.num ? `${it.label}: a number from ${it.num.min} to ${it.num.max}.` : `${it.label}: that value isn’t one Cartridge offers.`);
+    if (it.type === 'text' && value !== undefined) value = value.replace(/[\r\n]+/g, ' ').trim();
+    if (value !== undefined && it.type !== 'bool' && it.type !== 'text' && !typed && !(it.options || []).some((o) => String(Array.isArray(o) ? o[0] : o) === value)) throw new Error(it.num ? `${it.label}: a number from ${it.num.min} to ${it.num.max}.` : `${it.label}: that value isn’t one Cartridge offers.`);
     if (value !== undefined && it.type === 'bool' && value !== it.on && value !== it.off) throw new Error(`${it.label}: on or off only.`);
     if (F.copyBase && value === undefined && rec.copied) { // PPSSPP: back to your normal setting's value
       const b = F.base[0] && getIn('ini', read(F.base[0]), sec, key);

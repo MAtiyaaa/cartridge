@@ -6,6 +6,22 @@ The branch for 0.9.3 work is `claude/relaxed-fermat-30pigp`. Pull it before star
 
 ---
 
+## 6 Oct 2026 · 0.9.46 Every Setting
+- Owner: typed settings (shadPS4 DMEM in Advanced) missing from Game Settings, "place every setting advanced or not"; back from Window Width went to the Steam tab; hold A on a row that fits needed B twice; Show File Location's toast clipped.
+- Done: All Settings tab from the emulator's own file (six emulators), return to tab and row, expand only when it reveals more, toast text wraps. Checked in Chromium with a stub (tab and row after typing, one B after hold A) and a text-clipping audit of every tab, every Settings section and its pages, the game page and each More tab (nothing cut). Test added to test/gameSettings.test.js.
+- Owner to test on a device: All Settings for a real shadPS4/RPCS3/PCSX2 game, values written are picked up by the emulator.
+
+## 6 Oct 2026 · 0.9.45 Plain and Glass
+- Owner: Plain and Glass are two different modes, don't merge them; fewer, clearer options; design every element for both; "add it to your memories and any handovers, never forget this point". Done: one Style setting, Plain designed on its own, the rule in CLAUDE.md (owner's rules), the 0.9.22-0.9.37 handover and docs/design.md.
+- Owner: opening a game from a card lands offset, then snaps (both ways). Measured 39/52 px; morph now tracks its target every frame (0 to 4 px). Dock pill checked too.
+
+## 6 Oct 2026 · 0.9.44 Real Glass
+- Owner: "Glass mode looks like absolute shit, really cheap", with three reference pictures and the image-to-code skill to install (now in `.claude/skills/image-to-code`, MIT). What the references have that 0.9.42 lacked: a near-clear fill instead of a tint, a light-catching rim with hotspots, thickness, a hard-edged reflection, grain on big panes, a wide soft shadow. Rebuilt in CSS (details in CLAUDE.md 0.9.44); menu rows in sheets no longer grey blocks. Screenshots checked in dark and Light.
+- Owner's photo: two pages in Start's overview with the same picture (different widget counts). Reproduced in Chromium and fixed (CLAUDE.md 0.9.44).
+- Owner (photos of 0.9.37 and 0.9.34 Emulators): Glass panels near black since 0.9.42; see-through panels restored. "Inaccessible menus": the go() bug (0.9.38 to 0.9.43, fixed in this update); a D-pad reachability walk of every Settings page found nothing else.
+- Owner's list: More sheet dims twice, Steam console cards and Missing do nothing, Dock stays black in Light, storage ring invisible in Light, Emulators opens on Setup and Health, false "72 games not in their Steam collection", and a full bug check. All found and fixed (CLAUDE.md 0.9.44); the go() bug broke every non-game page since 0.9.38.
+- Owner: "also use the liquid ui skill". Added what the reference build lacked from it: shimmer on press, clear glass over media, concentric corners, reduced motion for the shimmer.
+
 ## 5 Oct 2026 · 0.9.43 Steady Home
 - Owner: the screen shakes scrolling games on Home fast. Measured in Chromium (shelves' top per frame while pressing right/left every 70 ms, games with long titles and summaries): it jumped 70 px for ~5 frames on long ones. Cause and fix in CLAUDE.md 0.9.43. After: one position for every frame at 1280x800 and 1920x1080; the header keeps its old height (300 / 367 px); a long text title fits in two lines.
 - GitHub had no runners for about an hour (billing was fine, the owner checked: public repo, 0 of 2,000 minutes); 0.9.42 was merged so its release ran as soon as they came back.

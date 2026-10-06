@@ -21,10 +21,13 @@
           <span class="l-end"><span class="status" :class="{ ok: fg.own }">{{ fg.own ? FGL[fg.own] : 'Default' }}</span></span>
         </button>
         <div v-if="tab === 'Steam' && !fg" class="lrow" data-focus tabindex="0"><span class="l-mid"><b>Frame Generation</b><span class="l-sub">{{ fgWhy || 'Looking…' }}</span></span></div>
-        <button v-for="it in shown" :key="it.id" class="lrow" data-focus data-expand :disabled="busy" @click="pick(it)">
+        <template v-for="(it, i) in shown" :key="it.id">
+        <div v-if="it.group && it.group !== shown[i - 1]?.group" class="gs-group">{{ it.group }}</div>
+        <button class="lrow" data-focus data-expand :data-key="'gs-' + it.id" :disabled="busy" @click="pick(it)">
           <span class="l-mid"><b>{{ it.label }}</b><span class="l-sub">{{ it.sub || (it.game != null ? 'This game’s own' : `${d.name}’s own${it.base != null ? ': ' + labelOf(it, it.base) : ''}`) }}</span></span>
           <span class="l-end"><span class="status" :class="{ ok: it.game != null }">{{ it.game != null ? labelOf(it, it.game) : 'Default' }}</span></span>
         </button>
+        </template>
       </div>
       <div class="row" style="justify-content: flex-end">
         <button v-if="d?.items?.some((x) => x.game != null)" class="btn" data-focus :disabled="busy" @click="resetAll"><Icon name="mdiRestore" />Back to {{ d.name }}’s Own</button>
@@ -45,14 +48,14 @@ import Icon from './Icon.vue';
 import Btn from './Btn.vue';
 import { frameGenFor } from '../steam.js';
 
-const props = defineProps({ romId: Number, name: String });
+const props = defineProps({ romId: Number, name: String, tab: String, at: String });
 const el = ref(null), d = ref(null), busy = ref(false);
 const rom = computed(() => romById(props.romId));
 const art = computed(() => (rom.value ? cover(rom.value) : ''));
-const tab = ref('');
+const tab = ref(props.tab || ''); // back from a picker: the tab you were on (0.9.46: it fell to Steam, the only tab before the list loaded)
 const tabs = computed(() => { const t = [...new Set((d.value?.items || []).map((x) => x.tab || 'General'))]; t.push('Steam'); return t; }); // Steam always: frame generation says why when it can't apply (0.9.28)
 const shown = computed(() => (d.value?.items || []).filter((x) => (x.tab || 'General') === tab.value));
-watch(tabs, (t) => { if (!t.includes(tab.value)) tab.value = t[0] || ''; }, { immediate: true });
+watch(tabs, (t) => { if (d.value && !t.includes(tab.value)) tab.value = t[0] || ''; }, { immediate: true }); // only once the list is in: before it, Steam is the only tab
 function stepTab(n) { const t = tabs.value; if (t.length < 2) return; tab.value = t[(t.indexOf(tab.value) + n + t.length) % t.length]; nextTick(() => focusFirst(el.value.querySelector('.gs-list') || el.value)); }
 // frame generation for this game (0.9.24): the same pick as Settings → Steam → Frame generation
 const FGL = { lsfg: 'Lossless Scaling (lsfg-vk)', mako: 'mako-run', off: 'Off' };
@@ -69,7 +72,7 @@ async function pickFg() {
     ...(f.found.mako ? [{ label: FGL.mako, value: 'mako', selected: f.own === 'mako' }] : []),
     { label: 'Off', value: 'off', icon: 'mdiClose', selected: f.own === 'off' },
   ] });
-  reopen();
+  reopen('fg');
   if (!v) return;
   busy.value = true;
   try { await call('steam:setFrameGen', { scope: 'game', id: props.romId, value: v === '__base' ? null : v }); await loadFg(); toast('Saved. Its Steam shortcut is being updated.', 'ok', 2800, 'mdiCheck'); }
@@ -79,21 +82,22 @@ async function pickFg() {
 const labelOf = (it, v) => it.options.find((o) => String(o.value) === String(v))?.label || String(v);
 let saved = null, layer;
 // the picker takes the one modal slot: this sheet comes back after it
-function reopen() { if (store.modal?.type !== 'gamesettings') store.modal = { type: 'gamesettings', props: { romId: props.romId, name: props.name }, resolve: saved || (() => {}) }; }
+function reopen(at) { if (store.modal?.type !== 'gamesettings') store.modal = { type: 'gamesettings', props: { romId: props.romId, name: props.name, tab: tab.value, at: at || '' }, resolve: saved || (() => {}) }; }
 async function pick(it) {
   const cur = it.game;
   const v = await choose({ title: it.label, message: it.sub || '', sheet: true, options: [
     { label: `${d.value.name}’s own`, sub: it.base != null ? `Now ${labelOf(it, it.base)}` : 'Follows your normal settings', value: '__base', icon: 'mdiArrowULeftTop', selected: cur == null, raw: true },
     ...it.options.map((o) => ({ label: o.label, value: o.value, selected: cur != null && String(cur) === String(o.value), raw: true })),
-    ...(it.num ? [{ label: 'Type a Number', sub: `${it.num.min} to ${it.num.max}${it.num.unit ? ' ' + it.num.unit : ''}${cur != null && !it.options.some((o) => String(o.value) === String(cur)) ? ' · now ' + cur : ''}`, value: '__num', icon: 'mdiNumeric', raw: true }] : []),
+    ...(it.type === 'text' ? [{ label: 'Type a Value', sub: cur != null ? 'Now ' + cur : it.base != null ? `${d.value.name}’s own is ${it.base}` : '', value: '__text', icon: 'mdiFormTextbox', raw: true }] : []),
+    ...(it.num ? [{ label: 'Type a Number', sub: `${Math.abs(it.num.min) >= 1e6 ? 'Any number' : `${it.num.min} to ${it.num.max}`}${it.num.unit ? ' ' + it.num.unit : ''}${cur != null && !it.options.some((o) => String(o.value) === String(cur)) ? ' · now ' + cur : ''}`, value: '__num', icon: 'mdiNumeric', raw: true }] : []),
   ] });
   // a number of your own (0.9.29): the keyboard first, then this window again
   let value = v;
-  if (v === '__num') {
-    const t = await askText({ title: it.label, value: cur != null ? String(cur) : '', placeholder: `${it.num.min} to ${it.num.max}` });
+  if (v === '__num' || v === '__text') {
+    const t = await askText({ title: it.label, value: cur != null ? String(cur) : it.base != null ? String(it.base) : '', placeholder: v === '__num' ? (Math.abs(it.num.min) >= 1e6 ? 'A number' : `${it.num.min} to ${it.num.max}`) : it.sub || '' });
     value = t != null && String(t).trim() ? String(t).trim() : null;
   }
-  reopen();
+  reopen('gs-' + it.id);
   if (value == null) return;
   await save([{ id: it.id, value: value === '__base' ? null : value }]);
 }
@@ -109,7 +113,10 @@ onMounted(async () => {
   layer = pushLayer(el.value, { back: () => closeModal(null), start: () => closeModal(null), lb: () => stepTab(-1), rb: () => stepTab(1), x() {}, y() {}, select() {}, lt() {}, rt() {} });
   loadFg();
   d.value = await call('gamesettings:get', { romId: props.romId }).catch((e) => ({ why: e.message, items: [] }));
-  await nextTick(); focusFirst(el.value);
+  await nextTick();
+  // back from a picker: the row you picked from, else the first
+  const back = props.at && el.value.querySelector(props.at === 'fg' ? '.gs-list .lrow' : `[data-key="${CSS.escape(props.at)}"]`);
+  if (back) { back.focus({ preventScroll: true }); back.scrollIntoView({ block: 'center' }); } else focusFirst(el.value);
 });
 onBeforeUnmount(() => layer?.pop());
 </script>
@@ -122,5 +129,6 @@ onBeforeUnmount(() => layer?.pop());
 .gs-cover { width: 64px; aspect-ratio: 2 / 3; object-fit: cover; border-radius: var(--r-md); flex: none; box-shadow: 0 8px 20px rgba(0, 0, 0, 0.45); }
 .gs-list { flex: 1 1 auto; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; padding: 4px; }
 .gs-list > * { flex: none; }
+.gs-group { flex: none; padding: 10px 4px 2px; font-size: var(--t-xs); font-weight: 700; color: var(--muted); letter-spacing: 0.02em; }
 .gs-tabs { display: flex; align-items: center; gap: 10px; align-self: flex-start; }
 </style>

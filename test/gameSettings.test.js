@@ -60,3 +60,21 @@ test('RPCS3 YAML and shadPS4 JSON, Dolphin reads its base under its own section 
   const dctx = { emu: 'dolphin', serial: 'GZLE01', dolphin: { user: u, config: c } };
   assert.strictEqual(G.describe(dctx).items.find((x) => x.id === 'Video_Settings.InternalResolution').base, '3');
 });
+
+test('every setting in the emulator’s own file is listed, typed from its value (0.9.46)', () => {
+  const user = path.join(TMP, 'shad');
+  fs.mkdirSync(path.join(user, 'custom_configs'), { recursive: true });
+  fs.writeFileSync(path.join(user, 'config.json'), JSON.stringify({ General: { extraDmemInMbytes: 0, logFilter: '', isPSNSignedIn: false }, GPU: { scale: 1.5 }, Input: { cursorState: 1 } }));
+  const ctx = { emu: 'shadps4', serial: 'CUSA00001', shadUser: user };
+  const d = G.describe(ctx);
+  const by = (id) => d.items.find((x) => x.id === id);
+  assert.ok(by('General.extraDmemInMbytes').num && by('General.extraDmemInMbytes').tab === 'All Settings');
+  assert.strictEqual(by('General.logFilter').type, 'text');
+  assert.ok(by('GPU.scale').num.decimals);
+  assert.ok(!by('Input.cursorState')); // a section the per-game file can't override
+  G.apply(ctx, [{ id: 'General.extraDmemInMbytes', value: '3000' }, { id: 'General.logFilter', value: 'Core:Info\n' }]);
+  const j = JSON.parse(fs.readFileSync(path.join(user, 'custom_configs/CUSA00001.json'), 'utf8'));
+  assert.strictEqual(j.General.extraDmemInMbytes, 3000);
+  assert.strictEqual(j.General.logFilter, 'Core:Info');
+  assert.throws(() => G.apply(ctx, [{ id: 'General.extraDmemInMbytes', value: 'lots' }]));
+});
