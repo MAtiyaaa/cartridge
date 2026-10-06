@@ -256,7 +256,7 @@ body.motion-reduce .view > *, body.motion-reduce .home > .hero, body.motion-redu
 .chip.red { background: rgba(255, 107, 97, 0.14); color: #ffa39c; }
 .chip.new { background: var(--primary); color: var(--on-primary); font-weight: 800; font-size: var(--t-xs); height: 22px; letter-spacing: 0.04em; }
 .glass { background: var(--s1); border-radius: var(--r-lg); }
-body.surface-glass .glass { background: var(--glass-bg); border: 1px solid var(--line); }
+body.surface-glass .glass, body.elements-glass .glass { background: var(--glass-bg); border: 1px solid var(--line); }
 /* Glass elements: the Liquid Glass block at the end of this file (0.9.42) */
 
 .btn { display: inline-flex; align-items: center; gap: 10px; height: 48px; padding: 0 22px; border-radius: var(--r-md); background: var(--s2); font-size: var(--t-md); font-weight: 600; transition: background var(--d-fast), color var(--d-fast); white-space: nowrap; }
