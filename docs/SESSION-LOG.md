@@ -6,6 +6,13 @@ The branch for 0.9.3 work is `claude/relaxed-fermat-30pigp`. Pull it before star
 
 ---
 
+## 6 Oct 2026 · After 0.9.47: owner's decisions (nothing built)
+- Resources (measured, real app): ~6.7% of a core in use, 3.3% idle, 2.1% behind a game, ~550 MB; a CPU-bound stand-in game ran 0.5% slower with Cartridge behind it (noise). Owner agreed for the next update: hold the hourly library sync and the auto Steam console collections check while a game runs (`gameFocus.away || runOn`), run them when it ends. Downloads keep running during games (owner: no pause).
+- Saves: full save sync comes in a later update; the user picks RomM's save upload or Syncthing. Not now: pausing Syncthing while playing, PSN sign-in for PS4 names, Ryujinx saves. BIOS and keys need no sync (they are in RomM).
+- Plugins ponytail, graphify, rtk: not wanted for now.
+- Mods overhaul (curated GitHub list, ROM hacks, PS3 file mods, Nexus): parked, owner wants more study first. Options are in the 0.9.47 chat and docs/plan-0.9.39.md.
+- Remind the owner: README pictures and layout (owner: "we will do pictures later, remind me").
+
 ## 6 Oct 2026 · 0.9.47 The Engine Update (one update, owner: "package them as one update not individually")
 - Carries the unpublished masonry change (owner's photo of Settings → Emulators).
 - Owner: menus don't open (Dreamcast in Consoles, collections), highlights gone (latest unlocks, trophies). Not reproduced in a clean real app (mock RomM) or the stub; most likely an older build (0.9.38 to 0.9.43 had the `go()` bug fixed in 0.9.44; a rollback sets `updateHold`, which pauses updates). Added `keepFocus` in nav.js so focus that falls off the page comes back; the real-app crawl found one such case (Settings → Updates busy button). Ask the owner for their version in About if it persists.
