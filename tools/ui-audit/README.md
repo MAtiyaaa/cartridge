@@ -35,3 +35,11 @@ Needs Playwright (`npm i -g playwright`, or a local copy) and a Chromium; `CHROM
 
 What they don't check: motion, real artwork, the Welcome, sizes other than 1280x800, touch. The real app against a
 mock RomM (docs/HANDOVER-0.9.22-to-0.9.37.md) covers navigation; a device covers the rest.
+
+## Clipping (0.9.49)
+
+`clipping.js` measures every line of text on every main page, each Settings section, the game page and every Start
+widget (at 1x1 to 4x2) at 1280x800 and 1920x1080, with real-world long names and descriptions. A line that the
+nearest box hiding its overflow cuts through (part shown, part not) is reported. Scrolling boxes, single-line text that
+ends in an ellipsis on purpose, line-clamped text and Start's page overview are skipped. It runs last in
+`npm run audit:ui`, or alone with `node tools/ui-audit/clipping.js`. Release with 0 cut texts.

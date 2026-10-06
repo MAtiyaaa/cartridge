@@ -64,9 +64,11 @@ function paramsOf(el, w, h) {
   return { frost: big ? 14 : el.classList.contains('tabs') ? 7 : 5, bezel: Math.max(8, Math.min(big ? 26 : 18, small * 0.32)), scale: big ? 34 : Math.min(44, small * 0.6) };
 }
 function filterFor(el) {
-  const b = el.getBoundingClientRect();
-  if (b.width < 24 || b.height < 16) return null;
-  const w = Math.round(b.width / 8) * 8, h = Math.round(b.height / 8) * 8;
+  // 0.9.49: the layout size, not getBoundingClientRect: a pop-up measured while it arrives (scaled to 0.9) got a filter
+  // smaller than itself, and the part outside showed the page sharp along its edges (the keyboard, owner's photos)
+  const bw = el.offsetWidth, bh = el.offsetHeight;
+  if (bw < 24 || bh < 16) return null;
+  const w = Math.ceil(bw / 8) * 8, h = Math.ceil(bh / 8) * 8;
   const r = Math.min(parseFloat(getComputedStyle(el).borderTopLeftRadius) || 0, w / 2, h / 2);
   const p = paramsOf(el, w, h);
   const key = `${w}x${h}r${Math.round(r)}f${p.frost}`;
@@ -75,12 +77,23 @@ function filterFor(el) {
     if (filters.size >= 32) { const old = [...filters.entries()].sort((a, b2) => a[1].used - b2[1].used)[0]; document.getElementById(old[1].id)?.remove(); filters.delete(old[0]); }
     const id = 'lgf-' + key.replace(/[^a-z0-9]/gi, '');
     const node = document.createElementNS(NS, 'filter');
-    node.setAttribute('id', id); node.setAttribute('x', '0'); node.setAttribute('y', '0'); node.setAttribute('width', String(w)); node.setAttribute('height', String(h));
+    node.setAttribute('id', id); const pad = 24; // a margin round the region, so a rounding or a sub-pixel move never leaves an edge unfiltered
+    node.setAttribute('x', String(-pad)); node.setAttribute('y', String(-pad)); node.setAttribute('width', String(w + 2 * pad)); node.setAttribute('height', String(h + 2 * pad));
     node.setAttribute('filterUnits', 'userSpaceOnUse'); node.setAttribute('color-interpolation-filters', 'sRGB');
-    node.innerHTML = `<feGaussianBlur in="SourceGraphic" stdDeviation="${p.frost}" result="frost"/>`
-      + `<feImage href="${lensMap(w, h, r, p.bezel)}" x="0" y="0" width="${w}" height="${h}" preserveAspectRatio="none" result="lens"/>`
+    // the blur fades to see-through within a few frost widths of the edge, and where a backdrop filter's result is
+    // see-through the page shows unfiltered: sharp strips round every sheet (0.9.49, the keyboard). The frost is made
+    // opaque again (alpha only, the colours are kept), before and after the lens bends it.
+    node.innerHTML = `<feGaussianBlur in="SourceGraphic" stdDeviation="${p.frost}" result="soft"/>`
+      + `<feComponentTransfer in="soft" result="frost"><feFuncA type="table" tableValues="1 1"/></feComponentTransfer>`
+      // the lens over a neutral grey (no bend): where the lens picture isn't drawn (it loads after the first frame,
+      // and Chromium leaves it out of some backdrop filters) the frost stays put instead of the whole view shifting
+      // half the bend up and left, which showed the page's edge as a band along the top and left of every glass piece
+      + `<feFlood flood-color="rgb(128,128,128)" result="still"/>`
+      + `<feImage href="${lensMap(w, h, r, p.bezel)}" x="0" y="0" width="${w}" height="${h}" preserveAspectRatio="none" result="lensPic"/>`
+      + `<feComposite in="lensPic" in2="still" operator="over" result="lens"/>`
       + `<feDisplacementMap in="frost" in2="lens" scale="${p.scale}" xChannelSelector="R" yChannelSelector="G" result="bent"/>`
-      + `<feColorMatrix in="bent" type="saturate" values="1.6"/>`;
+      + `<feColorMatrix in="bent" type="saturate" values="1.6" result="sat"/>`
+      + `<feComponentTransfer in="sat"><feFuncA type="table" tableValues="1 1"/></feComponentTransfer>`;
     ensureDefs().appendChild(node);
     f = { id, used: 0 };
     filters.set(key, f);

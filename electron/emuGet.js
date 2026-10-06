@@ -94,9 +94,11 @@ async function getAppImage(e, download, opts = {}) {
   }
   // never put a broken download in place (0.9.24): an AppImage must be one, a program a real program
   if (!require('./emuUpdates').looksRunnable(tmp, rel.name || name)) { fs.rmSync(tmp, { force: true }); throw new Error('What came down wasn’t a working program. Try again later.'); }
-  await require('./emuUpdates').fitGlibc(tmp, { ...rel, id: e.id, fallback: rel.fallback || e.fallback }, (url, to) => download(url, to), 'nothing was installed'); // 0.9.47
+  const got = { ...rel, id: e.id, fallback: rel.fallback || e.fallback };
+  await require('./emuUpdates').fitGlibc(tmp, got, (url, to) => download(url, to), 'nothing was installed'); // 0.9.47
+  await require('./emuStart').ensureStarts(e.id, tmp, got, (url, to) => download(url, to), 'nothing was installed'); // 0.9.49: it must really start
   fs.chmodSync(tmp, 0o755); fs.renameSync(tmp, dest);
-  return { path: dest, version: rel.version };
+  return { path: dest, version: got.version, fellBack: got.fellBack || null };
 }
 // a Flatpak from Flathub for this user (no password); flatpak prints "NN%" as it goes
 async function getFlatpak(fp, onProgress = () => {}) {

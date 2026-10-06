@@ -85,11 +85,11 @@ img { -webkit-user-drag: none; }
 
 /* ---------- background ---------- */
 .bg-stage { position: fixed; inset: 0; z-index: 0; overflow: hidden; background: var(--bg); }
-.bg-stage .layer { position: absolute; inset: -60px; background-size: cover; background-position: center 30%; opacity: 0; transition: opacity 0.9s var(--ease), transform 12s linear; filter: saturate(1.15); }
-.bg-stage .layer.on { opacity: 1; transform: scale(1.06); }
-/* 0.9.37: game art behind the pages drifts as slowly as the header (GPU only; still without it) */
-body:not(.light-fx):not(.motion-reduce) .bg-stage .layer.on:not(.blur):not(.wall) { animation: bg-drift 70s var(--ease-in-out, ease-in-out) 12s infinite alternate; will-change: transform; }
-@keyframes bg-drift { from { transform: scale(1.06); } to { transform: scale(1.11) translate(-1%, 0.6%); } }
+.bg-stage .layer { position: absolute; inset: -60px; background-size: cover; background-position: center 30%; opacity: 0; transform: scale(1.06); transition: opacity 0.9s var(--ease); filter: saturate(1.15); }
+.bg-stage .layer.on { opacity: 1; }
+/* 0.9.37 had the game art behind the pages zoom slowly from 12 s after a page settled; 0.9.49 (owner: after a while
+   idle the background "looks like vomit"): a whole screen slowly zooming reads as moving yourself, the classic cause of
+   motion sickness, so the page art stays still (no 12 s zoom on arrival either). The header's picture keeps a small sideways pan (MediaBar). */
 .bg-stage .layer.blur { filter: blur(26px) saturate(1.3) brightness(0.8); }
 /* without the GPU a 26px blur over the whole screen is redrawn on every change: a lighter one (0.9.28) */
 body.light-fx .bg-stage .layer.blur { filter: blur(10px) brightness(0.72); }
@@ -229,6 +229,7 @@ body.motion-reduce main.main[data-dir] > * { animation-name: viewIn; animation-d
 .view > :nth-child(5), .home .shelves > .shelf-wrap:nth-child(4) { animation-delay: 160ms; }
 .view > :nth-child(n+6), .home .shelves > .shelf-wrap:nth-child(n+5) { animation-delay: 200ms; }
 .view > .viewer, .view > [data-noanim] { animation: none; }
+:root.morph-back main.main > *, :root.morph-back .view > *, :root.morph-back .home > .hero, :root.morph-back .home .shelves > .shelf-wrap { animation: none; } /* back to a card (store.back) */
 .pane-in { animation: viewIn 180ms var(--ease-out); }
 body.motion-reduce .view > *, body.motion-reduce .home > .hero, body.motion-reduce .home .shelves > .shelf-wrap { animation: viewIn 120ms ease-out backwards; }
 
@@ -364,6 +365,9 @@ body.light-fx .systile .glyph { filter: saturate(0.6) brightness(1.1); }
 .menu-item { display: flex; align-items: center; gap: 14px; padding: 14px 16px; border-radius: var(--r-md); background: var(--s2); font-size: var(--t-md); font-weight: 500; transition: background var(--d-fast), color var(--d-fast); }
 .menu-item.danger { color: var(--danger-t, #ff9b93); }
 .menu-item.selected { background: var(--sel); }
+/* the chosen option's mark (0.9.49, owner: the tick vanished on a highlighted row; use the green tick everywhere): the
+   same green disc with a white check as "On this device", readable on any fill, focused or not */
+.tick-ok { display: inline-grid; place-items: center; flex: none; width: 22px; height: 22px; margin-left: 8px; border-radius: 50%; background: var(--green, #2fb36a); color: #fff; box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.18); }
 .menu-item:hover { background: var(--s3); }
 .menu-item:focus { background: var(--focus); color: var(--on-focus); box-shadow: none; }
 .menu-item:focus .sub, .menu-item:focus .muted { color: var(--on-focus-dim); }
@@ -587,7 +591,8 @@ body.theme-light .swatch.on { box-shadow: 0 0 0 3px var(--s0), 0 0 0 5px rgba(0,
 
 /* OLED (0.9.41, owner: "no difference between Cartridge and OLED"): everything black, panels set apart only by a fine
    grey edge, so a black screen stays black and nothing glows */
-body.theme-oled :is(.lrow, .toggle, .glass, .st-face, .eg-con, .dialog, .menu-sheet, .toast, .seg, .btn:not(.primary)):not(:focus):not(:focus-visible) { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1); }
+/* never over a Start tile's arranging ring (0.9.49: the ring sits on the face, the focus on the tile) */
+body.theme-oled :is(.lrow, .toggle, .glass, .st-face, .eg-con, .dialog, .menu-sheet, .toast, .seg, .btn:not(.primary)):not(:focus):not(:focus-visible):not(.editing .st-tile:is(:focus, :focus-visible) .st-face) { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1); }
 body.theme-oled .statusbar::before { background: linear-gradient(0deg, #000 0%, rgba(0, 0, 0, 0.6) 62%, rgba(0, 0, 0, 0) 100%); }
 
 /* ---- Liquid Glass (0.9.42, rebuilt in 0.9.44 from the owner's references with the image-to-code skill; rules from
@@ -629,7 +634,7 @@ body.elements-glass.theme-light {
   --lg-bevel: inset 0 1px 1px #fff, inset 0 -1px 2px rgba(30, 30, 45, 0.12), inset 0 0 0 3px rgba(255, 255, 255, 0.25);
   --lg-drop: 0 16px 40px -18px rgba(30, 30, 45, 0.32), 0 1px 3px rgba(30, 30, 45, 0.1);
   --lg-gloss: linear-gradient(166deg, rgba(255, 255, 255, 0.55) 0%, rgba(255, 255, 255, 0.2) 36%, rgba(255, 255, 255, 0) 36.4%);
-  --lg-lit: rgba(var(--lg-hi), 0.84);
+  --lg-lit: rgba(var(--lg-hi), 0.96); /* 0.9.49 (owner: black frosted buttons in Light): crisp dark, not a muddy see-through grey */
   --lg-lit-rim: linear-gradient(var(--lg-angle, 135deg), rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0.12) 40%, rgba(255, 255, 255, 0.5));
   --lg-lit-glow: 0 10px 26px -12px rgba(30, 30, 45, 0.5);
   --lg-on-lit: var(--lg-on-hi);
@@ -668,7 +673,11 @@ body.elements-glass .seg-ink { background: var(--lg-sel); box-shadow: var(--lg-b
 body.elements-glass.bar-pill.dock-glass .tab.active, body.elements-glass.bar-pill.dock-glass .tab.active:hover { color: var(--lg-on-lit); }
 body.elements-glass .seg.inked > button.on { color: var(--text); }
 body.elements-glass .btn.primary { background: rgba(var(--primary-rgb), 0.62); color: var(--on-btn, var(--on-primary)); box-shadow: var(--lg-bevel), var(--lg-drop); }
-body.elements-glass.theme-light .btn.primary { background: rgba(var(--primary-rgb), 0.86); } /* 0.62 of the dark focus colour read as mid grey under white text on a light page */
+/* 0.9.49 (owner: in Light the main buttons were black frosted glass): on a light page the prominent button is bright
+   glass, nearly white, with dark text; it stands out from the others by its brightness, weight and shadow. Focus is
+   still the dark lit glass, so where you are never reads the same as what's prominent. */
+body.elements-glass.theme-light :is(.btn, .seg button, .tab.active):is(:focus, :focus-visible)::after, body.elements-glass.theme-light.bar-pill.dock-glass .tab-ink::after { opacity: 0.35; }
+body.elements-glass.theme-light .btn.primary { background: rgba(255, 255, 255, 0.9); color: #1c1c1e; box-shadow: var(--lg-bevel), 0 10px 26px -12px rgba(30, 30, 45, 0.45), 0 1px 3px rgba(30, 30, 45, 0.14); }
 body.elements-glass .btn:focus-visible, body.elements-glass.pad-mode .btn:focus,
 body.elements-glass .seg button:focus-visible, body.elements-glass.pad-mode .seg button:focus { background: var(--lg-lit); color: var(--lg-on-lit); box-shadow: var(--lg-bevel), var(--lg-lit-glow); }
 body.elements-glass :is(.btn:focus-visible, .btn:focus)::before { background: var(--lg-lit-rim); }

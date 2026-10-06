@@ -180,11 +180,15 @@ function watchGameRun(romId) {
     }
     return false;
   };
-  let seen = false, started = Date.now();
+  let seen = false, started = Date.now(), seenAt = 0, asked = false;
+  const vita = /psvita|vita/i.test(`${r.platform_slug} ${r.platform_fs_slug}`);
   broadcast('game-run', { state: 'starting', romId });
   runT = setInterval(() => {
     let on = false; try { on = running(); } catch {}
-    if (on && !seen) { seen = true; runOn = true; log('game running', romId); }
+    if (on && !seen) { seen = true; seenAt = Date.now(); runOn = true; log('game running', romId); }
+    // 0.9.49 (owner: Vita3K "doesn't launch, nothing happens"): a Vita game that never shows, or closes within 15 s,
+    // gets Vita3K's own reason (its log, or the title not being in its storage) instead of silence
+    if (vita && !asked && ((!on && !seen && Date.now() - started > 20000) || (!on && seen && Date.now() - seenAt < 15000))) { asked = true; vitaQuickExit(romId, serial); }
     if (!on && !seen && Date.now() - started > 180000) { clearInterval(runT); return; } // never seen: give up after 3 min
     if (!on && seen) {
       clearInterval(runT); runOn = false; gameFocus.endedAt = Date.now(); log('game ended', romId);
@@ -193,6 +197,20 @@ function watchGameRun(romId) {
       if (isGamescope()) setTimeout(steamFront, 1500);
     }
   }, 2000);
+}
+// why Vita3K didn't stay open for a game: not in the storage this copy of Vita3K uses (its -r then refuses the title and
+// quits before any window: config.cpp IsMember check), else the last error in its log, else its start check
+async function vitaQuickExit(romId, serial) {
+  try {
+    const P = require('./pkgInstall'), cmd = steamMgr.vita3kCommand?.();
+    const fsPaths = P.vita3kFsPaths(cmd?.exe);
+    let why = '';
+    if (serial && fsPaths.length && !fsPaths.some((d) => fs.existsSync(path.join(d, 'ux0/app', serial)))) why = `${serial} isn’t installed in the storage this Vita3K uses (${fsPaths[0]}). Install the game again from its page.`;
+    if (!why) why = P.vita3kWhy(P.vita3kLogTail(cmd?.exe));
+    if (!why && cmd?.exe) { const c = await require('./emuStart').check('vita3k', cmd.exe); if (c && !c.ok) why = `Vita3K can’t start: ${c.reason}. Repair it in Settings → Emulators.`; }
+    log('vita game closed straight away', romId, serial || '', cmd?.exe || 'no vita3k', why || 'no reason found');
+    broadcast('toast', { text: why ? `Vita3K closed: ${why}` : 'Vita3K closed straight away without saying why. Report a Problem in About sends its log.', kind: 'error', icon: 'mdiAlertCircleOutline' });
+  } catch (e) { log('vita quick exit check', e.message); }
 }
 // Game Mode, 1.5 s after our game ended (0.9.34): when gamescope still doesn't name Cartridge as the app in front,
 // Steam is asked to go back to its running app the way its own Resume does (only with Steam's interface reachable,
@@ -528,12 +546,34 @@ function scanMounts() {
   return found.filter((p) => !p.includes('/.'));
 }
 
+// 0.9.49 (owner: "Detected ROM folders, I don't know what that means"; the list showed one folder twice, under /media and
+// /run/media, and EmuDeck's entry pointed at the drive itself): a found folder is the games folder on it (a drive or an
+// Emulation folder becomes its roms folder), the same real folder is listed once, and each says which drive it's on and
+// how many consoles and games it holds, so the choice is plain.
+const KNOWN_DIRS = new Set(Object.values(PLATFORM_MAP).flat().map((x) => x.toLowerCase()));
+function romsFolderStats(dir) {
+  let consoles = 0, games = 0;
+  for (const n of listDirNames(dir)) {
+    if (!KNOWN_DIRS.has(n.toLowerCase())) continue;
+    let k = 0; try { k = fs.readdirSync(path.join(dir, n)).filter((f) => !f.startsWith('.') && !/^(media|metadata\.txt|systeminfo\.txt)$/i.test(f)).length; } catch {}
+    consoles++; games += k;
+  }
+  return { consoles, games };
+}
 function detectRoots() {
   const out = [];
+  const real = (x) => { try { return fs.realpathSync(x); } catch { return path.resolve(x); } };
+  const list = mounts();
   const add = (p, source) => {
     if (!p) return;
-    const norm = path.resolve(p);
-    if (!out.find((o) => o.path === norm)) out.push({ path: norm, source, exists: isDir(norm) });
+    let norm = path.resolve(p);
+    // a drive or an Emulation folder: the games folder in it
+    if (romsFolderStats(norm).consoles < 2) for (const sub of ['roms', 'Emulation/roms']) if (isDir(path.join(norm, sub)) && romsFolderStats(path.join(norm, sub)).consoles >= 2) { norm = path.join(norm, sub); break; }
+    const r = real(norm);
+    const had = out.find((o) => o.real === r);
+    if (had) { if (!had.source.includes(source)) had.source += ` · ${source}`; return; }
+    const dv = isDir(norm) ? driveOf(norm, list) : null;
+    out.push({ path: norm, real: r, source, exists: isDir(norm), drive: dv ? (dv.label === 'This device' ? 'Main Drive' : dv.label) : '', ...romsFolderStats(norm) });
   };
   const emu = readEmuDeckSettings();
   if (emu.romsPath) add(emu.romsPath, 'EmuDeck settings');
@@ -548,7 +588,7 @@ function detectRoots() {
     const r = out.find((o) => o.exists);
     if (r) { const b = path.join(path.dirname(r.path), 'bios'); if (isDir(b)) bios = b; }
   }
-  return { roots: out, bios };
+  return { roots: out.filter((o) => o.exists), bios };
 }
 
 function listDirNames(dir) {
@@ -589,12 +629,16 @@ function platformDirs(p) {
   return [main, ...extraRoots().filter((r) => isDir(r)).map((r) => rootFolder(r, p))].filter(Boolean);
 }
 // where a new download goes: the folder picked in Storage, else the drive with the most free space
-function downloadDir(p, need = 0) {
+// root: a games folder picked for this one download (0.9.49, Always Ask), else the one picked in Storage
+function downloadDir(p, need = 0, root = null) {
   const main = platformPath(p).path;
   const roots = extraRoots().filter((r) => isDir(r));
   if (!roots.length || config.paths[p.slug]) return main; // one drive, or a folder you set for this console
   const opts = [main, ...roots.map((r) => rootFolder(r, p))].filter(Boolean);
-  const pick = config.downloadRoot && config.downloadRoot !== 'most' ? opts.find((d) => path.resolve(d).startsWith(path.resolve(config.downloadRoot) + path.sep)) : null;
+  const want = root || (config.downloadRoot && config.downloadRoot !== 'most' ? config.downloadRoot : null);
+  // the main games folder (config.romsRoot) holds main, which may sit under another path than romsRoot's (a console
+  // folder set by name), so the main root picks main itself
+  const pick = want ? (path.resolve(want) === path.resolve(config.romsRoot || '') ? main : opts.find((d) => path.resolve(d).startsWith(path.resolve(want) + path.sep))) : null;
   if (pick) return pick;
   const free = (d) => { let x = d; while (x && !isDir(x)) { const up = path.dirname(x); if (up === x) break; x = up; } try { const st = fs.statfsSync(x || '/'); return st.bavail * st.bsize; } catch { return 0; } };
   const ranked = opts.map((d) => ({ d, f: free(d) })).sort((a, b) => b.f - a.f);
@@ -1678,7 +1722,7 @@ async function runJob(it) {
   let lastT = Date.now(), lastB = 0;
   try {
     const rom = await api(`/api/roms/${it.romId}`);
-    const target = downloadDir({ slug: rom.platform_slug, fs_slug: rom.platform_fs_slug }, rom.fs_size_bytes || 0); // 0.9.38: any drive
+    const target = downloadDir({ slug: rom.platform_slug, fs_slug: rom.platform_fs_slug }, rom.fs_size_bytes || 0, it.root || null); // 0.9.38: any drive; 0.9.49: the one asked for
     if (!target) throw new Error('No folder set for this platform. Set it in Settings.');
     await fsp.mkdir(target, { recursive: true });
     const files = (rom.files || []).slice().sort((a, b) => a.full_path.localeCompare(b.full_path));
@@ -3461,6 +3505,8 @@ const handlers = {
     notRunning(id, P.NAMES[id] || id);
     const d = P.setPath(id, rid, value);
     log('emulator folder', id, rid, Array.isArray(value) ? value.join(', ') : value || '(default)');
+    // PPSSPP's Flatpak follows the link only when it may see where it points (0.9.49)
+    if (id === 'ppsspp' && value && P.locate('ppsspp')?.flatpak) try { require('child_process').execFileSync('flatpak', ['override', '--user', `--filesystem=${value}`, 'org.ppsspp.PPSSPP'], { timeout: 15000 }); } catch (e) { log('ppsspp flatpak access', e.message); }
     return d;
   },
   'fs:openFolder': async ({ path: p }) => { if (!p || !isDir(p)) throw new Error('That folder isn’t there yet.'); const err = await require('electron').shell.openPath(p); if (err) throw new Error(err); return true; },
@@ -4067,7 +4113,8 @@ const handlers = {
           r = await G.getFlatpak(e.fp, (pct) => send({ pct }));
         }
       }
-      log('emulator downloaded', id, r.path || r.fp);
+      log('emulator downloaded', id, r.path || r.fp, r.fellBack ? `(the newest can't start here: ${r.fellBack.reason || 'glibc'}; ${r.version})` : '');
+      if (r.fellBack) { config.emuGlibcHold = { ...(config.emuGlibcHold || {}), [id]: { t: Date.now(), have: require('./detect').systemGlibc() } }; saveConfig(); r.note ||= `The newest build can’t start on this system, so ${r.version} went in instead`; }
       // 0.9.37 (owner: fix the shadPS4 install): the Qt launcher comes with no shadPS4 in it, so games had nothing
       // to start with; the newest release goes in beside it as the launcher's default, as its own Versions does
       if (id === 'shadps4') { try { send({ pct: 99, text: 'Adding shadPS4 itself' }); r.shadVersion = await shadDefaultVersion(); } catch (e2) { log('shadPS4 version after install', e2.message); r.note = `shadPS4’s launcher is in, but its newest version couldn’t be added (${e2.message}). Add one in Versions.`; } }
@@ -4190,15 +4237,22 @@ const handlers = {
       // 0.9.47: an AppImage (or program) built for a newer glibc than this system has can't start: a repair too
       const gp = e.kind !== 'flatpak' && e.path && !/\.exe$/i.test(e.path) ? require('./detect').glibcProblem(e.path) : null;
       if (gp) broken.push(`glibc ${gp.need} (this system has ${gp.have})`);
+      // 0.9.49 (owner: "Vita3K genuinely doesn't open"): an emulator that can say whether it starts is asked (emuStart),
+      // since a copy whose libraries are all there can still die at once (EmuDeck's Qt 6 Vita3K on a system with another Qt 6)
+      const ES = require('./emuStart'), prog = e.path && /\.sh$/i.test(e.path) ? ES.scriptProgram(e.path) : e.path;
+      if (prog && ES.has(e.id) && !gp && cached) { const r = ES.cached(e.id, prog); if (r && !r.ok) broken.push(r.reason); }
+      else if (prog && ES.has(e.id) && !gp) jobs.push(ES.check(e.id, prog).then((r) => { if (r && !r.ok) { broken.push(r.reason); log('emulator start check', e.id, prog, r.reason, r.detail ? '| ' + r.detail.replace(/\n/g, ' | ').slice(0, 600) : ''); } }));
       const hold = config.emuGlibcHold?.[e.id], held = hold && !gp && Date.now() - hold.t < 14 * 864e5 && hold.have === require('./detect').systemGlibc();
       const ck = e.id + ':' + path.basename(e.path || '') + (kind === 'folder' ? ':folder' : '') + ':' + (channel || '');
       const c0 = cache[ck];
-      if (spec && !cached && (fresh || broken.length || !c0 || Date.now() - c0.t > TTL)) jobs.push(U.latestRelease(e.id, { file: e.path, channel }).then((rel) => { cache[ck] = { t: Date.now(), rel }; }).catch((err) => { cache[ck] = { t: c0?.t || 0, rel: c0?.rel || null, error: err.message }; }));
+      if (spec && !cached && (fresh || broken.length || ES.has(e.id) || !c0 || Date.now() - c0.t > TTL)) jobs.push(U.latestRelease(e.id, { file: e.path, channel }).then((rel) => { cache[ck] = { t: Date.now(), rel }; }).catch((err) => { cache[ck] = { t: c0?.t || 0, rel: c0?.rel || null, error: err.message }; }));
       out.push(() => { const c = cache[ck]; return ({ ...e, build: kind, broken: broken.length ? broken : null, update: c?.rel && (broken.length || (!held && U.isNewer(c.rel, e))) ? c.rel : null, latest: c?.rel || null, error: c?.error || null, noSource: !spec, channel, channels: spec ? ch.options : [], page: spec?.repo ? `https://github.com/${spec.repo}/releases` : null }); });
     }
     await Promise.all(jobs);
     const fpd = await fpRun;
-    const res = out.map((f) => f(fpd));
+    // every emulator's own website and download page come from CEE (0.9.49), Flatpaks and forks included
+    const CL = require('./cee').LINKS, FAM = require('./emuProfiles').FAMILY;
+    const res = out.map((f) => f(fpd)).map((x) => { const id = String(x.id || '').split('@')[0], l = CL[id] || CL[FAM[id]]; return x.custom || !l ? x : { ...x, page: l.downloads || x.page, site: l.site }; });
     if (!cached) log('emulator updates checked', `${res.length} in ${Date.now() - t0} ms, ${jobs.length} asked`);
     if (cached) return res;
     saveJson(file, cache);
@@ -4223,9 +4277,10 @@ const handlers = {
     broadcast('emu-update', { path: file, state: 'downloading', pct: 0 });
     let got = 0;
     await U.replaceAppImage(file, rel, (url, dest) => downloadTo(url, dest, { abort: new AbortController() }, (n) => { got += n; broadcast('emu-update', { path: file, state: 'downloading', pct: rel.size ? Math.round((got / rel.size) * 100) : null }); }, { plain: true }));
-    log('emulator updated (appimage)', own.id, own.version, '->', rel.version || rel.tag, rel.fellBack ? `(newest needs glibc ${rel.fellBack.need}, this has ${rel.fellBack.have})` : '');
+    log('emulator updated (appimage)', own.id, own.version, '->', rel.version || rel.tag, rel.fellBack ? `(the newest can't start here: ${rel.fellBack.reason || `it needs glibc ${rel.fellBack.need}, this has ${rel.fellBack.have}`})` : '');
     // 0.9.47: the newest build can't start here: its update isn't offered again for two weeks (it would come down and be refused)
-    if (rel.fellBack) { config.emuGlibcHold = { ...(config.emuGlibcHold || {}), [own.id]: { t: Date.now(), have: rel.fellBack.have } }; saveConfig(); }
+    // 0.9.49: the same when it came down and didn't start (emuStart)
+    if (rel.fellBack) { config.emuGlibcHold = { ...(config.emuGlibcHold || {}), [own.id]: { t: Date.now(), have: rel.fellBack.have || require('./detect').systemGlibc() } }; saveConfig(); }
     else if (config.emuGlibcHold?.[own.id]) { delete config.emuGlibcHold[own.id]; saveConfig(); }
     const cf = path.join(USER_DATA, 'emulator-releases.json'), cache = loadJson(cf, {});
     try { (cache.installed ||= {})[file] = { version: rel.version || rel.tag, size: fs.statSync(file).size, at: Date.now() }; saveJson(cf, cache); } catch {}
@@ -4381,7 +4436,21 @@ const handlers = {
     else { if (!file || !fs.existsSync(file)) return reject(new Error('That emulator isn’t there any more.')); cmd = file; cwd = path.dirname(file); }
     const env = { ...process.env };
     for (const k of ['LD_PRELOAD', 'LD_LIBRARY_PATH', 'APPDIR', 'APPIMAGE', 'ARGV0', 'OWD']) delete env[k];
-    const p = require('child_process').spawn(cmd, args, { cwd, env, detached: true, stdio: 'ignore' });
+    // 0.9.49 (owner: Vita3K "doesn't open, nothing happens"): what it prints goes to a log, and one that closes within
+    // 12 s with an error says why instead of nothing
+    const runLog = path.join(USER_DATA, 'emulator-runs', `${String(id || 'emulator').replace(/[^\w.@-]/g, '_')}.log`);
+    let fd = 'ignore'; try { fs.mkdirSync(path.dirname(runLog), { recursive: true }); fd = fs.openSync(runLog, 'w'); } catch {}
+    const p = require('child_process').spawn(cmd, args, { cwd, env, detached: true, stdio: ['ignore', fd, fd] });
+    if (typeof fd === 'number') try { fs.closeSync(fd); } catch {}
+    const t0 = Date.now();
+    p.once('exit', (code, signal) => {
+      if (Date.now() - t0 > 12000 || (!code && !signal)) return;
+      let text = ''; try { text = fs.readFileSync(runLog, 'utf8').slice(-8000); } catch {}
+      if (/vita3k/i.test(String(id))) text += '\n' + require('./pkgInstall').vita3kLogTail(file);
+      const why = require('./emuStart').reasonOf(text, code, signal);
+      log('emulator closed straight away', id || '', fp || file, code, signal || '', why);
+      broadcast('toast', { text: `${emuLabel(String(id || '').split('@')[0]) || 'The emulator'} closed straight away: ${why}`, kind: 'error', icon: 'mdiAlertCircleOutline' });
+    });
     p.once('error', (e) => reject(new Error(e.code === 'EACCES' ? 'It isn’t allowed to run (its file isn’t executable).' : `It didn’t start: ${e.message}`)));
     p.once('spawn', () => {
       log('emulator opened', id || '', fp || file);
@@ -4549,11 +4618,17 @@ const handlers = {
   'fs:mkdir': async (dir) => { await fsp.mkdir(dir, { recursive: true }); return true; },
   'storage:overview': () => storageOverview(),
   // the space where a console's next download would go (0.9.38: any drive with a games folder)
-  'fs:downloadSpace': async ({ slug, fs_slug, need = 0 } = {}) => { const d = downloadDir({ slug, fs_slug }, need); const sp = await handlers['fs:space'](d); return sp && { ...sp, dir: d }; },
+  'fs:downloadSpace': async ({ slug, fs_slug, need = 0, root = null } = {}) => { const d = downloadDir({ slug, fs_slug }, need, root); const sp = await handlers['fs:space'](d); return sp && { ...sp, dir: d }; },
   // the games folders: this device's and each extra drive's, with free space (Settings → Storage, 0.9.38)
   'roots:list': async () => {
-    const one = async (p, main) => { const sp = await handlers['fs:space'](p); return { path: p, main, here: isDir(p), free: sp?.free || 0, total: sp?.total || 0 }; };
-    return { roots: [await one(config.romsRoot, true), ...(await Promise.all(extraRoots().map((r) => one(r, false))))].filter((r) => r.path), to: config.downloadRoot || 'most' };
+    // 0.9.49 (owner: "This Device" was the main games folder, which was on the MicroSD, so games went there): each
+    // folder is named after the drive it's really on: Main Drive for this device's own disk, else the drive's name
+    const list = mounts();
+    const one = async (p, main) => { const sp = await handlers['fs:space'](p); const dv = p && isDir(p) ? driveOf(p, list) : null; return { path: p, main, here: isDir(p), free: sp?.free || 0, total: sp?.total || 0, drive: dv ? (dv.label === 'This device' ? 'Main Drive' : dv.label) : path.basename(path.dirname(path.dirname(p || '')) || '') || 'Drive', mount: dv?.mount || '' }; };
+    const roots = [await one(config.romsRoot, true), ...(await Promise.all(extraRoots().map((r) => one(r, false))))].filter((r) => r.path);
+    // two folders on one drive: the drive's name and the folder's
+    for (const r of roots) if (roots.filter((x) => x.drive === r.drive).length > 1) r.drive = `${r.drive} · ${path.basename(path.dirname(r.path)) === 'Emulation' ? path.basename(path.dirname(path.dirname(r.path))) : path.basename(path.dirname(r.path))}`;
+    return { roots, to: config.downloadRoot || 'most', ask: !!config.downloads?.askWhere };
   },
   // a drive picked: an ES-DE roms folder made on it (a folder per console in the library), added to every
   // set-up emulator's game list that has one, and opened to Flatpak emulators; never moves or deletes a game
@@ -4621,31 +4696,50 @@ const handlers = {
   // RomM on this device (0.9.15 section 1): Podman pod from RomM's own compose; secrets in romm-local.env
   'romm:localInfo': async () => {
     const rl = require('./rommLocal'), h = os.homedir();
+    // 0.9.49 (owner): the choices are your games folders (the main one, those on other drives, and any found on the
+    // device), each with its drive and what's in it; several can be picked. A new folder is the fallback.
+    const list = mounts(), real = (x) => { try { return fs.realpathSync(x); } catch { return path.resolve(x); } };
+    const folders = [];
+    const add = (p, from, main = false) => {
+      if (!p || !isDir(p) || folders.some((f) => f.real === real(p))) return;
+      const dv = driveOf(p, list);
+      folders.push({ path: p, real: real(p), from, main, drive: dv ? (dv.label === 'This device' ? 'Main Drive' : dv.label) : '', ...romsFolderStats(p) });
+    };
+    add(config.romsRoot, 'Your games folder', true);
+    for (const r of extraRoots()) add(r, 'Games on another drive');
+    try { for (const r of detectRoots().roots) add(r.path, r.source); } catch {}
     const emu = readEmuDeckSettings();
-    const libs = [];
-    if (emu.emulationPath && fs.existsSync(path.join(emu.emulationPath, 'roms'))) libs.push({ path: emu.emulationPath, from: 'EmuDeck' });
-    if (fs.existsSync(path.join(h, 'retrodeck', 'roms'))) libs.push({ path: path.join(h, 'retrodeck'), from: 'RetroDECK' });
-    libs.push({ path: path.join(h, 'RomM'), from: 'New folder' });
+    if (emu.emulationPath) add(path.join(emu.emulationPath, 'roms'), 'EmuDeck');
+    add(path.join(h, 'retrodeck', 'roms'), 'RetroDECK');
     const st = await rl.status();
-    return { ...st, ready: rl.readiness(), libraries: libs, port: config.rommLocal?.port || null, lan: config.rommLocal?.port ? rl.lanUrls(config.rommLocal.port) : [] };
+    const s = config.server || {};
+    return { ...st, ready: rl.readiness(), folders, newFolder: path.join(h, 'RomM'), chosen: config.rommLocal?.roms || null,
+      linked: !!(config.configured && !config.localOnly && (s.localUrl || s.remoteUrl)), mine: !!config.rommLocal?.port,
+      port: config.rommLocal?.port || null, lan: config.rommLocal?.port ? rl.lanUrls(config.rommLocal.port) : [] };
   },
   // Podman made ready from Cartridge (0.9.17); the device password is used once and never kept
   'romm:localPrepare': async ({ password } = {}) => {
     try { return { ok: true, ready: await require('./rommLocal').prepare({ password }, (p) => broadcast('romm-local', p)) }; }
     catch (e) { if (e.code === 'password') return { needPassword: true }; log('podman prepare failed:', e.message); throw e; }
   },
-  'romm:localSetup': async ({ username, password, library, name, keys }) => {
+  // which console folders are in more than one picked folder (shown before setup)
+  'romm:localPlan': ({ roms } = {}) => ({ conflicts: require('./rommLocal').planMounts((roms || []).filter((p) => isDir(p)), path.join(os.homedir(), '.local/share/cartridge-romm/library')).conflicts }),
+  // roms: games folders picked (0.9.49); library: a new folder that will hold roms/<console> (the old way)
+  'romm:localSetup': async ({ username, password, library, roms, name, keys }) => {
     const rl = require('./rommLocal');
     const dataDir = path.join(os.homedir(), '.local/share/cartridge-romm');
-    const r = await rl.setup({ username, password, library, dataDir, keys, name, envFile: path.join(USER_DATA, 'romm-local.env'), port: config.rommLocal?.port }, (p) => broadcast('romm-local', p));
-    config.rommLocal = { port: r.port, library, dataDir, name: String(name || '').slice(0, 40), at: Date.now(), boot: r.boot };
+    roms = (roms || []).filter((p) => isDir(p));
+    const r = await rl.setup({ username, password, library, roms, dataDir, keys, name, envFile: path.join(USER_DATA, 'romm-local.env'), port: config.rommLocal?.port }, (p) => broadcast('romm-local', p));
+    config.rommLocal = { port: r.port, library: roms.length ? null : library, roms: roms.length ? roms : null, dataDir, name: String(name || '').slice(0, 40), at: Date.now(), boot: r.boot };
     config.server = { ...config.server, localUrl: r.base, remoteUrl: config.server.remoteUrl || '', mode: config.server.remoteUrl ? 'auto' : 'local', auth: 'password', username: r.user, password, token: '' };
-    if (!config.romsRoot) config.romsRoot = path.join(library, 'roms');
+    if (!config.romsRoot) config.romsRoot = roms[0] || path.join(library, 'roms');
+    // the other picked folders become games folders on other drives, so downloads and the library see them too
+    for (const p of roms.slice(1)) if (path.resolve(p) !== path.resolve(config.romsRoot) && !extraRoots().some((x) => path.resolve(x) === path.resolve(p))) config.extraRoots = [...(config.extraRoots || []), { path: p }];
     saveConfig();
-    log('romm local: running on port', r.port, 'boot', r.boot);
-    return { ...r, lan: rl.lanUrls(r.port), romsRoot: config.romsRoot };
+    log('romm local: running on port', r.port, 'boot', r.boot, 'folders', roms.length || 1, 'conflicts', r.conflicts?.length || 0);
+    return { ...r, lan: rl.lanUrls(r.port), romsRoot: config.romsRoot, folders: roms };
   },
-  'romm:localUpdate': ({ keys } = {}) => require('./rommLocal').update({ envFile: path.join(USER_DATA, 'romm-local.env'), library: config.rommLocal?.library, dataDir: config.rommLocal?.dataDir, keys, keysOnly: !!keys }),
+  'romm:localUpdate': ({ keys } = {}) => require('./rommLocal').update({ envFile: path.join(USER_DATA, 'romm-local.env'), library: config.rommLocal?.library, roms: config.rommLocal?.roms, dataDir: config.rommLocal?.dataDir, keys, keysOnly: !!keys }),
   // which metadata keys are set (never the keys themselves)
   'romm:localKeys': () => { const k = require('./rommLocal').keysOf(require('./rommLocal').readEnv(path.join(USER_DATA, 'romm-local.env'))); return { igdb: !!(k.igdbId && k.igdbSecret), ss: !!(k.ssUser && k.ssPass) }; },
   // Welcome's scan (0.9.16): games already in Steam that Cartridge didn't add, per console (C7 take over)
@@ -4801,6 +4895,9 @@ const sendRaw = broadcast;
 broadcast = (ch, data) => { sendRaw(ch, data); const f = JOB_EVENTS[ch]; if (f && data) { try { const [k, o] = f(data); if (k && bgJobs.has(k)) bgJob(k, Object.fromEntries(Object.entries(o).filter(([, v]) => v != null))); } catch {} } };
 handlers['jobs:list'] = () => [...bgJobs.values()];
 handlers['emu:profiles'] = () => require('./emuProfiles').all(); // 0.9.48: what Cartridge knows per emulator (diagnostics)
+handlers['cee:emulators'] = () => require('./cee').emulators(); // 0.9.49 CEE: every emulator, its install kinds, launch lines, links
+handlers['cee:coverage'] = () => require('./cee').coverage(); // every console RomM can send and how it's played
+handlers['emu:startCheck'] = ({ id, path: p }) => require('./emuStart').check(id, p);
 handlers['scheduler:status'] = () => scheduler.status(); // 0.9.48: the background jobs and whether they wait for a game
 // the performance overlay (0.9.48, Settings → About): CPU since the last ask, as a share of one core, and memory, over all of
 // Cartridge's processes (Electron's own figures, nothing sent anywhere)

@@ -5,6 +5,7 @@
       <div class="spacer" />
       <span class="hint"><Btn b="LB" /><Btn b="RB" />Page</span>
       <span class="hint"><Btn b="X" />{{ fit ? 'Zoom in' : 'Fit' }}</span>
+      <span class="hint"><Btn b="RS" />Scroll</span>
       <button class="btn small" data-focus @click="closeModal(null)"><Icon name="mdiClose" :size="18" />Close</button>
     </header>
     <div v-if="error" class="center">{{ error }}</div>

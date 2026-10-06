@@ -71,7 +71,7 @@ const day = (d) => { const t = new Date(String(d).replace(' ', 'T') + (/[zZ]|[+-
 
 async function load(force = false) {
   error.value = '';
-  try { g.value = await call('ra:game', { gameId: props.gameId, force }); if (g.value.ingame || g.value.boxart) setBg({ src: img(g.value.ingame || g.value.boxart), blur: !g.value.ingame }); }
+  try { g.value = await call('ra:game', { gameId: props.gameId, force }); if (!g.value) throw new Error('RetroAchievements didn’t answer. Try again.'); if (g.value.ingame || g.value.boxart) setBg({ src: img(g.value.ingame || g.value.boxart), blur: !g.value.ingame }); }
   catch (e) { error.value = e.message; }
 }
 // 0.9.28 (owner): More starts with Go to Game Page; a game not matched to the library searches for it

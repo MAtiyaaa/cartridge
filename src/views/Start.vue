@@ -337,10 +337,10 @@
     </div>
     <!-- the pages at a glance (0.9.24; 0.9.28: L1/R1 in Arrange): A picks a page up, left and right move it -->
     <div v-if="ov" class="st-ov" ref="ovEl">
-      <div class="st-ov-head"><b>Pages</b><span class="muted">{{ ov.moving != null ? 'Left and right move it. A puts it down.' : 'A picks a page up to move it. B goes back to arranging.' }}</span></div>
+      <div class="st-ov-head"><b>Pages</b><span class="muted">{{ ov.moving != null ? 'The D-pad moves it, any way. A puts it down.' : 'A picks a page up to move it. B goes back to arranging.' }}</span></div>
       <!-- 0.9.28 (owner): each page in miniature with its real tiles (covers, the clock, pictures, names), and the page
            you carry lifts while the others slide out of its way -->
-      <TransitionGroup tag="div" name="st-ovm" class="st-ov-list">
+      <TransitionGroup tag="div" :name="ovJump ? 'st-ovj' : 'st-ovm'" class="st-ov-list">
         <button v-for="(pg, i) in pages" :key="pgKey(pg, i)" class="st-ov-page" :class="{ on: i === page, moving: ov.moving === i, dim: ov.moving != null && ov.moving !== i }" data-focus :data-key="'pg-' + i" @click="ovPick(i)">
           <span class="st-ov-map">
             <!-- 0.9.29 (owner: "it doesn't show the whole actual widgets"): a still copy of the page itself, taken when
@@ -352,7 +352,13 @@
             </i></template>
           </span>
           <span class="st-ov-n">Page {{ i + 1 }}<em>{{ pg.length }} {{ pg.length === 1 ? 'widget' : 'widgets' }}</em></span>
-          <span v-if="ov.moving === i" class="st-ov-carry"><Icon name="mdiArrowLeftRight" :size="16" />Moving</span>
+          <!-- 0.9.49 (owner): four arrows, as a page moves up, down, left and right -->
+          <span v-if="ov.moving === i" class="st-ov-carry"><Icon name="mdiArrowAll" :size="16" />Moving</span>
+        </button>
+        <!-- 0.9.49 (owner): a card after the last page adds one, from here too -->
+        <button v-if="ov.moving == null" key="st-ov-add" class="st-ov-page st-ov-addpg" data-focus data-key="pg-add" @click="ovAdd">
+          <span class="st-ov-map st-ov-addmap"><span class="st-ov-plus"><Icon name="mdiPlus" :size="30" /></span></span>
+          <span class="st-ov-n">Add Page<em>An empty page to fill</em></span>
         </button>
       </TransitionGroup>
     </div>
@@ -960,7 +966,9 @@ function snapPage() {
   const b = boardReady(page.value), pg = pages.value[page.value];
   if (!b || !pg?.length) return;
   const c = b.cloneNode(true);
-  c.querySelectorAll('.st-handle, .st-slot, .st-ghost, .st-slots').forEach((n) => n.remove());
+  // 0.9.49 (owner's photo: "Add widget" bars in some pages' pictures): everything that belongs to arranging comes out,
+  // the add-a-widget button, sizes and the edit buttons too, so a page's picture is the page as you use it
+  c.querySelectorAll('.st-handle, .st-slot, .st-ghost, .st-slots, .st-add, .st-size, .st-ctl').forEach((n) => n.remove());
   c.querySelectorAll('[data-focus], [tabindex], [data-key], [data-hold]').forEach((n) => { n.removeAttribute('data-focus'); n.removeAttribute('tabindex'); n.removeAttribute('data-key'); n.removeAttribute('data-hold'); });
   c.style.height = '';
   snaps.set(pageSig(pg), { html: c.outerHTML, w: b.offsetWidth, h: Math.max(b.offsetHeight, 1) });
@@ -1056,10 +1064,22 @@ function ovPick(i) {
   nextTick(() => focusKey('pg-' + i));
 }
 // how many page cards sit on one row of the overview (they wrap)
-function ovPerRow() { const c = [...(ovEl.value?.querySelectorAll('.st-ov-page') || [])]; const top = c[0]?.offsetTop; const n = c.filter((x) => x.offsetTop === top).length; return Math.max(1, n); }
+function ovPerRow() { const c = [...(ovEl.value?.querySelectorAll('.st-ov-page:not(.st-ov-addpg)') || [])]; const top = c[0]?.offsetTop; const n = c.filter((x) => x.offsetTop === top).length; return Math.max(1, n); }
+// 0.9.49 (owner: with five pages or more, moving a page into another row looked awful): within a row the pages glide
+// aside; across rows they trade places with a short fade instead of every card in between flying diagonally
+const ovJump = ref(false);
+let ovJumpT = 0;
+function ovAdd() { pages.value.push([]); save(); sfx.accept?.(); nextTick(() => focusKey('pg-' + (pages.value.length - 1))); }
 function ovMove(d) {
   const i = ov.value.moving, j = Math.max(0, Math.min(pages.value.length - 1, i + d));
   if (j === i) { sfx.error?.(); return; }
+  const per = ovPerRow();
+  ovJump.value = Math.floor(i / per) !== Math.floor(j / per);
+  clearTimeout(ovJumpT);
+  if (ovJump.value) {
+    ovJumpT = setTimeout(() => (ovJump.value = false), 320);
+    nextTick(() => { for (const c of ovEl.value?.querySelectorAll('.st-ov-page:not(.st-ov-addpg)') || []) c.animate([{ opacity: 0.35 }, { opacity: 1 }], { duration: 240, easing: 'cubic-bezier(0.23, 1, 0.32, 1)' }); });
+  }
   const cur = pages.value[page.value];
   // up/down carry the page a row (the ones between shift along by one); left/right swap neighbours
   const list = [...pages.value]; const [m] = list.splice(i, 1); list.splice(j, 0, m); pages.value = list;
@@ -1253,7 +1273,12 @@ watch(() => store.play, loadWeek);
    tile on every frame without the GPU. Same look, same timing. */
 .st-tile::before { content: ''; position: absolute; inset: 0; border-radius: inherit; box-shadow: var(--ring), 0 0 0 8px rgba(0, 0, 0, 0.32), 0 26px 50px -24px rgba(0, 0, 0, 0.85); opacity: 0; transform: translateY(0); transition: opacity 240ms ease, transform 380ms cubic-bezier(0.32, 0.72, 0, 1); pointer-events: none; }
 .st-tile:focus-visible::before, .pad-mode .st-tile:focus::before { opacity: 1; transform: translateY(-3px); }
-:global(body.theme-light .st-tile::before) { box-shadow: var(--ring), 0 26px 50px -24px rgba(0, 0, 0, 0.85); } /* a white ring vanished on the clock's day sky: a dark edge outside it (dark colours only) */
+:global(body.theme-light .st-tile::before) { box-shadow: var(--ring), 0 12px 22px -12px rgba(0, 0, 0, 0.45); }
+/* 0.9.49 (owner's photos: shadows cut off hard in Light, the Spotlight card and a cover tile): a shadow made for the
+   dark colours (long and dark) ran past the board's scrolling edge and the tile's own edge, and on a light page the cut
+   shows. Light keeps them short and soft: they end before any edge. */
+:global(body.theme-light .st-face :is(.st-band img, .st-cover, .st-deal-c, .st-fan-c, .st-tro-badge, .st-tro-fbadge, .st-tro-gart, .st-disc, .st-cart)) { box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12), 0 6px 12px -6px rgba(0, 0, 0, 0.3); }
+:global(body.theme-light .st-tile.held .st-face), :global(body.theme-light .st-tile.picked .st-face) { box-shadow: var(--ring), 0 14px 28px -12px rgba(0, 0, 0, 0.35); } /* a white ring vanished on the clock's day sky: a dark edge outside it (dark colours only) */
 .editing .st-tile::before { display: none; } /* arranging keeps its own ring on the face */
 .st-tile:focus-visible .st-face, .pad-mode .st-tile:focus .st-face { transform: translateY(-3px); }
 .st-tile:focus-within .st-face, .st-tile:focus .st-face { will-change: transform; }
@@ -1292,7 +1317,9 @@ watch(() => store.play, loadWeek);
 .st-edit-bar b { font-family: var(--display); font-size: var(--t-lg); font-weight: 700; }
 .st-edit-bar .spacer { flex: 1; }
 @media (max-width: 1400px) { .st-edit-bar { padding-left: 36px; padding-right: 36px; } }
-.st-size { position: absolute; bottom: 10px; left: 10px; z-index: 6; padding: 3px 10px; border-radius: 999px; background: #fff; color: #0c0d10; font-size: var(--t-xs); font-weight: 700; pointer-events: none; }
+/* 0.9.49 (owner's photo: "2 × 2" covered the card's "32 games"): the size sits on the tile's top edge, like a tab,
+   over the ring and never over what the tile shows */
+.st-size { position: absolute; top: -11px; left: 50%; transform: translateX(-50%); z-index: 6; padding: 3px 10px; border-radius: 999px; background: var(--focus, #fff); color: var(--on-focus, #0c0d10); font-size: var(--t-xs); font-weight: 700; line-height: 16px; white-space: nowrap; pointer-events: none; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35); }
 .st-ctl { position: absolute; top: 10px; right: 10px; z-index: 6; display: flex; gap: 6px; }
 .pad-mode .st-ctl { display: none; }
 .st-ctl-b { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; background: rgba(12, 13, 16, 0.82); color: #fff; box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.18); }
@@ -1414,6 +1441,11 @@ watch(() => store.play, loadWeek);
 .st-ov-page { position: relative; transition: translate var(--spring-pop-d, 300ms) var(--spring-pop, ease-out), scale var(--spring-pop-d, 300ms) var(--spring-pop, ease-out), box-shadow 260ms var(--ease-out), opacity 200ms ease; }
 .st-ov-page.dim { opacity: 0.55; }
 .st-ov-carry { position: absolute; top: -12px; left: 50%; transform: translateX(-50%); display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; background: var(--focus); color: var(--on-focus); font-size: var(--t-xs); font-weight: 700; box-shadow: 0 6px 16px rgba(0, 0, 0, 0.45); }
+.st-ovj-move { transition: none; }
+.st-ov-addpg { box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, 0.14); background: transparent; }
+.st-ov-addmap { display: grid; place-items: center; }
+.st-ov-plus { width: 56px; height: 56px; border-radius: 50%; display: grid; place-items: center; background: var(--s2); color: var(--text); box-shadow: var(--weight-edge, inset 0 0 0 1px rgba(255, 255, 255, 0.08)); }
+.st-ov-addpg:focus .st-ov-plus { background: var(--focus); color: var(--on-focus); }
 .st-ovm-move { transition: transform var(--spring-d, 420ms) var(--spring, cubic-bezier(0.32, 0.72, 0, 1)); }
 .st-ov-n { display: flex; justify-content: space-between; font-weight: 700; font-family: var(--display); }
 .st-ov-n em { font-style: normal; font-weight: 500; color: var(--muted); font-family: var(--body); font-size: var(--t-sm); }
@@ -1700,7 +1732,7 @@ watch(() => store.play, loadWeek);
   transition: width 560ms var(--spring), height 560ms var(--spring), transform 560ms var(--spring), margin 560ms var(--spring), box-shadow 300ms ease; }
 .st-spine::after { content: ''; position: absolute; left: 0; right: 0; top: 0; height: clamp(14px, 9%, 24px); background: linear-gradient(color-mix(in srgb, var(--case) 100%, #fff 12%), var(--case)); box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.22), 0 1px 0 rgba(0, 0, 0, 0.35); z-index: 2; }
 .st-spine-art { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: left center; opacity: 0.5; filter: blur(1px); transition: opacity 320ms ease, filter 320ms ease; }
-.st-spine-t { position: absolute; inset: clamp(22px, 13%, 32px) 0 8px; z-index: 1; writing-mode: vertical-rl; transform: rotate(180deg); display: flex; align-items: center; justify-content: flex-start; font-family: var(--display); font-weight: 700; font-size: 12px; color: #fff; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9); overflow: hidden; white-space: nowrap; line-height: 36px; }
+.st-spine-t { position: absolute; inset: clamp(22px, 13%, 32px) 0 8px; z-index: 1; writing-mode: vertical-rl; transform: rotate(180deg); display: block; text-overflow: ellipsis; font-family: var(--display); font-weight: 700; font-size: 12px; color: #fff; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9); overflow: hidden; white-space: nowrap; line-height: 36px; }
 .st-spine.out { width: min(36%, calc((100cqh - 96px) * 0.7)); min-width: 60px; height: 100%; margin: 0 12px 0 6px; transform: rotateY(-12deg); border-radius: 4px;
   box-shadow: 0 24px 40px rgba(0, 0, 0, 0.6), inset 0 0 0 1px rgba(255, 255, 255, 0.2); }
 .st-spine.out .st-spine-art { opacity: 1; filter: none; object-position: center; }

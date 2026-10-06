@@ -111,8 +111,14 @@ function keepFocus() {
   const { el } = kept;
   if (el.isConnected && !el.disabled && el.offsetParent !== null && inScope(el, l.el)) { el.focus({ preventScroll: true }); return; }
   if (el.isConnected && el.disabled && l.el.contains(el) && performance.now() - kept.t < 20000) return; // still busy: wait for it
+  // 0.9.49 (owner: opening Missing from Steam unfolded the search first): while a new page loads it has nothing to
+  // focus, and the nearest thing was the Dock's search, which opens on focus. On the page itself, only the page is a
+  // fallback; nothing there yet means wait for it (up to the 20 s above)
+  const main = l.el === document.body ? document.querySelector('main.main') : null;
+  if (main && main.contains(el) === false && !el.isConnected && performance.now() - kept.t < 20000 && !focusables(main).length) return;
   let best = null, bd = Infinity;
-  for (const [c, r] of focusables(l.el, true)) { const d = Math.hypot(r.left + r.width / 2 - kept.x, r.top + r.height / 2 - kept.y); if (d < bd) { bd = d; best = c; } }
+  for (const [c, r] of focusables(main || l.el, true)) { const d = Math.hypot(r.left + r.width / 2 - kept.x, r.top + r.height / 2 - kept.y); if (d < bd) { bd = d; best = c; } }
+  if (!best && main && performance.now() - kept.t < 20000) return; // the page is still loading
   kept = null;
   best?.focus({ preventScroll: true });
 }
@@ -159,6 +165,16 @@ function move(dir) {
       if (score < bestScore) { bestScore = score; best = el; }
     }
   }
+  // columns of cards ([data-columns]): left and right go to the other column's nearest card, level or not
+  const colsH = !vertical && !best ? cur.closest('[data-columns]') : null;
+  if (colsH) {
+    let d = Infinity;
+    for (const [el, r] of cands) {
+      if (!colsH.contains(el) || (dir === 'right' ? r.left < c.right - 4 : r.right > c.left + 4)) continue;
+      const dy = Math.abs(r.top + r.height / 2 - cy) + Math.abs((dir === 'right' ? r.left - c.right : c.left - r.right)) * 0.25;
+      if (dy < d) { d = dy; best = el; }
+    }
+  }
   // In a pop-up's long list, right with nothing to the right jumps to the button at its bottom right (Apply,
   // Done...), so a long list never has to be walked to its end (0.9.24, owner). Pages aren't pop-ups.
   if (!best && dir === 'right' && layer && layer.el !== document.body && cur.closest('[data-scroll]')) {
@@ -191,6 +207,13 @@ function pickRow(dir, cur, c, cands, wantX) {
   const below = dir === 'down';
   const pool = cands.filter(([, r]) => (below ? r.top >= c.bottom - 8 : r.bottom <= c.top + 8));
   if (!pool.length) return null;
+  // columns of cards of different heights ([data-columns], 0.9.49, owner: on the Emulators page down from RetroArch went
+  // to RPCS3 in the other column): up and down stay in the column you're in, while it has more
+  const cols = cur.closest('[data-columns]');
+  if (cols) {
+    const same = pool.filter(([el, r]) => cols.contains(el) && r.left < c.right - 4 && r.right > c.left + 4);
+    if (same.length) return same.reduce((m, x) => ((below ? x[1].top < m[1].top - 1 : x[1].bottom > m[1].bottom + 1) ? x : m))[0];
+  }
   const edge = below ? Math.min(...pool.map(([, r]) => r.top)) : Math.max(...pool.map(([, r]) => r.bottom));
   const ref = pool.find(([, r]) => (below ? r.top : r.bottom) === edge)[1];
   const tol = Math.max(8, ref.height * 0.5);

@@ -28,7 +28,7 @@
       </div>
       <div v-if="fpNote" class="eg-fp small"><Icon name="mdiPackageVariant" :size="18" />{{ fpNote }}</div>
       <div v-if="!list" class="muted small"><Icon name="mdiSync" :size="16" class="spin" /> Looking at what's installed…</div>
-      <div v-else v-masonry class="eg-grid">
+      <div v-else v-masonry class="eg-grid" data-columns>
         <section v-for="c in list" :key="c.key" class="eg-con">
           <div class="eg-head"><PIcon v-if="SLUG[c.key]" :p="{ slug: SLUG[c.key], fs_slug: SLUG[c.key] }" :size="30" /><Icon v-else name="mdiGamepadSquareOutline" :size="28" /><b>{{ c.name }}</b></div>
           <button v-for="e in c.emus" :key="c.key + e.id" class="eg-emu" :class="{ have: e.installed }" data-focus @click="togglePick(c, e)">
@@ -71,7 +71,7 @@
       </div>
       <div v-if="fpNote" class="eg-fp small"><Icon name="mdiPackageVariant" :size="18" />{{ fpNote }}</div>
       <div v-if="!list" class="muted small"><Icon name="mdiSync" :size="16" class="spin" /> Looking at what's installed…</div>
-      <div v-else v-masonry class="eg-grid">
+      <div v-else v-masonry class="eg-grid" data-columns>
         <section v-for="c in list" :key="c.key" class="eg-con">
           <div class="eg-head"><PIcon v-if="SLUG[c.key]" :p="{ slug: SLUG[c.key], fs_slug: SLUG[c.key] }" :size="30" /><Icon v-else name="mdiGamepadSquareOutline" :size="28" /><b>{{ c.name }}</b></div>
           <button v-for="e in c.emus" :key="c.key + e.id" class="eg-emu" :class="{ have: e.installed, busy: stateOf(c, e)?.state === 'run' }" data-focus @click="get(c, e)">
@@ -184,7 +184,7 @@ function shortVer(up) {
   const m = /\d{4}-\d{2}-\d{2}/.exec(v) || /\d+(?:\.\d+)+(?:[-.]\d+)?/.exec(v);
   return m ? m[0] : v.slice(0, 16) || 'new';
 }
-const PATH_IDS = new Set(['pcsx2', 'duckstation', 'dolphin', 'eden', 'citron', 'yuzu', 'azahar', 'citra', 'ryujinx', 'cemu', 'rpcs3', 'shadps4', 'vita3k']);
+const PATH_IDS = new Set(['pcsx2', 'duckstation', 'dolphin', 'eden', 'citron', 'yuzu', 'azahar', 'citra', 'ryujinx', 'cemu', 'rpcs3', 'shadps4', 'vita3k', 'ppsspp']);
 async function manage(u) {
   if (!u) return;
   const ch = u.channels || [];
@@ -199,7 +199,8 @@ async function manage(u) {
     // 0.9.33 (owner): a fork plays with the saves of the emulator it comes from, through Linked Folders
     ...(u.forkOf ? [{ label: 'Share Saves With the Original', sub: 'Link its save folder in Linked Folders', value: 'links', icon: 'mdiLinkVariant' }] : []),
     ...(u.id === 'shadps4' ? [{ label: 'Versions', sub: 'Which games use which, and more to add', value: 'versions', icon: 'mdiLayersTriple' }] : []),
-    ...(u.page ? [{ label: 'Open Its Releases Page', value: 'page', icon: 'mdiOpenInNew' }] : []),
+    ...(u.page ? [{ label: 'Open Its Download Page', value: 'page', icon: 'mdiOpenInNew' }] : []),
+    ...(u.site && u.site !== u.page ? [{ label: 'Open Its Website', value: 'site', icon: 'mdiWeb' }] : []),
     { label: 'Delete', sub: u.kind === 'flatpak' ? 'Uninstall the Flatpak' : 'Your saves and settings stay', value: 'delete', icon: 'mdiDeleteOutline', danger: true },
   ];
   const v = await choose({ title: u.label, message: [u.version ? 'Version ' + u.version : '', CH[u.channel] || (u.kind === 'flatpak' ? 'Flatpak from Flathub' : ''), u.path ? short(u.path) : ''].filter(Boolean).join(' · '), options: opts, sheet: true });
@@ -212,6 +213,7 @@ async function manage(u) {
   if (v === 'links') { store.emuPageWant = 'links'; return; }
   if (v === 'folders') return openModal('emupaths', { id: u.id, name: u.label });
   if (v === 'page') return window.open(u.page);
+  if (v === 'site') return window.open(u.site);
   if (v === 'delete') {
     if (!(await confirm(`Delete ${u.label}?`, `${u.kind === 'flatpak' ? 'Its Flatpak is uninstalled.' : 'The program is deleted.'} Saves and settings stay. Steam shortcuts that used it will show up in Shortcut health.`, 'Delete', true))) return;
     try { await call('emuget:remove', { id: u.id, kind: u.kind, fp: u.fp, where: u.where, path: u.path }); toast(`${u.label} was deleted`, 'ok', 3000, 'mdiDeleteOutline'); } catch (err) { toast(err.message, 'error', 6000); }

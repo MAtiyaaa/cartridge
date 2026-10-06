@@ -21,8 +21,9 @@ async function api(p, { method = 'GET', body } = {}) {
   if (!m) throw new Error('unexpected ' + p);
   const list = (notes[m[1]] ||= []);
   if (method === 'GET') return list;
-  if (method === 'POST') { const n = { id: nid++, user_id: 1, ...body }; list.push(n); return n; }
-  if (method === 'PUT') { const n = list.find((x) => x.id === +m[2]); Object.assign(n, body); return n; }
+  // RomM keeps one note per title for each game and user (unique_rom_user_note_title): a second one is a 500 (0.9.49)
+  if (method === 'POST') { if (list.some((x) => x.title === body.title)) throw new Error(`Server error 500 on ${p}`); const n = { id: nid++, user_id: 1, ...body }; list.push(n); return n; }
+  if (method === 'PUT') { const n = list.find((x) => x.id === +m[2]); if (list.some((x) => x !== n && x.title === body.title)) throw new Error(`Server error 500 on ${p}`); Object.assign(n, body); return n; }
 }
 function device(name, dir) {
   const ud = fs.mkdtempSync(path.join(os.tmpdir(), 'tro-'));
@@ -54,4 +55,38 @@ test('a fresh device sees every game the other device has, matched or not, unloc
   const carried = ov.games.find((g) => g.title.startsWith('A Game'));
   assert.strictEqual(carried.romId, null); // never linked to the carrier ROM
   assert.strictEqual(carried.earned ?? carried.trophies?.filter((t) => t.unlocked).length, 1);
+});
+
+test('two unmatched games on one carrier both sync, and the names list carries every name (0.9.49)', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rpcs3-'));
+  const trophy = (id) => ({ id, name: 'T' + id, desc: '', grade: 'B', points: 0, unlocked: true, time: 2000 });
+  const real = T.readSource;
+  T.readSource = (src) => (src === 'rpcs3' ? [
+    { src: 'rpcs3', set: 'NPWR00010_00', title: 'Unmatched One', titleId: 'BLUS00010', files: [], trophies: [trophy(1)] },
+    { src: 'rpcs3', set: 'NPWR00011_00', title: 'Unmatched Two', files: [], trophies: [trophy(1)] },
+    { src: 'rpcs3', set: 'NPWR00012_00', title: 'Deadpool', files: [], trophies: [trophy(1)] },
+  ] : []);
+  try {
+    const a = device('Ally', dir);
+    await a.refresh({ quiet: true });
+    const r = await a.handlers['trophies:sync']();
+    assert.strictEqual(r.state, 'ok', r.error);
+    const carried = (notes[10] || []).map((n) => JSON.parse(n.content)).filter((d) => d.cartridge === 'trophies' && d.carrier && /000(10|11)_/.test(d.set)).map((d) => d.set).sort();
+    assert.deepStrictEqual(carried, ['NPWR00010_00', 'NPWR00011_00']);
+    const list = (notes[10] || []).map((n) => JSON.parse(n.content)).find((d) => d.cartridge === 'trophy-names');
+    assert.ok(list, 'the names list is on the carrier');
+    assert.strictEqual(list.names.NPWR00010_00.title, 'Unmatched One');
+    assert.strictEqual(list.names.BLUS00010.title, 'Unmatched One'); // the game's own ID too
+    assert.strictEqual(list.names.NPWR00012_00.romId, 12);
+  } finally { T.readSource = real; }
+  // a device that has the set only as a code (shadPS4 keeps names with the installed game) gets the name
+  const dir2 = fs.mkdtempSync(path.join(os.tmpdir(), 'rpcs3-'));
+  T.readSource = (src) => (src === 'rpcs3' ? [{ src: 'rpcs3', set: 'NPWR00011_00', title: 'NPWR00011_00', files: [], trophies: [trophy(1)] }] : []);
+  try {
+    const b = device('TV', dir2);
+    await b.refresh({ quiet: true });
+    await b.handlers['trophies:sync']();
+    const g = b.handlers['trophies:overview']().games.find((x) => x.set === 'NPWR00011_00');
+    assert.strictEqual(g.title, 'Unmatched Two');
+  } finally { T.readSource = real; }
 });

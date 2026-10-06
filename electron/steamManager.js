@@ -18,6 +18,7 @@ const { spawn, execFileSync } = require('child_process');
 const { parseVdf, shortcutId, steamRunning } = require('./steamArt');
 const frameGen = require('./frameGen');
 const SC = require('./steamCollections');
+const ES = require('./emuStart');
 
 const HOME = os.homedir();
 const exists = (p) => { try { fs.accessSync(p); return true; } catch { return false; } };
@@ -463,6 +464,12 @@ module.exports = function createSteamManager(ctx) {
       const SRC = { emudeck: 'EmuDeck', appimage: 'AppImage', flatpak: 'Flatpak', native: 'Installed', windows: 'Windows build', folder: 'Folder' };
       // an emulator that is itself a fork (PrimeHack) is listed with the forks, never the default
       if (e.forkOf) { found.forEach((f, i) => forksOut.push({ id: i ? `${id}@${f.src}` : id, label: `${f.name} · fork of ${EMU[e.forkOf]?.label || e.forkOf}${found.length > 1 ? ' · ' + SRC[f.src] : ''}`, fork: true, t: f.t })); continue; }
+      // 0.9.49 (owner: Vita3K doesn't open): a copy known not to start goes after one that does, so the default (the
+      // plain id: Steam shortcuts, installs) is a copy that works. Unknown copies are checked in the background.
+      if (ES.has(id) && found.length > 1) {
+        const bad = (f) => { const p = f.src === 'emudeck' ? ES.scriptProgram(f.t.exe, HOME) : f.src === 'flatpak' ? null : f.t.exe; if (!p) return 0; const r = ES.cached(id, p); if (!r) { ES.check(id, p).catch(() => {}); return 0; } return r.ok ? 0 : 1; };
+        found.sort((a, b) => bad(a) - bad(b));
+      }
       found.forEach((f, i) => out.push({ id: i ? `${id}@${f.src}` : id, label: found.length > 1 ? `${f.name} · ${SRC[f.src]}` : f.name, t: f.t }));
     }
     // RetroDECK, for people who use it instead of EmuDeck (0.9.3, C5): it starts the game with the
@@ -545,10 +552,11 @@ module.exports = function createSteamManager(ctx) {
   // (0.9.3 L). EmuDeck keeps the real program at <Applications>/Vita3K/Vita3K (an AppImage without
   // the extension; EmuDeck's emuDeckVita3K.sh).
   function vita3kCommand() {
-    const direct = candidates('psvita').find((c) => !c.fork && /vita3k/i.test(c.t.exe) && c.t.how !== 'emudeck');
+    const works = (exe) => ES.cached('vita3k', exe)?.ok !== false; // 0.9.49: never a copy known not to start
+    const direct = candidates('psvita').find((c) => !c.fork && /vita3k/i.test(c.t.exe) && c.t.how !== 'emudeck' && works(c.t.exe));
     if (direct) return { exe: direct.t.exe, args: [], from: direct.t.from };
     const own = [...new Set([HOME, real(HOME)])]
-      .flatMap((h) => [path.join(h, 'Applications/Vita3K/Vita3K'), path.join(h, 'Applications/Vita3K/Vita3K.AppImage')]).find(exists);
+      .flatMap((h) => [path.join(h, 'Applications/Vita3K/Vita3K'), path.join(h, 'Applications/Vita3K/Vita3K.AppImage')]).find((p) => exists(p) && works(p));
     return own ? { exe: own, args: [], from: 'EmuDeck Vita3K' } : null;
   }
   function serialOf(rom, p) {

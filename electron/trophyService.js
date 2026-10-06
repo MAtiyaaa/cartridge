@@ -6,6 +6,17 @@ const os = require('os');
 const T = require('./trophies');
 
 const NOTE_TITLE = 'Cartridge trophies';
+// 0.9.49 (owner's photo: "Server error 500 on /api/roms/473/notes"): RomM keeps one note per title for each game and user
+// (rom_notes unique_rom_user_note_title, RomM migration 0057), and every trophy note was called "Cartridge trophies", so
+// a second game kept on one carrier ROM was refused with a 500 and never synced. Each set now has its own title; notes
+// under the old title are still read and take the new one when next written.
+const titleFor = (set) => `${NOTE_TITLE} ${String(set).replace(/[^A-Za-z0-9_-]+/g, '_')}`;
+const isTrophyNote = (n) => n.data.cartridge === 'trophies' && (n.title === NOTE_TITLE || n.title.startsWith(NOTE_TITLE + ' '));
+// The trophy names list (0.9.49, owner's idea): one note per console, on that console's carrier ROM, mapping every trophy
+// set code (NPWR…, and the game's own ID, CUSA…/PPSA…) to its game's name and library ROM. A device that knows a game
+// (installed there, or matched once) adds it; every device reads it on each sync, so a game shows its name everywhere,
+// installed or not, for good. Only names are added: a real name never becomes a code.
+const NAMES_TITLE = 'Cartridge trophy names';
 const NOTE_TAG = 'cartridge-trophies';
 const ORDER = ['rpcs3', 'shadps4', 'xenia', 'vita3k', 'kytyps5'];
 
@@ -30,6 +41,10 @@ module.exports = function createTrophyService(ctx) {
   const saveRemote = () => { try { fs.writeFileSync(REMOTE_FILE, JSON.stringify(Object.fromEntries(remote))); } catch {} };
   const device = () => (cfg().device || os.hostname() || 'This device').slice(0, 40);
   const keyOf = (g) => `${g.src}:${g.set}`;
+  const NAMES_FILE = path.join(USER_DATA, 'trophy-names.json');
+  const names = loadJson(NAMES_FILE, {}); // src -> { code -> { title, romId, set } }
+  const saveNames = () => { try { fs.writeFileSync(NAMES_FILE, JSON.stringify(names)); } catch {} };
+  const nameIn = (src, ...codes) => { const m = names[src] || {}; for (const c of codes) if (c && m[String(c).toUpperCase()]) return m[String(c).toUpperCase()]; return null; };
 
   // ------------------------------------------------------------ sources
   function srcCfg(id) {
@@ -214,7 +229,7 @@ module.exports = function createTrophyService(ctx) {
   // to RomM, else the linked library game's (0.9.3 K, E1). Nothing is written into emulator folders.
   const isCode = (t) => !t || /^(NPWR\d{5}_\d{2}|[0-9A-F]{8}|CUSA\d{5}|PPSA\d{5}(_\d{2})?|[A-Z]{4}\d{5}|PCS[A-Z]\d{5})$/i.test(String(t).trim());
   // 0.9.29: then a built-in name for the code (titleNames: Xbox 360 title IDs from x360db)
-  const nameOf = (title, remTitle, romId, src) => (!isCode(title) ? title : !isCode(remTitle) ? remTitle : romById(romId)?.name || ctx.codeName?.(src, title || remTitle) || title || remTitle || 'Unknown game');
+  const nameOf = (title, remTitle, romId, src, set, titleId) => (!isCode(title) ? title : !isCode(remTitle) ? remTitle : nameIn(src, set, titleId)?.title || romById(romId)?.name || ctx.codeName?.(src, title || remTitle) || title || remTitle || 'Unknown game');
   function merged(k) {
     const loc = games.get(k);
     const rem = remote.get(k)?.data;
@@ -234,9 +249,10 @@ module.exports = function createTrophyService(ctx) {
         if (!t.unlocked || (u.t && (!t.time || u.t < t.time))) Object.assign(t, { unlocked: true, time: u.t || t.time, device: u.d || 'Another device' });
       }
     }
-    const romId = k in links ? links[k] || null : remote.get(k)?.romId || (loc ? autoLink(loc) : null);
+    const listed = nameIn(base.src, base.set, base.titleId);
+    const romId = k in links ? links[k] || null : remote.get(k)?.romId || (loc ? autoLink(loc) : null) || (listed?.romId && romById(listed.romId) ? listed.romId : null);
     // still only a code (a game deleted before Cartridge learnt its name): say so, keep the code (0.9.16)
-    const title = nameOf(base.title, rem?.title, romId, base.src), unnamed = isCode(title);
+    const title = nameOf(base.title, rem?.title, romId, base.src, base.set, base.titleId), unnamed = isCode(title);
     return { ...base, title: unnamed ? `Unnamed ${T.SOURCES[base.src]?.short || ''} game`.replace('  ', ' ') : title, code: unnamed ? title : null, romId: romId || null, key: k };
   }
   function light(g) {
@@ -291,7 +307,7 @@ module.exports = function createTrophyService(ctx) {
     const notes = listOf(await api(`/api/roms/${romId}/notes`, { query: { tags: NOTE_TAG } }));
     return notes.filter((n) => n && String(n.title || '').startsWith('Cartridge troph') && (meId == null || n.user_id == null || n.user_id === meId)).map((n) => ({ id: n.id, title: n.title, data: parseAny(n.content) })).filter((n) => n.data);
   }
-  async function notesFor(romId) { return (await notesAll(romId)).filter((n) => n.data.cartridge === 'trophies' && n.title === NOTE_TITLE); }
+  async function notesFor(romId) { return (await notesAll(romId)).filter(isTrophyNote); }
 
   // ---- trophy pictures: small copies stored as extra private notes, so other devices can show them
   const ICON_REMOTE = path.join(USER_DATA, 'trophyicons', 'remote');
@@ -365,19 +381,57 @@ module.exports = function createTrophyService(ctx) {
   async function syncOne(g, romId, carrier) {
     const k = keyOf(g);
     const all = await notesAll(romId);
-    const notes = all.filter((n) => n.data.cartridge === 'trophies' && n.title === NOTE_TITLE);
+    const notes = all.filter(isTrophyNote);
     const note = notes.find((n) => n.data.src === g.src && n.data.set === g.set);
     try { await pushIcons(g, romId, all.filter((n) => n.data.cartridge === 'trophy-icons' && n.data.set === g.set)); } catch (e) { log('trophy icons upload failed', e.message); }
-    const { changed, data } = noteData(g, note?.data);
+    let { changed, data } = noteData(g, note?.data);
     if (carrier) data.carrier = true;
-    const body = { title: NOTE_TITLE, content: JSON.stringify(data), is_public: false, tags: [NOTE_TAG] };
+    const body = { title: titleFor(g.set), content: JSON.stringify(data), is_public: false, tags: [NOTE_TAG] };
     let noteId = note?.id;
+    if (note && note.title !== body.title) changed = true; // an old shared title moves to its own
     // 0.9.47 (owner: "the entire list of games"): written even with nothing unlocked yet, so the game is listed everywhere
     if (changed) {
       if (noteId) await api(`/api/roms/${romId}/notes/${noteId}`, { method: 'PUT', body });
       else { const r = await api(`/api/roms/${romId}/notes`, { method: 'POST', body }); noteId = r?.id; }
     }
     remote.set(k, { romId: carrier ? null : romId, carrierRom: carrier ? romId : null, noteId: noteId || null, data: changed ? data : note?.data || data });
+  }
+  // every name this device knows, added to the list kept on each console's carrier ROM, and every name there taken in
+  function learnNames() {
+    let added = 0;
+    for (const k of allKeys()) {
+      const loc = games.get(k), rem = remote.get(k);
+      const g = loc || rem?.data; if (!g) continue;
+      const romId = k in links ? links[k] || null : rem?.romId || (loc ? autoLink(loc) : null);
+      const title = !isCode(loc?.title) ? loc.title : !isCode(rem?.data?.title) ? rem.data.title : romById(romId)?.name || null;
+      if (!title || isCode(title)) continue;
+      const m = (names[g.src] ||= {});
+      for (const code of [g.set, g.titleId].filter(Boolean).map((c) => String(c).toUpperCase())) {
+        const had = m[code];
+        if (!had || isCode(had.title) || (!had.romId && romId)) { m[code] = { title, set: g.set, romId: romId || had?.romId || null }; added++; }
+      }
+    }
+    return added;
+  }
+  async function syncNames(reads) {
+    learnNames();
+    for (const src of ORDER) {
+      const c = carrierFor(src); if (!c) continue;
+      const all = reads.get(c) || await notesAll(c).catch(() => []);
+      const note = all.find((n) => n.data.cartridge === 'trophy-names' && n.data.src === src);
+      const theirs = note?.data?.names || {}, mine = (names[src] ||= {});
+      let localNew = false, gotNew = false;
+      for (const [code, e] of Object.entries(theirs)) { if (!e?.title || isCode(e.title)) continue; const had = mine[code]; if (!had || isCode(had.title) || (!had.romId && e.romId)) { mine[code] = { ...had, ...e }; gotNew = true; } }
+      for (const [code, e] of Object.entries(mine)) { const t = theirs[code]; if (!t || isCode(t.title) || (!t.romId && e.romId)) localNew = true; }
+      // a game known here only by its code gets the name in this device's own list of names too (titles.json)
+      if (gotNew) for (const e of Object.values(mine)) if (e.set && !isCode(e.title)) T.rememberTitle(e.set, e.title);
+      if (localNew && Object.keys(mine).length) {
+        const body = { title: `${NAMES_TITLE} ${src}`, content: JSON.stringify({ cartridge: 'trophy-names', v: 1, src, names: mine }), is_public: false, tags: [NOTE_TAG] };
+        if (note) await api(`/api/roms/${c}/notes/${note.id}`, { method: 'PUT', body }); else await api(`/api/roms/${c}/notes`, { method: 'POST', body });
+        log('trophy names list written', src, Object.keys(mine).length);
+      }
+    }
+    saveNames();
   }
   const NOTED_FILE = path.join(USER_DATA, 'trophy-noted.json');
   const noted = new Set(loadJson(NOTED_FILE, [])); // ROMs seen with trophy notes (any device)
@@ -413,7 +467,7 @@ module.exports = function createTrophyService(ctx) {
       for (const r of withNotes) {
         const all = reads.get(r.id) || [];
         if (all.some((x) => x.data.cartridge === 'trophies')) noted.add(r.id); else noted.delete(r.id);
-        for (const n of all.filter((x) => x.data.cartridge === 'trophies' && x.title === NOTE_TITLE)) {
+        for (const n of all.filter(isTrophyNote)) {
           const k = `${n.data.src}:${n.data.set}`;
           if (!T.SOURCES[n.data.src]) continue;
           // 0.9.28: a game this device has only as a code (a PS4 game that isn't installed here, so shadPS4 left
@@ -429,6 +483,7 @@ module.exports = function createTrophyService(ctx) {
           remote.set(k, { romId: n.data.carrier ? null : r.id, carrierRom: n.data.carrier ? r.id : null, noteId: n.id, data: n.data, icons }); pulled++;
         }
       }
+      try { await syncNames(reads); } catch (e) { log('trophy names list', e.message); }
       saveRemote();
       try { fs.writeFileSync(NOTED_FILE, JSON.stringify([...noted])); } catch {}
       syncState = { state: 'ok', at: Date.now(), pushed, pulled, full };

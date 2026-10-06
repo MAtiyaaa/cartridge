@@ -17,7 +17,7 @@ test('a drawing that isn\'t the one measured is left exactly as it is', () => {
 test('every Sony controller has a place for the PlayStation logo, and SONY where RomM wrote ROMMY', () => {
   for (const [k, f] of Object.entries(S.FIX)) {
     assert.strictEqual(f.logo.length, 5, k);
-    // SONY goes back where RomM wrote ROMMY, except on PS3 (0.9.47: the card's fade cut it off; the card shows SONY)
-    assert.strictEqual(!!f.sony, f.text.length > 0 && k !== 'ps3', k);
+    // SONY goes back where RomM wrote ROMMY (0.9.49: on PS3 too again, owner: "why did you remove Sony")
+    assert.strictEqual(!!f.sony, f.text.length > 0, k);
   }
 });

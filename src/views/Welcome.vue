@@ -67,6 +67,8 @@
             <Icon :name="padOk ? 'mdiCheckCircle' : using === 'pad' ? USING_ICON[padKind] || USING_ICON.pad : USING_ICON[using]" :size="72" />
             <b>{{ padOk ? 'Your controller works' : usingText }}</b>
             <span v-if="using === 'pad' && !padOk" class="muted small">Press <Btn b="A" /> to check it.</span>
+            <!-- 0.9.49 (owner: an underrated feature nobody is told about) -->
+            <span v-if="using === 'pad'" class="muted small">Push <Btn b="RS" /> up or down to scroll any page or list without moving the highlight.</span>
             <span v-else-if="!padOk" class="muted small">Everything works with {{ using === 'touch' ? 'touch' : using === 'keys' ? 'a keyboard' : 'a mouse' }} too. A controller is picked up as soon as you use one.</span>
           </div>
           <div class="w-box stack" style="align-items: center">
@@ -303,8 +305,28 @@
 
         <!-- 0.9.24 (owner): Syncthing, after the extras. Main server first, then this device, then the folder -->
         <template v-else-if="step === 'sync'">
+          <!-- 0.9.49 (owner): first how to sync. Cartridge Save Sync (saves through your RomM, being built) or Syncthing -->
           <template v-if="sy === ''">
             <h1>Sync Your Saves</h1>
+            <p class="w-lead">Keep your saves the same on every device you play on. Choose how.</p>
+            <div class="w-box stack">
+              <button class="lrow" data-focus :aria-pressed="store.config.saveSync === 'cartridge'" @click="pickCartSync">
+                <Icon name="mdiCloudSyncOutline" :size="26" />
+                <div class="l-mid"><b>Cartridge Save Sync <span class="status">Coming Soon</span></b><span class="l-sub">Your saves kept on your own RomM server and brought to each device, with nothing else to install. Not ready yet: choose it and Cartridge turns it on when it arrives.</span></div>
+                <span v-if="store.config.saveSync === 'cartridge'" class="tick-ok" title="Chosen"><Icon name="mdiCheck" :size="14" /></span>
+              </button>
+              <button class="lrow" data-focus @click="sy = 'st'">
+                <Icon name="mdiSyncCircle" :size="26" />
+                <div class="l-mid"><b>Syncthing</b><span class="l-sub">Syncs folders straight between your devices, no server or account. Cartridge can install and set it up, or read the one you already use.</span></div>
+              </button>
+            </div>
+            <div class="w-act">
+              <button class="btn" data-focus @click="prev"><Icon name="mdiArrowLeft" />Back</button>
+              <button class="btn primary" data-focus @click="next()">{{ store.config.saveSync === 'cartridge' ? 'Continue' : 'Skip' }}<Icon name="mdiArrowRight" /></button>
+            </div>
+          </template>
+          <template v-else-if="sy === 'st'">
+            <h1>Sync With Syncthing</h1>
             <p class="w-lead">Syncthing keeps your saves the same on all your devices. It runs on your own devices, with no cloud account. Cartridge finds every game's saves and shows what's synced.</p>
             <div class="w-box stack">
               <!-- 0.9.29 (owner): setting Syncthing up for saves is only for a new Syncthing, said plainly here -->
@@ -318,7 +340,7 @@
               </button>
             </div>
             <div class="w-act">
-              <button class="btn" data-focus @click="prev"><Icon name="mdiArrowLeft" />Back</button>
+              <button class="btn" data-focus @click="sy = ''"><Icon name="mdiArrowLeft" />Back</button>
               <button class="btn primary" data-focus @click="next()">Skip<Icon name="mdiArrowRight" /></button>
             </div>
           </template>
@@ -337,7 +359,7 @@
               </button>
             </div>
             <div class="w-act">
-              <button class="btn" data-focus @click="sy = ''"><Icon name="mdiArrowLeft" />Back</button>
+              <button class="btn" data-focus @click="sy = 'st'"><Icon name="mdiArrowLeft" />Back</button>
               <button class="btn primary" data-focus @click="next()">Skip<Icon name="mdiArrowRight" /></button>
             </div>
           </template>
@@ -346,7 +368,7 @@
             <p class="w-lead">Make this your main device, or join the one you set up first. Your saves stay in each emulator's own folder; Syncthing keeps them the same.</p>
             <div class="w-box stack"><SaveSync /></div>
             <div class="w-act">
-              <button class="btn" data-focus @click="sy = ''"><Icon name="mdiArrowLeft" />Back</button>
+              <button class="btn" data-focus @click="sy = 'st'"><Icon name="mdiArrowLeft" />Back</button>
               <button class="btn primary" data-focus @click="next()">Continue<Icon name="mdiArrowRight" /></button>
             </div>
           </template>
@@ -358,7 +380,7 @@
               <TextField v-model="srv.apikey" label="API key" placeholder="Paste its key" password icon="mdiKeyVariant" />
             </div>
             <div class="w-act">
-              <button class="btn" data-focus @click="sy = ''"><Icon name="mdiArrowLeft" />Back</button>
+              <button class="btn" data-focus @click="sy = 'st'"><Icon name="mdiArrowLeft" />Back</button>
               <button class="btn primary" data-focus :disabled="busy || !srv.address || !srv.apikey" @click="saveServer">{{ busy ? 'Checking…' : 'Connect' }}<Icon name="mdiArrowRight" /></button>
             </div>
           </template>
@@ -378,7 +400,7 @@
               <div v-if="syPct !== null" class="w-box glass w-prog"><div class="bar live"><i :style="{ width: syPct + '%' }" /></div><span class="muted small">{{ syPct }}%</span></div>
             </template>
             <div class="w-act">
-              <button class="btn" data-focus @click="sy = ''"><Icon name="mdiArrowLeft" />Back</button>
+              <button class="btn" data-focus @click="sy = 'st'"><Icon name="mdiArrowLeft" />Back</button>
               <button v-if="syst && syst.running && syWant === 'saves'" class="btn primary" data-focus @click="sy = 'saves'">Continue<Icon name="mdiArrowRight" /></button>
               <button v-else-if="syst && syst.running" class="btn primary" data-focus @click="syncFolders">Choose a Folder<Icon name="mdiArrowRight" /></button>
               <button v-else-if="syst && syst.installed" class="btn primary" data-focus :disabled="busy" @click="syKey ? saveSyKey() : syncDevice()">{{ syKey ? 'Use This Key' : 'Check Again' }}</button>
@@ -613,6 +635,7 @@ async function installSync() {
   catch (e) { toast(e.message, 'error', 6000); }
   off?.(); busy.value = false; syPct.value = null;
 }
+async function pickCartSync() { await saveConfig({ saveSync: store.config.saveSync === 'cartridge' ? null : 'cartridge' }); }
 async function syncFolders() { syFolders.value = await call('sync:suggest').catch(() => []); sy.value = 'folder'; }
 async function useFolder(dir, label) {
   try { const r = await call('sync:addFolder', { dir, label }); toast(r.existed ? 'Syncthing already shares that folder' : `Syncthing now shares ${dir}`, 'ok', 3500, 'mdiFolderSyncOutline'); next(); }
@@ -688,7 +711,7 @@ async function takeOverAll() {
   await loadScanExtras();
 }
 
-const handlers = { back: () => { if (step.value === 'emus' && picking.value) { picking.value = false; return; } /* 0.9.28: Back leaves the installer, not the step */ if (step.value === 'romm' && romm.value) { romm.value = romm.value === 'other' || romm.value === 'local' || romm.value === 'without' ? 'what' : ''; return; } if (step.value === 'sync' && sy.value) { sy.value = sy.value === 'folder' ? 'device' : ''; return; } if (at.value > 0) prev(); } };
+const handlers = { back: () => { if (step.value === 'emus' && picking.value) { picking.value = false; return; } /* 0.9.28: Back leaves the installer, not the step */ if (step.value === 'romm' && romm.value) { romm.value = romm.value === 'other' || romm.value === 'local' || romm.value === 'without' ? 'what' : ''; return; } if (step.value === 'sync' && sy.value) { sy.value = sy.value === 'folder' ? 'device' : sy.value === 'st' ? '' : 'st'; return; } if (at.value > 0) prev(); } };
 useView(handlers, [{ b: 'A', label: 'Select' }, { b: 'B', label: 'Back' }]);
 // Setup and the scan bring their own buttons; the welcome's come back after them
 watch(step, (v) => { if (!replay && !only && v !== 'done') saveConfig({ ui: { welcomeStep: v } }); });

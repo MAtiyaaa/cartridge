@@ -16,6 +16,8 @@ main, `window.cart.on()` in the UI).
 | Glass engine | `src/glassEngine.js` | refraction through generated lens maps, rim light that follows you, step down to frost on slow frames | `docs/glass-engine.md` |
 | Game identity | `electron/gameId.js` | which library game a file, save, trophy set or Syncthing folder is: IDs from names and read from the game itself (cached per file version in `game-ids.json`), then the same title, oldest copy on ties | `test/gameId.test.js` |
 | Emulator profiles | `electron/emuProfiles.js` | one view per emulator over every table that knows something about it (launch, saves, folders, links, settings, mods, patches, updates, Get Emulators), families for forks | `test/emuProfiles.test.js` pins every emulator's facts |
+| CEE (Cartridge Emulator Engine) | `electron/cee.js` | what Cartridge can do with each emulator (install kinds, launch line per kind, consoles, site and download page, update source) and with each console (emulators and cores, or why none) | `test/cee.test.js`: nothing offered that can't launch, every console playable or explained, every emulator linked |
+| Start check | `electron/emuStart.js` | runs an emulator that can answer (Vita3K `--version`) once per file version, so a copy that can't start is known before a game is launched, an update falls back to a build that starts, and the reason is said in plain words | used by updates, Get Emulators, Steam candidates |
 | Background job scheduler | `electron/scheduler.js` | Cartridge's own periodic work (library sync, Steam collections, BIOS check, picture cache trim) with due checks, retries, one run at a time, and waiting while a game runs | `test/scheduler.test.js` |
 | Image pipeline | `electron/main.js` (`sizedImage`, `trimImageCache`), `src/store.js` (`cover`, `img`) | pictures kept at the size they're shown (cards ask for ~360 px, banners for the screen's width), shrunk once and cached, cache capped at 1.5 GB | |
 | Performance overlay | `src/components/PerfOverlay.vue`, `perf:sample` | frame rate, slowest frame, CPU and memory on screen (Settings → About) | |
@@ -32,7 +34,7 @@ main, `window.cart.on()` in the UI).
 | Add-ons and patches | `electron/addons*.js`, `cheats.js`, `cemuPacks.js`, `patches.js`, `gameSettings.js` | mods, texture packs, cheats and patches per emulator, per-game settings | tests per file |
 | Saves and Syncthing | `electron/saves.js`, `syncthing.js`, `folderLinks.js` | finds saves (read only), sets up save sync through Syncthing, links fork folders on request | tests per file |
 | Downloads | `electron/dlWorker.js`, `main.js` | one worker per download, resume, checksums, speed limit | |
-| UI audits | `tools/ui-audit/` | focus and contrast checks in every look, the Plain/Glass separation check (in `npm test`), and screenshots compared with the last release (not shipped) | `tools/ui-audit/README.md` |
+| UI audits | `tools/ui-audit/` | focus and contrast checks in every look, the clipping check (text cut by its box, every page and widget), the Plain/Glass separation check (in `npm test`), and screenshots compared with the last release (not shipped) | `tools/ui-audit/README.md` |
 
 ## Libraries
 

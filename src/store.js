@@ -38,7 +38,6 @@ export const store = reactive({
   logoJob: null,
   manualSync: false,
   update: { state: 'idle' },
-  achTab: 'all', // Achievements tab: 'all' | 'ra' | 'others'
   trophyVer: 0, // bumps whenever emulator trophies change
   iconVer: 0, // bumps when a game icon is changed or reset
   trophySync: { state: 'idle' },
@@ -87,8 +86,14 @@ export function back() {
   const from = store.route.name === 'game' && document.querySelector('.g-cover img') && store.route.params?.romId;
   const prev = store.history[store.history.length - 1];
   const change = () => { store.navDir = 'out'; store.route = store.history.pop(); };
-  if (from && prev?.focusKey === 'rom-' + from) morph(document.querySelector('.g-cover'), change, `.card[data-key="rom-${from}"] .art`, nextTick);
-  else change();
+  if (from && prev?.focusKey === 'rom-' + from) {
+    // 0.9.49 (owner: "the return feels glitchy", on Home only): Home's rows settle in one after another (up to 720 ms)
+    // while the cover flies back into one of them, so it chased a moving card and the card kept moving after it
+    // landed. Coming back to a card, the page arrives still; going to a game is unchanged.
+    const root = document.documentElement;
+    root.classList.add('morph-back'); clearTimeout(back.t); back.t = setTimeout(() => root.classList.remove('morph-back'), 900);
+    morph(document.querySelector('.g-cover'), change, `.card[data-key="rom-${from}"] .art`, nextTick);
+  } else change();
   return true;
 }
 export function tab(name) {
@@ -297,16 +302,26 @@ export function downloadFor(romId) {
 export async function download(rom, { checkSpace = true } = {}) {
   const p = platformById(rom.platform_id);
   if (p && !p.target?.path) { toast(`Set a folder for ${p.display_name} first`, 'error'); return false; }
-  if (checkSpace && p?.target?.path && rom.fs_size_bytes && !(await roomFor(rom, p))) return false;
-  await call('dl:add', { romId: rom.id, name: rom.name, platformSlug: rom.platform_slug, platformName: rom.platform_display_name, size: rom.fs_size_bytes, cover: rom.path_cover_small || rom.url_cover });
+  // 0.9.49 (owner): Storage → Always Ask Where: with games folders on more than one drive, each download asks which
+  let root = null;
+  if (store.config.downloads?.askWhere) {
+    const r = await call('roots:list').catch(() => null);
+    const here = (r?.roots || []).filter((x) => x.here);
+    if (here.length > 1) {
+      root = await choose({ sheet: true, title: `Where should ${rom.name} go?`, options: here.map((x) => ({ label: x.drive, sub: `${bytes(x.free)} free · ${x.path.replace(store.info?.home || '\0', '~')}`, value: x.path, icon: x.main ? 'mdiHarddisk' : 'mdiSdCard', raw: true })) });
+      if (!root) return false;
+    }
+  }
+  if (checkSpace && p?.target?.path && rom.fs_size_bytes && !(await roomFor(rom, p, root))) return false;
+  await call('dl:add', { romId: rom.id, name: rom.name, platformSlug: rom.platform_slug, platformName: rom.platform_display_name, size: rom.fs_size_bytes, cover: rom.path_cover_small || rom.url_cover, root });
   toast(`Downloading ${rom.name}`, 'info', 2000, 'mdiDownload');
   return true;
 }
 
 // Before a download: will it fit? Counts what is still downloading to the same folder too.
-async function roomFor(rom, p) {
+async function roomFor(rom, p, root = null) {
   // 0.9.38: the drive the download would really go to (games folders on more than one drive)
-  const sp = (await call('fs:downloadSpace', { slug: p.slug, fs_slug: p.fs_slug, need: rom.fs_size_bytes || 0 }).catch(() => null)) || (await call('fs:space', p.target.path).catch(() => null));
+  const sp = (await call('fs:downloadSpace', { slug: p.slug, fs_slug: p.fs_slug, need: rom.fs_size_bytes || 0, root }).catch(() => null)) || (await call('fs:space', p.target.path).catch(() => null));
   if (!sp) return true;
   const same = (d) => ['queued', 'downloading'].includes(d.status) && store.lib?.platforms.find((x) => x.slug === d.platformSlug)?.target?.path === p.target.path;
   const pending = store.downloads.filter(same).reduce((s, d) => s + Math.max(0, (d.total || 0) - (d.received || 0)), 0);

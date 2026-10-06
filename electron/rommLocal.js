@@ -119,7 +119,35 @@ function rommArgs(s, dirs, keys = keysOf(s)) {
   return ['run', '-d', '--pod', POD, '--name', `${POD}-app`, '--restart', 'always', '--security-opt', 'label=disable',
     ...Object.entries(e).flatMap(([k, v]) => ['-e', `${k}=${v}`]),
     '-v', `${POD}-resources:/romm/resources`, '-v', `${POD}-redis:/redis-data`,
-    '-v', `${dirs.library}:/romm/library`, '-v', `${dirs.assets}:/romm/assets`, '-v', `${dirs.config}:/romm/config`, IMAGES.romm];
+    '-v', `${dirs.library}:/romm/library`, ...(dirs.mounts || []).flatMap(([from, to]) => ['-v', `${from}:${to}`]),
+    '-v', `${dirs.assets}:/romm/assets`, '-v', `${dirs.config}:/romm/config`, IMAGES.romm];
+}
+
+// 0.9.49 (owner: "the options should be where your emulation ROMs are... if you have multiple ROM directories it
+// should show you two, and you could pick two"). RomM reads one library (roms/<console>), so the games folders you
+// pick are put together inside the container, never on disk: one folder is mounted as RomM's roms folder; several
+// are mounted console by console. A console folder in more than one of them would be two folders on one path: the
+// first folder picked keeps it and the others are listed in `conflicts`, so nothing is hidden silently. Your folders
+// are only mounted, never moved or changed. New console folders join at the next RomM update (or Set Up Anyway).
+function planMounts(roms, library, list = (d) => { try { return fs.readdirSync(d, { withFileTypes: true }).filter((e) => (e.isDirectory() || e.isSymbolicLink()) && !e.name.startsWith('.')).map((e) => e.name); } catch { return []; } }) {
+  const real = (x) => { try { return fs.realpathSync(x); } catch { return path.resolve(x); } };
+  const dirs = [...new Set((roms || []).filter(Boolean).map(real))];
+  if (dirs.length === 1) return { mounts: [[dirs[0], '/romm/library/roms']], make: [], conflicts: [] };
+  const taken = new Map(), mounts = [], make = [], conflicts = [];
+  for (const d of dirs) for (const n of list(d)) {
+    const k = n.toLowerCase();
+    if (taken.has(k)) { conflicts.push({ console: n, kept: taken.get(k), skipped: d }); continue; }
+    taken.set(k, d);
+    mounts.push([real(path.join(d, n)), `/romm/library/roms/${n}`]);
+    make.push(path.join(library, 'roms', n)); // the mount point inside Cartridge's own library folder
+  }
+  return { mounts, make, conflicts };
+}
+const libraryOf = (opts) => (opts.roms?.length ? path.join(opts.dataDir, 'library') : opts.library);
+function dirsOf(opts) {
+  const library = libraryOf(opts);
+  const plan = opts.roms?.length ? planMounts(opts.roms, library) : { mounts: [], make: [], conflicts: [] };
+  return { library, mounts: plan.mounts, make: plan.make, conflicts: plan.conflicts, assets: path.join(opts.dataDir, 'assets'), config: path.join(opts.dataDir, 'config') };
 }
 
 async function waitFor(test, ms, every = 2000) {
@@ -131,15 +159,16 @@ async function waitFor(test, ms, every = 2000) {
   }
 }
 
-// opts: { username, password, library (a folder holding roms/<console>), dataDir, keys, envFile }
+// opts: { username, password, roms (games folders, each holding <console> folders) or library (a folder holding
+// roms/<console>), dataDir, keys, envFile }
 async function setup(opts, onProgress = () => {}, { fetchImpl = fetch } = {}) {
   const step = (n, label) => onProgress({ step: n, of: 7, label });
   if (!hasPodman() || !hasIds()) throw Object.assign(new Error('Podman isn’t ready yet.'), { code: 'prepare' });
   const user = String(opts.username || '').trim().toLowerCase();
   if (user.length < 3) throw new Error('The RomM username needs at least 3 characters.');
   if (!String(opts.password || '').trim()) throw new Error('Choose a RomM password.');
-  const dirs = { library: opts.library, assets: path.join(opts.dataDir, 'assets'), config: path.join(opts.dataDir, 'config') };
-  for (const d of [dirs.library, path.join(dirs.library, 'roms'), dirs.assets, dirs.config]) fs.mkdirSync(d, { recursive: true });
+  const dirs = dirsOf(opts);
+  for (const d of [dirs.library, path.join(dirs.library, 'roms'), dirs.assets, dirs.config, ...dirs.make]) fs.mkdirSync(d, { recursive: true });
   const s = withKeys({ DB_ROOT: secret(24), DB_PASSWD: secret(24), AUTH_KEY: secret(32), ...readEnv(opts.envFile) }, opts.keys);
   fs.mkdirSync(path.dirname(opts.envFile), { recursive: true });
   fs.writeFileSync(opts.envFile, envText(s), { mode: 0o600 });
@@ -172,7 +201,7 @@ async function setup(opts, onProgress = () => {}, { fetchImpl = fetch } = {}) {
   }
   step(7, 'Starting with this device');
   const boot = podmanBin() === OWN_PODMAN ? await ownBootUnit() : await run('systemctl', ['--user', 'enable', 'podman-restart.service']).then(() => true, () => false);
-  return { port, base, user, boot };
+  return { port, base, user, boot, conflicts: dirs.conflicts };
 }
 
 // Cartridge's own Podman has no podman-restart service: the same command as a user unit
@@ -195,7 +224,8 @@ async function update(opts) {
   if (opts.keys) { s = withKeys(s, opts.keys); fs.writeFileSync(opts.envFile, envText(s), { mode: 0o600 }); }
   if (!opts.keysOnly) await podman('pull', IMAGES.romm);
   await podman('rm', '-f', `${POD}-app`).catch(() => {});
-  const dirs = { library: opts.library, assets: path.join(opts.dataDir, 'assets'), config: path.join(opts.dataDir, 'config') };
+  const dirs = dirsOf(opts);
+  for (const d of dirs.make) fs.mkdirSync(d, { recursive: true });
   await podman(...rommArgs(s, dirs));
   return true;
 }
@@ -204,4 +234,4 @@ function lanUrls(port) {
   return Object.values(os.networkInterfaces()).flat().filter((i) => i && i.family === 'IPv4' && !i.internal).map((i) => `http://${i.address}:${port}`);
 }
 
-module.exports = { sudo, keysOf, setup, status, update, lanUrls, hasPodman, hasIds, readiness, prepare, podmanBin, OWN_PODMAN, dbArgs, rommArgs, envText, readEnv, freePort, POD };
+module.exports = { planMounts, dirsOf, sudo, keysOf, setup, status, update, lanUrls, hasPodman, hasIds, readiness, prepare, podmanBin, OWN_PODMAN, dbArgs, rommArgs, envText, readEnv, freePort, POD };
