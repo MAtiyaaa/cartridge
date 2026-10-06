@@ -2,9 +2,9 @@
 // Everything is applied as CSS variables and body classes, so switching is instant and costs nothing.
 
 // ---------------- colour
-const hex2rgb = (h) => { const n = parseInt(h.replace('#', ''), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; };
+export const hex2rgb = (h) => { const n = parseInt(h.replace('#', ''), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; };
 const rgb2hex = (r, g, b) => '#' + [r, g, b].map((v) => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, '0')).join('');
-function rgb2hsl(r, g, b) {
+export function rgb2hsl(r, g, b) {
   r /= 255; g /= 255; b /= 255;
   const mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2;
   if (mx === mn) return [0, 0, l];
@@ -12,7 +12,7 @@ function rgb2hsl(r, g, b) {
   const h = mx === r ? (g - b) / d + (g < b ? 6 : 0) : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
   return [h * 60, s, l];
 }
-function hsl(h, s, l) {
+export function hsl(h, s, l) {
   h = ((h % 360) + 360) % 360; s = Math.max(0, Math.min(1, s)); l = Math.max(0, Math.min(1, l));
   const k = (n) => (n + h / 30) % 12, a = s * Math.min(l, 1 - l);
   const f = (n) => l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
