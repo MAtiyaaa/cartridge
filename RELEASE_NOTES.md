@@ -1,10 +1,10 @@
-## Cartridge 0.9.45 · Plain and Glass
+## Cartridge 0.9.46 · Every Setting
 
-### Changed
-- **One Style setting: Plain or Glass.** Look & Feel → Theme now has one Style choice, right under Colour. It replaces the separate Background and Elements settings and covers the whole app. Your old choice carries over.
-  - **Glass** is see-through: frosted panels over the background, glass buttons and switches, a glass Dock.
-  - **Plain** is solid and matte, designed on its own rather than as Glass with the glass taken out: crisp edges around panels and rows, a faint light along the top of raised things, buttons that sit slightly raised, switch tracks that sit slightly sunk with the chosen option raised inside, solid pop-ups.
-- **The Dock follows the Style.** It's glass in Glass. In Plain you pick Black, White or Accent, and Light makes it white.
+### New
+- **Game Settings lists every setting.** Besides the main picks, a new All Settings tab lists every setting in the emulator's own settings file that its per-game file can change, grouped by section: shadPS4, RPCS3, PCSX2, DuckStation, Dolphin and PPSSPP. Settings that take a typed value are there too (shadPS4's extra DMEM in Advanced, for example): on/off settings are a pick, numbers and text have Type a Number or Type a Value, with the emulator's current value filled in.
 
 ### Fixed
-- **Opening a game from a card, and going back, landed off target then snapped:** the cover flew to where the game page's cover was at the very start, while the page was still settling in (and, going back, while the list was still scrolling to the card). It now follows its target the whole way and lands exactly on it.
+- **Game Settings went to the Steam tab after typing a value** (Window Width, for example). It now comes back on the tab and row you were on.
+- **Holding A on a row whose text already fits needed B twice to leave.** Hold A now only opens a row when it has more to show; otherwise nothing changes and one B goes back.
+- **Show File Location's message ran off its box.** Long paths in messages now wrap inside it.
+- **shadPS4 Game Settings showed "Default" without its value:** shadPS4's own settings (config.json) are now read, so each row says what shadPS4 uses now.
