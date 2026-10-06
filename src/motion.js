@@ -88,21 +88,34 @@ export function morph(fromEl, change, toSel, nextTick) {
     if (!b || b.width < 8 || b.height < 8 || !a.width) return;
     const fly = document.createElement('img');
     fly.className = 'morph-fly'; fly.src = src; fly.alt = '';
-    Object.assign(fly.style, { left: b.left + 'px', top: b.top + 'px', width: b.width + 'px', height: b.height + 'px', borderRadius: getComputedStyle(to).borderRadius });
+    Object.assign(fly.style, { left: b.left + 'px', top: b.top + 'px', width: b.width + 'px', height: b.height + 'px', borderRadius: getComputedStyle(to).borderRadius, transformOrigin: '0 0' });
     document.body.appendChild(fly);
     to.style.visibility = 'hidden';
-    const s = springCurve(SPRINGS['spring']);
-    const anim = fly.animate([
-      { transform: `translate(${a.left - b.left}px, ${a.top - b.top}px) scale(${a.width / b.width}, ${a.height / b.height})` },
-      { transform: 'none' },
-    ], { duration: Math.round(s.duration * 0.9), easing: s.easing.startsWith('linear(') && CSS.supports?.('transition-timing-function', 'linear(0, 1)') ? s.easing : 'cubic-bezier(0.2, 0.8, 0.2, 1)' });
-    const end = () => { to.style.visibility = ''; fly.remove(); if (running?.anim === anim) running = null; };
-    running = { anim, end };
-    anim.onfinish = end; anim.oncancel = end;
+    // 0.9.45 (owner: the picture landed off its place, then snapped there, both ways): the target is read again every
+    // frame. It moves while the flight runs (the new page settles in, a list scrolls the card into view), and the
+    // old flight was aimed at where it was in the first frame. A critically damped spring (no overshoot) carries the
+    // picture from where it was picked to wherever the target is now, so the last frame is exactly on it.
+    const w = (2 * Math.PI) / SPRINGS.spring.response, dur = 7.5 / w; // x(t) = 1 - (1 + wt) e^(-wt), done at 99.6%
+    const t0 = performance.now();
+    let raf = 0, alive = true;
+    const end = () => { if (!alive) return; alive = false; cancelAnimationFrame(raf); to.style.visibility = ''; fly.remove(); if (running?.end === end) running = null; };
+    const frame = (now) => {
+      if (!alive) return;
+      const t = (now - t0) / 1000, p = t >= dur ? 1 : Math.min(1, (1 - (1 + w * t) * Math.exp(-w * t)) / 0.985); // the last 1.5% folded in: it ends on the target, never a few pixels short
+      const c = to.isConnected ? to.getBoundingClientRect() : b;
+      if (c.width >= 8 && c.height >= 8) {
+        const x = a.left + (c.left - a.left) * p, y = a.top + (c.top - a.top) * p, wd = a.width + (c.width - a.width) * p, ht = a.height + (c.height - a.height) * p;
+        Object.assign(fly.style, { left: c.left + 'px', top: c.top + 'px', width: c.width + 'px', height: c.height + 'px', transform: `translate(${x - c.left}px, ${y - c.top}px) scale(${wd / c.width}, ${ht / c.height})` });
+      }
+      if (p >= 1) return end();
+      raf = requestAnimationFrame(frame);
+    };
+    running = { end };
+    raf = requestAnimationFrame(frame);
   })();
 }
 // any new input ends a flight at once (the page is already there underneath): never a wait
-export function skipMorph() { const r = running; running = null; if (r) { try { r.anim.cancel(); } catch {} r.end(); } }
+export function skipMorph() { const r = running; running = null; if (r) r.end(); }
 
 // ---------- 4. the sliding pill (0.9.38): in every segmented row (.seg), the chosen option's fill is one element that
 // glides to the next choice on a spring, stretching to its width, instead of one fill vanishing and another appearing.

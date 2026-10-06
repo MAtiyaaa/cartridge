@@ -6,6 +6,10 @@ The branch for 0.9.3 work is `claude/relaxed-fermat-30pigp`. Pull it before star
 
 ---
 
+## 6 Oct 2026 · 0.9.45 Plain and Glass
+- Owner: Plain and Glass are two different modes, don't merge them; fewer, clearer options; design every element for both; "add it to your memories and any handovers, never forget this point". Done: one Style setting, Plain designed on its own, the rule in CLAUDE.md (owner's rules), the 0.9.22-0.9.37 handover and docs/design.md.
+- Owner: opening a game from a card lands offset, then snaps (both ways). Measured 39/52 px; morph now tracks its target every frame (0 to 4 px). Dock pill checked too.
+
 ## 6 Oct 2026 · 0.9.44 Real Glass
 - Owner: "Glass mode looks like absolute shit, really cheap", with three reference pictures and the image-to-code skill to install (now in `.claude/skills/image-to-code`, MIT). What the references have that 0.9.42 lacked: a near-clear fill instead of a tint, a light-catching rim with hotspots, thickness, a hard-edged reflection, grain on big panes, a wide soft shadow. Rebuilt in CSS (details in CLAUDE.md 0.9.44); menu rows in sheets no longer grey blocks. Screenshots checked in dark and Light.
 - Owner's photo: two pages in Start's overview with the same picture (different widget counts). Reproduced in Chromium and fixed (CLAUDE.md 0.9.44).

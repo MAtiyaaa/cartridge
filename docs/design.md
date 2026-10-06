@@ -56,3 +56,10 @@ Focus appears at once; only the lift animates.
   also gets the ring when focused.
 - Game cards and tiles: 3px white ring outside a 3px gap, lifted 6%.
 - Fields: white 2px ring.
+
+
+## Plain and Glass (0.9.45, owner)
+Two separate modes, chosen with one Style setting, never merged. Every element is designed for both:
+- **Glass:** see-through. Frosted panels over the background; Liquid Glass on controls, the Dock and pop-ups (rim, reflection, lit glass for focus). `body.elements-glass`, `--lg-*` tokens.
+- **Plain:** solid and matte. Nothing see-through; depth from a hairline edge, a faint light top edge on raised things, raised buttons and chosen pills, sunk tracks. `body.style-plain`, `--pl-*` tokens.
+A new element isn't finished until it looks right in Plain, Glass, Light and OLED.

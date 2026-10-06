@@ -230,6 +230,10 @@
               <button v-for="(t, k) in THEMES" :key="k" class="swatch" data-focus :class="{ on: (ui.theme || 'cartridge') === k, ink: t.light }" :style="{ background: `linear-gradient(135deg, ${t.grad[0]}, ${t.grad[2]} 60%, ${t.grad[4]})` }" :title="t.label" @click="pickTheme(k)"><i :style="{ background: t.accent[0] }" /><span>{{ t.label }}</span></button>
               <button class="swatch custom" data-focus :class="{ on: ui.theme === 'custom' }" :style="ui.customColor ? { background: `linear-gradient(135deg, ${customT.grad[0]}, ${customT.grad[2]} 60%, ${customT.grad[4]})` } : {}" @click="pickColor"><Icon name="mdiEyedropperVariant" :size="18" /><span>Custom</span></button>
             </div>
+            <!-- 0.9.45 (owner): one Style, Plain or Glass, for the page, the cards and the controls together; up here, not in Advanced -->
+            <div class="subh"><Icon name="mdiLayersOutline" :size="20" />Style</div>
+            <div class="seg style-seg"><button v-for="(v, k) in STYLES" :key="k" data-focus :class="{ on: styleOf(ui) === k }" @click="pickStyle(k)">{{ v.label }}</button></div>
+            <p class="muted small" style="margin: 6px 0 0">{{ STYLES[styleOf(ui)].sub }}</p>
             <!-- the background is part of the theme (owner, 0.9.21: one page, not two) -->
             <div class="subh"><Icon name="mdiWallpaper" :size="20" />Background</div>
             <!-- one row: what's on now, and a menu with every background (theme ones, consoles, other) -->
@@ -252,8 +256,6 @@
               </button>
               <button v-if="Object.values(ui.colors || {}).some(Boolean)" class="btn small" data-focus @click="saveConfig({ ui: { colors: { highlight: '', buttons: '', bars: '', background: '' } } })"><Icon name="mdiRestore" :size="16" />Use theme colours</button>
             </div>
-            <div class="row"><span class="lbl">Background</span><div class="seg"><button v-for="(v, k) in SURFACES" :key="k" data-focus :class="{ on: (ui.surface || 'solid') === k }" @click="saveConfig({ ui: { surface: k, elements: elementsOf(ui) } })">{{ v.label }}</button></div></div>
-            <div class="row"><span class="lbl">Elements</span><div class="seg"><button v-for="(v, k) in ELEMENTS" :key="k" data-focus :class="{ on: elementsOf(ui) === k }" @click="saveConfig({ ui: { elements: k } })">{{ v.label }}</button></div></div>
             <div class="row"><span class="lbl">Text</span><div class="seg"><button v-for="(v, k) in TEXTS" :key="k" data-focus :class="{ on: (ui.text || 'normal') === k }" @click="saveConfig({ ui: { text: k } })">{{ v.label }}</button></div></div>
 
             </template>
@@ -273,7 +275,7 @@
             <div class="row"><span class="lbl">Placement</span><div class="seg"><button v-for="m in BAR_POS" :key="m.v" data-focus :class="{ on: (ui.barPos || 'bottom') === m.v }" @click="saveConfig({ ui: { barPos: m.v } })">{{ m.l }}</button></div></div>
             <div class="row"><span class="lbl">Tabs</span><div class="seg"><button v-for="m in BAR_ALIGN" :key="m.v" data-focus :class="{ on: (ui.barAlign || 'center') === m.v }" @click="saveConfig({ ui: { barAlign: m.v } })">{{ m.l }}</button></div></div>
             <div class="row"><span class="lbl">Style</span><div class="seg"><button v-for="m in BAR_STYLE" :key="m.v" data-focus :class="{ on: (ui.barStyle || 'pill') === m.v }" @click="saveConfig({ ui: { barStyle: m.v } })">{{ m.l }}</button></div></div>
-            <div v-if="(ui.barStyle || 'pill') === 'pill'" class="row"><span class="lbl">Colour</span><div class="seg"><button v-for="m in DOCK_COLOR" :key="m.v" data-focus :class="{ on: dockOf(ui) === m.v }" @click="saveConfig({ ui: { dockColor: m.v } })">{{ m.l }}</button></div></div>
+            <div v-if="(ui.barStyle || 'pill') === 'pill' && styleOf(ui) === 'plain'" class="row"><span class="lbl">Colour</span><div class="seg"><button v-for="m in DOCK_COLOR" :key="m.v" data-focus :class="{ on: dockOf(ui) === m.v }" @click="saveConfig({ ui: { dockColor: m.v } })">{{ m.l }}</button></div></div>
             <Toggle :model-value="ui.hints === true" label="Button hints" desc="A strip along the bottom with what each button does on this page (A Open, Y Search…)" @update:model-value="(v) => saveConfig({ ui: { hints: v } })" />
             <div class="subh"><Icon name="mdiViewGridOutline" :size="20" />Games &amp; Cards</div>
             <div class="row"><span class="lbl">Box art size</span><div class="seg"><button v-for="(v, k) in CARD_SIZES" :key="k" data-focus :class="{ on: (ui.gridSize || 'md') === k }" @click="saveConfig({ ui: { gridSize: k } })">{{ v.label }}</button></div></div>
@@ -533,7 +535,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { store, call, go, tab, saveConfig, pickFolder, choose, confirm, toast, openModal, bytes, ago, resync, scanServer, allRoms, romById, cover, resetLogos, askText, activeTabs, TAB_DEFS, consoleName, openTour } from '../store.js';
 import { useView } from '../useView.js';
 import { input, focusFirst, setPointerPref, setRumble, rumble, stopScroll } from '../nav.js';
-import { THEMES, SURFACES, ELEMENTS, elementsOf, dockOf, TEXTS, FONTS, CARD_SHAPES, CARD_SIZES, DENSITIES, themeFrom, themeOf, paletteOf } from '../themes.js';
+import { THEMES, STYLES, styleOf, dockOf, TEXTS, FONTS, CARD_SHAPES, CARD_SIZES, DENSITIES, themeFrom, themeOf, paletteOf } from '../themes.js';
 import { BACKGROUNDS, RENDERERS, LEGACY_ART, bgPreview } from '../bgRenderers.js';
 import { setSoundEnabled, setSoundStyle, previewSound, SOUND_PACKS } from '../sfx.js';
 import Icon from '../components/Icon.vue';
@@ -746,7 +748,7 @@ function moveTab(n, d) {
   [l[i], l[j]] = [l[j], l[i]];
   saveConfig({ ui: { tabs: l } });
 }
-const LOOK_KEYS = ['theme', 'customColor', 'colors', 'idle', 'surface', 'elements', 'text', 'font', 'bgStyle', 'wallDim', 'cardShape', 'density', 'gridSize', 'cardTitles', 'mediaBar', 'mediaSize', 'logos', 'motion', 'effects', 'sounds', 'soundPack', 'volume', 'rumble'];
+const LOOK_KEYS = ['theme', 'customColor', 'colors', 'idle', 'style', 'surface', 'elements', 'text', 'font', 'bgStyle', 'wallDim', 'cardShape', 'density', 'gridSize', 'cardTitles', 'mediaBar', 'mediaSize', 'logos', 'motion', 'effects', 'sounds', 'soundPack', 'volume', 'rumble'];
 const presets = computed(() => store.config.lookPresets || []);
 const presetStyle = (p) => { const g = themeOf(p.ui).grad; return { background: `linear-gradient(135deg, ${g[0]}, ${g[2]} 60%, ${g[4]})` }; };
 function lookNow() { const o = {}; for (const k of LOOK_KEYS) if (ui.value[k] !== undefined) o[k] = JSON.parse(JSON.stringify(ui.value[k])); return o; }
@@ -779,7 +781,7 @@ async function presetMenu(p, i) {
 }
 async function resetLook() {
   if (!(await confirm('Reset Look & Feel?', 'Colour, background, fonts, cards, motion and sounds go back to the defaults.', 'Reset'))) return;
-  await saveConfig({ ui: { colors: { highlight: '', buttons: '', bars: '', background: '' }, theme: 'cartridge', customColor: '', surface: 'solid', elements: 'plain', text: 'normal', font: 'cartridge', cardShape: 'rounded', density: 'normal', cardTitles: true, gridSize: 'md', bgStyle: 'solid', motion: 'normal', effects: 'auto', soundPack: 'soft', volume: 'medium', rumble: 'none' } });
+  await saveConfig({ ui: { colors: { highlight: '', buttons: '', bars: '', background: '' }, theme: 'cartridge', customColor: '', style: 'plain', surface: 'solid', elements: 'plain', text: 'normal', font: 'cartridge', cardShape: 'rounded', density: 'normal', cardTitles: true, gridSize: 'md', bgStyle: 'solid', motion: 'normal', effects: 'auto', soundPack: 'soft', volume: 'medium', rumble: 'none' } });
 }
 const pointers = [{ v: 'auto', l: 'Auto' }, { v: 'touch', l: 'Touch' }, { v: 'mouse', l: 'Mouse' }];
 const homeAchOpts = [{ v: 'all', l: 'All' }, { v: 'ra', l: 'RetroAchievements' }, { v: 'trophies', l: 'Trophies' }, { v: 'off', l: 'Off' }];
@@ -1072,12 +1074,14 @@ const BAR_POS = [{ v: 'top', l: 'Top' }, { v: 'bottom', l: 'Bottom' }, { v: 'lef
 // 0.9.32 (owner): black is the Dock's colour unless you pick another; Glass is its own choice now
 // 0.9.44 (owner: going to Light kept a black Dock): a black Dock turns white with Light and back to black when you leave
 // it; a Dock colour picked as glass or the accent stays as it is
+// the old keys follow the Style too, for anything that still reads them
+function pickStyle(k) { saveConfig({ ui: { style: k, surface: k === 'glass' ? 'glass' : 'solid', elements: k } }); }
 function pickTheme(k) {
   const light = !!THEMES[k]?.light, dock = ui.value.dockColor;
   const dockColor = light && dock === 'black' ? 'white' : !light && dock === 'white' && THEMES[ui.value.theme]?.light ? 'black' : undefined;
   saveConfig({ ui: { theme: k, gameTheme: null, ...(dockColor ? { dockColor } : {}) } });
 }
-const DOCK_COLOR = [{ v: 'black', l: 'Black' }, { v: 'glass', l: 'Glass' }, { v: 'white', l: 'White' }, { v: 'accent', l: 'Accent' }];
+const DOCK_COLOR = [{ v: 'black', l: 'Black' }, { v: 'white', l: 'White' }, { v: 'accent', l: 'Accent' }]; // Plain only: in Glass the Dock is glass (0.9.45)
 const BAR_ALIGN = [{ v: 'start', l: 'Aligned' }, { v: 'center', l: 'Centred' }];
 const BAR_STYLE = [{ v: 'plain', l: 'Plain' }, { v: 'pill', l: 'Floating Pill' }, { v: 'circle', l: 'Circles' }];
 const LOOK_PAGES = [{ v: 'theme', l: 'Theme' }, { v: 'cards', l: 'Text and Cards' }, { v: 'meta', l: 'Metadata' }, { v: 'motion', l: 'Motion and Sound' }, { v: 'controls', l: 'Controls' }];
@@ -1154,6 +1158,7 @@ onMounted(() => {
 </script>
 
 <style scoped>
+.style-seg { align-self: flex-start; } /* two choices: as wide as they are, not the whole page */
 .set-view { position: absolute; inset: 0; display: grid; grid-template-columns: 270px 1fr; gap: 10px; padding: 16px 36px 0; animation: viewIn 0.16s ease-out; }
 .rail { display: flex; flex-direction: column; gap: 4px; padding-top: 10px; }
 .rail-item { display: flex; align-items: center; gap: 14px; padding: 13px 16px; border-radius: var(--r-md); color: var(--muted); font-weight: 500; transition: background 0.15s, color 0.15s; }
