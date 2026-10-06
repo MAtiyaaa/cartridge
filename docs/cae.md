@@ -75,10 +75,12 @@ Three states, set from input and from main's `background` event:
 | State | When | What runs |
 |---|---|---|
 | active | you're using Cartridge | everything; controller read every 8 ms |
-| idle | nothing pressed for 60 s | decorative loops paused (`body.cae-idle`: background drift, cover drift, clock clouds and stars, picture drift); controller read every 16 ms |
+| idle | nothing pressed for 60 s | decorative loops paused (`body.cae-idle`: background drift, cover drift, clock clouds and stars, picture drift); the animated background draws 8 times a second from a timer instead of waking every frame; controller read every 16 ms |
 | away | a game or another app is in front, or the window is hidden | CSS animations paused (`body.away`), the background stops drawing, the controller is read 4 times a second |
 
-Any input wakes it at once. In the main process, the Game Mode focus watcher checks every 1.5 s instead of 0.6 s
+The animated background also halves its own frame rate when drawing a frame starts costing more than 8 ms (a slow device or a 4K screen). Any input wakes it at once.
+
+Measured in the real app (software rendering, Aurora, Glass): about 6.7% of one CPU core in use with nothing pressed, 3.3% idle, 2.1% with a game in front; about 550 MB across all of Electron's processes. In the main process, the Game Mode focus watcher checks every 1.5 s instead of 0.6 s
 while another app is in front, and the trophy service skips 3 of every 4 checks while a game runs.
 
 ## Checking a change
