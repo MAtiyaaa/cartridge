@@ -741,3 +741,8 @@ body.elements-glass.lg-refract.bar-pill.dock-glass:not(.lg-lite) .tabs[style*="-
    modalFrom), heavy and without bounce */
 body.elements-glass:not(.motion-reduce) .modal-enter-from > .dialog:not(.sheet) { transform: scale(0.9); }
 body.elements-glass:not(.motion-reduce) .modal-enter-active > .dialog:not(.sheet) { transition: transform var(--spring-soft-d) var(--spring-soft); }
+
+/* Glass-only see-through for small pieces outside the Liquid Glass set (0.9.48: Plain is solid, checked by
+   tools/ui-audit/styleModes.js): the collection badge and the welcome's keyboard */
+body.elements-glass { --chip-bg: rgba(255, 255, 255, 0.14); --kb-sleek-bg: rgba(14, 16, 22, 0.72); }
+body.elements-glass:not(.light-fx) { --chip-blur: blur(6px); --kb-sleek-blur: blur(28px) saturate(1.3); }

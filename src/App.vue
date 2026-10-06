@@ -90,6 +90,7 @@
   </Transition>
   <FirstTour v-if="store.tour" v-bind="store.tour.props" />
   <IdleScreen v-if="store.config?.configured" />
+  <PerfOverlay v-if="store.config?.ui?.perfOverlay && !store.away" />
 
   <div class="pops">
     <TransitionGroup name="pop">
@@ -147,6 +148,7 @@ import ImageSearch from './components/ImageSearch.vue';
 import ShadVersions from './components/ShadVersions.vue';
 import GameSettings from './components/GameSettings.vue';
 import IdleScreen from './components/IdleScreen.vue';
+import PerfOverlay from './components/PerfOverlay.vue';
 import SteamCollections from './components/SteamCollections.vue';
 import SteamPreview from './components/SteamPreview.vue';
 import SteamEmu from './components/SteamEmu.vue';

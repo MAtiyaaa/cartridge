@@ -222,15 +222,19 @@ export async function scanServer() {
 // ---------------- images / backgrounds
 // a long task still running in the background (0.9.32): screens show it again when they open
 export const bgJob = (prefix) => Object.values(store.bgJobs || {}).find((j) => j.key.startsWith(prefix) && j.state === 'run') || null;
-export function img(p) {
+export function img(p, w = 0) {
   if (!p) return '';
-  return 'romimg://img/?u=' + encodeURIComponent(p);
+  return 'romimg://img/?u=' + encodeURIComponent(p) + (w ? '&w=' + w : '');
 }
+// image pipeline (0.9.48): a card's cover is asked for at about the size it's drawn (cards are 128 to 220 px wide, the
+// TV's zoom shows as devicePixelRatio), so a 600 px SteamGridDB cover isn't decoded whole for every card. Big pictures
+// (game page, Start's large tiles) ask cover(rom, true) and get the full image.
+const coverW = () => ((typeof devicePixelRatio === 'number' ? devicePixelRatio : 1) > 1.4 ? 720 : 360);
 export function cover(rom, large = false) {
   const o = store.art?.[rom.id]?.grid;
-  if (o) return img(o);
+  if (o) return img(o, large ? 0 : coverW());
   const p = (large ? rom.path_cover_large || rom.path_cover_small : rom.path_cover_small || rom.path_cover_large) || rom.url_cover;
-  return img(p);
+  return img(p, large ? 0 : coverW());
 }
 // Sharp backgrounds (0.9.3 K, F2/F3): SteamGridDB's biggest hero for a game, asked for once it has
 // been highlighted for a moment (main.js sharpHero caches it). undefined: not asked yet, null: none.

@@ -161,6 +161,8 @@ function refocus() {
 // Cartridge comes back to the front with the pad working (nav.js gameEnded), in Game Mode and on the desktop.
 let runT = null, runOn = false;
 const runActive = () => runOn;
+// background jobs Cartridge runs by itself (0.9.48): a game in front (Game Mode) or one started from Cartridge counts as playing
+const scheduler = require('./scheduler').createScheduler({ playing: () => !!(gameFocus.away || runOn), file: path.join(USER_DATA, 'scheduler.json'), log });
 function watchGameRun(romId) {
   clearInterval(runT);
   gameFocus.gameApp = null; gameFocus.endedAt = 0;
@@ -673,6 +675,7 @@ function computeInstalled() {
   if (!library) return out;
   for (const p of library.platforms) Object.assign(out, installedState(library.roms[p.id] || [], p));
   installedMap = out;
+  try { identity.bump(); } catch {} // the game identity index follows what's on the device (defined further down)
   playSyncAt = 0; // play time can be matched to games now: sync again
   broadcast('installed', out);
   return out;
@@ -870,6 +873,40 @@ async function scanServer() {
 }
 
 // ---------------------------------------------------------------- image protocol (auth + disk cache)
+// The image pipeline (0.9.48): a picture is kept at the size it's shown, not the size it was made. With ?w= (covers ask
+// for their card size) and for every sharp hero (asked at this screen's width), a copy is shrunk once and kept beside
+// the original (<file>.w<width>), so the interface decodes a 360 px cover instead of a 600 px one, and a 1280 px
+// banner instead of a 3840 px one on a handheld. Only ever smaller; GIFs and SVGs (animation, drawings) untouched;
+// anything nativeImage can't read is served as it was.
+async function sizedImage(buf, type, w, file, jpeg = false) {
+  if (!w || !buf || !/jpe?g|png|webp/i.test(type || '')) return null;
+  const out = file + '.w' + w;
+  try { const b = await fsp.readFile(out); return { buf: b, type: (await fsp.readFile(out + '.type', 'utf8').catch(() => '')) || 'image/jpeg' }; } catch {}
+  try {
+    const { nativeImage } = require('electron');
+    const im = nativeImage.createFromBuffer(buf);
+    if (im.isEmpty() || im.getSize().width <= w * 1.15) return null; // already about that size
+    const small = im.resize({ width: w, quality: 'better' });
+    const png = !jpeg && /png/i.test(type), b = png ? small.toPNG() : small.toJPEG(88), t = png ? 'image/png' : 'image/jpeg';
+    fsp.writeFile(out, b).then(() => fsp.writeFile(out + '.type', t)).catch(() => {});
+    return { buf: b, type: t };
+  } catch { return null; }
+}
+async function trimImageCache(limit) {
+  let names = []; try { names = await fsp.readdir(IMG_CACHE); } catch { return; }
+  const files = [];
+  for (const n of names) { try { const st = await fsp.stat(path.join(IMG_CACHE, n)); files.push({ n, size: st.size, t: st.mtimeMs }); } catch {} }
+  let total = files.reduce((a, f) => a + f.size, 0);
+  if (total <= limit) return;
+  files.sort((a, b) => a.t - b.t);
+  let gone = 0;
+  for (const f of files) { if (total <= limit * 0.8) break; try { await fsp.unlink(path.join(IMG_CACHE, f.n)); total -= f.size; gone++; } catch {} }
+  log('image cache trimmed', gone, 'files, now', Math.round(total / 1048576), 'MB');
+}
+// the width a full-screen picture needs on this screen, in steps so a resize doesn't make a new copy every time
+function screenWidth() {
+  try { const d = screen.getPrimaryDisplay(); return Math.min(3840, Math.max(1280, Math.ceil((d.size.width * (d.scaleFactor || 1)) / 640) * 640)); } catch { return 1920; }
+}
 async function handleImage(request) {
   const u = new URL(request.url);
   const sl = u.searchParams.get('sys');
@@ -904,7 +941,11 @@ async function handleImage(request) {
   }
   const hz = u.searchParams.get('hz');
   if (hz) {
-    try { return new Response(await fsp.readFile(path.join(HERO_DIR, path.basename(hz))), { headers: { 'Content-Type': 'image/png', 'Cache-Control': 'max-age=31536000' } }); } catch { return new Response('nf', { status: 404 }); }
+    try {
+      const f = path.join(HERO_DIR, path.basename(hz)), b = await fsp.readFile(f);
+      const sz = await sizedImage(b, 'image/png', Number(u.searchParams.get('w')) || screenWidth(), f, true); // heroes are opaque: JPEG
+      return new Response(sz ? sz.buf : b, { headers: { 'Content-Type': sz ? sz.type : 'image/png', 'Cache-Control': 'max-age=31536000' } });
+    } catch { return new Response('nf', { status: 404 }); }
   }
   const lf = u.searchParams.get('f');
   if (lf) {
@@ -916,10 +957,12 @@ async function handleImage(request) {
   const file = path.join(IMG_CACHE, key);
   // RomM's Sony controllers carry its parody marks ("ROMMY"): Sony's own wordmark and logo go in (0.9.31)
   const sony = require('./sonyArt'), sonySlug = sony.isSonyArt(target), mark = (b) => (sonySlug ? sony.fix(sonySlug, b) : b);
+  const want = Math.min(2000, Number(u.searchParams.get('w')) || 0);
   try {
     const buf = mark(await fsp.readFile(file));
     const type = (await fsp.readFile(file + '.type', 'utf8').catch(() => '')) || 'image/jpeg';
-    return new Response(buf, { headers: { 'Content-Type': type, 'Cache-Control': 'max-age=31536000' } });
+    const sz = !sonySlug && want ? await sizedImage(buf, type, want, file) : null;
+    return new Response(sz ? sz.buf : buf, { headers: { 'Content-Type': sz ? sz.type : type, 'Cache-Control': 'max-age=31536000' } });
   } catch {}
   try {
     let url, headers = {};
@@ -931,8 +974,9 @@ async function handleImage(request) {
     if (!r.ok) return new Response('nf', { status: 404 });
     const buf = Buffer.from(await r.arrayBuffer());
     const type = r.headers.get('content-type') || 'image/jpeg';
-    fsp.mkdir(IMG_CACHE, { recursive: true }).then(() => Promise.all([fsp.writeFile(file, buf), fsp.writeFile(file + '.type', type)])).catch(() => {});
-    return new Response(mark(buf), { headers: { 'Content-Type': type } });
+    await fsp.mkdir(IMG_CACHE, { recursive: true }).then(() => Promise.all([fsp.writeFile(file, buf), fsp.writeFile(file + '.type', type)])).catch(() => {});
+    const sz = !sonySlug && want ? await sizedImage(buf, type, want, file) : null;
+    return new Response(sz ? sz.buf : mark(buf), { headers: { 'Content-Type': sz ? sz.type : type } });
   } catch {
     return new Response('err', { status: 502 });
   }
@@ -2280,39 +2324,39 @@ function ppssppPatchState(romId, r) {
   return { emu: 'ppsspp', serial: id, version: '', dir, title: r?.name || '' };
 }
 // every game with what Syncthing's files can be matched by: its name, serials and title IDs in its file names
-const syncIdCache = new Map();
 function syncGameList() {
   const S = require('./syncthing');
   return [...romIndexMain().values()].map((r) => {
     const where = installedMap[r.id];
     const ids = [...S.serialsIn([r.fs_name, ...(r.files || []).map((f) => f.file_name), where && where !== MARKED ? path.basename(where) : ''].join(' '))];
-    // 0.9.28: disc IDs read from the game itself, for folders named after them (Dolphin's GALE01, Azahar's title IDs)
-    const discIds = [];
-    if (where && where !== MARKED && /\.(iso|gcm|rvz|wia|wbfs|ciso|gcz|3ds|cci|cia|cxi)$/i.test(where)) {
-      if (!syncIdCache.has(where)) { let id = null; try { id = /\.(3ds|cci|cia|cxi)$/i.test(where) ? require('./addons').n3dsTitleId(where) : cheatsMod.gcWiiId(where); } catch {} syncIdCache.set(where, id); }
-      if (syncIdCache.get(where)) discIds.push(String(syncIdCache.get(where)));
-    }
+    // 0.9.28: disc IDs read from the game itself, for folders named after them (Dolphin's GALE01, Azahar's title IDs);
+    // read through the game identity engine since 0.9.48 (same readers, one cache)
+    const discIds = where && where !== MARKED && /\.(iso|gcm|rvz|wia|wbfs|ciso|gcz|3ds|cci|cia|cxi)$/i.test(where) ? identity.fileIds(r, where) : [];
     return { id: r.id, name: r.name || '', ids, discIds };
   });
 }
 // ---- Saves on this device (0.9.29, The Syncthing Update): electron/saves.js finds them, this matches them
-// to the library with every ID Cartridge can read from the game itself (cached per file and size)
-const saveIdCache = new Map();
-function saveIdsOf(r, where) {
-  const file = mainFile(where), slugs = `${r.platform_slug} ${r.platform_fs_slug}`;
-  let st; try { st = fs.statSync(file || where); } catch { return []; }
-  const k = (file || where) + ':' + st.size;
-  if (saveIdCache.has(k)) return saveIdCache.get(k);
-  const ids = [];
-  try {
-    if (/\bswitch\b/i.test(slugs) && file) { const A = require('./addons'); A.setKeyRoots([config.emulationRoot]); const id = A.switchTitleId(file); if (id) ids.push(id); }
-    else if (/ps3/i.test(slugs)) { const id = ps3Serial(r.id, where); if (id) ids.push(id); }
-    else if (/\bpsx\b/i.test(slugs) && file) { const id = require('./addons').psxSerial(file); if (id) ids.push(id); }
-    else if (/\bpsp\b/i.test(slugs) && file) { const id = ppssppPatchState(r.id, r)?.serial; if (id) ids.push(id); }
-  } catch {}
-  saveIdCache.set(k, ids);
-  return ids;
+// to the library with every ID Cartridge can read from the game itself. Since 0.9.48 the reading and its cache live in
+// the game identity engine (electron/gameId.js), shared with trophies and Syncthing
+function gameFileIds(r, where) {
+  const file = mainFile(where), slugs = `${r.platform_slug} ${r.platform_fs_slug}`, A = require('./addons');
+  if (/\bswitch\b/i.test(slugs) && file) { A.setKeyRoots([config.emulationRoot]); return [A.switchTitleId(file)]; }
+  if (/ps3/i.test(slugs)) return [ps3Serial(r.id, where)];
+  if (/\bpsx\b/i.test(slugs) && file) return [A.psxSerial(file)];
+  if (/\bpsp\b/i.test(slugs) && file) return [ppssppPatchState(r.id, r)?.serial];
+  if (/\bps2\b/i.test(slugs) && /\.(iso|chd|cso|zso)$/i.test(file)) return [patchesMod.ps2IsoInfo(file)?.serial];
+  if (/\b(ngc|gc|gamecube|wii)\b/i.test(slugs) && /\.(iso|gcm|rvz|wia|wbfs|ciso|gcz)$/i.test(file)) return [cheatsMod.gcWiiId(file)];
+  if (/\b(3ds|n3ds)\b/i.test(slugs) && /\.(3ds|cci|cia|cxi)$/i.test(file)) return [A.n3dsTitleId(file)];
+  return [];
 }
+const identity = require('./gameId').createIdentity({
+  file: path.join(USER_DATA, 'game-ids.json'),
+  roms: () => [...romIndexMain().values()],
+  whereOf: (id) => { const w = installedMap[id]; return w && w !== MARKED ? w : ''; },
+  extract: gameFileIds,
+  log,
+});
+const saveIdsOf = (r, where) => identity.fileIds(r, where);
 function savesGameList() {
   return syncGameList().map((g) => {
     const r = romIndexMain().get(g.id), where = installedMap[g.id];
@@ -2719,7 +2763,12 @@ function createWindow() {
   // console collections kept whole by themselves (0.9.34): 30 s after start, and again every 10 minutes, games of a
   // console that are in Steam but not in its collection are put in, only with Steam's interface reachable (no restart)
   const colsAuto = () => { if (!config.steam?.consoleCollections) return; steamMgr.fillCollections({ auto: true }).then((r) => { if (r.count) broadcast('toast', { text: `${r.count} game${r.count === 1 ? '' : 's'} added to ${r.count === 1 ? 'its' : 'their'} console collection in Steam`, kind: 'ok', icon: 'mdiSteam' }); }).catch((e) => log('console collections by itself:', e.message)); };
-  if (!globalThis.__colsAuto) { globalThis.__colsAuto = true; setTimeout(colsAuto, 30000); setInterval(colsAuto, 600000); setTimeout(() => biosSetup({ install: true }).catch(() => {}), 45000); /* 0.9.38: firmware too, when an emulator lacks it */ }
+  // 0.9.48: on the scheduler (electron/scheduler.js), so both wait while a game runs and run once it has ended
+  if (!globalThis.__colsAuto) {
+    globalThis.__colsAuto = true;
+    scheduler.add('steam-collections', { every: 600000, firstAfter: 30000, deferWhilePlaying: true, run: async () => colsAuto() });
+    scheduler.add('bios-check', { once: true, firstAfter: 45000, deferWhilePlaying: true, run: () => biosSetup({ install: true }).catch(() => {}) }); // 0.9.38: firmware too, when an emulator lacks it
+  }
   win.webContents.once('did-finish-load', () => log('ui loaded', Date.now() - startedAt + 'ms', 'window=' + win.getContentSize().join('x'), 'zoom=' + currentZoom()));
   win.webContents.on('did-finish-load', applyZoom);
   win.on('resize', () => { clearTimeout(zoomT); zoomT = setTimeout(applyZoom, 150); });
@@ -2739,6 +2788,7 @@ const trophySvc = require('./trophyService')({ busy: () => !!(gameFocus.away || 
   USER_DATA, api, broadcast: (c, d) => broadcast(c, d), log, loadJson,
   getConfig: () => config, saveConfig: () => saveConfig(), getLibrary: () => library,
   codeName: (src, code) => require('./titleNames').nameFor(src, code),
+  findRom: (q) => identity.findRom(q),
 });
 require('./titleNames').setup({ dir: USER_DATA, fetchImpl: (...a) => webFetch(...a) });
 // PS5 trophy names come from each game's own trophy package (0.9.37, KytyPS5): the downloaded PS5 game folders
@@ -3790,7 +3840,7 @@ const handlers = {
     if (require('./raLogin').running().has(e.id)) throw new Error(`Close ${e.name} first.`);
     // each emulator's own layout (addonInstall.plan, 0.9.18); PCSX2 and DuckStation: the game folder is
     // textures/<SERIAL>, the pack brings replacements/ (e.folder ends in it)
-    const kind = pack.source === 'ps2' ? 'ps2' : /^(eden|citron|yuzu|ryujinx)$/.test(e.id) ? 'switch' : ['pcsx2', 'duckstation', 'ppsspp', 'dolphin', 'azahar', 'citra', 'cemu', 'shadps4'].includes(e.id) ? e.id : 'plain';
+    const kind = require('./emuProfiles').modKind(e.id, pack.source); // 0.9.48: the emulator's profile says how its add-ons are laid out
     const dest = /\/replacements$/.test(e.folder) ? path.dirname(e.folder) : e.folder;
     const key = `${pack.source}:${pack.id}${file ? ':' + file.id : ''}:${rom.id}:${e.emuRoot}`;
     if (addonRecs()[key]) throw new Error('This add-on is already installed.');
@@ -4750,6 +4800,18 @@ const JOB_EVENTS = {
 const sendRaw = broadcast;
 broadcast = (ch, data) => { sendRaw(ch, data); const f = JOB_EVENTS[ch]; if (f && data) { try { const [k, o] = f(data); if (k && bgJobs.has(k)) bgJob(k, Object.fromEntries(Object.entries(o).filter(([, v]) => v != null))); } catch {} } };
 handlers['jobs:list'] = () => [...bgJobs.values()];
+handlers['emu:profiles'] = () => require('./emuProfiles').all(); // 0.9.48: what Cartridge knows per emulator (diagnostics)
+handlers['scheduler:status'] = () => scheduler.status(); // 0.9.48: the background jobs and whether they wait for a game
+// the performance overlay (0.9.48, Settings → About): CPU since the last ask, as a share of one core, and memory, over all of
+// Cartridge's processes (Electron's own figures, nothing sent anywhere)
+let perfPrev = null;
+handlers['perf:sample'] = () => {
+  const m = app.getAppMetrics(), t = Date.now();
+  const cpu = m.reduce((a, x) => a + (x.cpu?.cumulativeCPUUsage || 0), 0), mem = m.reduce((a, x) => a + (x.memory?.workingSetSize || 0), 0);
+  const pct = perfPrev && t > perfPrev.t ? ((cpu - perfPrev.cpu) / ((t - perfPrev.t) / 1000)) * 100 : null;
+  perfPrev = { cpu, t };
+  return { cpu: pct, memMB: Math.round(mem / 1024), procs: m.length, playing: !!(gameFocus.away || runOn) };
+};
 
 for (const [ch, fn] of Object.entries(handlers)) {
   ipcMain.handle(ch, async (_e, arg) => {
@@ -4786,10 +4848,13 @@ app.whenReady().then(() => {
     if (config.configured && (config.sync.onLaunch || !library)) syncLibrary().catch(() => {});
     setTimeout(() => trophySvc.start().catch((e) => log('trophies failed', e.message)), 1500);
   });
-  setInterval(() => {
-    const every = (config.sync.everyMinutes || 0) * 60e3;
-    if (config.configured && every && library && Date.now() - library.syncedAt > every) syncLibrary().catch(() => {});
-  }, 60e3);
+  // image pipeline (0.9.48): the picture cache stays under 1.5 GB; the oldest pictures go first and come back from RomM
+  // or SteamGridDB if they're shown again. Looked at once a day, never during a game
+  scheduler.add('image-cache-trim', { every: 24 * 3600e3, firstAfter: 5 * 60e3, deferWhilePlaying: true, run: () => trimImageCache(1.5 * 1024 ** 3) });
+  // the library sync (every hour by default), looked at each minute; it waits while a game runs (0.9.48, owner)
+  scheduler.add('library-sync', { every: 60e3, firstAfter: 60e3, deferWhilePlaying: true,
+    due: () => { const every = (config.sync.everyMinutes || 0) * 60e3; return !!(config.configured && every && library && Date.now() - library.syncedAt > every); },
+    run: () => syncLibrary().catch(() => {}) });
   win.on('focus', () => { if (library) computeInstalled(); });
   watchGamescopeFocus();
   setupUpdater();

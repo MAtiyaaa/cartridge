@@ -1,8 +1,8 @@
 {
   "name": "cartridge",
   "productName": "Cartridge",
-  "version": "0.9.47",
-  "versionName": "0.9.47",
+  "version": "0.9.48",
+  "versionName": "0.9.48",
   "description": "Controller-first RomM client for SteamOS and Bazzite",
   "main": "electron/main.js",
   "author": "abdu2304",
@@ -11,6 +11,7 @@
     "dev": "vite",
     "test": "node --test test/*.test.js",
     "audit:ui": "node tools/ui-audit/run.js",
+    "audit:visual": "node tools/ui-audit/visual.js",
     "build:ui": "vite build",
     "start": "vite build && electron .",
     "dist": "vite build && electron-builder --linux AppImage --x64 --publish never",
@@ -51,7 +52,7 @@
       }
     ],
     "releaseInfo": {
-      "releaseName": "Cartridge 0.9.47",
+      "releaseName": "Cartridge 0.9.48",
       "releaseNotesFile": "RELEASE_NOTES.md"
     }
   },

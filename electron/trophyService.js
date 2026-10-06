@@ -141,6 +141,10 @@ module.exports = function createTrophyService(ctx) {
       const id = g.titleId.toUpperCase();
       const hits = roms.filter((r) => String(r.fs_name || '').toUpperCase().includes(id));
       if (hits.length) return hits.sort((a, b) => a.id - b.id)[0].id; // 0.9.47: one serial, several copies is still that game
+      // 0.9.48: the game identity engine also knows serials read from the downloaded game itself (PARAM.SFO and so on),
+      // for ROMs whose names carry no serial
+      const f = ctx.findRom?.({ ids: [id], slugs: T.SOURCES[g.src].slugs });
+      if (f?.by === 'id') return f.id;
     }
     const n = norm(g.title);
     if (!n) return null;
