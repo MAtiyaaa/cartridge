@@ -6,7 +6,11 @@
   <div v-else class="shell" :style="{ '--card-w': cardW }">
     <header class="statusbar" :class="{ 'has-back': store.history.length }">
       <button v-if="store.history.length" class="backbtn" aria-label="Back" @click="back()"><Icon name="mdiArrowLeft" :size="22" /></button>
-      <div class="brand"><Logo :size="28" /></div>
+      <div class="brand"><Logo :size="28" />
+        <!-- 0.9.49 (owner): the hello slides out of the gap between the logo and the tabs, letter by letter like the
+             opening, then tucks back in -->
+        <div v-if="greet" class="greet" :class="{ out: greet.out }" :style="{ maxWidth: greet.max + 'px' }" aria-live="polite"><span v-for="(c, i) in greet.text" :key="i" :style="{ '--i': i }">{{ c === ' ' ? '\u00a0' : c }}</span></div>
+      </div>
       <!-- 0.9.19 (owner: make the top bar much better, with the taste skill; photos of the frontend
            they liked): every tab is its icon, the current one also its name, which opens out as you
            arrive; one short line slides under it. LT/RT only while a controller is in use. -->
@@ -209,6 +213,17 @@ const viewKey = computed(() => store.route.name + JSON.stringify(store.route.par
 const cardW = computed(() => (CARD_SIZES[store.config.ui.gridSize] || CARD_SIZES.md).w);
 // the white pill behind the current tab (transform and width, so moving it costs no layout)
 const tabsEl = ref(null), ink = ref({ opacity: 0 });
+// the hello (0.9.49): in the gap between the logo and a centred Dock when it fits there, else the old toast
+const greet = ref(null);
+function sayHello(text) {
+  const brand = document.querySelector('.statusbar .brand'), tabs = tabsEl.value;
+  const b = document.body.classList, room = brand && tabs && b.contains('bar-center') && !b.contains('bar-left') ? tabs.getBoundingClientRect().left - brand.getBoundingClientRect().right - 28 : 0;
+  const need = text.length * 9.5; // about the width of the text at the bar's size
+  if (room < need || matchMedia('(prefers-reduced-motion: reduce)').matches) { toast(text, 'info', 2600, 'mdiHandWave'); return; }
+  greet.value = { text, out: false, max: room };
+  setTimeout(() => { if (greet.value) greet.value.out = true; }, 2600 + text.length * 35);
+  setTimeout(() => (greet.value = null), 3500 + text.length * 35);
+}
 const padMode = computed(() => input.mode === 'pad');
 function placeInk() {
   const nav = tabsEl.value, el = nav?.querySelector(`[data-tab="${activeTab.value}"]`);
@@ -362,7 +377,7 @@ onMounted(async () => {
   if (store.config.configured && !store.config.setupDone && !store.welcoming) go('emu-setup', { first: true });
   // a hello with the name from the welcome
   const nm = (store.config.ui.name || '').trim();
-  if (nm && store.config.configured && !store.welcoming) { const h = new Date().getHours(); setTimeout(() => toast(`Good ${h < 5 || h >= 18 ? 'evening' : h < 12 ? 'morning' : 'afternoon'}, ${nm}`, 'info', 2600, 'mdiHandWave'), 1200); }
+  if (nm && store.config.configured && !store.welcoming) { const h = new Date().getHours(); setTimeout(() => sayHello(`Good ${h < 5 || h >= 18 ? 'evening' : h < 12 ? 'morning' : 'afternoon'}, ${nm}`), 1200); }
   // anything waiting for you (a moved emulator, games out of their collections, missing BIOS) shows as
   // a dot on Settings and a list in Settings → Emulators, not a pop-up (0.9.3)
   setTimeout(() => { if (store.config.configured) call('issues:list').then((l) => (store.issues = l.length)).catch(() => {}); }, 8000);
@@ -501,6 +516,19 @@ function modalFrom(el) {
 </script>
 
 <style scoped>
+/* the hello in the Dock's gap (0.9.49): it opens from the logo while its letters rise in (as the opening's name), holds,
+   then the letters drop and it closes back into the logo */
+.brand { position: relative; }
+.greet { position: absolute; left: calc(100% + 14px); top: 50%; display: flex; white-space: nowrap; overflow: hidden; translate: 0 -50%; font-family: var(--display); font-size: var(--t-md); font-weight: 700; letter-spacing: -0.01em; color: var(--text); pointer-events: none;
+  clip-path: inset(-20% 100% -20% 0); animation: greet-open 0.7s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+.greet span { opacity: 0; transform: translateY(12px); filter: blur(5px); animation: greet-char 0.55s cubic-bezier(0.16, 1, 0.3, 1) forwards; animation-delay: calc(0.12s + var(--i) * 0.035s); }
+.greet.out { animation: greet-close 0.5s cubic-bezier(0.7, 0, 0.84, 0) 0.25s forwards; clip-path: inset(-20% 0 -20% 0); }
+.greet.out span { opacity: 1; transform: none; filter: none; animation: greet-drop 0.3s ease-in forwards; animation-delay: calc(var(--i) * 0.012s); }
+@keyframes greet-open { to { clip-path: inset(-20% 0 -20% 0); } }
+@keyframes greet-close { to { clip-path: inset(-20% 100% -20% 0); } }
+@keyframes greet-char { to { opacity: 1; transform: none; filter: none; } }
+@keyframes greet-drop { to { opacity: 0; transform: translateY(8px); filter: blur(4px); } }
+
 .tab-trig { margin: 0 4px; }
 /* search (0.9.19): a round button with Y until it's used, then it opens into a field */
 .top-search { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; width: 40px; height: 40px; padding: 0 10px 0 11px; border-radius: 20px; background: rgba(255, 255, 255, 0.07); color: rgba(255, 255, 255, 0.7); cursor: text; overflow: hidden; transition: width 320ms cubic-bezier(0.23, 1, 0.32, 1), background 160ms, color 160ms; }
