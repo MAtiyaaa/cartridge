@@ -568,70 +568,98 @@ body.theme-light .swatch.on { box-shadow: 0 0 0 3px var(--s0), 0 0 0 5px rgba(0,
 body.theme-oled :is(.lrow, .toggle, .glass, .st-face, .eg-con, .dialog, .menu-sheet, .toast, .seg, .btn:not(.primary)) { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1); }
 body.theme-oled .statusbar::before { background: linear-gradient(0deg, #000 0%, rgba(0, 0, 0, 0.6) 62%, rgba(0, 0, 0, 0) 100%); }
 
-/* ---- Liquid Glass (0.9.42, owner: Glass mode built with the liquid-glass skill, and only it) ----
-   The skill's rules, in CSS: glass is the navigation and control layer floating over the content (the Dock,
-   buttons, switches, sheets and pop-ups, toasts, search), never the content (cards, rows, panels stay solid).
-   One material: the page blurred and saturated through a light tint of the theme (--lg-tint), a specular sheen
-   over the top half, a bright rim where light catches the edge, a soft drop under it. Glass can't sample glass, so
-   what sits inside a glass container (tabs in the Dock, buttons in a sheet, the switch's pill) gets the fill and
-   rim but no blur of its own, and only a few things blur at all (Dock, sheets, toasts, search, buttons over art).
-   Regular glass for controls; the picked or focused one turns prominent: glass filled with the highlight colour
-   (--lg-hi). Pressing lights it from inside (interactive). Reduced transparency makes it frosted and opaque,
-   more contrast gives it a real edge, light effects (no blur) keep the look with a denser fill. */
+/* ---- Liquid Glass (0.9.42, rebuilt in 0.9.44 from the owner's references with the image-to-code skill; rules from
+   the liquid-glass skill) ----
+   Glass is the navigation and control layer only (the Dock, search, buttons, switches, sheets, pop-ups, toasts),
+   never the content. What the references show, and what makes it read as glass rather than a tinted panel:
+   1. almost no fill: the page shows through, blurred, saturated and a little brighter (not a grey wash);
+   2. a thin rim that catches the light: brightest at the top-left and bottom-right, nearly gone at the sides
+      between (a gradient border drawn by ::before, masked to 1.2 px);
+   3. thickness: a light inner edge on top, a dark one underneath, and a faint second line just inside the rim;
+   4. a reflection: a hard-edged diagonal gloss across the upper part (::after), as on the dark capsules;
+   5. fine grain on big panes (sheets, pop-ups), as on the frosted window;
+   6. a soft, wide shadow under it, so it floats.
+   The focused or chosen control is lit glass: more fill (the highlight colour), a brighter rim and a glow. Glass
+   inside glass (tabs in the Dock, buttons in a sheet) keeps rim and gloss but never blurs again. Light effects and
+   reduced transparency keep every layer but the blur, with a denser fill; more contrast gives a solid edge. */
 body.elements-glass {
-  --lg-fill: rgba(var(--lg-tint), 0.34);
-  --lg-fill-strong: rgba(var(--lg-tint), 0.62);
-  --lg-blur: blur(16px) saturate(1.9) brightness(1.06);
-  --lg-sheen: linear-gradient(180deg, rgba(255, 255, 255, 0.16) 0%, rgba(255, 255, 255, 0.05) 42%, rgba(255, 255, 255, 0) 56%, rgba(255, 255, 255, 0.05) 100%);
-  --lg-rim: inset 0 1px 0 rgba(255, 255, 255, 0.34), inset 0 0 0 1px rgba(255, 255, 255, 0.11), inset 0 -1px 0 rgba(255, 255, 255, 0.05);
-  --lg-drop: 0 10px 28px -10px rgba(0, 0, 0, 0.55);
-  --lg-hi-fill: rgba(var(--lg-hi), 0.82);
-  --lg-hi-sheen: linear-gradient(180deg, rgba(255, 255, 255, 0.42) 0%, rgba(255, 255, 255, 0.12) 46%, rgba(255, 255, 255, 0) 56%, rgba(255, 255, 255, 0.08) 100%);
-  --lg-hi-rim: inset 0 1px 0 rgba(255, 255, 255, 0.75), inset 0 0 0 1px rgba(255, 255, 255, 0.28), inset 0 -1px 0 rgba(0, 0, 0, 0.12);
+  --lg-fill: rgba(255, 255, 255, 0.055);
+  --lg-fill-hover: rgba(255, 255, 255, 0.1);
+  --lg-pane: rgba(var(--lg-tint), 0.5); /* sheets and pop-ups: dark glass so long text reads, like the frosted window */
+  --lg-blur: blur(22px) saturate(1.8) brightness(1.08);
+  --lg-rim-grad: linear-gradient(135deg, rgba(255, 255, 255, 0.9) 0%, rgba(255, 255, 255, 0.26) 20%, rgba(255, 255, 255, 0.07) 46%, rgba(255, 255, 255, 0.14) 74%, rgba(255, 255, 255, 0.72) 100%);
+  --lg-bevel: inset 0 1px 1px rgba(255, 255, 255, 0.26), inset 0 -1px 2px rgba(0, 0, 0, 0.34), inset 0 0 0 3px rgba(255, 255, 255, 0.03), inset 0 12px 26px -16px rgba(255, 255, 255, 0.22);
+  --lg-drop: 0 18px 44px -16px rgba(0, 0, 0, 0.62), 0 2px 6px rgba(0, 0, 0, 0.22);
+  --lg-gloss: linear-gradient(166deg, rgba(255, 255, 255, 0.15) 0%, rgba(255, 255, 255, 0.06) 36%, rgba(255, 255, 255, 0) 36.4%);
+  --lg-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 .5 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.2'/%3E%3C/svg%3E");
+  --lg-lit: rgba(var(--lg-hi), 0.3);
+  --lg-lit-rim: linear-gradient(135deg, #fff 0%, rgba(255, 255, 255, 0.55) 30%, rgba(255, 255, 255, 0.3) 55%, rgba(255, 255, 255, 0.9) 100%);
+  --lg-lit-glow: 0 0 0 1px rgba(255, 255, 255, 0.35), 0 0 26px -2px rgba(var(--lg-hi), 0.45), 0 14px 34px -14px rgba(0, 0, 0, 0.6);
+  --lg-on-lit: #fff;
 }
 body.elements-glass.theme-light {
-  --lg-fill: rgba(255, 255, 255, 0.5);
-  --lg-fill-strong: rgba(255, 255, 255, 0.72);
-  --lg-blur: blur(16px) saturate(1.7) brightness(1.04);
-  --lg-sheen: linear-gradient(180deg, rgba(255, 255, 255, 0.7) 0%, rgba(255, 255, 255, 0.2) 46%, rgba(255, 255, 255, 0) 56%);
-  --lg-rim: inset 0 1px 0 #fff, inset 0 0 0 1px rgba(255, 255, 255, 0.6), inset 0 -1px 0 rgba(0, 0, 0, 0.06), 0 0 0 0.5px rgba(0, 0, 0, 0.08);
-  --lg-drop: 0 10px 26px -12px rgba(30, 30, 45, 0.28);
+  --lg-fill: rgba(255, 255, 255, 0.42);
+  --lg-fill-hover: rgba(255, 255, 255, 0.62);
+  --lg-pane: rgba(250, 250, 251, 0.62);
+  --lg-blur: blur(22px) saturate(1.7) brightness(1.04);
+  --lg-rim-grad: linear-gradient(135deg, #fff 0%, rgba(255, 255, 255, 0.7) 24%, rgba(0, 0, 0, 0.06) 50%, rgba(255, 255, 255, 0.6) 76%, #fff 100%);
+  --lg-bevel: inset 0 1px 1px #fff, inset 0 -1px 2px rgba(30, 30, 45, 0.12), inset 0 0 0 3px rgba(255, 255, 255, 0.25);
+  --lg-drop: 0 16px 40px -18px rgba(30, 30, 45, 0.32), 0 1px 3px rgba(30, 30, 45, 0.1);
+  --lg-gloss: linear-gradient(166deg, rgba(255, 255, 255, 0.55) 0%, rgba(255, 255, 255, 0.2) 36%, rgba(255, 255, 255, 0) 36.4%);
+  --lg-lit: rgba(var(--lg-hi), 0.84);
+  --lg-lit-rim: linear-gradient(135deg, rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0.12) 40%, rgba(255, 255, 255, 0.5));
+  --lg-lit-glow: 0 10px 26px -12px rgba(30, 30, 45, 0.5);
+  --lg-on-lit: var(--lg-on-hi);
 }
-/* the Dock: one glass capsule holding every tab (a container); the current tab is prominent glass inside it */
-body.elements-glass.bar-pill.dock-glass .tabs { background: var(--lg-sheen), var(--lg-fill); -webkit-backdrop-filter: var(--lg-blur); backdrop-filter: var(--lg-blur); box-shadow: var(--lg-rim), var(--lg-drop); }
-body.elements-glass.bar-pill.dock-glass .tab-ink { background: var(--lg-hi-sheen), var(--lg-hi-fill); box-shadow: var(--lg-hi-rim), 0 4px 14px -6px rgba(0, 0, 0, 0.5); }
-body.elements-glass.bar-pill.dock-glass .tab.active, body.elements-glass.bar-pill.dock-glass .tab.active:hover { color: var(--lg-on-hi); }
+/* the glass pieces: the Dock (when it's glass), search, sheets and pop-ups, toasts, buttons, switches */
+:where(body.elements-glass) :is(.top-search, .dialog, .toast, .btn) { position: relative; }
+body.elements-glass :is(.bar-pill.dock-glass .tabs, .top-search, .dialog, .toast, .btn, .seg) { isolation: isolate; }
+body.elements-glass.bar-pill.dock-glass .tabs, body.elements-glass :is(.top-search, .dialog, .toast, .btn:not(.primary), .seg) { background: var(--lg-fill); box-shadow: var(--lg-bevel), var(--lg-drop); }
+body.elements-glass :is(.dialog, .toast) { background: var(--lg-pane); }
+body.elements-glass.bar-pill.dock-glass .tabs, body.elements-glass :is(.top-search, .dialog, .toast) { -webkit-backdrop-filter: var(--lg-blur); backdrop-filter: var(--lg-blur); }
+body.elements-glass .g-actions .btn:not(.primary) { -webkit-backdrop-filter: var(--lg-blur); backdrop-filter: var(--lg-blur); } /* over the game's art */
+/* the rim (::before) and the reflection (::after, under the content) */
+body.elements-glass.bar-pill.dock-glass .tabs::before, body.elements-glass :is(.top-search, .dialog, .toast, .btn, .seg)::before {
+  content: ''; position: absolute; inset: 0; border-radius: inherit; padding: 1.2px; background: var(--lg-rim-grad); pointer-events: none; z-index: 2;
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude;
+}
+body.elements-glass.bar-pill.dock-glass .tabs::after, body.elements-glass :is(.top-search, .dialog, .toast, .btn, .seg)::after {
+  content: ''; position: absolute; inset: 0; border-radius: inherit; background: var(--lg-gloss); pointer-events: none; z-index: -1;
+}
+body.elements-glass :is(.dialog, .toast)::after { background: var(--lg-gloss), var(--lg-grain); background-size: auto, 160px 160px; opacity: 0.9; }
+body.elements-glass .dialog::after { background: linear-gradient(170deg, rgba(255, 255, 255, 0.09) 0%, rgba(255, 255, 255, 0.025) 22%, rgba(255, 255, 255, 0) 22.3%), var(--lg-grain); background-size: auto, 160px 160px; }
+body.elements-glass.theme-light .dialog::after { background: linear-gradient(170deg, rgba(255, 255, 255, 0.6) 0%, rgba(255, 255, 255, 0.2) 22%, rgba(255, 255, 255, 0) 22.3%); }
+body.elements-glass .btn:not(.primary):hover { background: var(--lg-fill-hover); }
+/* rows in a glass sheet sit on the glass (no grey blocks), only a hairline marks them; the focused one is lit glass */
+body.elements-glass .dialog .menu-item { background: rgba(255, 255, 255, 0.035); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.05); }
+body.elements-glass.theme-light .dialog .menu-item { background: rgba(255, 255, 255, 0.4); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.7); }
+body.elements-glass .dialog .menu-item:hover { background: var(--lg-fill-hover); }
+body.elements-glass .dialog .menu-item:focus { background: var(--lg-lit); color: var(--lg-on-lit); box-shadow: var(--lg-bevel), var(--lg-lit-glow); }
+body.elements-glass .dialog .menu-item:focus :is(.sub, .muted) { color: color-mix(in srgb, var(--lg-on-lit) 74%, transparent); }
+/* lit glass: the current tab, the chosen switch, the primary button, whatever is focused */
+body.elements-glass.bar-pill.dock-glass .tab-ink, body.elements-glass .seg-ink { background: var(--lg-lit); box-shadow: var(--lg-bevel), var(--lg-lit-glow); }
+body.elements-glass.bar-pill.dock-glass .tab.active, body.elements-glass.bar-pill.dock-glass .tab.active:hover { color: var(--lg-on-lit); }
+body.elements-glass .seg.inked > button.on { color: var(--lg-on-lit); }
+body.elements-glass .btn.primary { background: rgba(var(--primary-rgb), 0.62); color: var(--on-btn, var(--on-primary)); box-shadow: var(--lg-bevel), var(--lg-drop); }
+body.elements-glass .btn:focus-visible, body.elements-glass.pad-mode .btn:focus,
+body.elements-glass .seg button:focus-visible, body.elements-glass.pad-mode .seg button:focus { background: var(--lg-lit); color: var(--lg-on-lit); box-shadow: var(--lg-bevel), var(--lg-lit-glow); }
+body.elements-glass :is(.btn:focus-visible, .btn:focus)::before { background: var(--lg-lit-rim); }
+body.elements-glass.pad-mode .btn:not(:focus)::before { background: var(--lg-rim-grad); }
+body.elements-glass .btn.primary:focus-visible, body.elements-glass.pad-mode .btn.primary:focus { box-shadow: var(--lg-bevel), var(--lg-lit-glow), var(--ring); }
 body.elements-glass.theme-light.bar-pill.dock-glass .tab { color: rgba(28, 28, 30, 0.6); }
 body.elements-glass.theme-light.bar-pill.dock-glass .tab:hover { color: #1c1c1e; }
 body.elements-glass.theme-light.bar-pill.dock-glass .tab-trig { filter: invert(1); }
-/* search: its own small capsule */
-body.elements-glass .top-search { background: var(--lg-sheen), var(--lg-fill); -webkit-backdrop-filter: var(--lg-blur); backdrop-filter: var(--lg-blur); box-shadow: var(--lg-rim); }
-/* sheets, pop-ups and toasts: glass with a dense fill so what's on them reads (the skill's sheets); what sits on
-   them doesn't blur again */
-body.elements-glass :is(.dialog, .toast) { background: var(--lg-sheen), var(--lg-fill-strong); -webkit-backdrop-filter: var(--lg-blur); backdrop-filter: var(--lg-blur); box-shadow: var(--lg-rim), var(--shadow-pop); }
-/* buttons and switches: regular glass, no blur of their own (most sit on solid panels, and dozens of blurs on one
-   page is the skill's performance pitfall); over the game's art they blur what's behind them */
-body.elements-glass .btn:not(.primary), body.elements-glass .seg { background: var(--lg-sheen), var(--lg-fill); box-shadow: var(--lg-rim); }
-body.elements-glass .btn:not(.primary):hover { background: var(--lg-sheen), var(--lg-fill-strong); }
-body.elements-glass .g-actions .btn:not(.primary) { -webkit-backdrop-filter: var(--lg-blur); backdrop-filter: var(--lg-blur); }
-body.elements-glass .seg-ink { background: var(--lg-sheen), rgba(255, 255, 255, 0.14); box-shadow: var(--lg-rim); }
-body.elements-glass.theme-light .seg-ink { background: var(--lg-sheen), #fff; box-shadow: var(--lg-rim), 0 2px 8px -3px rgba(30, 30, 45, 0.25); }
-/* prominent: the primary button, and any focused control, filled with the highlight colour */
-body.elements-glass .btn.primary { background: var(--lg-hi-sheen), rgba(var(--primary-rgb), 0.84); box-shadow: var(--lg-hi-rim), var(--lg-drop); }
-body.elements-glass .btn:focus-visible, body.elements-glass.pad-mode .btn:focus,
-body.elements-glass .seg button:focus-visible, body.elements-glass.pad-mode .seg button:focus { background: var(--lg-hi-sheen), var(--lg-hi-fill); color: var(--lg-on-hi); box-shadow: var(--lg-hi-rim), var(--lg-drop); }
-body.elements-glass .btn.primary:focus-visible, body.elements-glass.pad-mode .btn.primary:focus { box-shadow: var(--lg-hi-rim), var(--ring); }
 /* interactive: pressed glass lights up from inside */
-body.elements-glass :is(.btn, .seg button):is(:active, .pressed) { box-shadow: var(--lg-hi-rim), inset 0 0 22px rgba(255, 255, 255, 0.32); }
-/* without blur (light effects, or reduced transparency): the same look, frosted and denser */
+body.elements-glass :is(.btn, .seg button):is(:active, .pressed) { box-shadow: var(--lg-bevel), inset 0 0 24px rgba(255, 255, 255, 0.3), var(--lg-drop); }
+/* without blur: every layer stays, the fill gets denser so it still reads */
 body.elements-glass.light-fx :is(.tabs, .top-search, .dialog, .toast, .btn) { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
-body.elements-glass.light-fx { --lg-fill: rgba(var(--lg-tint), 0.8); --lg-fill-strong: rgba(var(--lg-tint), 0.94); }
-body.elements-glass.light-fx.theme-light { --lg-fill: rgba(250, 250, 251, 0.9); --lg-fill-strong: rgba(250, 250, 251, 0.97); }
+body.elements-glass.light-fx { --lg-fill: rgba(var(--lg-tint), 0.72); --lg-fill-hover: rgba(var(--lg-tint), 0.82); --lg-pane: rgba(var(--lg-tint), 0.94); }
+body.elements-glass.light-fx.theme-light { --lg-fill: rgba(250, 250, 251, 0.88); --lg-fill-hover: #fff; --lg-pane: rgba(250, 250, 251, 0.97); }
 @media (prefers-reduced-transparency: reduce) {
   body.elements-glass :is(.tabs, .top-search, .dialog, .toast, .btn) { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
-  body.elements-glass { --lg-fill: rgba(var(--lg-tint), 0.94); --lg-fill-strong: rgba(var(--lg-tint), 0.98); --lg-hi-fill: rgb(var(--lg-hi)); }
+  body.elements-glass { --lg-fill: rgba(var(--lg-tint), 0.92); --lg-pane: rgba(var(--lg-tint), 0.97); --lg-lit: rgb(var(--lg-hi)); }
 }
 @media (prefers-contrast: more) {
-  body.elements-glass { --lg-rim: inset 0 0 0 1.5px rgba(255, 255, 255, 0.55); --lg-hi-rim: inset 0 0 0 2px rgba(255, 255, 255, 0.9); }
-  body.elements-glass.theme-light { --lg-rim: inset 0 0 0 1.5px rgba(0, 0, 0, 0.45); }
+  body.elements-glass { --lg-rim-grad: linear-gradient(rgba(255, 255, 255, 0.75), rgba(255, 255, 255, 0.75)); }
+  body.elements-glass.theme-light { --lg-rim-grad: linear-gradient(rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0.5)); }
 }
