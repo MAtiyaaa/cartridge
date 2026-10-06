@@ -67,6 +67,8 @@
             <Icon :name="padOk ? 'mdiCheckCircle' : using === 'pad' ? USING_ICON[padKind] || USING_ICON.pad : USING_ICON[using]" :size="72" />
             <b>{{ padOk ? 'Your controller works' : usingText }}</b>
             <span v-if="using === 'pad' && !padOk" class="muted small">Press <Btn b="A" /> to check it.</span>
+            <!-- 0.9.49 (owner: an underrated feature nobody is told about) -->
+            <span v-if="using === 'pad'" class="muted small">Push <Btn b="RS" /> up or down to scroll any page or list without moving the highlight.</span>
             <span v-else-if="!padOk" class="muted small">Everything works with {{ using === 'touch' ? 'touch' : using === 'keys' ? 'a keyboard' : 'a mouse' }} too. A controller is picked up as soon as you use one.</span>
           </div>
           <div class="w-box stack" style="align-items: center">

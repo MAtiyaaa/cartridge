@@ -54,7 +54,8 @@ const PAGES = [
   { title: 'Home', go: 'home', text: 'Your library at a glance: Continue Playing, what’s new, recommendations and your latest trophies. {A} opens a game, {X} downloads it.', at: 'main.main' },
   { title: 'Library', go: 'library', text: 'Every game on your server, with filters and sorting at the top. Pick a few at once to download them or add them to Steam together.', at: 'main.main' },
   { title: 'Consoles', go: 'consoles', text: 'Each console with its games. Its More ({Y}) holds the emulator it uses and how its games go into Steam.', at: 'main.main' },
-  { title: 'Achievements', go: 'achievements', text: 'RetroAchievements and your emulators’ trophies in one place. {LB} and {RB} switch between them.', at: 'main.main' },
+  { title: 'Scroll With the Right Stick', go: 'home', text: 'Push {RS} up or down to scroll any page, list or pop-up without moving the highlight. It works everywhere, the manuals too.', at: 'main.main' },
+  { title: 'Achievements', go: 'achievements', text: 'RetroAchievements and your emulators’ trophies on one page: your latest unlocks, then every game you’ve played, as a grid or a stack.', at: 'main.main' },
 ];
 const BASE0 = [
   { title: 'Your Tabs', text: 'The Dock holds every part of Cartridge. Move to the next tab now.', at: '.statusbar nav.tabs',
@@ -90,7 +91,10 @@ const next = () => go(i.value + 1);
 function place() {
   const t = s.value.at ? document.querySelector(s.value.at) : null; // null, never false or '' (used with ?.)
   const r = t?.getBoundingClientRect();
-  box.value = r && r.width ? { x: r.left - 8, y: r.top - 8, w: r.width + 16, h: r.height + 16 } : null;
+  // kept inside the window (0.9.49, owner: on a whole page the outline ran off the screen and only its bottom showed)
+  if (!r || !r.width) { box.value = null; return; }
+  const m = 6, x = Math.max(m, r.left - 8), y = Math.max(m, r.top - 8);
+  box.value = { x, y, w: Math.min(innerWidth - m, r.right + 8) - x, h: Math.min(innerHeight - m, r.bottom + 8) - y };
 }
 const spotStyle = computed(() => (box.value ? { transform: `translate(${box.value.x}px, ${box.value.y}px)`, width: box.value.w + 'px', height: box.value.h + 'px' } : {}));
 // the card sits beside what it points at: below it, else above, kept on screen
@@ -145,7 +149,7 @@ onBeforeUnmount(() => { layer?.pop(); clearInterval(tick); removeEventListener('
 .t-task.ok { background: rgba(63, 185, 80, 0.16); color: var(--green-l); }
 .t-do { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .t-do :deep(.pb) { transform: scale(1.25); margin: 0 4px; }
-.bubble p :deep(.pb.t-inl) { margin: 0 2px; vertical-align: -3px; }
+.bubble p :deep(.pb.t-inl) { margin: 0 2px; }
 .bubble p kbd { margin: 0 2px; }
 kbd { font: inherit; font-size: var(--t-sm); padding: 2px 8px; border-radius: 6px; background: var(--s3); box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.35); }
 .t-act { gap: var(--s-2); }

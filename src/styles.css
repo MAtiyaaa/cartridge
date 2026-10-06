@@ -229,6 +229,7 @@ body.motion-reduce main.main[data-dir] > * { animation-name: viewIn; animation-d
 .view > :nth-child(5), .home .shelves > .shelf-wrap:nth-child(4) { animation-delay: 160ms; }
 .view > :nth-child(n+6), .home .shelves > .shelf-wrap:nth-child(n+5) { animation-delay: 200ms; }
 .view > .viewer, .view > [data-noanim] { animation: none; }
+:root.morph-back main.main > *, :root.morph-back .view > *, :root.morph-back .home > .hero, :root.morph-back .home .shelves > .shelf-wrap { animation: none; } /* back to a card (store.back) */
 .pane-in { animation: viewIn 180ms var(--ease-out); }
 body.motion-reduce .view > *, body.motion-reduce .home > .hero, body.motion-reduce .home .shelves > .shelf-wrap { animation: viewIn 120ms ease-out backwards; }
 

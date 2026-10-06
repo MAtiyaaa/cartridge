@@ -86,8 +86,14 @@ export function back() {
   const from = store.route.name === 'game' && document.querySelector('.g-cover img') && store.route.params?.romId;
   const prev = store.history[store.history.length - 1];
   const change = () => { store.navDir = 'out'; store.route = store.history.pop(); };
-  if (from && prev?.focusKey === 'rom-' + from) morph(document.querySelector('.g-cover'), change, `.card[data-key="rom-${from}"] .art`, nextTick);
-  else change();
+  if (from && prev?.focusKey === 'rom-' + from) {
+    // 0.9.49 (owner: "the return feels glitchy", on Home only): Home's rows settle in one after another (up to 720 ms)
+    // while the cover flies back into one of them, so it chased a moving card and the card kept moving after it
+    // landed. Coming back to a card, the page arrives still; going to a game is unchanged.
+    const root = document.documentElement;
+    root.classList.add('morph-back'); clearTimeout(back.t); back.t = setTimeout(() => root.classList.remove('morph-back'), 900);
+    morph(document.querySelector('.g-cover'), change, `.card[data-key="rom-${from}"] .art`, nextTick);
+  } else change();
   return true;
 }
 export function tab(name) {

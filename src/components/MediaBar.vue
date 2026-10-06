@@ -1,8 +1,13 @@
 <template>
-  <div class="media" :class="{ empty: !shown }">
+  <div class="media" :class="{ empty: !shown, still }">
     <img v-for="(l, i) in layers" :key="i" :src="l.src || undefined" :class="{ on: l.on, blur: l.blur }" decoding="async" alt="" />
   </div>
 </template>
+<script>
+// what the header showed last (0.9.49, owner: going back to Home the media bar flickered for a moment, then settled):
+// a page that comes back with the same picture shows it at once, with its scrim, instead of building up from empty
+const last = { src: '', blur: false };
+</script>
 <script setup>
 import { reactive, ref, watch } from 'vue';
 // Two stacked images; the next one is decoded off-screen first, then swapped in with a short fade.
@@ -10,8 +15,11 @@ import { reactive, ref, watch } from 'vue';
 // no crossfade), a picture that fails to load clears the old game's instead of leaving it up, and the
 // blurred-cover fallback ({ src, blur }) is shown blurred.
 const props = defineProps({ src: [String, Object] });
-const layers = reactive([{ src: '', on: false, blur: false }, { src: '', on: false, blur: false }]);
-const shown = ref('');
+const want = typeof props.src === 'string' ? props.src : props.src?.src || '';
+const again = !!want && want === last.src;
+const layers = reactive([{ src: again ? last.src : '', on: again, blur: again && last.blur }, { src: '', on: false, blur: false }]);
+const shown = ref(again ? last.src : '');
+const still = ref(again); // the picture that was already up: no fade or settle the first time
 let idx = 0, token = 0;
 watch(() => props.src, async (v) => {
   const my = ++token;
@@ -31,7 +39,8 @@ watch(() => props.src, async (v) => {
   layers[next].on = true;
   layers[idx].on = false;
   idx = next;
-  shown.value = src;
+  shown.value = src; still.value = false;
+  last.src = src; last.blur = blur;
 }, { immediate: true });
 </script>
 <style scoped>
@@ -39,8 +48,15 @@ watch(() => props.src, async (v) => {
    title readable and fades it into the page (no mask: cheaper without the GPU, same look). 0.9.3 K: also
    a short fade at the top, so no edge shows under the top bar */
 .media { position: absolute; inset: 0; pointer-events: none; overflow: hidden; background: var(--s0); }
+/* 0.9.49 (owner's photo: a hard line between the screen's edge and the header picture, beside the first card): the
+   header faded into a flat page colour, and where the animated background or the theme's vignette isn't that colour,
+   its bottom edge showed. Now the header itself fades out at the bottom, into whatever is behind it. */
+.media { background: transparent; -webkit-mask-image: linear-gradient(0deg, transparent 0%, #000 38%); mask-image: linear-gradient(0deg, transparent 0%, #000 38%); }
 .media::after { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, color-mix(in srgb, var(--s0) 70%, transparent) 0%, transparent 9%), linear-gradient(90deg, var(--s0) 0%, color-mix(in srgb, var(--s0) 78%, transparent) 24%, color-mix(in srgb, var(--s0) 18%, transparent) 56%, transparent 100%), linear-gradient(0deg, var(--s0) 0%, color-mix(in srgb, var(--s0) 55%, transparent) 30%, transparent 62%); }
+/* 0.9.49 (owner: with the Dock at the bottom, no dark fade at the top): the top fade is only there for a top bar */
+:global(body:not(.bar-top) .media::after) { background: linear-gradient(90deg, var(--s0) 0%, color-mix(in srgb, var(--s0) 78%, transparent) 24%, color-mix(in srgb, var(--s0) 18%, transparent) 56%, transparent 100%), linear-gradient(0deg, var(--s0) 0%, color-mix(in srgb, var(--s0) 55%, transparent) 30%, transparent 62%); }
 .media.empty { background: transparent; }
+.media.still img { transition: none; animation: none; }
 .media.empty::after { display: none; }
 .media img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center 30%; opacity: 0; transition: opacity var(--d-med) ease-out; }
 /* 0.9.37 (owner: game backgrounds not a still, subtle, never jarring): after it settles, the picture drifts and
