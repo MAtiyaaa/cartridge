@@ -455,5 +455,8 @@ LT/RT switch top tabs. LB/RB only switch sections inside a page. A select, B bac
 - GameSettings.vue: props `tab`/`at`; `reopen(at)` after any picker or keyboard comes back on the same tab and row (the tab watch waits for the list; before it Steam was the only tab). Type a Value for text, `.gs-group` headings.
 - nav.js hold on `[data-expand]`: expands only when the row grows; otherwise nothing (no second B). Toasts wrap their text (`.toast-msg`).
 
+## 0.9.47 · Tighter Cards (6 Oct 2026)
+- EmuGet `.eg-grid` is masonry (owner): local directive `vMasonry` sets each card's `grid-row-end: span N` from its height (4px rows, row-gap 0, gap added to the span), refits on ResizeObserver/MutationObserver. Grid placement keeps left-to-right order; D-pad reach checked.
+
 ## Releases (full steps: HANDOFF D8)
 Only when the owner asks. Bump `version` and `build.releaseInfo.releaseName` ("Cartridge X.Y.Z") in `package.json`, and set `versionName` (what Settings → About and update messages show). **0.9.3 is shipped in parts (owner, 1 Oct 2026):** the number goes up as usual (0.9.4, 0.9.5...) but `versionName` and the release title are "0.9.3 B", "0.9.3 C"... until the 0.9.3 plan is done; notes heading `## Cartridge 0.9.3 B · Title`. Then put only this version's notes in `RELEASE_NOTES.md` (heading `## Cartridge X.Y.Z · Title`), add them to the top of `CHANGELOG.md`, grouped as New / Changed / Fixed with bold lead-ins. CI builds, launch-checks and publishes.

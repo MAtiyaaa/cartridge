@@ -6,6 +6,9 @@ The branch for 0.9.3 work is `claude/relaxed-fermat-30pigp`. Pull it before star
 
 ---
 
+## 6 Oct 2026 · 0.9.47 Tighter Cards
+- Owner (photo of Settings → Emulators): cards same width, height fitting their content, stacking, design unchanged. Done as masonry in EmuGet; checked in Chromium (cards pack with a 12 px gap, all rows reachable by D-pad).
+
 ## 6 Oct 2026 · 0.9.46 Every Setting
 - Owner: typed settings (shadPS4 DMEM in Advanced) missing from Game Settings, "place every setting advanced or not"; back from Window Width went to the Steam tab; hold A on a row that fits needed B twice; Show File Location's toast clipped.
 - Done: All Settings tab from the emulator's own file (six emulators), return to tab and row, expand only when it reveals more, toast text wraps. Checked in Chromium with a stub (tab and row after typing, one B after hold A) and a text-clipping audit of every tab, every Settings section and its pages, the game page and each More tab (nothing cut). Test added to test/gameSettings.test.js.
