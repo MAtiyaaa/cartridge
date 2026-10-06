@@ -77,9 +77,17 @@ export const ELEMENTS = {
   // grey over the background as before; the Liquid Glass material stays on controls, the Dock and pop-ups
   glass: { label: 'Glass', glassA: 0.62, glass: true },
 };
-// the Dock's colour when none was picked: Glass with Glass elements, white with Light, else black
-export const dockOf = (ui) => ui?.dockColor || (elementsOf(ui) === 'glass' ? 'glass' : ui?.theme === 'light' ? 'white' : 'black');
-export const elementsOf = (ui) => (ELEMENTS[ui?.elements] ? ui.elements : ui?.surface === 'glass' && !ui?.elements ? 'glass' : 'plain');
+// 0.9.45 (owner: "two different UI elements, glass and plain, don't merge them; one Plain mode and one Glass mode
+// across the board"): one Style setting (ui.style) sets the page, the elements and the Dock together. Plain is solid
+// and matte (styles.css body.style-plain); Glass is the see-through page, frosted panels and the Liquid Glass controls
+// (body.elements-glass). Every new element is designed for both. Saves from before 0.9.45 carry over: Glass in
+// either the old Background or Elements setting means Glass.
+export const STYLES = { plain: { label: 'Plain', sub: 'Solid and matte: crisp panels, clear edges, nothing see-through' }, glass: { label: 'Glass', sub: 'See-through: frosted panels over the background, glass buttons, switches and Dock' } };
+export const styleOf = (ui) => (STYLES[ui?.style] ? ui.style : ui?.elements === 'glass' || (!ui?.elements && ui?.surface === 'glass') ? 'glass' : 'plain');
+export const elementsOf = styleOf;
+// the Dock: glass in Glass; in Plain the colour picked (Black, White or Accent), else white with Light and black
+export const DOCK_PLAIN = ['black', 'white', 'accent'];
+export const dockOf = (ui) => (styleOf(ui) === 'glass' ? 'glass' : DOCK_PLAIN.includes(ui?.dockColor) ? ui.dockColor : ui?.theme === 'light' ? 'white' : 'black');
 export const TEXTS = {
   // three clearly different sets (0.9.3): High contrast lifts the secondary text right up, Soft is
   // dimmer and slightly warm for dark rooms
@@ -133,8 +141,9 @@ export function applyTheme(uiOrName) {
   else r.removeProperty('--bar');
   document.body.classList.toggle('custom-bars', ok(col.bars));
   // Light has its own page and panels: Background's Glass doesn't apply to it (0.9.41: Light with Glass went black)
-  const surf = (themeOf(ui).light ? null : SURFACES[ui.surface]) || SURFACES.solid;
-  const el = ELEMENTS[elementsOf(ui)] || ELEMENTS.plain;
+  const style = styleOf(ui);
+  const surf = (themeOf(ui).light ? null : SURFACES[style === 'glass' ? 'glass' : 'solid']) || SURFACES.solid;
+  const el = ELEMENTS[style] || ELEMENTS.plain;
   const lightT = !!t.light, black = !!(surf.black || t.black);
   const tx = lightT ? LIGHT_TEXTS[ui.text] || LIGHT_TEXTS.normal : TEXTS[ui.text] || TEXTS.normal;
   const g = t.grad;
@@ -203,6 +212,7 @@ export function applyTheme(uiOrName) {
   b.toggle('surface-oled', !!black);
   b.toggle('surface-glass', surf.glassA < 1 && !black);
   b.toggle('elements-glass', !!el.glass);
+  b.toggle('style-plain', !el.glass); // Plain's own look (styles.css), never mixed with Glass
   b.toggle('elements-oled', false);
   b.toggle('focus-light', foLight); // glass sheen strength
   b.toggle('theme-light', lightT);
@@ -217,7 +227,7 @@ export function paletteOf(ui) {
   if (/^#[0-9a-f]{6}$/i.test(ui?.colors?.highlight || '')) t = { ...t, accent: themeFrom(ui.colors.highlight).accent };
   // animated backgrounds keep the brand colour when the highlights are plain white
   const [pa, pl] = !ui?.colors?.highlight && t.bgAccent ? t.bgAccent : t.accent;
-  return { accent: pa, light: pl, warm: t.warm, grad: t.grad, black: !!((SURFACES[ui?.surface] || {}).black || t.black), ink: t.light ? '24,25,29' : '' };
+  return { accent: pa, light: pl, warm: t.warm, grad: t.grad, black: !!t.black, ink: t.light ? '24,25,29' : '' };
 }
 // "Light effects" when the GPU is off (software rendering), unless the user picked otherwise
 export function lightEffects(ui, info) {

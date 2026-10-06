@@ -677,3 +677,28 @@ body.elements-glass.light-fx.theme-light { --lg-fill: rgba(250, 250, 251, 0.88);
   body.elements-glass { --lg-rim-grad: linear-gradient(rgba(255, 255, 255, 0.75), rgba(255, 255, 255, 0.75)); }
   body.elements-glass.theme-light { --lg-rim-grad: linear-gradient(rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0.5)); }
 }
+
+/* ---- Plain (0.9.45, owner: "Plain mode and Glass mode, designed separately, never merged") ----
+   Glass gets its character from light passing through it; Plain gets it from being solid, like a well-made matte
+   object. Nothing is see-through. Depth comes from edges and light from above:
+   - raised things (buttons, cards, the chosen pill, the Dock, pop-ups) have a faint light top edge and a short, soft
+     drop under them;
+   - panels have a hairline all round, so a card and the rows inside it read as one piece;
+   - tracks (a switch's row of options) sit sunk in, with the chosen option raised inside.
+   Light and OLED have their own rules above; these are for the dark colours. */
+body.style-plain:not(.theme-light):not(.theme-oled) {
+  --pl-edge: inset 0 0 0 1px rgba(255, 255, 255, 0.055);
+  --pl-top: inset 0 1px 0 rgba(255, 255, 255, 0.075);
+  --pl-raise: 0 1px 2px rgba(0, 0, 0, 0.45), 0 6px 14px -6px rgba(0, 0, 0, 0.4);
+  --pl-sink: inset 0 1px 3px rgba(0, 0, 0, 0.5), inset 0 0 0 1px rgba(255, 255, 255, 0.035);
+}
+body.style-plain:not(.theme-light):not(.theme-oled) :is(.glass, .eg-con, .lrow, .toggle, .eg-emu):not(:focus):not(:focus-visible) { box-shadow: var(--pl-top), var(--pl-edge); }
+body.style-plain:not(.theme-light):not(.theme-oled) .btn:not(.primary):not(:focus):not(:focus-visible) { box-shadow: var(--pl-top), var(--pl-raise); }
+body.style-plain:not(.theme-light):not(.theme-oled) .btn.primary:not(:focus):not(:focus-visible) { box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), var(--pl-raise); }
+body.style-plain:not(.theme-light):not(.theme-oled) .seg { box-shadow: var(--pl-sink); }
+body.style-plain:not(.theme-light):not(.theme-oled) .seg-ink { background: var(--s3); box-shadow: var(--pl-top), var(--pl-raise); }
+body.style-plain:not(.theme-light):not(.theme-oled) :is(.dialog, .toast) { box-shadow: var(--pl-top), var(--pl-edge), var(--shadow-pop); }
+body.style-plain:not(.theme-light):not(.theme-oled) .dialog .menu-item:not(:focus) { box-shadow: var(--pl-edge); }
+body.style-plain:not(.theme-light):not(.theme-oled).bar-pill:is(.dock-black, .dock-accent) .tabs { box-shadow: var(--pl-top), var(--pl-edge), 0 10px 26px -10px rgba(0, 0, 0, 0.7); }
+body.style-plain:not(.theme-light):not(.theme-oled).bar-pill .tab-ink { box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5), 0 2px 6px -2px rgba(0, 0, 0, 0.6); }
+body.style-plain:not(.theme-light):not(.theme-oled) .top-search { box-shadow: var(--pl-sink); }
