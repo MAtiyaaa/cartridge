@@ -227,7 +227,7 @@
 
             <div class="subh"><Icon name="mdiPaletteOutline" :size="20" />Colour</div>
             <div class="swatches">
-              <button v-for="(t, k) in THEMES" :key="k" class="swatch" data-focus :class="{ on: (ui.theme || 'cartridge') === k, ink: t.light }" :style="{ background: `linear-gradient(135deg, ${t.grad[0]}, ${t.grad[2]} 60%, ${t.grad[4]})` }" :title="t.label" @click="saveConfig({ ui: { theme: k, gameTheme: null } })"><i :style="{ background: t.accent[0] }" /><span>{{ t.label }}</span></button>
+              <button v-for="(t, k) in THEMES" :key="k" class="swatch" data-focus :class="{ on: (ui.theme || 'cartridge') === k, ink: t.light }" :style="{ background: `linear-gradient(135deg, ${t.grad[0]}, ${t.grad[2]} 60%, ${t.grad[4]})` }" :title="t.label" @click="pickTheme(k)"><i :style="{ background: t.accent[0] }" /><span>{{ t.label }}</span></button>
               <button class="swatch custom" data-focus :class="{ on: ui.theme === 'custom' }" :style="ui.customColor ? { background: `linear-gradient(135deg, ${customT.grad[0]}, ${customT.grad[2]} 60%, ${customT.grad[4]})` } : {}" @click="pickColor"><Icon name="mdiEyedropperVariant" :size="18" /><span>Custom</span></button>
             </div>
             <!-- the background is part of the theme (owner, 0.9.21: one page, not two) -->
@@ -1022,7 +1022,10 @@ const mediaSizes = [{ v: 'compact', l: 'Compact' }, { v: 'spacious', l: 'Spaciou
 const EMU_PAGES = [{ v: 'emus', l: 'Emulators' }, { v: 'addons', l: 'Game Add-ons' }, { v: 'overview', l: 'Setup and Health' }, { v: 'folders', l: 'Console Folders' }, { v: 'links', l: 'Linked Folders' }];
 // a fork's Manage sheet asks for Linked Folders (0.9.33)
 watch(() => store.emuPageWant, (v) => { if (!v) return; store.emuPageWant = null; setEmuPage(v); nextTick(() => focusFirst(paneEl.value, `[data-key="emup-${v}"]`)); });
-const emuPage = ref(store.issues ? 'overview' : 'emus'); // problems waiting: open where they're listed
+// 0.9.44 (owner: Emulators opened on Setup and Health): every section opens on its first page; coming back from a
+// screen opened here returns to the page it was opened from (store.settingsSpot.page)
+const backTo = store.settingsSpot?.sec === sec.value ? store.settingsSpot.page : null;
+const emuPage = ref(sec.value === 'emu' && backTo ? backTo : 'emus');
 // installed games whose emulator has patches (0.9.16), by console then name
 const PATCH_EMU = [[/ps3/i, 'RPCS3', 'rpcs3'], [/ps4/i, 'shadPS4', 'shadps4'], [/\bps2\b/i, 'PCSX2', 'pcsx2'], [/\b(ngc|gamecube|gc|wii)\b/i, 'Dolphin', 'dolphin'], [/\bpsp\b/i, 'PPSSPP', 'ppsspp']];
 // Game Add-ons page (0.9.21): every installed game with add-ons, patches or game updates, by console, with a search
@@ -1054,6 +1057,7 @@ function gaSub(r) {
   return presentText(r.id) || (addonCount(r.id) ? `${addonCount(r.id)} installed by Cartridge` : parts.join(' · '));
 }
 async function openGameAddons(r) { await openModal('gameaddons', { romId: r.id, name: r.name }); loadAddons(); loadPs3Updates(); }
+onMounted(() => { if (emuPage.value === 'addons') setEmuPage('addons'); }); // back on Game Add-ons: load it again
 function setEmuPage(v) { emuPage.value = v; if (v === 'addons') { loadAddons(); if (ps3Ups.value === null) loadPs3Updates(); } }
 function stepEmu(d) {
   const i = EMU_PAGES.findIndex((p) => p.v === emuPage.value), n = EMU_PAGES[(i + d + EMU_PAGES.length) % EMU_PAGES.length].v;
@@ -1066,11 +1070,20 @@ async function loadPs3Updates(fresh = false) { ps3Ups.value = await call('ps3up:
 const TOUCH_SCROLL = [{ v: 'own', l: 'Cartridge’s' }, { v: 'browser', l: 'The Browser’s' }];
 const BAR_POS = [{ v: 'top', l: 'Top' }, { v: 'bottom', l: 'Bottom' }, { v: 'left', l: 'Left' }];
 // 0.9.32 (owner): black is the Dock's colour unless you pick another; Glass is its own choice now
+// 0.9.44 (owner: going to Light kept a black Dock): a black Dock turns white with Light and back to black when you leave
+// it; a Dock colour picked as glass or the accent stays as it is
+function pickTheme(k) {
+  const light = !!THEMES[k]?.light, dock = ui.value.dockColor;
+  const dockColor = light && dock === 'black' ? 'white' : !light && dock === 'white' && THEMES[ui.value.theme]?.light ? 'black' : undefined;
+  saveConfig({ ui: { theme: k, gameTheme: null, ...(dockColor ? { dockColor } : {}) } });
+}
 const DOCK_COLOR = [{ v: 'black', l: 'Black' }, { v: 'glass', l: 'Glass' }, { v: 'white', l: 'White' }, { v: 'accent', l: 'Accent' }];
 const BAR_ALIGN = [{ v: 'start', l: 'Aligned' }, { v: 'center', l: 'Centred' }];
 const BAR_STYLE = [{ v: 'plain', l: 'Plain' }, { v: 'pill', l: 'Floating Pill' }, { v: 'circle', l: 'Circles' }];
 const LOOK_PAGES = [{ v: 'theme', l: 'Theme' }, { v: 'cards', l: 'Text and Cards' }, { v: 'meta', l: 'Metadata' }, { v: 'motion', l: 'Motion and Sound' }, { v: 'controls', l: 'Controls' }];
-const lookPage = ref('theme'), lookAdv = ref(false);
+const lookPage = ref(sec.value === 'ui' && backTo ? backTo : 'theme'), lookAdv = ref(false);
+watch(sec, (v, was) => { if (was && v !== was) { emuPage.value = 'emus'; lookPage.value = 'theme'; lookAdv.value = false; } }); // a section always opens on its first page
+watch([sec, emuPage, lookPage], () => { store.settingsPage = sec.value === 'emu' ? emuPage.value : sec.value === 'ui' ? lookPage.value : null; }, { immediate: true });
 function setLookPage(v) { lookPage.value = v; lookAdv.value = false; }
 function stepLook(d) {
   if (sec.value !== 'ui') return false;

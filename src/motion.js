@@ -83,7 +83,7 @@ export function morph(fromEl, change, toSel, nextTick) {
   change();
   (async () => {
     await nextTick(); await nextTick();
-    const to = toSel && document.querySelector(toSel);
+    const to = toSel ? document.querySelector(toSel) : null;
     const b = to?.getBoundingClientRect();
     if (!b || b.width < 8 || b.height < 8 || !a.width) return;
     const fly = document.createElement('img');

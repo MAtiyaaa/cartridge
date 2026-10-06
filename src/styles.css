@@ -482,7 +482,8 @@ body.away *, body.away *::before, body.away *::after { animation-play-state: pau
 .modal-enter-active, .modal-leave-active { transition: opacity 220ms var(--ease-out); } /* fades ease, movement springs */
 .modal-leave-active { transition: opacity 170ms var(--ease-out); pointer-events: none; }
 .modal-enter-from, .modal-leave-to { opacity: 0; }
-.modal-enter-active, .modal-enter-active > .dialog, .modal-leave-active > .dialog, .modal-in > .dialog, .modal-in > .dialog.sheet { animation: none !important; }
+.modal-enter-active, .modal-in, .modal-leave-active, .modal-enter-active > .dialog, .modal-leave-active > .dialog, .modal-in > .dialog, .modal-in > .dialog.sheet { animation: none !important; }
+/* 0.9.44 (owner: the More sheet dimmed and opened again): the scrim's own fade (.scrim { animation: fade }) restarted when the enter classes came off, the same as the dialogs' did; .modal-in holds it off too */
 .modal-enter-active > .dialog { transition: transform var(--spring-pop-d) var(--spring-pop); }
 .modal-leave-active > .dialog { transition: transform 170ms var(--ease-out); }
 .modal-enter-from > .dialog { transform: scale(0.9); }

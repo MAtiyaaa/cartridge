@@ -1582,8 +1582,8 @@ watch(() => store.play, loadWeek);
 .st-store-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .st-gauge { position: relative; flex: none; height: 100%; aspect-ratio: 1; max-width: 50%; display: grid; place-items: center; container-type: inline-size; }
 .st-gauge svg { position: absolute; inset: 0; width: 100%; height: 100%; }
-.st-gauge line { stroke: rgba(255, 255, 255, 0.1); stroke-width: 2.6; stroke-linecap: round; transition: stroke 260ms ease; transition-delay: calc(var(--i) * 16ms + 200ms); }
-.st-gauge line.on { stroke: #fff; }
+.st-gauge line { stroke: color-mix(in srgb, var(--text) 12%, transparent); /* 0.9.44: the text colour, so Light gets dark ticks */ stroke-width: 2.6; stroke-linecap: round; transition: stroke 260ms ease; transition-delay: calc(var(--i) * 16ms + 200ms); }
+.st-gauge line.on { stroke: var(--text); }
 .st-gauge.low line.on { stroke: #ffb547; }
 .st-gauge > span { font-family: var(--display); font-weight: 700; font-size: clamp(13px, 22cqw, 40px); letter-spacing: -0.02em; }
 .st-gauge small { font-size: 0.62em; color: var(--muted); margin-left: 1px; }
@@ -1597,8 +1597,8 @@ watch(() => store.play, loadWeek);
 .st-sc-n { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .st-sc-n :deep(.picon), .st-sc-n :deep(svg), .st-sc-n :deep(img) { flex: none; }
 @container (max-width: 560px) { .st-sc-name { display: none; } .st-store-con { grid-template-columns: auto 1fr auto; } } /* no room for names: icons only (0.9.29: only the name; PIcon is a span too and hid with it) */
-.st-store-con i { height: 5px; border-radius: 3px; background: rgba(255, 255, 255, 0.08); overflow: hidden; }
-.st-store-con b { display: block; height: 100%; border-radius: inherit; background: rgba(255, 255, 255, 0.55); }
+.st-store-con i { height: 5px; border-radius: 3px; background: color-mix(in srgb, var(--text) 10%, transparent); overflow: hidden; }
+.st-store-con b { display: block; height: 100%; border-radius: inherit; background: color-mix(in srgb, var(--text) 55%, transparent); } /* 0.9.44: the text colour, dark on Light */
 .st-store-con em { font-style: normal; color: var(--text); font-weight: 600; }
 @container (min-height: 300px) { .st-store-cons { display: flex; } }
 @container (min-width: 520px) and (min-height: 200px) { .st-store-cons { display: flex; } .st-store-text .st-num { margin-top: 0; } .st-store-text { justify-content: center; } }
@@ -1720,4 +1720,16 @@ watch(() => store.play, loadWeek);
 .st-disc-boost { height: 92%; aspect-ratio: 1; border-radius: 50%; display: grid; place-items: center; } /* 0.9.39: no faster spin on focus any more */
 .st-disc-boost > .st-disc { height: 100%; }
 :global(body.motion-reduce .st-disc) { animation: none; }
+/* Light (0.9.44, owner: the storage ring didn't show on Light): the faint white tracks, pills and dots that sit on a
+   plain tile or the board are drawn in the text colour instead (tiles over art keep their white) */
+:global(body.theme-light .st-meter), :global(body.theme-light .st-tro-bar), :global(body.theme-light .st-bar.none i) { background: rgba(28, 28, 30, 0.1); }
+:global(body.theme-light .st-count) { background: rgba(28, 28, 30, 0.07); }
+:global(body.theme-light .st-face:has(.st-scrim) .st-count), :global(body.theme-light .st-face:has(.st-art) .st-count) { background: rgba(255, 255, 255, 0.16); }
+:global(body.theme-light .st-pages i) { background: rgba(28, 28, 30, 0.28); }
+:global(body.theme-light .st-pages i.on) { background: #1c1c1e; }
+:global(body.theme-light .st-add-plus) { background: rgba(28, 28, 30, 0.07); }
+:global(body.theme-light .st-ov-map) { background: rgba(28, 28, 30, 0.04); }
+:global(body.theme-light .st-ov-map i) { background: rgba(28, 28, 30, 0.12); }
+:global(body.theme-light .st-slots i) { box-shadow: inset 0 0 0 1px rgba(28, 28, 30, 0.12); }
+:global(body.theme-light .st-ghost) { box-shadow: inset 0 0 0 2px rgba(28, 28, 30, 0.4); }
 </style>
