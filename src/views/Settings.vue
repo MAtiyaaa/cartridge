@@ -1195,6 +1195,8 @@ onMounted(() => {
 .swatch { width: 74px; height: 50px; border-radius: var(--r-md); display: flex; align-items: flex-end; padding: 6px 8px; font-size: var(--t-xs); font-weight: 600; color: #fff; text-shadow: 0 1px 4px rgba(0,0,0,.6); box-shadow: inset 0 0 0 1px rgba(255,255,255,.15); }
 /* a colour can't take the grey fill: chosen is a soft ring, focus the full white one */
 .swatch.on { box-shadow: 0 0 0 3px var(--s0), 0 0 0 5px rgba(255, 255, 255, 0.45); }
+/* focus is the full focus colour, wider than the chosen ring, so a focused chosen colour still shows it moved (0.9.47: the audit found the two identical) */
+.pad-mode .swatch:focus, .swatch:focus-visible { box-shadow: 0 0 0 3px var(--s0), 0 0 0 6px var(--focus); }
 .swatch { position: relative; }
 .swatch i { position: absolute; top: 6px; right: 6px; width: 12px; height: 12px; border-radius: 50%; box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.7); }
 .swatch.ink { color: #1d1e22; text-shadow: none; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12); } /* Light's swatch (0.9.38) */

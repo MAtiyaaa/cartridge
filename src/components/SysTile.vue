@@ -11,7 +11,7 @@
     </div>
     <div>
       <div v-if="!logo || logoFail" class="nm">{{ p.display_name }}</div>
-      <div v-if="meta || maker" class="fam"><svg v-if="maker" class="maker" :class="{ symbol: maker.symbol, tall: maker.tall }" :viewBox="maker.vb" :aria-label="maker.name" role="img"><path v-for="(q, i) in maker.paths || [maker]" :key="i" :d="q.d" :fill-rule="q.evenodd ? 'evenodd' : null" /></svg><span v-if="maker && meta">·</span><span v-if="meta">{{ meta }}</span></div>
+      <div v-if="meta || maker" class="fam"><svg v-if="maker" class="maker" :class="[{ symbol: maker.symbol, tall: maker.tall }, 'm-' + makerKey]" :viewBox="maker.vb" :aria-label="maker.name" role="img"><path v-for="(q, i) in maker.paths || [maker]" :key="i" :d="q.d" :fill-rule="q.evenodd ? 'evenodd' : null" /></svg><span v-if="maker && meta">·</span><span v-if="meta">{{ meta }}</span></div>
       <div class="ct">{{ p.rom_count }} {{ p.rom_count === 1 ? 'game' : 'games' }}<template v-if="onDevice"> · <span class="ondev">{{ onDevice }} on device</span></template></div>
     </div>
   </button>
@@ -27,7 +27,8 @@ const wide = ref(false); // a wide drawing (Switch with its Joy-Cons) gets a wid
 const props = defineProps({ p: Object });
 defineEmits(['open', 'focused']);
 // the maker as its logo, at the height of the text (0.9.16); the family name stays text when there's none
-const maker = computed(() => MAKERS[makerOf(props.p)] || null);
+const makerKey = computed(() => makerOf(props.p));
+const maker = computed(() => MAKERS[makerKey.value] || null);
 const meta = computed(() => [maker.value ? '' : props.p.family_name, props.p.generation ? `Gen ${props.p.generation}` : '', props.p.category].filter(Boolean).slice(0, maker.value ? 1 : 2).join(' · '));
 const onDevice = computed(() => romsOf(props.p.id).filter((r) => store.installed[r.id]).length);
 

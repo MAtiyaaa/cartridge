@@ -10,6 +10,7 @@
   "scripts": {
     "dev": "vite",
     "test": "node --test test/*.test.js",
+    "audit:ui": "node tools/ui-audit/run.js",
     "build:ui": "vite build",
     "start": "vite build && electron .",
     "dist": "vite build && electron-builder --linux AppImage --x64 --publish never",

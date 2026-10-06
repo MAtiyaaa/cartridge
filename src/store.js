@@ -31,6 +31,7 @@ export const store = reactive({
   quickMenu: false,
   tour: null, // the interactive tour (FirstTour.vue)
   welcoming: false, // the welcome (0.9.15) is on screen
+  welcomeBg: false, // a background was picked in the welcome's Look step (0.9.47), so it shows instead of Ribbons
   lastSearch: '',
   logos: {},
   art: {},

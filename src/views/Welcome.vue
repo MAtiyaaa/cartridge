@@ -17,7 +17,7 @@
     <!-- every step is one centred card over the background (owner, 0.9.16) -->
     <div class="w-stage">
     <Transition :name="dir > 0 ? 'w-next' : 'w-prev'" mode="out-in">
-      <section :key="step" class="w-step glass" :class="'w-' + step" data-scroll>
+      <section :key="step" class="w-step glass" :class="['w-' + step, step === 'look' && 'w-look-step']" data-scroll>
         <!-- 1 -->
         <template v-if="step === 'hello'">
           <Logo :size="96" class="w-logo" />
@@ -35,6 +35,25 @@
           <div class="w-act">
             <button class="btn" data-focus @click="prev"><Icon name="mdiArrowLeft" />Back</button>
             <button class="btn primary" data-focus @click="saveName">{{ name.trim() ? 'Continue' : 'Skip' }}<Icon name="mdiArrowRight" /></button>
+          </div>
+        </template>
+
+        <!-- 2b (0.9.47, owner): make it yours early: Style, colour and background, the same settings as Look & Feel -->
+        <template v-else-if="step === 'look'">
+          <h1>Make It Yours</h1>
+          <p class="w-lead">Pick how Cartridge looks. Everything here can be changed later in Settings → Look &amp; Feel.</p>
+          <div class="w-box stack w-look">
+            <span class="muted small">Style</span>
+            <div class="seg"><button v-for="(v, k) in STYLES" :key="k" data-focus :class="{ on: styleOf(store.config.ui) === k }" @click="pickStyle(k)">{{ v.label }}</button></div>
+            <span class="muted small w-look-sub">{{ STYLES[styleOf(store.config.ui)].sub }}</span>
+            <span class="muted small">Colour</span>
+            <div class="w-swatches"><button v-for="(t, k) in THEMES" :key="k" class="w-swatch" data-focus :class="{ on: (store.config.ui.theme || 'cartridge') === k, ink: t.light }" :style="{ background: `linear-gradient(135deg, ${t.grad[0]}, ${t.grad[2]} 60%, ${t.grad[4]})` }" @click="pickTheme(k)"><i :style="{ background: t.accent[0] }" /><span>{{ t.label }}</span></button></div>
+            <span class="muted small">Background</span>
+            <div class="w-bgs"><button v-for="b in LOOK_BGS" :key="b.v" class="w-bg" data-focus :class="{ on: lookBg === b.v }" @click="pickBg(b.v)"><img v-if="bgPics[b.v]" :src="bgPics[b.v]" alt="" /><span>{{ b.l }}</span></button></div>
+          </div>
+          <div class="w-act">
+            <button class="btn" data-focus @click="prev"><Icon name="mdiArrowLeft" />Back</button>
+            <button class="btn primary" data-focus @click="next()">Continue<Icon name="mdiArrowRight" /></button>
           </div>
         </template>
 
@@ -442,8 +461,10 @@ import EmuSetup from './EmuSetup.vue';
 import EmuGet from '../components/EmuGet.vue';
 import RommLocal from '../components/RommLocal.vue';
 import { padInfo, detectPad, padKind } from '../pad.js';
+import { THEMES, STYLES, styleOf, paletteOf } from '../themes.js';
+import { BACKGROUNDS, RENDERERS, bgPreview } from '../bgRenderers.js';
 
-const STEPS = ['hello', 'name', 'pad', 'steam', 'emus', 'romm', 'scan', 'extras', 'sync', 'self', 'done'];
+const STEPS = ['hello', 'name', 'look', 'pad', 'steam', 'emus', 'romm', 'scan', 'extras', 'sync', 'self', 'done'];
 const ROMM_GUIDE = 'https://docs.romm.app/latest/getting-started/quick-start/'; // RomM's setup guide (owner: not the docs home)
 const el = ref(null);
 const at = ref(0), dir = ref(1);
@@ -467,6 +488,20 @@ const serverName = computed(() => { const s = store.config.server || {}; if (sto
 function go(i, d) { dir.value = d; at.value = Math.max(0, Math.min(STEPS.length - 1, i)); }
 function next() { romm.value = ''; sy.value = ''; picking.value = false; go(at.value + 1, 1); }
 function prev() { romm.value = ''; sy.value = ''; picking.value = false; go(at.value - 1, -1); }
+
+// the Look step: the same writes as Settings' pickStyle/pickTheme, so both stay in step
+function pickStyle(k) { saveConfig({ ui: { style: k, surface: k === 'glass' ? 'glass' : 'solid', elements: k } }); }
+function pickTheme(k) {
+  const ui = store.config.ui, light = !!THEMES[k]?.light, dock = ui.dockColor;
+  const dockColor = light && dock === 'black' ? 'white' : !light && dock === 'white' && THEMES[ui.theme]?.light ? 'black' : undefined;
+  saveConfig({ ui: { theme: k, gameTheme: null, ...(dockColor ? { dockColor } : {}) } });
+}
+// the animated ones and Still (game artwork and wallpapers need a library or a file, so they stay in Settings)
+const LOOK_BGS = BACKGROUNDS.filter((b) => b.group === 'Theme' || b.v === 'solid');
+const lookBg = computed(() => (store.welcomeBg ? store.config.ui.bgStyle : 'ribbons') || 'ribbons');
+const bgPics = computed(() => { const pal = paletteOf(store.config.ui), o = {}; if (step.value !== 'look') return o; for (const b of LOOK_BGS) if (RENDERERS[b.v]) o[b.v] = bgPreview(b.v, pal, 192, 108); return o; });
+// the welcome shows Ribbons until a background is picked here (Background.vue reads store.welcomeBg)
+async function pickBg(v) { store.welcomeBg = true; await saveConfig({ ui: { bgStyle: v } }); }
 
 async function saveName() {
   const n = name.value.trim().slice(0, 40);
@@ -711,6 +746,22 @@ onBeforeUnmount(() => { off?.(); clearTimeout(padT); window.removeEventListener(
 .w-logo { width: auto !important; margin-bottom: var(--s-2); }
 .w-lead { color: var(--muted); font-size: var(--t-md); line-height: 1.55; margin: 0; }
 .w-box { text-align: left; }
+.w-look { align-items: center; gap: var(--s-2); }
+.w-look > .muted:not(.w-look-sub) { margin-top: var(--s-1); }
+.w-step.w-look-step { gap: var(--s-3); }
+.w-look-sub { text-align: center; }
+.w-swatches, .w-bgs { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+.w-swatch { position: relative; width: 64px; height: 42px; border-radius: var(--r-md); display: flex; align-items: flex-end; padding: 4px 6px; font-size: 11px; font-weight: 600; color: #fff; text-shadow: 0 1px 4px rgba(0,0,0,.6); box-shadow: inset 0 0 0 1px rgba(255,255,255,.15); }
+.w-swatch i { position: absolute; top: 5px; right: 5px; width: 10px; height: 10px; border-radius: 50%; box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.7); }
+.w-swatch.ink { color: #1d1e22; text-shadow: none; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12); }
+.w-bg { position: relative; width: 108px; aspect-ratio: 16 / 9; border-radius: var(--r-md); overflow: hidden; background: var(--s2); display: flex; align-items: flex-end; padding: 6px 8px; font-size: var(--t-xs); font-weight: 600; color: #fff; text-shadow: 0 1px 4px rgba(0,0,0,.7); box-shadow: inset 0 0 0 1px var(--line, rgba(255,255,255,.15)); }
+.w-bg img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.w-bg span { position: relative; }
+/* chosen = a light outer ring; focus keeps the app's own white focus (owner: chosen and focused never look alike) */
+.w-swatch.on, .w-bg.on { box-shadow: 0 0 0 3px var(--s0), 0 0 0 5px rgba(255, 255, 255, 0.45); }
+.pad-mode .w-swatch:focus, .w-swatch:focus-visible, .pad-mode .w-bg:focus, .w-bg:focus-visible { box-shadow: 0 0 0 3px var(--s0), 0 0 0 6px var(--focus); }
+:global(body.theme-light .w-bg) { color: #1d1e22; text-shadow: 0 0 6px rgba(255, 255, 255, 0.9); }
+:global(body.theme-light .w-swatch.on), :global(body.theme-light .w-bg.on) { box-shadow: 0 0 0 3px var(--s0), 0 0 0 5px rgba(0, 0, 0, 0.35); }
 .w-act { display: flex; justify-content: center; gap: var(--s-3); flex-wrap: wrap; margin-top: var(--s-3); }
 .w-good { display: flex; align-items: center; justify-content: center; gap: var(--s-2); color: #7ee787; font-weight: 600; font-size: var(--t-md); }
 .w-done { color: #7ee787; }

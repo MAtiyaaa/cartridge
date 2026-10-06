@@ -177,8 +177,8 @@ body.bar-circle:not(.bar-left) .tab-ink { width: 44px !important; height: 44px; 
 body.bar-circle.bar-left .tab { width: 52px; height: 52px; }
 body.bar-circle.bar-left .tab-ink { border-radius: 50%; }
 /* pages arrive from where the bar sends them: up or down when it's on the left */
-@keyframes viewFromB { from { opacity: 0; transform: translateY(32px); } }
-@keyframes viewFromT { from { opacity: 0; transform: translateY(-32px); } }
+@keyframes viewFromB { from { opacity: 0; transform: translateY(24px); } }
+@keyframes viewFromT { from { opacity: 0; transform: translateY(-24px); } }
 body.bar-left main.main[data-dir='r'] > * { animation-name: viewFromB; }
 body.bar-left main.main[data-dir='l'] > * { animation-name: viewFromT; }
 .statusbar .sys { display: flex; align-items: center; gap: 16px; color: rgba(255, 255, 255, 0.78); font-size: var(--t-sm); font-weight: 600; font-variant-numeric: tabular-nums; }
@@ -203,11 +203,11 @@ body.bar-left main.main[data-dir='l'] > * { animation-name: viewFromT; }
 @keyframes viewIn { from { opacity: 0; } }
 /* pages arrive from where they are (0.9.19): a tab from its side, a deeper page settling in, back
    easing out of the way. Short, one move, then still: no bounce. */
-@keyframes viewFromR { from { opacity: 0; transform: translateX(36px); } }
-@keyframes viewFromL { from { opacity: 0; transform: translateX(-36px); } }
-@keyframes viewDeeper { from { opacity: 0; transform: translateY(18px) scale(0.975); } }
-@keyframes viewBack { from { opacity: 0; transform: scale(1.025); } }
-main.main[data-dir] > * { animation-duration: var(--spring-d, 420ms); animation-timing-function: var(--spring, var(--ease-out)); } /* 0.9.38: on a spring */
+@keyframes viewFromR { from { opacity: 0; transform: translateX(24px); } } /* CAE: heavy, short travel */
+@keyframes viewFromL { from { opacity: 0; transform: translateX(-24px); } }
+@keyframes viewDeeper { from { opacity: 0; transform: translateY(12px) scale(0.985); } }
+@keyframes viewBack { from { opacity: 0; transform: scale(1.015); } }
+main.main[data-dir] > * { animation-duration: var(--spring-soft-d, 460ms); animation-timing-function: var(--spring-soft, var(--ease-out)); } /* CAE: pages are big surfaces, the heavy profile */
 /* without the GPU a whole page moving or fading is the one costly thing (measured in 0.9.38: going back to a full
    Library doubled the slow frames), so pages keep their short fade there; the picture flying in, the sliding pills,
    presses and pop-ups carry the motion instead */
@@ -215,13 +215,13 @@ body.light-fx main.main[data-dir] > * { animation-name: viewIn; animation-durati
 main.main[data-dir='r'] > * { animation-name: viewFromR; }
 main.main[data-dir='l'] > * { animation-name: viewFromL; }
 main.main[data-dir='in'] > * { animation-name: viewDeeper; }
-main.main[data-dir='out'] > * { animation-name: viewBack; animation-duration: 260ms; }
+main.main[data-dir='out'] > * { animation-name: viewBack; animation-duration: var(--spring-d, 340ms); animation-timing-function: var(--spring, var(--ease-out)); } /* back: quicker than going in */
 body.motion-reduce main.main[data-dir] > * { animation-name: viewIn; animation-duration: 120ms; }
 /* 0.9.23: Start's arrival everywhere. A page's parts (its header, then each section or row) settle in one
    after another: up a little, from just smaller, 40 ms apart, once when the page opens. Only opacity
    and transform, so it stays smooth without the GPU; Settings' sections change on every move, so they
    only fade, quickly. */
-@keyframes settle { from { opacity: 0; transform: translateY(14px) scale(0.985); } }
+@keyframes settle { from { opacity: 0; transform: translateY(10px) scale(0.99); } }
 .view > *, .home > .hero, .home .shelves > .shelf-wrap { animation: settle var(--d-settle) var(--ease-out) backwards; } /* backwards: no transform left behind (a fixed child would follow it) */
 .view > :nth-child(2), .home .shelves > .shelf-wrap:nth-child(1) { animation-delay: 40ms; }
 .view > :nth-child(3), .home .shelves > .shelf-wrap:nth-child(2) { animation-delay: 80ms; }
@@ -334,6 +334,10 @@ body.surface-glass .glass, body.elements-glass .glass { background: var(--glass-
 .systile .maker { height: 0.9em; width: auto; fill: currentColor; flex: none; }
 .systile .maker.symbol { height: 1.1em; }
 .systile .maker.tall { height: 1.45em; margin: -0.28em 0; } /* Nintendo: the pill around the letters (0.9.21) */
+/* 0.9.47 (owner: SEGA read much smaller than Nintendo and SONY): SEGA's letters are short and wide-spaced, so it is drawn
+   taller to match their visual weight; Microsoft too */
+.systile .maker.m-sega { height: 1.3em; margin: -0.2em 0; }
+.systile .maker.m-microsoft { height: 1.05em; }
 .systile .ct { display: inline-flex; gap: 6px; padding: 4px 8px; border-radius: var(--r-sm); background: rgba(0, 0, 0, 0.35); color: #fff; font-size: var(--t-xs); font-weight: 600; }
 .systile:focus { transform: translateY(-4px) scale(1.03); box-shadow: var(--ring), 0 20px 40px -22px rgba(0, 0, 0, 0.9); }
 .systile:focus .glyph { opacity: 0.8; transform: translateY(-2px) scale(1.04); }
@@ -348,7 +352,7 @@ body.light-fx .systile .glyph { filter: saturate(0.6) brightness(1.1); }
 .toast.ok .ti { background: rgba(63, 185, 80, 0.2); color: var(--green-l); }
 .toast.error .ti { background: rgba(255, 107, 97, 0.18); color: #ffa39c; }
 .toasts.shifted { right: 430px; }
-@keyframes toastIn { from { transform: translateX(30px); opacity: 0; } }
+@keyframes toastIn { from { transform: translateX(16px); opacity: 0; } }
 
 .scrim { position: fixed; inset: 0; background: rgba(3, 4, 7, 0.82); display: grid; place-items: center; z-index: 50; animation: fade 0.2s; }
 @keyframes fade { from { opacity: 0; } }
@@ -462,7 +466,7 @@ body.light-fx .coll .art, body.light-fx .coll .mosaic { transition-property: tra
 /* section titles are words only (docs/design.md): the icons some screens put in front are hidden */
 .subh > svg.icon:first-child { display: none; }
 /* rows that turn white on focus don't also get the ring */
-.pad-mode :is(.menu-item, .rail-item, .prow, .qm-item, .up-row, .sm-row, .ss-emu, .lrow, .toggle, .tab, .ga-row, .cc-row, .lf-card, .tl-e):focus, :is(.menu-item, .rail-item, .prow, .qm-item, .up-row, .sm-row, .ss-emu, .lrow, .ga-row, .cc-row, .lf-card, .tl-e):focus-visible { box-shadow: none; } /* rows: the fill is the focus (0.9.37: About, Its Games, Linked Folders had the ring too) */
+.pad-mode :is(.menu-item, .rail-item, .prow, .qm-item, .up-row, .sm-row, .ss-emu, .lrow, .toggle, .tab, .ga-row, .cc-row, .lf-card, .tl-e, .aa-row, .ad-row, .eg-emu, .pt-row, .file, .eg-drive):focus, :is(.menu-item, .rail-item, .prow, .qm-item, .up-row, .sm-row, .ss-emu, .lrow, .ga-row, .cc-row, .lf-card, .tl-e, .aa-row, .ad-row, .eg-emu, .pt-row, .file, .eg-drive):focus-visible { box-shadow: none; } /* rows: the fill is the focus (0.9.37: About, Its Games, Linked Folders had the ring too) */
 
 /* a small count on a page tab (Emulators → Updates, 0.9.16) */
 .count-dot { display: inline-grid; place-items: center; min-width: 1.4em; height: 1.4em; padding: 0 0.35em; margin-left: 6px; border-radius: 999px; background: #f5c542; color: #1a1400; font-size: 0.75em; font-weight: 700; }
@@ -481,16 +485,17 @@ body.away *, body.away *::before, body.away *::after { animation-play-state: pau
 /* pop-ups: open from the button that asked (transform-origin set in App.vue), close the same way back; a hand-over
    between two cross-fades. The page behind dims with the scrim. */
 .modal-enter-active, .modal-leave-active { transition: opacity 220ms var(--ease-out); } /* fades ease, movement springs */
-.modal-leave-active { transition: opacity 170ms var(--ease-out); pointer-events: none; }
+.modal-leave-active { transition: opacity 150ms var(--ease-out); pointer-events: none; } /* closing is quicker than opening */
 .modal-enter-from, .modal-leave-to { opacity: 0; }
 .modal-enter-active, .modal-in, .modal-leave-active, .modal-enter-active > .dialog, .modal-leave-active > .dialog, .modal-in > .dialog, .modal-in > .dialog.sheet { animation: none !important; }
 /* 0.9.44 (owner: the More sheet dimmed and opened again): the scrim's own fade (.scrim { animation: fade }) restarted when the enter classes came off, the same as the dialogs' did; .modal-in holds it off too */
-.modal-enter-active > .dialog { transition: transform var(--spring-pop-d) var(--spring-pop); }
-.modal-leave-active > .dialog { transition: transform 170ms var(--ease-out); }
-.modal-enter-from > .dialog { transform: scale(0.9); }
-.modal-leave-to > .dialog { transform: scale(0.97); }
+.modal-enter-active > .dialog { transition: transform var(--spring-d) var(--spring); } /* CAE: arrives and stops, no bounce */
+.modal-enter-active > .dialog.sheet { transition: transform var(--spring-soft-d) var(--spring-soft); } /* sheets: bigger, heavier */
+.modal-leave-active > .dialog { transition: transform 150ms var(--ease-out); }
+.modal-enter-from > .dialog { transform: scale(0.96); }
+.modal-leave-to > .dialog { transform: scale(0.98); }
 /* bottom sheets come up and go down the same path */
-.modal-enter-from > .dialog.sheet { transform: translateY(90px); transform-origin: 50% 100% !important; }
+.modal-enter-from > .dialog.sheet { transform: translateY(48px); transform-origin: 50% 100% !important; }
 .modal-leave-to > .dialog.sheet { transform: translateY(40px); }
 /* without the GPU each scaled frame of a big box is repainted: opacity only, short */
 body.light-fx .modal-enter-active { transition-duration: var(--d-med); }
@@ -503,7 +508,7 @@ body.motion-reduce .modal-enter-from > .dialog, body.motion-reduce .modal-leave-
    runs the same without the GPU (light effects), where 0.9.37 fell back to plain fades. */
 /* presses: down at once, back on a spring with one small overshoot */
 .btn, .menu-item, .lrow, .seg button, .toggle { transition: background var(--d-fast), color var(--d-fast), transform var(--spring-pop-d) var(--spring-pop); }
-.btn:active, .menu-item:active, .seg button:active, .btn.pressed, .menu-item.pressed { transform: scale(0.95); transition: transform 80ms ease-out, background var(--d-fast), color var(--d-fast); }
+.btn:active, .menu-item:active, .seg button:active, .btn.pressed, .menu-item.pressed { transform: scale(0.965); transition: transform 80ms ease-out, background var(--d-fast), color var(--d-fast); }
 .lrow:active, .lrow.pressed, .toggle:active, .toggle.pressed { transform: scale(0.985); transition: transform 80ms ease-out, background var(--d-fast), color var(--d-fast); } /* wide rows: a smaller squeeze reads the same */
 /* where you are: a button lifts a little as focus lands on it */
 .pad-mode .btn:focus:not(:active):not(.pressed), .btn:focus-visible:not(:active):not(.pressed) { transform: scale(1.03); }
@@ -548,10 +553,18 @@ body.theme-light {
   --tile-bg: #e3e3e8; --tile-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.05), 0 4px 10px -4px rgba(20, 20, 30, 0.18);
 }
 /* Light: cards, rows and dialogs are raised; what's chosen is a grey fill, where you are is near-black */
-body.theme-light :is(.lrow, .toggle, .glass, .st-face, .systile, .eg-con, .card .art, .coll .art) { box-shadow: var(--weight-edge), var(--weight); }
+/* 0.9.47: never on what has focus. :is() takes its most specific part (.card .art), so this outranked the focus ring and
+   Light lost every card, console and unlock highlight */
+body.theme-light :is(.lrow, .toggle, .glass, .st-face, .systile, .eg-con):not(:focus):not(:focus-visible), body.theme-light :is(.card, .coll):not(:focus) .art { box-shadow: var(--weight-edge), var(--weight); }
 body.theme-light :is(.dialog, .toast, .menu-sheet) { box-shadow: var(--shadow-pop); }
 body.theme-light :is(.lrow, .toggle):is(:focus-visible, .pad-mode :focus) { box-shadow: var(--weight); }
-body.theme-light .btn:not(.primary) { box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.06); }
+/* 0.9.47: colours written for dark pages that vanished on Light: the search button (white icon on a white Dock) and the
+   amber warning text */
+body.theme-light .top-search { color: rgba(28, 28, 30, 0.7); }
+body.theme-light .top-search:not(.open):not(:focus-within) { color: rgba(28, 28, 30, 0.6); }
+body.theme-light .top-search:not(.open):not(:focus-within):hover { color: #1c1c1e; background: rgba(0, 0, 0, 0.05); }
+body.theme-light :is(.ss-warn, .status.warn, .chip.none, .lf-wire.bad, .sv-badge.pre, .sp-e.skip) { color: #8a5a00; }
+body.theme-light .btn:not(.primary):not(:focus):not(:focus-visible) { box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.06); }
 body.theme-light .scrim { background: rgba(235, 235, 239, 0.6); }
 body.theme-light .statusbar::before { background: linear-gradient(180deg, rgba(235, 235, 239, 0.9) 0%, rgba(235, 235, 239, 0.5) 62%, rgba(235, 235, 239, 0) 100%); }
 body.theme-light.bar-bottom .statusbar::before { background: linear-gradient(0deg, rgba(235, 235, 239, 0.9) 0%, rgba(235, 235, 239, 0.5) 62%, rgba(235, 235, 239, 0) 100%); }
@@ -559,6 +572,10 @@ body.theme-light.bar-pill.dock-white .tabs { background: rgba(255, 255, 255, 0.9
 body.theme-light .card:focus .title { color: var(--text); }
 /* console wordmarks: dark on the page, white where they sit on a picture or the idle screen */
 body.theme-light .cmark { filter: brightness(0); opacity: 0.78; }
+/* 0.9.47 (owner: the console logo vanished in the white of a focused row): a wordmark on a focus fill takes the fill's
+   text colour, dark on a light fill, white on a dark one */
+body.focus-light :is(.menu-item, .lrow, .aa-row, .ad-row, .ga-row, .cc-row, .pt-row, .prow, .up-row, .sm-row, .ss-emu, .eg-emu, .tl-e):is(:focus, :focus-visible) .cmark { filter: brightness(0); opacity: 0.82; }
+body:not(.focus-light) :is(.menu-item, .lrow, .aa-row, .ad-row, .ga-row, .cc-row, .pt-row, .prow, .up-row, .sm-row, .ss-emu, .eg-emu, .tl-e):is(:focus, :focus-visible) .cmark { filter: brightness(0) invert(1); opacity: 0.92; }
 body.theme-light :is(.idle, .st-face:has(.st-scrim), .st-face:has(.st-art)) .cmark { filter: brightness(0) invert(1); opacity: 0.92; }
 /* Start tiles drawn over a game's picture keep light text */
 body.theme-light .st-face:has(.st-scrim) { color: #f4f4f5; --text: #f4f4f5; --muted: rgba(255, 255, 255, 0.8); --dim: rgba(255, 255, 255, 0.6); }
@@ -570,7 +587,7 @@ body.theme-light .swatch.on { box-shadow: 0 0 0 3px var(--s0), 0 0 0 5px rgba(0,
 
 /* OLED (0.9.41, owner: "no difference between Cartridge and OLED"): everything black, panels set apart only by a fine
    grey edge, so a black screen stays black and nothing glows */
-body.theme-oled :is(.lrow, .toggle, .glass, .st-face, .eg-con, .dialog, .menu-sheet, .toast, .seg, .btn:not(.primary)) { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1); }
+body.theme-oled :is(.lrow, .toggle, .glass, .st-face, .eg-con, .dialog, .menu-sheet, .toast, .seg, .btn:not(.primary)):not(:focus):not(:focus-visible) { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1); }
 body.theme-oled .statusbar::before { background: linear-gradient(0deg, #000 0%, rgba(0, 0, 0, 0.6) 62%, rgba(0, 0, 0, 0) 100%); }
 
 /* ---- Liquid Glass (0.9.42, rebuilt in 0.9.44 from the owner's references with the image-to-code skill; rules from
@@ -592,29 +609,31 @@ body.elements-glass {
   --lg-fill-hover: rgba(255, 255, 255, 0.1);
   --lg-pane: rgba(var(--lg-tint), 0.5); /* sheets and pop-ups: dark glass so long text reads, like the frosted window */
   --lg-blur: blur(22px) saturate(1.8) brightness(1.08);
-  --lg-rim-grad: linear-gradient(135deg, rgba(255, 255, 255, 0.9) 0%, rgba(255, 255, 255, 0.26) 20%, rgba(255, 255, 255, 0.07) 46%, rgba(255, 255, 255, 0.14) 74%, rgba(255, 255, 255, 0.72) 100%);
+  --lg-rim-grad: linear-gradient(var(--lg-angle, 135deg), rgba(255, 255, 255, 0.9) 0%, rgba(255, 255, 255, 0.26) 20%, rgba(255, 255, 255, 0.07) 46%, rgba(255, 255, 255, 0.14) 74%, rgba(255, 255, 255, 0.72) 100%);
   --lg-bevel: inset 0 1px 1px rgba(255, 255, 255, 0.26), inset 0 -1px 2px rgba(0, 0, 0, 0.34), inset 0 0 0 3px rgba(255, 255, 255, 0.03), inset 0 12px 26px -16px rgba(255, 255, 255, 0.22);
   --lg-drop: 0 18px 44px -16px rgba(0, 0, 0, 0.62), 0 2px 6px rgba(0, 0, 0, 0.22);
   --lg-gloss: linear-gradient(166deg, rgba(255, 255, 255, 0.15) 0%, rgba(255, 255, 255, 0.06) 36%, rgba(255, 255, 255, 0) 36.4%);
   --lg-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 .5 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.2'/%3E%3C/svg%3E");
   --lg-lit: rgba(var(--lg-hi), 0.88); /* prominent glass: the highlight colour nearly solid, so focus reads white with dark text (owner: not grey) */
-  --lg-lit-rim: linear-gradient(135deg, #fff 0%, rgba(255, 255, 255, 0.55) 30%, rgba(255, 255, 255, 0.3) 55%, rgba(255, 255, 255, 0.9) 100%);
+  --lg-lit-rim: linear-gradient(var(--lg-angle, 135deg), #fff 0%, rgba(255, 255, 255, 0.55) 30%, rgba(255, 255, 255, 0.3) 55%, rgba(255, 255, 255, 0.9) 100%);
   --lg-lit-glow: 0 0 0 1px rgba(255, 255, 255, 0.35), 0 0 26px -2px rgba(var(--lg-hi), 0.45), 0 14px 34px -14px rgba(0, 0, 0, 0.6);
   --lg-on-lit: var(--lg-on-hi);
+  --lg-sel: rgba(255, 255, 255, 0.2); /* chosen but not focused (0.9.47): brighter glass with white text, never the lit focus look */
 }
 body.elements-glass.theme-light {
   --lg-fill: rgba(255, 255, 255, 0.42);
   --lg-fill-hover: rgba(255, 255, 255, 0.62);
   --lg-pane: rgba(250, 250, 251, 0.62);
   --lg-blur: blur(22px) saturate(1.7) brightness(1.04);
-  --lg-rim-grad: linear-gradient(135deg, #fff 0%, rgba(255, 255, 255, 0.7) 24%, rgba(0, 0, 0, 0.06) 50%, rgba(255, 255, 255, 0.6) 76%, #fff 100%);
+  --lg-rim-grad: linear-gradient(var(--lg-angle, 135deg), #fff 0%, rgba(255, 255, 255, 0.7) 24%, rgba(0, 0, 0, 0.06) 50%, rgba(255, 255, 255, 0.6) 76%, #fff 100%);
   --lg-bevel: inset 0 1px 1px #fff, inset 0 -1px 2px rgba(30, 30, 45, 0.12), inset 0 0 0 3px rgba(255, 255, 255, 0.25);
   --lg-drop: 0 16px 40px -18px rgba(30, 30, 45, 0.32), 0 1px 3px rgba(30, 30, 45, 0.1);
   --lg-gloss: linear-gradient(166deg, rgba(255, 255, 255, 0.55) 0%, rgba(255, 255, 255, 0.2) 36%, rgba(255, 255, 255, 0) 36.4%);
   --lg-lit: rgba(var(--lg-hi), 0.84);
-  --lg-lit-rim: linear-gradient(135deg, rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0.12) 40%, rgba(255, 255, 255, 0.5));
+  --lg-lit-rim: linear-gradient(var(--lg-angle, 135deg), rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0.12) 40%, rgba(255, 255, 255, 0.5));
   --lg-lit-glow: 0 10px 26px -12px rgba(30, 30, 45, 0.5);
   --lg-on-lit: var(--lg-on-hi);
+  --lg-sel: rgba(255, 255, 255, 0.85);
 }
 /* the glass pieces: the Dock (when it's glass), search, sheets and pop-ups, toasts, buttons, switches */
 :where(body.elements-glass) :is(.top-search, .dialog, .toast, .btn) { position: relative; }
@@ -642,17 +661,21 @@ body.elements-glass .dialog .menu-item:hover { background: var(--lg-fill-hover);
 body.elements-glass .dialog .menu-item:focus { background: var(--lg-lit); color: var(--lg-on-lit); box-shadow: var(--lg-bevel), var(--lg-lit-glow); }
 body.elements-glass .dialog .menu-item:focus :is(.sub, .muted) { color: color-mix(in srgb, var(--lg-on-lit) 74%, transparent); }
 /* lit glass: the current tab, the chosen switch, the primary button, whatever is focused */
-body.elements-glass.bar-pill.dock-glass .tab-ink, body.elements-glass .seg-ink { background: var(--lg-lit); box-shadow: var(--lg-bevel), var(--lg-lit-glow); }
+body.elements-glass.bar-pill.dock-glass .tab-ink { background: var(--lg-lit); box-shadow: var(--lg-bevel), var(--lg-lit-glow); }
+/* 0.9.47 (owner: "I don't know what I'm selecting"): the chosen option of a switch was lit like focus (0.88 white against
+   focus's white), so the two read the same. Chosen is brighter glass now; only focus is lit, as in Plain (grey vs white). */
+body.elements-glass .seg-ink { background: var(--lg-sel); box-shadow: var(--lg-bevel); }
 body.elements-glass.bar-pill.dock-glass .tab.active, body.elements-glass.bar-pill.dock-glass .tab.active:hover { color: var(--lg-on-lit); }
-body.elements-glass .seg.inked > button.on { color: var(--lg-on-lit); }
+body.elements-glass .seg.inked > button.on { color: var(--text); }
 body.elements-glass .btn.primary { background: rgba(var(--primary-rgb), 0.62); color: var(--on-btn, var(--on-primary)); box-shadow: var(--lg-bevel), var(--lg-drop); }
+body.elements-glass.theme-light .btn.primary { background: rgba(var(--primary-rgb), 0.86); } /* 0.62 of the dark focus colour read as mid grey under white text on a light page */
 body.elements-glass .btn:focus-visible, body.elements-glass.pad-mode .btn:focus,
 body.elements-glass .seg button:focus-visible, body.elements-glass.pad-mode .seg button:focus { background: var(--lg-lit); color: var(--lg-on-lit); box-shadow: var(--lg-bevel), var(--lg-lit-glow); }
 body.elements-glass :is(.btn:focus-visible, .btn:focus)::before { background: var(--lg-lit-rim); }
 body.elements-glass.pad-mode .btn:not(:focus)::before { background: var(--lg-rim-grad); }
 body.elements-glass .btn.primary:focus-visible, body.elements-glass.pad-mode .btn.primary:focus { box-shadow: var(--lg-bevel), var(--lg-lit-glow), var(--ring); }
-body.elements-glass.theme-light.bar-pill.dock-glass .tab { color: rgba(28, 28, 30, 0.6); }
-body.elements-glass.theme-light.bar-pill.dock-glass .tab:hover { color: #1c1c1e; }
+body.elements-glass.theme-light.bar-pill.dock-glass .tab:not(.active) { color: rgba(28, 28, 30, 0.6); }
+body.elements-glass.theme-light.bar-pill.dock-glass .tab:not(.active):hover { color: #1c1c1e; }
 body.elements-glass.theme-light.bar-pill.dock-glass .tab-trig { filter: invert(1); }
 /* interactive: pressed glass lights up from inside */
 /* ...and a band of light sweeps across it (liquid-glass skill: interactive glass scales, bounces and shimmers) */
@@ -703,3 +726,18 @@ body.style-plain:not(.theme-light):not(.theme-oled) .dialog .menu-item:not(:focu
 body.style-plain:not(.theme-light):not(.theme-oled).bar-pill:is(.dock-black, .dock-accent) .tabs { box-shadow: var(--pl-top), var(--pl-edge), 0 10px 26px -10px rgba(0, 0, 0, 0.7); }
 body.style-plain:not(.theme-light):not(.theme-oled).bar-pill .tab-ink { box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5), 0 2px 6px -2px rgba(0, 0, 0, 0.6); }
 body.style-plain:not(.theme-light):not(.theme-oled) .top-search { box-shadow: var(--pl-sink); }
+
+/* CAE governor (0.9.47, motion.js): idle for a minute, the slow decorative loops hold still (they cost frames for
+   nothing while nobody looks); any input lets them run on from where they were */
+body.cae-idle :is(.bg-stage .layer, .media img, .sc-clouds g, .sc-clouds .c1, .sc-clouds .c2, .sc-stars circle, .st-img) { animation-play-state: paused !important; }
+
+/* ---- Glass engine (0.9.47, src/glassEngine.js; Glass only, dark and light): real refraction. Each glass surface gets
+   an SVG lens as its backdrop-filter (frost, then the view bent at the rim); the rim's highlight follows --lg-angle.
+   Without the lens (Plain, light effects, reduced motion or transparency, slow frames: body.lg-lite) the frosted blur
+   above stays. */
+body.elements-glass.lg-refract:not(.lg-lite) :is(.top-search, .dialog, .toast, .g-actions .btn:not(.primary))[style*="--lg-refract"],
+body.elements-glass.lg-refract.bar-pill.dock-glass:not(.lg-lite) .tabs[style*="--lg-refract"] { -webkit-backdrop-filter: var(--lg-refract); backdrop-filter: var(--lg-refract); }
+/* the liquid morph: in Glass a pop-up swells out of the button that opened it (its transform-origin, App.vue
+   modalFrom), heavy and without bounce */
+body.elements-glass:not(.motion-reduce) .modal-enter-from > .dialog:not(.sheet) { transform: scale(0.9); }
+body.elements-glass:not(.motion-reduce) .modal-enter-active > .dialog:not(.sheet) { transition: transform var(--spring-soft-d) var(--spring-soft); }

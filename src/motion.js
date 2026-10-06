@@ -1,12 +1,30 @@
-// Motion (0.9.37, owner: a fluid motion engine, with the apple-design skill: springs, interruptible transitions,
-// shared element transitions, micro-interactions; nothing jarring, no cost). Three parts:
-// 1. Spring curves for CSS: a damped spring simulated once and written as linear() easing tokens (--spring and its
-//    duration --spring-d). CSS transitions start from where the element is now, so retargeting mid-way never jumps.
-// 2. A spring for values Cartridge moves itself (nav.js scrolling): it keeps its velocity when the target changes,
-//    so presses in a row blend into one motion instead of restarting.
-// 3. morph(): a picture flying from where you picked it to where it lands (a game card into the game page), with
-//    the View Transitions API; only with the GPU, and skipped at once by any new input.
-// Apple's parameters (Designing Fluid Interfaces): damping ratio (1 = no overshoot) and response (seconds).
+// CAE, the Cartridge Animation Engine (0.9.47; grew from 0.9.37's motion.js). Rules in docs/cae.md. In short:
+// - Heavy, not phone-like: things have weight. Movement is critically damped (no bounce) and short (8 to 24 px); only
+//   a press let go gets a hint of give. Big surfaces (pages, sheets) take a little longer than small ones (presses,
+//   focus), never the other way round. Closing is quicker than opening.
+// - Interruptible: every move starts from where the thing is now, with its speed kept (springs), so presses in a row
+//   blend and nothing snaps. Any new input finishes a picture still flying (skipMorph).
+// - Cheap: transform and opacity only; one frame loop for everything script moves (the ticker), asleep when nothing
+//   moves; the governor below slows or stops the rest while you're idle or a game is in front.
+// Parts: 0 the ticker, 1 spring curves for CSS, 2 springs for script, 3 shared element flights, 4 sliding pills,
+// 5 the governor.
+
+// ---------- 0. one frame loop (0.9.47): every script-driven motion registers here, so there is at most one
+// requestAnimationFrame, it stops when nothing moves, and it never runs while Cartridge is in the background
+const jobs = new Set();
+let tickRaf = 0, tickLast = 0;
+function tick(now) {
+  tickRaf = 0;
+  const dt = Math.min(0.05, (now - (tickLast || now)) / 1000); tickLast = now;
+  for (const j of [...jobs]) { let keep = false; try { keep = j(now, dt) !== false; } catch { keep = false; } if (!keep) jobs.delete(j); }
+  if (jobs.size) tickRaf = requestAnimationFrame(tick); else tickLast = 0;
+}
+// run fn(now, dt) every frame until it returns false; returns a stop function
+export function frame(fn) {
+  jobs.add(fn);
+  if (!tickRaf) { tickLast = 0; tickRaf = requestAnimationFrame(tick); }
+  return () => jobs.delete(fn);
+}
 
 // ---------- 1. spring curves for CSS
 // x'' = -k (x - 1) - c x', from 0 at rest; k = (2π / response)², c = 4π ζ / response
@@ -26,15 +44,16 @@ export function springCurve({ damping = 1, response = 0.35, samples = 48 } = {})
   out[out.length - 1] = 1;
   return { easing: `linear(0, ${out.join(', ')})`, duration: dur };
 }
-// critically damped by default; a little bounce only for things that carry momentum (a flick, a page turn)
+// The profiles (CAE 0.9.47, owner: "smooth and fluid but heavy, for a handheld or a PC, not a phone"). Damping 1 is
+// critical: it arrives and stops, no overshoot. The old names stay so every rule using them keeps working.
 export const SPRINGS = {
-  spring: { damping: 1, response: 0.38 },        // most movement: settles, never overshoots
-  'spring-snappy': { damping: 1, response: 0.24 }, // small things: presses, rings, chips
-  'spring-soft': { damping: 1, response: 0.55 },   // big surfaces: sheets, pages
-  'spring-bounce': { damping: 0.78, response: 0.38 }, // after momentum only
-  // 0.9.38 (owner: "more prominent, but never jarring"): a touch of life for things that answer you (a press let go,
-  // a pop-up arriving, a toggle's knob, the pill sliding to what you picked): one small overshoot, then still
-  'spring-pop': { damping: 0.72, response: 0.42 },
+  spring: { damping: 1, response: 0.34 },          // settle: most movement
+  'spring-snappy': { damping: 1, response: 0.22 }, // snap: presses, rings, chips, focus
+  'spring-soft': { damping: 1, response: 0.46 },   // heavy: pages, sheets, big surfaces
+  'spring-bounce': { damping: 0.86, response: 0.36 }, // after momentum only (a flick)
+  // a press let go, a toggle's knob, a pill reaching its choice: a hint of give (0.9.38 had 0.72, which read as a
+  // phone's bounce; 0.86 overshoots about 1%)
+  'spring-pop': { damping: 0.86, response: 0.36 },
 };
 export function installSprings(root = document.documentElement) {
   if (!CSS.supports?.('transition-timing-function', 'linear(0, 1)')) return; // older engines keep the cubic curves
@@ -46,25 +65,25 @@ export function installSprings(root = document.documentElement) {
 }
 
 // ---------- 2. a spring for values moved by script, interruptible with velocity kept
-// spring(state, target, { response, damping }) steps the value each frame towards target; calling it again while it
-// runs only moves the target, so the motion carries on from its current position and speed.
+// springTo(state, target, { response, damping }) steps the value each frame towards target; calling it again while it
+// runs only moves the target, so the motion carries on from its current position and speed. Runs on the ticker.
 export function springTo(st, target, { response = 0.3, damping = 1, apply, done } = {}) {
   st.target = target; st.k = (2 * Math.PI / response) ** 2; st.c = (4 * Math.PI * damping) / response; st.apply = apply; st.done = done;
   if (st.v == null) st.v = 0;
   if (st.raf) return st;
-  let last = performance.now();
-  const frame = (now) => {
-    let dt = Math.min(0.05, (now - last) / 1000); last = now;
-    // small fixed steps: steady at any frame rate, also when a slow frame comes in without the GPU
+  st.raf = 1; // running (nav.js reads it)
+  st.stop = frame((now, dt0) => {
+    if (!st.raf) return false;
+    let dt = dt0 || 1 / 60;
+    // small fixed steps: steady at any frame rate (60, 90, 144 Hz), also when a slow frame comes in without the GPU
     while (dt > 0) { const h = Math.min(dt, 0.004); const a = -st.k * (st.x - st.target) - st.c * st.v; st.v += a * h; st.x += st.v * h; dt -= h; }
-    if (Math.abs(st.x - st.target) < 0.5 && Math.abs(st.v) < 8) { st.x = st.target; st.v = 0; st.raf = 0; st.apply?.(st.x); st.done?.(); return; }
+    if (Math.abs(st.x - st.target) < 0.5 && Math.abs(st.v) < 8) { st.x = st.target; st.v = 0; st.raf = 0; st.apply?.(st.x); st.done?.(); return false; }
     st.apply?.(st.x);
-    st.raf = requestAnimationFrame(frame);
-  };
-  st.raf = requestAnimationFrame(frame);
+    return true;
+  });
   return st;
 }
-export function stopSpring(st) { if (st?.raf) cancelAnimationFrame(st.raf); if (st) { st.raf = 0; st.v = 0; } }
+export function stopSpring(st) { if (st?.raf) st.stop?.(); if (st) { st.raf = 0; st.v = 0; } }
 
 // ---------- 3. shared element transitions
 // 0.9.38: the picture flies as one element (FLIP) instead of a View Transition. A View Transition snapshots the
@@ -97,21 +116,21 @@ export function morph(fromEl, change, toSel, nextTick) {
     // picture from where it was picked to wherever the target is now, so the last frame is exactly on it.
     const w = (2 * Math.PI) / SPRINGS.spring.response, dur = 7.5 / w; // x(t) = 1 - (1 + wt) e^(-wt), done at 99.6%
     const t0 = performance.now();
-    let raf = 0, alive = true;
-    const end = () => { if (!alive) return; alive = false; cancelAnimationFrame(raf); to.style.visibility = ''; fly.remove(); if (running?.end === end) running = null; };
-    const frame = (now) => {
-      if (!alive) return;
+    let stop = null, alive = true;
+    const end = () => { if (!alive) return; alive = false; stop?.(); to.style.visibility = ''; fly.remove(); if (running?.end === end) running = null; };
+    const step = (now) => {
+      if (!alive) return false;
       const t = (now - t0) / 1000, p = t >= dur ? 1 : Math.min(1, (1 - (1 + w * t) * Math.exp(-w * t)) / 0.985); // the last 1.5% folded in: it ends on the target, never a few pixels short
       const c = to.isConnected ? to.getBoundingClientRect() : b;
       if (c.width >= 8 && c.height >= 8) {
         const x = a.left + (c.left - a.left) * p, y = a.top + (c.top - a.top) * p, wd = a.width + (c.width - a.width) * p, ht = a.height + (c.height - a.height) * p;
         Object.assign(fly.style, { left: c.left + 'px', top: c.top + 'px', width: c.width + 'px', height: c.height + 'px', transform: `translate(${x - c.left}px, ${y - c.top}px) scale(${wd / c.width}, ${ht / c.height})` });
       }
-      if (p >= 1) return end();
-      raf = requestAnimationFrame(frame);
+      if (p >= 1) { end(); return false; }
+      return true;
     };
     running = { end };
-    raf = requestAnimationFrame(frame);
+    stop = frame(step);
   })();
 }
 // any new input ends a flight at once (the page is already there underneath): never a wait
@@ -144,4 +163,22 @@ export function slidingPills(root = document.body) {
   addEventListener('resize', () => all(true));
   all(true);
   return () => all(true);
+}
+
+// ---------- 5. the governor (0.9.47, owner: "near-zero footprint while a game runs"): three states.
+// active: you're using Cartridge; everything runs. idle: nothing pressed for a minute; the slow decorative loops
+// (background drift, cover drift, clock clouds and stars, picture drift) pause and the controller is read at 60 Hz
+// instead of 120. away: another app is in front (a game) or the window is hidden; main says so (event background),
+// CSS animations pause (body.away), the background stops drawing and the controller is read 4 times a second.
+// Any input wakes it at once; nothing waits on a timer to come back.
+export const governor = { mode: 'active', away: false };
+let lastIn = typeof performance !== 'undefined' ? performance.now() : 0;
+const setMode = (m) => { if (governor.mode === m) return; governor.mode = m; document.body.classList.toggle('cae-idle', m === 'idle'); };
+export function governorInput() { lastIn = performance.now(); if (governor.mode === 'idle') setMode('active'); }
+export function governorAway(v) { governor.away = !!v; setMode(v ? 'away' : performance.now() - lastIn > IDLE_MS ? 'idle' : 'active'); }
+const IDLE_MS = 60000;
+export function startGovernor() {
+  for (const ev of ['pointerdown', 'pointermove', 'keydown', 'wheel', 'touchstart']) addEventListener(ev, governorInput, { passive: true, capture: true });
+  document.addEventListener('visibilitychange', () => setMode(document.hidden || governor.away ? 'away' : 'active'));
+  setInterval(() => { if (governor.mode !== 'away' && performance.now() - lastIn > IDLE_MS) setMode('idle'); }, 5000);
 }

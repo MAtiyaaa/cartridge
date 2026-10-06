@@ -218,7 +218,9 @@ function watchGamescopeFocus() {
   let mine = BigInt(gid); if (mine > 0xffffffffn) mine >>= 32n;
   let last = null, busy = false, seen = new Set(), first = true, hiddenFor = 0, tick = false, scanning = false;
   gameFocus.watched = true;
-  setInterval(() => {
+  // CAE governor (0.9.47, owner: no CPU taken from the game): every 600 ms while Cartridge is in front, every 1.5 s
+  // while another app is (xprop is a process start each round, the Steam launch scan reads every process's command line)
+  const round = () => {
     if (busy) return; busy = true;
     require('child_process').execFile('xprop', ['-root', 'GAMESCOPE_FOCUSED_APP'], { timeout: 1500 }, (err, out) => {
       busy = false;
@@ -257,7 +259,8 @@ function watchGamescopeFocus() {
       if (fresh) { gameFocus.endedAt = 0; gameFocus.gameApp = null; } // a new game (even the same one again) is away as usual
       if (fresh && win && !win.isDestroyed() && win.isVisible()) { log('steam started another game, stepping aside'); hiddenFor = Date.now(); win.hide(); }
     }, () => { scanning = false; });
-  }, 600);
+  };
+  (function loop() { round(); setTimeout(loop, gameFocus.away ? 1500 : 600); })();
 }
 // Game Mode, another app in front or just closed (0.9.23, owner: closing a game started from Steam closed
 // Cartridge too). Steam ends a game by signalling its launch session, and on the way back Cartridge got
@@ -2732,7 +2735,7 @@ function createWindow() {
   win.webContents.setWindowOpenHandler(({ url }) => { shell.openExternal(url); return { action: 'deny' }; });
 }
 
-const trophySvc = require('./trophyService')({
+const trophySvc = require('./trophyService')({ busy: () => !!(gameFocus.away || runOn),
   USER_DATA, api, broadcast: (c, d) => broadcast(c, d), log, loadJson,
   getConfig: () => config, saveConfig: () => saveConfig(), getLibrary: () => library,
   codeName: (src, code) => require('./titleNames').nameFor(src, code),
@@ -4134,10 +4137,14 @@ const handlers = {
       // 0.9.23: a copy that can't start (system libraries missing, e.g. Vita3K's Qt6 zip build on SteamOS)
       // is offered its update as a repair, newer or not
       const broken = kind === 'program' || kind === 'folder' ? U.missingLibs(e.path) : [];
+      // 0.9.47: an AppImage (or program) built for a newer glibc than this system has can't start: a repair too
+      const gp = e.kind !== 'flatpak' && e.path && !/\.exe$/i.test(e.path) ? require('./detect').glibcProblem(e.path) : null;
+      if (gp) broken.push(`glibc ${gp.need} (this system has ${gp.have})`);
+      const hold = config.emuGlibcHold?.[e.id], held = hold && !gp && Date.now() - hold.t < 14 * 864e5 && hold.have === require('./detect').systemGlibc();
       const ck = e.id + ':' + path.basename(e.path || '') + (kind === 'folder' ? ':folder' : '') + ':' + (channel || '');
       const c0 = cache[ck];
       if (spec && !cached && (fresh || broken.length || !c0 || Date.now() - c0.t > TTL)) jobs.push(U.latestRelease(e.id, { file: e.path, channel }).then((rel) => { cache[ck] = { t: Date.now(), rel }; }).catch((err) => { cache[ck] = { t: c0?.t || 0, rel: c0?.rel || null, error: err.message }; }));
-      out.push(() => { const c = cache[ck]; return ({ ...e, build: kind, broken: broken.length ? broken : null, update: c?.rel && (broken.length || U.isNewer(c.rel, e)) ? c.rel : null, latest: c?.rel || null, error: c?.error || null, noSource: !spec, channel, channels: spec ? ch.options : [], page: spec?.repo ? `https://github.com/${spec.repo}/releases` : null }); });
+      out.push(() => { const c = cache[ck]; return ({ ...e, build: kind, broken: broken.length ? broken : null, update: c?.rel && (broken.length || (!held && U.isNewer(c.rel, e))) ? c.rel : null, latest: c?.rel || null, error: c?.error || null, noSource: !spec, channel, channels: spec ? ch.options : [], page: spec?.repo ? `https://github.com/${spec.repo}/releases` : null }); });
     }
     await Promise.all(jobs);
     const fpd = await fpRun;
@@ -4166,7 +4173,10 @@ const handlers = {
     broadcast('emu-update', { path: file, state: 'downloading', pct: 0 });
     let got = 0;
     await U.replaceAppImage(file, rel, (url, dest) => downloadTo(url, dest, { abort: new AbortController() }, (n) => { got += n; broadcast('emu-update', { path: file, state: 'downloading', pct: rel.size ? Math.round((got / rel.size) * 100) : null }); }, { plain: true }));
-    log('emulator updated (appimage)', own.id, own.version, '->', rel.version || rel.tag);
+    log('emulator updated (appimage)', own.id, own.version, '->', rel.version || rel.tag, rel.fellBack ? `(newest needs glibc ${rel.fellBack.need}, this has ${rel.fellBack.have})` : '');
+    // 0.9.47: the newest build can't start here: its update isn't offered again for two weeks (it would come down and be refused)
+    if (rel.fellBack) { config.emuGlibcHold = { ...(config.emuGlibcHold || {}), [own.id]: { t: Date.now(), have: rel.fellBack.have } }; saveConfig(); }
+    else if (config.emuGlibcHold?.[own.id]) { delete config.emuGlibcHold[own.id]; saveConfig(); }
     const cf = path.join(USER_DATA, 'emulator-releases.json'), cache = loadJson(cf, {});
     try { (cache.installed ||= {})[file] = { version: rel.version || rel.tag, size: fs.statSync(file).size, at: Date.now() }; saveJson(cf, cache); } catch {}
     broadcast('emu-update', { path: file, state: 'done' });

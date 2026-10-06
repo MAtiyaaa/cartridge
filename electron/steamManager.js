@@ -717,7 +717,8 @@ module.exports = function createSteamManager(ctx) {
       if (hits.length) return hits.sort((a, b) => (path.basename(b, '.' + e) === path.basename(dir).replace(/\.m3u$/i, '')) - (path.basename(a, '.' + e) === path.basename(dir).replace(/\.m3u$/i, '')) || a.split('/').length - b.split('/').length)[0];
     }
     const junk = /\.(txt|nfo|jpe?g|png|pdf|md|sav|srm|state\d*|dat|xml|sfv|md5|sha1)$/i;
-    return files.filter((f) => !junk.test(f)).sort((a, b) => (fs.statSync(b).size || 0) - (fs.statSync(a).size || 0))[0] || null;
+    const size = (f) => { try { return fs.statSync(f).size; } catch { return 0; } }; // a broken link in the folder must not stop the whole plan
+    return files.filter((f) => !junk.test(f)).sort((a, b) => size(b) - size(a))[0] || null;
   }
 
   // ---------------------------------------------------------------- templates for every console

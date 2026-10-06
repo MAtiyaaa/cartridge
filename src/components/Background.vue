@@ -28,7 +28,7 @@ import { paletteOf, lightEffects } from '../themes.js';
 import { lastInput } from '../nav.js';
 
 const mode = computed(() => {
-  let m = (store.welcoming && 'ribbons') || store.config?.ui?.bgStyle || 'solid'; // the welcome is on Ribbons
+  let m = (store.welcoming && !store.welcomeBg && 'ribbons') || store.config?.ui?.bgStyle || 'solid'; // the welcome is on Ribbons until one is picked in its Look step
   if (LEGACY_ART[m]) m = 'art:' + LEGACY_ART[m]; // retired in 0.9.15: that console's own art instead
   return RENDERERS[m] || m.startsWith('art:') || ['solid', 'art', 'wallpaper'].includes(m) ? m : 'solid';
 });

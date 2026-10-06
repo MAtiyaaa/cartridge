@@ -6,8 +6,18 @@ The branch for 0.9.3 work is `claude/relaxed-fermat-30pigp`. Pull it before star
 
 ---
 
-## 6 Oct 2026 · 0.9.47 Tighter Cards
-- Owner (photo of Settings → Emulators): cards same width, height fitting their content, stacking, design unchanged. Done as masonry in EmuGet; checked in Chromium (cards pack with a 12 px gap, all rows reachable by D-pad).
+## 6 Oct 2026 · 0.9.47 The Engine Update (one update, owner: "package them as one update not individually")
+- Carries the unpublished masonry change (owner's photo of Settings → Emulators).
+- Owner: menus don't open (Dreamcast in Consoles, collections), highlights gone (latest unlocks, trophies). Not reproduced in a clean real app (mock RomM) or the stub; most likely an older build (0.9.38 to 0.9.43 had the `go()` bug fixed in 0.9.44; a rollback sets `updateHold`, which pauses updates). Added `keepFocus` in nav.js so focus that falls off the page comes back; the real-app crawl found one such case (Settings → Updates busy button). Ask the owner for their version in About if it persists.
+- Highlights: a pixel audit found Light/OLED shadow rules beating the focus ring, Glass chosen = focused in switch rows, the chosen swatch identical focused, the clock tile ring on a day sky. Fixed. The audits are now in the repo (`tools/ui-audit`, `npm run audit:ui`) so they run before every release: the owner's "how can you mitigate these issues".
+- Achievements: no ring on rows (fill only), console logo dark/white on the focused row; PlayStation logo 1.6 optical (owner: smaller than NES), SEGA/Microsoft maker logos on console cards, PS3 card SONY clipped (removed from the picture).
+- Trophies: every game pushed to RomM notes, unmatched ones on the console's oldest ROM (carrier); fresh install lists all (tested with a fake notes API).
+- Vita3K: builds after 2026-10-03 need glibc 2.43 (Vita3K CI on Ubuntu 26.04); falls back to Vita3K-builds 4111. Owner to test: Vita3K install/update on SteamOS.
+- CAE (docs/cae.md), the governor, Glass engine (docs/glass-engine.md, liquid-glass-design skill), Welcome Look step, background rebuild (Aurora, Contours, Drift, Tide; Waves/Ribbons untouched), README and docs/architecture.md.
+- Skills: impeccable, transitions-dev/polish, web-design-guidelines, liquid-glass-design added; improve-animations, taste-skill, img2threejs, liquid-glass, image-to-code were already there. kokonutui, react-bits (React components), anime.js (a JS library) and awesome-design-md (DESIGN.md collection) are not skills; not added to the app.
+- Mods/Nexus: discussed only, nothing built (owner: discuss first). Recommendation given in chat.
+- Checked: npm test, vite build, launch check, focus and contrast audits in six looks, real-app Settings crawl in Plain and Glass, Welcome Look step in Plain/Glass × dark/Light/OLED, backgrounds rendered standalone with frame times.
+- Owner to test on a device: Glass refraction smoothness on the Deck and a TV (it should step down to frost by itself if slow), motion feel, controller after a game (governor away), the Look step, backgrounds, PlayStation/SEGA logo sizes.
 
 ## 6 Oct 2026 · 0.9.46 Every Setting
 - Owner: typed settings (shadPS4 DMEM in Advanced) missing from Game Settings, "place every setting advanced or not"; back from Window Width went to the Steam tab; hold A on a row that fits needed B twice; Show File Location's toast clipped.

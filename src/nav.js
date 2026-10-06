@@ -1,7 +1,7 @@
 // Controller-first spatial navigation + gamepad/keyboard input.
 // Layers: the top layer receives input. A layer = { el: scope element, handlers: {action: fn} }.
 // Actions: up down left right accept back x y lb rb lt rt select start
-import { springTo, stopSpring, skipMorph } from './motion.js';
+import { springTo, stopSpring, skipMorph, governor, governorInput } from './motion.js';
 import { reactive } from 'vue';
 import { sfx } from './sfx.js';
 
@@ -93,6 +93,30 @@ export function focusFirst(scope, selector) {
 }
 
 function inScope(el, scope) { return el && scope.contains(el) && el.hasAttribute?.('data-focus'); }
+
+// Focus never falls through (0.9.47, owner: "highlights have disappeared", "I don't know what I'm selecting"): a focused
+// button that turns disabled while it works (busy), or a row that re-renders away, drops focus to <body> without any
+// event. Nothing was highlighted and A only woke focus up. Checked every 150 ms in pad mode: back to the same button
+// once it's enabled again (up to 20 s), else the nearest focusable in the top layer, where the old one was.
+let kept = null;
+function keepFocus() {
+  const a = document.activeElement;
+  if (a && a !== document.body) {
+    if (a.hasAttribute?.('data-focus')) { const r = a.getBoundingClientRect(); if (r.width) kept = { el: a, x: r.left + r.width / 2, y: r.top + r.height / 2, t: performance.now() }; }
+    return;
+  }
+  if (!kept || input.mode !== 'pad' || !document.hasFocus()) return;
+  const l = topLayer();
+  if (!l) return;
+  const { el } = kept;
+  if (el.isConnected && !el.disabled && el.offsetParent !== null && inScope(el, l.el)) { el.focus({ preventScroll: true }); return; }
+  if (el.isConnected && el.disabled && l.el.contains(el) && performance.now() - kept.t < 20000) return; // still busy: wait for it
+  let best = null, bd = Infinity;
+  for (const [c, r] of focusables(l.el, true)) { const d = Math.hypot(r.left + r.width / 2 - kept.x, r.top + r.height / 2 - kept.y); if (d < bd) { bd = d; best = c; } }
+  kept = null;
+  best?.focus({ preventScroll: true });
+}
+if (typeof window !== 'undefined') setInterval(keepFocus, 150);
 
 // Moving up and down keeps to the column you started in (a short item in between doesn't pull you
 // sideways); moving left or right sets a new column.
@@ -247,7 +271,7 @@ export function dispatch(action, { keepMode = false } = {}) {
   if (action === 'accept') {
     const el = document.activeElement;
     if (layer && inScope(el, layer.el)) { pressFx(el); el.click(); }
-    else focusFirst();
+    else { keepFocus(); if (!document.activeElement || document.activeElement === document.body) focusFirst(); } // focus fell through: show where you are first (0.9.47)
   }
 }
 
@@ -455,7 +479,7 @@ function poll() {
   const merged = {};
   for (const gp of pads) {
     input.padName = gp.id;
-    if (gp.buttons.some((b) => b.pressed) || gp.axes.slice(0, 2).some((a) => Math.abs(a) > 0.55)) { lastPad = gp.index; if (input.keys) input.keys = false; }
+    if (gp.buttons.some((b) => b.pressed) || gp.axes.some((a) => Math.abs(a) > 0.25)) { governorInput(); if (gp.buttons.some((b) => b.pressed) || gp.axes.slice(0, 2).some((a) => Math.abs(a) > 0.55)) { lastPad = gp.index; if (input.keys) input.keys = false; } }
     gp.buttons.forEach((b, i) => {
       const a = BTN[i];
       if (!a || a === 'lt' || a === 'rt') return;
@@ -497,7 +521,8 @@ function poll() {
 }
 // Every 8 ms while Cartridge is in front; when it isn't (a game is running, or you switched away)
 // only a few times a second, so it costs the system nothing in the background (A14)
-(function loop() { poll(); setTimeout(loop, inFront() ? 8 : 250); })();
+// CAE governor (0.9.47): 60 Hz once idle for a minute (a press still lands within a frame), back to 120 Hz on any input
+(function loop() { poll(); setTimeout(loop, !inFront() ? 250 : governor.mode === 'idle' ? 16 : 8); })();
 // Game Mode: Steam's menu is in front while Cartridge keeps its window focus (main.js watchGamescopeFocus)
 export function setBackground(v) { inBackground = !!v; gsKnown = true; }
 // Outside Game Mode (0.9.29, owner: "on a PC with a controller, after the game closes the controls don't work"):
