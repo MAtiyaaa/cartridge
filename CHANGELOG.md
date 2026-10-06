@@ -18,6 +18,7 @@ Every Cartridge release, newest first. Each GitHub release only lists its own ch
 - **Rounded shapes nest properly:** the highlight inside a switch follows the switch's own curve.
 
 ### Fixed
+- **The chosen pill in switches going grey (since 0.9.38):** in switches like Look & Feel's pages, the chosen one lost its white fill when focused with the controller, so it showed as a grey pill. It's white with dark text again. In Glass, focused and chosen controls are now nearly solid in your highlight colour (white by default) instead of a faint grey glass.
 - **Pages that wouldn't open (since 0.9.38):** the Steam console cards, "missing from Steam", Emulator setup, Shortcut health, Frame Generation and other screens opened from Settings did nothing. The new card-to-game-page animation broke opening any page that isn't a game. They all open again.
 - **The More sheet (and every pop-up) dimming twice:** after a pop-up opened, the dark backdrop behind it faded in a second time.
 - **"Games aren't in their Steam collection" when they are:** the check read Steam's collections file, which Steam writes long after games are put in collections. It now asks Steam directly first, as the rest of the collections code does.
