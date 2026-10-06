@@ -4696,31 +4696,50 @@ const handlers = {
   // RomM on this device (0.9.15 section 1): Podman pod from RomM's own compose; secrets in romm-local.env
   'romm:localInfo': async () => {
     const rl = require('./rommLocal'), h = os.homedir();
+    // 0.9.49 (owner): the choices are your games folders (the main one, those on other drives, and any found on the
+    // device), each with its drive and what's in it; several can be picked. A new folder is the fallback.
+    const list = mounts(), real = (x) => { try { return fs.realpathSync(x); } catch { return path.resolve(x); } };
+    const folders = [];
+    const add = (p, from, main = false) => {
+      if (!p || !isDir(p) || folders.some((f) => f.real === real(p))) return;
+      const dv = driveOf(p, list);
+      folders.push({ path: p, real: real(p), from, main, drive: dv ? (dv.label === 'This device' ? 'Main Drive' : dv.label) : '', ...romsFolderStats(p) });
+    };
+    add(config.romsRoot, 'Your games folder', true);
+    for (const r of extraRoots()) add(r, 'Games on another drive');
+    try { for (const r of detectRoots().roots) add(r.path, r.source); } catch {}
     const emu = readEmuDeckSettings();
-    const libs = [];
-    if (emu.emulationPath && fs.existsSync(path.join(emu.emulationPath, 'roms'))) libs.push({ path: emu.emulationPath, from: 'EmuDeck' });
-    if (fs.existsSync(path.join(h, 'retrodeck', 'roms'))) libs.push({ path: path.join(h, 'retrodeck'), from: 'RetroDECK' });
-    libs.push({ path: path.join(h, 'RomM'), from: 'New folder' });
+    if (emu.emulationPath) add(path.join(emu.emulationPath, 'roms'), 'EmuDeck');
+    add(path.join(h, 'retrodeck', 'roms'), 'RetroDECK');
     const st = await rl.status();
-    return { ...st, ready: rl.readiness(), libraries: libs, port: config.rommLocal?.port || null, lan: config.rommLocal?.port ? rl.lanUrls(config.rommLocal.port) : [] };
+    const s = config.server || {};
+    return { ...st, ready: rl.readiness(), folders, newFolder: path.join(h, 'RomM'), chosen: config.rommLocal?.roms || null,
+      linked: !!(config.configured && !config.localOnly && (s.localUrl || s.remoteUrl)), mine: !!config.rommLocal?.port,
+      port: config.rommLocal?.port || null, lan: config.rommLocal?.port ? rl.lanUrls(config.rommLocal.port) : [] };
   },
   // Podman made ready from Cartridge (0.9.17); the device password is used once and never kept
   'romm:localPrepare': async ({ password } = {}) => {
     try { return { ok: true, ready: await require('./rommLocal').prepare({ password }, (p) => broadcast('romm-local', p)) }; }
     catch (e) { if (e.code === 'password') return { needPassword: true }; log('podman prepare failed:', e.message); throw e; }
   },
-  'romm:localSetup': async ({ username, password, library, name, keys }) => {
+  // which console folders are in more than one picked folder (shown before setup)
+  'romm:localPlan': ({ roms } = {}) => ({ conflicts: require('./rommLocal').planMounts((roms || []).filter((p) => isDir(p)), path.join(os.homedir(), '.local/share/cartridge-romm/library')).conflicts }),
+  // roms: games folders picked (0.9.49); library: a new folder that will hold roms/<console> (the old way)
+  'romm:localSetup': async ({ username, password, library, roms, name, keys }) => {
     const rl = require('./rommLocal');
     const dataDir = path.join(os.homedir(), '.local/share/cartridge-romm');
-    const r = await rl.setup({ username, password, library, dataDir, keys, name, envFile: path.join(USER_DATA, 'romm-local.env'), port: config.rommLocal?.port }, (p) => broadcast('romm-local', p));
-    config.rommLocal = { port: r.port, library, dataDir, name: String(name || '').slice(0, 40), at: Date.now(), boot: r.boot };
+    roms = (roms || []).filter((p) => isDir(p));
+    const r = await rl.setup({ username, password, library, roms, dataDir, keys, name, envFile: path.join(USER_DATA, 'romm-local.env'), port: config.rommLocal?.port }, (p) => broadcast('romm-local', p));
+    config.rommLocal = { port: r.port, library: roms.length ? null : library, roms: roms.length ? roms : null, dataDir, name: String(name || '').slice(0, 40), at: Date.now(), boot: r.boot };
     config.server = { ...config.server, localUrl: r.base, remoteUrl: config.server.remoteUrl || '', mode: config.server.remoteUrl ? 'auto' : 'local', auth: 'password', username: r.user, password, token: '' };
-    if (!config.romsRoot) config.romsRoot = path.join(library, 'roms');
+    if (!config.romsRoot) config.romsRoot = roms[0] || path.join(library, 'roms');
+    // the other picked folders become games folders on other drives, so downloads and the library see them too
+    for (const p of roms.slice(1)) if (path.resolve(p) !== path.resolve(config.romsRoot) && !extraRoots().some((x) => path.resolve(x) === path.resolve(p))) config.extraRoots = [...(config.extraRoots || []), { path: p }];
     saveConfig();
-    log('romm local: running on port', r.port, 'boot', r.boot);
-    return { ...r, lan: rl.lanUrls(r.port), romsRoot: config.romsRoot };
+    log('romm local: running on port', r.port, 'boot', r.boot, 'folders', roms.length || 1, 'conflicts', r.conflicts?.length || 0);
+    return { ...r, lan: rl.lanUrls(r.port), romsRoot: config.romsRoot, folders: roms };
   },
-  'romm:localUpdate': ({ keys } = {}) => require('./rommLocal').update({ envFile: path.join(USER_DATA, 'romm-local.env'), library: config.rommLocal?.library, dataDir: config.rommLocal?.dataDir, keys, keysOnly: !!keys }),
+  'romm:localUpdate': ({ keys } = {}) => require('./rommLocal').update({ envFile: path.join(USER_DATA, 'romm-local.env'), library: config.rommLocal?.library, roms: config.rommLocal?.roms, dataDir: config.rommLocal?.dataDir, keys, keysOnly: !!keys }),
   // which metadata keys are set (never the keys themselves)
   'romm:localKeys': () => { const k = require('./rommLocal').keysOf(require('./rommLocal').readEnv(path.join(USER_DATA, 'romm-local.env'))); return { igdb: !!(k.igdbId && k.igdbSecret), ss: !!(k.ssUser && k.ssPass) }; },
   // Welcome's scan (0.9.16): games already in Steam that Cartridge didn't add, per console (C7 take over)
