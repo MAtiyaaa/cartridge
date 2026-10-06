@@ -1253,7 +1253,12 @@ watch(() => store.play, loadWeek);
    tile on every frame without the GPU. Same look, same timing. */
 .st-tile::before { content: ''; position: absolute; inset: 0; border-radius: inherit; box-shadow: var(--ring), 0 0 0 8px rgba(0, 0, 0, 0.32), 0 26px 50px -24px rgba(0, 0, 0, 0.85); opacity: 0; transform: translateY(0); transition: opacity 240ms ease, transform 380ms cubic-bezier(0.32, 0.72, 0, 1); pointer-events: none; }
 .st-tile:focus-visible::before, .pad-mode .st-tile:focus::before { opacity: 1; transform: translateY(-3px); }
-:global(body.theme-light .st-tile::before) { box-shadow: var(--ring), 0 26px 50px -24px rgba(0, 0, 0, 0.85); } /* a white ring vanished on the clock's day sky: a dark edge outside it (dark colours only) */
+:global(body.theme-light .st-tile::before) { box-shadow: var(--ring), 0 12px 22px -12px rgba(0, 0, 0, 0.45); }
+/* 0.9.49 (owner's photos: shadows cut off hard in Light, the Spotlight card and a cover tile): a shadow made for the
+   dark colours (long and dark) ran past the board's scrolling edge and the tile's own edge, and on a light page the cut
+   shows. Light keeps them short and soft: they end before any edge. */
+:global(body.theme-light .st-face :is(.st-band img, .st-cover, .st-deal-c, .st-fan-c, .st-tro-badge, .st-tro-fbadge, .st-tro-gart, .st-disc, .st-cart)) { box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12), 0 6px 12px -6px rgba(0, 0, 0, 0.3); }
+:global(body.theme-light .st-tile.held .st-face), :global(body.theme-light .st-tile.picked .st-face) { box-shadow: var(--ring), 0 14px 28px -12px rgba(0, 0, 0, 0.35); } /* a white ring vanished on the clock's day sky: a dark edge outside it (dark colours only) */
 .editing .st-tile::before { display: none; } /* arranging keeps its own ring on the face */
 .st-tile:focus-visible .st-face, .pad-mode .st-tile:focus .st-face { transform: translateY(-3px); }
 .st-tile:focus-within .st-face, .st-tile:focus .st-face { will-change: transform; }
@@ -1292,7 +1297,9 @@ watch(() => store.play, loadWeek);
 .st-edit-bar b { font-family: var(--display); font-size: var(--t-lg); font-weight: 700; }
 .st-edit-bar .spacer { flex: 1; }
 @media (max-width: 1400px) { .st-edit-bar { padding-left: 36px; padding-right: 36px; } }
-.st-size { position: absolute; bottom: 10px; left: 10px; z-index: 6; padding: 3px 10px; border-radius: 999px; background: #fff; color: #0c0d10; font-size: var(--t-xs); font-weight: 700; pointer-events: none; }
+/* 0.9.49 (owner's photo: "2 × 2" covered the card's "32 games"): the size sits on the tile's top edge, like a tab,
+   over the ring and never over what the tile shows */
+.st-size { position: absolute; top: -11px; left: 50%; transform: translateX(-50%); z-index: 6; padding: 3px 10px; border-radius: 999px; background: var(--focus, #fff); color: var(--on-focus, #0c0d10); font-size: var(--t-xs); font-weight: 700; line-height: 16px; white-space: nowrap; pointer-events: none; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35); }
 .st-ctl { position: absolute; top: 10px; right: 10px; z-index: 6; display: flex; gap: 6px; }
 .pad-mode .st-ctl { display: none; }
 .st-ctl-b { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; background: rgba(12, 13, 16, 0.82); color: #fff; box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.18); }
@@ -1700,7 +1707,7 @@ watch(() => store.play, loadWeek);
   transition: width 560ms var(--spring), height 560ms var(--spring), transform 560ms var(--spring), margin 560ms var(--spring), box-shadow 300ms ease; }
 .st-spine::after { content: ''; position: absolute; left: 0; right: 0; top: 0; height: clamp(14px, 9%, 24px); background: linear-gradient(color-mix(in srgb, var(--case) 100%, #fff 12%), var(--case)); box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.22), 0 1px 0 rgba(0, 0, 0, 0.35); z-index: 2; }
 .st-spine-art { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: left center; opacity: 0.5; filter: blur(1px); transition: opacity 320ms ease, filter 320ms ease; }
-.st-spine-t { position: absolute; inset: clamp(22px, 13%, 32px) 0 8px; z-index: 1; writing-mode: vertical-rl; transform: rotate(180deg); display: flex; align-items: center; justify-content: flex-start; font-family: var(--display); font-weight: 700; font-size: 12px; color: #fff; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9); overflow: hidden; white-space: nowrap; line-height: 36px; }
+.st-spine-t { position: absolute; inset: clamp(22px, 13%, 32px) 0 8px; z-index: 1; writing-mode: vertical-rl; transform: rotate(180deg); display: block; text-overflow: ellipsis; font-family: var(--display); font-weight: 700; font-size: 12px; color: #fff; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9); overflow: hidden; white-space: nowrap; line-height: 36px; }
 .st-spine.out { width: min(36%, calc((100cqh - 96px) * 0.7)); min-width: 60px; height: 100%; margin: 0 12px 0 6px; transform: rotateY(-12deg); border-radius: 4px;
   box-shadow: 0 24px 40px rgba(0, 0, 0, 0.6), inset 0 0 0 1px rgba(255, 255, 255, 0.2); }
 .st-spine.out .st-spine-art { opacity: 1; filter: none; object-position: center; }

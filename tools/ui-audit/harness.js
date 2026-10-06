@@ -42,14 +42,27 @@ function stub(ui, extra = {}) {
 }
 // open the built UI with a look: { theme, style } (style 'plain' | 'glass')
 // dist: another build to load (the visual check opens the last release's build too); freeze: a fixed clock and no motion
-async function open({ theme = 'cartridge', style = 'plain', bg = 'ribbons', width = 1280, height = 800, dist = '', freeze = false } = {}) {
+async function open({ theme = 'cartridge', style = 'plain', bg = 'ribbons', width = 1280, height = 800, dist = '', freeze = false, ui = {}, long = false } = {}) {
   const { chromium } = playwright();
   const browser = await chromium.launch({ executablePath: process.env.CHROMIUM || undefined, args: ['--allow-file-access-from-files'] });
   const page = await browser.newPage({ viewport: { width, height } });
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
   if (freeze) await page.clock.setFixedTime(new Date('2026-01-15T10:30:00'));
-  await page.addInitScript(stub({ theme, style, elements: style, surface: style === 'glass' ? 'glass' : 'solid', bgStyle: bg }));
+  // long: real-world text lengths (long game names, long trophy names and descriptions), for the clipping audit
+  if (long) await page.addInitScript(() => {
+    const L = (t, n) => `${t} ${'and the Second One Is Also Free When You Find It '.repeat(n)}`.trim();
+    const grow = (ch, d) => {
+      if (!d || typeof d !== 'object') return d;
+      if (ch === 'library:get') for (const list of Object.values(d.roms || {})) for (const r of list) r.name = L(r.name, r.id % 3);
+      if (ch === 'trophies:overview') { for (const t of d.recent || []) { t.name = L(t.name, 1); t.desc = L(t.desc || 'Was pretty good', 2); t.game = L(t.game, 1); } for (const g of d.games || []) g.title = L(g.title, 1); }
+      if (ch === 'ra:overview') { for (const a of d.recent || []) { a.title = L(a.title, 1); a.desc = L(a.desc, 2); a.game = L(a.game, 1); } for (const g of d.played || []) g.title = L(g.title, 1); }
+      return d;
+    };
+    const wrap = () => { const c = window.cart; if (!c || c.__long) return; const call = c.call; c.call = async (ch, a) => grow(ch, await call(ch, a)); c.__long = true; };
+    Object.defineProperty(window, 'cart', { configurable: true, set(v) { Object.defineProperty(window, 'cart', { value: v, writable: true, configurable: true }); wrap(); }, get() { return undefined; } });
+  });
+  await page.addInitScript(stub({ theme, style, elements: style, surface: style === 'glass' ? 'glass' : 'solid', bgStyle: bg, ...ui }));
   if (freeze) await page.addInitScript(() => { addEventListener('DOMContentLoaded', () => { const st = document.createElement('style'); st.textContent = '*, *::before, *::after { animation: none !important; transition: none !important; caret-color: transparent !important; }'; document.head.appendChild(st); }); });
   await page.goto('file://' + path.resolve(dist || path.join(__dirname, '../../dist'), 'index.html'));
   await page.waitForTimeout(2500);

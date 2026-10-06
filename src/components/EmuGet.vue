@@ -28,7 +28,7 @@
       </div>
       <div v-if="fpNote" class="eg-fp small"><Icon name="mdiPackageVariant" :size="18" />{{ fpNote }}</div>
       <div v-if="!list" class="muted small"><Icon name="mdiSync" :size="16" class="spin" /> Looking at what's installed…</div>
-      <div v-else v-masonry class="eg-grid">
+      <div v-else v-masonry class="eg-grid" data-columns>
         <section v-for="c in list" :key="c.key" class="eg-con">
           <div class="eg-head"><PIcon v-if="SLUG[c.key]" :p="{ slug: SLUG[c.key], fs_slug: SLUG[c.key] }" :size="30" /><Icon v-else name="mdiGamepadSquareOutline" :size="28" /><b>{{ c.name }}</b></div>
           <button v-for="e in c.emus" :key="c.key + e.id" class="eg-emu" :class="{ have: e.installed }" data-focus @click="togglePick(c, e)">
@@ -71,7 +71,7 @@
       </div>
       <div v-if="fpNote" class="eg-fp small"><Icon name="mdiPackageVariant" :size="18" />{{ fpNote }}</div>
       <div v-if="!list" class="muted small"><Icon name="mdiSync" :size="16" class="spin" /> Looking at what's installed…</div>
-      <div v-else v-masonry class="eg-grid">
+      <div v-else v-masonry class="eg-grid" data-columns>
         <section v-for="c in list" :key="c.key" class="eg-con">
           <div class="eg-head"><PIcon v-if="SLUG[c.key]" :p="{ slug: SLUG[c.key], fs_slug: SLUG[c.key] }" :size="30" /><Icon v-else name="mdiGamepadSquareOutline" :size="28" /><b>{{ c.name }}</b></div>
           <button v-for="e in c.emus" :key="c.key + e.id" class="eg-emu" :class="{ have: e.installed, busy: stateOf(c, e)?.state === 'run' }" data-focus @click="get(c, e)">

@@ -365,6 +365,9 @@ body.light-fx .systile .glyph { filter: saturate(0.6) brightness(1.1); }
 .menu-item { display: flex; align-items: center; gap: 14px; padding: 14px 16px; border-radius: var(--r-md); background: var(--s2); font-size: var(--t-md); font-weight: 500; transition: background var(--d-fast), color var(--d-fast); }
 .menu-item.danger { color: var(--danger-t, #ff9b93); }
 .menu-item.selected { background: var(--sel); }
+/* the chosen option's mark (0.9.49, owner: the tick vanished on a highlighted row; use the green tick everywhere): the
+   same green disc with a white check as "On this device", readable on any fill, focused or not */
+.tick-ok { display: inline-grid; place-items: center; flex: none; width: 22px; height: 22px; margin-left: 8px; border-radius: 50%; background: var(--green, #2fb36a); color: #fff; box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.18); }
 .menu-item:hover { background: var(--s3); }
 .menu-item:focus { background: var(--focus); color: var(--on-focus); box-shadow: none; }
 .menu-item:focus .sub, .menu-item:focus .muted { color: var(--on-focus-dim); }
@@ -588,7 +591,8 @@ body.theme-light .swatch.on { box-shadow: 0 0 0 3px var(--s0), 0 0 0 5px rgba(0,
 
 /* OLED (0.9.41, owner: "no difference between Cartridge and OLED"): everything black, panels set apart only by a fine
    grey edge, so a black screen stays black and nothing glows */
-body.theme-oled :is(.lrow, .toggle, .glass, .st-face, .eg-con, .dialog, .menu-sheet, .toast, .seg, .btn:not(.primary)):not(:focus):not(:focus-visible) { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1); }
+/* never over a Start tile's arranging ring (0.9.49: the ring sits on the face, the focus on the tile) */
+body.theme-oled :is(.lrow, .toggle, .glass, .st-face, .eg-con, .dialog, .menu-sheet, .toast, .seg, .btn:not(.primary)):not(:focus):not(:focus-visible):not(.editing .st-tile:is(:focus, :focus-visible) .st-face) { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1); }
 body.theme-oled .statusbar::before { background: linear-gradient(0deg, #000 0%, rgba(0, 0, 0, 0.6) 62%, rgba(0, 0, 0, 0) 100%); }
 
 /* ---- Liquid Glass (0.9.42, rebuilt in 0.9.44 from the owner's references with the image-to-code skill; rules from
