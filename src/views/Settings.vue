@@ -445,7 +445,7 @@
             </div>
             <div class="row wrap">
               <button class="btn" data-focus :disabled="!!store.trophyScan" @click="scanTrophies"><Icon name="mdiRadar" />{{ store.trophyScan ? `Scanning… ${store.trophyScan.visited || ''}` : 'Scan again' }}</button>
-              <button class="btn" data-focus @click="openOthers"><Icon name="mdiTrophyOutline" />Open Trophies &amp; Gamerscore</button>
+              <button class="btn" data-focus @click="openOthers"><Icon name="mdiTrophyOutline" />Open Achievements</button>
             </div>
             <Toggle :model-value="tcfg.sync !== false" label="Sync across devices" desc="Keeps trophies from every device together, stored as private notes on your RomM games. Uses your RomM login, no extra account. Only adds unlocks, never removes them." @update:model-value="(v) => setT({ sync: v })" />
             <p v-if="tcfg.sync !== false" class="muted small" style="margin-top: -6px">{{ syncLine }}</p>
@@ -828,7 +828,7 @@ async function chooseSrc(s) {
 }
 async function removeDir(s, dir) { trophySrc.value = await call('trophies:removeDir', { src: s.id, dir }); store.config = await call('config:get'); }
 async function scanTrophies() { trophySrc.value = await call('trophies:scan').catch((e) => (toast(e.message, 'error'), trophySrc.value)); store.config = await call('config:get'); }
-function openOthers() { store.achTab = 'others'; tab('achievements'); }
+function openOthers() { tab('achievements'); }
 const syncLine = computed(() => {
   const s = store.trophySync;
   if (s.state === 'ok') return `Last synced ${ago(s.at)}.`;
