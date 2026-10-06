@@ -88,7 +88,7 @@ async function go(n) {
 const next = () => go(i.value + 1);
 // where the spotlight goes: the step's element, padded; none centres the card
 function place() {
-  const t = s.value.at && document.querySelector(s.value.at);
+  const t = s.value.at ? document.querySelector(s.value.at) : null; // null, never false or '' (used with ?.)
   const r = t?.getBoundingClientRect();
   box.value = r && r.width ? { x: r.left - 8, y: r.top - 8, w: r.width + 16, h: r.height + 16 } : null;
 }

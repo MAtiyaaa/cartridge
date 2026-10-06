@@ -106,7 +106,7 @@
     </TransitionGroup>
   </div>
   <div class="toasts" :class="{ shifted: store.quickMenu }">
-    <div v-for="t in store.toasts" :key="t.id" class="toast" :class="t.kind"><span class="ti"><Icon :name="t.icon" :size="18" /></span>{{ t.msg }}</div>
+    <div v-for="t in store.toasts" :key="t.id" class="toast" :class="t.kind"><span class="ti"><Icon :name="t.icon" :size="18" /></span><span class="toast-msg">{{ t.msg }}</span></div>
   </div>
 </template>
 

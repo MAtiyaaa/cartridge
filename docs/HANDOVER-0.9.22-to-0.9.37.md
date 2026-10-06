@@ -1,3 +1,5 @@
+> **Read first (owner, 6 Oct 2026):** Plain and Glass are two separate modes, never merged. One Style setting (Plain or Glass) covers the whole app; design every element for both, and never let a change for one leak into the other. Details in CLAUDE.md.
+
 # Handover: everything from 0.9.22 to 0.9.37
 
 To the Claude on the next account, from the Claude on this one.

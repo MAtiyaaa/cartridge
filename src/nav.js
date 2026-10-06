@@ -23,7 +23,17 @@ function pressFx(el) {
   if (!el?.classList) return;
   el.classList.add('pressed');
   setTimeout(() => el.classList.remove('pressed'), 110);
+  shine(el);
 }
+// 0.9.44 (liquid-glass skill: interactive glass shimmers when pressed): a light sweep across a glass button, longer
+// than the squeeze, so it gets its own class; only drawn in Glass (styles.css .lg-shine)
+function shine(el) {
+  const b = el?.closest?.('.btn');
+  if (!b || !document.body.classList.contains('elements-glass')) return;
+  b.classList.remove('lg-shine'); void b.offsetWidth; b.classList.add('lg-shine');
+  clearTimeout(b._shine); b._shine = setTimeout(() => b.classList.remove('lg-shine'), 650);
+}
+if (typeof document !== 'undefined') document.addEventListener('pointerdown', (e) => shine(e.target), true);
 export function glideBy(sc, dx = 0, dy = 0) {
   if (!sc || (!dx && !dy)) return;
   let a = anims.get(sc);
@@ -259,7 +269,14 @@ export function dispatch(action, { keepMode = false } = {}) {
   if (action === 'hold' && document.activeElement?.hasAttribute?.('data-expand') && !document.activeElement.hasAttribute('data-hold')) {
     const el = document.activeElement;
     for (const o of (layer?.el || document).querySelectorAll('.expanded[data-expand]')) if (o !== el) o.classList.remove('expanded');
-    el.classList.toggle('expanded'); rumble(true);
+    // 0.9.46 (owner: a row that already showed all of its text still took two presses of B to leave): open it only
+    // if opening shows more. Measured straight after (one layout, nothing painted in between); no taller, no card.
+    if (!el.classList.contains('expanded')) {
+      const h = el.getBoundingClientRect().height;
+      el.classList.add('expanded');
+      if (el.getBoundingClientRect().height <= h + 2) { el.classList.remove('expanded'); return; }
+    } else el.classList.remove('expanded');
+    rumble(true);
     return;
   }
   if (h && h(document.activeElement) !== false) return;
