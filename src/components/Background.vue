@@ -26,9 +26,10 @@ import { RENDERERS, DARK_BASE, BG_BASE, LEGACY_ART, artPan, setInk } from '../bg
 import { consoleColors } from '../consoleColors.js';
 import { paletteOf, lightEffects } from '../themes.js';
 import { lastInput } from '../nav.js';
+import { governor } from '../motion.js';
 
 const mode = computed(() => {
-  let m = (store.welcoming && 'ribbons') || store.config?.ui?.bgStyle || 'solid'; // the welcome is on Ribbons
+  let m = (store.welcoming && !store.welcomeBg && 'ribbons') || store.config?.ui?.bgStyle || 'solid'; // the welcome is on Ribbons until one is picked in its Look step
   if (LEGACY_ART[m]) m = 'art:' + LEGACY_ART[m]; // retired in 0.9.15: that console's own art instead
   return RENDERERS[m] || m.startsWith('art:') || ['solid', 'art', 'wallpaper'].includes(m) ? m : 'solid';
 });
@@ -82,39 +83,46 @@ function setup() {
   frame = rendererOf(mode.value)(ctx, w, h, S, pal, light.value);
   return true;
 }
+// CAE governor (0.9.47): idle (nothing pressed for a minute) draws 8 times a second from a timer instead of waking
+// every frame; and if drawing gets expensive (a slow device, a 4K screen) the rate halves by itself
+let idleT = 0, cost = 0;
+function stop() { cancelAnimationFrame(raf); clearTimeout(idleT); raf = 0; idleT = 0; }
+function next() { if (governor.mode === 'idle') idleT = setTimeout(() => { idleT = 0; raf = requestAnimationFrame(loop); }, 125); else raf = requestAnimationFrame(loop); }
 function loop(t) {
-  raf = requestAnimationFrame(loop);
-  const gap = light.value ? 50 : 33; // ~30fps (20 in light mode) is plenty for a slow ambient drift
-  if (t - last < gap) return;
+  next();
+  const gap = (light.value ? 50 : 33) * (cost > 8 ? 2 : 1); // ~30fps (20 in light mode) is plenty for a slow ambient drift
+  if (governor.mode !== 'idle' && t - last < gap) return;
   // without the GPU, give every frame to the interface while you move around; the background
   // picks up again a moment after you stop
   if (light.value && t - lastInput < 900) return;
   last = t;
   if (!setup()) return;
+  const s = performance.now();
   frame((t - t0) / 1000);
+  cost = cost * 0.9 + (performance.now() - s) * 0.1;
 }
 function start() {
-  cancelAnimationFrame(raf); last = 0; key = ''; frame = null;
+  stop(); last = 0; key = ''; frame = null;
   if (!rendererOf(mode.value)) return;
   // one still frame: reduced motion, and (0.9.28, owner: choppy on handhelds) light effects, where repainting a
   // full-screen canvas without the GPU took frames from the interface
   if (reduce.value || light.value) { nextTick(() => { if (setup()) frame(12); }); return; }
   raf = requestAnimationFrame(loop);
 }
-const restart = async () => { cancelAnimationFrame(raf); await nextTick(); start(); };
+const restart = async () => { stop(); await nextTick(); start(); };
 watch([mode, reduce, light, () => store.config?.ui?.theme, () => store.config?.ui?.customColor, () => store.config?.ui?.surface, () => store.config?.ui?.style, () => JSON.stringify(store.config?.ui?.colors || {})], restart, { immediate: true });
 // art backgrounds pick up the library once it's loaded or changes
 watch(() => store.libVersion, () => { artCache.clear(); if (mode.value.startsWith('art:')) restart(); });
 const onResize = () => { if (reduce.value || light.value) restart(); };
 window.addEventListener('resize', onResize);
-const vis = () => (document.hidden ? cancelAnimationFrame(raf) : start());
+const vis = () => (document.hidden ? stop() : start());
 document.addEventListener('visibilitychange', vis);
 // not in front (a game is running from Steam, or another window is): no drawing at all (0.9.3, Ally)
-const away = () => cancelAnimationFrame(raf);
+const away = () => stop();
 window.addEventListener('blur', away);
 window.addEventListener('focus', start);
-watch(() => store.away, (a) => (a ? cancelAnimationFrame(raf) : start()));
-onBeforeUnmount(() => { cancelAnimationFrame(raf); document.removeEventListener('visibilitychange', vis); window.removeEventListener('resize', onResize); window.removeEventListener('blur', away); window.removeEventListener('focus', start); });
+watch(() => store.away, (a) => (a ? stop() : start()));
+onBeforeUnmount(() => { stop(); document.removeEventListener('visibilitychange', vis); window.removeEventListener('resize', onResize); window.removeEventListener('blur', away); window.removeEventListener('focus', start); });
 
 // ---------- your own wallpaper
 const wallUrl = computed(() => (store.config?.ui?.wallpaper ? 'romimg://img/?wp=1&t=' + store.config.ui.wallpaper : ''));

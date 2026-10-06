@@ -715,18 +715,18 @@ const topConsoles = computed(() => {
   return (store.lib?.platforms || []).filter((p) => score[p.slug]).sort((a, b) => score[b.slug].min - score[a.slug].min || score[b.slug].inst - score[a.slug].inst).slice(0, 5);
 });
 const allBgs = computed(() => {
-  const theme = BACKGROUNDS.filter((b) => b.group === 'Theme'), other = BACKGROUNDS.filter((b) => b.group === 'Other');
+  const theme = BACKGROUNDS.filter((b) => b.group === 'Theme'), scenes = BACKGROUNDS.filter((b) => b.group === 'Scenes'), other = BACKGROUNDS.filter((b) => b.group === 'Other');
   const top = topConsoles.value.map((p) => ({ v: 'art:' + p.slug, l: consoleName(p), sub: 'Your games, slowly panning', group: 'Top' }));
   const used = new Set(top.map((b) => b.v));
-  return [...theme, ...top, ...artBgs.value.filter((b) => !used.has(b.v)), ...other];
+  return [...theme, ...scenes, ...top, ...artBgs.value.filter((b) => !used.has(b.v)), ...other];
 });
 const bgNow = computed(() => { const v = ui.value.bgStyle || 'solid'; const m = LEGACY_ART[v] ? 'art:' + LEGACY_ART[v] : v; return allBgs.value.find((b) => b.v === m) || BACKGROUNDS[0]; });
-const BG_ICON = { Theme: 'mdiWaves', Top: 'mdiStarOutline', Consoles: 'mdiGamepadVariantOutline', Art: 'mdiImageMultipleOutline', Other: 'mdiImageOutline' };
+const BG_ICON = { Theme: 'mdiWaves', Scenes: 'mdiWaves', Top: 'mdiStarOutline', Consoles: 'mdiGamepadVariantOutline', Art: 'mdiImageMultipleOutline', Other: 'mdiImageOutline' };
 async function pickBg() {
   let last = '';
   const pal = paletteOf(ui.value);
   // a picture of each animated one (0.9.3 L); still, artwork and wallpaper keep their icon
-  const options = allBgs.value.map((b) => { const o = { label: b.l, sub: b.sub, value: b.v, icon: BG_ICON[b.group], img: RENDERERS[b.v] ? bgPreview(b.v, pal) : '', selected: bgNow.value.v === b.v, raw: b.group === 'Art' || (b.group === 'Top' && b.v.startsWith('art:')), heading: b.group !== last ? { Theme: 'Your theme colours', Top: 'Your most played consoles', Art: 'Your games', Other: 'Other' }[b.group] : '' }; last = b.group; return o; });
+  const options = allBgs.value.map((b) => { const o = { label: b.l, sub: b.sub, value: b.v, icon: BG_ICON[b.group], img: RENDERERS[b.v] ? bgPreview(b.v, pal) : '', selected: bgNow.value.v === b.v, raw: b.group === 'Art' || (b.group === 'Top' && b.v.startsWith('art:')), heading: b.group !== last ? { Theme: 'Your theme colours', Scenes: 'Their own colours', Top: 'Your most played consoles', Art: 'Your games', Other: 'Other' }[b.group] : '' }; last = b.group; return o; });
   const v = await choose({ title: 'Background', options });
   if (v) await setBg(v);
 }
@@ -1195,6 +1195,8 @@ onMounted(() => {
 .swatch { width: 74px; height: 50px; border-radius: var(--r-md); display: flex; align-items: flex-end; padding: 6px 8px; font-size: var(--t-xs); font-weight: 600; color: #fff; text-shadow: 0 1px 4px rgba(0,0,0,.6); box-shadow: inset 0 0 0 1px rgba(255,255,255,.15); }
 /* a colour can't take the grey fill: chosen is a soft ring, focus the full white one */
 .swatch.on { box-shadow: 0 0 0 3px var(--s0), 0 0 0 5px rgba(255, 255, 255, 0.45); }
+/* focus is the full focus colour, wider than the chosen ring, so a focused chosen colour still shows it moved (0.9.47: the audit found the two identical) */
+.pad-mode .swatch:focus, .swatch:focus-visible { box-shadow: 0 0 0 3px var(--s0), 0 0 0 6px var(--focus); }
 .swatch { position: relative; }
 .swatch i { position: absolute; top: 6px; right: 6px; width: 12px; height: 12px; border-radius: 50%; box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.7); }
 .swatch.ink { color: #1d1e22; text-shadow: none; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12); } /* Light's swatch (0.9.38) */

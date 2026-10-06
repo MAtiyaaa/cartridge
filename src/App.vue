@@ -112,6 +112,7 @@
 import { computed, onMounted, onBeforeUnmount, ref, watch, nextTick, defineAsyncComponent } from 'vue';
 import { store, loadConfig, loadLibrary, loadArt, back, tab, go, call, toast, choose, saveConfig, builtinKb, askText, GRADE, activeTabs, TAB_DEFS, romById, isFavourite, download } from './store.js';
 import { pushLayer, focusFirst, input, gameEnded } from './nav.js';
+import { governorAway } from './motion.js';
 import { setSoundEnabled, setSoundStyle, sfx } from './sfx.js';
 import { applyTheme, CARD_SIZES, dockOf } from './themes.js';
 import { setPointerPref, setRumble, setBackground } from './nav.js';
@@ -342,7 +343,7 @@ onMounted(async () => {
   // another app in front in Game Mode (0.9.21, owner: still laggy in the background): gamescope never
   // hides or blurs the window, so stop the pad, the animated background and every CSS animation here
   window.cart.on('game-run', (g) => gameEnded(g?.state === 'ended'));
-  window.cart.on('background', (b) => { setBackground(b?.away); store.away = !!b?.away; document.body.classList.toggle('away', !!b?.away); });
+  window.cart.on('background', (b) => { setBackground(b?.away); governorAway(b?.away); store.away = !!b?.away; document.body.classList.toggle('away', !!b?.away); });
   // background jobs (0.9.32): what's running now, and every change after; the Downloads page lists them
   window.cart.on('bg-job', (j) => { if (j.gone) delete store.bgJobs[j.key]; else store.bgJobs[j.key] = j; });
   call('jobs:list').then((l) => { for (const j of l || []) store.bgJobs[j.key] = j; }).catch(() => {});

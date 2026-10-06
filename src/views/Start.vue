@@ -11,7 +11,7 @@
     </div>
     <div class="st-scroll" data-scroll ref="scroller" @pointerdown="swipeDown">
       <Transition :name="'st-pg-' + pageDir" mode="out-in" @after-enter="afterPage">
-      <div class="st-board" :key="page" :data-pg="page" :style="{ height: boardH + 'px' }">
+      <div class="st-board" :key="page" :data-pg="page" :style="{ height: boardH + 'px' }" @transitionend="tileSettled">
         <!-- arranging: the grid's empty cells show, and where the held tile will land -->
         <div v-if="editing" class="st-slots" aria-hidden="true"><i v-for="c in slots" :key="c.k" :style="c.s" /></div>
         <div v-if="ghost" class="st-ghost" :style="ghost" aria-hidden="true" />
@@ -784,6 +784,8 @@ function focusTile(t) {
 // 0.9.23 (owner: moving a tile past another and back pushed tiles away and ruined the layout): while a
 // tile is held, moved or resized, every other tile is laid out again from where it was when you picked
 // it up, so taking a tile back where it was puts everything back as it was.
+// CAE (0.9.47, owner): a soft rumble when a tile you moved or resized comes to rest in its place (once per settle)
+function tileSettled(e) { if (editing.value && e.target.classList?.contains('st-tile') && e.propertyName === 'transform' && !e.pseudoElement) rumble('settle'); }
 let base = null;
 function snap() { base = new Map(tiles.value.map((t) => [t.id, { x: t.x, y: t.y, w: t.w, h: t.h }])); }
 function relayout(fixedId) {
@@ -1249,8 +1251,9 @@ watch(() => store.play, loadWeek);
 /* focus (0.9.29, owner: choppy on handhelds): the ring and lift shadow sit on the tile's ::before and fade in
    by opacity, and the face lifts on its own layer; animating the face's box-shadow repainted the whole
    tile on every frame without the GPU. Same look, same timing. */
-.st-tile::before { content: ''; position: absolute; inset: 0; border-radius: inherit; box-shadow: var(--ring), 0 26px 50px -24px rgba(0, 0, 0, 0.85); opacity: 0; transform: translateY(0); transition: opacity 240ms ease, transform 380ms cubic-bezier(0.32, 0.72, 0, 1); pointer-events: none; }
+.st-tile::before { content: ''; position: absolute; inset: 0; border-radius: inherit; box-shadow: var(--ring), 0 0 0 8px rgba(0, 0, 0, 0.32), 0 26px 50px -24px rgba(0, 0, 0, 0.85); opacity: 0; transform: translateY(0); transition: opacity 240ms ease, transform 380ms cubic-bezier(0.32, 0.72, 0, 1); pointer-events: none; }
 .st-tile:focus-visible::before, .pad-mode .st-tile:focus::before { opacity: 1; transform: translateY(-3px); }
+:global(body.theme-light .st-tile::before) { box-shadow: var(--ring), 0 26px 50px -24px rgba(0, 0, 0, 0.85); } /* a white ring vanished on the clock's day sky: a dark edge outside it (dark colours only) */
 .editing .st-tile::before { display: none; } /* arranging keeps its own ring on the face */
 .st-tile:focus-visible .st-face, .pad-mode .st-tile:focus .st-face { transform: translateY(-3px); }
 .st-tile:focus-within .st-face, .st-tile:focus .st-face { will-change: transform; }

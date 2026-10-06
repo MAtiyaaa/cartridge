@@ -28,7 +28,7 @@
       </div>
       <div v-if="fpNote" class="eg-fp small"><Icon name="mdiPackageVariant" :size="18" />{{ fpNote }}</div>
       <div v-if="!list" class="muted small"><Icon name="mdiSync" :size="16" class="spin" /> Looking at what's installed…</div>
-      <div v-else class="eg-grid">
+      <div v-else v-masonry class="eg-grid">
         <section v-for="c in list" :key="c.key" class="eg-con">
           <div class="eg-head"><PIcon v-if="SLUG[c.key]" :p="{ slug: SLUG[c.key], fs_slug: SLUG[c.key] }" :size="30" /><Icon v-else name="mdiGamepadSquareOutline" :size="28" /><b>{{ c.name }}</b></div>
           <button v-for="e in c.emus" :key="c.key + e.id" class="eg-emu" :class="{ have: e.installed }" data-focus @click="togglePick(c, e)">
@@ -71,7 +71,7 @@
       </div>
       <div v-if="fpNote" class="eg-fp small"><Icon name="mdiPackageVariant" :size="18" />{{ fpNote }}</div>
       <div v-if="!list" class="muted small"><Icon name="mdiSync" :size="16" class="spin" /> Looking at what's installed…</div>
-      <div v-else class="eg-grid">
+      <div v-else v-masonry class="eg-grid">
         <section v-for="c in list" :key="c.key" class="eg-con">
           <div class="eg-head"><PIcon v-if="SLUG[c.key]" :p="{ slug: SLUG[c.key], fs_slug: SLUG[c.key] }" :size="30" /><Icon v-else name="mdiGamepadSquareOutline" :size="28" /><b>{{ c.name }}</b></div>
           <button v-for="e in c.emus" :key="c.key + e.id" class="eg-emu" :class="{ have: e.installed, busy: stateOf(c, e)?.state === 'run' }" data-focus @click="get(c, e)">
@@ -352,6 +352,22 @@ watch(() => bgJob('emu:'), (j) => { if (j) { upRun.value = j.key.slice(4); upPct
 watch(() => bgJob('custom:'), (j) => { if (j) { gh.value.open = true; gh.value.busy = true; gh.value.pct = j.pct ?? null; } else if (gh.value.busy && !ghCalling) { gh.value.busy = false; load(); loadUps(true); } }, { immediate: true });
 let off = null, offP = null, offU = null, lastDone = 0;
 const told = new Set();
+// masonry (0.9.47, owner: a console with one emulator shouldn't take a row as tall as one with three): same
+// column widths, each card as tall as what's in it, the next card moves up under it. Order stays left to right
+// (grid placement), only each card's row span is measured: 4px rows, span = its height plus the gap.
+const vMasonry = {
+  mounted(grid) {
+    const fit = () => {
+      const gap = parseFloat(getComputedStyle(grid).columnGap) || 0;
+      for (const c of grid.children) { c.style.gridRowEnd = ''; const h = c.getBoundingClientRect().height; c.style.gridRowEnd = 'span ' + Math.max(1, Math.ceil((h + gap) / 4)); }
+    };
+    let raf = 0; const soon = () => { if (!raf) raf = requestAnimationFrame(() => { raf = 0; fit(); }); };
+    const ro = new ResizeObserver(soon), watchAll = () => { ro.disconnect(); ro.observe(grid); for (const c of grid.children) ro.observe(c); soon(); };
+    const mo = new MutationObserver(watchAll); mo.observe(grid, { childList: true });
+    watchAll(); grid._masonry = { ro, mo };
+  },
+  unmounted(grid) { grid._masonry?.ro.disconnect(); grid._masonry?.mo.disconnect(); },
+};
 onMounted(async () => {
   off = window.cart.on('emuget-state', (s) => {
     q.value = s;
@@ -413,6 +429,7 @@ defineExpose({ load });
 .eg-sum b { font-size: var(--t-xl); font-family: var(--display); }
 .eg-now { display: inline-flex; align-items: center; gap: 6px; font-size: var(--t-sm); color: var(--muted); }
 .eg-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: var(--s-3); }
+.eg-grid[class] { grid-auto-rows: 4px; row-gap: 0; align-items: start; }
 .eg-con { display: flex; flex-direction: column; gap: 6px; padding: var(--s-3); border-radius: var(--r-lg); background: var(--s1); }
 .eg-head { display: flex; align-items: center; gap: 10px; padding: 2px 4px 6px; }
 .eg-head b { font-family: var(--display); font-size: var(--t-md);  overflow-wrap: anywhere; }

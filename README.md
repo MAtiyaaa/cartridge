@@ -71,13 +71,13 @@ Settings → Updates checks GitHub Releases and swaps in the new version on rest
 <td valign="top">
 
 **🏆 Achievements and trophies**<br>
-RetroAchievements for retro consoles, plus trophies from RPCS3, shadPS4, Xenia and Vita3K wherever they are installed. Trophies sync between your devices through private notes on your RomM server, and pop up as you unlock them.
+RetroAchievements for retro consoles, plus trophies and Gamerscore from RPCS3, shadPS4, Xenia, Vita3K and KytyPS5 wherever they are installed (read only). Every game syncs between your devices through private notes on your RomM server, installed there or not, and unlocks pop up as they happen.
 
 </td>
 <td valign="top">
 
-**🎮 PS4 and PS5 friendly**<br>
-Extracted PS4/PS5 game folders are detected automatically, and anything else can be marked as installed.
+**🧩 Emulators, set up for you**<br>
+Finds your emulators however they're installed (EmuDeck, Flatpak, AppImages, packages, RetroDECK), gets and updates new ones, places BIOS and firmware, and installs PS3 and Vita packages. Mods, texture packs, patches, cheats and per-game settings for the emulators that have them, and save sync between devices through Syncthing.
 
 </td>
 </tr>
@@ -85,13 +85,13 @@ Extracted PS4/PS5 game folders are detected automatically, and anything else can
 <td valign="top">
 
 **🎨 Make it yours**<br>
-14 colour themes or any colour you like, six animated backgrounds (inspired by the PSP, PS3, PS5, Xbox, Nintendo and Steam), a still one, game artwork or your own wallpaper, six fonts, OLED black, card sizes, corners and spacing, motion and sound styles. Custom covers, logos and backgrounds per game from SteamGridDB.
+Two styles, designed separately: **Plain** (solid and matte) and **Glass** (see-through, with real refraction). 17 colours including OLED black and Light, or any colour you like. Animated backgrounds in your colours (Ribbons, XMB Waves, Aurora, Contours, Drift, Tide) or their own (Midnight, Solar Flare, Nordic Aurora, Cyber Gradient, Liquid Titanium), a still one, game artwork, a pan over a console's covers or your own wallpaper. Seven fonts, card sizes, corners and spacing, motion and sound styles, and a Start page of tiles you arrange yourself. Custom covers, logos and backgrounds per game from SteamGridDB. The first-run welcome lets you pick the style, colour and background before anything else.
 
 </td>
 <td valign="top">
 
 **⚡ Handheld to TV**<br>
-The interface sizes itself to your screen on every launch, from a Steam Deck to a 4K TV, and uses the GPU on big screens. Lazy-loaded grids and a cached image store keep it smooth.
+The interface sizes itself to your screen on every launch, from a Steam Deck to a 4K TV. Motion runs on Cartridge's own animation engine (heavy, short, interruptible), and Cartridge goes quiet when you're idle and nearly silent while a game is running. Lazy-loaded grids and a cached image store keep it smooth.
 
 </td>
 </tr>
@@ -136,7 +136,7 @@ This downloads the latest AppImage to `~/Applications`, makes it executable and 
 
 **Updating:** open **Settings → Updates → Check for updates**, or pick it from the Quick Menu. The new version downloads in the background and replaces the AppImage when you restart, so your Steam shortcut keeps working.
 
-> **Won't start from Steam?** Press Settings → Steam → Add to Steam again after updating, so Steam uses Cartridge's launch script. Each Steam launch is logged to `~/.config/Cartridge/steam-launch.log`. **Blank window?** It also switches to software rendering if the GPU process fails. You can also force it with **Settings → Look & feel → Rendering → Compatible**, or launch once with `./Cartridge-x86_64.AppImage --disable-gpu`. A log is kept at `~/.config/Cartridge/cartridge.log`.
+> **Won't start from Steam?** Press Settings → Steam → Add to Steam again after updating, so Steam uses Cartridge's launch script. Each Steam launch is logged to `~/.config/Cartridge/steam-launch.log`. **Blank window?** Cartridge restarts once without the GPU if the GPU process fails at start. You can also launch once with `./Cartridge-x86_64.AppImage --disable-gpu`. A log is kept at `~/.config/Cartridge/cartridge.log`.
 
 <br>
 
@@ -155,25 +155,41 @@ This downloads the latest AppImage to `~/Applications`, makes it executable and 
 
 | Button | Action |
 |:---:|---|
-| **D-pad / Stick** | Move |
-| **A** | Select |
+| **D-pad / Left stick** | Move |
+| **Right stick** | Scroll |
+| **A** | Select · hold to arrange Start or open a row's details |
 | **B** | Back |
-| **X** | Download highlighted game |
-| **Y** | Search box (type with any keyboard, or Steam + X in Game Mode) · on a game page: More (custom artwork) |
-| **LT / RT** | Switch tabs (Home, Library, Consoles, Downloads, Settings) |
-| **LB / RB** | Inside a console or collection: previous / next |
-| **Select** | Downloads · in a grid: cycle All / On device / Not downloaded / New |
+| **X** | Download the highlighted game, or the page's action |
+| **Y** | Search, or More on a game page |
+| **LT / RT** | Switch top tabs |
+| **LB / RB** | Switch sections inside a page |
+| **Select** | Downloads |
 | **Start** | Quick Menu (resync, scan, updates, screenshot) |
-| **Touch** | Tap anything. The cursor only appears when a mouse moves |
+| **Touch** | Tap, swipe to scroll, swipe from the left edge to go back, swipe the tabs to switch them |
+| **Keyboard** | Arrows, Enter, Esc; Tab moves focus, 1 to 9 pick a tab, Ctrl+F or / searches, F1 lists the keys |
 
 <br>
+
+## ✦ Under the hood
+
+Cartridge is Electron with a Vue 3 interface and no UI, state or animation library: the engines are its own.
+[docs/architecture.md](docs/architecture.md) maps them all. The main ones:
+
+- **CAE, the Cartridge Animation Engine** ([docs/cae.md](docs/cae.md)): springs, one frame loop, shared-element flights, and a governor that quiets Cartridge while you're idle or playing.
+- **The Glass engine** ([docs/glass-engine.md](docs/glass-engine.md)): refraction through generated lens maps, a rim light that follows you, and a step down to frosted glass on slow frames.
+- **The focus engine** (`src/nav.js`): controller, keyboard, touch and mouse on every screen.
+- **The Steam manager**: shortcuts, artwork and collections, live through Steam's own client when it can.
+- **Emulator detection and updates**: every install kind, read from inside AppImages, with a check that a new build can run on your Linux.
+- **Trophy sync**: emulator trophies read only, shared between devices through private RomM notes.
 
 ## ✦ Build from source
 
 ```bash
 npm install
-npm start       # run in development
-npm run dist    # build release/Cartridge-x86_64.AppImage
+npm start          # run in development
+npm test           # detection, Steam, trophies, readers and more
+npm run audit:ui   # focus and contrast in every look (needs Playwright)
+npm run dist       # build release/Cartridge-x86_64.AppImage
 ```
 
 Bumping `version` in `package.json` on `main` builds the AppImage on GitHub Actions and publishes it as a release. Installed copies pick it up automatically.
@@ -182,6 +198,6 @@ Bumping `version` in `package.json` on `main` builds the AppImage on GitHub Acti
 
 Settings and the library cache live in `~/.config/Cartridge/`. The full history of changes is in [CHANGELOG.md](CHANGELOG.md).
 
-Console logos come from the open-source [Art Book Next](https://github.com/anthonycaccese/art-book-next-es-de) theme for ES-DE and are downloaded on first use. The RetroAchievements logo belongs to RetroAchievements. Trophy data is read from RPCS3, shadPS4, Xenia and Vita3K using the file formats in their open-source code. Fonts: Outfit, Roboto, Inter, Nunito, Rubik, Space Grotesk and Lexend, all under the SIL Open Font License. The backgrounds are original designs. All logos and trademarks belong to their owners.
+Console logos come from the open-source [Art Book Next](https://github.com/anthonycaccese/art-book-next-es-de) theme for ES-DE and are downloaded on first use. The RetroAchievements logo belongs to RetroAchievements. Trophy data is read from RPCS3, shadPS4, Xenia and Vita3K using the file formats in their open-source code. Fonts: Archivo, Inter, Outfit, Roboto, Nunito, Rubik, Space Grotesk and Lexend, all under the SIL Open Font License. The backgrounds are original designs. All logos and trademarks belong to their owners.
 
 <div align="center"><sub>Cartridge is an unofficial client and isn't affiliated with the RomM project.</sub></div>

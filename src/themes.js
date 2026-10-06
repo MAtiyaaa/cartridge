@@ -189,7 +189,8 @@ export function applyTheme(uiOrName) {
   if (t.neutral) { r.setProperty('--xmb', black ? '#000' : S[0]); r.setProperty('--xmb-base', black ? '#000' : S[0]); }
   for (let i = 0; i < 6; i++) r.setProperty('--g' + i, g[i]);
   r.setProperty('--tint-rgb', black ? '0, 0, 0' : lightT ? '235, 235, 239' : tint);
-  r.setProperty('--glass-bg', el.glassA < 1 ? `rgba(${black ? '0, 0, 0' : tint}, ${el.glassA})` : S[1]);
+  // Light (0.9.47): white frosted panels; the dark tint made grey slabs with unreadable text in Light + Glass
+  r.setProperty('--glass-bg', el.glassA < 1 ? `rgba(${lightT ? '250, 250, 251' : black ? '0, 0, 0' : tint}, ${lightT ? 0.72 : el.glassA})` : S[1]);
   // Liquid Glass tokens (0.9.42): the material's tint (the theme's hue, white glass on Light, black on OLED) and the
   // prominent colour (the highlight) for focused controls and primary buttons
   r.setProperty('--lg-tint', lightT ? '255, 255, 255' : black || t.oled ? '0, 0, 0' : tint);
