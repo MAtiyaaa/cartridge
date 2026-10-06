@@ -14,6 +14,11 @@ main, `window.cart.on()` in the UI).
 |---|---|---|---|
 | CAE, the Cartridge Animation Engine | `src/motion.js` | one frame loop, spring curves for CSS and script, shared-element flights, sliding pills, the governor (idle and in-game quiet) | `docs/cae.md` |
 | Glass engine | `src/glassEngine.js` | refraction through generated lens maps, rim light that follows you, step down to frost on slow frames | `docs/glass-engine.md` |
+| Game identity | `electron/gameId.js` | which library game a file, save, trophy set or Syncthing folder is: IDs from names and read from the game itself (cached per file version in `game-ids.json`), then the same title, oldest copy on ties | `test/gameId.test.js` |
+| Emulator profiles | `electron/emuProfiles.js` | one view per emulator over every table that knows something about it (launch, saves, folders, links, settings, mods, patches, updates, Get Emulators), families for forks | `test/emuProfiles.test.js` pins every emulator's facts |
+| Background job scheduler | `electron/scheduler.js` | Cartridge's own periodic work (library sync, Steam collections, BIOS check, picture cache trim) with due checks, retries, one run at a time, and waiting while a game runs | `test/scheduler.test.js` |
+| Image pipeline | `electron/main.js` (`sizedImage`, `trimImageCache`), `src/store.js` (`cover`, `img`) | pictures kept at the size they're shown (cards ask for ~360 px, banners for the screen's width), shrunk once and cached, cache capped at 1.5 GB | |
+| Performance overlay | `src/components/PerfOverlay.vue`, `perf:sample` | frame rate, slowest frame, CPU and memory on screen (Settings → About) | |
 | Focus engine | `src/nav.js` | controller, keyboard, touch and mouse: focus moves, layers and zones, holds, scrolling (springs, momentum, touch drag), rumble, focus that never falls off the page | HANDOFF, CLAUDE.md "Touch" |
 | Backgrounds | `src/bgRenderers.js` | Waves and Ribbons, plus Aurora, Contours, Drift and Tide built on the same rules from named Fourier presets (`PRESETS`), pure functions of time | comments in the file |
 | Themes | `src/themes.js` | colours, Plain and Glass styles, fonts, card shapes; writes the design tokens | `docs/design.md` |
@@ -27,7 +32,7 @@ main, `window.cart.on()` in the UI).
 | Add-ons and patches | `electron/addons*.js`, `cheats.js`, `cemuPacks.js`, `patches.js`, `gameSettings.js` | mods, texture packs, cheats and patches per emulator, per-game settings | tests per file |
 | Saves and Syncthing | `electron/saves.js`, `syncthing.js`, `folderLinks.js` | finds saves (read only), sets up save sync through Syncthing, links fork folders on request | tests per file |
 | Downloads | `electron/dlWorker.js`, `main.js` | one worker per download, resume, checksums, speed limit | |
-| UI audits | `tools/ui-audit/` | focus and contrast checks in every look before a release (not shipped) | `tools/ui-audit/README.md` |
+| UI audits | `tools/ui-audit/` | focus and contrast checks in every look, the Plain/Glass separation check (in `npm test`), and screenshots compared with the last release (not shipped) | `tools/ui-audit/README.md` |
 
 ## Libraries
 

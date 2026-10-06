@@ -86,6 +86,11 @@ A stand-in game (one hashing process per CPU core, 10 s runs, six interleaved pa
 Measured in the real app (software rendering, Aurora, Glass): about 6.7% of one CPU core in use with nothing pressed, 3.3% idle, 2.1% with a game in front; about 550 MB across all of Electron's processes. In the main process, the Game Mode focus watcher checks every 1.5 s instead of 0.6 s
 while another app is in front, and the trophy service skips 3 of every 4 checks while a game runs.
 
+### The scheduler's game rule
+Since 0.9.48 the library sync, the Steam collections check, the BIOS check and the picture cache trim run on
+`electron/scheduler.js`: anything due while a game runs waits and runs once the game has ended. Downloads are not
+on it and keep going (owner).
+
 ## Checking a change
 
 - `npm run audit:ui` (focus and contrast in Plain and Glass, three colours; see `tools/ui-audit/README.md`).

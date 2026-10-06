@@ -182,7 +182,7 @@ onBeforeUnmount(() => { window.removeEventListener('keydown', onKey, true); laye
 .kb-hints { display: flex; gap: 18px; justify-content: center; color: var(--muted); font-size: var(--t-xs); }
 .hint { display: flex; align-items: center; gap: 6px; }
 /* the welcome's keyboard (0.9.17): glass like the welcome card, quiet keys, the white focus box */
-.kb.sleek { background: rgba(14, 16, 22, 0.72); backdrop-filter: blur(28px) saturate(1.3); border: 1px solid rgba(255, 255, 255, 0.08); box-shadow: 0 30px 90px rgba(0, 0, 0, 0.55); }
+.kb.sleek { background: var(--kb-sleek-bg, rgba(14, 16, 22, 0.96)); backdrop-filter: var(--kb-sleek-blur, none); /* frosted only in Glass (0.9.48) */ border: 1px solid rgba(255, 255, 255, 0.08); box-shadow: 0 30px 90px rgba(0, 0, 0, 0.55); }
 .kb.sleek h2 { font-weight: 600; letter-spacing: -0.01em; }
 .kb.sleek .kb-display { background: rgba(255, 255, 255, 0.06); border: 0; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1); }
 .kb.sleek .caret { background: #fff; }

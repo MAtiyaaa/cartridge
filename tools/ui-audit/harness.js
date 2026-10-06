@@ -41,14 +41,17 @@ function stub(ui, extra = {}) {
 })();`;
 }
 // open the built UI with a look: { theme, style } (style 'plain' | 'glass')
-async function open({ theme = 'cartridge', style = 'plain', bg = 'ribbons', width = 1280, height = 800 } = {}) {
+// dist: another build to load (the visual check opens the last release's build too); freeze: a fixed clock and no motion
+async function open({ theme = 'cartridge', style = 'plain', bg = 'ribbons', width = 1280, height = 800, dist = '', freeze = false } = {}) {
   const { chromium } = playwright();
   const browser = await chromium.launch({ executablePath: process.env.CHROMIUM || undefined, args: ['--allow-file-access-from-files'] });
   const page = await browser.newPage({ viewport: { width, height } });
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
+  if (freeze) await page.clock.setFixedTime(new Date('2026-01-15T10:30:00'));
   await page.addInitScript(stub({ theme, style, elements: style, surface: style === 'glass' ? 'glass' : 'solid', bgStyle: bg }));
-  await page.goto('file://' + path.resolve(__dirname, '../../dist/index.html'));
+  if (freeze) await page.addInitScript(() => { addEventListener('DOMContentLoaded', () => { const st = document.createElement('style'); st.textContent = '*, *::before, *::after { animation: none !important; transition: none !important; caret-color: transparent !important; }'; document.head.appendChild(st); }); });
+  await page.goto('file://' + path.resolve(dist || path.join(__dirname, '../../dist'), 'index.html'));
   await page.waitForTimeout(2500);
   page.setDefaultTimeout(4000);
   return { browser, page, errors };
