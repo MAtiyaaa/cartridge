@@ -91,8 +91,13 @@ const ROWS = {
   rpcs3: [['/dev_hdd0/', 'Internal Drive (dev_hdd0)', 'Installed games, updates, DLC, saves and trophies'], ['/dev_hdd1/', 'Cache Drive (dev_hdd1)'], ['/dev_usb000/', 'USB Drive (dev_usb000)'], ['/games/', 'Disc Games (games)', 'Where RPCS3 keeps games it copied']],
   shadps4: [['GUI.installDirs', 'Game Folders', 'Where shadPS4 looks for games', 'tomllist'], ['GUI.addonInstallDir', 'DLC', 'Where shadPS4 keeps DLC (addcont)']],
   vita3k: [['pref-path', 'Storage (ux0)', 'Installed games, updates, DLC and saves']],
+  // 0.9.49 (owner: "make PPSSPP's folders changeable"): on Linux PPSSPP's memory stick is always $XDG_CONFIG_HOME/ppsspp
+  // (UI/NativeApp.cpp; memstick_dir.txt is read on Android and UWP only), so there is no setting to write. Its PSP folder
+  // is copied to the new place (never over a file), the old one kept beside as PSP.cartridge-kept, and a link put where
+  // PPSSPP looks. Nothing is deleted.
+  ppsspp: [['PSP', 'Memory Stick (PSP)', 'Saves, save states, textures and cheats']],
 };
-const NAMES = { pcsx2: 'PCSX2', duckstation: 'DuckStation', dolphin: 'Dolphin', yuzu: 'Yuzu', eden: 'Eden', citron: 'Citron', azahar: 'Azahar', citra: 'Citra', ryujinx: 'Ryujinx', cemu: 'Cemu', rpcs3: 'RPCS3', shadps4: 'shadPS4', vita3k: 'Vita3K' };
+const NAMES = { pcsx2: 'PCSX2', duckstation: 'DuckStation', dolphin: 'Dolphin', yuzu: 'Yuzu', eden: 'Eden', citron: 'Citron', azahar: 'Azahar', citra: 'Citra', ryujinx: 'Ryujinx', cemu: 'Cemu', rpcs3: 'RPCS3', shadps4: 'shadPS4', vita3k: 'Vita3K', ppsspp: 'PPSSPP' };
 
 // where each one's settings file is, from what's on this device (the same places add-ons look)
 function locate(id, home = os.homedir()) {
@@ -112,6 +117,11 @@ function locate(id, home = os.homedir()) {
     const dirs = [path.join(data, 'shadPS4'), path.join(home, '.local/share/shadPS4'), path.join(home, '.var/app/net.shadps4.shadPS4/data/shadPS4')];
     const d = dirs.find((x) => exists(path.join(x, 'config.toml'))); return d ? { id, kind, file: path.join(d, 'config.toml'), root: d } : null;
   }
+  if (kind === 'ppsspp') {
+    const roots = [path.join(cfg, 'ppsspp'), path.join(home, '.var/app/org.ppsspp.PPSSPP/config/ppsspp')];
+    const r = roots.find((x) => exists(path.join(x, 'PSP'))) || roots.find(isDir);
+    return r ? { id, kind, file: path.join(r, 'PSP', 'SYSTEM', 'ppsspp.ini'), root: r, flatpak: r.includes('/.var/app/') } : null;
+  }
   if (kind === 'vita3k') {
     const f = [path.join(cfg, 'Vita3K', 'config.yml'), path.join(home, '.var/app/info.vita3k.Vita3K/config/Vita3K/config.yml')].find(exists);
     return f ? { id, kind, file: f, root: path.dirname(f), dflt: path.join(data, 'Vita3K', 'Vita3K') } : null;
@@ -130,6 +140,10 @@ function resolve(loc, v) {
 function describe(id, home) {
   const loc = locate(id, home);
   if (!loc) return { id, name: NAMES[id] || id, why: `${NAMES[id] || id}'s settings weren't found on this device. Open it once, then come back.` };
+  if (loc.kind === 'ppsspp') {
+    const psp = path.join(loc.root, 'PSP'); let link = null; try { if (fs.lstatSync(psp).isSymbolicLink()) link = fs.realpathSync(psp); } catch {}
+    return { id, name: NAMES[id], file: loc.file, items: [{ id: 'PSP', label: 'Memory Stick (PSP)', sub: 'Saves, save states, textures and cheats. PPSSPP always looks here, so Cartridge moves the folder and leaves a link.', list: false, value: link || '', path: link || psp, here: isDir(link || psp), dflt: !link, moves: true }] };
+  }
   const text = read(loc.file) || '';
   let json = null; if (loc.kind === 'ryujinx') { try { json = JSON.parse(text); } catch {} }
   const items = (ROWS[loc.kind] || []).map(([rid, label, sub, list]) => {
@@ -158,6 +172,7 @@ function setPath(id, rid, value, home) {
   const row = (ROWS[loc.kind] || []).find((r) => r[0] === rid);
   if (!row) throw new Error('Cartridge can’t change that folder.');
   const list = row[3];
+  if (loc.kind === 'ppsspp') { movePsp(loc, value); return describe(id, home); }
   let text = read(loc.file);
   if (text == null && !['vita3k', 'rpcs3'].includes(loc.kind)) throw new Error(`${NAMES[id] || id}'s settings file couldn't be read.`);
   text = text || '';
@@ -190,6 +205,28 @@ function setPath(id, rid, value, home) {
   fs.writeFileSync(tmp, text); fs.renameSync(tmp, loc.file);
   if (!list && value) fs.mkdirSync(resolve(loc, value), { recursive: true });
   return describe(id, home);
+}
+// PPSSPP's PSP folder to `to` (null: back where PPSSPP keeps it). Files are copied, never over one; the old folder stays.
+function movePsp(loc, to) {
+  const psp = path.join(loc.root, 'PSP'), kept = psp + '.cartridge-kept';
+  let link = null; try { if (fs.lstatSync(psp).isSymbolicLink()) link = fs.readlinkSync(psp); } catch {}
+  const from = link ? path.resolve(loc.root, link) : psp;
+  if (to) {
+    to = path.resolve(String(to).replace(/^~(?=\/|$)/, os.homedir()));
+    const rp = (p) => { try { return fs.realpathSync(p); } catch { return path.resolve(p); } };
+    if (rp(to) === rp(from)) return;
+    if ((rp(to) + '/').startsWith(rp(loc.root) + '/') || (rp(from) + '/').startsWith(rp(to) + '/')) throw new Error('Pick a folder outside PPSSPP’s own folder.');
+    fs.mkdirSync(to, { recursive: true });
+    if (isDir(from)) fs.cpSync(from, to, { recursive: true, force: false, errorOnExist: false, preserveTimestamps: true });
+    const count = (d) => { let n = 0; for (const e of fs.readdirSync(d, { withFileTypes: true })) n += e.isDirectory() ? count(path.join(d, e.name)) : 1; return n; };
+    if (isDir(from) && count(to) < count(from)) throw new Error('Not every file could be copied, so nothing was changed. Check the drive has room.');
+    if (link) fs.unlinkSync(psp); else if (exists(psp)) { if (exists(kept)) throw new Error(`${kept} is already there. Move it away first.`); fs.renameSync(psp, kept); }
+    fs.symlinkSync(to, psp);
+  } else {
+    if (!link) return;
+    fs.unlinkSync(psp); fs.mkdirSync(psp, { recursive: true });
+    if (isDir(from)) fs.cpSync(from, psp, { recursive: true, force: false, errorOnExist: false, preserveTimestamps: true }); // the moved folder stays too
+  }
 }
 const supported = () => Object.keys(NAMES);
 module.exports = { ROWS, NAMES, locate, describe, setPath, supported, iniAll, iniSet, qtSet, tomlGet, tomlSet, ymlLine, ymlLineSet };

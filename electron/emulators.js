@@ -52,6 +52,9 @@ const EMU = {
   stella: { label: 'Stella', fp: ['io.github.stella_emu.Stella'], bin: ['stella'], args: '-fullscreen 1 "{ROM}"', for: ['atari2600'] },
   ymir: { label: 'Ymir', app: /ymir/i, fp: ['io.github.strikerx3.ymir'], bin: ['ymir'], args: '-d "{ROM}"', for: ['saturn'] },
   bigpemu: { label: 'BigPEmu', scripts: ['bigpemu.sh'], args: '"{ROM}"', for: ['atarijaguar', 'atarijaguarcd'] },
+  // Supermodel (Sega Model 3; Docs/README.txt and Src/OSD/SDL/Main.cpp): the romset zip, -fullscreen. It reads its
+  // Games.xml from its own folder, which the Flatpak (com.supermodel3.Supermodel, what Get Emulators installs) carries.
+  supermodel: { label: 'Supermodel', scripts: ['supermodel.sh'], app: /supermodel/i, fp: ['com.supermodel3.Supermodel'], bin: ['supermodel', 'Supermodel'], args: '"{ROM}" -fullscreen', for: ['model3'] },
   // MAME runs a set by name from its folder
   mame: { label: 'MAME', scripts: ['mame.sh'], fp: ['org.mamedev.MAME'], bin: ['mame'], args: '-rompath "{DIR}" "{NAME}"', for: ['arcade', 'cps1', 'cps2', 'cps3', 'neogeo'] },
   scummvm: { label: 'ScummVM', scripts: ['scummvm.sh'], fp: ['org.scummvm.ScummVM'], bin: ['scummvm'], args: '--path="{ROM}" --auto-detect', for: ['scummvm'] },
@@ -116,6 +119,8 @@ const CORES = {
   colecovision: ['gearcoleco', 'bluemsx'], intellivision: ['freeintv'], vectrex: ['vecx'], '3do': ['opera'],
   amiga: ['puae', 'puae2021'], amigacd32: ['puae'], amstradcpc: ['cap32', 'crocods'], c64: ['vice_x64'], msx: ['bluemsx', 'fmsx'], msx2: ['bluemsx', 'fmsx'], x68000: ['px68k'], zxspectrum: ['fuse'],
   dos: ['dosbox_pure'], scummvm: ['scummvm'], pico8: ['retro8'], tic80: ['tic80'],
+  // 0.9.49 (CEE: every console RomM has gets a way to play): libretro's own cores for the smaller systems
+  arduboy: ['arduous'], gameandwatch: ['gw'], megaduck: ['sameduck'], odyssey2: ['o2em'], pico: ['picodrive'], supervision: ['potator'], zx81: ['81'],
 };
 const CORE_NAMES = {
   mesen: 'Mesen', fceumm: 'FCEUmm', nestopia: 'Nestopia', quicknes: 'QuickNES', snes9x: 'Snes9x', bsnes: 'bsnes', bsnes_hd_beta: 'bsnes-hd', 'mesen-s': 'Mesen-S', bsnes2014_accuracy: 'bsnes 2014', bsnes_mercury_accuracy: 'bsnes-mercury', mednafen_snes: 'Beetle bsnes',
@@ -127,9 +132,10 @@ const CORE_NAMES = {
   fbneo: 'FBNeo', mame: 'MAME', mame2003_plus: 'MAME 2003-Plus', neocd: 'NeoCD', stella: 'Stella', atari800: 'Atari800', prosystem: 'ProSystem', virtualjaguar: 'Virtual Jaguar', handy: 'Handy', mednafen_lynx: 'Beetle Lynx', hatari: 'Hatari',
   mednafen_ngp: 'Beetle NeoPop', mednafen_wswan: 'Beetle Cygne', gearcoleco: 'Gearcoleco', freeintv: 'FreeIntv', vecx: 'vecx', opera: 'Opera',
   puae: 'PUAE', puae2021: 'PUAE 2021', cap32: 'Caprice32', crocods: 'CrocoDS', vice_x64: 'VICE', fmsx: 'fMSX', px68k: 'PX68k', fuse: 'Fuse', dosbox_pure: 'DOSBox Pure', scummvm: 'ScummVM', retro8: 'Retro8', tic80: 'TIC-80',
+  arduous: 'Arduous', gw: 'Game & Watch', sameduck: 'SameDuck', o2em: 'O2EM', potator: 'Potator', 81: 'EightyOne',
 };
 // consoles EmuDeck plays in RetroArch unless you pick a standalone emulator
-const RA_FIRST = new Set(['nes', 'fds', 'famicom', 'snes', 'sfc', 'gb', 'gbc', 'gba', 'n64', 'virtualboy', 'pokemini', 'genesis', 'megadrive', 'mastersystem', 'gamegear', 'segacd', 'sega32x', 'sg-1000', 'saturn', 'dreamcast',
+const RA_FIRST = new Set(['arduboy', 'gameandwatch', 'megaduck', 'odyssey2', 'pico', 'supervision', 'zx81', 'nes', 'fds', 'famicom', 'snes', 'sfc', 'gb', 'gbc', 'gba', 'n64', 'virtualboy', 'pokemini', 'genesis', 'megadrive', 'mastersystem', 'gamegear', 'segacd', 'sega32x', 'sg-1000', 'saturn', 'dreamcast',
   'pcengine', 'pcenginecd', 'pcfx', 'pc88', 'pc98', 'arcade', 'neogeo', 'cps1', 'cps2', 'cps3', 'neogeocd', 'atari2600', 'atari5200', 'atari7800', 'atari800', 'atarijaguar', 'atarilynx', 'atarist', 'ngp', 'ngpc',
   'wonderswan', 'wonderswancolor', 'colecovision', 'intellivision', 'vectrex', '3do', 'amiga', 'amigacd32', 'amstradcpc', 'c64', 'msx', 'msx2', 'x68000', 'zxspectrum', 'pico8', 'tic80']);
 

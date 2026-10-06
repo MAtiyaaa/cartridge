@@ -488,4 +488,4 @@ async function installFirmware({ emu, cmd, file, signal }) {
   if (code && code !== 0) throw new Error(`${emu === 'rpcs3' ? 'RPCS3' : 'Vita3K'} couldn't install the firmware: ${(tail.trim().split('\n').pop() || 'exit ' + code).slice(0, 200)}`);
   return true;
 }
-module.exports = { vita3kFsPaths, vita3kWhy, installFirmware, pkgInfo, packagesIn, licencePlan, stageLicences, exdataHas, npdOf, rpcs3Hdds, sfoSerial, install, vitaPrefs, vitaContent, findZrif, installVita, vitaArchiveContents, vitaUnpack, safeToRemove };
+module.exports = { vita3kFsPaths, vita3kWhy, vita3kLogTail, installFirmware, pkgInfo, packagesIn, licencePlan, stageLicences, exdataHas, npdOf, rpcs3Hdds, sfoSerial, install, vitaPrefs, vitaContent, findZrif, installVita, vitaArchiveContents, vitaUnpack, safeToRemove };

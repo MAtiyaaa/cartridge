@@ -40,6 +40,10 @@ const REPOS = {
   shadps4: { repo: 'shadps4-emu/shadps4-qtlauncher', asset: /linux-qt.*\.zip$|qt.?launcher.*\.AppImage$/i, zipped: /\.AppImage$/i, pre: true, preOnly: true },
   // 0.9.21 (owner: "couldn't check"): Eden's server is git.eden-emu.dev; .org kept as the older name
   eden: { repo: 'eden-emulator/Releases', asset: /(amd64|x86_64|x64|steamdeck|rog).*\.AppImage$|linux.*\.AppImage$/i, forge: [['https://git.eden-emu.dev', 'eden-emu/eden'], ['https://git.eden-emu.org', 'eden-emu/eden']], first: 'forge' },
+  // 0.9.49 (owner: "Citron has no update source? look for it"): Citron publishes on its own Forgejo (git.citron-emu.org,
+  // Citron/Emulator; the old lower-case path kept), and its Linux AppImages are rebuilt on GitHub by pkgforge-dev,
+  // where EmuDeck's emuDeckCitron.sh takes them. Forgejo first, as for Eden and Ryujinx.
+  citron: { repo: 'pkgforge-dev/Citron-AppImage', asset: /(x86_64|amd64|x64).*\.AppImage$|\.AppImage$/i, forge: [['https://git.citron-emu.org', 'Citron/Emulator'], ['https://git.citron-emu.org', 'citron/emulator']], first: 'forge' },
   ryujinx: { repo: 'Ryubing/Stable-Releases', asset: /x64.*\.AppImage$/i, forge: [['https://git.ryujinx.app', 'Ryubing/Stable'], ['https://git.ryujinx.app', 'ryubing/ryujinx']], first: 'forge' },
   flycast: { repo: 'flyinghead/flycast', asset: /x86_64\.AppImage$/i },
   mgba: { repo: 'mgba-emu/mgba', asset: /x64\.AppImage$|x86_64\.AppImage$/i },
@@ -68,7 +72,8 @@ function missingLibs(file) {
   try {
     if (!file || /\.exe$/i.test(file) || require('./detect').appImageType(file)) return [];
     const out = require('child_process').execFileSync('ldd', [file], { env: plainEnv(), timeout: 8000, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
-    return [...out.matchAll(/^\s*(\S+)\s*=>\s*not found/gm)].map((m) => m[1]);
+    // 0.9.49: a library that is there but the wrong version (Qt_6.10 not found) stops a program just the same
+    return [...out.matchAll(/^\s*(\S+)\s*=>\s*not found/gm)].map((m) => m[1]).concat([...new Set([...out.matchAll(/version [`']([^']+)' not found/g)].map((m) => m[1]))]);
   } catch { return []; }
 }
 // which release source a copy uses: Xenia Edge's AppImage has its own; a Windows build its own files
@@ -233,6 +238,7 @@ async function replaceAppImage(file, rel, download) {
   // (not a web page or a cut-off file), any other program at least a Linux program
   if (!looksRunnable(tmp, rel)) { fs.rmSync(tmp, { force: true }); throw new Error('What came down wasn’t a working program, so your copy was left as it was. Try again later.'); }
   await fitGlibc(tmp, rel, download, 'your copy was left as it was');
+  await require('./emuStart').ensureStarts(rel.id, tmp, rel, download, 'your copy was left as it was'); // 0.9.49
   fs.chmodSync(tmp, 0o755);
   fs.renameSync(file, old);
   try { fs.renameSync(tmp, file); } catch (e) { fs.renameSync(old, file); throw e; }

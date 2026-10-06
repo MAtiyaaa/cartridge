@@ -65,7 +65,7 @@ async function pick(it) {
   }
   const v = await choose({ sheet: true, title: it.label, message: [short(it.path), it.sub].filter(Boolean).join('\n'), options: [
     { label: 'Open the Folder', value: 'open', icon: 'mdiFolderOpenOutline' },
-    { label: 'Choose Another Folder', sub: 'The files there now stay where they are', value: 'change', icon: 'mdiFolderEditOutline' },
+    { label: 'Choose Another Folder', sub: it.moves ? 'Its files are copied there, and the old folder is kept' : 'The files there now stay where they are', value: 'change', icon: 'mdiFolderEditOutline' },
     ...(!it.dflt ? [{ label: 'Back to Its Default', value: 'default', icon: 'mdiRestore' }] : []),
   ] });
   reopen();
@@ -74,7 +74,8 @@ async function pick(it) {
     const dir = await pickFolder({ title: `New folder for ${it.label}`, start: it.path || store.info?.home });
     reopen();
     if (!dir || dir === it.path) return;
-    if (!(await confirm(`Move ${it.label} to this folder?`, `${short(dir)}\n\n${d.value.name} will use it from now on. What's in ${short(it.path)} stays there: copy it over yourself if you want it in the new place.`, 'Use It'))) return reopen();
+    const msg = it.moves ? `${short(dir)}\n\nEverything in ${short(it.path)} is copied there (nothing is overwritten), the old folder is kept beside it as PSP.cartridge-kept, and ${d.value.name} uses the new one through a link.` : `${short(dir)}\n\n${d.value.name} will use it from now on. What's in ${short(it.path)} stays there: copy it over yourself if you want it in the new place.`;
+    if (!(await confirm(`Move ${it.label} to this folder?`, msg, 'Use It'))) return reopen();
     reopen(); await set(it, dir);
   }
   if (v === 'default') await set(it, null);

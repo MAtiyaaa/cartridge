@@ -13,7 +13,7 @@ const EXPECT = {
   "bigpemu": 'y - - - - - - - - -',
   "bsnes": 'y - - - - - - - - -',
   "cemu": 'y own own own own - cemu own own y',
-  "citron": 'y own own yuzu - - switch - - -',
+  "citron": 'y own own yuzu - - switch - own -',
   "desmume": 'y - - - - - - - - -',
   "dolphin": 'y own own own own own dolphin own - y',
   "duckstation": 'y own own own own own duckstation - own y',
@@ -30,7 +30,7 @@ const EXPECT = {
   "parallel": 'y - - - - - - - - -',
   "pcsx2": 'y own own own own own pcsx2 own own y',
   "play": 'y - - - - - - - - -',
-  "ppsspp": 'y own own - own own ppsspp own own y',
+  "ppsspp": 'y own own own own own ppsspp own own y',
   "primehack": 'y dolphin dolphin dolphin own dolphin - dolphin - y',
   "retroarch": '- own own - - - - - - y',
   "rmg": 'y - - - - - - - - y',
@@ -43,7 +43,7 @@ const EXPECT = {
   "snes9x": 'y - - - - - - - - -',
   "stella": 'y - - - - - - - - -',
   "sudachi": '- own own yuzu - - - - - -',
-  "supermodel": '- - - - - - - - - y',
+  "supermodel": 'y - - - - - - - - y',
   "suyu": '- own own yuzu - - - - - -',
   "torzu": '- own own yuzu - - - - - -',
   "vita3k": 'y own own own own - - - own y',
@@ -55,7 +55,7 @@ const EXPECT = {
   "yuzu": 'y own own own - - switch - - -',
 };
 // emulators that appear in a table without a launch entry of their own, on purpose
-const NO_LAUNCH = { retroarch: 'cores, launched per core', sudachi: 'yuzu fork, saves only', suyu: 'yuzu fork, saves only', torzu: 'yuzu fork, saves only', 'xenia-win': 'Windows build through Proton', supermodel: 'offered in Get Emulators; no launch arguments yet' };
+const NO_LAUNCH = { retroarch: 'cores, launched per core', sudachi: 'yuzu fork, saves only', suyu: 'yuzu fork, saves only', torzu: 'yuzu fork, saves only', 'xenia-win': 'Windows build through Proton' };
 
 test('every emulator any table names is known', () => {
   for (const id of P.known()) assert.ok(E.EMU[id] || NO_LAUNCH[id], `${id} is in a table but Cartridge can't launch it and it isn't listed in NO_LAUNCH`);
