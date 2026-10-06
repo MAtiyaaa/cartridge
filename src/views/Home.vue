@@ -49,7 +49,7 @@
       </section>
 
       <section class="shelves" ref="shelvesEl" @focusin="onShelfFocus">
-        <div v-for="s in shelves" :key="s.id" class="shelf-wrap" :data-shelf="s.id">
+        <div v-for="s in shelves" :key="s.id" class="shelf-wrap" :data-shelf="s.id" :data-type="s.type || 'games'" :style="{ '--row-h': rowGuess(s) + 'px' }">
           <div class="shelf-title"><Icon :name="s.icon" :size="20" />{{ s.title }}<span class="count">{{ s.count }}</span></div>
           <div class="shelf" data-hscroll>
             <template v-if="s.type === 'sys'">
@@ -88,12 +88,44 @@
   </div>
 </template>
 
+<script>
+// 0.9.51 (owner: scrolling down Home flickered, then showed the row): rows from the third are drawn only when they come
+// near (content-visibility), and until then hold a guessed height; the guess was 360 px for every row, and each row
+// snapped to its real height (202 to 336 px, measured) while you scrolled, so everything below jumped. Each row's real
+// height is kept here for the whole run (Home is rebuilt after every game), and a row never seen yet guesses from
+// rows of its kind.
+const ROW_H = new Map(), TYPE_H = new Map();
+</script>
+
 <script setup>
 import { recommend } from '../recs.js';
 import { computed, ref, nextTick, onMounted, onBeforeUnmount, watch } from 'vue';
 import { tab, img, cover, collections, autoLists, seriesLists, genres, visible, store, go, allRoms, visiblePlatforms, romsOf, isNew, setBg, backdropOf, wantSharp, heroArt as heroOf, bytes, year, ago, rating, resync, downloadFor, download, romById, toast, logoOf, call, GRADE, loadPlay, playtimeText } from '../store.js';
 import { useView } from '../useView.js';
 import { ensureFocus, scrollMode } from '../nav.js';
+const rowGuess = (s) => ROW_H.get(s.id) || TYPE_H.get(s.type || 'games') || 360;
+// remember a row's height whenever it is really drawn (not while it is skipped)
+const seenRows = new WeakSet();
+let rowRo = null;
+function remember(el) { const h = Math.round(el.getBoundingClientRect().height); if (h > 40) { ROW_H.set(el.dataset.shelf, h); TYPE_H.set(el.dataset.type, h); } }
+function watchRows() {
+  // rows not measured yet: laid out once, measured and put back to on-demand in the same task, so nothing is painted
+  // in between (one layout of Home when it opens, instead of a jump per row while scrolling)
+  const box = shelvesEl.value;
+  if (box && [...box.querySelectorAll('.shelf-wrap')].some((el, i) => i >= 2 && !ROW_H.has(el.dataset.shelf))) {
+    box.classList.add('rows-measure');
+    for (const el of box.querySelectorAll('.shelf-wrap')) remember(el);
+    box.classList.remove('rows-measure');
+  }
+  rowRo ||= new ResizeObserver((list) => { for (const e of list) if (!e.target.dataset.skipped) remember(e.target); });
+  for (const [i, el] of [...(shelvesEl.value?.querySelectorAll('.shelf-wrap') || [])].entries()) {
+    if (seenRows.has(el)) continue;
+    seenRows.add(el);
+    if (i >= 2) el.dataset.skipped = '1'; // drawn on demand (the CSS below): its size counts only once it's drawn
+    el.addEventListener('contentvisibilityautostatechange', (e) => { el.dataset.skipped = e.skipped ? '1' : ''; if (!e.skipped) requestAnimationFrame(() => remember(el)); });
+    rowRo.observe(el);
+  }
+}
 import Icon from '../components/Icon.vue';
 import Logo from '../components/Logo.vue';
 import PIcon from '../components/PIcon.vue';
@@ -327,7 +359,9 @@ watch(() => [heroRom.value?.id, heroSys.value?.id, heroCol.value?.id, heroRom.va
   for (const t of [0, 180, 600]) setTimeout(() => requestAnimationFrame(fitHero), t);
 });
 watch(() => store.libVersion, async () => { await nextTick(); ensureFocus(el.value); });
-onMounted(async () => { await nextTick(); ensureFocus(el.value); });
+onMounted(async () => { await nextTick(); ensureFocus(el.value); watchRows(); });
+watch(() => shelves.value.map((x) => x.id).join(), () => nextTick(watchRows));
+onBeforeUnmount(() => rowRo?.disconnect());
 </script>
 
 <style scoped>
@@ -351,7 +385,8 @@ onMounted(async () => { await nextTick(); ensureFocus(el.value); });
 /* rows far below aren't laid out or painted until they come near (0.9.28: smoother on handhelds) */
 /* 0.9.32 (owner: the first card's ring was cut): content-visibility clips a row to its own box, which stopped at
    the page margin; the box now runs to the screen edges (margin out, padding back in), so a lifted card and its ring show */
-.shelves > .shelf-wrap:nth-child(n+3) { content-visibility: auto; contain-intrinsic-size: auto 360px; margin-left: calc(-1 * var(--s-7)); margin-right: calc(-1 * var(--s-7)); padding-left: var(--s-7); padding-right: var(--s-7); }
+.shelves > .shelf-wrap:nth-child(n+3) { content-visibility: auto; contain-intrinsic-size: auto var(--row-h, 360px); margin-left: calc(-1 * var(--s-7)); margin-right: calc(-1 * var(--s-7)); padding-left: var(--s-7); padding-right: var(--s-7); }
+.shelves.rows-measure > .shelf-wrap { content-visibility: visible; }
 @media (max-width: 1400px) { .shelves > .shelf-wrap:nth-child(n+3) { margin-left: -36px; margin-right: -36px; padding-left: 36px; padding-right: 36px; } }
 .hero-enter-active { transition: opacity 0.14s ease-out; }
 .hero-leave-active { transition: opacity 0.1s ease-in; position: absolute; }

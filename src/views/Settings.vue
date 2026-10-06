@@ -3,7 +3,7 @@
     <nav class="rail">
       <div class="eyebrow" style="padding: 0 14px 10px">Settings</div>
       <button class="rail-item rail-find" data-focus @click="searchSettings"><Icon name="mdiMagnify" :size="20" />Find a Setting</button>
-      <button v-for="s in sections" :key="s.id" class="rail-item" :class="{ on: sec === s.id }" data-focus :data-key="'sec-' + s.id" :data-autofocus="sec === s.id ? '' : undefined" @focus="sec = s.id" @click="pick(s.id)">
+      <button v-for="s in sections" :key="s.id" class="rail-item" :class="{ on: sec === s.id }" data-focus :data-key="'sec-' + s.id" :data-autofocus="sec === s.id ? '' : undefined" @focus="sec = s.id" @click="(e) => pick(s.id, e)">
         <SyncthingLogo v-if="s.id === 'syncthing'" :size="20" mono class="rail-st" /><Icon v-else :name="s.icon" :size="20" />{{ s.label }}
       </button>
     </nav>
@@ -999,7 +999,13 @@ watch(sec, (v) => { store.settingsSection = v; if (v === 'emu') { loadIssues(); 
 function enter() { focusFirst(paneEl.value); }
 // a press on a section: with a controller or keys it was already focused (and chosen), so A goes in; a tap or click
 // chooses it (0.9.49, owner: tapping the left list did nothing; a touch never moves focus, so @focus never ran)
-function pick(id) { if (sec.value !== id) { sec.value = id; if (input.mode === 'pad') nextTick(enter); return; } enter(); }
+// a tap or click also moves focus there (0.9.51, owner: touch didn't light the list like the controller does): the
+// white stays on what you picked, never on the last thing the controller was on
+function pick(id, e) {
+  if (input.mode !== 'pad') e?.currentTarget?.focus?.({ preventScroll: true });
+  if (sec.value !== id) { sec.value = id; if (input.mode === 'pad') nextTick(enter); return; }
+  enter();
+}
 async function setMode(mode) { await saveConfig({ server: { mode } }); reconnect(); }
 async function reconnect() {
   try { const r = await call('server:reconnect'); toast(`Connected · ${r.base}`, 'ok', 2600, 'mdiLanConnect'); } catch (e) { toast(e.message, 'error'); }
@@ -1231,7 +1237,7 @@ onMounted(() => {
 .rail { display: flex; flex-direction: column; gap: 4px; padding-top: 10px; }
 .rail-item { display: flex; align-items: center; gap: 14px; padding: 13px 16px; border-radius: var(--r-md); color: var(--muted); font-weight: 500; transition: background 0.15s, color 0.15s; }
 /* the page follows the list as you move, so the current section only needs brighter text, no box */
-.rail-item.on { color: var(--text); }
+.rail-item.on { color: var(--text); background: var(--sel); } /* the open section: chosen, the softer fill (docs/design-rules.md 6) */
 .rail-item:focus { background: var(--focus); color: var(--on-focus); box-shadow: none; }
 .pane { overflow-y: auto; padding: 6px 12px 60px 24px; }
 .ga-cons { display: flex; gap: 8px; overflow-x: auto; padding: 8px 6px 10px; margin: 0 -6px; scrollbar-width: none; } /* room for a selected chip (0.9.28: it was cut off) */
