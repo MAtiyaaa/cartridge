@@ -4,3 +4,4 @@ release/
 *.AppImage
 .DS_Store
 .ui-audit/
+tools/brand/out/
