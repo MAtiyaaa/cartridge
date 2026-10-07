@@ -48,6 +48,7 @@ const DEFAULT_CONFIG = {
     colors: { highlight: '', buttons: '', bars: '', background: '' } },
   sync: { onLaunch: true, everyMinutes: 60 },
   sgdbKey: '', // optional SteamGridDB API key for game logos
+  nexusKey: '', // optional Nexus Mods personal API key (0.9.52): only Premium members' one-press downloads use it
   ra: { user: '', key: '' }, // RetroAchievements username + web API key
   trophies: { sources: {}, sync: true, popups: true, device: '' }, // PS3/PS4/Xbox 360/Vita trophies from emulators
   graphics: 'auto', // auto (GPU, falls back on failure) | software
@@ -2222,6 +2223,22 @@ const patchesMod = require('./patches');
 const cheatsMod = require('./cheats');
 const webFetch = require('./webFetch'); // outside services through Chromium's network stack (0.9.17: 403s)
 // add-ons Cartridge installed (0.9.17): { key: { dest, files, ... } }; Remove deletes only those files
+// The web and mods engines (0.9.52): one place for outside services, one shape for every mod source (web.js, modEngine.js)
+let webEngine = null, modEngine = null;
+const webEng = () => (webEngine ||= require('./web').createWeb({ cacheDir: path.join(USER_DATA, 'web-cache'), log }));
+const modsEng = () => (modEngine ||= require('./modEngine').createModEngine({ web: webEng(), key: (n) => (n === 'nexus' ? String(config.nexusKey || '').trim() || null : null), cacheFile: path.join(USER_DATA, 'addons-ps2-catalog.json'), log }));
+// a library game as the mods engine sees it: its name and Cartridge's console folder name (RomM's slug mapped)
+const modGame = (rom) => ({ name: rom.name || rom.fs_name || '', slug: (PLATFORM_MAP[rom.platform_slug] || PLATFORM_MAP[rom.platform_fs_slug] || [rom.platform_slug])[0], romId: rom.id });
+// how a ROM hack can be used for a game: RetroArch patches games as it loads them (a patch beside the game, named like
+// it), so with RetroArch nothing is written into the game; otherwise a patched copy is made beside the original
+function hackModes(rom) {
+  const file = installedMap[rom.id];
+  if (!file || file === MARKED) return { here: false };
+  let t = null; try { t = steamMgr.gameTemplate(rom.id, modGame(rom).slug); } catch {}
+  const ra = !!t && (/retroarch/i.test(t.exe || '') || /(^|\s)-L\s/.test(t.lo || ''));
+  return { here: true, retroarch: ra, file: path.basename(file), dir: fs.existsSync(file) && fs.statSync(file).isDirectory() };
+}
+const hackCache = new Map(); // ROM hack downloads read by hacks:prepare, kept 30 minutes for hacks:apply
 const ADDONS_FILE = path.join(USER_DATA, 'addons-installed.json');
 let addonBrowser = null;
 let addonRun = null, addonCache = null, emuGetRun = null;
@@ -3943,12 +3960,18 @@ const handlers = {
     return hit.folder;
   },
   // Add-on downloads (0.9.17): what can be installed for a game, from where, and what Cartridge put in
-  'addons:available': async ({ romId, sort = 'downloads' }) => {
+  // 0.9.52: every source is a provider of the mods engine (modEngine.js); sources lists the game's (EmuCoreX, GameBanana,
+  // Nexus Mods, ROM hacks) and source picks one; the PS2 catalog and GameBanana keep their own path below, unchanged
+  'addons:available': async ({ romId, sort = 'downloads', source = '' }) => {
     const rom = romIndexMain().get(Number(romId));
     if (!rom) return { emus: [], packs: [], installed: [] };
     const emus = handlers['addons:forGame']({ romId });
     const installed = Object.entries(addonRecs()).filter(([, r]) => r.romId === rom.id).map(([key, r]) => ({ key, ...r, files: undefined, count: r.files.length }));
-    const out = { emus, installed, packs: [], source: null, error: '', featured: [] };
+    const out = { emus, installed, packs: [], source: null, error: '', featured: [], sources: modsEng().sourcesFor(modGame(rom)) };
+    if (source === 'nexus' || source === 'rh') {
+      const r = await modsEng().list(source, modGame(rom), { sort });
+      return { ...out, source, packs: r.items, error: r.error || '', modGame: r.game || null, hackMode: source === 'rh' ? hackModes(rom) : null };
+    }
     // 0.9.23: hand-picked texture packs from their creators' pages (Dolphin by game ID)
     // featured texture packs: GameCube by game ID, and HenrikoMagnifico's GameCube, Wii and 3DS packs by ID or name (0.9.24)
     try {
@@ -3980,6 +4003,71 @@ const handlers = {
     return out;
   },
   'addons:gbFiles': ({ modId }) => require('./addonSources').gbFiles(modId),
+  // one add-on in full from any source (0.9.52): files, text, pictures (AddonDetail)
+  'addons:detail': ({ source, item }) => modsEng().detail(source, item),
+  // the Nexus Mods key in Settings: who it belongs to and whether downloads are one press (Premium)
+  'nexus:check': async ({ key }) => { const k = String(key || '').trim(); if (!k) return null; return modsEng().get('nexus').account(k); },
+  // ROM hacks (0.9.52): the hack's download read for its patches (IPS, UPS, BPS; xdelta and PPF named but not applied)
+  'hacks:prepare': async ({ romId, item }) => {
+    const rom = romIndexMain().get(Number(romId));
+    if (!rom) throw new Error('That game isn’t in the library.');
+    const d = await modsEng().detail('rh', item);
+    const f = d.files[0];
+    if (!f) throw new Error('Romhacking.net has no download for this hack.');
+    const buf = await webEng().buffer(f.url, { headers: { Accept: '*/*' }, timeout: 120000 });
+    const P = require('./romPatch'), patches = [];
+    const isZip = buf.length > 4 && buf.readUInt32LE(0) === 0x04034b50;
+    const take = (name, data) => { const kind = P.kindOf(name, data); if (kind) patches.push({ name, kind, supported: P.SOFT.has(kind), size: data.length, data }); };
+    if (isZip) {
+      await new Promise((ok, bad) => require('yauzl').fromBuffer(buf, { lazyEntries: true }, (e, z) => {
+        if (e) return bad(new Error('The hack’s download couldn’t be opened.'));
+        z.on('entry', (en) => {
+          if (/\/$/.test(en.fileName) || !/\.(ips|ups|bps|xdelta|vcdiff|ppf|aps)$/i.test(en.fileName) || en.uncompressedSize > 256 << 20) return z.readEntry();
+          z.openReadStream(en, (er, st) => { if (er) return z.readEntry(); const parts = []; st.on('data', (c) => parts.push(c)); st.on('end', () => { take(en.fileName, Buffer.concat(parts)); z.readEntry(); }); });
+        });
+        z.on('end', ok); z.on('error', bad); z.readEntry();
+      }));
+    } else take(f.name.replace(/\.zip$/i, ''), buf);
+    if (!patches.length) throw new Error('No patch file was found in this hack’s download.');
+    const id = `rh-${item.id}-${Date.now()}`;
+    hackCache.set(id, { item, patches, at: Date.now() });
+    for (const [k, v] of hackCache) if (Date.now() - v.at > 30 * 60e3) hackCache.delete(k);
+    return { id, romInfo: d.romInfo || '', modes: hackModes(rom), patches: patches.map(({ name, kind, supported, size }, i) => ({ i, name, kind, supported, size })) };
+  },
+  // use one patch: 'soft' puts it beside the game for RetroArch (the game file is never written), 'copy' writes a
+  // patched copy beside the original (never over a file). Both are recorded like add-ons, so Delete removes them.
+  'hacks:apply': async ({ romId, id, index = 0, mode }) => {
+    const rom = romIndexMain().get(Number(romId)), prep = hackCache.get(id);
+    if (!rom || !prep) throw new Error('Open the hack again: its download expired.');
+    const pt = prep.patches[index], P = require('./romPatch');
+    if (!pt?.supported) throw new Error(`${P.KIND[pt?.kind] || 'This'} patches need a separate tool; Cartridge uses IPS, UPS and BPS.`);
+    let file = installedMap[rom.id];
+    if (!file || file === MARKED) throw new Error('Download the game first: the hack is applied to your copy.');
+    if (fs.statSync(file).isDirectory()) throw new Error('This game is a folder; ROM hacks are for single-file games.');
+    const dir = path.dirname(file), recs = addonRecs(), key = `rh:${prep.item.id}:${rom.id}:${mode}`;
+    if (recs[key]) throw new Error('This hack is already in use for this game.');
+    let made;
+    if (mode === 'soft') {
+      if (!hackModes(rom).retroarch) throw new Error('Only RetroArch patches games as it loads them. Make a patched copy instead.');
+      made = P.softName(file, pt.kind);
+      // one hack at a time: RetroArch reads the patch named like the game
+      if (fs.existsSync(made)) throw new Error('A patch for this game is already beside it. Delete it first (Installed above).');
+      fs.writeFileSync(made, pt.data, { flag: 'wx' });
+    } else {
+      let rom0 = null, ext = path.extname(file);
+      if (/\.zip$/i.test(file)) { // the ROM inside a zip: its biggest file
+        rom0 = await new Promise((ok, bad) => require('yauzl').open(file, { lazyEntries: true }, (e, z) => { if (e) return bad(e); let best = null; z.on('entry', (en) => { if (!/\/$/.test(en.fileName) && (!best || en.uncompressedSize > best.uncompressedSize)) best = en; z.readEntry(); }); z.on('end', () => { if (!best) return bad(new Error('The game’s zip is empty.')); ext = path.extname(best.fileName); z.openReadStream(best, (er, st) => { if (er) return bad(er); const parts = []; st.on('data', (c) => parts.push(c)); st.on('end', () => ok(Buffer.concat(parts))); }); }); z.readEntry(); }));
+      } else rom0 = fs.readFileSync(file);
+      const out = P.apply(rom0, pt.data, pt.name);
+      const label = String(prep.item.name || 'Hack').replace(/[\\/:*?"<>|]+/g, ' ').trim().slice(0, 80);
+      made = path.join(dir, `${path.basename(file).replace(/\.[^.]+$/, '')} [${label}]${ext}`);
+      fs.writeFileSync(made, out, { flag: 'wx' });
+    }
+    recs[key] = { source: 'rh', id: prep.item.id, name: prep.item.name, category: 'ROM Hack', romId: rom.id, game: rom.name, emu: mode === 'soft' ? 'retroarch' : 'copy', emuName: mode === 'soft' ? 'RetroArch' : 'Patched copy', emuRoot: dir, dest: dir, alt: {}, files: [path.basename(made)], bytes: fs.statSync(made).size, at: Date.now(), from: prep.item.url, mode };
+    saveJson(ADDONS_FILE, recs);
+    log('rom hack', mode, prep.item.id, 'for', rom.id);
+    return { file: made, mode };
+  },
   'addons:gbMod': ({ modId }) => require('./addonSources').gbMod(modId),
   // { romId, emuRoot (the emulator copy), pack (from addons:available), file (GameBanana only) }
   'addons:install': async ({ romId, emuRoot, pack, file }) => {
@@ -3989,6 +4077,13 @@ const handlers = {
     if (!rom || !e) throw new Error('That emulator wasn’t found.');
     if (!e.folder) throw new Error(`Cartridge couldn’t read this game’s ID, so it doesn’t know which ${e.name} folder it goes in.`);
     if (require('./raLogin').running().has(e.id)) throw new Error(`Close ${e.name} first.`);
+    // 0.9.52: Nexus Mods gives Premium members the file; for anyone else its page opens in Cartridge's window, where
+    // the download (after Nexus's own sign-in) is caught and installed like any other (addons:browse)
+    if (pack.source === 'nexus') {
+      const d = await modsEng().download('nexus', pack, file);
+      if (d.page) { handlers['addons:browse']({ url: d.page, romId, emuRoot, kind: 'mods', name: pack.name }); return { page: true }; }
+      file = { ...file, url: d.url };
+    }
     // each emulator's own layout (addonInstall.plan, 0.9.18); PCSX2 and DuckStation: the game folder is
     // textures/<SERIAL>, the pack brings replacements/ (e.folder ends in it)
     const kind = require('./emuProfiles').modKind(e.id, pack.source); // 0.9.48: the emulator's profile says how its add-ons are laid out

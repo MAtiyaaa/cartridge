@@ -281,12 +281,16 @@
         <!-- 9 -->
         <template v-else-if="step === 'extras'">
           <h1>Optional Extras</h1>
-          <p class="w-lead">Both can be added later in Settings.</p>
+          <p class="w-lead">All of these can be added later in Settings.</p>
           <div class="w-box stack">
             <div class="subh">SteamGridDB</div>
             <p class="muted small">A free key from steamgriddb.com (Preferences → API) gives every game its logo and better Steam artwork.</p>
             <div v-if="store.config.sgdbKey" class="w-good"><Icon name="mdiCheckCircle" :size="22" /><span>Key saved</span></div>
             <TextField v-else v-model="sgdb" label="SteamGridDB API key" placeholder="Paste your key" password icon="mdiKeyVariant" />
+            <div class="subh" style="margin-top: 10px">Nexus Mods</div>
+            <p class="muted small">Mods from Nexus Mods show without a key. A Premium account’s personal API key (nexusmods.com → your profile → API Keys) downloads them in one press.</p>
+            <div v-if="store.config.nexusKey" class="w-good"><Icon name="mdiCheckCircle" :size="22" /><span>Key saved</span></div>
+            <TextField v-else v-model="nexus" label="Nexus Mods API key" placeholder="Paste your key" password icon="mdiKeyVariant" />
             <div class="subh" style="margin-top: 10px">RetroAchievements</div>
             <div v-if="store.config.ra?.user" class="w-good"><Icon name="mdiCheckCircle" :size="22" /><span>Signed in as {{ store.config.ra.user }}</span></div>
             <template v-else>
@@ -299,7 +303,7 @@
           </div>
           <div class="w-act">
             <button class="btn" data-focus @click="prev"><Icon name="mdiArrowLeft" />Back</button>
-            <button class="btn primary" data-focus :disabled="busy" @click="saveExtras">{{ sgdb || (raUser && raKey) || store.config.sgdbKey || store.config.ra?.user ? 'Next' : 'Skip' }}<Icon name="mdiArrowRight" /></button>
+            <button class="btn primary" data-focus :disabled="busy" @click="saveExtras">{{ sgdb || nexus || (raUser && raKey) || store.config.sgdbKey || store.config.nexusKey || store.config.ra?.user ? 'Next' : 'Skip' }}<Icon name="mdiArrowRight" /></button>
           </div>
         </template>
 
@@ -500,7 +504,7 @@ const name = ref(store.config.ui.name || '');
 const padOk = ref(false), liveDone = ref(false), selfDone = ref(false), busy = ref(false);
 const getting = ref(''), opened = ref(''), progress = ref(null);
 const romm = ref('');
-const sgdb = ref(''), raUser = ref(''), raKey = ref('');
+const sgdb = ref(''), nexus = ref(''), raUser = ref(''), raKey = ref('');
 const guideQr = ref('');
 
 const deviceName = computed(() => `${name.value.trim()}'s ${st.value.device || 'device'}`);
@@ -595,6 +599,7 @@ async function saveExtras() {
   busy.value = true;
   try {
     if (sgdb.value.trim()) await saveConfig({ sgdbKey: sgdb.value.trim() });
+    if (nexus.value.trim()) { await call('nexus:check', { key: nexus.value.trim() }); await saveConfig({ nexusKey: nexus.value.trim() }); }
     if (raUser.value.trim() && raKey.value.trim()) {
       const r = await call('ra:signin', { user: raUser.value.trim(), key: raKey.value.trim() });
       store.config = await call('config:get');
