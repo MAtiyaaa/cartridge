@@ -151,13 +151,13 @@ onBeforeUnmount(() => { window.removeEventListener('keydown', onKey, true); laye
 <style scoped>
 .kb { width: min(860px, 94vw); }
 /* opened from the search box: it unfolds from there, quick and soft, then the keys settle row by row */
-.kb.grow { animation: kb-grow 340ms var(--ease-out, cubic-bezier(0.23, 1, 0.32, 1)) both; }
+.kb.grow { animation: kb-grow var(--spring-d) var(--spring) both; }
 @keyframes kb-grow { from { opacity: 0; transform: translate(var(--gx, 0), var(--gy, 0)) scale(0.18); border-radius: 999px; } 60% { opacity: 1; } }
-.kb.grow .kb-row { animation: kb-row 380ms var(--ease-out, ease-out) both; }
-.kb.grow .kb-row:nth-child(2) { animation-delay: 30ms; } .kb.grow .kb-row:nth-child(3) { animation-delay: 60ms; } .kb.grow .kb-row:nth-child(4) { animation-delay: 90ms; } .kb.grow .kb-row:nth-child(5) { animation-delay: 120ms; }
+.kb.grow .kb-row { animation: kb-row var(--spring-d) var(--spring) both; }
+.kb.grow .kb-row:nth-child(2) { animation-delay: 30ms; } .kb.grow .kb-row:nth-child(3) { animation-delay: 60ms; } .kb.grow .kb-row:nth-child(4) { animation-delay: 90ms; } .kb.grow .kb-row:nth-child(5) { animation-delay: calc(var(--stagger) * 3); }
 @keyframes kb-row { from { opacity: 0; transform: translateY(8px); } }
 :global(body.motion-reduce .kb.grow), :global(body.motion-reduce .kb.grow .kb-row), :global(body.light-fx .kb.grow .kb-row) { animation: none; }
-:global(body.light-fx .kb.grow) { animation: kb-fade 160ms ease-out both; }
+:global(body.light-fx .kb.grow) { animation: kb-fade var(--fade-in) both; }
 @keyframes kb-fade { from { opacity: 0; } }
 .kb-display { position: relative; display: flex; align-items: center; min-height: 56px; padding: 0 16px; border-radius: var(--r-md); background: var(--bg); border: 1px solid var(--primary); font-size: var(--t-lg); overflow: hidden; white-space: nowrap; }
 .kb-display .ph { color: var(--dim); }
@@ -167,7 +167,7 @@ onBeforeUnmount(() => { window.removeEventListener('keydown', onKey, true); laye
 .reveal:focus { box-shadow: var(--ring); }
 .kb-rows { display: flex; flex-direction: column; gap: 8px; }
 .kb-row { display: flex; gap: 8px; justify-content: center; }
-.key { flex: 1; height: 52px; border-radius: var(--r-md); background: rgba(255,255,255,.07); border: 1px solid var(--line); display: flex; align-items: center; justify-content: center; gap: 6px; font-size: var(--t-lg); transition: transform 0.08s; }
+.key { flex: 1; height: 52px; border-radius: var(--r-md); background: rgba(255,255,255,.07); border: 1px solid var(--line); display: flex; align-items: center; justify-content: center; gap: 6px; font-size: var(--t-lg); transition: transform var(--spring-snappy-d) var(--spring-snappy); }
 .key.small { height: 38px; font-size: var(--t-sm); flex: none; padding: 0 12px; }
 .key.wide { flex: 1.6; font-size: var(--t-sm); }
 .key.space { flex: 4; font-size: var(--t-sm); }
@@ -182,7 +182,7 @@ onBeforeUnmount(() => { window.removeEventListener('keydown', onKey, true); laye
 .kb-hints { display: flex; gap: 18px; justify-content: center; color: var(--muted); font-size: var(--t-xs); }
 .hint { display: flex; align-items: center; gap: 6px; }
 /* the welcome's keyboard (0.9.17): glass like the welcome card, quiet keys, the white focus box */
-.kb.sleek { background: rgba(14, 16, 22, 0.72); backdrop-filter: blur(28px) saturate(1.3); border: 1px solid rgba(255, 255, 255, 0.08); box-shadow: 0 30px 90px rgba(0, 0, 0, 0.55); }
+.kb.sleek { background: var(--kb-sleek-bg, rgba(14, 16, 22, 0.96)); backdrop-filter: var(--kb-sleek-blur, none); /* frosted only in Glass (0.9.48) */ border: 1px solid rgba(255, 255, 255, 0.08); box-shadow: 0 30px 90px rgba(0, 0, 0, 0.55); }
 .kb.sleek h2 { font-weight: 600; letter-spacing: -0.01em; }
 .kb.sleek .kb-display { background: rgba(255, 255, 255, 0.06); border: 0; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1); }
 .kb.sleek .caret { background: #fff; }

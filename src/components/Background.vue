@@ -27,10 +27,11 @@ import { RENDERERS, DARK_BASE, BG_BASE, LEGACY_ART, artPan, setInk } from '../bg
 import { consoleColors } from '../consoleColors.js';
 import { paletteOf, lightEffects } from '../themes.js';
 import { lastInput } from '../nav.js';
+import { governor } from '../motion.js';
 const props = defineProps({ still: Boolean });
 
 const mode = computed(() => {
-  let m = (store.welcoming && 'ribbons') || store.config?.ui?.bgStyle || 'solid'; // the welcome is on Ribbons
+  let m = (store.welcoming && !store.welcomeBg && 'ribbons') || store.config?.ui?.bgStyle || 'solid'; // the welcome is on Ribbons until one is picked in its Look step
   if (LEGACY_ART[m]) m = 'art:' + LEGACY_ART[m]; // retired in 0.9.15: that console's own art instead
   return RENDERERS[m] || m.startsWith('art:') || ['solid', 'art', 'wallpaper'].includes(m) ? m : 'solid';
 });
@@ -65,7 +66,6 @@ watch(mode, (m) => document.body.classList.toggle('bg-console', !!baseOf(m)), { 
 const cv = ref(null);
 let raf = 0, last = 0, ctx = null, frame = null, key = '';
 const t0 = performance.now();
-let clock = 0; // ms of animation drawn so far (Android)
 const ANDROID = import.meta.env.MODE === 'android';
 function scale() {
   const dpr = window.devicePixelRatio || 1;
@@ -89,43 +89,55 @@ function setup() {
   frame = rendererOf(mode.value)(ctx, w, h, S, pal, light.value);
   return true;
 }
+// CAE governor (0.9.47) and the idle glide (0.9.49, owner: after a while idle the background "looks like vomit"): idle
+// used to draw 8 times a second, which made the motion judder. Now the background's own clock slows to a stop over
+// about a second, at full smoothness, and then nothing is drawn at all (cheaper than before); any input and it eases
+// back into motion. If drawing gets expensive (a slow device, a 4K screen) the rate halves by itself.
+let idleT = 0, cost = 0, tv = 0, speed = 1, prevT = 0;
+function stop() { cancelAnimationFrame(raf); clearInterval(idleT); raf = 0; idleT = 0; prevT = 0; }
+function next() { raf = requestAnimationFrame(loop); }
+function park() { raf = 0; prevT = 0; clearInterval(idleT); idleT = setInterval(() => { if (governor.mode !== 'idle') { clearInterval(idleT); idleT = 0; if (!raf) raf = requestAnimationFrame(loop); } }, 200); }
 function loop(t) {
-  raf = requestAnimationFrame(loop);
-  const gap = light.value ? 50 : 33; // ~30fps (20 in light mode) is plenty for a slow ambient drift
+  const want = governor.mode === 'idle' ? 0 : 1;
+  const dt = prevT ? Math.min(100, t - prevT) : 16; prevT = t;
+  speed += (want - speed) * Math.min(1, dt / (want ? 450 : 380)); // eases out of idle a little slower than into it
+  tv += dt * speed;
+  if (!want && speed < 0.015) { speed = 0; park(); return; }
+  next();
+  const gap = (light.value ? 50 : 33) * (cost > 8 ? 2 : 1); // ~30fps (20 in light mode) is plenty for a slow ambient drift
   if (t - last < gap) return;
   // without the GPU, give every frame to the interface while you move around; the background
   // picks up again a moment after you stop
   // (not on Android: it composites on the GPU, and pausing there read as the picture stalling on every tap)
   if (light.value && !ANDROID && t - lastInput < 900) return;
-  // Android: the animation's own clock only moves while it draws: after a pause it carries on from where it
-  // stopped instead of jumping ahead (that jump looked like the background restarting on every press)
-  clock += last ? Math.min(t - last, gap * 2) : 0;
   last = t;
   if (!setup()) return;
-  frame(ANDROID ? clock / 1000 : (t - t0) / 1000);
+  const s = performance.now();
+  frame(tv / 1000);
+  cost = cost * 0.9 + (performance.now() - s) * 0.1;
 }
 function start() {
-  cancelAnimationFrame(raf); last = 0; key = ''; frame = null;
+  stop(); last = 0; key = ''; frame = null;
   if (!rendererOf(mode.value)) return;
   // one still frame: reduced motion, and (0.9.28, owner: choppy on handhelds) light effects, where repainting a
   // full-screen canvas without the GPU took frames from the interface
   if (reduce.value || light.value) { nextTick(() => { if (setup()) frame(12); }); return; }
   raf = requestAnimationFrame(loop);
 }
-const restart = async () => { cancelAnimationFrame(raf); await nextTick(); start(); };
+const restart = async () => { stop(); await nextTick(); start(); };
 watch([mode, reduce, light, () => store.config?.ui?.theme, () => store.config?.ui?.customColor, () => store.config?.ui?.surface, () => store.config?.ui?.style, () => JSON.stringify(store.config?.ui?.colors || {})], restart, { immediate: true });
 // art backgrounds pick up the library once it's loaded or changes
 watch(() => store.libVersion, () => { artCache.clear(); if (mode.value.startsWith('art:')) restart(); });
 const onResize = () => { if (reduce.value || light.value) restart(); };
 window.addEventListener('resize', onResize);
-const vis = () => (document.hidden ? cancelAnimationFrame(raf) : start());
+const vis = () => (document.hidden ? stop() : start());
 document.addEventListener('visibilitychange', vis);
 // not in front (a game is running from Steam, or another window is): no drawing at all (0.9.3, Ally)
-const away = () => cancelAnimationFrame(raf);
+const away = () => stop();
 window.addEventListener('blur', away);
 window.addEventListener('focus', start);
-watch(() => store.away, (a) => (a ? cancelAnimationFrame(raf) : start()));
-onBeforeUnmount(() => { cancelAnimationFrame(raf); document.removeEventListener('visibilitychange', vis); window.removeEventListener('resize', onResize); window.removeEventListener('blur', away); window.removeEventListener('focus', start); });
+watch(() => store.away, (a) => (a ? stop() : start()));
+onBeforeUnmount(() => { stop(); document.removeEventListener('visibilitychange', vis); window.removeEventListener('resize', onResize); window.removeEventListener('blur', away); window.removeEventListener('focus', start); });
 
 // ---------- your own wallpaper
 const wallUrl = computed(() => (store.config?.ui?.wallpaper ? romimg('wp=1&t=' + store.config.ui.wallpaper) : ''));

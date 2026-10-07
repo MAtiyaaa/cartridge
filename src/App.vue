@@ -6,7 +6,11 @@
   <div v-else class="shell" :style="{ '--card-w': cardW }">
     <header class="statusbar" :class="{ 'has-back': store.history.length }">
       <button v-if="store.history.length" class="backbtn" aria-label="Back" @click="back()"><Icon name="mdiArrowLeft" :size="22" /></button>
-      <div class="brand"><Logo :size="28" /></div>
+      <div class="brand"><Logo :size="28" />
+        <!-- 0.9.49 (owner): the hello slides out of the gap between the logo and the tabs, letter by letter like the
+             opening, then tucks back in -->
+        <div v-if="greet" class="greet" :class="{ out: greet.out }" :style="{ maxWidth: greet.max + 'px' }" aria-live="polite"><span v-for="(c, i) in greet.text" :key="i" :style="{ '--i': i }">{{ c === ' ' ? '\u00a0' : c }}</span></div>
+      </div>
       <!-- 0.9.19 (owner: make the top bar much better, with the taste skill; photos of the frontend
            they liked): every tab is its icon, the current one also its name, which opens out as you
            arrive; one short line slides under it. LT/RT only while a controller is in use. -->
@@ -91,7 +95,9 @@
     <GameSettings v-else-if="store.modal?.type === 'gamesettings'" :key="'gs' + store.modal.props.romId" v-bind="store.modal.props" />
   </Transition>
   <FirstTour v-if="store.tour" v-bind="store.tour.props" />
+  <CloudSync v-if="store.cloudSync" />
   <IdleScreen v-if="store.config?.configured" />
+  <PerfOverlay v-if="store.config?.ui?.perfOverlay && !store.away" />
 
   <div class="pops">
     <TransitionGroup name="pop">
@@ -112,9 +118,10 @@
 
 <script setup>
 import { computed, onMounted, onBeforeUnmount, ref, watch, nextTick, defineAsyncComponent } from 'vue';
-import { store, loadConfig, loadLibrary, loadArt, back, rootBack, tab, go, call, toast, choose, saveConfig, builtinKb, askText, GRADE, activeTabs, TAB_DEFS, romById, isFavourite, download } from './store.js';
+import { store, loadConfig, loadLibrary, loadArt, back, rootBack, tab, go, call, toast, choose, saveConfig, builtinKb, askText, GRADE, activeTabs, TAB_DEFS, romById, isFavourite, download, playGame } from './store.js';
 import { desktopLinks } from './links.js';
 import { pushLayer, focusFirst, input, gameEnded } from './nav.js';
+import { governorAway } from './motion.js';
 import { setSoundEnabled, setSoundStyle, sfx } from './sfx.js';
 import { applyTheme, CARD_SIZES, dockOf } from './themes.js';
 import { setPointerPref, setRumble, setBackground } from './nav.js';
@@ -135,6 +142,7 @@ import GameTimeline from './components/GameTimeline.vue';
 import GameAbout from './components/GameAbout.vue';
 import ConsoleCollection from './components/ConsoleCollection.vue';
 import FirstTour from './components/FirstTour.vue';
+import CloudSync from './components/CloudSync.vue';
 // the manual reader brings pdf.js: loaded the first time a manual opens, not at start
 const ManualViewer = defineAsyncComponent(() => import('./components/ManualViewer.vue'));
 import PatchesSheet from './components/PatchesSheet.vue';
@@ -149,6 +157,7 @@ import ImageSearch from './components/ImageSearch.vue';
 import ShadVersions from './components/ShadVersions.vue';
 import GameSettings from './components/GameSettings.vue';
 import IdleScreen from './components/IdleScreen.vue';
+import PerfOverlay from './components/PerfOverlay.vue';
 import SteamCollections from './components/SteamCollections.vue';
 import SteamPreview from './components/SteamPreview.vue';
 import SteamEmu from './components/SteamEmu.vue';
@@ -214,6 +223,17 @@ const viewKey = computed(() => store.route.name + JSON.stringify(store.route.par
 const cardW = computed(() => (CARD_SIZES[store.config.ui.gridSize] || CARD_SIZES.md).w);
 // the white pill behind the current tab (transform and width, so moving it costs no layout)
 const tabsEl = ref(null), ink = ref({ opacity: 0 });
+// the hello (0.9.49): in the gap between the logo and a centred Dock when it fits there, else the old toast
+const greet = ref(null);
+function sayHello(text) {
+  const brand = document.querySelector('.statusbar .brand'), tabs = tabsEl.value;
+  const b = document.body.classList, room = brand && tabs && b.contains('bar-center') && !b.contains('bar-left') ? tabs.getBoundingClientRect().left - brand.getBoundingClientRect().right - 28 : 0;
+  const need = text.length * 9.5; // about the width of the text at the bar's size
+  if (room < need || matchMedia('(prefers-reduced-motion: reduce)').matches) { toast(text, 'info', 2600, 'mdiHandWave'); return; }
+  greet.value = { text, out: false, max: room };
+  setTimeout(() => { if (greet.value) greet.value.out = true; }, 2600 + text.length * 35);
+  setTimeout(() => (greet.value = null), 3500 + text.length * 35);
+}
 const padMode = computed(() => input.mode === 'pad');
 function placeInk() {
   const nav = tabsEl.value, el = nav?.querySelector(`[data-tab="${activeTab.value}"]`);
@@ -361,7 +381,7 @@ onMounted(async () => {
   // another app in front in Game Mode (0.9.21, owner: still laggy in the background): gamescope never
   // hides or blurs the window, so stop the pad, the animated background and every CSS animation here
   window.cart.on('game-run', (g) => gameEnded(g?.state === 'ended'));
-  window.cart.on('background', (b) => { setBackground(b?.away); store.away = !!b?.away; document.body.classList.toggle('away', !!b?.away); });
+  window.cart.on('background', (b) => { setBackground(b?.away); governorAway(b?.away); store.away = !!b?.away; document.body.classList.toggle('away', !!b?.away); });
   // background jobs (0.9.32): what's running now, and every change after; the Downloads page lists them
   window.cart.on('bg-job', (j) => { if (j.gone) delete store.bgJobs[j.key]; else store.bgJobs[j.key] = j; });
   call('jobs:list').then((l) => { for (const j of l || []) store.bgJobs[j.key] = j; }).catch(() => {});
@@ -371,6 +391,17 @@ onMounted(async () => {
     if (m.state === 'done' || m.state === 'error') setTimeout(() => { if (store.addonJobs[m.key]?.state === m.state) delete store.addonJobs[m.key]; }, 12000);
   });
   window.cart.on('toast', (t) => t?.text && toast(t.text, t.kind || 'info', 4500, t.icon));
+  // Cartridge Save Sync in the background (0.9.51): a word when saves moved after a game, and when two devices
+  // changed the same save (it waits for you in Settings → Saves and Sync)
+  window.cart.on('savesync', (p) => {
+    // away from the server (0.9.52): once, when the first save is held, and when they go up
+    if (p?.state === 'held' && p.held && p.held.at - p.held.since < 2000) return toast('RomM can’t be reached from here. Your saves stay on this device and go up when it can.', 'info', 6000, 'mdiCloudOffOutline');
+    if (p?.state === 'released') { const c = p.counts || {}; return toast(c.conflict ? `Back in touch with RomM. ${c.conflict === 1 ? 'A save' : `${c.conflict} saves`} changed on two devices: choose in Settings → Saves and Sync.` : `Back in touch with RomM${c.up ? `: ${c.up} ${c.up === 1 ? 'save' : 'saves'} sent` : ''}.`, c.conflict ? 'info' : 'ok', 5000, 'mdiCloudCheckOutline'); }
+    if (p?.state !== 'done' || !['after', 'back', 'scheduled'].includes(p.why)) return;
+    const c = p.counts || {};
+    if (c.conflict) toast(`${c.conflict === 1 ? 'A save' : `${c.conflict} saves`} changed on two devices. Choose which to keep in Settings → Saves and Sync.`, 'info', 7000, 'mdiCallSplit');
+    else if (c.up || c.down) toast([c.up && `${c.up} ${c.up === 1 ? 'save' : 'saves'} sent to RomM`, c.down && `${c.down} brought here`].filter(Boolean).join(' · '), 'ok', 3200, 'mdiCloudCheckOutline');
+  });
   // main asks for a page (0.9.37: a download caught on an add-on site shows its progress in Downloads)
   window.cart.on('nav', (n) => { if (!n?.tab) return; if (n.closeModal && store.modal) { const r = store.modal.resolve; store.modal = null; try { r?.(null); } catch {} } tab(n.tab); });
   if (steamOn) setTimeout(steamReport, 2500);
@@ -378,7 +409,7 @@ onMounted(async () => {
   if (steamOn && store.config.configured && !store.config.setupDone && !store.welcoming) go('emu-setup', { first: true });
   // a hello with the name from the welcome
   const nm = (store.config.ui.name || '').trim();
-  if (nm && store.config.configured && !store.welcoming) { const h = new Date().getHours(); setTimeout(() => toast(`Good ${h < 5 || h >= 18 ? 'evening' : h < 12 ? 'morning' : 'afternoon'}, ${nm}`, 'info', 2600, 'mdiHandWave'), 1200); }
+  if (nm && store.config.configured && !store.welcoming) { const h = new Date().getHours(); setTimeout(() => sayHello(`Good ${h < 5 || h >= 18 ? 'evening' : h < 12 ? 'morning' : 'afternoon'}, ${nm}`), 1200); }
   // anything waiting for you (a moved emulator, games out of their collections, missing BIOS) shows as
   // a dot on Settings and a list in Settings → Emulators, not a pop-up (0.9.3). Android without Steam has none.
   if (steamOn) setTimeout(() => { if (store.config.configured) call('issues:list').then((l) => (store.issues = l.length)).catch(() => {}); }, 8000);
@@ -507,10 +538,10 @@ async function cardMenu(e) {
     { label: 'Open', value: 'open', icon: 'mdiArrowRight' },
     here ? { label: 'Ready to Play', sub: 'Through Steam', value: 'play', icon: 'mdiPlay' } : { label: 'Download', value: 'dl', icon: 'mdiDownload' },
     { label: fav ? 'Remove from Favourites' : 'Add to Favourites', value: 'fav', icon: fav ? 'mdiHeart' : 'mdiHeartOutline' },
-  ] });
+  ].filter((o) => !IS_ANDROID || o.value !== 'play') }); // Android: a long press opens this; games play from their page there
   if (v === 'open') go('game', { romId: rom.id });
   else if (v === 'dl') download(rom);
-  else if (v === 'play') call('steam:play', { romId: rom.id }).catch((err) => toast(err.message, 'error', 5000));
+  else if (v === 'play') playGame(rom.id).catch((err) => toast(err.message, 'error', 5000));
   else if (v === 'fav') call('fav:set', { romId: rom.id, on: !fav }).then(() => toast(fav ? 'Removed from favourites' : 'Added to favourites', 'ok', 2200, 'mdiHeartOutline')).catch((err) => toast(err.message, 'error', 6000));
 }
 onMounted(() => document.addEventListener('contextmenu', cardMenu));
@@ -532,9 +563,22 @@ function modalFrom(el) {
 </script>
 
 <style scoped>
+/* the hello in the Dock's gap (0.9.49): it opens from the logo while its letters rise in (as the opening's name), holds,
+   then the letters drop and it closes back into the logo */
+.brand { position: relative; }
+.greet { position: absolute; left: calc(100% + 14px); top: 50%; display: flex; white-space: nowrap; overflow: hidden; translate: 0 -50%; font-family: var(--display); font-size: var(--t-md); font-weight: 700; letter-spacing: -0.01em; color: var(--text); pointer-events: none;
+  clip-path: inset(-20% 100% -20% 0); animation: greet-open var(--spring-soft-d) var(--spring-soft) forwards; }
+.greet span { opacity: 0; transform: translateY(12px); filter: blur(5px); animation: greet-char var(--spring-soft-d) var(--spring-soft) forwards; animation-delay: calc(0.12s + var(--i) * 0.035s); }
+.greet.out { animation: greet-close var(--d-slow) var(--ease-in) 0.25s forwards; clip-path: inset(-20% 0 -20% 0); }
+.greet.out span { opacity: 1; transform: none; filter: none; animation: greet-drop var(--d-slow) var(--ease-in) forwards; animation-delay: calc(var(--i) * 0.012s); }
+@keyframes greet-open { to { clip-path: inset(-20% 0 -20% 0); } }
+@keyframes greet-close { to { clip-path: inset(-20% 100% -20% 0); } }
+@keyframes greet-char { to { opacity: 1; transform: none; filter: none; } }
+@keyframes greet-drop { to { opacity: 0; transform: translateY(8px); filter: blur(4px); } }
+
 .tab-trig { margin: 0 4px; }
 /* search (0.9.19): a round button with Y until it's used, then it opens into a field */
-.top-search { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; width: 40px; height: 40px; padding: 0 10px 0 11px; border-radius: 20px; background: rgba(255, 255, 255, 0.07); color: rgba(255, 255, 255, 0.7); cursor: text; overflow: hidden; transition: width 320ms cubic-bezier(0.23, 1, 0.32, 1), background 160ms, color 160ms; }
+.top-search { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; width: 40px; height: 40px; padding: 0 10px 0 11px; border-radius: 20px; background: rgba(255, 255, 255, 0.07); color: rgba(255, 255, 255, 0.7); cursor: text; overflow: hidden; transition: width var(--spring-d) var(--spring), background var(--tint), color var(--tint); }
 .top-search:hover { background: rgba(255, 255, 255, 0.11); }
 /* a round button with the mouse or touch; room for the Y hint with a controller */
 :global(body.pad-mode .top-search:not(.open):not(:focus-within)) { width: 70px; }
@@ -551,7 +595,7 @@ function modalFrom(el) {
 .top-search input::placeholder { color: rgba(255, 255, 255, 0.5); }
 .top-search .clear { background: none; border: 0; color: var(--muted); padding: 4px; display: grid; place-items: center; }
 .top-search :deep(.pb) { transform: scale(0.85); opacity: 0.8; }
-.backbtn { width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; background: rgba(255, 255, 255, 0.08); margin-right: -4px; transition: background 160ms; }
+.backbtn { width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; background: rgba(255, 255, 255, 0.08); margin-right: -4px; transition: background var(--tint); }
 .backbtn:hover { background: rgba(255, 255, 255, 0.14); }
 .backbtn:active { background: rgba(255, 255, 255, 0.2); transform: scale(0.96); }
 .pops { position: fixed; top: 76px; right: 24px; z-index: 80; display: flex; flex-direction: column; gap: 10px; pointer-events: none; }
@@ -562,20 +606,20 @@ function modalFrom(el) {
 .pop-kind { display: flex; gap: 6px; align-items: center; font-size: var(--t-xs); letter-spacing: 0.04em; color: #cfd6e4; }
 .pop-name { font-family: var(--display); font-weight: 700; font-size: var(--t-md);  overflow-wrap: anywhere; }
 .pop-game { font-size: var(--t-xs); color: var(--muted);  overflow-wrap: anywhere; }
-.pop-enter-active, .pop-leave-active { transition: opacity 0.3s, transform 0.35s var(--ease); }
+.pop-enter-active, .pop-leave-active { transition: opacity var(--fade-slow), transform var(--spring-d) var(--spring); }
 .pop-enter-from { opacity: 0; transform: translateX(40px); }
 .pop-leave-to { opacity: 0; transform: translateY(-12px); }
 .steam-ring { position: relative; flex: none; width: 30px; height: 30px; padding: 0; display: grid; place-items: center; }
 .steam-ring .sr-ring { position: absolute; inset: 0; width: 100%; height: 100%; transform: rotate(-90deg); }
-.sr-arc { fill: none; stroke: var(--text); stroke-width: 3; stroke-linecap: round; transition: stroke-dasharray 600ms var(--ease-out); }
-.steam-ring.wait .sr-ring { animation: sr-spin 1.4s linear infinite; }
+.sr-arc { fill: none; stroke: var(--text); stroke-width: 3; stroke-linecap: round; transition: stroke-dasharray var(--fade-slow); }
+.steam-ring.wait .sr-ring { animation: sr-spin var(--loop-spin) infinite; }
 @keyframes sr-spin { to { transform: rotate(270deg); } }
 .sr-logo { opacity: 0.9; }
 /* the sync ring (0.9.38): the Steam ring's look, its arc on the spring; done = a tick, then it settles away */
 .sync-ring .sr-arc { transition: stroke-dasharray var(--spring-soft-d, 600ms) var(--spring-soft, var(--ease-out)); }
 .sync-ring .sr-logo { transition: transform var(--spring-d, 300ms) var(--spring-bounce, var(--ease-out)); }
 .sync-ring.done .sr-logo { transform: scale(1.12); }
-.ring-out-enter-active { transition: opacity 220ms var(--ease-out), transform var(--spring-d, 300ms) var(--spring, var(--ease-out)); }
-.ring-out-leave-active { transition: opacity 260ms var(--ease-in-out), transform 260ms var(--ease-in-out); }
+.ring-out-enter-active { transition: opacity var(--fade-in), transform var(--spring-d, 300ms) var(--spring, var(--ease-out)); }
+.ring-out-leave-active { transition: opacity var(--fade-slow), transform var(--spring-d) var(--spring); }
 .ring-out-enter-from, .ring-out-leave-to { opacity: 0; transform: scale(0.7); }
 </style>

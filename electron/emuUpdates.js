@@ -24,7 +24,9 @@ const REPOS = {
   // PS5 (0.9.37): whole folders as .tar.gz, laid over ~/Applications/<dir> (layFolder)
   sharpemu: { repo: 'sharpemu/sharpemu', asset: /linux-x64\.tar\.gz$/i, pre: true, dirBuild: { dir: 'SharpEmu', program: 'SharpEmu' } },
   kytyps5: { repo: 'KytyPS5/KytyPS5', asset: /Linux-x86_64\.tar\.gz$/i, pre: true, dirBuild: { dir: 'KytyPS5', program: 'kyty_emulator' } },
-  vita3k: { repo: 'Vita3K/Vita3K', tag: 'continuous', asset: /^Vita3K-x86_64\.AppImage$/i, overProgram: true },
+  // fallback (0.9.47): Vita3K's builds from 3 Oct 2026 are made on Ubuntu 26.04 and need glibc 2.43; build 4111 is the
+  // last one made on 24.04 (glibc 2.39), used where the newest can't start (SteamOS, Bazzite, most distros today)
+  vita3k: { repo: 'Vita3K/Vita3K', tag: 'continuous', asset: /^Vita3K-x86_64\.AppImage$/i, overProgram: true, fallback: { url: 'https://github.com/Vita3K/Vita3K-builds/releases/download/4111/Vita3K-x86_64.AppImage', version: 'build 4111', name: 'Vita3K-x86_64.AppImage' } },
   azahar: { repo: 'azahar-emu/azahar', asset: /\.AppImage$/i },
   cemu: { repo: 'cemu-project/Cemu', asset: /x86_64\.AppImage$/i },
   xemu: { repo: 'xemu-project/xemu', asset: /x86_64\.AppImage$/i },
@@ -38,6 +40,10 @@ const REPOS = {
   shadps4: { repo: 'shadps4-emu/shadps4-qtlauncher', asset: /linux-qt.*\.zip$|qt.?launcher.*\.AppImage$/i, zipped: /\.AppImage$/i, pre: true, preOnly: true },
   // 0.9.21 (owner: "couldn't check"): Eden's server is git.eden-emu.dev; .org kept as the older name
   eden: { repo: 'eden-emulator/Releases', asset: /(amd64|x86_64|x64|steamdeck|rog).*\.AppImage$|linux.*\.AppImage$/i, forge: [['https://git.eden-emu.dev', 'eden-emu/eden'], ['https://git.eden-emu.org', 'eden-emu/eden']], first: 'forge' },
+  // 0.9.49 (owner: "Citron has no update source? look for it"): Citron publishes on its own Forgejo (git.citron-emu.org,
+  // Citron/Emulator; the old lower-case path kept), and its Linux AppImages are rebuilt on GitHub by pkgforge-dev,
+  // where EmuDeck's emuDeckCitron.sh takes them. Forgejo first, as for Eden and Ryujinx.
+  citron: { repo: 'pkgforge-dev/Citron-AppImage', asset: /(x86_64|amd64|x64).*\.AppImage$|\.AppImage$/i, forge: [['https://git.citron-emu.org', 'Citron/Emulator'], ['https://git.citron-emu.org', 'citron/emulator']], first: 'forge' },
   ryujinx: { repo: 'Ryubing/Stable-Releases', asset: /x64.*\.AppImage$/i, forge: [['https://git.ryujinx.app', 'Ryubing/Stable'], ['https://git.ryujinx.app', 'ryubing/ryujinx']], first: 'forge' },
   flycast: { repo: 'flyinghead/flycast', asset: /x86_64\.AppImage$/i },
   mgba: { repo: 'mgba-emu/mgba', asset: /x64\.AppImage$|x86_64\.AppImage$/i },
@@ -66,7 +72,8 @@ function missingLibs(file) {
   try {
     if (!file || /\.exe$/i.test(file) || require('./detect').appImageType(file)) return [];
     const out = require('child_process').execFileSync('ldd', [file], { env: plainEnv(), timeout: 8000, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
-    return [...out.matchAll(/^\s*(\S+)\s*=>\s*not found/gm)].map((m) => m[1]);
+    // 0.9.49: a library that is there but the wrong version (Qt_6.10 not found) stops a program just the same
+    return [...out.matchAll(/^\s*(\S+)\s*=>\s*not found/gm)].map((m) => m[1]).concat([...new Set([...out.matchAll(/version [`']([^']+)' not found/g)].map((m) => m[1]))]);
   } catch { return []; }
 }
 // which release source a copy uses: Xenia Edge's AppImage has its own; a Windows build its own files
@@ -153,7 +160,7 @@ async function latestRelease(id, { fetchImpl, spec, file, channel } = {}) {
   for (const t of tries) {
     let rel = null; try { rel = await t(); } catch (e) { lastErr = e; continue; }
     const asset = pickAsset(rel?.assets, r.asset, file);
-    if (asset) return { version: verOf(rel.tag) || verOf(asset.name), tag: rel.tag, name: asset.name, url: asset.url, size: asset.size, date: asset.date || rel.date, folder: !!r.wholeFolder, dirBuild: r.dirBuild || null, zipped: r.wholeFolder || r.dirBuild ? null : /\.(zip|tar\.gz|tgz)$/i.test(asset.name) ? r.zipped || /\.AppImage$/i : null };
+    if (asset) return { id, fallback: r.fallback || null, version: verOf(rel.tag) || verOf(asset.name), tag: rel.tag, name: asset.name, url: asset.url, size: asset.size, date: asset.date || rel.date, folder: !!r.wholeFolder, dirBuild: r.dirBuild || null, zipped: r.wholeFolder || r.dirBuild ? null : /\.(zip|tar\.gz|tgz)$/i.test(asset.name) ? r.zipped || /\.AppImage$/i : null };
   }
   if (lastErr) throw lastErr; // every source refused: say why
   return null;
@@ -230,6 +237,8 @@ async function replaceAppImage(file, rel, download) {
   // 0.9.23: never put something that can't start in place of a working copy: an AppImage must be one
   // (not a web page or a cut-off file), any other program at least a Linux program
   if (!looksRunnable(tmp, rel)) { fs.rmSync(tmp, { force: true }); throw new Error('What came down wasn’t a working program, so your copy was left as it was. Try again later.'); }
+  await fitGlibc(tmp, rel, download, 'your copy was left as it was');
+  await require('./emuStart').ensureStarts(rel.id, tmp, rel, download, 'your copy was left as it was'); // 0.9.49
   fs.chmodSync(tmp, 0o755);
   fs.renameSync(file, old);
   try { fs.renameSync(tmp, file); } catch (e) { fs.renameSync(old, file); throw e; }
@@ -237,6 +246,21 @@ async function replaceAppImage(file, rel, download) {
   return true;
 }
 
+// a build that asks for a newer glibc than this system has can't start at all (0.9.47: Vita3K "doesn't even open").
+// Its known older build goes in instead (REPOS[id].fallback), else nothing is put in place and the reason is said.
+async function fitGlibc(tmp, rel, download, kept = 'nothing was changed') {
+  const D = require('./detect');
+  const p = D.glibcProblem(tmp);
+  if (!p) return rel;
+  fs.rmSync(tmp, { force: true });
+  const fb = rel.fallback || REPOS[rel.id]?.fallback;
+  if (fb) {
+    await download(fb.url, tmp);
+    if (looksRunnable(tmp, { name: fb.name }) && !D.glibcProblem(tmp)) { Object.assign(rel, { version: fb.version, fellBack: p }); return rel; }
+    fs.rmSync(tmp, { force: true });
+  }
+  throw new Error(`This build needs a newer Linux than this one (glibc ${p.need}; this system has ${p.have}), so it couldn't start here, and ${kept}.`);
+}
 function looksRunnable(file, rel) {
   const D = require('./detect');
   if (/\.AppImage$/i.test(rel?.name || '')) return !!D.appImageType(file);
@@ -289,4 +313,4 @@ async function replaceFolder(file, rel, download) {
   return true;
 }
 
-module.exports = { layFolder, ranVersion, channelsOf, withChannel, flatpakRemove, installKind, missingLibs, looksRunnable, replaceFolder, specFor, pickAsset, fileFromTar, forgeRelease, appImageFromZip, REPOS, verOf, cmpVer, flatpakUpdates, flatpakUpdate, latestRelease, isNewer, replaceAppImage };
+module.exports = { fitGlibc, layFolder, ranVersion, channelsOf, withChannel, flatpakRemove, installKind, missingLibs, looksRunnable, replaceFolder, specFor, pickAsset, fileFromTar, forgeRelease, appImageFromZip, REPOS, verOf, cmpVer, flatpakUpdates, flatpakUpdate, latestRelease, isNewer, replaceAppImage };

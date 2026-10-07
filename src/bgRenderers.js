@@ -102,38 +102,74 @@ function glow(rgb, size) {
 }
 const rgbOf = (hex) => { const n = parseInt(String(hex || '#ffffff').slice(1).padEnd(6, '0').slice(0, 6), 16); return `${(n >> 16) & 255},${(n >> 8) & 255},${n & 255}`; };
 
-// ---------------------------------------------------------------- styles (0.9.19)
-// The owner retired the console scenes ("they all look bad, except Ribbons and XMB"): backgrounds
-// are styles now, made the way Ribbons is: hair-fine lines or soft points added together ('lighter'),
-// slow, fading at their edges, in your theme's colours. Each costs a few hundred draw calls a frame.
+// ---------------------------------------------------------------- styles (0.9.19, rebuilt in 0.9.47)
+// The owner retired the console scenes ("they all look bad, except Ribbons and XMB"): backgrounds are styles,
+// made the way Ribbons is. 0.9.47 (owner: raise the others to Waves/Ribbons quality, with formal maths) rebuilt
+// Aurora, Drift and Tide and retuned Contours on the rules Ribbons follows:
+// - one focal shape, low in the frame and to the right, the left kept quiet for the page's words;
+// - every motion is a short Fourier sum (PRESETS below: amplitude A, wavenumber k, angular speed w, phase ph), slow
+//   and low-frequency, so neighbours move together and nothing jitters;
+// - hair-fine lines or soft sprites added together ('lighter'; dark ink laid over on Light), fading at their ends;
+// - a pure function of time t: the same t gives the same frame at any frame rate, so dropped frames never speed it up;
+// - built once per size: gradients and sprites are made in setup, never per frame.
+// Waves and Ribbons above are left exactly as they were.
 
-// Aurora: two curtains of light hanging from a slow curving fold: fine rays rise from the fold, bright
-// where they start and fading upwards, over a soft glow that follows it
+// sum of sines: Σ A·sin(k·u + w·t + ph)
+const fsum = (P, u, t) => { let s = 0; for (const p of P) s += p.A * Math.sin(p.k * u + p.w * t + p.ph); return s; };
+const clamp01 = (x) => (x < 0 ? 0 : x > 1 ? 1 : x);
+const smooth = (a, b, x) => { const v = clamp01((x - a) / (b - a)); return v * v * (3 - 2 * v); };
+export const PRESETS = {
+  // Aurora: the fold each curtain hangs from (fraction of height) and the brightness travelling along it
+  aurora: [
+    { y: 0.56, len: 0.36, fold: [{ A: 0.075, k: 2.7, w: 0.09, ph: 0 }, { A: 0.028, k: 6.3, w: -0.14, ph: 1.3 }], lit: [{ A: 0.55, k: 7.1, w: -0.31, ph: 0 }, { A: 0.35, k: 3.3, w: 0.17, ph: 2.2 }] },
+    { y: 0.42, len: 0.24, fold: [{ A: 0.05, k: 2.1, w: -0.07, ph: 2.1 }, { A: 0.02, k: 5.2, w: 0.12, ph: 0.4 }], lit: [{ A: 0.6, k: 5.7, w: 0.27, ph: 1.1 }, { A: 0.3, k: 9.4, w: -0.19, ph: 0.3 }] },
+  ],
+  // Drift: a stream function ψ(x, y, t); the motes follow its curl, so the flow is smooth and never converges
+  drift: [{ A: 0.035, kx: 3.1, ky: 1.7, w: 0.05, ph: 0 }, { A: 0.022, kx: -1.9, ky: 4.3, w: -0.04, ph: 1.7 }, { A: 0.012, kx: 6.2, ky: -2.8, w: 0.07, ph: 4.1 }],
+  // Tide: deep-water swells (Airy waves, ω = √(g·k)), each with a direction; height in world units
+  tide: [{ A: 0.24, k: 0.9, dx: 0.94, dz: 0.34, ph: 0 }, { A: 0.12, k: 1.9, dx: -0.55, dz: 0.83, ph: 1.9 }, { A: 0.05, k: 4.1, dx: 0.2, dz: 0.98, ph: 3.3 }],
+  // Contours: the height field, two folded sines (unchanged shape, now named)
+  contours: { speed: 0.05, levels: 17, lightLevels: 9 },
+};
+const G = 9.81 * 0.02; // gravity scaled to Cartridge's slow time: a swell of k = 1 takes about 45 s to roll by
+
+// Aurora: two curtains of light hanging from slow folds. Each curtain is narrow vertical strips of one pre-made
+// gradient (bright at the fold, fading up; a short soft fade below it), so the light is continuous and rays come from
+// a fixed fine striation, not from hundreds of separate strokes. A hair-fine line traces each fold, as in Ribbons.
 function aurora(g, w, h, S, pal, light) {
-  const N = light ? 90 : 220, R = rng(7);
-  const acc = rgbOf(pal?.accent), lig = rgbOf(pal?.light || pal?.accent);
-  const rays = Array.from({ length: N }, (_, i) => ({ u: (i + R()) / N, ph: R() * TAU, k: R() }));
-  const CURT = [{ rgb: acc, y: 0.5, amp: 0.09, sp: 0.11, len: 0.34, off: 0 }, { rgb: lig, y: 0.36, amp: 0.06, sp: -0.08, len: 0.22, off: 2.1 }];
-  const body = glow(acc, Math.round(h * 0.7));
+  const acc = rgbOf(pal?.accent), lig = rgbOf(pal?.light || pal?.accent), R = rng(7);
+  const STEP = Math.max(2, Math.round((light ? 5 : 3) * S));
+  const cols = Math.ceil(w / STEP) + 1;
+  // rays: a few incommensurate sines over the column index, so they come in soft bundles of varying width instead
+  // of a regular comb (and a little noise so no two bundles match)
+  const p1 = R() * TAU, p2 = R() * TAU, p3 = R() * TAU;
+  const stria = Float32Array.from({ length: cols }, (_, i) => { const x = (i * STEP) / (4 * S); return clamp01(0.55 + 0.2 * Math.sin(x * 0.23 + p1) + 0.14 * Math.sin(x * 0.71 + p2) + 0.08 * Math.sin(x * 1.9 + p3) + 0.08 * (R() - 0.5)); });
+  const strip = (rgb) => once(1, 256, (c) => {
+    const gr = c.createLinearGradient(0, 0, 0, 256);
+    gr.addColorStop(0, `rgba(${rgb},0)`); gr.addColorStop(0.45, `rgba(${rgb},0.2)`); gr.addColorStop(0.72, `rgba(${rgb},0.7)`);
+    gr.addColorStop(0.78, `rgba(${rgb},1)`); gr.addColorStop(0.86, `rgba(${rgb},0.35)`); gr.addColorStop(1, `rgba(${rgb},0)`);
+    c.fillStyle = gr; c.fillRect(0, 0, 1, 256);
+  });
+  const CURT = PRESETS.aurora.map((c, i) => ({ ...c, img: strip(i ? lig : acc), rgb: i ? lig : acc }));
+  const body = glow(acc, Math.round(h * 0.8));
+  // the curtains thin out to the left, where the words are
+  const side = Float32Array.from({ length: cols }, (_, i) => 0.25 + 0.75 * smooth(0.05, 0.6, (i * STEP) / w));
   return (t) => {
     g.clearRect(0, 0, w, h);
     g.globalCompositeOperation = COMP;
-    g.lineWidth = 2.2 * S; // softer, wider rays read as light rather than strands
     for (const c of CURT) {
-      const fold = (u) => h * (c.y + c.amp * Math.sin(u * 3.1 + t * c.sp + c.off) + c.amp * 0.45 * Math.sin(u * 7.3 - t * c.sp * 1.6));
-      // the glow along the fold, a few soft stamps
-      for (let i = 0; i <= 6; i++) { const u = i / 6; g.globalAlpha = 0.07; g.drawImage(body, u * w - body.width / 2, fold(u) - body.height * 0.62); }
-      g.globalAlpha = 1;
-      for (const r of rays) {
-        const x = r.u * w + Math.sin(t * 0.13 + r.ph) * w * 0.006, y0 = fold(r.u);
-        // ray length breathes slowly along the curtain, so brightness travels across it
-        const pulse = 0.5 + 0.5 * Math.sin(r.u * 9 - t * 0.35 + c.off + r.ph * 0.3);
-        const len = h * c.len * (0.35 + 0.65 * pulse) * (0.7 + 0.3 * r.k);
-        const gr = g.createLinearGradient(0, y0, 0, y0 - len);
-        gr.addColorStop(0, `rgba(${c.rgb},${0.05 + 0.13 * pulse})`); gr.addColorStop(0.3, `rgba(${c.rgb},${0.03 + 0.06 * pulse})`); gr.addColorStop(1, `rgba(${c.rgb},0)`);
-        g.strokeStyle = gr;
-        g.beginPath(); g.moveTo(x, y0); g.lineTo(x + Math.sin(r.ph + t * 0.05) * w * 0.004, y0 - len); g.stroke();
+      const fold = (u) => h * (c.y + fsum(c.fold, u, t));
+      for (let i = 0; i <= 4; i++) { const u = 0.3 + (i / 4) * 0.7; g.globalAlpha = 0.05; g.drawImage(body, u * w - body.width / 2, fold(u) - body.height * 0.6); }
+      for (let i = 0; i < cols; i++) {
+        const u = (i * STEP) / w, lit = clamp01(0.5 + 0.5 * fsum(c.lit, u, t));
+        const len = h * c.len * (0.45 + 0.55 * lit), y0 = fold(u);
+        g.globalAlpha = (light ? 0.5 : 0.34) * side[i] * stria[i] * (0.35 + 0.65 * lit);
+        g.drawImage(c.img, i * STEP, y0 - len * 0.78, STEP + 0.6, len); // the strip's bright point (0.78) sits on the fold, a soft glow runs on below
       }
+      g.globalAlpha = 1;
+      g.beginPath();
+      for (let x = 0; x <= w + STEP; x += STEP * 3) { const y = fold(x / w); x ? g.lineTo(x, y) : g.moveTo(x, y); }
+      g.strokeStyle = `rgba(${c.rgb},${light ? 0.45 : 0.3})`; g.lineWidth = 1.1 * S; g.stroke();
     }
   };
 }
@@ -141,18 +177,18 @@ function aurora(g, w, h, S, pal, light) {
 // Contours: slowly shifting height lines, like a map's, drawn by marching squares over a moving field
 function contours(g, w, h, S, pal, light) {
   const C = light ? 40 : 72, Rw = Math.ceil(C * h / w), dx = w / C, dy = h / Rw;
-  const NL = light ? 9 : 17, LEVELS = Array.from({ length: NL }, (_, i) => -0.8 + (1.6 * i) / (NL - 1));
+  const NL = light ? PRESETS.contours.lightLevels : PRESETS.contours.levels, LEVELS = Array.from({ length: NL }, (_, i) => -0.8 + (1.6 * i) / (NL - 1));
   const f = new Float32Array((C + 1) * (Rw + 1));
   const acc = rgbOf(pal?.accent);
   return (t) => {
-    const T = t * 0.05;
+    const T = t * PRESETS.contours.speed;
     for (let j = 0; j <= Rw; j++) for (let i = 0; i <= C; i++) {
       const x = i / C * 3.2, y = j / Rw * 1.8;
       f[j * (C + 1) + i] = 0.55 * Math.sin(x * 1.3 + T * 1.7 + Math.sin(y * 1.1 - T)) + 0.45 * Math.cos(y * 1.9 - T * 1.3 + Math.sin(x * 0.7 + T * 0.6)) * Math.sin(x * 0.5 + y * 0.4 + T * 0.4);
     }
     g.clearRect(0, 0, w, h);
     g.globalCompositeOperation = COMP;
-    g.lineWidth = 1.05 * S;
+    g.lineJoin = 'round'; g.lineCap = 'round';
     LEVELS.forEach((L, li) => {
       g.beginPath();
       for (let j = 0; j < Rw; j++) for (let i = 0; i < C; i++) {
@@ -171,64 +207,164 @@ function contours(g, w, h, S, pal, light) {
       // every fourth line heavier, as maps draw their index lines; the middle one in your colour
       const idx = li % 4 === 0, mid = li === (LEVELS.length - 1) / 2;
       g.lineWidth = (idx ? 1.6 : 1) * S;
-      g.strokeStyle = mid ? `rgba(${acc},0.34)` : `rgba(${INK},${(idx ? 0.13 : 0.065) * (1.1 - Math.abs(L) * 0.5)})`;
+      g.strokeStyle = mid ? `rgba(${acc},0.38)` : `rgba(${INK},${(idx ? 0.15 : 0.075) * (1.1 - Math.abs(L) * 0.5)})`;
       g.stroke();
     });
-    // the lines fade towards the left, where the page's words are
+    // the lines fade towards the left, where the page's words are, and softly at the top
     g.globalCompositeOperation = 'destination-out';
     const fade = g.createLinearGradient(0, 0, w * 0.55, 0); fade.addColorStop(0, 'rgba(0,0,0,0.85)'); fade.addColorStop(1, 'rgba(0,0,0,0)');
     g.fillStyle = fade; g.fillRect(0, 0, w * 0.55, h);
+    const top = g.createLinearGradient(0, 0, 0, h * 0.25); top.addColorStop(0, 'rgba(0,0,0,0.6)'); top.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = top; g.fillRect(0, 0, w, h * 0.25);
     g.globalCompositeOperation = 'source-over';
   };
 }
 
-// Drift: soft points of light floating by at three depths, the near ones large and faint
+// Drift: soft points of light carried along a slow current. Each mote has a home on a long diagonal band (the
+// focal shape, low left to high right like Ribbons' band), travels along it, and is displaced by the curl of the
+// stream function, so neighbours sway together. Three depths: near ones big, soft and slow, far ones small and sharp.
 function drift(g, w, h, S, pal, light) {
-  const R = rng(11), N = light ? 30 : 64;
-  const acc = rgbOf(pal?.accent);
-  // small motes white, the out-of-focus ones in your colour
-  const sprites = [glow(INK, 36 * S), glow(acc, 140 * S), glow(acc, 320 * S)];
-  const pts = Array.from({ length: N }, () => { const z = R(); return { x: R(), y: R(), z, d: z < 0.55 ? 0 : z < 0.88 ? 1 : 2, ph: R() * TAU, sp: 0.4 + R() * 0.6 }; });
+  const R = rng(11), N = light ? 34 : 70;
+  const acc = rgbOf(pal?.accent), lig = rgbOf(pal?.light || pal?.accent);
+  const sprites = [glow(INK, 26 * S), glow(lig, 90 * S), glow(acc, 260 * S)];
+  const ALPHA = light ? [0.5, 0.2, 0.1] : [0.42, 0.16, 0.085], SPEED = [0.006, 0.0045, 0.003];
+  const pts = Array.from({ length: N }, () => { const z = R(); return { s: R(), off: (R() + R() + R() - 1.5) * 0.22, d: z < 0.6 ? 0 : z < 0.9 ? 1 : 2, ph: R() * TAU, sp: 0.7 + R() * 0.6 }; });
+  const P = PRESETS.drift;
+  // curl of ψ = Σ A sin(kx·x + ky·y + w·t + ph): v = (∂ψ/∂y, -∂ψ/∂x)
+  const curl = (x, y, t) => { let vx = 0, vy = 0; for (const p of P) { const c = p.A * Math.cos(p.kx * x + p.ky * y + p.w * t + p.ph); vx += p.ky * c; vy -= p.kx * c; } return [vx, vy]; };
   return (t) => {
     g.clearRect(0, 0, w, h);
     g.globalCompositeOperation = COMP;
     for (const p of pts) {
-      const v = (0.006 + p.z * 0.018) * p.sp;
-      const x = ((p.x + t * v) % 1.2 - 0.1) * w + Math.sin(t * 0.3 + p.ph) * 14 * S;
-      const y = ((p.y - t * v * 0.35 + 10) % 1.2 - 0.1) * h + Math.cos(t * 0.23 + p.ph) * 10 * S;
-      const twinkle = 0.55 + 0.45 * Math.sin(t * 0.8 * p.sp + p.ph);
-      const a = [0.32, 0.13, 0.07][p.d] * twinkle;
+      const s = (p.s + t * SPEED[p.d] * p.sp) % 1; // along the band, 0 at the left edge
+      const bx = -0.1 + s * 1.2, by = 0.78 - s * 0.42 + p.off + 0.05 * Math.sin(s * 5 + p.ph);
+      const [vx, vy] = curl(bx, by, t);
+      const x = (bx + vx * 0.9) * w, y = (by + vy * 0.9) * h;
+      // fade in and out at the band's ends (no pop on wrap), quieter on the left, a slow breathe
+      const life = smooth(0, 0.12, s) * (1 - smooth(0.88, 1, s)), side = 0.35 + 0.65 * smooth(0.1, 0.55, s);
       const img = sprites[p.d];
-      g.globalAlpha = a; g.drawImage(img, x - img.width / 2, y - img.height / 2);
+      g.globalAlpha = ALPHA[p.d] * life * side * (0.7 + 0.3 * Math.sin(t * 0.4 * p.sp + p.ph));
+      g.drawImage(img, x - img.width / 2, y - img.height / 2);
     }
     g.globalAlpha = 1;
   };
 }
 
-// Tide: a sea of fine points in perspective, rising and falling in long slow swells
+// Tide: a sea of fine points seen from just above, rising and falling in long swells. A real perspective plane
+// (rows spread to the frame's full width at every depth, so there's no point at the horizon), heights from the
+// Airy swells in PRESETS.tide (each crest moves at its own speed, √(g/k)), the far rows fading into haze and the
+// crests catching your colour.
 function tide(g, w, h, S, pal, light) {
-  const COLS = light ? 46 : 84, ROWS = light ? 18 : 30;
-  const acc = rgbOf(pal?.accent);
+  const ROWS = light ? 22 : 36, GAP = light ? 0.2 : 0.12; // world spacing between points, the same at every depth
+  const acc = rgbOf(pal?.accent), P = PRESETS.tide.map((p) => ({ ...p, om: Math.sqrt(G * p.k) }));
+  const horizon = h * 0.5, camH = 1.1, f = h * 0.9, Z0 = 1.1, Z1 = 16;
+  const zs = Array.from({ length: ROWS }, (_, r) => Z0 * Math.pow(Z1 / Z0, r / (ROWS - 1))); // even on screen, not in depth
+  const crest = [];
   return (t) => {
     g.clearRect(0, 0, w, h);
     g.globalCompositeOperation = COMP;
-    const horizon = h * 0.46, sz = 1.6 * S;
-    for (let r = 0; r < ROWS; r++) {
-      const z = 1 + r * 0.42; // depth: near rows first
-      const persp = 1 / z;
-      const a = Math.min(0.75, 0.9 * persp) * (r < 2 ? 0.6 : 1);
-      g.fillStyle = r % 7 === 3 ? `rgba(${acc},${a})` : `rgba(${INK},${a * 0.75})`;
-      for (let c = 0; c <= COLS; c++) {
-        const xw = (c / COLS - 0.5) * 2.6;
-        const yw = 0.22 * Math.sin(xw * 1.7 + t * 0.32 + z * 0.55) * Math.cos(z * 0.33 - t * 0.21) + 0.08 * Math.sin(xw * 4.1 - t * 0.5 + z);
-        const X = w / 2 + xw * w * 0.5 * persp * 1.4, Y = horizon + (0.95 - yw) * h * 0.55 * persp;
-        if (X < -10 || X > w + 10 || Y > h + 10) continue;
-        const s = sz * (0.6 + persp * 1.2);
-        g.fillRect(X - s / 2, Y - s / 2, s, s);
+    crest.length = 0;
+    for (let r = ROWS - 1; r >= 0; r--) {
+      const z = zs[r], half = (w / 2) * z / f * 1.06; // world half-width that fills the frame at this depth
+      const gap = Math.max(GAP, (2 * half) / 260); // far rows: no more than 260 points
+      const haze = Math.exp(-(z - Z0) * 0.14), a = (light ? 0.75 : 0.6) * haze;
+      const s = Math.max(1, 2.6 * S * Z0 / z + 0.5 * S);
+      g.fillStyle = `rgba(${INK},${a.toFixed(3)})`;
+      for (let x = -Math.floor(half / gap) * gap; x <= half; x += gap) {
+        let y = 0; for (const p of P) y += p.A * Math.sin(p.k * (p.dx * x + p.dz * z) - p.om * t + p.ph);
+        const X = w / 2 + x * f / z, Y = horizon + (camH - y) * f / z;
+        if (Y > h + 8) continue;
+        if (y > 0.25) crest.push(X, Y, s, haze); else g.fillRect(X - s / 2, Y - s / 2, s, s);
       }
     }
+    for (let i = 0; i < crest.length; i += 4) { g.fillStyle = `rgba(${acc},${((light ? 0.85 : 0.85) * crest[i + 3]).toFixed(3)})`; const s = crest[i + 2] * 1.2; g.fillRect(crest[i] - s / 2, crest[i + 1] - s / 2, s, s); }
+    // haze over the horizon so the far rows melt into the page
+    g.globalCompositeOperation = 'destination-out';
+    const hz = g.createLinearGradient(0, horizon, 0, horizon + h * 0.12); hz.addColorStop(0, 'rgba(0,0,0,1)'); hz.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = hz; g.fillRect(0, 0, w, horizon + h * 0.12);
+    g.globalCompositeOperation = 'source-over';
   };
 }
+
+// ---------------------------------------------------------------- scenes with their own colours (0.9.47)
+// Owner asked for more backgrounds at Waves/Ribbons quality, from formal presets. Each is one of the two originals'
+// constructions with its numbers written down: a wave scene is Waves' layered bands (a sum of sines for the centre
+// line, a breathing thickness, the front layer brightest and the back ones wider and fainter); a ribbon scene is
+// Ribbons' band of hair-fine lines (each line offset from the centre curve, brightest in the middle) with a
+// specular glint travelling along it. They keep their own colours over their own dark base (BG_BASE), in every
+// theme, and are pure functions of time like the rest.
+const SCENES = {
+  midnight: { kind: 'ribbon', cols: ['#5ef2ff', '#9b7bff'], n: 22, spread: 0.010, y: 0.58, fold: [{ A: 0.08, k: 2.6, w: 0.2, ph: 0 }, { A: 0.045, k: 5.3, w: -0.29, ph: 1.1 }], twist: 0.9, glint: 0.1, line: 1.1, alpha: 0.42 },
+  solar: { kind: 'wave', cols: ['#ff9d3c', '#ffd56b', '#ff6a2b'], speed: 0.6, layers: [{ a: 0.10, k: 1.3, s: 0.07, y: 0.6, h: 0.24, al: 0.16 }, { a: 0.07, k: 2.1, s: -0.05, y: 0.64, h: 0.14, al: 0.12 }, { a: 0.12, k: 0.9, s: 0.04, y: 0.56, h: 0.3, al: 0.07 }, { a: 0.05, k: 2.9, s: 0.09, y: 0.67, h: 0.06, al: 0.2 }] },
+  nordic: { kind: 'ribbon', cols: ['#3dffa8', '#2bd4d0'], n: 26, spread: 0.016, y: 0.5, fold: [{ A: 0.12, k: 1.9, w: 0.12, ph: 0.4 }, { A: 0.05, k: 4.4, w: -0.17, ph: 2.0 }], twist: 1.6, glint: 0.06, line: 1.1, alpha: 0.3, sway: 0.06 },
+  cyber: { kind: 'wave', cols: ['#a24bff', '#ff3fb4', '#6a5bff'], speed: 1.25, layers: [{ a: 0.09, k: 1.8, s: 0.11, y: 0.6, h: 0.15, al: 0.14 }, { a: 0.07, k: 2.6, s: -0.09, y: 0.63, h: 0.09, al: 0.12 }, { a: 0.11, k: 1.2, s: 0.06, y: 0.56, h: 0.22, al: 0.07 }, { a: 0.04, k: 3.6, s: 0.15, y: 0.66, h: 0.04, al: 0.22 }] },
+  titanium: { kind: 'ribbon', cols: ['#eef2f8', '#8a93a3'], n: 34, spread: 0.008, y: 0.6, fold: [{ A: 0.07, k: 2.2, w: 0.16, ph: 0.8 }, { A: 0.04, k: 5.9, w: -0.22, ph: 0.2 }], twist: 1.1, glint: 0.08, line: 0.9, alpha: 0.26 },
+};
+function sceneWave(cfg) {
+  return (g, w, h, S) => {
+    const STEP = 18;
+    const grads = cfg.layers.map((wv, i) => {
+      const c = rgbOf(cfg.cols[i % cfg.cols.length]), gr = g.createLinearGradient(0, 0, w, 0);
+      gr.addColorStop(0, `rgba(${c},0)`); gr.addColorStop(0.3, `rgba(${c},${wv.al})`); gr.addColorStop(0.7, `rgba(${c},${wv.al * 1.3})`); gr.addColorStop(1, `rgba(${c},0)`);
+      return { gr, c };
+    });
+    return (time) => {
+      const t = time * cfg.speed;
+      g.clearRect(0, 0, w, h);
+      g.globalCompositeOperation = 'lighter';
+      cfg.layers.forEach((wv, wi) => {
+        const top = [], bot = [];
+        for (let x = 0; x <= w + STEP; x += STEP) {
+          const u = x / w;
+          const base = wv.y * h + Math.sin(u * Math.PI * wv.k + t * wv.s * 6) * wv.a * h + Math.sin(u * Math.PI * wv.k * 0.5 - t * wv.s * 3) * wv.a * 0.5 * h;
+          const thick = wv.h * h * (0.55 + 0.45 * Math.sin(u * Math.PI * 1.3 + t * wv.s * 4));
+          top.push(x, base - thick / 2); bot.push(x, base + thick / 2);
+        }
+        g.beginPath();
+        for (let i = 0; i < top.length; i += 2) (i ? g.lineTo(top[i], top[i + 1]) : g.moveTo(top[i], top[i + 1]));
+        for (let i = bot.length - 2; i >= 0; i -= 2) g.lineTo(bot[i], bot[i + 1]);
+        g.closePath(); g.fillStyle = grads[wi].gr; g.fill();
+        g.beginPath();
+        for (let i = 0; i < top.length; i += 2) (i ? g.lineTo(top[i], top[i + 1]) : g.moveTo(top[i], top[i + 1]));
+        g.strokeStyle = `rgba(${grads[wi].c},${wv.al * 1.8})`; g.lineWidth = 1.5 * S; g.stroke();
+      });
+      g.globalCompositeOperation = 'source-over';
+    };
+  };
+}
+function sceneRibbon(cfg) {
+  return (g, w, h, S) => {
+    const N = cfg.n, STEP = 20, a = rgbOf(cfg.cols[0]), b = rgbOf(cfg.cols[1]);
+    const lineGrad = (al) => { const gr = g.createLinearGradient(0, 0, w, 0); gr.addColorStop(0, `rgba(${b},0)`); gr.addColorStop(0.25, `rgba(${b},${al})`); gr.addColorStop(0.7, `rgba(${a},${al})`); gr.addColorStop(1, `rgba(${a},${al * 0.4})`); return gr; };
+    const grads = Array.from({ length: N + 1 }, (_, k) => lineGrad(cfg.alpha * (0.3 + 0.7 * (1 - Math.abs(k - N / 2) / (N / 2)))));
+    const glintS = glow(a, Math.round(h * 0.32));
+    const body = g.createLinearGradient(0, 0, w, 0); body.addColorStop(0, `rgba(${b},0)`); body.addColorStop(0.5, `rgba(${a},0.06)`); body.addColorStop(1, `rgba(${a},0)`);
+    return (t) => {
+      g.clearRect(0, 0, w, h);
+      g.globalCompositeOperation = 'lighter';
+      const sway = cfg.sway ? Math.sin(t * 0.09) * cfg.sway : 0; // Nordic: the whole band drifts up and down
+      const yOf = (u, k) => h * (cfg.y + sway + fsum(cfg.fold, u * 2, t * 0.5)) + (k - N / 2) * h * cfg.spread * (1 + 0.8 * Math.sin(u * 3 * cfg.twist + t * 0.35));
+      g.beginPath();
+      for (let x = 0; x <= w + STEP; x += STEP) { const u = x / w; x ? g.lineTo(x, yOf(u, 0) - h * 0.03) : g.moveTo(x, yOf(u, 0) - h * 0.03); }
+      for (let x = Math.ceil((w + STEP) / STEP) * STEP; x >= 0; x -= STEP) g.lineTo(x, yOf(x / w, N) + h * 0.03);
+      g.closePath(); g.fillStyle = body; g.fill();
+      g.lineWidth = cfg.line * S;
+      for (let k = 0; k <= N; k++) {
+        g.strokeStyle = grads[k];
+        g.beginPath();
+        for (let x = 0; x <= w + STEP; x += STEP) { const y = yOf(x / w, k); x ? g.lineTo(x, y) : g.moveTo(x, y); }
+        g.stroke();
+      }
+      // the specular glint: a soft light travelling along the band's middle, once every ~40 s
+      const gu = ((t * 0.025) % 1.4) - 0.2;
+      g.globalAlpha = cfg.glint * Math.sin(Math.PI * clamp01((gu + 0.2) / 1.4)) * 4;
+      g.drawImage(glintS, gu * w - glintS.width / 2, yOf(gu, N / 2) - glintS.height / 2);
+      g.globalAlpha = 1;
+      g.globalCompositeOperation = 'source-over';
+    };
+  };
+}
+const SCENE_R = Object.fromEntries(Object.entries(SCENES).map(([k, c]) => [k, (c.kind === 'wave' ? sceneWave : sceneRibbon)(c)]));
 
 export function artPan(urls, rgb = '150,150,170') {
   const imgs = [];
@@ -256,7 +392,7 @@ export function artPan(urls, rgb = '150,150,170') {
   };
 }
 
-export const RENDERERS = { waves, ribbons, aurora, contours, drift, tide };
+export const RENDERERS = { waves, ribbons, aurora, contours, drift, tide, ...SCENE_R };
 // Backgrounds from before 0.9.15 whose console now shows its own game art (A)
 export const LEGACY_ART = { wiiu: 'wiiu', ds: 'nds', n3ds: '3ds', xbox: 'xbox', ps2: 'ps2', gc: 'ngc', wii: 'wii', xbox360: 'xbox360', switch: 'switch' }; // 0.9.19: the console scenes retired too (owner)
 // Picker entries. The first two follow your theme colours, the console ones use their own.
@@ -267,6 +403,11 @@ export const BACKGROUNDS = [
   { v: 'contours', l: 'Contours', sub: 'Slow height lines, like a map', group: 'Theme' },
   { v: 'drift', l: 'Drift', sub: 'Soft lights floating by', group: 'Theme' },
   { v: 'tide', l: 'Tide', sub: 'A sea of points rising and falling', group: 'Theme' },
+  { v: 'midnight', l: 'Midnight', sub: 'Neon glass ribbons on obsidian', group: 'Scenes' },
+  { v: 'solar', l: 'Solar Flare', sub: 'Slow amber and gold waves', group: 'Scenes' },
+  { v: 'nordic', l: 'Nordic Aurora', sub: 'Emerald and teal ribbons drifting', group: 'Scenes' },
+  { v: 'cyber', l: 'Cyber Gradient', sub: 'Purple and magenta waves', group: 'Scenes' },
+  { v: 'titanium', l: 'Liquid Titanium', sub: 'Chrome ribbons catching the light', group: 'Scenes' },
   { v: 'solid', l: 'Still', sub: 'A still gradient, no motion', group: 'Other' },
   { v: 'art', l: 'Game artwork', sub: 'The highlighted game', group: 'Other' },
   { v: 'wallpaper', l: 'Wallpaper', sub: 'An image of your own', group: 'Other' },
@@ -274,6 +415,11 @@ export const BACKGROUNDS = [
 // The console backgrounds' own base colours (under the canvas)
 export const BG_BASE = {
   art: 'linear-gradient(180deg, #0b0b0d 0%, #070708 100%)',
+  midnight: 'linear-gradient(160deg, #0b0d1a 0%, #05060c 60%, #020206 100%)',
+  solar: 'linear-gradient(170deg, #2a0e04 0%, #160703 55%, #0a0402 100%)',
+  nordic: 'linear-gradient(170deg, #04201c 0%, #021210 55%, #010807 100%)',
+  cyber: 'linear-gradient(160deg, #2a0838 0%, #15041f 55%, #090210 100%)',
+  titanium: 'linear-gradient(170deg, #1b1d22 0%, #0f1013 55%, #070708 100%)',
 };
 // darker base for renderers that need contrast (theme gradient under the canvas)
 export const DARK_BASE = new Set([]);

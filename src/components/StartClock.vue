@@ -55,7 +55,7 @@ const STARS = Array.from({ length: 34 }, (_, i) => ({ i, x: rnd() * 400, y: rnd(
 <style scoped>
 .sc { position: absolute; inset: 0; container-type: size; color: #fff; }
 .sc-scene { position: absolute; inset: 0; width: 100%; height: 100%; }
-.sc-scene stop, .sc-scene path, .sc-scene circle { transition: stop-color 1.6s ease, fill 1.6s ease, cx 2s ease, cy 2s ease; }
+.sc-scene stop, .sc-scene path, .sc-scene circle { transition: stop-color var(--fade-ambient), fill var(--fade-ambient), cx var(--fade-ambient), cy var(--fade-ambient); }
 .sc-stars circle { fill: #fff; animation: sc-twinkle 5s ease-in-out infinite; }
 @keyframes sc-twinkle { 0%, 100% { opacity: 0.9; } 50% { opacity: 0.25; } }
 .sc-clouds { opacity: 0.5; }

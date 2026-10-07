@@ -54,7 +54,8 @@ const PAGES = [
   { title: 'Home', go: 'home', text: 'Your library at a glance: Continue Playing, what’s new, recommendations and your latest trophies. {A} opens a game, {X} downloads it.', at: 'main.main' },
   { title: 'Library', go: 'library', text: 'Every game on your server, with filters and sorting at the top. Pick a few at once to download them or add them to Steam together.', at: 'main.main' },
   { title: 'Consoles', go: 'consoles', text: 'Each console with its games. Its More ({Y}) holds the emulator it uses and how its games go into Steam.', at: 'main.main' },
-  { title: 'Achievements', go: 'achievements', text: 'RetroAchievements and your emulators’ trophies in one place. {LB} and {RB} switch between them.', at: 'main.main' },
+  { title: 'Scroll With the Right Stick', go: 'home', text: 'Push {RS} up or down to scroll any page, list or pop-up without moving the highlight. It works everywhere, the manuals too.', at: 'main.main' },
+  { title: 'Achievements', go: 'achievements', text: 'RetroAchievements and your emulators’ trophies on one page: your latest unlocks, then every game you’ve played, as a grid or a stack.', at: 'main.main' },
 ];
 const BASE0 = [
   { title: 'Your Tabs', text: 'The Dock holds every part of Cartridge. Move to the next tab now.', at: '.statusbar nav.tabs',
@@ -84,13 +85,19 @@ async function go(n) {
   i.value = n; did.value = false; s0 = { route: store.route.name }; seen = {};
   await nextTick(); place(); setTimeout(place, 380); // again once the page it points at has arrived
   focusFirst(el.value, '[data-autofocus]');
+  // 0.9.49 (owner: after Continue, A did nothing until right was pressed): a step that opens a page lets that page focus
+  // its first item a moment later, which took the focus off the card; it comes back to Continue once the page is there
+  for (const t of [120, 420, 800]) setTimeout(() => { if (store.tour && !store.modal && !store.quickMenu && el.value && !el.value.contains(document.activeElement)) focusFirst(el.value, '[data-autofocus]'); }, t);
 }
 const next = () => go(i.value + 1);
 // where the spotlight goes: the step's element, padded; none centres the card
 function place() {
   const t = s.value.at ? document.querySelector(s.value.at) : null; // null, never false or '' (used with ?.)
   const r = t?.getBoundingClientRect();
-  box.value = r && r.width ? { x: r.left - 8, y: r.top - 8, w: r.width + 16, h: r.height + 16 } : null;
+  // kept inside the window (0.9.49, owner: on a whole page the outline ran off the screen and only its bottom showed)
+  if (!r || !r.width) { box.value = null; return; }
+  const m = 6, x = Math.max(m, r.left - 8), y = Math.max(m, r.top - 8);
+  box.value = { x, y, w: Math.min(innerWidth - m, r.right + 8) - x, h: Math.min(innerHeight - m, r.bottom + 8) - y };
 }
 const spotStyle = computed(() => (box.value ? { transform: `translate(${box.value.x}px, ${box.value.y}px)`, width: box.value.w + 'px', height: box.value.h + 'px' } : {}));
 // the card sits beside what it points at: below it, else above, kept on screen
@@ -112,8 +119,10 @@ function check() {
 }
 let layer;
 onMounted(() => {
-  const pass = (a) => () => { if (s.value.pass?.includes(a)) { layer.below(a); setTimeout(check, 60); } };
-  layer = pushLayer(el.value, { back: () => (s.value.pass?.includes('back') ? pass('back')() : done()), start: pass('start'), lt: pass('lt'), rt: pass('rt'), y: pass('y'), search: pass('search'), select: pass('select'), lb() {}, rb() {}, x() {} });
+  // as: what the press does underneath. Y is search here whatever page the tour is on (0.9.51: on Achievements, where
+  // the page's own Y is Sort, the search step never saw search open and every step after it was stuck)
+  const pass = (a, as = a) => () => { if (s.value.pass?.includes(a)) { layer.below(as); setTimeout(check, 60); } };
+  layer = pushLayer(el.value, { back: () => (s.value.pass?.includes('back') ? pass('back')() : done()), start: pass('start'), lt: pass('lt'), rt: pass('rt'), y: pass('y', 'search'), search: pass('search'), select: pass('select'), lb() {}, rb() {}, x() {} });
   // its first steps are about Start: go there when it's opened from elsewhere (Settings → About)
   if (steps[0]?.at === 'main.main' && store.route.name !== 'start' && activeTabs().includes('start')) tab('start');
   tick = setInterval(() => { check(); if (s.value.at) place(); }, 250);
@@ -127,10 +136,10 @@ onBeforeUnmount(() => { layer?.pop(); clearInterval(tick); removeEventListener('
 
 <style scoped>
 /* never in the way of the app: only the card takes clicks, so the thing pointed at can be clicked or tapped */
-.tour-root { position: fixed; inset: 0; z-index: 44; /* under pop-ups (50) and the Quick Menu (45), which it teaches */ pointer-events: none; opacity: 0; transition: opacity 260ms var(--ease-out); }
+.tour-root { position: fixed; inset: 0; z-index: 44; /* under pop-ups (50) and the Quick Menu (45), which it teaches */ pointer-events: none; opacity: 0; transition: opacity var(--fade-slow); }
 .tour-root.ready { opacity: 1; }
 .spot { position: absolute; left: 0; top: 0; border-radius: var(--r-lg); box-shadow: 0 0 0 200vmax rgba(3, 4, 7, 0.72), 0 0 0 2px rgba(255, 255, 255, 0.9) inset;
-  transition: transform var(--spring-soft-d) var(--spring-soft), width var(--spring-soft-d) var(--spring-soft), height var(--spring-soft-d) var(--spring-soft), opacity 200ms; }
+  transition: transform var(--spring-soft-d) var(--spring-soft), width var(--spring-soft-d) var(--spring-soft), height var(--spring-soft-d) var(--spring-soft), opacity var(--fade-in); }
 .spot.none { width: 0; height: 0; transform: translate(50vw, 50vh); box-shadow: 0 0 0 200vmax rgba(3, 4, 7, 0.72); }
 .bubble { position: absolute; left: 0; top: 0; pointer-events: auto; min-width: 0; gap: var(--s-3); animation: none;
   transition: transform var(--spring-d) var(--spring); }
@@ -145,7 +154,7 @@ onBeforeUnmount(() => { layer?.pop(); clearInterval(tick); removeEventListener('
 .t-task.ok { background: rgba(63, 185, 80, 0.16); color: var(--green-l); }
 .t-do { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .t-do :deep(.pb) { transform: scale(1.25); margin: 0 4px; }
-.bubble p :deep(.pb.t-inl) { margin: 0 2px; vertical-align: -3px; }
+.bubble p :deep(.pb.t-inl) { margin: 0 2px; }
 .bubble p kbd { margin: 0 2px; }
 kbd { font: inherit; font-size: var(--t-sm); padding: 2px 8px; border-radius: 6px; background: var(--s3); box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.35); }
 .t-act { gap: var(--s-2); }

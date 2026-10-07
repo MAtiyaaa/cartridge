@@ -34,14 +34,15 @@ export const store = reactive({
   quickMenu: false,
   battery: null, // { level, charging, toFull, toEmpty } from the WebView (App.vue), null on desktops
   tour: null, // the interactive tour (FirstTour.vue)
+  cloudSync: null, // Cartridge Cloud Sync before a game (CloudSync.vue, 0.9.51)
   welcoming: false, // the welcome (0.9.15) is on screen
+  welcomeBg: false, // a background was picked in the welcome's Look step (0.9.47), so it shows instead of Ribbons
   lastSearch: '',
   logos: {},
   art: {},
   logoJob: null,
   manualSync: false,
   update: { state: 'idle' },
-  achTab: 'all', // Achievements tab: 'all' | 'ra' | 'others'
   trophyVer: 0, // bumps whenever emulator trophies change
   iconVer: 0, // bumps when a game icon is changed or reset
   trophySync: { state: 'idle' },
@@ -90,8 +91,14 @@ export function back() {
   const from = store.route.name === 'game' && document.querySelector('.g-cover img') && store.route.params?.romId;
   const prev = store.history[store.history.length - 1];
   const change = () => { store.navDir = 'out'; store.route = store.history.pop(); };
-  if (from && prev?.focusKey === 'rom-' + from) morph(document.querySelector('.g-cover'), change, `.card[data-key="rom-${from}"] .art`, nextTick);
-  else change();
+  if (from && prev?.focusKey === 'rom-' + from) {
+    // 0.9.49 (owner: "the return feels glitchy", on Home only): Home's rows settle in one after another (up to 720 ms)
+    // while the cover flies back into one of them, so it chased a moving card and the card kept moving after it
+    // landed. Coming back to a card, the page arrives still; going to a game is unchanged.
+    const root = document.documentElement;
+    root.classList.add('morph-back'); clearTimeout(back.t); back.t = setTimeout(() => root.classList.remove('morph-back'), 900);
+    morph(document.querySelector('.g-cover'), change, `.card[data-key="rom-${from}"] .art`, nextTick);
+  } else change();
   return true;
 }
 export function tab(name) {
@@ -146,6 +153,37 @@ export function titleCase(s) {
   return s.replace(/(^|[\s(“"])([a-z]+)(?=$|[\s,.:;!?)”"…])/g, (m, pre, w, off) => (off > 0 && SMALL.has(w) ? m : pre + w[0].toUpperCase() + w.slice(1)));
 }
 export const choose = (props) => openModal('menu', props);
+// Play, with Cartridge Cloud Sync first (0.9.51, owner: like Steam Cloud before a game): with Cartridge Save Sync on,
+// the game's saves are checked against RomM and the newest is brought here before the emulator starts. A conflict
+// is never guessed: you pick which save to keep. RomM out of reach: the game starts with this device's save.
+export const saveSyncOn = () => !IS_ANDROID && store.config?.saveSync === 'cartridge' && !store.config?.syncthing?.role && !store.config?.localOnly;
+export async function playGame(romId) {
+  romId = Number(romId);
+  if (saveSyncOn()) {
+    const game = romById(romId)?.name || '';
+    const show = (o) => { store.cloudSync = { ...(store.cloudSync || {}), game, ...o }; };
+    const t0 = Date.now();
+    show({ state: 'check', label: 'Checking your saves with RomM', done: 0, of: 0 });
+    const off = window.cart.on('savesync', (p) => { if (p?.why === 'before' && store.cloudSync && p.state === 'run') show({ done: p.done, of: p.of, label: p.of ? `Checking your saves (${p.done} of ${p.of})` : 'Checking your saves with RomM' }); });
+    let r; try { r = await call('savesync:before', { romId }); } catch (e) { r = { error: e.message }; }
+    off?.();
+    for (const c of (r?.results || []).filter((x) => x.result === 'conflict')) {
+      show({ state: 'conflict', label: `${c.label || 'A save'} changed here and on another device` });
+      const v = await choose({ title: 'Which Save?', message: `${c.label || 'This save'} (${c.emuName}) changed on this device and on another one since they last synced. The one you don't pick is kept as an older version.`, options: [{ label: 'Use the One From RomM', sub: 'The save from your other device', value: 'theirs', icon: 'mdiCloudDownloadOutline' }, { label: 'Keep This Device’s', sub: 'It goes to RomM as the newest', value: 'mine', icon: 'mdiCellphoneArrowDown' }] });
+      if (!v) { store.cloudSync = null; return; } // B: nothing changes and the game doesn't start
+      show({ state: 'check', label: v === 'mine' ? 'Saving this device’s save to RomM' : 'Bringing the save from RomM' });
+      try { await call('savesync:resolve', { key: c.key, choice: v, romId }); } catch (e) { toast(e.message, 'error', 5000); }
+    }
+    const res = r?.results || [], n = (k) => res.filter((x) => x.result === k).length;
+    const busy = n('busy'), auth = res.find((x) => x.result === 'auth');
+    if (r?.offline || r?.error || auth) show({ state: 'offline', label: auth ? auth.error : 'RomM couldn’t be reached. Playing with this device’s save.' });
+    else if (busy) show({ state: 'error', label: 'The emulator is already open, so its saves weren’t changed.' });
+    else show({ state: 'done', label: n('down') ? 'Your latest save is here' : n('up') ? 'Your save is in RomM' : 'Your saves are up to date', done: 1, of: 1 });
+    await new Promise((ok) => setTimeout(ok, Math.max(r?.offline || auth ? 1800 : 700, 1100 - (Date.now() - t0))));
+    store.cloudSync = null;
+  }
+  return call('steam:play', { romId });
+}
 export const confirm = (title, message, okLabel = 'Confirm', danger = false) =>
   openModal('menu', { title, message, options: [{ label: okLabel, value: true, danger, icon: danger ? 'mdiAlertOutline' : 'mdiCheck' }, { label: 'Cancel', value: false, icon: 'mdiClose' }] });
 
@@ -236,15 +274,19 @@ export async function scanServer() {
 // ---------------- images / backgrounds
 // a long task still running in the background (0.9.32): screens show it again when they open
 export const bgJob = (prefix) => Object.values(store.bgJobs || {}).find((j) => j.key.startsWith(prefix) && j.state === 'run') || null;
-export function img(p) {
+export function img(p, w = 0) {
   if (!p) return '';
-  return romimg('u=' + encodeURIComponent(p));
+  return romimg('u=' + encodeURIComponent(p) + (w ? '&w=' + w : ''));
 }
+// image pipeline (0.9.48): a card's cover is asked for at about the size it's drawn (cards are 128 to 220 px wide, the
+// TV's zoom shows as devicePixelRatio), so a 600 px SteamGridDB cover isn't decoded whole for every card. Big pictures
+// (game page, Start's large tiles) ask cover(rom, true) and get the full image.
+const coverW = () => ((typeof devicePixelRatio === 'number' ? devicePixelRatio : 1) > 1.4 ? 720 : 360);
 export function cover(rom, large = false) {
   const o = store.art?.[rom.id]?.grid;
-  if (o) return img(o);
+  if (o) return img(o, large ? 0 : coverW());
   let p = (large ? rom.path_cover_large || rom.path_cover_small : rom.path_cover_small || rom.path_cover_large) || rom.url_cover;
-  if (!IS_ANDROID && !IS_REMOTE) return img(p); // the desktop: RomM's cover only, as upstream
+  if (!IS_ANDROID && !IS_REMOTE) return img(p, large ? 0 : coverW()); // the desktop: RomM's cover only, as upstream
   // Android and the phone page:
   if (/^[a-z-]*file:\/\//i.test(p || '')) p = ''; // a gamelist.xml cover RomM never copied: only RomM can read it
   // with a SteamGridDB key, main.js fills in a cover when RomM has none (or answers without one)
@@ -314,20 +356,37 @@ export function downloadFor(romId) {
 // drive's ROMs folder; undefined asks (ask: false takes the drive used last). The desktop never passes it.
 export async function download(rom, { checkSpace = true, root, ask = true } = {}) {
   const p = platformById(rom.platform_id);
-  if (import.meta.env.MODE === 'android' && root === undefined) { root = await (await import('./android/drives.js')).pickDrive({ ask }); if (root === null) return false; }
-  if (p && !p.target?.path && !root) { toast(`Set a folder for ${p.display_name} first`, 'error'); return false; }
-  if (checkSpace && (root || p?.target?.path) && rom.fs_size_bytes && !(await roomFor(rom, p, root))) return false;
-  await call('dl:add', { romId: rom.id, name: rom.name, platformSlug: rom.platform_slug, platformName: rom.platform_display_name, size: rom.fs_size_bytes, cover: rom.path_cover_small || rom.url_cover, ...(root ? { root } : {}) });
+  if (import.meta.env.MODE === 'android') {
+    if (root === undefined) { root = await (await import('./android/drives.js')).pickDrive({ ask }); if (root === null) return false; }
+    if (p && !p.target?.path && !root) { toast(`Set a folder for ${p.display_name} first`, 'error'); return false; }
+    if (checkSpace && (root || p?.target?.path) && rom.fs_size_bytes && !(await roomFor(rom, p, root))) return false;
+    await call('dl:add', { romId: rom.id, name: rom.name, platformSlug: rom.platform_slug, platformName: rom.platform_display_name, size: rom.fs_size_bytes, cover: rom.path_cover_small || rom.url_cover, ...(root ? { root } : {}) });
+    toast(`Downloading ${rom.name}`, 'info', 2000, 'mdiDownload');
+    return true;
+  }
+  if (p && !p.target?.path) { toast(`Set a folder for ${p.display_name} first`, 'error'); return false; }
+  // 0.9.49 (owner): Storage → Always Ask Where: with games folders on more than one drive, each download asks which
+  root = null;
+  if (store.config.downloads?.askWhere) {
+    const r = await call('roots:list').catch(() => null);
+    const here = (r?.roots || []).filter((x) => x.here);
+    if (here.length > 1) {
+      root = await choose({ sheet: true, title: `Where should ${rom.name} go?`, options: here.map((x) => ({ label: x.drive, sub: `${bytes(x.free)} free · ${x.path.replace(store.info?.home || '\0', '~')}`, value: x.path, icon: x.main ? 'mdiHarddisk' : 'mdiSdCard', raw: true })) });
+      if (!root) return false;
+    }
+  }
+  if (checkSpace && p?.target?.path && rom.fs_size_bytes && !(await roomFor(rom, p, root))) return false;
+  await call('dl:add', { romId: rom.id, name: rom.name, platformSlug: rom.platform_slug, platformName: rom.platform_display_name, size: rom.fs_size_bytes, cover: rom.path_cover_small || rom.url_cover, root });
   toast(`Downloading ${rom.name}`, 'info', 2000, 'mdiDownload');
   return true;
 }
 
 // Before a download: will it fit? Counts what is still downloading to the same folder too.
-async function roomFor(rom, p, root) {
+async function roomFor(rom, p, root = null) {
   // 0.9.38: the drive the download would really go to (games folders on more than one drive). Android: its own
   // Install to (root, a drive's ROMs folder) or the main one
   const sp = IS_ANDROID ? await call('fs:space', root || p.target.path).catch(() => null)
-    : (await call('fs:downloadSpace', { slug: p.slug, fs_slug: p.fs_slug, need: rom.fs_size_bytes || 0 }).catch(() => null)) || (await call('fs:space', p.target.path).catch(() => null));
+    : (await call('fs:downloadSpace', { slug: p.slug, fs_slug: p.fs_slug, need: rom.fs_size_bytes || 0, root }).catch(() => null)) || (await call('fs:space', p.target.path).catch(() => null));
   if (!sp) return true;
   const same = (d) => ['queued', 'downloading'].includes(d.status) && (root ? d.root === root : !d.root && store.lib?.platforms.find((x) => x.slug === d.platformSlug)?.target?.path === p.target.path);
   const pending = store.downloads.filter(same).reduce((s, d) => s + Math.max(0, (d.total || 0) - (d.received || 0)), 0);

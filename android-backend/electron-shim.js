@@ -29,6 +29,8 @@ Object.assign(app, {
   requestSingleInstanceLock: () => true, // Android runs one app instance by itself
   disableHardwareAcceleration() {},
   getGPUFeatureStatus: () => ({ android: 'webview' }),
+  // the Performance Overlay (perf:sample): the backend's own Node process (Electron: CPU seconds, memory in KB)
+  getAppMetrics: () => { const u = process.cpuUsage(); return [{ cpu: { cumulativeCPUUsage: (u.user + u.system) / 1e6 }, memory: { workingSetSize: Math.round(process.memoryUsage().rss / 1024) } }]; },
   getPath(name) {
     const home = os.homedir();
     return ({

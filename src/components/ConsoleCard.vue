@@ -8,7 +8,7 @@
     </div>
     <!-- 0.9.23 (owner: the bottom left was empty on Start): the maker and the counts, as on the Consoles page -->
     <div class="cc-foot">
-      <div v-if="!compact && (meta || maker)" class="fam"><svg v-if="maker" class="maker" :class="{ symbol: maker.symbol, tall: maker.tall }" :viewBox="maker.vb" :aria-label="maker.name" role="img"><path v-for="(q, i) in maker.paths || [maker]" :key="i" :d="q.d" :fill-rule="q.evenodd ? 'evenodd' : null" /></svg><span v-if="maker && meta">·</span><span v-if="meta">{{ meta }}</span></div>
+      <div v-if="!compact && (meta || maker)" class="fam"><svg v-if="maker" class="maker" :class="[{ symbol: maker.symbol, tall: maker.tall }, 'm-' + makerKey]" :viewBox="maker.vb" :aria-label="maker.name" role="img"><path v-for="(q, i) in maker.paths || [maker]" :key="i" :d="q.d" :fill-rule="q.evenodd ? 'evenodd' : null" /></svg><span v-if="maker && meta">·</span><span v-if="meta">{{ meta }}</span></div>
       <div class="ct">{{ p.rom_count }}<span class="cc-games"> {{ p.rom_count === 1 ? 'game' : 'games' }}</span><template v-if="onDevice"> · <span class="ondev">{{ onDevice }}<span class="cc-games"> on device</span></span></template></div>
     </div>
   </div>
@@ -23,7 +23,8 @@ import { opticalOf } from '../consoleOptical.js';
 import PIcon from './PIcon.vue';
 const wide = ref(false); // a wide drawing (Switch with its Joy-Cons) gets a wide box, so it isn't small (0.9.24)
 const props = defineProps({ p: Object, compact: Boolean });
-const maker = computed(() => MAKERS[makerOf(props.p)] || null);
+const makerKey = computed(() => makerOf(props.p));
+const maker = computed(() => MAKERS[makerKey.value] || null);
 const meta = computed(() => [maker.value ? '' : props.p.family_name, props.p.generation ? `Gen ${props.p.generation}` : ''].filter(Boolean).slice(0, 1).join(''));
 const onDevice = computed(() => romsOf(props.p.id).filter((r) => store.installed[r.id]).length);
 const cache = (globalThis.__sysLogos ||= new Map());

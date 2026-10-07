@@ -30,7 +30,9 @@ function deny() { call('remote:pair:deny').catch(() => {}); req.value = null; }
 onBeforeUnmount(() => { off1?.(); off2?.(); clearInterval(t); });
 </script>
 <style scoped>
-.pair-scrim { position: fixed; inset: 0; z-index: 90; display: grid; place-items: center; background: rgba(3, 4, 8, 0.6); backdrop-filter: blur(6px); }
+.pair-scrim { position: fixed; inset: 0; z-index: 90; display: grid; place-items: center; background: rgba(3, 4, 8, 0.72); }
+/* see-through only in Glass (Plain and Glass stay apart) */
+:global(body.elements-glass .pair-scrim) { background: rgba(3, 4, 8, 0.6); backdrop-filter: blur(6px); }
 .pair { width: min(460px, 90vw); padding: 30px 28px 24px; border-radius: 22px; display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6); }
 .pair-ic { width: 64px; height: 64px; border-radius: 50%; display: grid; place-items: center; color: var(--primary-t); background: radial-gradient(circle, rgba(var(--primary-rgb), 0.35), rgba(var(--primary-rgb), 0.08)); }
 .pair-t { font-family: var(--display); font-size: 22px; font-weight: 700; }
@@ -38,6 +40,6 @@ onBeforeUnmount(() => { off1?.(); off2?.(); clearInterval(t); });
 .code { display: flex; gap: 8px; margin: 10px 0 4px; }
 .code span { width: 48px; height: 62px; display: grid; place-items: center; border-radius: 12px; background: rgba(255, 255, 255, 0.07); border: 1px solid var(--line-2); font: 700 32px var(--display); font-variant-numeric: tabular-nums; }
 .pair-exp { font-size: 12.5px; color: var(--dim); margin-bottom: 8px; }
-.pair-enter-active, .pair-leave-active { transition: opacity 0.2s; }
+.pair-enter-active, .pair-leave-active { transition: opacity var(--fade-in); }
 .pair-enter-from, .pair-leave-to { opacity: 0; }
 </style>

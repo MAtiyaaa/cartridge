@@ -121,12 +121,12 @@ defineExpose({ sleep, wake });
 .idle-cap .n { font-family: var(--display); font-size: var(--t-xl); font-weight: 700; margin: 0; }
 .idle-cap .p { opacity: 0.85; font-weight: 600; }
 .idle-hint { position: absolute; top: 34px; right: 44px; display: flex; align-items: center; gap: 10px; color: rgba(255, 255, 255, 0.55); font-size: var(--t-sm); font-weight: 500; }
-.idle-enter-active, .idle-leave-active { transition: opacity 0.8s ease; }
+.idle-enter-active, .idle-leave-active { transition: opacity var(--fade-cross); }
 .idle-enter-from, .idle-leave-to { opacity: 0; }
-.slide-enter-active { transition: opacity 1.6s ease; }
-.slide-leave-active { transition: opacity 1.6s ease; }
+.slide-enter-active { transition: opacity var(--fade-ambient); }
+.slide-leave-active { transition: opacity var(--fade-ambient); }
 .slide-enter-from, .slide-leave-to { opacity: 0; }
-.cap-enter-active, .cap-leave-active { transition: opacity 0.6s ease, transform 0.6s ease; }
+.cap-enter-active, .cap-leave-active { transition: opacity var(--fade-cross), transform var(--spring-soft-d) var(--spring-soft); }
 .cap-enter-from { opacity: 0; transform: translateY(8px); }
 .cap-leave-to { opacity: 0; }
 </style>

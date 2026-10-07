@@ -89,7 +89,7 @@ onBeforeUnmount(() => layer.pop());
 .ap-grid.logo .ap-item { background: repeating-conic-gradient(#2a2e3a 0% 25%, #20232d 0% 50%) 50% / 20px 20px; padding: 14px; }
 .ap-grid.logo .ap-item img { aspect-ratio: 16 / 7; }
 .ap-grid.logo .ap-item img { object-fit: contain; }
-.ap-item { position: relative; display: block; width: 100%; min-height: 0; border-radius: var(--r-sm); overflow: hidden; background: #161a25; transition: transform 0.14s ease-out; }
+.ap-item { position: relative; display: block; width: 100%; min-height: 0; border-radius: var(--r-sm); overflow: hidden; background: #161a25; transition: transform var(--spring-snappy-d) var(--spring-snappy); }
 .ap-item img { width: 100%; height: auto; object-fit: cover; display: block; }
 .ap-item:focus { transform: scale(1.04); }
 .ap-style { position: absolute; left: 6px; bottom: 6px; font-size: var(--t-xs); padding: 2px 6px; border-radius: 4px; background: rgba(0, 0, 0, 0.6); color: #cfd3dc; }

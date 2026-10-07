@@ -2,12 +2,24 @@
   <div class="rl">
     <template v-if="phase === 'intro'">
       <h1>Set up RomM on this device</h1>
-      <div class="rl-note glass"><Icon name="mdiInformationOutline" :size="22" /><span>Your RomM server is only reachable while this device is on and online.</span></div>
-      <p class="muted small">Cartridge runs RomM in the background with Podman, the way RomM's own setup does. It starts with the device and keeps running in Game Mode.</p>
-      <div class="rl-act">
-        <button class="btn" data-focus @click="emit('back')"><Icon name="mdiArrowLeft" />Back</button>
-        <button class="btn primary" data-focus :disabled="!info" @click="phase = needsPrep ? 'prep' : 'form'">Continue<Icon name="mdiArrowRight" /></button>
-      </div>
+      <!-- 0.9.49 (owner): already linked to a RomM, so say so first; Set Up Anyway goes on to the setup -->
+      <template v-if="info?.linked && !anyway">
+        <div class="rl-linked"><Icon name="mdiCheckCircle" :size="26" /><div><b>{{ info.mine ? 'RomM is set up on this device' : 'Cartridge is connected to RomM' }}</b><span class="muted small">{{ linkedTo }}{{ info.mine && info.running === false ? ' · not running right now' : '' }}</span></div></div>
+        <p class="muted small">There's nothing to do here. Set it up anyway to make a new RomM on this device{{ info.mine ? ' (your account and games are kept, the folders can change)' : '; Cartridge then uses it instead' }}.</p>
+        <div class="rl-act">
+          <button class="btn" data-focus @click="emit('back')"><Icon name="mdiArrowLeft" />Back</button>
+          <button class="btn" data-focus @click="anyway = true">Set Up Anyway</button>
+          <button class="btn primary" data-focus @click="emit('done')">Continue<Icon name="mdiArrowRight" /></button>
+        </div>
+      </template>
+      <template v-else>
+        <div class="rl-note glass"><Icon name="mdiInformationOutline" :size="22" /><span>Your RomM server is only reachable while this device is on and online.</span></div>
+        <p class="muted small">Cartridge runs RomM in the background with Podman, the way RomM's own setup does. It starts with the device and keeps running in Game Mode.</p>
+        <div class="rl-act">
+          <button class="btn" data-focus @click="info?.linked ? (anyway = false) : emit('back')"><Icon name="mdiArrowLeft" />Back</button>
+          <button class="btn primary" data-focus :disabled="!info" @click="phase = needsPrep ? 'prep' : 'form'">Continue<Icon name="mdiArrowRight" /></button>
+        </div>
+      </template>
     </template>
 
     <!-- 0.9.17: Podman set up from here (downloaded when missing; user ID ranges with the device password) -->
@@ -38,14 +50,21 @@
       </div>
       <p v-if="f.confirm && f.confirm !== f.password" class="rl-bad"><Icon name="mdiAlertCircle" :size="18" />The passwords don't match.</p>
       <div class="subh">Where RomM keeps your games</div>
+      <p class="muted small">{{ folders.length ? 'Your games folders. Pick one or more: RomM shows the games already in them, and nothing in them is moved.' : 'No games folders were found on this device.' }}</p>
       <div class="stack">
-        <button v-for="l in libs" :key="l.path" class="lrow" data-focus :class="{ sel: f.library === l.path }" @click="f.library = l.path">
+        <button v-for="l in folders" :key="l.path" class="lrow" data-focus :aria-pressed="picked.includes(l.path)" @click="toggle(l.path)">
           <Icon name="mdiFolderOutline" :size="24" />
-          <div class="l-mid"><b>{{ l.from === 'New folder' ? 'A new folder' : `Your ${l.from} folder` }}</b><span class="l-sub mono">{{ short(l.path) }}/roms/&lt;console&gt;</span></div>
-          <Icon v-if="f.library === l.path" name="mdiCheck" :size="20" />
+          <div class="l-mid"><b>{{ l.drive || l.from }}<span v-if="l.consoles" class="rl-count"> · {{ l.consoles }} consoles, {{ l.games }} games</span></b><span class="l-sub mono">{{ short(l.path) }}/&lt;console&gt;</span></div>
+          <span v-if="picked.includes(l.path)" class="tick-ok" title="Chosen"><Icon name="mdiCheck" :size="14" /></span>
         </button>
-        <button class="lrow" data-focus :class="{ sel: custom && f.library === custom }" @click="browse"><Icon name="mdiFolderOpen" :size="24" /><div class="l-mid"><b>Somewhere else…</b><span v-if="custom" class="l-sub mono">{{ short(custom) }}/roms/&lt;console&gt;</span></div><Icon v-if="custom && f.library === custom" name="mdiCheck" :size="20" /></button>
+        <button class="lrow" data-focus :aria-pressed="useNew" @click="pickNew">
+          <Icon name="mdiFolderPlusOutline" :size="24" />
+          <div class="l-mid"><b>A new folder</b><span class="l-sub mono">{{ short(info?.newFolder) }}/roms/&lt;console&gt;</span></div>
+          <span v-if="useNew" class="tick-ok" title="Chosen"><Icon name="mdiCheck" :size="14" /></span>
+        </button>
+        <button class="lrow" data-focus @click="browse"><Icon name="mdiFolderOpen" :size="24" /><div class="l-mid"><b>Somewhere else…</b><span class="l-sub">Add another games folder to the list</span></div></button>
       </div>
+      <p v-for="c in conflicts" :key="c.console" class="rl-warn small"><Icon name="mdiInformationOutline" :size="18" />{{ c.console }} is in more than one folder: RomM shows the one in {{ short(c.kept) }}.</p>
       <div class="rl-act">
         <button class="btn" data-focus @click="phase = 'intro'"><Icon name="mdiArrowLeft" />Back</button>
         <button class="btn primary" data-focus :disabled="!ready" @click="start"><Icon name="mdiServerPlus" />Set up RomM</button>
@@ -64,7 +83,7 @@
     <template v-else-if="phase === 'done'">
       <div class="rl-good"><Icon name="mdiCheckCircle" :size="56" /></div>
       <h1>RomM is running</h1>
-      <p class="muted">Signed in as <b>{{ f.username.trim().toLowerCase() }}</b>. Put games in <span class="mono">{{ short(result.romsRoot) }}/&lt;console&gt;</span> and scan them in RomM.</p>
+      <p class="muted">Signed in as <b>{{ f.username.trim().toLowerCase() }}</b>. {{ result.folders?.length ? 'Scan your library in RomM to see the games already in your folders.' : '' }} New games go in <span class="mono">{{ short(result.romsRoot) }}/&lt;console&gt;</span>.</p>
       <p v-if="result.lan.length" class="muted small">On other devices at home: <span class="mono">{{ result.lan.join('  ·  ') }}</span></p>
       <p v-if="!result.boot" class="muted small">Starting with the device couldn't be turned on. RomM keeps running until you restart.</p>
       <div class="rl-act">
@@ -134,23 +153,31 @@ async function prep() {
   } catch (e) { prepErr.value = e.message; }
   devPass.value = ''; prepBusy.value = false;
 }
-const f = reactive({ username: '', password: '', confirm: '', name: '', library: '' });
+const f = reactive({ username: '', password: '', confirm: '', name: '' });
 const keys = reactive({ igdbId: '', igdbSecret: '', ssUser: '', ssPass: '' });
-const custom = ref('');
 const prog = ref({}), result = ref(null), error = ref(''), afterKeys = ref(false);
-const libs = computed(() => info.value?.libraries || []);
-const ready = computed(() => f.username.trim().length >= 3 && f.password && f.password === f.confirm && f.library);
+const ready = computed(() => f.username.trim().length >= 3 && f.password && f.password === f.confirm && (picked.value.length || useNew.value));
+const anyway = ref(false);
+const linkedTo = computed(() => { const s = store.config.server || {}; try { return new URL(s.localUrl || s.remoteUrl).host; } catch { return ''; } });
+// games folders: several can be picked; a new folder is the other way (empty, made for RomM)
+const extra = ref([]), picked = ref([]), useNew = ref(false), conflicts = ref([]);
+const folders = computed(() => [...(info.value?.folders || []), ...extra.value]);
+function toggle(p) { useNew.value = false; picked.value = picked.value.includes(p) ? picked.value.filter((x) => x !== p) : [...picked.value, p]; }
+function pickNew() { useNew.value = !useNew.value; if (useNew.value) picked.value = []; }
+watch(picked, async (v) => { conflicts.value = v.length > 1 ? await call('romm:localPlan', { roms: v }).then((r) => r.conflicts || [], () => []) : []; });
 const short = (p) => String(p || '').replace(store.info?.home || '\0', '~');
 
 async function browse() {
-  const p = await pickFolder({ title: 'Where should RomM keep your games?', start: store.info?.home });
-  if (p) { custom.value = p; f.library = p; }
+  const p = await pickFolder({ title: 'Pick a games folder (the one holding a folder per console)', start: store.info?.home });
+  if (!p) return;
+  if (!folders.value.some((x) => x.path === p)) extra.value.push({ path: p, from: 'Picked folder', drive: '' });
+  if (!picked.value.includes(p)) toggle(p);
 }
 let off = null;
 async function start() {
   phase.value = 'work'; prog.value = {};
   try {
-    result.value = await call('romm:localSetup', { username: f.username, password: f.password, library: f.library, name: f.name });
+    result.value = await call('romm:localSetup', { username: f.username, password: f.password, roms: useNew.value ? [] : [...picked.value], library: useNew.value ? info.value.newFolder : null, name: f.name });
     store.config = await call('config:get');
     await saveConfig({ configured: true, localOnly: false });
     call('library:sync').catch(() => {});
@@ -163,7 +190,10 @@ onMounted(async () => {
   off = window.cart.on('romm-local', (p) => (prog.value = p));
   keysOn.value = await call('romm:localKeys').catch(() => ({}));
   info.value = await call('romm:localInfo').catch(() => ({ podman: false, libraries: [] }));
-  f.library = info.value.libraries?.[0]?.path || '';
+  // the folders RomM used before (Set Up Anyway), else your main games folder, else a new folder
+  const had = (info.value.chosen || []).filter((p) => info.value.folders?.some((x) => x.path === p));
+  picked.value = had.length ? had : info.value.folders?.find((x) => x.main)?.path ? [info.value.folders.find((x) => x.main).path] : info.value.folders?.[0] ? [info.value.folders[0].path] : [];
+  useNew.value = !picked.value.length;
   f.username = (store.config.ui.name || '').toLowerCase().replace(/[^a-z0-9_.-]/g, '');
   await nextTick(); focusFirst(document.querySelector('.rl'), '.rl-act .btn.primary:not([disabled]), [data-focus]');
 });
@@ -182,7 +212,10 @@ onBeforeUnmount(() => off?.());
 .stack { display: flex; flex-direction: column; gap: var(--s-2); }
 .small { font-size: var(--t-sm); margin: 0; line-height: 1.5; }
 .mono { font-family: ui-monospace, monospace; word-break: break-all; }
-.lrow.sel { background: var(--sel); }
+.rl-linked { display: flex; align-items: center; gap: var(--s-3); padding: var(--s-3) var(--s-4); border-radius: var(--r-md); background: rgba(126, 231, 135, 0.12); color: var(--green-l, #7ee787); }
+.rl-linked > div { display: flex; flex-direction: column; gap: 2px; color: var(--text); }
+.rl-warn { display: flex; align-items: center; gap: 8px; color: var(--muted); }
+.rl-count { font-weight: 500; color: inherit; opacity: 0.75; }
 .toggle-adv { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: var(--t-sm); padding: 6px; border-radius: var(--r-md); align-self: flex-start; }
 .toggle-adv:focus { box-shadow: var(--ring); }
 p { margin: 0; }

@@ -28,7 +28,7 @@
       </div>
       <div v-if="fpNote" class="eg-fp small"><Icon name="mdiPackageVariant" :size="18" />{{ fpNote }}</div>
       <div v-if="!list" class="muted small"><Icon name="mdiSync" :size="16" class="spin" /> Looking at what's installed…</div>
-      <div v-else class="eg-grid">
+      <div v-else v-masonry class="eg-grid" data-columns>
         <section v-for="c in list" :key="c.key" class="eg-con">
           <div class="eg-head"><PIcon v-if="SLUG[c.key]" :p="{ slug: SLUG[c.key], fs_slug: SLUG[c.key] }" :size="30" /><Icon v-else name="mdiGamepadSquareOutline" :size="28" /><b>{{ c.name }}</b></div>
           <button v-for="e in c.emus" :key="c.key + e.id" class="eg-emu" :class="{ have: e.installed }" data-focus @click="togglePick(c, e)">
@@ -71,7 +71,7 @@
       </div>
       <div v-if="fpNote" class="eg-fp small"><Icon name="mdiPackageVariant" :size="18" />{{ fpNote }}</div>
       <div v-if="!list" class="muted small"><Icon name="mdiSync" :size="16" class="spin" /> Looking at what's installed…</div>
-      <div v-else class="eg-grid">
+      <div v-else v-masonry class="eg-grid" data-columns>
         <section v-for="c in list" :key="c.key" class="eg-con">
           <div class="eg-head"><PIcon v-if="SLUG[c.key]" :p="{ slug: SLUG[c.key], fs_slug: SLUG[c.key] }" :size="30" /><Icon v-else name="mdiGamepadSquareOutline" :size="28" /><b>{{ c.name }}</b></div>
           <button v-for="e in c.emus" :key="c.key + e.id" class="eg-emu" :class="{ have: e.installed, busy: stateOf(c, e)?.state === 'run' }" data-focus @click="get(c, e)">
@@ -184,7 +184,7 @@ function shortVer(up) {
   const m = /\d{4}-\d{2}-\d{2}/.exec(v) || /\d+(?:\.\d+)+(?:[-.]\d+)?/.exec(v);
   return m ? m[0] : v.slice(0, 16) || 'new';
 }
-const PATH_IDS = new Set(['pcsx2', 'duckstation', 'dolphin', 'eden', 'citron', 'yuzu', 'azahar', 'citra', 'ryujinx', 'cemu', 'rpcs3', 'shadps4', 'vita3k']);
+const PATH_IDS = new Set(['pcsx2', 'duckstation', 'dolphin', 'eden', 'citron', 'yuzu', 'azahar', 'citra', 'ryujinx', 'cemu', 'rpcs3', 'shadps4', 'vita3k', 'ppsspp']);
 async function manage(u) {
   if (!u) return;
   const ch = u.channels || [];
@@ -199,7 +199,8 @@ async function manage(u) {
     // 0.9.33 (owner): a fork plays with the saves of the emulator it comes from, through Linked Folders
     ...(u.forkOf ? [{ label: 'Share Saves With the Original', sub: 'Link its save folder in Linked Folders', value: 'links', icon: 'mdiLinkVariant' }] : []),
     ...(u.id === 'shadps4' ? [{ label: 'Versions', sub: 'Which games use which, and more to add', value: 'versions', icon: 'mdiLayersTriple' }] : []),
-    ...(u.page ? [{ label: 'Open Its Releases Page', value: 'page', icon: 'mdiOpenInNew' }] : []),
+    ...(u.page ? [{ label: 'Open Its Download Page', value: 'page', icon: 'mdiOpenInNew' }] : []),
+    ...(u.site && u.site !== u.page ? [{ label: 'Open Its Website', value: 'site', icon: 'mdiWeb' }] : []),
     { label: 'Delete', sub: u.kind === 'flatpak' ? 'Uninstall the Flatpak' : 'Your saves and settings stay', value: 'delete', icon: 'mdiDeleteOutline', danger: true },
   ];
   const v = await choose({ title: u.label, message: [u.version ? 'Version ' + u.version : '', CH[u.channel] || (u.kind === 'flatpak' ? 'Flatpak from Flathub' : ''), u.path ? short(u.path) : ''].filter(Boolean).join(' · '), options: opts, sheet: true });
@@ -212,6 +213,7 @@ async function manage(u) {
   if (v === 'links') { store.emuPageWant = 'links'; return; }
   if (v === 'folders') return openModal('emupaths', { id: u.id, name: u.label });
   if (v === 'page') return window.open(u.page);
+  if (v === 'site') return window.open(u.site);
   if (v === 'delete') {
     if (!(await confirm(`Delete ${u.label}?`, `${u.kind === 'flatpak' ? 'Its Flatpak is uninstalled.' : 'The program is deleted.'} Saves and settings stay. Steam shortcuts that used it will show up in Shortcut health.`, 'Delete', true))) return;
     try { await call('emuget:remove', { id: u.id, kind: u.kind, fp: u.fp, where: u.where, path: u.path }); toast(`${u.label} was deleted`, 'ok', 3000, 'mdiDeleteOutline'); } catch (err) { toast(err.message, 'error', 6000); }
@@ -352,6 +354,22 @@ watch(() => bgJob('emu:'), (j) => { if (j) { upRun.value = j.key.slice(4); upPct
 watch(() => bgJob('custom:'), (j) => { if (j) { gh.value.open = true; gh.value.busy = true; gh.value.pct = j.pct ?? null; } else if (gh.value.busy && !ghCalling) { gh.value.busy = false; load(); loadUps(true); } }, { immediate: true });
 let off = null, offP = null, offU = null, lastDone = 0;
 const told = new Set();
+// masonry (0.9.47, owner: a console with one emulator shouldn't take a row as tall as one with three): same
+// column widths, each card as tall as what's in it, the next card moves up under it. Order stays left to right
+// (grid placement), only each card's row span is measured: 4px rows, span = its height plus the gap.
+const vMasonry = {
+  mounted(grid) {
+    const fit = () => {
+      const gap = parseFloat(getComputedStyle(grid).columnGap) || 0;
+      for (const c of grid.children) { c.style.gridRowEnd = ''; const h = c.getBoundingClientRect().height; c.style.gridRowEnd = 'span ' + Math.max(1, Math.ceil((h + gap) / 4)); }
+    };
+    let raf = 0; const soon = () => { if (!raf) raf = requestAnimationFrame(() => { raf = 0; fit(); }); };
+    const ro = new ResizeObserver(soon), watchAll = () => { ro.disconnect(); ro.observe(grid); for (const c of grid.children) ro.observe(c); soon(); };
+    const mo = new MutationObserver(watchAll); mo.observe(grid, { childList: true });
+    watchAll(); grid._masonry = { ro, mo };
+  },
+  unmounted(grid) { grid._masonry?.ro.disconnect(); grid._masonry?.mo.disconnect(); },
+};
 onMounted(async () => {
   off = window.cart.on('emuget-state', (s) => {
     q.value = s;
@@ -394,15 +412,15 @@ defineExpose({ load });
 .eg-chip.on { background: var(--sel); }
 .eg-chip:focus { background: var(--focus); color: var(--on-focus); outline: none; }
 .eg-ghbar { height: 6px; border-radius: 3px; background: rgba(255, 255, 255, 0.12); overflow: hidden; }
-.eg-ghbar i { display: block; height: 100%; background: currentColor; transition: width 0.3s ease; }
-.eg-ghbar i.live { animation: egLive 1.2s ease-in-out infinite; transform-origin: left; }
+.eg-ghbar i { display: block; height: 100%; background: currentColor; transition: width var(--progress); }
+.eg-ghbar i.live { animation: egLive var(--loop-pulse) infinite; transform-origin: left; }
 .eg-intro { display: flex; flex-direction: column; gap: 6px; text-align: center; }
 .eg-intro b { font-size: var(--t-lg); }
 .eg-drives { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: var(--s-3); }
 .eg-drive { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding: var(--s-4); border-radius: var(--r-lg); background: var(--s2); color: inherit; border: 0; text-align: left; transition: transform var(--d-1, 0.12s), background var(--d-1, 0.12s); }
 .eg-drive b { font-size: var(--t-md); }
 .eg-fp { display: flex; gap: var(--s-2); align-items: flex-start; padding: 10px 12px; border-radius: var(--r-md); background: var(--s2); color: var(--muted); }
-.eg-drive.busy { cursor: progress; animation: eg-wait 1.1s var(--ease-in-out, ease-in-out) infinite alternate; }
+.eg-drive.busy { cursor: progress; animation: eg-wait var(--loop-pulse) infinite alternate; }
 @keyframes eg-wait { to { opacity: 0.72; } }
 .eg-drive:focus { background: var(--focus); color: var(--on-focus); outline: none; transform: translateY(-2px); }
 .eg-drive:focus .muted { color: var(--on-focus-dim); }
@@ -413,6 +431,7 @@ defineExpose({ load });
 .eg-sum b { font-size: var(--t-xl); font-family: var(--display); }
 .eg-now { display: inline-flex; align-items: center; gap: 6px; font-size: var(--t-sm); color: var(--muted); }
 .eg-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: var(--s-3); }
+.eg-grid[class] { grid-auto-rows: 4px; row-gap: 0; align-items: start; }
 .eg-con { display: flex; flex-direction: column; gap: 6px; padding: var(--s-3); border-radius: var(--r-lg); background: var(--s1); }
 .eg-head { display: flex; align-items: center; gap: 10px; padding: 2px 4px 6px; }
 .eg-head b { font-family: var(--display); font-size: var(--t-md);  overflow-wrap: anywhere; }
@@ -425,7 +444,7 @@ defineExpose({ load });
 .eg-mid .small {  overflow-wrap: anywhere; }
 .eg-get { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: rgba(255, 255, 255, 0.08); flex: none; }
 .eg-emu:focus .eg-get { background: rgba(0, 0, 0, 0.1); }
-.eg-bar-fill { position: absolute; left: 0; bottom: 0; height: 3px; background: currentColor; transition: width 0.3s ease; }
-.eg-bar-fill.live { animation: egLive 1.2s ease-in-out infinite; transform-origin: left; }
+.eg-bar-fill { position: absolute; left: 0; bottom: 0; height: 3px; background: currentColor; transition: width var(--progress); }
+.eg-bar-fill.live { animation: egLive var(--loop-pulse) infinite; transform-origin: left; }
 @keyframes egLive { 0% { transform: scaleX(0.05); opacity: 0.4; } 50% { transform: scaleX(0.6); opacity: 0.9; } 100% { transform: scaleX(1); opacity: 0.2; } }
 </style>

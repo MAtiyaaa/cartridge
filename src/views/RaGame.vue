@@ -71,7 +71,7 @@ const day = (d) => { const t = new Date(String(d).replace(' ', 'T') + (/[zZ]|[+-
 
 async function load(force = false) {
   error.value = '';
-  try { g.value = await call('ra:game', { gameId: props.gameId, force }); if (g.value.ingame || g.value.boxart) setBg({ src: img(g.value.ingame || g.value.boxart), blur: !g.value.ingame }); }
+  try { g.value = await call('ra:game', { gameId: props.gameId, force }); if (!g.value) throw new Error('RetroAchievements didn’t answer. Try again.'); if (g.value.ingame || g.value.boxart) setBg({ src: img(g.value.ingame || g.value.boxart), blur: !g.value.ingame }); }
   catch (e) { error.value = e.message; }
 }
 // 0.9.28 (owner): More starts with Go to Game Page; a game not matched to the library searches for it
@@ -106,7 +106,7 @@ onMounted(async () => { await load(); focusFirst(el.value); });
 .chip.gold { background: rgba(245, 197, 66, 0.18); color: #ffd978; display: inline-flex; gap: 5px; align-items: center; }
 .chip.hc { font-size: var(--t-xs); padding: 2px 6px; background: rgba(255, 90, 90, 0.18); color: #ff9b9b; }
 .rg-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(420px, 1fr)); gap: 12px; padding-bottom: 40px; }
-.rg-ach { display: flex; gap: 14px; padding: 12px 14px; border-radius: var(--r-md); outline: none; transition: transform 0.14s ease-out; }
+.rg-ach { display: flex; gap: 14px; padding: 12px 14px; border-radius: var(--r-md); outline: none; transition: transform var(--spring-snappy-d) var(--spring-snappy); }
 .rg-ach:focus { transform: scale(1.02); }
 .rg-ach.locked { opacity: 0.72; }
 .rg-badge { width: 64px; height: 64px; border-radius: var(--r-md); flex: none; }
