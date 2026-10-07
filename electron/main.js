@@ -24,6 +24,7 @@ const USER_DATA = app.getPath('userData');
 const CONFIG_FILE = path.join(USER_DATA, 'config.json');
 const MANIFEST_FILE = path.join(USER_DATA, 'installed.json');
 const IMG_CACHE = path.join(USER_DATA, 'imgcache');
+const LIB_ART = path.join(USER_DATA, 'imgcache-library'); // every game's cover, small, for browsing away from the server (0.9.52)
 
 // ---------------------------------------------------------------- config
 const DEFAULT_CONFIG = {
@@ -1011,6 +1012,11 @@ async function handleImage(request) {
     const sz = !sonySlug && want ? await sizedImage(buf, type, want, file) : null;
     return new Response(sz ? sz.buf : buf, { headers: { 'Content-Type': sz ? sz.type : type, 'Cache-Control': 'max-age=31536000' } });
   } catch {}
+  // away from the server (0.9.52): the small copy libraryArt() kept serves a card at once, and stands in for any size
+  // when RomM can't be reached
+  const libFile = path.join(LIB_ART, key + '.jpg');
+  const fromLib = async () => { try { return new Response(await fsp.readFile(libFile), { headers: { 'Content-Type': 'image/jpeg' } }); } catch { return null; } };
+  if (want && want <= LIB_ART_W * 1.15 && !sonySlug) { const r = await fromLib(); if (r) return r; }
   try {
     let url, headers = {};
     if (/^https?:\/\//.test(target)) url = target.replace(/^\/\//, 'https://');
@@ -1018,15 +1024,50 @@ async function handleImage(request) {
     if (url.startsWith('//')) url = 'https:' + url;
     // outside sites through webFetch (Electron's network, as the rest of Cartridge: sites behind Cloudflare refuse Node's)
     const r = /^https?:\/\//.test(target) ? await webFetch(url, { headers: { 'User-Agent': 'Cartridge (https://github.com/abdu2304/cartridge)' }, signal: AbortSignal.timeout(20000) }) : await fetch(url, { headers, signal: AbortSignal.timeout(20000) });
-    if (!r.ok) return new Response('nf', { status: 404 });
+    if (!r.ok) return (await fromLib()) || new Response('nf', { status: 404 });
     const buf = Buffer.from(await r.arrayBuffer());
     const type = r.headers.get('content-type') || 'image/jpeg';
     await fsp.mkdir(IMG_CACHE, { recursive: true }).then(() => Promise.all([fsp.writeFile(file, buf), fsp.writeFile(file + '.type', type)])).catch(() => {});
     const sz = !sonySlug && want ? await sizedImage(buf, type, want, file) : null;
     return new Response(sz ? sz.buf : mark(buf), { headers: { 'Content-Type': sz ? sz.type : type } });
   } catch {
-    return new Response('err', { status: 502 });
+    return (await fromLib()) || new Response('err', { status: 502 });
   }
+}
+// Every game's cover kept small (0.9.52, owner: a RomM at home with no tunnel; away, the library should still look
+// whole, without taking much room). Once the library is synced and RomM answers, each cover is fetched once, shrunk
+// to a 360 px JPEG (about 25 KB, so 2,000 games is about 50 MB) and kept apart from the picture cache, which trims
+// itself. Covers of games that left the library are dropped. The budget stops it at 250 MB on very big libraries.
+const LIB_ART_W = 360, LIB_ART_MAX = 250 * 1048576;
+async function libraryArt() {
+  if (!library || library.local || !config.configured) return;
+  const want = new Map();
+  for (const list of Object.values(library.roms || {})) for (const r of list) { const p = r.path_cover_small || r.path_cover_large || r.url_cover; if (p) want.set(crypto.createHash('sha1').update(p).digest('hex'), p); }
+  await fsp.mkdir(LIB_ART, { recursive: true });
+  let have = []; try { have = await fsp.readdir(LIB_ART); } catch {}
+  let total = 0;
+  for (const n of have) { const k = n.replace(/\.jpg$/, ''); if (!want.has(k)) await fsp.unlink(path.join(LIB_ART, n)).catch(() => {}); else { total += (await fsp.stat(path.join(LIB_ART, n)).catch(() => ({ size: 0 }))).size; want.delete(k); } }
+  if (!want.size) return;
+  let base; try { base = await resolveBase(); } catch { return; }
+  if (!base || !(await probe(base, config.server, 4000).catch(() => null))?.ok) return; // not reachable: next time
+  const { nativeImage } = require('electron');
+  let made = 0;
+  for (const [k, p] of want) {
+    if (total > LIB_ART_MAX || gameFocus.away || runOn) break; // a game started: stop, carry on next time
+    try {
+      let url, headers = {};
+      if (/^https?:\/\//.test(p)) url = p; else { url = base + (p.startsWith('/') ? '' : '/') + p; headers = authHeaders(); delete headers.Accept; }
+      const r = /^https?:\/\//.test(p) ? await webFetch(url, { signal: AbortSignal.timeout(20000) }) : await fetch(url, { headers, signal: AbortSignal.timeout(20000) });
+      if (!r.ok) continue;
+      const im = nativeImage.createFromBuffer(Buffer.from(await r.arrayBuffer()));
+      if (im.isEmpty()) continue;
+      const b = (im.getSize().width > LIB_ART_W ? im.resize({ width: LIB_ART_W, quality: 'better' }) : im).toJPEG(82);
+      await fsp.writeFile(path.join(LIB_ART, k + '.jpg'), b);
+      total += b.length; made++;
+    } catch {}
+    await new Promise((ok) => setTimeout(ok, 120)); // gentle on the server and the device
+  }
+  if (made) log('library art: kept', made, 'covers,', Math.round(total / 1048576), 'MB in all');
 }
 
 // ---------------------------------------------------------------- logos + custom artwork
@@ -1822,7 +1863,8 @@ async function runJob(it) {
   } catch (e) {
     // stopped on purpose: keep a status set since (paused, or queued again by Resume)
     if (ac.signal.aborted) { if (!['paused', 'queued'].includes(it.status)) it.status = 'cancelled'; }
-    else { it.status = 'error'; it.error = e.message; }
+    // 0.9.52: away from a RomM with no tunnel the library still shows; say so plainly instead of a network code
+    else { it.status = 'error'; it.error = /ENOTFOUND|EAI_AGAIN|ECONNREFUSED|EHOSTUNREACH|ENETUNREACH|ETIMEDOUT|fetch failed|ERR_(NAME_NOT_RESOLVED|INTERNET_DISCONNECTED|CONNECTION_|ADDRESS_UNREACHABLE)/.test(String(e.message)) ? 'Your RomM server can’t be reached from here. Games already on this device still play; try again when you’re back on its network.' : e.message; }
     // a re-download that didn't finish: the old copy goes back, so the game is never left missing
     if (it.backup && ['error', 'cancelled'].includes(it.status)) await restoreBackup(it);
   }
@@ -2499,7 +2541,7 @@ async function saveSyncRun({ romId = null, key = null, choice = null, dry = fals
     romId = romId == null ? null : Number(romId);
     const local = SS.units({ extra, games: ssGames(), carriers: ssCarriers() });
     let remotes = [];
-    try { remotes = await (await ssRpcList(romId)); } catch (e) { log('save sync: RomM unreachable', e.message); return { offline: true, error: e.message }; }
+    try { remotes = await (await ssRpcList(romId)); } catch (e) { log('save sync: RomM unreachable', e.message); if (why !== 'before' && !dry) ssHold(romId); return { offline: true, error: e.message, held: ssData.held || null }; }
     const devId = await rommDevice(), rpc = ssRpc(devId);
     const todo = [...local, ...SS.remoteOnly(remotes, new Set(local.map((u) => u.key)))].filter((u) => ssFor(u, romId) && (!key || u.key === key));
     const results = [];
@@ -2518,6 +2560,37 @@ async function saveSyncRun({ romId = null, key = null, choice = null, dry = fals
     return { results, counts };
   })().finally(() => { ssBusy = null; });
   return ssBusy;
+}
+// Away from the server (0.9.52, owner: a RomM at home with no tunnel, played on a handheld away). Nothing special
+// is needed to keep a save: the emulator keeps writing it on this device, played again or not. What Cartridge adds is
+// the hold: the games played while RomM couldn't be reached are noted (save-sync.json held), RomM is checked every
+// minute while something is held (never while a game runs), and the moment it answers they go up. The ledger then
+// decides as always: changed only here = up, changed on another device too = a conflict you settle (never guessed).
+let ssHoldT = null;
+function ssHold(romId) {
+  const h = ssData.held || { since: Date.now(), romIds: [], all: false };
+  if (romId == null) h.all = true; else if (!h.romIds.includes(romId)) h.romIds.push(romId);
+  h.at = Date.now(); ssData.held = h; saveJson(SAVESYNC_FILE, ssData, false);
+  broadcast('savesync', { state: 'held', held: h });
+  ssWatchBack();
+}
+function ssWatchBack() {
+  if (ssHoldT || !ssData.held) return;
+  ssHoldT = setInterval(async () => {
+    if (!ssData.held || !saveSyncOn()) { clearInterval(ssHoldT); ssHoldT = null; return; }
+    if (gameFocus.away || runOn) return; // a game is in front: wait, it may be writing its save
+    let ok = false;
+    try { const b = await resolveBase(true); ok = !!b && !!(await probe(b, config.server, 4000))?.ok; } catch {}
+    if (!ok) return;
+    const held = ssData.held;
+    const r = await saveSyncRun({ why: 'reconnected' }).catch(() => null);
+    if (!r || r.offline) return;
+    if (ssData.held === held) delete ssData.held;
+    saveJson(SAVESYNC_FILE, ssData, false);
+    log('save sync: server back, held saves synced', JSON.stringify(r.counts || {}));
+    broadcast('savesync', { state: 'released', counts: r.counts || {}, held });
+    clearInterval(ssHoldT); ssHoldT = null;
+  }, 60000);
 }
 // every save of ours in RomM (or one game's): what other devices put there
 async function ssRpcList(romId) {
@@ -2897,6 +2970,7 @@ function createWindow() {
   // 0.9.48: on the scheduler (electron/scheduler.js), so both wait while a game runs and run once it has ended
   if (!globalThis.__colsAuto) {
     globalThis.__colsAuto = true;
+    if (ssData.held) ssWatchBack(); // saves held from last time go up once RomM answers (0.9.52)
     scheduler.add('save-sync', { every: 30 * 60000, firstAfter: 40000, deferWhilePlaying: true, run: () => saveSyncRun({ why: 'scheduled' }) }); // 0.9.51
     scheduler.add('steam-collections', { every: 600000, firstAfter: 30000, deferWhilePlaying: true, run: async () => colsAuto() });
     scheduler.add('bios-check', { once: true, firstAfter: 45000, deferWhilePlaying: true, run: () => biosSetup({ install: true }).catch(() => {}) }); // 0.9.38: firmware too, when an emulator lacks it
@@ -3312,7 +3386,7 @@ const handlers08 = {
   // every save on this device with the game it belongs to (0.9.29); read only
   'saves:list': ({ fresh } = {}) => savesList(fresh),
   // Cartridge Save Sync (0.9.51)
-  'savesync:status': () => ({ mode: config.saveSync || null, on: saveSyncOn(), syncthing: syncthingSaves(), busy: !!ssBusy, last: ssData.last, saved: Object.keys(ssData.ledger).length, backups: SAVE_BACKUPS }),
+  'savesync:status': () => ({ mode: config.saveSync || null, on: saveSyncOn(), syncthing: syncthingSaves(), busy: !!ssBusy, last: ssData.last, saved: Object.keys(ssData.ledger).length, backups: SAVE_BACKUPS, held: ssData.held ? { ...ssData.held, games: ssData.held.romIds.map((id) => romIndexMain().get(id)?.name).filter(Boolean) } : null }),
   'savesync:set': ({ on } = {}) => {
     if (on && syncthingSaves()) throw new Error('This device syncs saves with Syncthing. Stop using Syncthing for saves first: a device uses one or the other.');
     config.saveSync = on ? 'cartridge' : null; saveConfig();
@@ -5151,6 +5225,8 @@ app.whenReady().then(() => {
   });
   // image pipeline (0.9.48): the picture cache stays under 1.5 GB; the oldest pictures go first and come back from RomM
   // or SteamGridDB if they're shown again. Looked at once a day, never during a game
+  // every game's cover kept small for browsing away from the server (0.9.52), every 6 hours, never during a game
+  scheduler.add('library-art', { every: 6 * 3600e3, firstAfter: 3 * 60e3, deferWhilePlaying: true, run: () => libraryArt() });
   scheduler.add('image-cache-trim', { every: 24 * 3600e3, firstAfter: 5 * 60e3, deferWhilePlaying: true, run: () => trimImageCache(1.5 * 1024 ** 3) });
   // the library sync (every hour by default), looked at each minute; it waits while a game runs (0.9.48, owner)
   scheduler.add('library-sync', { every: 60e3, firstAfter: 60e3, deferWhilePlaying: true,

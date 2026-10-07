@@ -375,6 +375,9 @@ onMounted(async () => {
   // Cartridge Save Sync in the background (0.9.51): a word when saves moved after a game, and when two devices
   // changed the same save (it waits for you in Settings → Saves and Sync)
   window.cart.on('savesync', (p) => {
+    // away from the server (0.9.52): once, when the first save is held, and when they go up
+    if (p?.state === 'held' && p.held && p.held.at - p.held.since < 2000) return toast('RomM can’t be reached from here. Your saves stay on this device and go up when it can.', 'info', 6000, 'mdiCloudOffOutline');
+    if (p?.state === 'released') { const c = p.counts || {}; return toast(c.conflict ? `Back in touch with RomM. ${c.conflict === 1 ? 'A save' : `${c.conflict} saves`} changed on two devices: choose in Settings → Saves and Sync.` : `Back in touch with RomM${c.up ? `: ${c.up} ${c.up === 1 ? 'save' : 'saves'} sent` : ''}.`, c.conflict ? 'info' : 'ok', 5000, 'mdiCloudCheckOutline'); }
     if (p?.state !== 'done' || !['after', 'back', 'scheduled'].includes(p.why)) return;
     const c = p.counts || {};
     if (c.conflict) toast(`${c.conflict === 1 ? 'A save' : `${c.conflict} saves`} changed on two devices. Choose which to keep in Settings → Saves and Sync.`, 'info', 7000, 'mdiCallSplit');

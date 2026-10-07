@@ -12,6 +12,12 @@
       <button v-else class="btn" data-focus @click="emit('advanced')"><Icon name="mdiTune" />Advanced</button>
     </div>
 
+    <!-- 0.9.52: away from the server, saves stay here and go up the moment RomM answers again -->
+    <template v-if="st?.on && st?.held">
+      <div class="subh">Waiting for Your Server</div>
+      <p class="muted small">RomM couldn’t be reached {{ ago(st.held.since) }}. Keep playing: your saves stay on this device{{ st.held.games?.length ? `, and ${st.held.games.length === 1 ? st.held.games[0] : st.held.games.length + ' games'} go up` : ' and go up' }} as soon as Cartridge can reach RomM again. If another device played the same game meanwhile, you choose which save to keep.</p>
+    </template>
+
     <template v-if="st?.on && conflicts.length">
       <div class="subh">Choose Which Save to Keep</div>
       <p class="muted small">These changed on this device and on another one since they last synced. The one you don't pick stays in RomM as an older version.</p>
@@ -54,6 +60,7 @@ const conflicts = computed(() => st.value?.last?.conflicts || []);
 const short = (p) => String(p || '').replace(store.info?.home || '\0', '~');
 const sub = computed(() => {
   const s = st.value; if (!s) return '';
+  if (s.on && s.held) return 'Away from your server · saves are kept here until it can be reached';
   if (s.on) return s.last ? `Last synced ${ago(s.last.at)} · ${s.saved} saves kept in step` : 'The first sync starts in a moment';
   if (s.syncthing) return 'A device uses Cartridge Save Sync or Syncthing for saves, never both. Change it in Advanced.';
   return 'Keep your saves on your own RomM server and bring them to every device you play on.';
