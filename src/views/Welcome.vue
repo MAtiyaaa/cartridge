@@ -305,14 +305,14 @@
 
         <!-- 0.9.24 (owner): Syncthing, after the extras. Main server first, then this device, then the folder -->
         <template v-else-if="step === 'sync'">
-          <!-- 0.9.49 (owner): first how to sync. Cartridge Save Sync (saves through your RomM, being built) or Syncthing -->
+          <!-- 0.9.49 (owner): first how to sync. Cartridge Save Sync (saves on your RomM, built in 0.9.51) or Syncthing -->
           <template v-if="sy === ''">
             <h1>Sync Your Saves</h1>
             <p class="w-lead">Keep your saves the same on every device you play on. Choose how.</p>
             <div class="w-box stack">
               <button class="lrow" data-focus :aria-pressed="store.config.saveSync === 'cartridge'" @click="pickCartSync">
                 <Icon name="mdiCloudSyncOutline" :size="26" />
-                <div class="l-mid"><b>Cartridge Save Sync <span class="status">Coming Soon</span></b><span class="l-sub">Your saves kept on your own RomM server and brought to each device, with nothing else to install. Not ready yet: choose it and Cartridge turns it on when it arrives.</span></div>
+                <div class="l-mid"><b>Cartridge Save Sync</b><span class="l-sub">Your saves on your own RomM server, checked before every game and saved after it, like Steam Cloud. Nothing else to install.</span></div>
                 <span v-if="store.config.saveSync === 'cartridge'" class="tick-ok" title="Chosen"><Icon name="mdiCheck" :size="14" /></span>
               </button>
               <button class="lrow" data-focus @click="sy = 'st'">
@@ -635,7 +635,10 @@ async function installSync() {
   catch (e) { toast(e.message, 'error', 6000); }
   off?.(); busy.value = false; syPct.value = null;
 }
-async function pickCartSync() { await saveConfig({ saveSync: store.config.saveSync === 'cartridge' ? null : 'cartridge' }); }
+async function pickCartSync() {
+  try { await call('savesync:set', { on: store.config.saveSync !== 'cartridge' }); store.config = await call('config:get'); }
+  catch (e) { toast(e.message, 'error', 6000); } // Syncthing already syncs this device's saves: one or the other
+}
 async function syncFolders() { syFolders.value = await call('sync:suggest').catch(() => []); sy.value = 'folder'; }
 async function useFolder(dir, label) {
   try { const r = await call('sync:addFolder', { dir, label }); toast(r.existed ? 'Syncthing already shares that folder' : `Syncthing now shares ${dir}`, 'ok', 3500, 'mdiFolderSyncOutline'); next(); }

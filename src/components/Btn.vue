@@ -49,10 +49,12 @@ const cls = computed(() => {
 });
 </script>
 <style>
-/* in a line of text the glyph's middle sits on the middle of the capitals (0.9.49, owner: the tour's A, LB, RB and R
-   stick sat off the line everywhere): half the cap height (0.36em) above the baseline, less half the glyph's 22px.
-   Flex and grid rows ignore vertical-align, so buttons and hint bars are unchanged. */
-.pb { display: inline-grid; place-items: center; height: 22px; min-width: 22px; padding: 0 6px; border-radius: var(--r-md); font: 700 11px/1 var(--body), sans-serif; color: #0b0d12; background: #d9dee8; box-shadow: 0 1px 0 rgba(0, 0, 0, 0.35); flex: none; vertical-align: calc(0.36em - 11px); }
+/* in a line of text the glyph's middle sits on the middle of the capitals. 0.9.49 shifted the box by its bottom edge,
+   but a glyph with a letter lines up by that letter's own baseline, so letters sat 9.5 px low (owner's photo: worse).
+   0.9.51: the box's middle goes to the line's middle (vertical-align: middle, the same for letters and the stick),
+   then up 0.16em of the glyph's own 11 px (about 1.8 px), from x-height to cap height (measured: 0 px off at 16 px, both kinds). Flex and grid rows ignore
+   vertical-align and top, so buttons and hint bars are unchanged. */
+.pb { display: inline-grid; place-items: center; height: 22px; min-width: 22px; padding: 0 6px; border-radius: var(--r-md); font: 700 11px/1 var(--body), sans-serif; color: #0b0d12; background: #d9dee8; box-shadow: 0 1px 0 rgba(0, 0, 0, 0.35); flex: none; vertical-align: middle; position: relative; top: var(--pb-lift, -0.16em); }
 .pb.face { width: 22px; padding: 0; }
 /* the letter sits in the middle of its button (0.9.23): the text box is cut to the capital letters, so
    the font's room for accents and descenders no longer pushes it off centre */
@@ -75,5 +77,5 @@ const cls = computed(() => {
 .k-playstation.f-x .pb-shape { stroke: #f39bd3; } .k-playstation.f-y .pb-shape { stroke: #4fe0b6; }
 /* Nintendo and Steam: plain light buttons with dark letters */
 .k-nintendo.face, .k-steam.face { background: #e6e9ef; }
-.padpair { display: inline-flex; gap: 4px; vertical-align: calc(0.36em - 11px); }
+.padpair { display: inline-flex; gap: 4px; vertical-align: middle; position: relative; top: var(--pb-lift, -0.16em); }
 </style>

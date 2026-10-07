@@ -119,8 +119,10 @@ function check() {
 }
 let layer;
 onMounted(() => {
-  const pass = (a) => () => { if (s.value.pass?.includes(a)) { layer.below(a); setTimeout(check, 60); } };
-  layer = pushLayer(el.value, { back: () => (s.value.pass?.includes('back') ? pass('back')() : done()), start: pass('start'), lt: pass('lt'), rt: pass('rt'), y: pass('y'), search: pass('search'), select: pass('select'), lb() {}, rb() {}, x() {} });
+  // as: what the press does underneath. Y is search here whatever page the tour is on (0.9.51: on Achievements, where
+  // the page's own Y is Sort, the search step never saw search open and every step after it was stuck)
+  const pass = (a, as = a) => () => { if (s.value.pass?.includes(a)) { layer.below(as); setTimeout(check, 60); } };
+  layer = pushLayer(el.value, { back: () => (s.value.pass?.includes('back') ? pass('back')() : done()), start: pass('start'), lt: pass('lt'), rt: pass('rt'), y: pass('y', 'search'), search: pass('search'), select: pass('select'), lb() {}, rb() {}, x() {} });
   // its first steps are about Start: go there when it's opened from elsewhere (Settings → About)
   if (steps[0]?.at === 'main.main' && store.route.name !== 'start' && activeTabs().includes('start')) tab('start');
   tick = setInterval(() => { check(); if (s.value.at) place(); }, 250);

@@ -64,7 +64,7 @@
       <!-- Grid: three columns of cards (RetroAchievements' layout) -->
       <div v-if="view === 'grid'" class="aa-grid">
         <button v-for="g in shown" :key="g.key" class="aa-card glass" data-focus :data-key="'aa-' + g.key" @click="g.open()" @focus="g.bg && setBg({ src: g.bg, blur: true })">
-          <span class="aa-art"><img v-if="g.icon" :src="g.icon" loading="lazy" alt="" @error="g.icon = ''" /><Icon v-else name="mdiGamepadVariantOutline" :size="30" /></span>
+          <GameIcon class="aa-gi" :title="g.code ? '' : g.title" :rom-id="g.romId" :fallback="g.icon" :size="72" :grade="g.kind === 'tro' ? 'G' : null" />
           <span class="aa-c-body">
             <span class="aa-c-title">{{ g.title }}</span>
             <span class="aa-c-sub"><ConsoleMark :slug="g.slug" :label="g.console" /><template v-if="g.t"> · {{ when(g.t) }}</template></span>
@@ -77,7 +77,7 @@
       <!-- Stack: one game per line -->
       <div v-else class="aa-list">
         <button v-for="g in shown" :key="g.key" class="aa-row" data-focus :data-key="'aa-' + g.key" @click="g.open()" @focus="g.bg && setBg({ src: g.bg, blur: true })">
-          <span class="aa-art small"><img v-if="g.icon" :src="g.icon" loading="lazy" alt="" @error="g.icon = ''" /><Icon v-else name="mdiGamepadVariantOutline" :size="22" /></span>
+          <GameIcon class="aa-gi" :title="g.code ? '' : g.title" :rom-id="g.romId" :fallback="g.icon" :size="44" :grade="g.kind === 'tro' ? 'G' : null" />
           <span class="aa-r-title">{{ g.title }}</span>
           <span class="aa-r-con"><ConsoleMark :slug="g.slug" :label="g.console" /></span>
           <span class="aa-r-n">{{ g.earned }}/{{ g.total }}</span>
@@ -100,6 +100,9 @@ import { computed, onMounted, ref, watch } from 'vue';
 import { store, call, img, go, setBg, when, choose, consoleName, consoleSlug, saveConfig } from '../store.js';
 import ConsoleMark from '../components/ConsoleMark.vue';
 import { useView } from '../useView.js';
+// 0.9.51 (owner: Change Icon stopped working here): the game's icon is GameIcon again, as on the pages before 0.9.49,
+// so an icon picked in a game's More shows, and a wide picture is fitted inside the square instead of cut
+import GameIcon from '../components/GameIcon.vue';
 import { focusFirst } from '../nav.js';
 import Icon from '../components/Icon.vue';
 import Grade from '../components/Grade.vue';
@@ -231,6 +234,7 @@ onMounted(async () => {
 .aa-art { width: 72px; height: 72px; border-radius: var(--r-md); flex: none; display: grid; place-items: center; overflow: hidden; background: var(--tile-bg, rgba(0, 0, 0, 0.25)); color: var(--muted); }
 .aa-art img { width: 100%; height: 100%; object-fit: cover; }
 .aa-art.small { width: 44px; height: 44px; border-radius: var(--r-sm); }
+.aa-gi { flex: none; }
 .aa-c-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 5px; }
 .aa-c-title { font-family: var(--display); font-weight: 600; font-size: var(--t-md); overflow-wrap: anywhere; }
 .aa-c-sub { font-size: var(--t-xs); color: var(--text-2, var(--muted)); overflow-wrap: anywhere; }

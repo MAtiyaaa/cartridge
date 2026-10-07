@@ -3,7 +3,7 @@
     <nav class="rail">
       <div class="eyebrow" style="padding: 0 14px 10px">Settings</div>
       <button class="rail-item rail-find" data-focus @click="searchSettings"><Icon name="mdiMagnify" :size="20" />Find a Setting</button>
-      <button v-for="s in sections" :key="s.id" class="rail-item" :class="{ on: sec === s.id }" data-focus :data-key="'sec-' + s.id" :data-autofocus="sec === s.id ? '' : undefined" @focus="sec = s.id" @click="pick(s.id)">
+      <button v-for="s in sections" :key="s.id" class="rail-item" :class="{ on: sec === s.id }" data-focus :data-key="'sec-' + s.id" :data-autofocus="sec === s.id ? '' : undefined" @focus="sec = s.id" @click="(e) => pick(s.id, e)">
         <SyncthingLogo v-if="s.id === 'syncthing'" :size="20" mono class="rail-st" /><Icon v-else :name="s.icon" :size="20" />{{ s.label }}
       </button>
     </nav>
@@ -103,7 +103,39 @@
 
           <!-- Syncthing (its own tab in 0.9.21; renamed with its logo in 0.9.23, owner) -->
           <template v-else-if="sec === 'syncthing'">
-            <SyncCard ref="syncRef" />
+            <!-- 0.9.51: Cartridge Save Sync (RomM) or Syncthing, chosen in Advanced; a device uses one, never both (owner) -->
+            <div class="lookpages"><Btn b="LB" /><div class="seg"><button v-for="p in SYNC_PAGES" :key="p.v" data-focus :data-key="'sync-' + p.v" :class="{ on: syncPage === p.v }" @click="syncPage = p.v">{{ p.l }}</button></div><Btn b="RB" /></div>
+            <SaveSyncCard v-if="syncPage === 'saves'" @advanced="syncPage = 'advanced'" />
+            <template v-else-if="syncPage === 'syncthing'">
+              <p v-if="ssMode === 'cartridge'" class="muted small sync-lock"><Icon name="mdiLockOutline" :size="16" />This device syncs saves with Cartridge Save Sync, so Syncthing isn't used for saves here. Syncthing still shows what else it keeps in step.</p>
+              <SyncCard ref="syncRef" />
+            </template>
+            <template v-else>
+              <div class="subh">How This Device Syncs Saves</div>
+              <p class="muted small">One way per device: two ways moving the same saves would fight each other.</p>
+              <div class="stack">
+                <button class="lrow" data-focus :aria-disabled="ssLocked" @click="setSaveSync('cartridge')">
+                  <Icon name="mdiCloudSyncOutline" :size="26" />
+                  <div class="l-mid"><b>Cartridge Save Sync</b><span class="l-sub">{{ ssLocked ? 'Locked while Syncthing syncs this device’s saves. Stop using Syncthing for saves below first.' : 'Saves on your own RomM server, synced before and after you play, with older versions kept.' }}</span></div>
+                  <Icon v-if="ssLocked" name="mdiLockOutline" :size="20" class="muted" /><span v-else-if="ssMode === 'cartridge'" class="tick-ok" title="Chosen"><Icon name="mdiCheck" :size="14" /></span>
+                </button>
+                <button class="lrow" data-focus @click="setSaveSync('syncthing')">
+                  <SyncthingLogo :size="26" mono />
+                  <div class="l-mid"><b>Syncthing</b><span class="l-sub">Save folders copied straight between your devices, set up on the Syncthing page.</span></div>
+                  <span v-if="ssMode === 'syncthing'" class="tick-ok" title="Chosen"><Icon name="mdiCheck" :size="14" /></span>
+                </button>
+                <button class="lrow" data-focus @click="setSaveSync(null)">
+                  <Icon name="mdiCloudOffOutline" :size="26" />
+                  <div class="l-mid"><b>Don't Sync Saves</b><span class="l-sub">Saves stay on this device.</span></div>
+                  <span v-if="!ssMode" class="tick-ok" title="Chosen"><Icon name="mdiCheck" :size="14" /></span>
+                </button>
+              </div>
+              <template v-if="ssLocked">
+                <div class="subh">Stop Using Syncthing for Saves</div>
+                <p class="muted small">Cartridge stops managing Syncthing for saves on this device. Syncthing itself and its folders stay as they are: remove the save folders in Syncthing if you don't want them any more.</p>
+                <div class="row"><button class="btn" data-focus @click="leaveSyncthing"><Icon name="mdiLinkOff" />Stop Using Syncthing for Saves</button></div>
+              </template>
+            </template>
           </template>
 
           <template v-else-if="sec === 'emu'">
@@ -557,6 +589,7 @@ import SteamSettings from '../components/SteamSettings.vue';
 import StorageManager from '../components/StorageManager.vue';
 import LibraryCheck from '../components/LibraryCheck.vue';
 import SyncCard from '../components/SyncCard.vue';
+import SaveSyncCard from '../components/SaveSyncCard.vue';
 import SyncthingLogo from '../components/SyncthingLogo.vue';
 import RommUpload from '../components/RommUpload.vue';
 import EmuIcon from '../components/EmuIcon.vue';
@@ -591,6 +624,26 @@ const lead = computed(() => sections.find((x) => x.id === sec.value)?.lead || ''
 // pages in Library and Downloads and Updates
 const LIB_PAGES = [{ v: 'server', l: 'RomM Server' }, { v: 'folders', l: 'Games and Storage' }];
 const DLUP_PAGES = [{ v: 'downloads', l: 'Downloads' }, { v: 'updates', l: 'Cartridge Updates' }];
+// Saves and Sync (0.9.51): Cartridge Save Sync, Syncthing, and Advanced (which one this device uses)
+const SYNC_PAGES = [{ v: 'saves', l: 'Cartridge Save Sync' }, { v: 'syncthing', l: 'Syncthing' }, { v: 'advanced', l: 'Advanced' }];
+const ssLocked = computed(() => !!store.config.syncthing?.role);
+const ssMode = computed(() => (store.config.syncthing?.role ? 'syncthing' : store.config.saveSync === 'cartridge' ? 'cartridge' : store.config.saveSync === 'syncthing' ? 'syncthing' : null));
+const syncPage = ref(ssMode.value === 'syncthing' ? 'syncthing' : 'saves');
+async function setSaveSync(v) {
+  if (v === 'cartridge' && ssLocked.value) { toast('Stop using Syncthing for saves first: a device uses one or the other.', 'info', 4500, 'mdiLockOutline'); return; }
+  if (v === 'syncthing' && store.config.saveSync === 'cartridge' && !(await confirm('Use Syncthing for Saves?', 'Cartridge Save Sync turns off on this device. Your saves in RomM stay there.', 'Use Syncthing'))) return;
+  try {
+    if (v === 'cartridge') await call('savesync:set', { on: true });
+    else { await call('savesync:set', { on: false }); await saveConfig({ saveSync: v }); }
+    store.config = await call('config:get');
+    if (v === 'syncthing') syncPage.value = 'syncthing'; else if (v === 'cartridge') syncPage.value = 'saves';
+  } catch (e) { toast(e.message, 'error', 6000); }
+}
+async function leaveSyncthing() {
+  if (!(await confirm('Stop Using Syncthing for Saves?', 'Cartridge stops managing Syncthing for saves on this device. Syncthing and its folders are left as they are.', 'Stop'))) return;
+  await call('savesync:leaveSyncthing'); store.config = await call('config:get');
+  toast('Syncthing no longer syncs saves here. You can turn on Cartridge Save Sync now.', 'ok', 4000, 'mdiLinkOff');
+}
 const libPage = ref(startSec[0] === 'library' && startSec[1] ? startSec[1] : 'server');
 const dlupPage = ref(startSec[0] === 'dlup' && startSec[1] ? startSec[1] : 'downloads');
 // Settings search (0.9.49, owner's Settings refresh): Y lists every setting by name; picking one opens its section and
@@ -911,7 +964,7 @@ function paneLeft() {
   if (more) return false;
   focusFirst(el.value, `[data-key="sec-${sec.value}"]`);
 }
-useView({ right: railRight, left: paneLeft, back: () => { if (!document.activeElement?.closest('.rail')) { focusFirst(el.value, `[data-key="sec-${sec.value}"]`); return; } return false; }, lb: () => (sec.value === 'emu' ? stepEmu(-1) : sec.value === 'library' ? stepPages(LIB_PAGES, libPage, 'lib', -1) : sec.value === 'dlup' ? stepPages(DLUP_PAGES, dlupPage, 'dlup', -1) : sec.value === 'syncthing' ? syncRef.value?.step(-1) : sec.value === 'steam' ? steamRef.value?.step(-1) : stepLook(-1)), rb: () => (sec.value === 'emu' ? stepEmu(1) : sec.value === 'library' ? stepPages(LIB_PAGES, libPage, 'lib', 1) : sec.value === 'dlup' ? stepPages(DLUP_PAGES, dlupPage, 'dlup', 1) : sec.value === 'syncthing' ? syncRef.value?.step(1) : sec.value === 'steam' ? steamRef.value?.step(1) : stepLook(1)), y: () => searchSettings() },
+useView({ right: railRight, left: paneLeft, back: () => { if (!document.activeElement?.closest('.rail')) { focusFirst(el.value, `[data-key="sec-${sec.value}"]`); return; } return false; }, lb: () => (sec.value === 'emu' ? stepEmu(-1) : sec.value === 'library' ? stepPages(LIB_PAGES, libPage, 'lib', -1) : sec.value === 'dlup' ? stepPages(DLUP_PAGES, dlupPage, 'dlup', -1) : sec.value === 'syncthing' ? stepPages(SYNC_PAGES, syncPage, 'sync', -1) : sec.value === 'steam' ? steamRef.value?.step(-1) : stepLook(-1)), rb: () => (sec.value === 'emu' ? stepEmu(1) : sec.value === 'library' ? stepPages(LIB_PAGES, libPage, 'lib', 1) : sec.value === 'dlup' ? stepPages(DLUP_PAGES, dlupPage, 'dlup', 1) : sec.value === 'syncthing' ? stepPages(SYNC_PAGES, syncPage, 'sync', 1) : sec.value === 'steam' ? steamRef.value?.step(1) : stepLook(1)), y: () => searchSettings() },
   [{ b: 'A', label: 'Select' }, { b: 'B', label: 'Back' }, { b: 'Y', label: 'Find a Setting' }, { b: 'LT+RT', label: 'Tabs' }]);
 // Settings → Emulators → Issues
 const issues = ref(null);
@@ -999,7 +1052,13 @@ watch(sec, (v) => { store.settingsSection = v; if (v === 'emu') { loadIssues(); 
 function enter() { focusFirst(paneEl.value); }
 // a press on a section: with a controller or keys it was already focused (and chosen), so A goes in; a tap or click
 // chooses it (0.9.49, owner: tapping the left list did nothing; a touch never moves focus, so @focus never ran)
-function pick(id) { if (sec.value !== id) { sec.value = id; if (input.mode === 'pad') nextTick(enter); return; } enter(); }
+// a tap or click also moves focus there (0.9.51, owner: touch didn't light the list like the controller does): the
+// white stays on what you picked, never on the last thing the controller was on
+function pick(id, e) {
+  if (input.mode !== 'pad') e?.currentTarget?.focus?.({ preventScroll: true });
+  if (sec.value !== id) { sec.value = id; if (input.mode === 'pad') nextTick(enter); return; }
+  enter();
+}
 async function setMode(mode) { await saveConfig({ server: { mode } }); reconnect(); }
 async function reconnect() {
   try { const r = await call('server:reconnect'); toast(`Connected · ${r.base}`, 'ok', 2600, 'mdiLanConnect'); } catch (e) { toast(e.message, 'error'); }
@@ -1231,7 +1290,8 @@ onMounted(() => {
 .rail { display: flex; flex-direction: column; gap: 4px; padding-top: 10px; }
 .rail-item { display: flex; align-items: center; gap: 14px; padding: 13px 16px; border-radius: var(--r-md); color: var(--muted); font-weight: 500; transition: background 0.15s, color 0.15s; }
 /* the page follows the list as you move, so the current section only needs brighter text, no box */
-.rail-item.on { color: var(--text); }
+.sync-lock { display: flex; align-items: center; gap: 8px; margin: 0 0 var(--s-2); }
+.rail-item.on { color: var(--text); background: var(--sel); } /* the open section: chosen, the softer fill (docs/design-rules.md 6) */
 .rail-item:focus { background: var(--focus); color: var(--on-focus); box-shadow: none; }
 .pane { overflow-y: auto; padding: 6px 12px 60px 24px; }
 .ga-cons { display: flex; gap: 8px; overflow-x: auto; padding: 8px 6px 10px; margin: 0 -6px; scrollbar-width: none; } /* room for a selected chip (0.9.28: it was cut off) */
