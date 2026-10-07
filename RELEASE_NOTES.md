@@ -1,19 +1,20 @@
-## Cartridge 0.9.51 · Cartridge Save Sync
+## Cartridge 0.9.52 · Mods, Offline and a New Welcome
 
 ### New
-- **Cartridge Save Sync.** Your saves kept on your own RomM server and brought to every device you play on. Turn it on in Settings → Saves and Sync. It covers Eden, RPCS3, shadPS4, PCSX2 (whole memory cards), DuckStation, PPSSPP, Vita3K, Dolphin, Cemu, Azahar, Xenia, and RetroArch saves and save states.
-- **Cartridge Cloud Sync before a game.** Like Steam Cloud: when you start a game from Cartridge, its saves are checked with RomM first and the newest is brought here. Games started from Steam sync when you come back to Cartridge. After you play, your saves go to RomM, and every 30 minutes anything that changed.
-- **Safe by design.** A save is never changed while its emulator is open. When two devices changed the same save, Cartridge asks which to keep and never guesses. The one you don't pick stays in RomM as an older version, and 10 older versions are kept on this device too.
-- **Saves in RomM on every game** (More): sync now, or put an older version back.
-- **Saves and Sync → Advanced:** choose Cartridge Save Sync, Syncthing or no save sync. A device uses one or the other, never both: while Syncthing syncs your saves, Cartridge Save Sync stays locked until you stop using Syncthing for saves.
-- **CIDE, the Cartridge ID Engine.** Everything Cartridge has learned about game IDs and serials (PlayStation serials, Nintendo title IDs, GameCube, Wii and Xbox 360 IDs) in one engine: what each console's ID looks like, where it's read from the game, and which consoles have none. Detection works exactly as before.
+- **A new welcome.** A new opening: the Cartridge mark draws itself, fills and lights up, and the name rises. The setup is in a clearer order: RomM first, your name with your look, controls only when your own controller is found, Cartridge in Steam on the Steam step, and a progress bar along the top.
+- **Made for Game Mode.** The very first time Cartridge opens on a desktop, it offers to add itself to Steam, waits for Steam to restart, says "See you in Game Mode" and closes, so you set it up with your controller. Set Up Here Instead carries on at once. It is never shown again.
+- **Mods from more places.** GameBanana, EmuCoreX texture packs, Nexus Mods (add your own key in Settings → Look & Feel → Metadata) and ROM hacks (Beta) in one sheet. The right stick, or the chips, switch between them.
+- **The mod rule book.** Cartridge knows where each emulator keeps mods (PCSX2, DuckStation, PPSSPP, Dolphin, Azahar, Cemu, Eden and its forks, Ryujinx, shadPS4), what a mod must contain and what has to be switched on. Each emulator shows what it takes. Mods are only offered for emulators Cartridge knows how to install into, and anything that doesn't match is refused instead of being unpacked somewhere.
+- **ROM hacks (Beta).** IPS, UPS and BPS patches: with RetroArch the patch sits beside the game and RetroArch applies it as the game loads, so nothing is changed; for other emulators a patched copy is made beside your game.
+- **Away from your server.** When RomM can't be reached (a server at home with no tunnel), your saves stay on this device and go up the moment Cartridge can reach RomM again. Keep playing as normal. If another device played the same game meanwhile, you choose which save to keep.
+- **Your library offline.** Every game's cover is kept small on this device (about 25 KB each), so the whole library still looks right away from your server. Downloads say plainly that the server can't be reached.
 
 ### Changed
-- **QR pairing** now asks RomM for permission to store saves. If you paired with a QR code before, pair again to use Cartridge Save Sync.
+- **GIF search for Start's picture widget** now searches Tenor first: about 50 relevant GIFs a search, with safe search on. More brings another batch.
+- **Every animation** now uses the Cartridge Animation Engine's timings: one set of fades, springs and moves across the whole app.
+- **Steam shortcuts** are built with the Cartridge ID Engine. They come out exactly as before (checked against hundreds of saved cases).
+- **Turned down and removed from plans:** Ryujinx saves, PlayStation Network sign-in, pausing Syncthing, more languages and PS3 mods.
 
 ### Fixed
-- **Home no longer jumps** when scrolling down after coming back from a game page.
-- **Button pictures** in the tour and hints sit centred in the text again.
-- **The tour's search step** (press Y) now counts on every page, so the steps after it work.
-- **Change Icon** works on Achievements again.
-- **Touch in Settings:** tapping a section highlights it in the list, as the controller does.
+- **PS3 firmware installs** were reported as failed although they worked (RPCS3 ends without a clean exit). Cartridge now reads RPCS3's own log, and closes it once done.
+- **Start picture tiles** have a soft shade behind their label so it stays readable.
