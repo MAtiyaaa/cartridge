@@ -54,7 +54,7 @@ function nexus({ web, key = () => null, log = () => {} }) {
   const SORT = { downloads: 'downloads', liked: 'endorsements', newest: 'createdAt', updated: 'updatedAt' };
   return {
     id: 'nexus', name: 'Nexus Mods', kind: 'mods', site: 'https://www.nexusmods.com',
-    forGame: (g) => !!g.name,
+    forGame: (g) => !!g.name && g.mods !== false, // only with an emulator Cartridge knows how to install mods into (modRules)
     async list(g, { sort = 'downloads', page = 1 } = {}) {
       const gm = await game(g);
       if (!gm) return { items: [], error: `Nexus Mods has no game called “${titleOf(g.name)}”.` };
@@ -97,7 +97,7 @@ function gamebanana({ web }) {
   const f = asFetch(web);
   return {
     id: 'gb', name: 'GameBanana', kind: 'mods', site: 'https://gamebanana.com',
-    forGame: (g) => !!g.name,
+    forGame: (g) => !!g.name && g.mods !== false, // only with an emulator Cartridge knows how to install mods into (modRules)
     async list(g, { sort = 'downloads', page = 1 } = {}) {
       const gm = await S.gbGame(g.name, { fetchImpl: f });
       if (!gm) return { items: [], error: `GameBanana has no game called “${titleOf(g.name)}”.` };

@@ -3929,13 +3929,14 @@ const handlers = {
     }
     if (slug === 'switch') { const k = require('./bios').status('switch', { roots: emuRootsAll() }); const v = switchVersionOf(where && where !== MARKED ? where : '', k?.ok ? [path.dirname(k.where)] : []); if (v) { ids.version = v; if (!ids.switchId && v.titleId) { ids.switchId = v.titleId; ids.switchIdLower = v.titleId.toLowerCase(); } } }
     if (typeof out === 'function') out(ids);
-    const list = A.forGame(slug, ids, A.emulators());
+    const R = require('./modRules');
+    const list = A.forGame(slug, ids, A.emulators()).map((x) => { const r = R.RULES[R.kindOf(x.id)]; return r ? { ...x, rule: { what: r.what, needs: r.needs, on: r.on } } : x; }); // 0.9.52: what it takes, shown in the sheet
     // 0.9.38 (owner: mods for shadPS4): shadPS4 lays <game folder>-mods over the game (read only, above -UPDATE), so a
     // mod goes beside the game and never into it; the game folder is the one holding eboot.bin
     if (slug === 'ps4' && where && where !== MARKED) {
       let g = where;
       try { if (!fs.existsSync(path.join(g, 'eboot.bin'))) g = fs.readdirSync(where).map((n) => path.join(where, n)).find((d) => fs.existsSync(path.join(d, 'eboot.bin'))) || ''; } catch { g = ''; }
-      if (g) list.push({ id: 'shadps4', name: 'shadPS4', on: true, mods: true, emuRoot: 'shadps4:' + g, root: path.dirname(g), folder: g + '-mods', has: fs.existsSync(g + '-mods'), game: g });
+      if (g) list.push({ id: 'shadps4', name: 'shadPS4', on: true, mods: true, rule: (({ what, needs, on }) => ({ what, needs, on }))(R.RULES.shadps4), emuRoot: 'shadps4:' + g, root: path.dirname(g), folder: g + '-mods', has: fs.existsSync(g + '-mods'), game: g });
     }
     return list;
   },
@@ -3967,8 +3968,9 @@ const handlers = {
     if (!rom) return { emus: [], packs: [], installed: [] };
     const emus = handlers['addons:forGame']({ romId });
     const installed = Object.entries(addonRecs()).filter(([, r]) => r.romId === rom.id).map(([key, r]) => ({ key, ...r, files: undefined, count: r.files.length }));
-    const out = { emus, installed, packs: [], source: null, error: '', featured: [], sources: modsEng().sourcesFor(modGame(rom)) };
+    const out = { emus, installed, packs: [], source: null, error: '', featured: [], sources: modsEng().sourcesFor({ ...modGame(rom), mods: emus.some((e) => require('./modRules').takesMods(e.id)) }) };
     if (source === 'nexus' || source === 'rh') {
+      if (source === 'nexus' && !emus.some((e) => require('./modRules').takesMods(e.id))) return { ...out, source, error: 'None of the emulators for this console on this device take mods Cartridge knows how to install.' };
       const r = await modsEng().list(source, modGame(rom), { sort });
       return { ...out, source, packs: r.items, error: r.error || '', modGame: r.game || null, hackMode: source === 'rh' ? hackModes(rom) : null };
     }
@@ -4087,6 +4089,7 @@ const handlers = {
     // each emulator's own layout (addonInstall.plan, 0.9.18); PCSX2 and DuckStation: the game folder is
     // textures/<SERIAL>, the pack brings replacements/ (e.folder ends in it)
     const kind = require('./emuProfiles').modKind(e.id, pack.source); // 0.9.48: the emulator's profile says how its add-ons are laid out
+    if (kind === 'plain') throw new Error(require('./modRules').refusal(null)); // 0.9.52: no rule, nothing unpacked anywhere
     const dest = /\/replacements$/.test(e.folder) ? path.dirname(e.folder) : e.folder;
     const key = `${pack.source}:${pack.id}${file ? ':' + file.id : ''}:${rom.id}:${e.emuRoot}`;
     if (addonRecs()[key]) throw new Error('This add-on is already installed.');

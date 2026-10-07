@@ -11,6 +11,7 @@
         <div v-if="emu" class="ad-facts">
           <div class="ad-fact"><span>Emulator</span><b>{{ emu.name }}{{ emu.flatpak ? ' (Flatpak)' : '' }}</b></div>
           <div class="ad-fact"><span>Folder</span><b class="mono">{{ emu.folder ? short(emu.folder) : short(emu.root) }}</b><em v-if="!emu.folder">This game’s ID couldn’t be read</em></div>
+          <div v-if="emu.rule" class="ad-fact"><span>Takes</span><b>{{ emu.rule.what }}</b><em>Needs {{ emu.rule.needs }}; anything else is refused</em></div>
           <div v-if="d?.version && wants('mods')" class="ad-fact"><span>Your Copy</span><b>{{ verText }}</b><em>Mods made for another version may not load</em></div>
           <div v-if="!emu.mods && wants('tex')" class="ad-fact"><span>Custom Textures</span><b>{{ emu.on ? 'On' : 'Off' }}</b><em v-if="!emu.on">Turned on when a pack is installed</em></div>
           <div v-if="here && wants(here.mods ? 'mods' : 'tex')" class="ad-fact ok"><span>In Place</span><b>{{ here.mods ? 'Mods' : 'A texture pack' }} · {{ here.files.toLocaleString() }} files</b><em>{{ here.by === 'cartridge' ? 'Installed by Cartridge' : here.by === 'both' ? 'Partly installed by Cartridge' : 'Added outside Cartridge' }}</em></div>

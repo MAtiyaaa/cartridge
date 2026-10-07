@@ -14,13 +14,9 @@ const E = require('./emulators');
 // forks and builds that use another emulator's folders and formats
 const FAMILY = { eden: 'yuzu', citron: 'yuzu', sudachi: 'yuzu', suyu: 'yuzu', torzu: 'yuzu', primehack: 'dolphin', xeniaedge: 'xenia', 'xenia-win': 'xenia', citra: 'azahar' };
 const SWITCH = /^(eden|citron|yuzu|ryujinx)$/;
-const MOD_EMUS = ['pcsx2', 'duckstation', 'ppsspp', 'dolphin', 'azahar', 'citra', 'cemu', 'shadps4'];
-// how an add-on for this emulator is laid out (addonInstall.plan's kinds); EmuCoreX PS2 texture packs are their own
-function modKind(id, source) {
-  if (source === 'ps2') return 'ps2';
-  if (SWITCH.test(id)) return 'switch';
-  return MOD_EMUS.includes(id) ? id : 'plain';
-}
+// how an add-on for this emulator is laid out (addonInstall.plan's kinds): the rule book in modRules.js (0.9.52);
+// 'plain' = no rule, and Cartridge then installs nothing
+function modKind(id, source) { return require('./modRules').kindOf(id, source) || 'plain'; }
 // the emulators whose patches and cheats Cartridge lists and turns on (main.js EMU_PATCH)
 const PATCHES = ['rpcs3', 'shadps4', 'dolphin', 'ppsspp', 'cemu', 'pcsx2'];
 
