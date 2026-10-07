@@ -55,6 +55,17 @@ export const SPRINGS = {
   // phone's bounce; 0.86 overshoots about 1%)
   'spring-pop': { damping: 0.86, response: 0.36 },
 };
+// CAE's named timings for script (0.9.52): timing('fade-slow') -> { duration, easing } for element.animate(), read
+// from the same CSS tokens the stylesheets use (--fade-in, --fade-slow, --spring...), so script and CSS never drift apart
+export function timing(name, root = document.documentElement) {
+  const cs = getComputedStyle(root), get = (n) => cs.getPropertyValue('--' + n).trim();
+  const deref = (v, n = 0) => (n > 6 ? v : v.replace(/var\(--([\w-]+)(?:,[^)]*)?\)/g, (_, k) => deref(get(k), n + 1)));
+  let v = deref(get(name));
+  if (/^spring/.test(name)) v = deref(get(name + '-d')) + ' ' + v;
+  const ms = v.match(/(\d*\.?\d+)(ms|s)\b/), d = ms ? parseFloat(ms[1]) * (ms[2] === 's' ? 1000 : 1) : 200;
+  const easing = v.replace(/(\d*\.?\d+)(ms|s)\b/, '').trim() || 'ease-out';
+  return { duration: d, easing };
+}
 export function installSprings(root = document.documentElement) {
   if (!CSS.supports?.('transition-timing-function', 'linear(0, 1)')) return; // older engines keep the cubic curves
   for (const [name, p] of Object.entries(SPRINGS)) {

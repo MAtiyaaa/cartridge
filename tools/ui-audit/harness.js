@@ -16,9 +16,9 @@ function data() {
   const installed = Object.fromEntries(Object.values(roms).flat().slice(0, 22).map((r) => [r.id, '/roms/x/' + r.fs_name]));
   return { plats, roms, installed };
 }
-function stub(ui, extra = {}) {
+function stub(ui, extra = {}, lib = null, answers = {}) {
   return `(() => {
-  const D = ${JSON.stringify(data())};
+  const D = ${JSON.stringify(lib || data())};
   const cfg = ${JSON.stringify({ configured: true, welcomed: 1, setupDone: true, server: { localUrl: 'http://x', mode: 'auto', auth: 'password', username: 'u' }, romsRoot: '/roms', downloads: { concurrency: 2 }, sync: { onLaunch: false, everyMinutes: 0 }, ui: { font: 'cartridge', sounds: false, toured: true, startTips: true, logos: false, mediaBar: true, idle: '0', ...ui }, ra: { user: 'player', key: 'k' }, trophies: {}, steam: {}, ...extra })};
   const now = Date.now();
   const H = {
@@ -36,13 +36,15 @@ function stub(ui, extra = {}) {
     'fs:space': { free: 5e11, total: 1e12 }, 'storage:overview': { drives: [], games: [] }, 'upload:list': { files: [] },
     'server:status': { base: 'http://x', route: 'local' }, 'pad:detect': { kind: 'xbox', devices: [] },
   };
+  Object.assign(H, ${JSON.stringify(answers)}); // 0.9.52: a run's own answers (the README pictures' real library)
   const merge = (t, x) => { for (const [k, v] of Object.entries(x || {})) { if (v && typeof v === 'object' && !Array.isArray(v) && t[k] && typeof t[k] === 'object') merge(t[k], v); else t[k] = v; } return t; };
   window.cart = { call: async (ch, a) => { if (ch === 'config:set') { merge(cfg, a); return JSON.parse(JSON.stringify(cfg)); } return ch in H ? JSON.parse(JSON.stringify(H[ch])) : null; }, on: () => () => {} };
 })();`;
 }
 // open the built UI with a look: { theme, style } (style 'plain' | 'glass')
 // dist: another build to load (the visual check opens the last release's build too); freeze: a fixed clock and no motion
-async function open({ theme = 'cartridge', style = 'plain', bg = 'ribbons', width = 1280, height = 800, dist = '', freeze = false, ui = {}, long = false, touch = false } = {}) {
+// extra: top-level settings over the stub's (welcomed: null opens the welcome as on a new install, 0.9.52)
+async function open({ theme = 'cartridge', style = 'plain', bg = 'ribbons', width = 1280, height = 800, dist = '', freeze = false, ui = {}, long = false, touch = false, extra = {}, lib = null, answers = {}, routes = null, init = null } = {}) {
   const { chromium } = playwright();
   const browser = await chromium.launch({ executablePath: process.env.CHROMIUM || undefined, args: ['--allow-file-access-from-files'] });
   const page = await browser.newPage({ viewport: { width, height }, hasTouch: touch });
@@ -62,7 +64,10 @@ async function open({ theme = 'cartridge', style = 'plain', bg = 'ribbons', widt
     const wrap = () => { const c = window.cart; if (!c || c.__long) return; const call = c.call; c.call = async (ch, a) => grow(ch, await call(ch, a)); c.__long = true; };
     Object.defineProperty(window, 'cart', { configurable: true, set(v) { Object.defineProperty(window, 'cart', { value: v, writable: true, configurable: true }); wrap(); }, get() { return undefined; } });
   });
-  await page.addInitScript(stub({ theme, style, elements: style, surface: style === 'glass' ? 'glass' : 'solid', bgStyle: bg, ...ui }));
+  // routes: { 'https://host/**': (route) => ... } answers picture requests from disk (README pictures)
+  if (routes) for (const [glob, fn] of Object.entries(routes)) await page.route(glob, fn);
+  if (init) await page.addInitScript(init); // a run's own page script, before the app starts
+  await page.addInitScript(stub({ theme, style, elements: style, surface: style === 'glass' ? 'glass' : 'solid', bgStyle: bg, ...ui }, extra, lib, answers));
   if (freeze) await page.addInitScript(() => { addEventListener('DOMContentLoaded', () => { const st = document.createElement('style'); st.textContent = '*, *::before, *::after { animation: none !important; transition: none !important; caret-color: transparent !important; }'; document.head.appendChild(st); }); });
   await page.goto('file://' + path.resolve(dist || path.join(__dirname, '../../dist'), 'index.html'));
   await page.waitForTimeout(2500);

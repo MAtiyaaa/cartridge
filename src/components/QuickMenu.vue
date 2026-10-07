@@ -93,10 +93,10 @@ onMounted(() => {
 onBeforeUnmount(() => { layer.pop(); clearInterval(tick); });
 </script>
 <style scoped>
-.qm-scrim { position: fixed; inset: 0; z-index: 45; background: rgba(3, 4, 7, 0.45); animation: fade 0.2s; }
-.qm { position: absolute; top: var(--s-4); right: var(--s-4); bottom: var(--s-4); width: min(420px, calc(100vw - 2 * var(--s-4))); padding: var(--s-4); display: flex; flex-direction: column; gap: var(--s-3); background: var(--s1); border-radius: var(--r-lg); box-shadow: var(--shadow-pop); animation: qm-in 0.42s var(--spring, var(--ease)); overflow-y: auto; overscroll-behavior: contain; }
+.qm-scrim { position: fixed; inset: 0; z-index: 45; background: rgba(3, 4, 7, 0.45); animation: fade var(--fade-in); }
+.qm { position: absolute; top: var(--s-4); right: var(--s-4); bottom: var(--s-4); width: min(420px, calc(100vw - 2 * var(--s-4))); padding: var(--s-4); display: flex; flex-direction: column; gap: var(--s-3); background: var(--s1); border-radius: var(--r-lg); box-shadow: var(--shadow-pop); animation: qm-in var(--spring-d) var(--spring); overflow-y: auto; overscroll-behavior: contain; }
 @keyframes qm-in { from { transform: translateX(48px); opacity: 0; } }
-@media (prefers-reduced-motion: reduce) { .qm { animation: fade 0.15s; } }
+@media (prefers-reduced-motion: reduce) { .qm { animation: fade var(--fade-in); } }
 .qm-head { display: flex; align-items: center; gap: var(--s-3); padding: 2px 4px var(--s-1); }
 .qm-hl { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .qm-title { font-family: var(--display); font-weight: 600; font-size: var(--t-lg); line-height: 1.1; }
@@ -110,7 +110,7 @@ onBeforeUnmount(() => { layer.pop(); clearInterval(tick); });
 .qm-stat b { font-family: var(--display); font-size: var(--t-xl); font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1.15; }
 .qm-stat small { font-size: var(--t-xs); color: var(--muted); overflow-wrap: anywhere; }
 .qm-bar { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: rgba(255, 255, 255, 0.08); }
-.qm-bar i { display: block; height: 100%; background: var(--green, #2fb36a); transition: width 0.4s linear; }
+.qm-bar i { display: block; height: 100%; background: var(--green, #2fb36a); transition: width var(--progress); }
 
 .qm-quick { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--s-2); }
 .qm-tog { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; min-width: 0; aspect-ratio: 1; padding: var(--s-2) 4px; border-radius: var(--r-md); background: var(--s2); font-size: var(--t-xs); font-weight: 600; color: var(--muted); transition: background var(--d-fast), color var(--d-fast); }

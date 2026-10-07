@@ -65,7 +65,7 @@ async function isZip(file) { try { const fd = await fsp.open(file, 'r'); const b
 // - shadps4 (0.9.38): <game folder>-mods, which shadPS4 lays over the game read-only (fs.cpp probe_overlay "-mods"),
 //   so a mod mirrors the game's own files (dvdroot_ps4/, Image0/...); found by the game folder's top entries (opts.tops),
 //   named as the game names them, and nothing in the game itself is touched
-// - plain: folders wrapping everything are dropped, the rest kept as it is
+// - anything else: refused (0.9.52; the rule book is modRules.js)
 const IMG = /\.(png|dds|jpe?g|webp|tga|bmp)$/i;
 const segs = (r) => r.split('/');
 const safeName = (n) => String(n).replace(/[\\/:*?"<>|]+/g, ' ').trim().slice(0, 80) || 'Mod';
@@ -115,7 +115,8 @@ function plan(list, kind, { id = '', name = 'Mod', tops: gameTops = [] } = {}) {
     }
   } else if (kind === 'ppsspp') {
     const ini = rels.filter((r) => /(^|\/)textures\.(ini|zip)$/i.test(r)).sort((a, b) => segs(a).length - segs(b).length)[0];
-    const base = ini ? segs(ini).slice(0, -1).join('/') : wrapper(rels).replace(/\/$/, '');
+    if (!ini) return []; // 0.9.52: PPSSPP finds a pack by its textures.ini (or textures.zip); without one it isn't a pack
+    const base = segs(ini).slice(0, -1).join('/');
     const pre = base ? base + '/' : '';
     map = (r) => (r.startsWith(pre) ? r.slice(pre.length) : null);
   } else if ((kind === 'azahar' || kind === 'citra') && rels.some((r) => /(^|\/)(romfs|exefs|exheader\.bin|code\.(ips|bps)|exefsdir)(\/|$)/i.test(r))) {
@@ -130,8 +131,8 @@ function plan(list, kind, { id = '', name = 'Mod', tops: gameTops = [] } = {}) {
       ? (x) => ID && (x.toUpperCase() === ID || (x.length === 3 && x.toUpperCase() === ID.slice(0, 3)))
       : (x) => ID && x.toUpperCase() === ID;
     const r0 = rels.find((r) => anchorAt(r, isId));
-    if (r0) { const pre = segs(r0).slice(0, anchorAt(r0, isId).i + 1).join('/') + '/'; map = (r) => (r.startsWith(pre) ? r.slice(pre.length) : null); }
-    else { const w = wrapper(rels); map = (r) => r.slice(w.length); }
+    if (r0) { const pre = segs(r0).slice(0, anchorAt(r0, isId).i + 1).join('/') + '/'; map = (r) => (r.startsWith(pre) && IMG.test(r) ? r.slice(pre.length) : null); }
+    else { const w = wrapper(rels.filter((r) => IMG.test(r))); map = (r) => (IMG.test(r) && r.startsWith(w) ? r.slice(w.length) : null); } // 0.9.52: pictures only
   } else if (kind === 'cemu') {
     const packs = rels.filter((r) => /(^|\/)rules\.txt$/i.test(r)).map((r) => segs(r).slice(0, -1).join('/'));
     if (!packs.length) return [];
@@ -155,7 +156,7 @@ function plan(list, kind, { id = '', name = 'Mod', tops: gameTops = [] } = {}) {
       if (ep >= 0) return `${s[ep + 1]}/exefs/${s.slice(ep + 2).join('/')}`;
       if (i < 0 && /\.(ips|pchtxt)$/i.test(x)) return `${safe}/exefs/${s[s.length - 1]}`;
       if (i < 0 && /^[0-9A-F]{16}\.txt$/i.test(s[s.length - 1])) return `${safe}/cheats/${s[s.length - 1]}`;
-      if (i < 0) return x;
+      if (i < 0) return null; // 0.9.52: anything else (readme, screenshots, a PC build's files) isn't for the emulator
       // "<Mod>/romfs/..." keeps the mod's own folder; a bare romfs, or one under wrappers, gets the mod's name
       const own = i > 0 && !/^[0-9A-F]{16}$/i.test(s[i - 1]) && s[i - 1].toUpperCase() !== ID ? s[i - 1] : safe; // Atmosphere's contents/<id>/romfs too
       return `${own}/${s.slice(i).join('/')}`;
@@ -168,8 +169,7 @@ function plan(list, kind, { id = '', name = 'Mod', tops: gameTops = [] } = {}) {
     const p0 = pre ? pre + '/' : '';
     map = (r) => { if (!r.startsWith(p0)) return null; const s = segs(r.slice(p0.length)); const o = s.length > 1 && own.get(s[0].toLowerCase()); return o ? [o, ...s.slice(1)].join('/') : null; };
   } else {
-    const strip = tops.size === 1 && id && [...tops][0].toUpperCase() === ID && rels.every((r) => r.includes('/')) ? [...tops][0] + '/' : '';
-    map = (r) => (strip && r.startsWith(strip) ? r.slice(strip.length) : r);
+    return []; // 0.9.52: no rule for this emulator (modRules.js), so nothing goes anywhere
   }
   return list.map((e) => ({ e, to: map(e.rel) })).filter((x) => x.to && !x.to.split('/').some((p) => p === '..' || p === '' || p === '.'));
 }
@@ -193,7 +193,7 @@ async function install(archive, dest, kind, opts = {}) {
   const a = await openArchive(archive, tmp);
   try {
     const todo = plan(a.list, kind, opts);
-    if (!todo.length) throw new Error(EMPTY[kind] || 'This add-on is empty.');
+    if (!todo.length) throw new Error(EMPTY[kind] || require('./modRules').refusal(kind));
     for (const t of todo) { const w = where(dest, t.to, opts.alt); if (!w || !inside(w.base, w.out)) throw new Error('Unsafe file path in the add-on.'); if (fs.existsSync(w.out)) throw new Error(`Something is already at ${t.to.replace(/^@\w+\//, '')} in this folder, so nothing was installed. Remove it first.`); }
     const need = todo.reduce((s, t) => s + (t.e.size || 0), 0);
     const free = await fsp.statfs(fs.existsSync(dest) ? dest : path.dirname(dest)).then((st) => st.bavail * st.bsize).catch(() => Infinity);

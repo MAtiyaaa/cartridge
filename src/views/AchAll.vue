@@ -214,7 +214,7 @@ onMounted(async () => {
 .aa-g b { font-size: var(--t-md); }
 .aa-note { display: flex; align-items: center; gap: var(--s-2); padding: 10px 14px; margin-bottom: var(--s-3); border-radius: var(--r-md); background: var(--s1); }
 .aa-latest { margin-bottom: var(--s-4); }
-.aa-unlock { flex: none; width: 360px; display: flex; gap: 14px; padding: 14px; border-radius: var(--r-md); text-align: left; transition: transform 0.14s ease-out; }
+.aa-unlock { flex: none; width: 360px; display: flex; gap: 14px; padding: 14px; border-radius: var(--r-md); text-align: left; transition: transform var(--spring-snappy-d) var(--spring-snappy); }
 .aa-unlock:focus { transform: scale(1.03); }
 .aa-uicon { width: 64px; height: 64px; border-radius: var(--r-md); flex: none; display: grid; place-items: center; background: var(--tile-bg, rgba(0, 0, 0, 0.25)); box-shadow: var(--tile-shadow, 0 6px 16px rgba(0, 0, 0, 0.4)); overflow: hidden; }
 .aa-uicon img { width: 100%; height: 100%; object-fit: cover; }
@@ -229,7 +229,7 @@ onMounted(async () => {
 .aa-view button { display: inline-flex; align-items: center; gap: 6px; }
 /* Grid */
 .aa-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; padding-bottom: 30px; }
-.aa-card { display: flex; gap: 14px; align-items: center; padding: 12px 14px; border-radius: var(--r-md); text-align: left; position: relative; transition: transform 0.14s ease-out; min-width: 0; }
+.aa-card { display: flex; gap: 14px; align-items: center; padding: 12px 14px; border-radius: var(--r-md); text-align: left; position: relative; transition: transform var(--spring-snappy-d) var(--spring-snappy); min-width: 0; }
 .aa-card:focus { transform: scale(1.02); }
 .aa-art { width: 72px; height: 72px; border-radius: var(--r-md); flex: none; display: grid; place-items: center; overflow: hidden; background: var(--tile-bg, rgba(0, 0, 0, 0.25)); color: var(--muted); }
 .aa-art img { width: 100%; height: 100%; object-fit: cover; }

@@ -15,6 +15,7 @@ const fs = require('fs');
 
 // the serial patterns Syncthing matching already used (PS1 to PS3, PSP, Vita, PS4/PS5, Switch and 3DS title IDs)
 const { serialsIn } = require('./syncthing');
+const cide = require('./cide'); // IDs in names: CIDE's parse (the same rule, 0.9.52)
 const norm = (t) => String(t || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[™®©]/g, '')
   .replace(/\s*[\(\[][^\)\]]*[\)\]]/g, '').replace(/\b(trophies|trophy set|achievements)\b/g, '').replace(/^the\s+|,\s*the\b/g, '')
   .replace(/&/g, 'and').replace(/[^a-z0-9]+/g, ' ').trim();
@@ -37,7 +38,7 @@ function createIdentity(ctx) {
     c[k] = ids; save();
     return ids;
   }
-  const nameIds = (rom, where) => [...serialsIn([rom.fs_name, rom.name, ...(rom.files || []).map((f) => f.file_name), where ? where.split('/').pop() : ''].join(' '))];
+  const nameIds = (rom, where) => cide.parse([rom.fs_name, rom.name, ...(rom.files || []).map((f) => f.file_name), where ? where.split('/').pop() : ''].join(' '));
   function idsOf(rom) {
     const where = ctx.whereOf?.(rom.id) || '';
     return [...new Set([...nameIds(rom, where), ...fileIds(rom, where)])];

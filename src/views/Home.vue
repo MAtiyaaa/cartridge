@@ -388,8 +388,8 @@ onBeforeUnmount(() => rowRo?.disconnect());
 .shelves > .shelf-wrap:nth-child(n+3) { content-visibility: auto; contain-intrinsic-size: auto var(--row-h, 360px); margin-left: calc(-1 * var(--s-7)); margin-right: calc(-1 * var(--s-7)); padding-left: var(--s-7); padding-right: var(--s-7); }
 .shelves.rows-measure > .shelf-wrap { content-visibility: visible; }
 @media (max-width: 1400px) { .shelves > .shelf-wrap:nth-child(n+3) { margin-left: -36px; margin-right: -36px; padding-left: 36px; padding-right: 36px; } }
-.hero-enter-active { transition: opacity 0.14s ease-out; }
-.hero-leave-active { transition: opacity 0.1s ease-in; position: absolute; }
+.hero-enter-active { transition: opacity var(--fade-in); }
+.hero-leave-active { transition: opacity var(--fade-out); position: absolute; }
 .hero-enter-from, .hero-leave-to { opacity: 0; }
 .show-all .art { display: grid; place-items: center; background: var(--s2); }
 .show-all.wide { width: 250px; }

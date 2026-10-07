@@ -147,7 +147,7 @@ onMounted(async () => { await load(); focusFirst(el.value); });
 .tg-prog { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; font-size: var(--t-sm); color: #d4d8e2; }
 .tg-gc { display: inline-flex; gap: 5px; align-items: center; }
 .tg-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(420px, 1fr)); gap: 12px; padding-bottom: 40px; }
-.tg-t { display: flex; gap: 14px; padding: 12px 14px; border-radius: var(--r-md); outline: none; transition: transform 0.14s ease-out; }
+.tg-t { display: flex; gap: 14px; padding: 12px 14px; border-radius: var(--r-md); outline: none; transition: transform var(--spring-snappy-d) var(--spring-snappy); }
 .tg-t:focus { transform: scale(1.02); }
 .tg-t.locked { opacity: 0.7; }
 .tg-t.locked .tg-ticon img { filter: grayscale(1) brightness(0.7); }

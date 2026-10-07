@@ -462,6 +462,27 @@ function safeToRemove(rec, roots) {
 // folder). RPCS3 (rpcs3.cpp): `--headless --installfw <PUP>` installs with no window and quits.
 // Vita3K (main.cpp): `--firmware <PUP>` installs into its fs folder and quits. Vita firmware and its
 // font package are both .PUP files: each is installed the same way.
+// RPCS3's own folders on this device (config: dev_flash; cache: RPCS3.log), installed, Flatpak and EmuDeck's portable copy
+function rpcs3Dirs(home = os.homedir(), exe = '') {
+  const xdg = process.env.XDG_CONFIG_HOME || path.join(home, '.config'), cache = process.env.XDG_CACHE_HOME || path.join(home, '.cache');
+  const cfg = [path.join(xdg, 'rpcs3'), path.join(home, '.var/app/net.rpcs3.RPCS3/config/rpcs3')];
+  const logs = [path.join(cache, 'rpcs3/RPCS3.log'), path.join(home, '.var/app/net.rpcs3.RPCS3/cache/rpcs3/RPCS3.log')];
+  if (exe) { const d = path.dirname(exe); cfg.push(path.join(d, 'config')); logs.push(path.join(d, 'config/cache/RPCS3.log'), path.join(d, 'cache/RPCS3.log')); }
+  return { cfg, logs };
+}
+// 0.9.52 (tested with RPCS3 0.0.43 and Sony's 4.93 PUP): RPCS3 installs the firmware in seconds, writes "Successfully
+// installed PS3 firmware version X" to its log, and then ends with exit code 143 or keeps running, so its exit code says
+// nothing. Success is that log line, or firmware modules written during this run.
+function rpcs3FwDone(since, exe) {
+  const { cfg, logs } = rpcs3Dirs(os.homedir(), exe);
+  for (const f of logs) {
+    try { const st = fs.statSync(f); if (st.mtimeMs < since - 2000) continue; const t = fs.readFileSync(f, 'latin1'); const m = t.match(/Successfully installed PS3 firmware version ([\d.]+)/g); if (m) return { version: m.pop().match(/([\d.]+)\.?$/)[1].replace(/\.$/, '') }; } catch {}
+  }
+  for (const c of cfg) {
+    try { const d = path.join(c, 'dev_flash/vsh/module'), l = fs.readdirSync(d); if (l.length > 50 && l.some((n) => fs.statSync(path.join(d, n)).mtimeMs >= since - 2000)) return { version: null }; } catch {}
+  }
+  return null;
+}
 async function installFirmware({ emu, cmd, file, signal }) {
   const env = { ...process.env };
   for (const k of ['LD_PRELOAD', 'LD_LIBRARY_PATH', 'APPDIR', 'APPIMAGE', 'ARGV0', 'OWD']) delete env[k];
@@ -475,17 +496,26 @@ async function installFirmware({ emu, cmd, file, signal }) {
     p.stdout.on('data', keep); p.stderr.on('data', keep);
     const kill = () => { try { p.kill(); } catch {} };
     const timer = setTimeout(kill, 20 * 60e3);
+    // RPCS3 may stay open after installing: once its log says it's done, it is closed (0.9.52)
+    const watch = emu === 'rpcs3' ? setInterval(() => { if ((done = rpcs3FwDone(started, cmd.exe))) setTimeout(kill, 1500); }, 1000) : null;
     signal?.addEventListener('abort', kill, { once: true });
-    p.on('error', (e) => { clearTimeout(timer); reject(new Error(`${emu === 'rpcs3' ? 'RPCS3' : 'Vita3K'} didn't start: ${e.message}`)); });
-    p.on('exit', (c) => { clearTimeout(timer); resolve(c); });
+    p.on('error', (e) => { clearTimeout(timer); clearInterval(watch); reject(new Error(`${emu === 'rpcs3' ? 'RPCS3' : 'Vita3K'} didn't start: ${e.message}`)); });
+    p.on('exit', (c) => { clearTimeout(timer); clearInterval(watch); resolve(c); });
   });
+  const started = Date.now();
+  let done = null;
   let code;
   for (const qpa of emu === 'vita3k' ? QT_TRIES : [undefined]) { // as installVita: no window either way (--firmware quits)
     if (qpa) env.QT_QPA_PLATFORM = qpa; else if (qpa === null) delete env.QT_QPA_PLATFORM;
     code = await run();
     if (!NO_QT.test(tail)) break;
   }
-  if (code && code !== 0) throw new Error(`${emu === 'rpcs3' ? 'RPCS3' : 'Vita3K'} couldn't install the firmware: ${(tail.trim().split('\n').pop() || 'exit ' + code).slice(0, 200)}`);
+  if (emu === 'rpcs3') {
+    if (done || (done = rpcs3FwDone(started, cmd.exe))) return true;
+    if (signal?.aborted) throw new Error('Cancelled.');
+    throw new Error(`RPCS3 couldn't install the firmware: ${(tail.trim().split('\n').filter((l) => /error|fail|cannot|invalid/i.test(l)).pop() || tail.trim().split('\n').pop() || 'exit ' + code).slice(0, 200)}`);
+  }
+  if (code && code !== 0) throw new Error(`Vita3K couldn't install the firmware: ${(tail.trim().split('\n').pop() || 'exit ' + code).slice(0, 200)}`);
   return true;
 }
-module.exports = { vita3kFsPaths, vita3kWhy, vita3kLogTail, installFirmware, pkgInfo, packagesIn, licencePlan, stageLicences, exdataHas, npdOf, rpcs3Hdds, sfoSerial, install, vitaPrefs, vitaContent, findZrif, installVita, vitaArchiveContents, vitaUnpack, safeToRemove };
+module.exports = { rpcs3FwDone, rpcs3Dirs, vita3kFsPaths, vita3kWhy, vita3kLogTail, installFirmware, pkgInfo, packagesIn, licencePlan, stageLicences, exdataHas, npdOf, rpcs3Hdds, sfoSerial, install, vitaPrefs, vitaContent, findZrif, installVita, vitaArchiveContents, vitaUnpack, safeToRemove };

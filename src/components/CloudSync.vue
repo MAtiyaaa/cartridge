@@ -30,13 +30,13 @@ onMounted(() => { layer = pushLayer(document.querySelector('.cs-scrim'), { back:
 onBeforeUnmount(() => layer?.pop());
 </script>
 <style scoped>
-.cs-scrim { position: fixed; inset: 0; z-index: 46; display: grid; place-items: center; background: rgba(3, 4, 7, 0.55); animation: fade 0.18s ease-out; }
+.cs-scrim { position: fixed; inset: 0; z-index: 46; display: grid; place-items: center; background: rgba(3, 4, 7, 0.55); animation: fade var(--fade-in); }
 .cs { min-width: 0; width: min(440px, calc(100vw - 32px)); display: grid; grid-template-columns: auto 1fr; gap: var(--s-4); align-items: center; padding: var(--s-5); }
 .cs-mark { position: relative; width: 64px; height: 64px; color: var(--text); }
 .cs-mark svg { width: 64px; height: 64px; display: block; }
 .cs-track { fill: none; stroke: currentColor; stroke-width: 2.4; opacity: 0.12; }
-.cs-arc { fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-dasharray: 22 100; transform-origin: 32px 32px; animation: cs-turn 1.1s linear infinite; opacity: 0.85; }
-.cs-mark.done .cs-arc { stroke-dasharray: 100 100; animation: none; stroke: var(--green, #2fb36a); transition: stroke-dasharray 0.4s var(--ease-out, ease-out); }
+.cs-arc { fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-dasharray: 22 100; transform-origin: 32px 32px; animation: cs-turn var(--loop-spin) infinite; opacity: 0.85; }
+.cs-mark.done .cs-arc { stroke-dasharray: 100 100; animation: none; stroke: var(--green, #2fb36a); transition: stroke-dasharray var(--fade-slow); }
 .cs-mark.offline .cs-arc, .cs-mark.error .cs-arc, .cs-mark.conflict .cs-arc { animation: none; stroke-dasharray: 0 100; }
 .cs-ico { position: absolute; left: 50%; top: 50%; translate: -50% -50%; }
 .cs-mark.done .cs-ico { color: var(--green, #2fb36a); }
@@ -46,8 +46,8 @@ onBeforeUnmount(() => layer?.pop());
 .cs-label { font-size: var(--t-sm); overflow-wrap: anywhere; }
 .cs-game { font-size: var(--t-xs); overflow-wrap: anywhere; }
 .cs-bar { grid-column: 1 / -1; height: 4px; border-radius: 2px; background: color-mix(in srgb, var(--text) 12%, transparent); overflow: hidden; }
-.cs-bar i { display: block; height: 100%; background: var(--text); border-radius: 2px; transition: width 0.3s var(--ease-out, ease-out); }
-.cs-bar.live i { animation: cs-slide 1.2s ease-in-out infinite; }
+.cs-bar i { display: block; height: 100%; background: var(--text); border-radius: 2px; transition: width var(--progress); }
+.cs-bar.live i { animation: cs-slide var(--loop-pulse) infinite; }
 @keyframes cs-slide { from { transform: translateX(-100%); } to { transform: translateX(290%); } }
 @media (prefers-reduced-motion: reduce) { .cs-arc, .cs-bar.live i { animation: none; } }
 :global(body.motion-reduce .cs-arc), :global(body.motion-reduce .cs-bar.live i) { animation: none; }

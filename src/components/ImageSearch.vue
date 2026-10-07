@@ -2,7 +2,7 @@
   <div class="scrim" ref="el" @click.self="closeModal(null)">
     <div class="dialog isr">
       <div class="isr-head">
-        <div><div class="eyebrow">{{ kind === 'gif' ? 'GIFs from Openverse and Wikimedia Commons' : '4K wallpapers from Wallhaven' }}</div><h2>{{ q }}</h2></div>
+        <div><div class="eyebrow">{{ kind === 'gif' ? 'GIFs from Tenor, Openverse and Wikimedia Commons' : '4K wallpapers from Wallhaven' }}</div><h2>{{ q }}</h2></div>
         <button class="btn" data-focus @click="closeModal(null)"><Icon name="mdiClose" />Close</button>
       </div>
       <div v-if="err" class="muted">{{ err }}</div>
@@ -16,7 +16,7 @@
         </button>
         <button v-if="more" class="isr-item isr-more" data-focus @click="loadMore"><Icon name="mdiChevronDown" :size="28" />More</button>
       </div>
-      <p class="muted small" style="margin: 0">{{ kind === 'gif' ? 'Openly licensed GIFs from Openverse and Wikimedia Commons, the biggest first.' : 'Safe-for-work wallpapers from Wallhaven, 3840 by 2160 or bigger.' }} The one you pick is saved on this device.</p>
+      <p class="muted small" style="margin: 0">{{ kind === 'gif' ? 'GIFs from Tenor (safe search on), then openly licensed ones from Openverse and Wikimedia Commons. More brings another batch.' : 'Safe-for-work wallpapers from Wallhaven, 3840 by 2160 or bigger.' }} The one you pick is saved on this device.</p>
     </div>
   </div>
 </template>
@@ -34,7 +34,7 @@ async function load() {
   try {
     const got = await call('start:search', { q: props.q, kind: props.kind, page });
     list.value = [...(list.value || []), ...got.filter((r) => !(list.value || []).some((x) => x.url === r.url))];
-    more.value = got.length >= (props.kind === 'gif' ? 8 : 20); // GIFs too small to use are left out of each page of 20
+    more.value = got.length >= (props.kind === 'gif' ? 8 : 20); // a page of GIFs from Tenor is about 50; the free sources add a few
   } catch (e) { err.value = /allowlist|ENOTFOUND|fetch failed/i.test(e.message) ? 'Couldn’t reach the search. Check the connection and try again.' : e.message; }
 }
 async function loadMore() { page++; await load(); }

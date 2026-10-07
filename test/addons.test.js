@@ -157,7 +157,7 @@ test('mod layouts from the emulators\' own guides: Azahar mods, Switch exefs pat
   assert.deepStrictEqual(to(['Pack/' + T + '/tex1.png'], 'azahar', { id: T }), ['tex1.png']); // a texture pack still goes in the textures
   const S = '0100F2C0115B6000';
   assert.deepStrictEqual(to(['atmosphere/exefs_patches/60fps/abcd.ips'], 'switch', { id: S, name: 'Smooth' }), ['60fps/exefs/abcd.ips']);
-  assert.deepStrictEqual(to(['Dynamic FPS.pchtxt', 'readme.md'], 'switch', { id: S, name: 'Dynamic FPS' }), ['Dynamic FPS/exefs/Dynamic FPS.pchtxt', 'readme.md']);
+  assert.deepStrictEqual(to(['Dynamic FPS.pchtxt', 'readme.md'], 'switch', { id: S, name: 'Dynamic FPS' }), ['Dynamic FPS/exefs/Dynamic FPS.pchtxt']); // 0.9.52: a readme isn't for the emulator
   assert.deepStrictEqual(to(['0123456789ABCDEF.txt'], 'switch', { id: S, name: 'Cheats' }), ['Cheats/cheats/0123456789ABCDEF.txt']);
   assert.deepStrictEqual(to(['My Mod/romfs_ext/x.bfres'], 'switch', { id: S, name: 'My Mod' }), ['My Mod/romfs_ext/x.bfres']);
   assert.deepStrictEqual(to(['atmosphere/contents/' + S + '/romfs/Model/a.bfres'], 'switch', { id: S, name: 'Hair' }), ['Hair/romfs/Model/a.bfres']);

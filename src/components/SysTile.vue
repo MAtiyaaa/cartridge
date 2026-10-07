@@ -58,7 +58,7 @@ const tileStyle = computed(() => {
 <style>
 .systile .sys-top { height: 44px; display: flex; align-items: center; position: relative; z-index: 1; }
 .systile .sys-top + div { position: relative; z-index: 1; }
-.systile .sys-logo { max-height: 30px; max-width: 170px; object-fit: contain; object-position: left center; filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.45)); transition: transform 0.3s var(--ease); transform-origin: left center; }
+.systile .sys-logo { max-height: 30px; max-width: 170px; object-fit: contain; object-position: left center; filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.45)); transition: transform var(--spring-d) var(--spring); transform-origin: left center; }
 .systile:focus .sys-logo { transform: scale(1.06); }
 .systile .ondev { color: #b9f6ca; }
 .systile .sys-clip { position: absolute; inset: 0; border-radius: inherit; overflow: hidden; clip-path: inset(0 round 16px); pointer-events: none; }

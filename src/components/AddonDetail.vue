@@ -19,8 +19,11 @@
       <div class="adt-body" data-scroll>
         <div v-if="pics.length > 1" class="adt-pics"><img v-for="u in pics.slice(1)" :key="u" :src="u" loading="lazy" alt="" /></div>
         <p v-if="text" class="adt-text">{{ text }}</p>
-        <div v-else-if="p.source === 'gb' && !more" class="muted small"><Icon name="mdiSync" :size="14" class="spin" /> Reading its page…</div>
-        <template v-if="p.source === 'gb'">
+        <div v-else-if="remote && !more" class="muted small"><Icon name="mdiSync" :size="14" class="spin" /> Reading its page…</div>
+        <!-- 0.9.52: a ROM hack names the exact copy of the game it needs -->
+        <div v-if="more?.romInfo" class="adt-need"><Icon name="mdiInformationOutline" :size="18" /><span><b>Needs</b> {{ more.romInfo }}</span></div>
+        <div v-if="hack && hackMode && !hackMode.here" class="muted small">Download the game first: a hack is applied to your copy.</div>
+        <template v-if="p.source === 'gb' || p.source === 'nexus'">
           <div class="sec-title">Files</div>
           <div v-if="!more" class="muted small">…</div>
           <div v-else-if="!more.files.length" class="muted small">No zip, 7z or rar files in this mod.</div>
@@ -34,7 +37,11 @@
       <div class="row" style="justify-content: flex-end">
         <button v-if="p.url" class="btn" data-focus @click="openPage"><Icon name="mdiOpenInNew" />Its Page</button>
         <button class="btn" data-focus @click="closeModal(null)">Back</button>
-        <button v-if="p.source !== 'gb'" class="btn primary" data-focus data-autofocus :disabled="installed" @click="closeModal({ install: true })"><Icon name="mdiDownload" />{{ installed ? 'Installed' : 'Install' }}</button>
+        <template v-if="hack">
+          <button class="btn" :class="{ primary: !hackMode?.retroarch }" data-focus :disabled="installed || !hackMode?.here" @click="closeModal({ hack: 'copy' })"><Icon name="mdiContentCopy" />Make a Patched Copy</button>
+          <button v-if="hackMode?.retroarch" class="btn primary" data-focus data-autofocus :disabled="installed || !hackMode?.here" @click="closeModal({ hack: 'soft' })"><Icon name="mdiPlay" />{{ installed ? 'In Use' : 'Use With RetroArch' }}</button>
+        </template>
+        <button v-else-if="!remote || p.source === 'ps2'" class="btn primary" data-focus data-autofocus :disabled="installed" @click="closeModal({ install: true })"><Icon name="mdiDownload" />{{ installed ? 'Installed' : 'Install' }}</button>
       </div>
     </div>
   </div>
@@ -46,14 +53,17 @@ import { computed, onMounted, onBeforeUnmount, ref } from 'vue';
 import { pushLayer, focusFirst } from '../nav.js';
 import { call, closeModal, bytes } from '../store.js';
 import Icon from './Icon.vue';
-const props = defineProps({ p: Object, installed: Boolean, kind: String });
+const props = defineProps({ p: Object, installed: Boolean, kind: String, hackMode: Object });
+// sources read from their site (GameBanana, Nexus Mods, Romhacking.net); the PS2 catalog carries everything already
+const remote = computed(() => ['gb', 'nexus', 'rh'].includes(props.p.source));
+const hack = computed(() => props.p.source === 'rh');
 const el = ref(null), more = ref(null);
 const pics = computed(() => [...new Set([...(more.value?.images || []), ...(props.p.previews || []), props.p.preview].filter(Boolean))]);
 const author = computed(() => (props.p.authors || []).join(', ') || more.value?.author || '');
 const size = computed(() => props.p.size || (more.value?.files?.length === 1 ? more.value.files[0].size : 0));
 const version = computed(() => props.p.version || more.value?.version || '');
 const text = computed(() => more.value?.text || props.p.description || props.p.notes || '');
-const kindLabel = computed(() => (props.kind === 'tex' || props.p.source === 'ps2' ? 'Texture Pack' : 'Mod'));
+const kindLabel = computed(() => (props.p.source === 'rh' ? 'ROM Hack · Romhacking.net' : props.kind === 'tex' || props.p.source === 'ps2' ? 'Texture Pack' : props.p.source === 'nexus' ? 'Mod · Nexus Mods' : 'Mod'));
 // 0.9.32: its page opens in Cartridge (AddonsSheet), where a download clicked there installs for this game
 function openPage() { closeModal({ page: true }); }
 let layer;
@@ -61,6 +71,7 @@ onMounted(async () => {
   layer = pushLayer(el.value, { back: () => closeModal(null), start: () => closeModal(null), lb() {}, rb() {}, x() {}, y() {}, select() {}, lt() {}, rt() {} });
   focusFirst(el.value);
   if (props.p.source === 'gb') { more.value = await call('addons:gbMod', { modId: props.p.id }).catch(() => ({ files: [], images: [] })); focusFirst(el.value); }
+  else if (props.p.source === 'nexus' || props.p.source === 'rh') { more.value = await call('addons:detail', { source: props.p.source, item: JSON.parse(JSON.stringify(props.p)) }).catch((e) => ({ files: [], images: [], text: e.message })); focusFirst(el.value); }
 });
 onBeforeUnmount(() => layer?.pop());
 </script>
@@ -76,4 +87,7 @@ onBeforeUnmount(() => layer?.pop());
 .adt-pics { display: flex; gap: 8px; overflow-x: auto; }
 .adt-pics img { height: 120px; border-radius: var(--r-sm); }
 .adt-text { margin: 0; white-space: pre-line; line-height: 1.5; color: var(--text); }
+.adt-need { display: flex; gap: var(--s-2); align-items: flex-start; padding: var(--s-3); border-radius: var(--r-md); background: var(--s2); font-size: var(--t-sm); line-height: 1.45; }
+.adt-need .icon { flex: none; margin-top: 1px; }
+.adt-need b { margin-right: 4px; }
 </style>

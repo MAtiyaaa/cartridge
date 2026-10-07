@@ -375,6 +375,9 @@ onMounted(async () => {
   // Cartridge Save Sync in the background (0.9.51): a word when saves moved after a game, and when two devices
   // changed the same save (it waits for you in Settings → Saves and Sync)
   window.cart.on('savesync', (p) => {
+    // away from the server (0.9.52): once, when the first save is held, and when they go up
+    if (p?.state === 'held' && p.held && p.held.at - p.held.since < 2000) return toast('RomM can’t be reached from here. Your saves stay on this device and go up when it can.', 'info', 6000, 'mdiCloudOffOutline');
+    if (p?.state === 'released') { const c = p.counts || {}; return toast(c.conflict ? `Back in touch with RomM. ${c.conflict === 1 ? 'A save' : `${c.conflict} saves`} changed on two devices: choose in Settings → Saves and Sync.` : `Back in touch with RomM${c.up ? `: ${c.up} ${c.up === 1 ? 'save' : 'saves'} sent` : ''}.`, c.conflict ? 'info' : 'ok', 5000, 'mdiCloudCheckOutline'); }
     if (p?.state !== 'done' || !['after', 'back', 'scheduled'].includes(p.why)) return;
     const c = p.counts || {};
     if (c.conflict) toast(`${c.conflict === 1 ? 'A save' : `${c.conflict} saves`} changed on two devices. Choose which to keep in Settings → Saves and Sync.`, 'info', 7000, 'mdiCallSplit');
@@ -530,10 +533,10 @@ function modalFrom(el) {
    then the letters drop and it closes back into the logo */
 .brand { position: relative; }
 .greet { position: absolute; left: calc(100% + 14px); top: 50%; display: flex; white-space: nowrap; overflow: hidden; translate: 0 -50%; font-family: var(--display); font-size: var(--t-md); font-weight: 700; letter-spacing: -0.01em; color: var(--text); pointer-events: none;
-  clip-path: inset(-20% 100% -20% 0); animation: greet-open 0.7s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
-.greet span { opacity: 0; transform: translateY(12px); filter: blur(5px); animation: greet-char 0.55s cubic-bezier(0.16, 1, 0.3, 1) forwards; animation-delay: calc(0.12s + var(--i) * 0.035s); }
-.greet.out { animation: greet-close 0.5s cubic-bezier(0.7, 0, 0.84, 0) 0.25s forwards; clip-path: inset(-20% 0 -20% 0); }
-.greet.out span { opacity: 1; transform: none; filter: none; animation: greet-drop 0.3s ease-in forwards; animation-delay: calc(var(--i) * 0.012s); }
+  clip-path: inset(-20% 100% -20% 0); animation: greet-open var(--spring-soft-d) var(--spring-soft) forwards; }
+.greet span { opacity: 0; transform: translateY(12px); filter: blur(5px); animation: greet-char var(--spring-soft-d) var(--spring-soft) forwards; animation-delay: calc(0.12s + var(--i) * 0.035s); }
+.greet.out { animation: greet-close var(--d-slow) var(--ease-in) 0.25s forwards; clip-path: inset(-20% 0 -20% 0); }
+.greet.out span { opacity: 1; transform: none; filter: none; animation: greet-drop var(--d-slow) var(--ease-in) forwards; animation-delay: calc(var(--i) * 0.012s); }
 @keyframes greet-open { to { clip-path: inset(-20% 0 -20% 0); } }
 @keyframes greet-close { to { clip-path: inset(-20% 100% -20% 0); } }
 @keyframes greet-char { to { opacity: 1; transform: none; filter: none; } }
@@ -541,7 +544,7 @@ function modalFrom(el) {
 
 .tab-trig { margin: 0 4px; }
 /* search (0.9.19): a round button with Y until it's used, then it opens into a field */
-.top-search { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; width: 40px; height: 40px; padding: 0 10px 0 11px; border-radius: 20px; background: rgba(255, 255, 255, 0.07); color: rgba(255, 255, 255, 0.7); cursor: text; overflow: hidden; transition: width 320ms cubic-bezier(0.23, 1, 0.32, 1), background 160ms, color 160ms; }
+.top-search { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; width: 40px; height: 40px; padding: 0 10px 0 11px; border-radius: 20px; background: rgba(255, 255, 255, 0.07); color: rgba(255, 255, 255, 0.7); cursor: text; overflow: hidden; transition: width var(--spring-d) var(--spring), background var(--tint), color var(--tint); }
 .top-search:hover { background: rgba(255, 255, 255, 0.11); }
 /* a round button with the mouse or touch; room for the Y hint with a controller */
 :global(body.pad-mode .top-search:not(.open):not(:focus-within)) { width: 70px; }
@@ -558,7 +561,7 @@ function modalFrom(el) {
 .top-search input::placeholder { color: rgba(255, 255, 255, 0.5); }
 .top-search .clear { background: none; border: 0; color: var(--muted); padding: 4px; display: grid; place-items: center; }
 .top-search :deep(.pb) { transform: scale(0.85); opacity: 0.8; }
-.backbtn { width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; background: rgba(255, 255, 255, 0.08); margin-right: -4px; transition: background 160ms; }
+.backbtn { width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; background: rgba(255, 255, 255, 0.08); margin-right: -4px; transition: background var(--tint); }
 .backbtn:hover { background: rgba(255, 255, 255, 0.14); }
 .backbtn:active { background: rgba(255, 255, 255, 0.2); transform: scale(0.96); }
 .pops { position: fixed; top: 76px; right: 24px; z-index: 80; display: flex; flex-direction: column; gap: 10px; pointer-events: none; }
@@ -569,20 +572,20 @@ function modalFrom(el) {
 .pop-kind { display: flex; gap: 6px; align-items: center; font-size: var(--t-xs); letter-spacing: 0.04em; color: #cfd6e4; }
 .pop-name { font-family: var(--display); font-weight: 700; font-size: var(--t-md);  overflow-wrap: anywhere; }
 .pop-game { font-size: var(--t-xs); color: var(--muted);  overflow-wrap: anywhere; }
-.pop-enter-active, .pop-leave-active { transition: opacity 0.3s, transform 0.35s var(--ease); }
+.pop-enter-active, .pop-leave-active { transition: opacity var(--fade-slow), transform var(--spring-d) var(--spring); }
 .pop-enter-from { opacity: 0; transform: translateX(40px); }
 .pop-leave-to { opacity: 0; transform: translateY(-12px); }
 .steam-ring { position: relative; flex: none; width: 30px; height: 30px; padding: 0; display: grid; place-items: center; }
 .steam-ring .sr-ring { position: absolute; inset: 0; width: 100%; height: 100%; transform: rotate(-90deg); }
-.sr-arc { fill: none; stroke: var(--text); stroke-width: 3; stroke-linecap: round; transition: stroke-dasharray 600ms var(--ease-out); }
-.steam-ring.wait .sr-ring { animation: sr-spin 1.4s linear infinite; }
+.sr-arc { fill: none; stroke: var(--text); stroke-width: 3; stroke-linecap: round; transition: stroke-dasharray var(--fade-slow); }
+.steam-ring.wait .sr-ring { animation: sr-spin var(--loop-spin) infinite; }
 @keyframes sr-spin { to { transform: rotate(270deg); } }
 .sr-logo { opacity: 0.9; }
 /* the sync ring (0.9.38): the Steam ring's look, its arc on the spring; done = a tick, then it settles away */
 .sync-ring .sr-arc { transition: stroke-dasharray var(--spring-soft-d, 600ms) var(--spring-soft, var(--ease-out)); }
 .sync-ring .sr-logo { transition: transform var(--spring-d, 300ms) var(--spring-bounce, var(--ease-out)); }
 .sync-ring.done .sr-logo { transform: scale(1.12); }
-.ring-out-enter-active { transition: opacity 220ms var(--ease-out), transform var(--spring-d, 300ms) var(--spring, var(--ease-out)); }
-.ring-out-leave-active { transition: opacity 260ms var(--ease-in-out), transform 260ms var(--ease-in-out); }
+.ring-out-enter-active { transition: opacity var(--fade-in), transform var(--spring-d, 300ms) var(--spring, var(--ease-out)); }
+.ring-out-leave-active { transition: opacity var(--fade-slow), transform var(--spring-d) var(--spring); }
 .ring-out-enter-from, .ring-out-leave-to { opacity: 0; transform: scale(0.7); }
 </style>

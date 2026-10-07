@@ -24,6 +24,7 @@ const USER_DATA = app.getPath('userData');
 const CONFIG_FILE = path.join(USER_DATA, 'config.json');
 const MANIFEST_FILE = path.join(USER_DATA, 'installed.json');
 const IMG_CACHE = path.join(USER_DATA, 'imgcache');
+const LIB_ART = path.join(USER_DATA, 'imgcache-library'); // every game's cover, small, for browsing away from the server (0.9.52)
 
 // ---------------------------------------------------------------- config
 const DEFAULT_CONFIG = {
@@ -48,6 +49,7 @@ const DEFAULT_CONFIG = {
     colors: { highlight: '', buttons: '', bars: '', background: '' } },
   sync: { onLaunch: true, everyMinutes: 60 },
   sgdbKey: '', // optional SteamGridDB API key for game logos
+  nexusKey: '', // optional Nexus Mods personal API key (0.9.52): only Premium members' one-press downloads use it
   ra: { user: '', key: '' }, // RetroAchievements username + web API key
   trophies: { sources: {}, sync: true, popups: true, device: '' }, // PS3/PS4/Xbox 360/Vita trophies from emulators
   graphics: 'auto', // auto (GPU, falls back on failure) | software
@@ -1010,6 +1012,11 @@ async function handleImage(request) {
     const sz = !sonySlug && want ? await sizedImage(buf, type, want, file) : null;
     return new Response(sz ? sz.buf : buf, { headers: { 'Content-Type': sz ? sz.type : type, 'Cache-Control': 'max-age=31536000' } });
   } catch {}
+  // away from the server (0.9.52): the small copy libraryArt() kept serves a card at once, and stands in for any size
+  // when RomM can't be reached
+  const libFile = path.join(LIB_ART, key + '.jpg');
+  const fromLib = async () => { try { return new Response(await fsp.readFile(libFile), { headers: { 'Content-Type': 'image/jpeg' } }); } catch { return null; } };
+  if (want && want <= LIB_ART_W * 1.15 && !sonySlug) { const r = await fromLib(); if (r) return r; }
   try {
     let url, headers = {};
     if (/^https?:\/\//.test(target)) url = target.replace(/^\/\//, 'https://');
@@ -1017,15 +1024,50 @@ async function handleImage(request) {
     if (url.startsWith('//')) url = 'https:' + url;
     // outside sites through webFetch (Electron's network, as the rest of Cartridge: sites behind Cloudflare refuse Node's)
     const r = /^https?:\/\//.test(target) ? await webFetch(url, { headers: { 'User-Agent': 'Cartridge (https://github.com/abdu2304/cartridge)' }, signal: AbortSignal.timeout(20000) }) : await fetch(url, { headers, signal: AbortSignal.timeout(20000) });
-    if (!r.ok) return new Response('nf', { status: 404 });
+    if (!r.ok) return (await fromLib()) || new Response('nf', { status: 404 });
     const buf = Buffer.from(await r.arrayBuffer());
     const type = r.headers.get('content-type') || 'image/jpeg';
     await fsp.mkdir(IMG_CACHE, { recursive: true }).then(() => Promise.all([fsp.writeFile(file, buf), fsp.writeFile(file + '.type', type)])).catch(() => {});
     const sz = !sonySlug && want ? await sizedImage(buf, type, want, file) : null;
     return new Response(sz ? sz.buf : mark(buf), { headers: { 'Content-Type': sz ? sz.type : type } });
   } catch {
-    return new Response('err', { status: 502 });
+    return (await fromLib()) || new Response('err', { status: 502 });
   }
+}
+// Every game's cover kept small (0.9.52, owner: a RomM at home with no tunnel; away, the library should still look
+// whole, without taking much room). Once the library is synced and RomM answers, each cover is fetched once, shrunk
+// to a 360 px JPEG (about 25 KB, so 2,000 games is about 50 MB) and kept apart from the picture cache, which trims
+// itself. Covers of games that left the library are dropped. The budget stops it at 250 MB on very big libraries.
+const LIB_ART_W = 360, LIB_ART_MAX = 250 * 1048576;
+async function libraryArt() {
+  if (!library || library.local || !config.configured) return;
+  const want = new Map();
+  for (const list of Object.values(library.roms || {})) for (const r of list) { const p = r.path_cover_small || r.path_cover_large || r.url_cover; if (p) want.set(crypto.createHash('sha1').update(p).digest('hex'), p); }
+  await fsp.mkdir(LIB_ART, { recursive: true });
+  let have = []; try { have = await fsp.readdir(LIB_ART); } catch {}
+  let total = 0;
+  for (const n of have) { const k = n.replace(/\.jpg$/, ''); if (!want.has(k)) await fsp.unlink(path.join(LIB_ART, n)).catch(() => {}); else { total += (await fsp.stat(path.join(LIB_ART, n)).catch(() => ({ size: 0 }))).size; want.delete(k); } }
+  if (!want.size) return;
+  let base; try { base = await resolveBase(); } catch { return; }
+  if (!base || !(await probe(base, config.server, 4000).catch(() => null))?.ok) return; // not reachable: next time
+  const { nativeImage } = require('electron');
+  let made = 0;
+  for (const [k, p] of want) {
+    if (total > LIB_ART_MAX || gameFocus.away || runOn) break; // a game started: stop, carry on next time
+    try {
+      let url, headers = {};
+      if (/^https?:\/\//.test(p)) url = p; else { url = base + (p.startsWith('/') ? '' : '/') + p; headers = authHeaders(); delete headers.Accept; }
+      const r = /^https?:\/\//.test(p) ? await webFetch(url, { signal: AbortSignal.timeout(20000) }) : await fetch(url, { headers, signal: AbortSignal.timeout(20000) });
+      if (!r.ok) continue;
+      const im = nativeImage.createFromBuffer(Buffer.from(await r.arrayBuffer()));
+      if (im.isEmpty()) continue;
+      const b = (im.getSize().width > LIB_ART_W ? im.resize({ width: LIB_ART_W, quality: 'better' }) : im).toJPEG(82);
+      await fsp.writeFile(path.join(LIB_ART, k + '.jpg'), b);
+      total += b.length; made++;
+    } catch {}
+    await new Promise((ok) => setTimeout(ok, 120)); // gentle on the server and the device
+  }
+  if (made) log('library art: kept', made, 'covers,', Math.round(total / 1048576), 'MB in all');
 }
 
 // ---------------------------------------------------------------- logos + custom artwork
@@ -1821,7 +1863,8 @@ async function runJob(it) {
   } catch (e) {
     // stopped on purpose: keep a status set since (paused, or queued again by Resume)
     if (ac.signal.aborted) { if (!['paused', 'queued'].includes(it.status)) it.status = 'cancelled'; }
-    else { it.status = 'error'; it.error = e.message; }
+    // 0.9.52: away from a RomM with no tunnel the library still shows; say so plainly instead of a network code
+    else { it.status = 'error'; it.error = /ENOTFOUND|EAI_AGAIN|ECONNREFUSED|EHOSTUNREACH|ENETUNREACH|ETIMEDOUT|fetch failed|ERR_(NAME_NOT_RESOLVED|INTERNET_DISCONNECTED|CONNECTION_|ADDRESS_UNREACHABLE)/.test(String(e.message)) ? 'Your RomM server can’t be reached from here. Games already on this device still play; try again when you’re back on its network.' : e.message; }
     // a re-download that didn't finish: the old copy goes back, so the game is never left missing
     if (it.backup && ['error', 'cancelled'].includes(it.status)) await restoreBackup(it);
   }
@@ -2222,6 +2265,22 @@ const patchesMod = require('./patches');
 const cheatsMod = require('./cheats');
 const webFetch = require('./webFetch'); // outside services through Chromium's network stack (0.9.17: 403s)
 // add-ons Cartridge installed (0.9.17): { key: { dest, files, ... } }; Remove deletes only those files
+// The web and mods engines (0.9.52): one place for outside services, one shape for every mod source (web.js, modEngine.js)
+let webEngine = null, modEngine = null;
+const webEng = () => (webEngine ||= require('./web').createWeb({ cacheDir: path.join(USER_DATA, 'web-cache'), log }));
+const modsEng = () => (modEngine ||= require('./modEngine').createModEngine({ web: webEng(), key: (n) => (n === 'nexus' ? String(config.nexusKey || '').trim() || null : null), cacheFile: path.join(USER_DATA, 'addons-ps2-catalog.json'), log }));
+// a library game as the mods engine sees it: its name and Cartridge's console folder name (RomM's slug mapped)
+const modGame = (rom) => ({ name: rom.name || rom.fs_name || '', slug: (PLATFORM_MAP[rom.platform_slug] || PLATFORM_MAP[rom.platform_fs_slug] || [rom.platform_slug])[0], romId: rom.id });
+// how a ROM hack can be used for a game: RetroArch patches games as it loads them (a patch beside the game, named like
+// it), so with RetroArch nothing is written into the game; otherwise a patched copy is made beside the original
+function hackModes(rom) {
+  const file = installedMap[rom.id];
+  if (!file || file === MARKED) return { here: false };
+  let t = null; try { t = steamMgr.gameTemplate(rom.id, modGame(rom).slug); } catch {}
+  const ra = !!t && (/retroarch/i.test(t.exe || '') || /(^|\s)-L\s/.test(t.lo || ''));
+  return { here: true, retroarch: ra, file: path.basename(file), dir: fs.existsSync(file) && fs.statSync(file).isDirectory() };
+}
+const hackCache = new Map(); // ROM hack downloads read by hacks:prepare, kept 30 minutes for hacks:apply
 const ADDONS_FILE = path.join(USER_DATA, 'addons-installed.json');
 let addonBrowser = null;
 let addonRun = null, addonCache = null, emuGetRun = null;
@@ -2374,7 +2433,7 @@ function syncGameList() {
   const S = require('./syncthing');
   return [...romIndexMain().values()].map((r) => {
     const where = installedMap[r.id];
-    const ids = [...S.serialsIn([r.fs_name, ...(r.files || []).map((f) => f.file_name), where && where !== MARKED ? path.basename(where) : ''].join(' '))];
+    const ids = require('./cide').parse([r.fs_name, ...(r.files || []).map((f) => f.file_name), where && where !== MARKED ? path.basename(where) : ''].join(' '));
     // 0.9.28: disc IDs read from the game itself, for folders named after them (Dolphin's GALE01, Azahar's title IDs);
     // read through the game identity engine since 0.9.48 (same readers, one cache)
     const discIds = where && where !== MARKED && /\.(iso|gcm|rvz|wia|wbfs|ciso|gcz|3ds|cci|cia|cxi)$/i.test(where) ? identity.fileIds(r, where) : [];
@@ -2482,7 +2541,7 @@ async function saveSyncRun({ romId = null, key = null, choice = null, dry = fals
     romId = romId == null ? null : Number(romId);
     const local = SS.units({ extra, games: ssGames(), carriers: ssCarriers() });
     let remotes = [];
-    try { remotes = await (await ssRpcList(romId)); } catch (e) { log('save sync: RomM unreachable', e.message); return { offline: true, error: e.message }; }
+    try { remotes = await (await ssRpcList(romId)); } catch (e) { log('save sync: RomM unreachable', e.message); if (why !== 'before' && !dry) ssHold(romId); return { offline: true, error: e.message, held: ssData.held || null }; }
     const devId = await rommDevice(), rpc = ssRpc(devId);
     const todo = [...local, ...SS.remoteOnly(remotes, new Set(local.map((u) => u.key)))].filter((u) => ssFor(u, romId) && (!key || u.key === key));
     const results = [];
@@ -2501,6 +2560,37 @@ async function saveSyncRun({ romId = null, key = null, choice = null, dry = fals
     return { results, counts };
   })().finally(() => { ssBusy = null; });
   return ssBusy;
+}
+// Away from the server (0.9.52, owner: a RomM at home with no tunnel, played on a handheld away). Nothing special
+// is needed to keep a save: the emulator keeps writing it on this device, played again or not. What Cartridge adds is
+// the hold: the games played while RomM couldn't be reached are noted (save-sync.json held), RomM is checked every
+// minute while something is held (never while a game runs), and the moment it answers they go up. The ledger then
+// decides as always: changed only here = up, changed on another device too = a conflict you settle (never guessed).
+let ssHoldT = null;
+function ssHold(romId) {
+  const h = ssData.held || { since: Date.now(), romIds: [], all: false };
+  if (romId == null) h.all = true; else if (!h.romIds.includes(romId)) h.romIds.push(romId);
+  h.at = Date.now(); ssData.held = h; saveJson(SAVESYNC_FILE, ssData, false);
+  broadcast('savesync', { state: 'held', held: h });
+  ssWatchBack();
+}
+function ssWatchBack() {
+  if (ssHoldT || !ssData.held) return;
+  ssHoldT = setInterval(async () => {
+    if (!ssData.held || !saveSyncOn()) { clearInterval(ssHoldT); ssHoldT = null; return; }
+    if (gameFocus.away || runOn) return; // a game is in front: wait, it may be writing its save
+    let ok = false;
+    try { const b = await resolveBase(true); ok = !!b && !!(await probe(b, config.server, 4000))?.ok; } catch {}
+    if (!ok) return;
+    const held = ssData.held;
+    const r = await saveSyncRun({ why: 'reconnected' }).catch(() => null);
+    if (!r || r.offline) return;
+    if (ssData.held === held) delete ssData.held;
+    saveJson(SAVESYNC_FILE, ssData, false);
+    log('save sync: server back, held saves synced', JSON.stringify(r.counts || {}));
+    broadcast('savesync', { state: 'released', counts: r.counts || {}, held });
+    clearInterval(ssHoldT); ssHoldT = null;
+  }, 60000);
 }
 // every save of ours in RomM (or one game's): what other devices put there
 async function ssRpcList(romId) {
@@ -2880,6 +2970,7 @@ function createWindow() {
   // 0.9.48: on the scheduler (electron/scheduler.js), so both wait while a game runs and run once it has ended
   if (!globalThis.__colsAuto) {
     globalThis.__colsAuto = true;
+    if (ssData.held) ssWatchBack(); // saves held from last time go up once RomM answers (0.9.52)
     scheduler.add('save-sync', { every: 30 * 60000, firstAfter: 40000, deferWhilePlaying: true, run: () => saveSyncRun({ why: 'scheduled' }) }); // 0.9.51
     scheduler.add('steam-collections', { every: 600000, firstAfter: 30000, deferWhilePlaying: true, run: async () => colsAuto() });
     scheduler.add('bios-check', { once: true, firstAfter: 45000, deferWhilePlaying: true, run: () => biosSetup({ install: true }).catch(() => {}) }); // 0.9.38: firmware too, when an emulator lacks it
@@ -3295,7 +3386,7 @@ const handlers08 = {
   // every save on this device with the game it belongs to (0.9.29); read only
   'saves:list': ({ fresh } = {}) => savesList(fresh),
   // Cartridge Save Sync (0.9.51)
-  'savesync:status': () => ({ mode: config.saveSync || null, on: saveSyncOn(), syncthing: syncthingSaves(), busy: !!ssBusy, last: ssData.last, saved: Object.keys(ssData.ledger).length, backups: SAVE_BACKUPS }),
+  'savesync:status': () => ({ mode: config.saveSync || null, on: saveSyncOn(), syncthing: syncthingSaves(), busy: !!ssBusy, last: ssData.last, saved: Object.keys(ssData.ledger).length, backups: SAVE_BACKUPS, held: ssData.held ? { ...ssData.held, games: ssData.held.romIds.map((id) => romIndexMain().get(id)?.name).filter(Boolean) } : null }),
   'savesync:set': ({ on } = {}) => {
     if (on && syncthingSaves()) throw new Error('This device syncs saves with Syncthing. Stop using Syncthing for saves first: a device uses one or the other.');
     config.saveSync = on ? 'cartridge' : null; saveConfig();
@@ -3912,13 +4003,14 @@ const handlers = {
     }
     if (slug === 'switch') { const k = require('./bios').status('switch', { roots: emuRootsAll() }); const v = switchVersionOf(where && where !== MARKED ? where : '', k?.ok ? [path.dirname(k.where)] : []); if (v) { ids.version = v; if (!ids.switchId && v.titleId) { ids.switchId = v.titleId; ids.switchIdLower = v.titleId.toLowerCase(); } } }
     if (typeof out === 'function') out(ids);
-    const list = A.forGame(slug, ids, A.emulators());
+    const R = require('./modRules');
+    const list = A.forGame(slug, ids, A.emulators()).map((x) => { const r = R.RULES[R.kindOf(x.id)]; return r ? { ...x, rule: { what: r.what, needs: r.needs, on: r.on } } : x; }); // 0.9.52: what it takes, shown in the sheet
     // 0.9.38 (owner: mods for shadPS4): shadPS4 lays <game folder>-mods over the game (read only, above -UPDATE), so a
     // mod goes beside the game and never into it; the game folder is the one holding eboot.bin
     if (slug === 'ps4' && where && where !== MARKED) {
       let g = where;
       try { if (!fs.existsSync(path.join(g, 'eboot.bin'))) g = fs.readdirSync(where).map((n) => path.join(where, n)).find((d) => fs.existsSync(path.join(d, 'eboot.bin'))) || ''; } catch { g = ''; }
-      if (g) list.push({ id: 'shadps4', name: 'shadPS4', on: true, mods: true, emuRoot: 'shadps4:' + g, root: path.dirname(g), folder: g + '-mods', has: fs.existsSync(g + '-mods'), game: g });
+      if (g) list.push({ id: 'shadps4', name: 'shadPS4', on: true, mods: true, rule: (({ what, needs, on }) => ({ what, needs, on }))(R.RULES.shadps4), emuRoot: 'shadps4:' + g, root: path.dirname(g), folder: g + '-mods', has: fs.existsSync(g + '-mods'), game: g });
     }
     return list;
   },
@@ -3943,12 +4035,19 @@ const handlers = {
     return hit.folder;
   },
   // Add-on downloads (0.9.17): what can be installed for a game, from where, and what Cartridge put in
-  'addons:available': async ({ romId, sort = 'downloads' }) => {
+  // 0.9.52: every source is a provider of the mods engine (modEngine.js); sources lists the game's (EmuCoreX, GameBanana,
+  // Nexus Mods, ROM hacks) and source picks one; the PS2 catalog and GameBanana keep their own path below, unchanged
+  'addons:available': async ({ romId, sort = 'downloads', source = '' }) => {
     const rom = romIndexMain().get(Number(romId));
     if (!rom) return { emus: [], packs: [], installed: [] };
     const emus = handlers['addons:forGame']({ romId });
     const installed = Object.entries(addonRecs()).filter(([, r]) => r.romId === rom.id).map(([key, r]) => ({ key, ...r, files: undefined, count: r.files.length }));
-    const out = { emus, installed, packs: [], source: null, error: '', featured: [] };
+    const out = { emus, installed, packs: [], source: null, error: '', featured: [], sources: modsEng().sourcesFor({ ...modGame(rom), mods: emus.some((e) => require('./modRules').takesMods(e.id)) }) };
+    if (source === 'nexus' || source === 'rh') {
+      if (source === 'nexus' && !emus.some((e) => require('./modRules').takesMods(e.id))) return { ...out, source, error: 'None of the emulators for this console on this device take mods Cartridge knows how to install.' };
+      const r = await modsEng().list(source, modGame(rom), { sort });
+      return { ...out, source, packs: r.items, error: r.error || '', modGame: r.game || null, hackMode: source === 'rh' ? hackModes(rom) : null };
+    }
     // 0.9.23: hand-picked texture packs from their creators' pages (Dolphin by game ID)
     // featured texture packs: GameCube by game ID, and HenrikoMagnifico's GameCube, Wii and 3DS packs by ID or name (0.9.24)
     try {
@@ -3980,6 +4079,71 @@ const handlers = {
     return out;
   },
   'addons:gbFiles': ({ modId }) => require('./addonSources').gbFiles(modId),
+  // one add-on in full from any source (0.9.52): files, text, pictures (AddonDetail)
+  'addons:detail': ({ source, item }) => modsEng().detail(source, item),
+  // the Nexus Mods key in Settings: who it belongs to and whether downloads are one press (Premium)
+  'nexus:check': async ({ key }) => { const k = String(key || '').trim(); if (!k) return null; return modsEng().get('nexus').account(k); },
+  // ROM hacks (0.9.52): the hack's download read for its patches (IPS, UPS, BPS; xdelta and PPF named but not applied)
+  'hacks:prepare': async ({ romId, item }) => {
+    const rom = romIndexMain().get(Number(romId));
+    if (!rom) throw new Error('That game isn’t in the library.');
+    const d = await modsEng().detail('rh', item);
+    const f = d.files[0];
+    if (!f) throw new Error('Romhacking.net has no download for this hack.');
+    const buf = await webEng().buffer(f.url, { headers: { Accept: '*/*' }, timeout: 120000 });
+    const P = require('./romPatch'), patches = [];
+    const isZip = buf.length > 4 && buf.readUInt32LE(0) === 0x04034b50;
+    const take = (name, data) => { const kind = P.kindOf(name, data); if (kind) patches.push({ name, kind, supported: P.SOFT.has(kind), size: data.length, data }); };
+    if (isZip) {
+      await new Promise((ok, bad) => require('yauzl').fromBuffer(buf, { lazyEntries: true }, (e, z) => {
+        if (e) return bad(new Error('The hack’s download couldn’t be opened.'));
+        z.on('entry', (en) => {
+          if (/\/$/.test(en.fileName) || !/\.(ips|ups|bps|xdelta|vcdiff|ppf|aps)$/i.test(en.fileName) || en.uncompressedSize > 256 << 20) return z.readEntry();
+          z.openReadStream(en, (er, st) => { if (er) return z.readEntry(); const parts = []; st.on('data', (c) => parts.push(c)); st.on('end', () => { take(en.fileName, Buffer.concat(parts)); z.readEntry(); }); });
+        });
+        z.on('end', ok); z.on('error', bad); z.readEntry();
+      }));
+    } else take(f.name.replace(/\.zip$/i, ''), buf);
+    if (!patches.length) throw new Error('No patch file was found in this hack’s download.');
+    const id = `rh-${item.id}-${Date.now()}`;
+    hackCache.set(id, { item, patches, at: Date.now() });
+    for (const [k, v] of hackCache) if (Date.now() - v.at > 30 * 60e3) hackCache.delete(k);
+    return { id, romInfo: d.romInfo || '', modes: hackModes(rom), patches: patches.map(({ name, kind, supported, size }, i) => ({ i, name, kind, supported, size })) };
+  },
+  // use one patch: 'soft' puts it beside the game for RetroArch (the game file is never written), 'copy' writes a
+  // patched copy beside the original (never over a file). Both are recorded like add-ons, so Delete removes them.
+  'hacks:apply': async ({ romId, id, index = 0, mode }) => {
+    const rom = romIndexMain().get(Number(romId)), prep = hackCache.get(id);
+    if (!rom || !prep) throw new Error('Open the hack again: its download expired.');
+    const pt = prep.patches[index], P = require('./romPatch');
+    if (!pt?.supported) throw new Error(`${P.KIND[pt?.kind] || 'This'} patches need a separate tool; Cartridge uses IPS, UPS and BPS.`);
+    let file = installedMap[rom.id];
+    if (!file || file === MARKED) throw new Error('Download the game first: the hack is applied to your copy.');
+    if (fs.statSync(file).isDirectory()) throw new Error('This game is a folder; ROM hacks are for single-file games.');
+    const dir = path.dirname(file), recs = addonRecs(), key = `rh:${prep.item.id}:${rom.id}:${mode}`;
+    if (recs[key]) throw new Error('This hack is already in use for this game.');
+    let made;
+    if (mode === 'soft') {
+      if (!hackModes(rom).retroarch) throw new Error('Only RetroArch patches games as it loads them. Make a patched copy instead.');
+      made = P.softName(file, pt.kind);
+      // one hack at a time: RetroArch reads the patch named like the game
+      if (fs.existsSync(made)) throw new Error('A patch for this game is already beside it. Delete it first (Installed above).');
+      fs.writeFileSync(made, pt.data, { flag: 'wx' });
+    } else {
+      let rom0 = null, ext = path.extname(file);
+      if (/\.zip$/i.test(file)) { // the ROM inside a zip: its biggest file
+        rom0 = await new Promise((ok, bad) => require('yauzl').open(file, { lazyEntries: true }, (e, z) => { if (e) return bad(e); let best = null; z.on('entry', (en) => { if (!/\/$/.test(en.fileName) && (!best || en.uncompressedSize > best.uncompressedSize)) best = en; z.readEntry(); }); z.on('end', () => { if (!best) return bad(new Error('The game’s zip is empty.')); ext = path.extname(best.fileName); z.openReadStream(best, (er, st) => { if (er) return bad(er); const parts = []; st.on('data', (c) => parts.push(c)); st.on('end', () => ok(Buffer.concat(parts))); }); }); z.readEntry(); }));
+      } else rom0 = fs.readFileSync(file);
+      const out = P.apply(rom0, pt.data, pt.name);
+      const label = String(prep.item.name || 'Hack').replace(/[\\/:*?"<>|]+/g, ' ').trim().slice(0, 80);
+      made = path.join(dir, `${path.basename(file).replace(/\.[^.]+$/, '')} [${label}]${ext}`);
+      fs.writeFileSync(made, out, { flag: 'wx' });
+    }
+    recs[key] = { source: 'rh', id: prep.item.id, name: prep.item.name, category: 'ROM Hack', romId: rom.id, game: rom.name, emu: mode === 'soft' ? 'retroarch' : 'copy', emuName: mode === 'soft' ? 'RetroArch' : 'Patched copy', emuRoot: dir, dest: dir, alt: {}, files: [path.basename(made)], bytes: fs.statSync(made).size, at: Date.now(), from: prep.item.url, mode };
+    saveJson(ADDONS_FILE, recs);
+    log('rom hack', mode, prep.item.id, 'for', rom.id);
+    return { file: made, mode };
+  },
   'addons:gbMod': ({ modId }) => require('./addonSources').gbMod(modId),
   // { romId, emuRoot (the emulator copy), pack (from addons:available), file (GameBanana only) }
   'addons:install': async ({ romId, emuRoot, pack, file }) => {
@@ -3989,9 +4153,17 @@ const handlers = {
     if (!rom || !e) throw new Error('That emulator wasn’t found.');
     if (!e.folder) throw new Error(`Cartridge couldn’t read this game’s ID, so it doesn’t know which ${e.name} folder it goes in.`);
     if (require('./raLogin').running().has(e.id)) throw new Error(`Close ${e.name} first.`);
+    // 0.9.52: Nexus Mods gives Premium members the file; for anyone else its page opens in Cartridge's window, where
+    // the download (after Nexus's own sign-in) is caught and installed like any other (addons:browse)
+    if (pack.source === 'nexus') {
+      const d = await modsEng().download('nexus', pack, file);
+      if (d.page) { handlers['addons:browse']({ url: d.page, romId, emuRoot, kind: 'mods', name: pack.name }); return { page: true }; }
+      file = { ...file, url: d.url };
+    }
     // each emulator's own layout (addonInstall.plan, 0.9.18); PCSX2 and DuckStation: the game folder is
     // textures/<SERIAL>, the pack brings replacements/ (e.folder ends in it)
     const kind = require('./emuProfiles').modKind(e.id, pack.source); // 0.9.48: the emulator's profile says how its add-ons are laid out
+    if (kind === 'plain') throw new Error(require('./modRules').refusal(null)); // 0.9.52: no rule, nothing unpacked anywhere
     const dest = /\/replacements$/.test(e.folder) ? path.dirname(e.folder) : e.folder;
     const key = `${pack.source}:${pack.id}${file ? ':' + file.id : ''}:${rom.id}:${e.emuRoot}`;
     if (addonRecs()[key]) throw new Error('This add-on is already installed.');
@@ -4863,7 +5035,7 @@ const handlers = {
       emudeck: ex('.config/EmuDeck/settings.sh') || ex('emudeck'),
       retrodeck: ex('.var/app/net.retrodeck.retrodeck') || ex('retrodeck'),
       steam: steamFound, live, gamescope: isGamescope(), appimage: !!process.env.APPIMAGE,
-      inSteam: !!process.env.CARTRIDGE_FROM_STEAM || require('./steamArt').cartridgeInSteam(),
+      inSteam: !!process.env.CARTRIDGE_FROM_STEAM || require('./steamArt').cartridgeInSteam(), fromSteam: !!process.env.CARTRIDGE_FROM_STEAM,
       host: os.hostname(), device: deviceKind(),
     };
   },
@@ -5053,6 +5225,8 @@ app.whenReady().then(() => {
   });
   // image pipeline (0.9.48): the picture cache stays under 1.5 GB; the oldest pictures go first and come back from RomM
   // or SteamGridDB if they're shown again. Looked at once a day, never during a game
+  // every game's cover kept small for browsing away from the server (0.9.52), every 6 hours, never during a game
+  scheduler.add('library-art', { every: 6 * 3600e3, firstAfter: 3 * 60e3, deferWhilePlaying: true, run: () => libraryArt() });
   scheduler.add('image-cache-trim', { every: 24 * 3600e3, firstAfter: 5 * 60e3, deferWhilePlaying: true, run: () => trimImageCache(1.5 * 1024 ** 3) });
   // the library sync (every hour by default), looked at each minute; it waits while a game runs (0.9.48, owner)
   scheduler.add('library-sync', { every: 60e3, firstAfter: 60e3, deferWhilePlaying: true,

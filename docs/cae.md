@@ -57,6 +57,30 @@ them as custom properties at start, so CSS uses springs without any script per f
 
 Each has a matching `-d` duration token. Engines without `linear()` keep the older cubic curves.
 
+### 1b. Named timings (0.9.52)
+Everything that isn't a spring move uses a named timing from `styles.css :root`, so no stylesheet writes its own curve
+or duration (the owner asked for every animation to be on CAE; `test/cae.test.js` checks it on every build):
+
+| Token | Value | Used for |
+|---|---|---|
+| `--fade-in` | 160 ms, ease-out | something appearing, a scrim dimming |
+| `--fade-out` | 120 ms, ease-in | something going (closing is quicker than opening) |
+| `--fade-slow` | 320 ms, ease-out | a bigger surface appearing |
+| `--fade-cross` | 520 ms, ease-in-out | one picture becoming another |
+| `--fade-ambient` | 1600 ms, ease-in-out | slow scenery: the idle screen, the clock's sky |
+| `--tint` | 140 ms, ease-out | colour, background or shadow changing |
+| `--progress` | 300 ms, ease-out | a bar filling |
+| `--move-slow` | 900 ms, ease-out | a slow, deliberate move: a gauge needle, a picture settling |
+| `--move-ambient` | 1600 ms, ease-out | scenery moving: the sun crossing the clock |
+| `--loop-spin` | 1.1 s, linear | things that turn: spinners, rings |
+| `--loop-pulse` | 1.2 s, ease-in-out | things that breathe: live bars, a picked handle |
+| `--press` | 90 ms | how fast a press goes down (back up on `--spring-pop`) |
+| `--stagger` | 40 ms | one row after another |
+
+Allowed as written, with reasons: delays (choreography), scenery loops of 2 s or more and the caret's stepped blink,
+0 durations, and the Reduce and Fast motion overrides (settings). Script animations ask `timing('fade-slow')` from
+`motion.js`, which reads the same tokens.
+
 ### 2. Springs for script
 `springTo(state, target, { response, damping, apply, done })` moves a value by script on the ticker, keeping its
 velocity when the target changes mid-way. nav.js uses it for scrolling (`glideBy`): holding a direction retargets
