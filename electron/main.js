@@ -5000,6 +5000,7 @@ const sendRaw = broadcast;
 broadcast = (ch, data) => { sendRaw(ch, data); const f = JOB_EVENTS[ch]; if (f && data) { try { const [k, o] = f(data); if (k && bgJobs.has(k)) bgJob(k, Object.fromEntries(Object.entries(o).filter(([, v]) => v != null))); } catch {} } };
 handlers['jobs:list'] = () => [...bgJobs.values()];
 handlers['emu:profiles'] = () => require('./emuProfiles').all(); // 0.9.48: what Cartridge knows per emulator (diagnostics)
+handlers['cide:map'] = () => { const C = require('./cide'); return C.map(require('./cee').consoleKeys()); }; // 0.9.51: each console's ID kinds and readers, or why it has none (diagnostics)
 handlers['cee:emulators'] = () => require('./cee').emulators(); // 0.9.49 CEE: every emulator, its install kinds, launch lines, links
 handlers['cee:coverage'] = () => require('./cee').coverage(); // every console RomM can send and how it's played
 handlers['emu:startCheck'] = ({ id, path: p }) => require('./emuStart').check(id, p);
