@@ -12,7 +12,7 @@
 
       <!-- each part stays alive once opened, so ticks and lists survive moving between tabs -->
       <div ref="body" class="ga-body">
-        <AddonsSheet v-if="seen.addons" v-show="tab === 'mods' || tab === 'tex'" :rom-id="romId" :name="name" embedded :kind="tab === 'mods' ? 'mods' : 'tex'" :on-reopen="reopen" />
+        <AddonsSheet v-if="seen.addons" ref="ads" v-show="tab === 'mods' || tab === 'tex'" :rom-id="romId" :name="name" embedded :kind="tab === 'mods' ? 'mods' : 'tex'" :on-reopen="reopen" />
         <div v-if="seen.patches && !patches && patchTab" class="muted"><Icon name="mdiSync" :size="16" class="spin" /> Reading {{ PATCH_EMU_OF(slug) }}’s list…</div>
         <PatchesSheet v-if="patches" v-show="patchTab" ref="pt" v-bind="patches" :name="name" :rom-id="romId" embedded :section="sectionOf(tab)" @reload="loadPatches" />
         <template v-if="tab === 'updates'">
@@ -52,11 +52,12 @@ import AddonsSheet from './AddonsSheet.vue';
 import PatchesSheet from './PatchesSheet.vue';
 
 const props = defineProps({ romId: Number, name: String, tab: String });
-const el = ref(null), body = ref(null), pt = ref(null);
+const el = ref(null), body = ref(null), pt = ref(null), ads = ref(null);
 const rom = computed(() => romById(props.romId));
 const slug = computed(() => `${rom.value?.platform_slug || ''} ${rom.value?.platform_fs_slug || ''}`);
 const art = computed(() => (rom.value ? cover(rom.value) : ''));
-const ADDONS = /\b(ps2|psx|ngc|gamecube|wii|psp|3ds|n3ds|switch|wiiu|ps4)\b/i, TEXTURES = /\b(ps2|psx|ngc|gamecube|wii|psp|3ds|n3ds)\b/i;
+// 0.9.52: Nexus Mods (PS3 too) and ROM hacks (cartridge consoles) also live in the Mods tab
+const ADDONS = /\b(ps2|psx|ngc|gamecube|wii|psp|3ds|n3ds|switch|wiiu|ps4|ps3|nes|famicom|snes|sfam|n64|gb|gbc|gba|nds|genesis-slash-megadrive|sms|gamegear|turbografx16--1)\b/i, TEXTURES = /\b(ps2|psx|ngc|gamecube|wii|psp|3ds|n3ds)\b/i;
 const PATCHES = [[/ps3/i, 'RPCS3'], [/ps4/i, 'shadPS4'], [/\bps2\b/i, 'PCSX2'], [/\b(ngc|gamecube|gc|wii)\b/i, 'Dolphin'], [/\bpsp\b/i, 'PPSSPP'], [/\bwiiu\b/i, 'Cemu']];
 const PATCH_EMU_OF = (s) => (PATCHES.find(([re]) => re.test(s)) || [])[1] || '';
 // Dolphin's kinds of code, as its game properties shows them
@@ -131,7 +132,9 @@ let off = null, layer;
 onMounted(() => {
   saved = store.modal?.resolve;
   off = window.cart.on('ps3-update', (m) => { if (m.romId !== props.romId) return; upText.value = m.state === 'downloading' ? `Downloading ${m.version} · ${m.pct}%` : m.state === 'installing' ? `Installing ${m.version || ''} in RPCS3` : m.state === 'done' ? 'Done' : upText.value; });
-  layer = pushLayer(el.value, { back: leave, lb: () => tabs.value.length > 1 && step(-1), rb: () => tabs.value.length > 1 && step(1), x() {}, y() {}, select() {}, lt() {}, rt() {} });
+  layer = pushLayer(el.value, { back: leave, lb: () => tabs.value.length > 1 && step(-1), rb: () => tabs.value.length > 1 && step(1), x() {}, y() {}, select() {}, lt() {}, rt() {},
+    // the right stick moves between mod sites on the Mods tab (0.9.52)
+    rsleft: () => { if (tab.value === 'mods') ads.value?.stepSource(-1); }, rsright: () => { if (tab.value === 'mods') ads.value?.stepSource(1); } });
   show(tab.value);
   nextTick(() => focusFirst(el.value, `[data-key="ga-${tab.value}"]`));
 });

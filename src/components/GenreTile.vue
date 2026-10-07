@@ -35,7 +35,7 @@ const covers = computed(() => props.g.rom_ids.slice(0, 16).map((id) => romById(i
 <style scoped>
 .genre { position: relative; flex: none; width: 300px; height: 168px; border-radius: var(--r-lg); overflow: hidden; text-align: left; display: flex; align-items: flex-end; padding: 18px 20px;
   background: radial-gradient(120% 120% at 0% 0%, hsla(var(--h), 70%, 55%, 0.55), transparent 60%), linear-gradient(135deg, hsl(var(--h), 55%, 30%), hsl(calc(var(--h) + 40), 60%, 12%));
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.14); transition: transform 0.22s var(--ease), box-shadow 0.22s; }
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.14); transition: transform var(--spring-d) var(--spring), box-shadow var(--tint); }
 .genre:focus { box-shadow: var(--ring) !important; transform: translateY(-5px) scale(1.04); }
 .mark { position: absolute; left: -26px; bottom: -34px; opacity: 0.12; color: #fff; transform: rotate(-12deg); }
 .strip { position: absolute; right: 18px; top: -30px; bottom: -30px; width: 92px; display: flex; flex-direction: column; gap: 8px; transform: rotate(12deg); }

@@ -39,7 +39,7 @@ function bad() { known.set(props.logo.url, 'bad'); state.value = 'bad'; }
 </script>
 
 <style>
-.game-logo { display: block; margin: 2px 0 8px; opacity: 0; transition: opacity 0.14s ease; max-width: 100%; }
+.game-logo { display: block; margin: 2px 0 8px; opacity: 0; transition: opacity var(--fade-in); max-width: 100%; }
 .game-logo.ready { opacity: 1; }
 .game-logo img { display: block; width: 100%; height: 100%; object-fit: contain; object-position: left bottom; filter: drop-shadow(0 4px 18px rgba(0, 0, 0, 0.55)); }
 /* all-black logos (and no white version on SteamGridDB): draw them white */

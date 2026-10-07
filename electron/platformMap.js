@@ -7,6 +7,8 @@ module.exports = {
   'amiga-cd32': ['amigacd32', 'cd32'],
   'android': ['android'],
   'arcade': ['arcade', 'mame', 'fbneo'],
+  'sega-model-3': ['model3'],
+  'model3': ['model3'],
   'arduboy': ['arduboy'],
   'atari2600': ['atari2600'],
   'atari5200': ['atari5200'],

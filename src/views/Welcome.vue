@@ -1,23 +1,19 @@
 <template>
   <div class="welcome" :class="{ 'w-out': leaving, 'w-intro-on': intro }" ref="el">
-    <!-- 0.9.17: the opening, once, before the first card (any press skips it) -->
-    <div v-if="intro" class="w-intro" @pointerdown="intro = false">
-      <div class="wi-ring" /><div class="wi-ring r2" />
-      <div class="wi-mark"><Logo :size="132" /><i class="wi-glint" /></div>
-      <div class="wi-name"><span v-for="(c, i) in 'Cartridge'" :key="i" :style="{ animationDelay: 0.75 + i * 0.045 + 's' }">{{ c }}</span></div>
-    </div>
+    <!-- 0.9.52: the opening, rebuilt on CAE (WelcomeIntro.vue); any press skips it -->
+    <WelcomeIntro v-if="intro" @done="intro = false" />
     <div class="w-top">
       <!-- 0.9.17: going back is always visible: an arrow to tap, and B on a controller (hint below) -->
       <button v-if="at > 0 && !only" class="w-back" data-focus aria-label="Back" @click="handlers.back()"><Icon name="mdiArrowLeft" :size="22" /></button>
       <Logo :size="34" />
-      <div class="w-dots"><template v-if="!only"><i v-for="(s, i) in STEPS" :key="s" :class="{ on: i === at, done: i < at }" /></template></div>
+      <div class="w-steps" :class="{ hidden: only }" role="progressbar" :aria-valuenow="at + 1" :aria-valuemax="STEPS_C.length"><i :style="{ transform: `scaleX(${STEPS_C.length > 1 ? at / (STEPS_C.length - 1) : 0})` }" /></div>
       <button class="btn small" data-focus @click="leave"><Icon name="mdiClose" :size="18" />{{ only ? 'Close' : replay ? 'Leave' : 'Skip Setup' }}</button>
     </div>
 
     <!-- every step is one centred card over the background (owner, 0.9.16) -->
     <div class="w-stage">
     <Transition :name="dir > 0 ? 'w-next' : 'w-prev'" mode="out-in">
-      <section :key="step" class="w-step glass" :class="'w-' + step" data-scroll>
+      <section :key="step" class="w-step glass" :class="['w-' + step, step === 'look' && 'w-look-step']" data-scroll>
         <!-- 1 -->
         <template v-if="step === 'hello'">
           <Logo :size="96" class="w-logo" />
@@ -26,15 +22,48 @@
           <div class="w-act"><button class="btn primary xl" data-focus @click="next()">Get started<Icon name="mdiArrowRight" /></button></div>
         </template>
 
-        <!-- 2 -->
-        <template v-else-if="step === 'name'">
-          <h1>What Should We Call You?</h1>
-          <p class="w-lead">For a hello when Cartridge starts, and to name this device in RomM.</p>
-          <div class="w-box"><TextField v-model="name" label="Your name" placeholder="Sam" icon="mdiAccount" /></div>
-          <p v-if="name.trim()" class="muted small">This device will be called <b>{{ deviceName }}</b>. You can change it in Settings → About.</p>
+        <!-- 0.9.52 (owner): the very first launch, on the desktop: Cartridge is made for Game Mode. Add to Steam closes and
+             reopens Steam, waits until Steam has it, says goodbye and closes; the setup then starts in Game Mode. Never
+             again after this first time (ui.gameModeAsked), nor in Game Mode, from Steam, or when the setup is run again. -->
+        <template v-else-if="step === 'gamemode'">
+          <div class="w-gm-icon" :class="{ ok: gm === 'done' }"><Icon :name="gm === 'done' ? 'mdiCheckCircle' : 'mdiSteam'" :size="64" /></div>
+          <template v-if="gm === 'done'">
+            <h1 class="w-big">Added to Steam</h1>
+            <p class="w-lead">See you in Game Mode. Open Cartridge from your library there and the setup carries on with your controller.</p>
+          </template>
+          <template v-else>
+            <h1 class="w-big">Cartridge Is Made for Game Mode</h1>
+            <p class="w-lead">Add it to Steam, then open it from Game Mode to set it up with your controller.</p>
+            <p v-if="gm === 'adding'" class="w-gm-busy"><Icon name="mdiSync" :size="18" class="spin" />{{ gmText }}</p>
+            <p v-else-if="st.inSteam" class="muted small">Cartridge is already in your Steam library.</p>
+            <p v-else-if="!st.appimage" class="muted small">Adding to Steam works from the AppImage. You can also add it in Steam yourself: Add a Game, then Add a Non-Steam Game.</p>
+          </template>
+          <div v-if="gm !== 'done'" class="w-act">
+            <button class="btn" data-focus :disabled="gm === 'adding'" @click="next()">Set Up Here Instead</button>
+            <button v-if="st.inSteam" class="btn primary" data-focus @click="call('app:quit')"><Icon name="mdiSteam" />Close and Open From Game Mode</button>
+            <button v-else-if="st.appimage" class="btn primary" data-focus :disabled="gm === 'adding'" @click="gmAdd"><Icon name="mdiSteam" />{{ gm === 'adding' ? 'Adding…' : 'Add to Steam' }}</button>
+          </div>
+        </template>
+
+        <!-- 2b (0.9.47, owner): make it yours early: Style, colour and background, the same settings as Look & Feel -->
+        <template v-else-if="step === 'look'">
+          <h1>Make It Yours</h1>
+          <p class="w-lead">Your name, and how Cartridge looks. Everything here can be changed later in Settings.</p>
+          <div class="w-box stack w-look">
+            <!-- 0.9.52: the name lives here now (a hello when Cartridge starts, and this device's name in RomM) -->
+            <TextField v-model="name" label="Your name" placeholder="Sam" icon="mdiAccount" />
+            <span v-if="name.trim()" class="muted small">This device will be called <b>{{ deviceName }}</b> in RomM.</span>
+            <span class="muted small">Style</span>
+            <div class="seg"><button v-for="(v, k) in STYLES" :key="k" data-focus :class="{ on: styleOf(store.config.ui) === k }" @click="pickStyle(k)">{{ v.label }}</button></div>
+            <span class="muted small w-look-sub">{{ STYLES[styleOf(store.config.ui)].sub }}</span>
+            <span class="muted small">Colour</span>
+            <div class="w-swatches"><button v-for="(t, k) in THEMES" :key="k" class="w-swatch" data-focus :class="{ on: (store.config.ui.theme || 'cartridge') === k, ink: t.light }" :style="{ background: `linear-gradient(135deg, ${t.grad[0]}, ${t.grad[2]} 60%, ${t.grad[4]})` }" @click="pickTheme(k)"><i :style="{ background: t.accent[0] }" /><span>{{ t.label }}</span></button></div>
+            <span class="muted small">Background</span>
+            <div class="w-bgs"><button v-for="b in LOOK_BGS" :key="b.v" class="w-bg" data-focus :class="{ on: lookBg === b.v }" @click="pickBg(b.v)"><img v-if="bgPics[b.v]" :src="bgPics[b.v]" alt="" /><span>{{ b.l }}</span></button></div>
+          </div>
           <div class="w-act">
             <button class="btn" data-focus @click="prev"><Icon name="mdiArrowLeft" />Back</button>
-            <button class="btn primary" data-focus @click="saveName">{{ name.trim() ? 'Continue' : 'Skip' }}<Icon name="mdiArrowRight" /></button>
+            <button class="btn primary" data-focus @click="saveName">Continue<Icon name="mdiArrowRight" /></button>
           </div>
         </template>
 
@@ -48,6 +77,8 @@
             <Icon :name="padOk ? 'mdiCheckCircle' : using === 'pad' ? USING_ICON[padKind] || USING_ICON.pad : USING_ICON[using]" :size="72" />
             <b>{{ padOk ? 'Your controller works' : usingText }}</b>
             <span v-if="using === 'pad' && !padOk" class="muted small">Press <Btn b="A" /> to check it.</span>
+            <!-- 0.9.49 (owner: an underrated feature nobody is told about) -->
+            <span v-if="using === 'pad'" class="muted small">Push <Btn b="RS" /> up or down to scroll any page or list without moving the highlight.</span>
             <span v-else-if="!padOk" class="muted small">Everything works with {{ using === 'touch' ? 'touch' : using === 'keys' ? 'a keyboard' : 'a mouse' }} too. A controller is picked up as soon as you use one.</span>
           </div>
           <div class="w-box stack" style="align-items: center">
@@ -79,6 +110,12 @@
               <button class="btn primary" data-focus @click="liveOn"><Icon name="mdiFlash" />Turn on</button>
             </template>
             <button v-else class="btn primary" data-focus @click="next()">Continue<Icon name="mdiArrowRight" /></button>
+          </div>
+          <!-- 0.9.52: Cartridge itself in Steam, on the same step (it was a step of its own) -->
+          <div v-if="st.steam && !st.gamescope" class="w-box w-self">
+            <Icon :name="st.inSteam || selfDone ? 'mdiCheckCircle' : 'mdiSteam'" :size="26" />
+            <div class="l-mid"><b>{{ st.inSteam || selfDone ? 'Cartridge is in Steam' : 'Add Cartridge to Steam' }}</b><span class="l-sub">{{ st.inSteam || selfDone ? 'Open it from Game Mode, with its own artwork.' : st.appimage ? 'So you can open it from Game Mode. Steam closes and reopens once.' : 'This works from the AppImage build. You can do it later in Settings → Steam.' }}</span></div>
+            <button v-if="!st.inSteam && !selfDone && st.appimage" class="btn" data-focus :disabled="busy" @click="addSelf"><Icon name="mdiSteam" />{{ busy ? 'Adding…' : 'Add' }}</button>
           </div>
         </template>
 
@@ -213,14 +250,14 @@
               <div class="qr-img" v-html="guideQr" />
               <div class="stack">
                 <b>Scan with your phone</b>
-                <p class="muted small">RomM's guide explains the setup step by step. When the server is running, come back and pick "Yes, sign in".</p>
+                <p class="muted small">RomM's guide explains the setup step by step. When the server is running, come back and pick "Yes, Sign In".</p>
                 <p class="small mono">{{ ROMM_GUIDE }}</p>
               </div>
             </div>
             <div class="w-act">
               <button class="btn" data-focus @click="romm = 'what'"><Icon name="mdiArrowLeft" />Back</button>
               <button class="btn" data-focus @click="next()">Later</button>
-              <button class="btn primary" data-focus @click="romm = 'signin'">Yes, sign in</button>
+              <button class="btn primary" data-focus @click="romm = 'signin'">Yes, Sign In</button>
             </div>
           </template>
           <template v-else>
@@ -229,7 +266,7 @@
             <div class="w-act w-act-c">
               <button class="btn" data-focus @click="prev"><Icon name="mdiArrowLeft" />Back</button>
               <button class="btn" data-focus @click="romm = 'what'">No</button>
-              <button class="btn primary" data-focus @click="romm = 'signin'">Yes, sign in</button>
+              <button class="btn primary" data-focus @click="romm = 'signin'">Yes, Sign In</button>
             </div>
           </template>
         </template>
@@ -260,12 +297,19 @@
         <!-- 9 -->
         <template v-else-if="step === 'extras'">
           <h1>Optional Extras</h1>
-          <p class="w-lead">Both can be added later in Settings.</p>
+          <p class="w-lead">All of these can be added later in Settings.</p>
           <div class="w-box stack">
             <div class="subh">SteamGridDB</div>
             <p class="muted small">A free key from steamgriddb.com (Preferences → API) gives every game its logo{{ IS_ANDROID ? ', and a cover when RomM has none' : ' and better Steam artwork' }}.</p>
             <div v-if="store.config.sgdbKey" class="w-good"><Icon name="mdiCheckCircle" :size="22" /><span>Key saved</span></div>
             <TextField v-else v-model="sgdb" label="SteamGridDB API key" placeholder="Paste your key" password icon="mdiKeyVariant" />
+            <!-- Android: no mods (Add-ons are desktop only) -->
+            <template v-if="!IS_ANDROID">
+            <div class="subh" style="margin-top: 10px">Nexus Mods</div>
+            <p class="muted small">Mods from Nexus Mods show without a key. A Premium account’s personal API key (nexusmods.com → your profile → API Keys) downloads them in one press.</p>
+            <div v-if="store.config.nexusKey" class="w-good"><Icon name="mdiCheckCircle" :size="22" /><span>Key saved</span></div>
+            <TextField v-else v-model="nexus" label="Nexus Mods API key" placeholder="Paste your key" password icon="mdiKeyVariant" />
+            </template>
             <div class="subh" style="margin-top: 10px">RetroAchievements</div>
             <div v-if="store.config.ra?.user" class="w-good"><Icon name="mdiCheckCircle" :size="22" /><span>Signed in as {{ store.config.ra.user }}</span></div>
             <template v-else>
@@ -278,14 +322,34 @@
           </div>
           <div class="w-act">
             <button class="btn" data-focus @click="prev"><Icon name="mdiArrowLeft" />Back</button>
-            <button class="btn primary" data-focus :disabled="busy" @click="saveExtras">{{ sgdb || (raUser && raKey) || store.config.sgdbKey || store.config.ra?.user ? 'Next' : 'Skip' }}<Icon name="mdiArrowRight" /></button>
+            <button class="btn primary" data-focus :disabled="busy" @click="saveExtras">{{ sgdb || nexus || (raUser && raKey) || store.config.sgdbKey || store.config.nexusKey || store.config.ra?.user ? 'Next' : 'Skip' }}<Icon name="mdiArrowRight" /></button>
           </div>
         </template>
 
         <!-- 0.9.24 (owner): Syncthing, after the extras. Main server first, then this device, then the folder -->
         <template v-else-if="step === 'sync'">
+          <!-- 0.9.49 (owner): first how to sync. Cartridge Save Sync (saves on your RomM, built in 0.9.51) or Syncthing -->
           <template v-if="sy === ''">
             <h1>Sync Your Saves</h1>
+            <p class="w-lead">Keep your saves the same on every device you play on. Choose how.</p>
+            <div class="w-box stack">
+              <button class="lrow" data-focus :aria-pressed="store.config.saveSync === 'cartridge'" @click="pickCartSync">
+                <Icon name="mdiCloudSyncOutline" :size="26" />
+                <div class="l-mid"><b>Cartridge Save Sync</b><span class="l-sub">Your saves on your own RomM server, checked before every game and saved after it, like Steam Cloud. Nothing else to install.</span></div>
+                <span v-if="store.config.saveSync === 'cartridge'" class="tick-ok" title="Chosen"><Icon name="mdiCheck" :size="14" /></span>
+              </button>
+              <button class="lrow" data-focus @click="sy = 'st'">
+                <Icon name="mdiSyncCircle" :size="26" />
+                <div class="l-mid"><b>Syncthing</b><span class="l-sub">Syncs folders straight between your devices, no server or account. Cartridge can install and set it up, or read the one you already use.</span></div>
+              </button>
+            </div>
+            <div class="w-act">
+              <button class="btn" data-focus @click="prev"><Icon name="mdiArrowLeft" />Back</button>
+              <button class="btn primary" data-focus @click="next()">{{ store.config.saveSync === 'cartridge' ? 'Continue' : 'Skip' }}<Icon name="mdiArrowRight" /></button>
+            </div>
+          </template>
+          <template v-else-if="sy === 'st'">
+            <h1>Sync With Syncthing</h1>
             <p class="w-lead">Syncthing keeps your saves the same on all your devices. It runs on your own devices, with no cloud account. Cartridge finds every game's saves and shows what's synced.</p>
             <div class="w-box stack">
               <!-- 0.9.29 (owner): setting Syncthing up for saves is only for a new Syncthing, said plainly here -->
@@ -299,7 +363,7 @@
               </button>
             </div>
             <div class="w-act">
-              <button class="btn" data-focus @click="prev"><Icon name="mdiArrowLeft" />Back</button>
+              <button class="btn" data-focus @click="sy = ''"><Icon name="mdiArrowLeft" />Back</button>
               <button class="btn primary" data-focus @click="next()">Skip<Icon name="mdiArrowRight" /></button>
             </div>
           </template>
@@ -318,7 +382,7 @@
               </button>
             </div>
             <div class="w-act">
-              <button class="btn" data-focus @click="sy = ''"><Icon name="mdiArrowLeft" />Back</button>
+              <button class="btn" data-focus @click="sy = 'st'"><Icon name="mdiArrowLeft" />Back</button>
               <button class="btn primary" data-focus @click="next()">Skip<Icon name="mdiArrowRight" /></button>
             </div>
           </template>
@@ -327,7 +391,7 @@
             <p class="w-lead">Make this your main device, or join the one you set up first. Your saves stay in each emulator's own folder; Syncthing keeps them the same.</p>
             <div class="w-box stack"><SaveSync /></div>
             <div class="w-act">
-              <button class="btn" data-focus @click="sy = ''"><Icon name="mdiArrowLeft" />Back</button>
+              <button class="btn" data-focus @click="sy = 'st'"><Icon name="mdiArrowLeft" />Back</button>
               <button class="btn primary" data-focus @click="next()">Continue<Icon name="mdiArrowRight" /></button>
             </div>
           </template>
@@ -339,7 +403,7 @@
               <TextField v-model="srv.apikey" label="API key" placeholder="Paste its key" password icon="mdiKeyVariant" />
             </div>
             <div class="w-act">
-              <button class="btn" data-focus @click="sy = ''"><Icon name="mdiArrowLeft" />Back</button>
+              <button class="btn" data-focus @click="sy = 'st'"><Icon name="mdiArrowLeft" />Back</button>
               <button class="btn primary" data-focus :disabled="busy || !srv.address || !srv.apikey" @click="saveServer">{{ busy ? 'Checking…' : 'Connect' }}<Icon name="mdiArrowRight" /></button>
             </div>
           </template>
@@ -359,7 +423,7 @@
               <div v-if="syPct !== null" class="w-box glass w-prog"><div class="bar live"><i :style="{ width: syPct + '%' }" /></div><span class="muted small">{{ syPct }}%</span></div>
             </template>
             <div class="w-act">
-              <button class="btn" data-focus @click="sy = ''"><Icon name="mdiArrowLeft" />Back</button>
+              <button class="btn" data-focus @click="sy = 'st'"><Icon name="mdiArrowLeft" />Back</button>
               <button v-if="syst && syst.running && syWant === 'saves'" class="btn primary" data-focus @click="sy = 'saves'">Continue<Icon name="mdiArrowRight" /></button>
               <button v-else-if="syst && syst.running" class="btn primary" data-focus @click="syncFolders">Choose a Folder<Icon name="mdiArrowRight" /></button>
               <button v-else-if="syst && syst.installed" class="btn primary" data-focus :disabled="busy" @click="syKey ? saveSyKey() : syncDevice()">{{ syKey ? 'Use This Key' : 'Check Again' }}</button>
@@ -389,27 +453,6 @@
           </template>
         </template>
 
-        <!-- 10 -->
-        <template v-else-if="step === 'self'">
-          <h1>Add Cartridge to Steam</h1>
-          <template v-if="st.inSteam || selfDone">
-            <div class="w-good"><Icon name="mdiCheckCircle" :size="28" /><span>Cartridge is in Steam</span></div>
-            <p class="w-lead">Find it in your library in Game Mode, with its own artwork.</p>
-          </template>
-          <template v-else>
-            <p class="w-lead">So you can open Cartridge from Game Mode, with its artwork. Steam closes and reopens once to pick it up.</p>
-            <p v-if="!st.appimage" class="muted small">This only works from the AppImage build. You can do it later in Settings → Steam.</p>
-          </template>
-          <div class="w-act">
-            <button class="btn" data-focus @click="prev"><Icon name="mdiArrowLeft" />Back</button>
-            <template v-if="!st.inSteam && !selfDone && st.appimage">
-              <button class="btn" data-focus @click="next()">Skip</button>
-              <button class="btn primary" data-focus :disabled="busy" @click="addSelf"><Icon name="mdiSteam" />{{ busy ? 'Adding…' : 'Add to Steam' }}</button>
-            </template>
-            <button v-else class="btn primary" data-focus @click="next()">Continue<Icon name="mdiArrowRight" /></button>
-          </div>
-        </template>
-
         <!-- 11 -->
         <template v-else-if="step === 'done'">
           <div class="w-good w-done"><Icon name="mdiCheckCircle" :size="72" /></div>
@@ -433,6 +476,7 @@ import { store, call, saveConfig, toast, tab, confirm, openModal, choose, pickFo
 import { focusFirst, input } from '../nav.js';
 import { useView } from '../useView.js';
 import Logo from '../components/Logo.vue';
+import WelcomeIntro from '../components/WelcomeIntro.vue';
 import Icon from '../components/Icon.vue';
 import Btn from '../components/Btn.vue';
 import TextField from '../components/TextField.vue';
@@ -442,15 +486,22 @@ import EmuSetup from './EmuSetup.vue';
 import EmuGet from '../components/EmuGet.vue';
 import RommLocal from '../components/RommLocal.vue';
 import { padInfo, detectPad, padKind } from '../pad.js';
+import { THEMES, STYLES, styleOf, paletteOf } from '../themes.js';
+import { BACKGROUNDS, RENDERERS, bgPreview } from '../bgRenderers.js';
 import { IS_ANDROID } from '../platform.js';
 
-// Android: no Steam, no EmuDeck or RetroDECK, no desktop scan or Syncthing; emulators are picked in Settings → Emulators
-const DESKTOP_ONLY = ['steam', 'emus', 'scan', 'sync', 'self'];
-const STEPS = ['hello', 'name', 'pad', 'steam', 'emus', 'romm', 'scan', 'extras', 'sync', 'self', 'done'].filter((s) => !IS_ANDROID || !DESKTOP_ONLY.includes(s));
+// 0.9.52 (owner): RomM first (the rest needs it), your name with the look, Controls only with a controller of your own,
+// Cartridge in Steam on the Steam step, and the Game Mode screen on the very first desktop launch only. The plan is fixed
+// once at the start (pad and Steam are read first), so a step never shifts under you.
+const ALL_STEPS = ['hello', 'gamemode', 'romm', 'look', 'pad', 'emus', 'scan', 'steam', 'sync', 'extras', 'done'];
+const plan = ref({ gamemode: false, pad: true });
+// Android: no Steam or Game Mode, no desktop emulator installer, scan or save sync; emulators are picked in Settings → Emulators
+const DESKTOP_ONLY = ['gamemode', 'steam', 'emus', 'scan', 'sync'];
+const STEPS_C = computed(() => ALL_STEPS.filter((s) => (s !== 'gamemode' || plan.value.gamemode) && (s !== 'pad' || plan.value.pad) && (!IS_ANDROID || !DESKTOP_ONLY.includes(s))));
 const ROMM_GUIDE = 'https://docs.romm.app/latest/getting-started/quick-start/'; // RomM's setup guide (owner: not the docs home)
 const el = ref(null);
 const at = ref(0), dir = ref(1);
-const step = computed(() => STEPS[at.value]);
+const step = computed(() => STEPS_C.value[at.value]);
 const replay = !!store.config.welcomed;
 // Settings → RomM → Set up RomM on this device opens just that step, on the same background
 const only = store.welcoming === 'romm-local';
@@ -460,16 +511,30 @@ const name = ref(store.config.ui.name || '');
 const padOk = ref(false), liveDone = ref(false), selfDone = ref(false), busy = ref(false);
 const getting = ref(''), opened = ref(''), progress = ref(null);
 const romm = ref('');
-const sgdb = ref(''), raUser = ref(''), raKey = ref('');
+const sgdb = ref(''), nexus = ref(''), raUser = ref(''), raKey = ref('');
 const guideQr = ref('');
 
 const deviceName = computed(() => `${name.value.trim()}'s ${st.value.device || 'device'}`);
 // RomM has no server name of its own, so the name picked for RomM on this device is Cartridge's label for it
 const serverName = computed(() => { const s = store.config.server || {}; if (store.config.rommLocal?.name && s.localUrl && s.localUrl.includes(':' + store.config.rommLocal.port)) return store.config.rommLocal.name; try { return new URL(s.localUrl || s.remoteUrl).host; } catch { return 'your RomM server'; } });
 
-function go(i, d) { dir.value = d; at.value = Math.max(0, Math.min(STEPS.length - 1, i)); }
+function go(i, d) { dir.value = d; at.value = Math.max(0, Math.min(STEPS_C.value.length - 1, i)); }
 function next() { romm.value = ''; sy.value = ''; picking.value = false; go(at.value + 1, 1); }
 function prev() { romm.value = ''; sy.value = ''; picking.value = false; go(at.value - 1, -1); }
+
+// the Look step: the same writes as Settings' pickStyle/pickTheme, so both stay in step
+function pickStyle(k) { saveConfig({ ui: { style: k, surface: k === 'glass' ? 'glass' : 'solid', elements: k } }); }
+function pickTheme(k) {
+  const ui = store.config.ui, light = !!THEMES[k]?.light, dock = ui.dockColor;
+  const dockColor = light && dock === 'black' ? 'white' : !light && dock === 'white' && THEMES[ui.theme]?.light ? 'black' : undefined;
+  saveConfig({ ui: { theme: k, gameTheme: null, ...(dockColor ? { dockColor } : {}) } });
+}
+// the animated ones and Still (game artwork and wallpapers need a library or a file, so they stay in Settings)
+const LOOK_BGS = BACKGROUNDS.filter((b) => b.group === 'Theme' || b.v === 'solid');
+const lookBg = computed(() => (store.welcomeBg ? store.config.ui.bgStyle : 'ribbons') || 'ribbons');
+const bgPics = computed(() => { const pal = paletteOf(store.config.ui), o = {}; if (step.value !== 'look') return o; for (const b of LOOK_BGS) if (RENDERERS[b.v]) o[b.v] = bgPreview(b.v, pal, 192, 108); return o; });
+// the welcome shows Ribbons until a background is picked here (Background.vue reads store.welcomeBg)
+async function pickBg(v) { store.welcomeBg = true; await saveConfig({ ui: { bgStyle: v } }); }
 
 async function saveName() {
   const n = name.value.trim().slice(0, 40);
@@ -541,6 +606,7 @@ async function saveExtras() {
   busy.value = true;
   try {
     if (sgdb.value.trim()) await saveConfig({ sgdbKey: sgdb.value.trim() });
+    if (nexus.value.trim()) { await call('nexus:check', { key: nexus.value.trim() }); await saveConfig({ nexusKey: nexus.value.trim() }); }
     if (raUser.value.trim() && raKey.value.trim()) {
       const r = await call('ra:signin', { user: raUser.value.trim(), key: raKey.value.trim() });
       store.config = await call('config:get');
@@ -581,12 +647,32 @@ async function installSync() {
   catch (e) { toast(e.message, 'error', 6000); }
   off?.(); busy.value = false; syPct.value = null;
 }
+async function pickCartSync() {
+  try { await call('savesync:set', { on: store.config.saveSync !== 'cartridge' }); store.config = await call('config:get'); }
+  catch (e) { toast(e.message, 'error', 6000); } // Syncthing already syncs this device's saves: one or the other
+}
 async function syncFolders() { syFolders.value = await call('sync:suggest').catch(() => []); sy.value = 'folder'; }
 async function useFolder(dir, label) {
   try { const r = await call('sync:addFolder', { dir, label }); toast(r.existed ? 'Syncthing already shares that folder' : `Syncthing now shares ${dir}`, 'ok', 3500, 'mdiFolderSyncOutline'); next(); }
   catch (e) { toast(e.message, 'error', 5000); }
 }
 async function customFolder() { const d = await pickFolder({ title: 'The folder Syncthing keeps in sync', start: store.info?.home }); if (d) useFolder(d); }
+// the first desktop launch (0.9.52): add to Steam, wait until Steam is back and has Cartridge, then close
+const gm = ref(''), gmText = ref('');
+async function gmAdd() {
+  try {
+    const s0 = await call('steam:status');
+    gm.value = 'adding'; gmText.value = s0.running ? 'Adding to Steam. Steam closes and opens again…' : 'Adding to Steam…';
+    await call('steam:add', { restartSteam: true });
+    if (s0.running) {
+      gmText.value = 'Waiting for Steam to open again…';
+      for (let i = 0; i < 90; i++) { const s = await call('steam:status').catch(() => ({})); if (s.running && s.added) break; await new Promise((r) => setTimeout(r, 1000)); }
+    }
+    gm.value = 'done';
+    await saveConfig({ ui: { welcomeStep: '' } }); // the setup starts from the top in Game Mode
+    setTimeout(() => call('app:quit'), 3200);
+  } catch (e) { gm.value = ''; toast(e.message, 'error', 7000); }
+}
 async function addSelf() {
   try {
     const s = await call('steam:status');
@@ -658,14 +744,17 @@ async function takeOverAll() {
 
 // Android: on the controller check B counts too. Android's button layouts can send B for the button
 // marked A, and going back from here looked like the check failed
-const handlers = { back: () => { if (IS_ANDROID && step.value === 'pad' && input.mode === 'pad') return padPress(); if (step.value === 'emus' && picking.value) { picking.value = false; return; } /* 0.9.28: Back leaves the installer, not the step */ if (step.value === 'romm' && romm.value) { romm.value = romm.value === 'other' || romm.value === 'local' || romm.value === 'without' ? 'what' : ''; return; } if (step.value === 'sync' && sy.value) { sy.value = sy.value === 'folder' ? 'device' : ''; return; } if (at.value > 0) prev(); } };
+const handlers = { back: () => { if (IS_ANDROID && step.value === 'pad' && input.mode === 'pad') return padPress(); if (step.value === 'emus' && picking.value) { picking.value = false; return; } /* 0.9.28: Back leaves the installer, not the step */ if (step.value === 'romm' && romm.value) { romm.value = romm.value === 'other' || romm.value === 'local' || romm.value === 'without' ? 'what' : ''; return; } if (step.value === 'sync' && sy.value) { sy.value = sy.value === 'folder' ? 'device' : sy.value === 'st' ? '' : 'st'; return; } if (at.value > 0) prev(); } };
 useView(handlers, [{ b: 'A', label: 'Select' }, { b: 'B', label: 'Back' }]);
 // Setup and the scan bring their own buttons; the welcome's come back after them
 watch(step, (v) => { if (!replay && !only && v !== 'done') saveConfig({ ui: { welcomeStep: v } }); });
 // the installer focuses itself once its drives or list are there; leaving it focuses the step's first choice
 watch(picking, async (v) => { await nextTick(); if (!v) setTimeout(() => focusFirst(el.value?.querySelector('.w-step') || el.value, '.w-step [data-focus]'), 120); else setTimeout(() => { const eg = el.value?.querySelector('.eg'); if (eg && !eg.contains(document.activeElement)) focusFirst(eg); }, 120); });
+watch(step, async (v) => {
+  if (v === 'sync' && store.config.configured && !store.config.localOnly && !store.config.saveSync && !store.config.syncthing?.role) { try { await call('savesync:set', { on: true }); store.config = await call('config:get'); } catch {} }
+});
 watch([step, romm, sy], async () => {
-  if (step.value === 'self' && st.value.inSteam === false) await load();
+  if (step.value === 'steam' && st.value.inSteam === false) await load();
   if (step.value === 'scan') loadScanExtras();
   await nextTick(); await nextTick();
   if (!(step.value === 'scan' || (step.value === 'romm' && (romm.value === 'signin' || romm.value === 'local')))) store.viewHandlers = handlers;
@@ -677,20 +766,26 @@ watch([step, romm, sy], async () => {
   }
 });
 onMounted(async () => {
-  if (only) { at.value = STEPS.indexOf('romm'); romm.value = 'local'; }
+  // the plan first (0.9.52): the Game Mode screen on the very first desktop launch only; Controls with a controller of
+  // your own (not a Steam Deck's built-in one, and not keyboard and mouse alone)
+  await Promise.all([load(), detectPad()]);
+  const pi = padInfo.value;
+  plan.value = {
+    gamemode: !IS_ANDROID && !replay && !only && !store.config.ui.gameModeAsked && !st.value.gamescope && !st.value.fromSteam,
+    pad: !!(pi?.kind ? pi.kind !== 'steam' || /pro|dual|xbox|8bitdo|wireless/i.test(pi.name || '') : input.padName && !/steam deck|28de/i.test(input.padName)),
+  };
+  if (plan.value.gamemode) saveConfig({ ui: { gameModeAsked: true } }); // asked once, whatever is picked
+  if (only) { at.value = STEPS_C.value.indexOf('romm'); romm.value = 'local'; }
   // picks up where it was left (closed halfway, or off to Desktop Mode for EmuDeck), 0.9.16
-  else if (!replay && STEPS.includes(store.config.ui.welcomeStep)) at.value = STEPS.indexOf(store.config.ui.welcomeStep);
+  else if (!replay && STEPS_C.value.includes(store.config.ui.welcomeStep)) at.value = STEPS_C.value.indexOf(store.config.ui.welcomeStep);
   store.welcoming ||= true;
   if (step.value === 'hello' && !only && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
-    intro.value = true;
+    intro.value = true; // WelcomeIntro ends itself (about 2.8 s)
     const skip = () => { intro.value = false; };
-    setTimeout(skip, 2600);
     window.addEventListener('keydown', skip, { once: true, capture: true });
   }
   off = window.cart.on('welcome-progress', (p) => { if (p.percent != null) progress.value = p.percent; });
   window.addEventListener('keydown', onKeyUse, true); window.addEventListener('pointerdown', onPointerUse, true);
-  detectPad();
-  await load();
   await nextTick(); focusFirst(el.value, '.w-act .btn.primary');
 });
 onBeforeUnmount(() => { off?.(); clearTimeout(padT); window.removeEventListener('keydown', onKeyUse, true); window.removeEventListener('pointerdown', onPointerUse, true); });
@@ -699,10 +794,17 @@ onBeforeUnmount(() => { off?.(); clearTimeout(padT); window.removeEventListener(
 <style scoped>
 .welcome { position: relative; z-index: 1; height: 100%; display: flex; flex-direction: column; overflow: hidden; }
 .w-top { display: flex; align-items: center; gap: var(--s-4); padding: var(--s-4) var(--s-5); flex: none; }
-.w-dots { flex: 1; display: flex; justify-content: center; gap: 8px; }
-.w-dots i { width: 8px; height: 8px; border-radius: 50%; background: rgba(255, 255, 255, 0.22); transition: background var(--d-2, 0.2s), transform var(--d-2, 0.2s); }
-.w-dots i.done { background: rgba(255, 255, 255, 0.55); }
-.w-dots i.on { background: #fff; transform: scale(1.3); }
+.w-steps { flex: 1; max-width: 360px; height: 4px; margin: 0 auto; border-radius: 2px; background: rgba(255, 255, 255, 0.14); overflow: hidden; }
+.w-steps.hidden { visibility: hidden; }
+.w-steps i { display: block; height: 100%; border-radius: inherit; background: #fff; transform-origin: left; transition: transform var(--spring-soft-d) var(--spring-soft); }
+/* 0.9.52: the Game Mode screen (first desktop launch) and Cartridge in Steam on the Steam step */
+.w-step > .w-gm-icon { width: 112px; }
+.w-gm-icon { display: grid; place-items: center; width: 112px; height: 112px; margin: 0 auto 8px; border-radius: 30px; background: rgba(255, 255, 255, 0.06); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1); }
+.w-gm-icon.ok { color: var(--green-l, #7ee787); }
+.w-gm-busy { display: flex; align-items: center; justify-content: center; gap: 8px; color: var(--muted); }
+.w-self { display: flex; align-items: center; gap: var(--s-3); margin-top: var(--s-4); text-align: left; }
+.w-self .l-mid { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.w-self .l-sub { font-size: var(--t-sm); color: var(--muted); }
 .w-stage { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; padding: 0 var(--s-5) calc(var(--s-6) + 28px); } /* room for the A/B hints */
 .w-step { width: min(960px, 100%); max-height: 100%; overflow-y: auto; display: flex; flex-direction: column; align-items: center; gap: var(--s-4); padding: var(--s-6) var(--s-6) var(--s-6); text-align: center; box-shadow: 0 24px 80px rgba(0, 0, 0, 0.45); }
 .w-step > * { max-width: 820px; width: 100%; flex: none; }
@@ -716,6 +818,22 @@ onBeforeUnmount(() => { off?.(); clearTimeout(padT); window.removeEventListener(
 .w-logo { width: auto !important; margin-bottom: var(--s-2); }
 .w-lead { color: var(--muted); font-size: var(--t-md); line-height: 1.55; margin: 0; }
 .w-box { text-align: left; }
+.w-look { align-items: center; gap: var(--s-2); }
+.w-look > .muted:not(.w-look-sub) { margin-top: var(--s-1); }
+.w-step.w-look-step { gap: var(--s-3); }
+.w-look-sub { text-align: center; }
+.w-swatches, .w-bgs { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+.w-swatch { position: relative; width: 64px; height: 42px; border-radius: var(--r-md); display: flex; align-items: flex-end; padding: 4px 6px; font-size: 11px; font-weight: 600; color: #fff; text-shadow: 0 1px 4px rgba(0,0,0,.6); box-shadow: inset 0 0 0 1px rgba(255,255,255,.15); }
+.w-swatch i { position: absolute; top: 5px; right: 5px; width: 10px; height: 10px; border-radius: 50%; box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.7); }
+.w-swatch.ink { color: #1d1e22; text-shadow: none; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12); }
+.w-bg { position: relative; width: 108px; aspect-ratio: 16 / 9; border-radius: var(--r-md); overflow: hidden; background: var(--s2); display: flex; align-items: flex-end; padding: 6px 8px; font-size: var(--t-xs); font-weight: 600; color: #fff; text-shadow: 0 1px 4px rgba(0,0,0,.7); box-shadow: inset 0 0 0 1px var(--line, rgba(255,255,255,.15)); }
+.w-bg img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.w-bg span { position: relative; }
+/* chosen = a light outer ring; focus keeps the app's own white focus (owner: chosen and focused never look alike) */
+.w-swatch.on, .w-bg.on { box-shadow: 0 0 0 3px var(--s0), 0 0 0 5px rgba(255, 255, 255, 0.45); }
+.pad-mode .w-swatch:focus, .w-swatch:focus-visible, .pad-mode .w-bg:focus, .w-bg:focus-visible { box-shadow: 0 0 0 3px var(--s0), 0 0 0 6px var(--focus); }
+:global(body.theme-light .w-bg) { color: #1d1e22; text-shadow: 0 0 6px rgba(255, 255, 255, 0.9); }
+:global(body.theme-light .w-swatch.on), :global(body.theme-light .w-bg.on) { box-shadow: 0 0 0 3px var(--s0), 0 0 0 5px rgba(0, 0, 0, 0.35); }
 .w-act { display: flex; justify-content: center; gap: var(--s-3); flex-wrap: wrap; margin-top: var(--s-3); }
 .w-good { display: flex; align-items: center; justify-content: center; gap: var(--s-2); color: #7ee787; font-weight: 600; font-size: var(--t-md); }
 .w-done { color: #7ee787; }
@@ -738,38 +856,26 @@ onBeforeUnmount(() => { off?.(); clearTimeout(padT); window.removeEventListener(
 .w-scan-lead { text-align: center; max-width: 1180px !important; }
 .w-emu { position: relative !important; inset: auto !important; height: auto !important; overflow: visible !important; padding: 0 !important; text-align: left; max-width: 1180px !important; animation: none !important; }
 /* the first screen arrives in a short sequence: the mark, the title, then the rest (0.9.16) */
-.w-hello > * { animation: wIn 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
-.w-hello > .w-logo { animation-name: wLogo; animation-duration: 0.9s; }
+.w-hello > * { animation: wIn var(--spring-soft-d) var(--spring-soft) both; }
+.w-hello > .w-logo { animation-name: wLogo; animation-duration: var(--d-move-slow); }
 .w-hello > :nth-child(2) { animation-delay: 0.18s; }
 .w-hello > :nth-child(3) { animation-delay: 0.32s; }
 .w-hello > :nth-child(4) { animation-delay: 0.46s; }
 @keyframes wIn { from { opacity: 0; transform: translateY(18px); } }
-@keyframes wLogo { 0% { opacity: 0; transform: scale(0.7) rotate(-6deg); } 60% { opacity: 1; transform: scale(1.06) rotate(1deg); } 100% { transform: none; } }
-.welcome.w-out .w-stage, .welcome.w-out .w-top { transition: opacity 0.4s ease, transform 0.4s cubic-bezier(0.4, 0, 0.2, 1); opacity: 0; transform: translateY(-24px) scale(0.97); }
-.w-next-enter-active, .w-next-leave-active, .w-prev-enter-active, .w-prev-leave-active { transition: opacity 0.22s ease, transform 0.22s ease; }
+@keyframes wLogo { 0% { opacity: 0; transform: scale(0.9); } 100% { opacity: 1; transform: none; } } /* CAE: arrives and stops, no wobble (0.9.52) */
+.welcome.w-out .w-stage, .welcome.w-out .w-top { transition: opacity var(--fade-slow), transform var(--spring-d) var(--spring); opacity: 0; transform: translateY(-24px) scale(0.97); }
+.w-next-enter-active, .w-next-leave-active, .w-prev-enter-active, .w-prev-leave-active { transition: opacity var(--fade-in), transform var(--spring-d) var(--spring); }
 .w-next-enter-from, .w-prev-leave-to { opacity: 0; transform: translateX(40px); }
 .w-next-leave-to, .w-prev-enter-from { opacity: 0; transform: translateX(-40px); }
-@media (prefers-reduced-motion: reduce) { .w-next-enter-active, .w-next-leave-active, .w-prev-enter-active, .w-prev-leave-active { transition: opacity 0.15s; transform: none !important; } }
+@media (prefers-reduced-motion: reduce) { .w-next-enter-active, .w-next-leave-active, .w-prev-enter-active, .w-prev-leave-active { transition: opacity var(--fade-in); transform: none !important; } }
 .w-back { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; background: rgba(255, 255, 255, 0.08); color: inherit; border: 0; flex: none; }
 .w-back:focus, .w-back:hover { background: var(--focus); color: var(--on-focus); outline: none; }
 .w-hints { position: absolute; left: 0; right: 0; bottom: 14px; display: flex; justify-content: center; gap: 22px; color: var(--muted); font-size: var(--t-sm); pointer-events: none; }
 .w-hints > span { display: inline-flex; align-items: center; gap: 8px; line-height: 1; text-box: trim-both cap alphabetic; } /* the word centred on its button, not on its descenders (0.9.24) */
 /* the opening (0.9.17): the mark comes into focus inside two rings of light, a glint crosses it, the
    name follows letter by letter, then everything lifts away to the first card */
-.w-intro { position: absolute; inset: 0; z-index: 5; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px; background: radial-gradient(60% 60% at 50% 45%, rgba(18, 18, 22, 0.55), rgba(5, 5, 7, 0.96)); animation: wiOut 0.5s cubic-bezier(0.4, 0, 0.2, 1) 2.1s forwards; }
-.wi-mark { position: relative; animation: wiMark 1.1s cubic-bezier(0.16, 1, 0.3, 1) both; overflow: hidden; border-radius: 28px; }
-.wi-glint { position: absolute; inset: -20%; background: linear-gradient(105deg, transparent 38%, rgba(255, 255, 255, 0.55) 50%, transparent 62%); transform: translateX(-120%); animation: wiGlint 0.9s ease-in-out 0.7s forwards; mix-blend-mode: overlay; }
-.wi-ring { position: absolute; top: 45%; left: 50%; width: 180px; height: 180px; margin: -90px 0 0 -90px; border-radius: 50%; border: 1.5px solid rgba(239, 75, 35, 0.55); box-shadow: 0 0 60px rgba(239, 75, 35, 0.35); opacity: 0; animation: wiRing 1.6s cubic-bezier(0.16, 1, 0.3, 1) 0.15s forwards; }
-.wi-ring.r2 { border-color: rgba(255, 255, 255, 0.25); box-shadow: none; animation-delay: 0.35s; }
-.wi-name { display: flex; font-family: var(--display); font-size: calc(var(--t-2xl) * 1.2); font-weight: 800; letter-spacing: -0.02em; }
-.wi-name span { opacity: 0; transform: translateY(14px); filter: blur(6px); animation: wiChar 0.55s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
 .welcome.w-intro-on .w-top, .welcome.w-intro-on .w-stage { opacity: 0; }
-.welcome:not(.w-intro-on) .w-top, .welcome:not(.w-intro-on) .w-stage { transition: opacity 0.5s ease; }
-@keyframes wiMark { 0% { opacity: 0; transform: scale(0.62); filter: blur(14px); } 100% { opacity: 1; transform: none; filter: none; } }
-@keyframes wiGlint { to { transform: translateX(120%); } }
-@keyframes wiRing { 0% { opacity: 0; transform: scale(0.6); } 30% { opacity: 0.9; } 100% { opacity: 0; transform: scale(2.4); } }
-@keyframes wiChar { to { opacity: 1; transform: none; filter: none; } }
-@keyframes wiOut { to { opacity: 0; transform: scale(1.04); visibility: hidden; } }
+.welcome:not(.w-intro-on) .w-top, .welcome:not(.w-intro-on) .w-stage { transition: opacity var(--fade-cross); }
 .w-warn { display: flex; align-items: center; justify-content: center; gap: 10px; color: #ffd978; font-weight: 600; }
 .w-miss { text-align: left; margin: 0 auto; padding-left: 1.2em; display: flex; flex-direction: column; gap: 6px; max-width: 640px !important; color: var(--muted); line-height: 1.45; }
 .w-miss b { color: var(--text, #fff); }

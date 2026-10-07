@@ -129,15 +129,17 @@ function squashfs(fd, base) {
     }
     return out;
   }
-  function readFile(f, max = 512 * 1024) {
-    if (f.size > max) throw new Error('file too big');
-    const parts = []; let pos = f.blocks;
+  // head: only the first bytes (0.9.47: a program's needed glibc versions sit near its start)
+  function readFile(f, max = 512 * 1024, head = 0) {
+    if (f.size > max && !head) throw new Error('file too big');
+    const parts = []; let pos = f.blocks, got = 0;
     for (const s of f.sizes) {
+      if (head && got >= head) return Buffer.concat(parts);
       const len = s & 0xffffff;
       if (!len) { parts.push(Buffer.alloc(S.blockSize)); continue; }
       const raw = readAt(fd, base + pos, len);
       parts.push(s & 0x1000000 ? raw : decompress(raw, S.comp));
-      pos += len;
+      pos += len; got += S.blockSize;
     }
     if (f.frag !== 0xffffffff) {
       // the fragment table: raw u64 pointers to metadata blocks of 16-byte entries
@@ -499,7 +501,7 @@ function identifyInWorker(cands, prevList, onProgress, log) {
 }
 
 // one file from inside an AppImage (PCSX2's patches.zip lives in its usr/bin/resources), or null
-function readAppImageFile(file, inner, max = 64 << 20) {
+function readAppImageFile(file, inner, max = 64 << 20, head = 0) {
   let fd;
   try {
     fd = fs.openSync(file, 'r');
@@ -507,8 +509,41 @@ function readAppImageFile(file, inner, max = 64 << 20) {
     if (readAt(fd, base, 4).toString('latin1') !== 'hsqs') { const i = readAt(fd, base, 1 << 20).indexOf('hsqs'); if (i < 0) return null; base += i; } // a little padding
     const fsys = squashfs(fd, base);
     const node = fsys && fsys.lookup(inner);
-    return node && node.type === 'file' ? fsys.readFile(node, max) : null;
+    return node && node.type === 'file' ? fsys.readFile(node, max, head) : null;
   } catch { return null; } finally { if (fd !== undefined) try { fs.closeSync(fd); } catch {} }
 }
 
-module.exports = { readAppImageFile, identifyAll, identifyInWorker, missingFuse2, flatpakCanSee, appImageType, isElf, readAppImage, parseDesktop, parseAppStream, identify, identifyProgram, walk, menuEntries, srmConfigs, extraBinDirs, execName, FAMILY, KNOWN };
+// the newest glibc a program asks for (0.9.47, owner: "Vita3K doesn't open at all"): Vita3K's builds moved to Ubuntu
+// 26.04 on 3 Oct 2026 and need glibc 2.43, which SteamOS and Bazzite don't have yet, so it died before any window.
+// Read from the program itself (an AppImage's main program inside its squashfs), so nothing runs to find out.
+const glibcCache = new Map();
+function glibcNeeded(file) {
+  let st; try { st = fs.statSync(file); } catch { return null; }
+  const key = file + ':' + st.size + ':' + st.mtimeMs;
+  if (glibcCache.has(key)) return glibcCache.get(key);
+  let buf = null;
+  try {
+    if (appImageType(file)) {
+      const a = readAppImage(file), exe = execName(a.desktop?.exec || '') || a.desktopFile || '';
+      for (const inner of [exe && 'usr/bin/' + exe, 'AppRun.wrapped', exe && 'usr/bin/' + exe.toLowerCase()].filter(Boolean)) { buf = readAppImageFile(file, inner, 256 << 20, 4 << 20); if (buf && isElfBuf(buf)) break; buf = null; }
+    } else if (isElf(file)) { const fd = fs.openSync(file, 'r'); try { buf = Buffer.alloc(Math.min(st.size, 4 << 20)); fs.readSync(fd, buf, 0, buf.length, 0); } finally { fs.closeSync(fd); } }
+  } catch {}
+  let best = null;
+  if (buf) for (const m of buf.toString('latin1').matchAll(/GLIBC_2\.(\d+)(?:\.(\d+))?/g)) { const v = [2, +m[1], +(m[2] || 0)]; if (!best || cmpV(v, best) > 0) best = v; }
+  const out = best ? best.slice(0, best[2] ? 3 : 2).join('.') : null;
+  glibcCache.set(key, out);
+  return out;
+}
+const isElfBuf = (b) => b.length > 4 && b[0] === 0x7f && b.toString('latin1', 1, 4) === 'ELF';
+const cmpV = (a, b) => { for (let i = 0; i < Math.max(a.length, b.length); i++) { const d = (a[i] || 0) - (b[i] || 0); if (d) return d; } return 0; };
+function systemGlibc() {
+  try { const v = process.report?.getReport?.()?.header?.glibcVersionRuntime; if (v) return v; } catch {}
+  try { const m = /(\d+\.\d+)\s*$/m.exec(require('child_process').execFileSync('ldd', ['--version'], { encoding: 'utf8', timeout: 4000, stdio: ['ignore', 'pipe', 'ignore'] }).split('\n')[0]); return m ? m[1] : null; } catch { return null; }
+}
+// { need, have } when the program wants a newer glibc than this system has, else null
+function glibcProblem(file) {
+  const need = glibcNeeded(file), have = systemGlibc();
+  if (!need || !have) return null;
+  return cmpV(need.split('.').map(Number), have.split('.').map(Number)) > 0 ? { need, have } : null;
+}
+module.exports = { glibcNeeded, glibcProblem, systemGlibc, readAppImageFile, identifyAll, identifyInWorker, missingFuse2, flatpakCanSee, appImageType, isElf, readAppImage, parseDesktop, parseAppStream, identify, identifyProgram, walk, menuEntries, srmConfigs, extraBinDirs, execName, FAMILY, KNOWN };

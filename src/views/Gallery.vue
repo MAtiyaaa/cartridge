@@ -397,7 +397,7 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.plat-view { position: absolute; inset: 0; display: grid; grid-template-rows: auto auto 1fr; padding: 8px 36px 0; animation: viewIn 0.16s ease-out; }
+.plat-view { position: absolute; inset: 0; display: grid; grid-template-rows: auto auto 1fr; padding: 8px 36px 0; animation: viewIn var(--fade-in); }
 .ph-head { display: flex; align-items: center; justify-content: space-between; gap: 20px; margin: 6px 0 14px; }
 .sys-switch { display: flex; align-items: center; gap: 16px; min-width: 0; }
 .sys-switch h1 { font-size: var(--t-xl); font-weight: 700;  overflow-wrap: anywhere; }
@@ -419,7 +419,7 @@ onMounted(async () => {
 .detail h2 { font-size: var(--t-lg); line-height: 1.15; }
 .d-sum { margin: 0; color: var(--text-2, #c3c9d4); font-size: var(--t-sm); line-height: 1.55; display: -webkit-box; -webkit-line-clamp: 6; -webkit-box-orient: vertical; overflow: hidden; }
 .d-hints { display: flex; gap: 16px; color: var(--muted); font-size: var(--t-xs); }
-.fadeup-enter-active, .fadeup-leave-active { transition: opacity 0.16s, transform 0.22s var(--ease); }
+.fadeup-enter-active, .fadeup-leave-active { transition: opacity var(--fade-in), transform var(--spring-d) var(--spring); }
 .fadeup-enter-from { opacity: 0; transform: translateY(8px); }
 .fadeup-leave-to { opacity: 0; }
 @media (max-width: 1100px) { .body { grid-template-columns: 1fr; } .detail { display: none; } }

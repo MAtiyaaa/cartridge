@@ -1,7 +1,7 @@
 // Controller-first spatial navigation + gamepad/keyboard input.
 // Layers: the top layer receives input. A layer = { el: scope element, handlers: {action: fn} }.
 // Actions: up down left right accept back x y lb rb lt rt select start
-import { springTo, stopSpring, skipMorph } from './motion.js';
+import { springTo, stopSpring, skipMorph, governor, governorInput } from './motion.js';
 import { reactive } from 'vue';
 import { sfx } from './sfx.js';
 
@@ -108,6 +108,36 @@ export function focusFirst(scope, selector) {
 
 function inScope(el, scope) { return el && scope.contains(el) && el.hasAttribute?.('data-focus'); }
 
+// Focus never falls through (0.9.47, owner: "highlights have disappeared", "I don't know what I'm selecting"): a focused
+// button that turns disabled while it works (busy), or a row that re-renders away, drops focus to <body> without any
+// event. Nothing was highlighted and A only woke focus up. Checked every 150 ms in pad mode: back to the same button
+// once it's enabled again (up to 20 s), else the nearest focusable in the top layer, where the old one was.
+let kept = null;
+function keepFocus() {
+  const a = document.activeElement;
+  if (a && a !== document.body) {
+    if (a.hasAttribute?.('data-focus')) { const r = a.getBoundingClientRect(); if (r.width) kept = { el: a, x: r.left + r.width / 2, y: r.top + r.height / 2, t: performance.now() }; }
+    return;
+  }
+  if (!kept || input.mode !== 'pad' || !document.hasFocus()) return;
+  const l = topLayer();
+  if (!l) return;
+  const { el } = kept;
+  if (el.isConnected && !el.disabled && el.offsetParent !== null && inScope(el, l.el)) { el.focus({ preventScroll: true }); return; }
+  if (el.isConnected && el.disabled && l.el.contains(el) && performance.now() - kept.t < 20000) return; // still busy: wait for it
+  // 0.9.49 (owner: opening Missing from Steam unfolded the search first): while a new page loads it has nothing to
+  // focus, and the nearest thing was the Dock's search, which opens on focus. On the page itself, only the page is a
+  // fallback; nothing there yet means wait for it (up to the 20 s above)
+  const main = l.el === document.body ? document.querySelector('main.main') : null;
+  if (main && main.contains(el) === false && !el.isConnected && performance.now() - kept.t < 20000 && !focusables(main).length) return;
+  let best = null, bd = Infinity;
+  for (const [c, r] of focusables(main || l.el, true)) { const d = Math.hypot(r.left + r.width / 2 - kept.x, r.top + r.height / 2 - kept.y); if (d < bd) { bd = d; best = c; } }
+  if (!best && main && performance.now() - kept.t < 20000) return; // the page is still loading
+  kept = null;
+  best?.focus({ preventScroll: true });
+}
+if (typeof window !== 'undefined') setInterval(keepFocus, 150);
+
 // Moving up and down keeps to the column you started in (a short item in between doesn't pull you
 // sideways); moving left or right sets a new column.
 let colX = null, colFrom = null;
@@ -174,6 +204,16 @@ function move(dir) {
       if (score < bestScore) { bestScore = score; best = el; }
     }
   }
+  // columns of cards ([data-columns]): left and right go to the other column's nearest card, level or not
+  const colsH = !vertical && !best ? cur.closest('[data-columns]') : null;
+  if (colsH) {
+    let d = Infinity;
+    for (const [el, r] of cands) {
+      if (!colsH.contains(el) || (dir === 'right' ? r.left < c.right - 4 : r.right > c.left + 4)) continue;
+      const dy = Math.abs(r.top + r.height / 2 - cy) + Math.abs((dir === 'right' ? r.left - c.right : c.left - r.right)) * 0.25;
+      if (dy < d) { d = dy; best = el; }
+    }
+  }
   // In a pop-up's long list, right with nothing to the right jumps to the button at its bottom right (Apply,
   // Done...), so a long list never has to be walked to its end (0.9.24, owner). Pages aren't pop-ups.
   if (!best && dir === 'right' && layer && layer.el !== document.body && cur.closest('[data-scroll]')) {
@@ -189,9 +229,15 @@ function move(dir) {
   } else if (vertical) {
     // Nothing further: scroll the container so hidden content becomes reachable
     const sc = cur.closest('[data-scroll]');
-    if (sc) glideBy(sc, 0, dir === 'down' ? 200 : -200);
-  }
+    const room = sc ? (dir === 'down' ? sc.scrollHeight - sc.clientHeight - sc.scrollTop : sc.scrollTop) > 1 : false;
+    if (room) glideBy(sc, 0, dir === 'down' ? 200 : -200);
+    else edgeBump(cur);
+  } else edgeBump(cur);
 }
+// the end of a list: one soft settle the first time you push against it, not a buzz while the direction is held
+let edgeEl = null, edgeAt = 0;
+function edgeBump(cur) { const t = performance.now(); if (cur !== edgeEl || t - edgeAt > 900) rumble('settle'); edgeEl = cur; edgeAt = t; }
+if (typeof addEventListener !== 'undefined') addEventListener('cae-settle', () => rumble('settle'));
 
 // Up and down (0.9.16, owner): always the very next row, never one further down because it happened
 // to line up better. Landing in a game row (a sideways shelf) goes to its first game; in another
@@ -200,6 +246,13 @@ function pickRow(dir, cur, c, cands, wantX) {
   const below = dir === 'down';
   const pool = cands.filter(([, r]) => (below ? r.top >= c.bottom - 8 : r.bottom <= c.top + 8));
   if (!pool.length) return null;
+  // columns of cards of different heights ([data-columns], 0.9.49, owner: on the Emulators page down from RetroArch went
+  // to RPCS3 in the other column): up and down stay in the column you're in, while it has more
+  const cols = cur.closest('[data-columns]');
+  if (cols) {
+    const same = pool.filter(([el, r]) => cols.contains(el) && r.left < c.right - 4 && r.right > c.left + 4);
+    if (same.length) return same.reduce((m, x) => ((below ? x[1].top < m[1].top - 1 : x[1].bottom > m[1].bottom + 1) ? x : m))[0];
+  }
   const edge = below ? Math.min(...pool.map(([, r]) => r.top)) : Math.max(...pool.map(([, r]) => r.bottom));
   const ref = pool.find(([, r]) => (below ? r.top : r.bottom) === edge)[1];
   const tol = Math.max(8, ref.height * 0.5);
@@ -286,7 +339,7 @@ export function dispatch(action, { keepMode = false } = {}) {
   if (action === 'accept') {
     const el = document.activeElement;
     if (layer && inScope(el, layer.el)) { pressFx(el); el.click(); }
-    else focusFirst();
+    else { keepFocus(); if (!document.activeElement || document.activeElement === document.body) focusFirst(); } // focus fell through: show where you are first (0.9.47)
   }
 }
 
@@ -488,15 +541,20 @@ const RUMBLE = { low: 0.12, medium: 0.25, high: 0.45 };
 let rumbleLevel = 'none', lastPad = -1;
 export function setRumble(v) { rumbleLevel = RUMBLE[v] ? v : 'none'; }
 // kind: false (moving), true (A), 'tab' (0.9.21, owner: haptics when switching between menus in the bars:
-// LB/RB and LT/RT): a short, firmer click on both motors, so a page change feels different from a step
+// LB/RB and LT/RT): a short, firmer click on both motors, so a page change feels different from a step.
+// 'settle' (CAE 0.9.47, owner: "the slight rumble when the spring settles"): a soft tap on the heavy motor only, when
+// something comes to rest: a tile snapping into its place on Start, a cover landing on the game page, a list
+// reaching its end. At most one every 250 ms.
+let settledAt = 0;
 export function rumble(strong = false) {
   const m = RUMBLE[rumbleLevel];
   if (!m) return;
+  if (strong === 'settle') { const t = performance.now(); if (t - settledAt < 250) return; settledAt = t; }
   // Android's WebView can't rumble a pad: the device's own motor (a handheld's) gives the buzz, longer for higher levels
-  if (ANDROID) { try { navigator.vibrate?.(Math.round((strong ? 30 : 12) + m * 20)); } catch {} return; }
+  if (ANDROID) { try { navigator.vibrate?.(Math.round((strong === 'settle' ? 6 : strong ? 30 : 12) + m * 20)); } catch {} return; }
   if (lastPad < 0) return;
   const gp = navigator.getGamepads?.()[lastPad];
-  const fx = strong === 'tab' ? { duration: 26, weakMagnitude: Math.min(1, m * 1.2), strongMagnitude: m * 0.9 } : { duration: strong ? 32 : 18, weakMagnitude: m, strongMagnitude: strong ? m * 0.6 : 0 };
+  const fx = strong === 'settle' ? { duration: 22, weakMagnitude: 0, strongMagnitude: m * 0.55 } : strong === 'tab' ? { duration: 26, weakMagnitude: Math.min(1, m * 1.2), strongMagnitude: m * 0.9 } : { duration: strong ? 32 : 18, weakMagnitude: m, strongMagnitude: strong ? m * 0.6 : 0 };
   try { gp?.vibrationActuator?.playEffect('dual-rumble', fx)?.catch?.(() => {}); } catch {}
 }
 // the part of the screen focus was last in (a [data-zone]), for when the focused element goes away
@@ -525,7 +583,7 @@ function poll() {
   const merged = {};
   for (const gp of pads) {
     input.padName = gp.id;
-    if (gp.buttons.some((b) => b.pressed) || gp.axes.slice(0, 2).some((a) => Math.abs(a) > 0.55)) { lastPad = gp.index; if (input.keys) input.keys = false; }
+    if (gp.buttons.some((b) => b.pressed) || gp.axes.some((a) => Math.abs(a) > 0.25)) { governorInput(); if (gp.buttons.some((b) => b.pressed) || gp.axes.slice(0, 2).some((a) => Math.abs(a) > 0.55)) { lastPad = gp.index; if (input.keys) input.keys = false; } }
     gp.buttons.forEach((b, i) => {
       const a = BTN[i];
       if (!a || a === 'lt' || a === 'rt') return;
@@ -567,7 +625,8 @@ function poll() {
 }
 // Every 8 ms while Cartridge is in front; when it isn't (a game is running, or you switched away)
 // only a few times a second, so it costs the system nothing in the background (A14)
-(function loop() { poll(); setTimeout(loop, inFront() ? 8 : 250); })();
+// CAE governor (0.9.47): 60 Hz once idle for a minute (a press still lands within a frame), back to 120 Hz on any input
+(function loop() { poll(); setTimeout(loop, !inFront() ? 250 : governor.mode === 'idle' ? 16 : 8); })();
 // Game Mode: Steam's menu is in front while Cartridge keeps its window focus (main.js watchGamescopeFocus)
 export function setBackground(v) { inBackground = !!v; gsKnown = true; }
 // Outside Game Mode (0.9.29, owner: "on a PC with a controller, after the game closes the controls don't work"):

@@ -5,3 +5,4 @@ release/
 .DS_Store
 android-dist/
 remote-dist/
+.ui-audit/

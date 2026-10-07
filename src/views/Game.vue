@@ -162,7 +162,7 @@
 import { similarTo } from '../recs.js';
 import { addGame, removeGame, applyChanges, pickEmulator, pickCollections, pickFrameGen } from '../steam.js';
 import { computed, onMounted, onBeforeUnmount, ref, nextTick, watch, defineAsyncComponent, getCurrentScope, shallowRef } from 'vue';
-import { store, heroArt, call, img, go, cover, bytes, year, rating, toast, confirm, download, downloadFor, romById, platformById, isNew, setBg, logoOf, resetLogos, artFor, choose, openModal, allRoms, visible, isFavourite, addToCollection, playOf, playtimeText, ago, loadPlay, askText, saveConfig, backdropOf, wantSharp, bgJob } from '../store.js';
+import { store, heroArt, call, img, go, cover, bytes, year, rating, toast, confirm, download, downloadFor, romById, platformById, isNew, setBg, logoOf, resetLogos, artFor, choose, openModal, allRoms, visible, isFavourite, addToCollection, playOf, playtimeText, ago, loadPlay, askText, saveConfig, backdropOf, wantSharp, bgJob, playGame, saveSyncOn } from '../store.js';
 import { pinToStart } from '../startTiles.js';
 import { useView } from '../useView.js';
 import { IS_ANDROID } from '../platform.js';
@@ -577,6 +577,22 @@ if (import.meta.env.MODE === 'android') {
 const PC_SLUGS = /^(win|windows|win3x|pc|dos)$/i; // PC games (Android: open in GameNative, GameHub or Winlator)
 // Syncthing's older versions of one save (0.9.29): grouped by when they were replaced; restoring puts that
 // version back through Syncthing (its own versioning), the only time Cartridge asks for a save to change
+// Cartridge Save Sync for this game (0.9.51): sync now, or put an older version back (it becomes the newest everywhere;
+// the save it replaces is kept here first)
+async function cloudSaves() {
+  const id = Number(props.romId);
+  let list = []; try { list = await call('savesync:versions', { romId: id }); } catch (e) { toast(e.message, 'error', 5000); return; }
+  const fmt = (t) => { try { return new Date(t).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }); } catch { return t; } };
+  const v = await choose({ title: 'Saves in RomM', message: list.length ? 'The newest of each save is what your devices get. Pick an older one to put it back.' : 'No saves of this game in RomM yet. They go there after you play.', options: [{ label: 'Sync Now', sub: 'Check this game’s saves with RomM', value: 'sync', icon: 'mdiSync' }, ...list.map((x, i) => ({ label: `${x.emuName} · ${fmt(x.at)}`, sub: `${i === list.findIndex((y) => y.key === x.key) ? 'Newest' : 'Older version'} · ${bytes(x.size || 0)}${x.device ? ' · from ' + x.device : ''}`, value: 'v' + x.id, icon: 'mdiHistory', raw: true }))] });
+  if (!v) return;
+  if (v === 'sync') {
+    try { const r = await call('savesync:run', { romId: id }); const c = r?.counts || {}; toast(r?.offline ? 'RomM couldn’t be reached' : c.conflict ? 'A save changed on two devices: choose in Settings → Saves and Sync' : c.down ? 'The newest save is here' : c.up ? 'Saved to RomM' : 'Up to date', r?.offline || c.conflict ? 'error' : 'ok', 4000, 'mdiCloudSyncOutline'); } catch (e) { toast(e.message, 'error', 5000); }
+    return;
+  }
+  const x = list.find((y) => 'v' + y.id === v);
+  if (!(await confirm('Put This Version Back?', `${x.emuName}'s save from ${fmt(x.at)} becomes the newest on every device. The save on this device now is kept as an older version first.`, 'Put It Back'))) return;
+  try { await call('savesync:restore', { id: x.id, romId: id }); toast('That version is back', 'ok', 3000, 'mdiHistory'); } catch (e) { toast(e.message, 'error', 6000); }
+}
 async function olderVersions(x) {
   let all = {};
   try { all = (await call('syncsaves:versions', { id: x.synced.id })) || {}; } catch (e) { toast(e.message, 'error', 5000); return; }
@@ -646,10 +662,13 @@ async function more() {
   if (!IS_ANDROID && installedPath.value && !marked.value && (pe || /\bpsx\b/i.test(slugs))) play.push({ label: 'Game settings', sub: `${pe || 'DuckStation'}’s settings for this game only`, value: 'gamesettings', icon: 'mdiTune' });
   // patches and cheats are in Game Add-ons (0.9.24, owner: no separate row for them here)
   // 0.9.28 (owner: PS4 patches had gone from here): PS3 and PS4 too; Game Add-ons shows only the tabs the console has
-  if (!IS_ANDROID && installedPath.value && !marked.value && /\b(ps2|ps3|ps4|psx|ngc|gamecube|gc|wii|psp|3ds|n3ds|switch|wiiu)\b/i.test(slugs)) play.push({ label: 'Add-ons', value: 'textures', icon: 'mdiPuzzleOutline',
-    sub: /ps4/i.test(slugs) ? 'Patches from shadPS4 and GoldHEN' : /ps3/i.test(slugs) ? 'Patches and game updates' : /\bps2\b/i.test(slugs) ? 'Texture packs and patches' : /\bpsp\b/i.test(slugs) ? 'Mods and cheats' : 'Mods, packs and patches, and what’s installed' });
+  // 0.9.52: cartridge consoles too, for ROM hacks (and Nexus Mods on the mods engine's other sources)
+  const HACKS = /\b(nes|famicom|snes|sfam|n64|gb|gbc|gba|nds|genesis-slash-megadrive|sms|gamegear|turbografx16--1)\b/i;
+  if (!IS_ANDROID && installedPath.value && !marked.value && (/\b(ps2|ps3|ps4|psx|ngc|gamecube|gc|wii|psp|3ds|n3ds|switch|wiiu)\b/i.test(slugs) || HACKS.test(slugs))) play.push({ label: 'Add-ons', value: 'textures', icon: 'mdiPuzzleOutline',
+    sub: HACKS.test(slugs) ? 'ROM hacks and mods' : /ps4/i.test(slugs) ? 'Patches from shadPS4 and GoldHEN' : /ps3/i.test(slugs) ? 'Patches and game updates' : /\bps2\b/i.test(slugs) ? 'Texture packs and patches' : /\bpsp\b/i.test(slugs) ? 'Mods and cheats' : 'Mods, packs and patches, and what’s installed' });
   // 0.9.29 (The Syncthing Update): this game's saves on this device, found by the save's own ID
   const sv = IS_ANDROID ? null : await Promise.race([call('saves:forRom', { romId: Number(props.romId) }).catch(() => []), new Promise((r) => setTimeout(() => r(null), 1500))]);
+  if (!IS_ANDROID && saveSyncOn()) play.push({ label: 'Saves in RomM', sub: 'Cartridge Save Sync: sync now, or put an older version back', value: 'cloudsaves', icon: 'mdiCloudSyncOutline' }); // 0.9.51
   if (sv?.length) play.push({ label: 'Saves on This Device', sub: `${sv.length} ${sv.length === 1 ? 'save' : 'saves'} · ${sv.some((x) => x.synced) ? 'synced with Syncthing' : 'not synced'} · changed ${ago(Math.max(...sv.map((x) => x.at || 0)))}`, value: 'saves', icon: 'mdiContentSaveOutline' });
   if (installedPath.value) play.push({ label: 'Show file location', value: 'path', icon: 'mdiFolderOutline' });
   const top = [
@@ -716,9 +735,10 @@ async function more() {
   if (v === 'mark' || v === 'unmark') { await setMark(v === 'mark'); return; }
   if (v === 'trophies') { await linkTrophies(); return; }
   if (v === 'path') { toast(installedPath.value, 'info', 5000, 'mdiFolder'); return; }
+  if (v === 'cloudsaves') return cloudSaves();
   if (v === 'saves') {
     const list = sv || [];
-    const p = await choose({ title: 'Saves on This Device', message: 'Read only: Cartridge never changes a save. A to copy where it is.', options: list.map((x) => ({ label: x.emuName + (x.shared ? ' · Memory Card' : ''), sub: `${bytes(x.size || 0)} · changed ${ago(x.at)} · ${x.synced ? 'synced in ' + x.synced.label : 'not synced'}${x.conflicts ? ` · ${x.conflicts} conflict ${x.conflicts === 1 ? 'copy' : 'copies'} from two devices` : ''}`, value: x.path, icon: x.synced ? 'mdiSync' : 'mdiContentSaveOutline', raw: true })) });
+    const p = await choose({ title: 'Saves on This Device', message: saveSyncOn() ? 'Cartridge Save Sync keeps these in step with RomM. A to copy where one is.' : 'Read only: Cartridge never changes a save. A to copy where it is.', options: list.map((x) => ({ label: x.emuName + (x.shared ? ' · Memory Card' : ''), sub: `${bytes(x.size || 0)} · changed ${ago(x.at)} · ${x.synced ? 'synced in ' + x.synced.label : 'not synced'}${x.conflicts ? ` · ${x.conflicts} conflict ${x.conflicts === 1 ? 'copy' : 'copies'} from two devices` : ''}`, value: x.path, icon: x.synced ? 'mdiSync' : 'mdiContentSaveOutline', raw: true })) });
     const x = list.find((y) => y.path === p);
     if (!x) return;
     // a save in one of Cartridge's synced folders can go back to an older version Syncthing kept (0.9.29)
@@ -765,7 +785,7 @@ async function more() {
 }
 // Ready to play (0.9.21, owner: it did nothing): starts the game's Steam shortcut; not in Steam yet: offers to add it
 async function playNow() {
-  try { await call('steam:play', { romId: Number(props.romId) }); toast('Starting through Steam…', 'info', 2500, 'mdiPlay'); }
+  try { await playGame(Number(props.romId)); toast('Starting through Steam…', 'info', 2500, 'mdiPlay'); }
   catch (e) {
     if (/Add it to Steam/.test(e.message) && (await confirm('Add to Steam to play?', 'Cartridge starts games through their Steam shortcut, so they launch with your emulator setup.', 'Add to Steam'))) return addGame({ ...base.value, id: Number(props.romId) });
     toast(e.message, 'error', 5000);
@@ -806,6 +826,9 @@ onMounted(async () => {
 .g-banner-img.blur { filter: blur(24px) saturate(1.3) brightness(0.8); transform: scale(1.15); }
 .g-banner-shade { position: absolute; inset: 0; background: linear-gradient(90deg, rgba(0, 0, 0, 0.55) 0%, rgba(0, 0, 0, 0.2) 45%, transparent 75%); } /* only for the logo's contrast */
 .g-banner-shade { -webkit-mask-image: linear-gradient(180deg, transparent 0%, #000 14%, #000 50%, transparent 100%); mask-image: linear-gradient(180deg, transparent 0%, #000 14%, #000 50%, transparent 100%); }
+/* 0.9.49 (owner: a dark band at the top of the art with the Dock at the bottom): the art fades in at the top only
+   under a top bar; otherwise it runs to the screen's edge */
+:global(body:not(.bar-top) .g-banner-img), :global(body:not(.bar-top) .g-banner-shade) { -webkit-mask-image: linear-gradient(180deg, #000 0%, #000 50%, transparent 100%); mask-image: linear-gradient(180deg, #000 0%, #000 50%, transparent 100%); }
 .g-banner-logo { position: absolute; left: var(--s-7); bottom: var(--s-5); right: 360px; display: flex; align-items: flex-end; }
 .g-hero { position: relative; display: flex; align-items: flex-start; justify-content: space-between; gap: 40px; padding: var(--s-4) var(--s-7) var(--s-5); }
 .g-info { display: flex; flex-direction: column; gap: var(--s-4); max-width: 860px; min-width: 0; }
@@ -856,10 +879,10 @@ onMounted(async () => {
 .fact { display: flex; flex-direction: column; gap: 2px; word-break: break-word; }
 .fact span { font-size: var(--t-xs); color: var(--muted); font-weight: 600; }
 .fact b { font-weight: 500; font-size: var(--t-sm); }
-.viewer { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.94); z-index: 40; display: grid; place-items: center; animation: fade 0.2s; }
+.viewer { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.94); z-index: 40; display: grid; place-items: center; animation: fade var(--fade-in); }
 .viewer > * { grid-area: 1 / 1; }
 .viewer .vload { color: var(--muted); }
-.viewer img { opacity: 0; transition: opacity 0.14s ease-out; }
+.viewer img { opacity: 0; transition: opacity var(--fade-in); }
 .viewer img.on { opacity: 1; }
 .viewer img { max-width: 94vw; max-height: 84vh; border-radius: var(--r-sm); box-shadow: 0 30px 80px rgba(0, 0, 0, 0.7); }
 .vhint { position: absolute; bottom: 26px; display: flex; gap: 8px; align-items: center; color: var(--muted); font-size: var(--t-sm); }
@@ -870,7 +893,7 @@ onMounted(async () => {
 .ra-sum-bar i { background: linear-gradient(90deg, #f5c542, #ffdf80); }
 .small { font-size: var(--t-sm); }
 .ra-badges { gap: 10px; padding: 12px 20px 12px var(--s-7); margin: 0 0 0 calc(-1 * var(--s-7)); }
-.ra-b { flex: none; width: 60px; height: 60px; border-radius: var(--r-md); overflow: hidden; transition: transform 0.14s ease-out; box-shadow: 0 6px 14px rgba(0, 0, 0, 0.4); }
+.ra-b { flex: none; width: 60px; height: 60px; border-radius: var(--r-md); overflow: hidden; transition: transform var(--spring-snappy-d) var(--spring-snappy); box-shadow: 0 6px 14px rgba(0, 0, 0, 0.4); }
 .ra-b img { width: 100%; height: 100%; display: block; }
 .ra-b.locked { opacity: 0.55; }
 .ra-b:focus { transform: scale(1.12); }

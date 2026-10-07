@@ -11,7 +11,7 @@
     </div>
     <div>
       <div v-if="!logo || logoFail" class="nm">{{ p.display_name }}</div>
-      <div v-if="meta || maker" class="fam"><svg v-if="maker" class="maker" :class="{ symbol: maker.symbol, tall: maker.tall }" :viewBox="maker.vb" :aria-label="maker.name" role="img"><path v-for="(q, i) in maker.paths || [maker]" :key="i" :d="q.d" :fill-rule="q.evenodd ? 'evenodd' : null" /></svg><span v-if="maker && meta">·</span><span v-if="meta">{{ meta }}</span></div>
+      <div v-if="meta || maker" class="fam"><svg v-if="maker" class="maker" :class="[{ symbol: maker.symbol, tall: maker.tall }, 'm-' + makerKey]" :viewBox="maker.vb" :aria-label="maker.name" role="img"><path v-for="(q, i) in maker.paths || [maker]" :key="i" :d="q.d" :fill-rule="q.evenodd ? 'evenodd' : null" /></svg><span v-if="maker && meta">·</span><span v-if="meta">{{ meta }}</span></div>
       <div class="ct">{{ p.rom_count }} {{ p.rom_count === 1 ? 'game' : 'games' }}<template v-if="onDevice"> · <span class="ondev">{{ onDevice }} on device</span></template></div>
     </div>
   </button>
@@ -27,7 +27,8 @@ const wide = ref(false); // a wide drawing (Switch with its Joy-Cons) gets a wid
 const props = defineProps({ p: Object });
 defineEmits(['open', 'focused']);
 // the maker as its logo, at the height of the text (0.9.16); the family name stays text when there's none
-const maker = computed(() => MAKERS[makerOf(props.p)] || null);
+const makerKey = computed(() => makerOf(props.p));
+const maker = computed(() => MAKERS[makerKey.value] || null);
 const meta = computed(() => [maker.value ? '' : props.p.family_name, props.p.generation ? `Gen ${props.p.generation}` : '', props.p.category].filter(Boolean).slice(0, maker.value ? 1 : 2).join(' · '));
 const onDevice = computed(() => romsOf(props.p.id).filter((r) => store.installed[r.id]).length);
 
@@ -57,7 +58,7 @@ const tileStyle = computed(() => {
 <style>
 .systile .sys-top { height: 44px; display: flex; align-items: center; position: relative; z-index: 1; }
 .systile .sys-top + div { position: relative; z-index: 1; }
-.systile .sys-logo { max-height: 30px; max-width: 170px; object-fit: contain; object-position: left center; filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.45)); transition: transform 0.3s var(--ease); transform-origin: left center; }
+.systile .sys-logo { max-height: 30px; max-width: 170px; object-fit: contain; object-position: left center; filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.45)); transition: transform var(--spring-d) var(--spring); transform-origin: left center; }
 .systile:focus .sys-logo { transform: scale(1.06); }
 .systile .ondev { color: #b9f6ca; }
 .systile .sys-clip { position: absolute; inset: 0; border-radius: inherit; overflow: hidden; clip-path: inset(0 round 16px); pointer-events: none; }

@@ -16,7 +16,7 @@
             <Icon v-else-if="o.icon" :name="o.icon" />
             <span>{{ o.raw ? o.label : titleCase(o.label) }}</span>
             <span v-if="o.sub" class="sub">{{ o.sub }}</span>
-            <Icon v-if="o.selected" name="mdiCheck" style="margin-left: 8px; color: var(--primary-l)" />
+            <span v-if="o.selected" class="tick-ok" title="Chosen"><Icon name="mdiCheck" :size="14" /></span>
           </button>
         </template>
       </div>

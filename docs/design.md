@@ -1,12 +1,15 @@
 # Cartridge design system (0.9)
 
+**The rules** (how Cartridge looks and feels, clipping, focus, Plain and Glass, motion, logos, what makes a screen
+finished) are in `docs/design-rules.md` since 0.9.50. This file keeps the values: type, space, radius, colour.
+
 Direction B, built on a real system: the artwork leads, the interface is solid, dark and quiet around it.
 Every screen uses these values and nothing else. If something new needs a value that isn't here, change
 this file first.
 
 ## Principles
 - **Art first.** Game art is the colour on screen. Chrome is neutral and stays out of its way.
-- **Solid, not glass.** Surfaces are opaque neutral greys, separated by value, not by borders or blur.
+- **Plain or Glass.** Since 0.9.45 there are two separate styles (see the end of this file and `docs/design-rules.md`).
 - **White means "you are here".** Focus is white (or the Highlights colour when one is picked): a ring
   on art, a full fill on buttons, rows and tabs. Readable from a sofa, the same on every screen.
 - **Chosen is a lighter grey fill** (`--sel`), never a stripe or an outline. The current top tab has a

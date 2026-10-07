@@ -29,6 +29,7 @@ const USER_DATA = app.getPath('userData');
 const CONFIG_FILE = path.join(USER_DATA, 'config.json');
 const MANIFEST_FILE = path.join(USER_DATA, 'installed.json');
 const IMG_CACHE = path.join(USER_DATA, 'imgcache');
+const LIB_ART = path.join(USER_DATA, 'imgcache-library'); // every game's cover, small, for browsing away from the server (0.9.52)
 
 // ---------------------------------------------------------------- config
 const DEFAULT_CONFIG = {
@@ -53,6 +54,7 @@ const DEFAULT_CONFIG = {
     colors: { highlight: '', buttons: '', bars: '', background: '' } },
   sync: { onLaunch: true, everyMinutes: 60 },
   sgdbKey: '', // optional SteamGridDB API key for game logos
+  nexusKey: '', // optional Nexus Mods personal API key (0.9.52): only Premium members' one-press downloads use it
   ra: { user: '', key: '' }, // RetroAchievements username + web API key
   trophies: { sources: {}, sync: true, popups: true, device: '' }, // PS3/PS4/Xbox 360/Vita trophies from emulators
   graphics: 'auto', // auto (GPU, falls back on failure) | software
@@ -171,6 +173,8 @@ function refocus() {
 // Cartridge comes back to the front with the pad working (nav.js gameEnded), in Game Mode and on the desktop.
 let runT = null, runOn = false;
 const runActive = () => runOn;
+// background jobs Cartridge runs by itself (0.9.48): a game in front (Game Mode) or one started from Cartridge counts as playing
+const scheduler = require('./scheduler').createScheduler({ playing: () => !!(gameFocus.away || runOn), file: path.join(USER_DATA, 'scheduler.json'), log });
 function watchGameRun(romId) {
   clearInterval(runT);
   gameFocus.gameApp = null; gameFocus.endedAt = 0;
@@ -188,19 +192,38 @@ function watchGameRun(romId) {
     }
     return false;
   };
-  let seen = false, started = Date.now();
+  let seen = false, started = Date.now(), seenAt = 0, asked = false;
+  const vita = /psvita|vita/i.test(`${r.platform_slug} ${r.platform_fs_slug}`);
   broadcast('game-run', { state: 'starting', romId });
   runT = setInterval(() => {
     let on = false; try { on = running(); } catch {}
-    if (on && !seen) { seen = true; runOn = true; log('game running', romId); }
+    if (on && !seen) { seen = true; seenAt = Date.now(); runOn = true; log('game running', romId); }
+    // 0.9.49 (owner: Vita3K "doesn't launch, nothing happens"): a Vita game that never shows, or closes within 15 s,
+    // gets Vita3K's own reason (its log, or the title not being in its storage) instead of silence
+    if (vita && !asked && ((!on && !seen && Date.now() - started > 20000) || (!on && seen && Date.now() - seenAt < 15000))) { asked = true; vitaQuickExit(romId, serial); }
     if (!on && !seen && Date.now() - started > 180000) { clearInterval(runT); return; } // never seen: give up after 3 min
     if (!on && seen) {
       clearInterval(runT); runOn = false; gameFocus.endedAt = Date.now(); log('game ended', romId);
       broadcast('game-run', { state: 'ended', romId });
+      saveSyncAfter(romId); // Cartridge Save Sync (0.9.51)
       bringBack();
       if (isGamescope()) setTimeout(steamFront, 1500);
     }
   }, 2000);
+}
+// why Vita3K didn't stay open for a game: not in the storage this copy of Vita3K uses (its -r then refuses the title and
+// quits before any window: config.cpp IsMember check), else the last error in its log, else its start check
+async function vitaQuickExit(romId, serial) {
+  try {
+    const P = require('./pkgInstall'), cmd = steamMgr.vita3kCommand?.();
+    const fsPaths = P.vita3kFsPaths(cmd?.exe);
+    let why = '';
+    if (serial && fsPaths.length && !fsPaths.some((d) => fs.existsSync(path.join(d, 'ux0/app', serial)))) why = `${serial} isn’t installed in the storage this Vita3K uses (${fsPaths[0]}). Install the game again from its page.`;
+    if (!why) why = P.vita3kWhy(P.vita3kLogTail(cmd?.exe));
+    if (!why && cmd?.exe) { const c = await require('./emuStart').check('vita3k', cmd.exe); if (c && !c.ok) why = `Vita3K can’t start: ${c.reason}. Repair it in Settings → Emulators.`; }
+    log('vita game closed straight away', romId, serial || '', cmd?.exe || 'no vita3k', why || 'no reason found');
+    broadcast('toast', { text: why ? `Vita3K closed: ${why}` : 'Vita3K closed straight away without saying why. Report a Problem in About sends its log.', kind: 'error', icon: 'mdiAlertCircleOutline' });
+  } catch (e) { log('vita quick exit check', e.message); }
 }
 // Game Mode, 1.5 s after our game ended (0.9.34): when gamescope still doesn't name Cartridge as the app in front,
 // Steam is asked to go back to its running app the way its own Resume does (only with Steam's interface reachable,
@@ -228,7 +251,9 @@ function watchGamescopeFocus() {
   let mine = BigInt(gid); if (mine > 0xffffffffn) mine >>= 32n;
   let last = null, busy = false, seen = new Set(), first = true, hiddenFor = 0, tick = false, scanning = false;
   gameFocus.watched = true;
-  setInterval(() => {
+  // CAE governor (0.9.47, owner: no CPU taken from the game): every 600 ms while Cartridge is in front, every 1.5 s
+  // while another app is (xprop is a process start each round, the Steam launch scan reads every process's command line)
+  const round = () => {
     if (busy) return; busy = true;
     require('child_process').execFile('xprop', ['-root', 'GAMESCOPE_FOCUSED_APP'], { timeout: 1500 }, (err, out) => {
       busy = false;
@@ -247,6 +272,7 @@ function watchGamescopeFocus() {
         // back in front after a game (0.9.24, owner: controls dead after closing a game): the window came back
         // without focus (showInactive), and the page only reads the pad while focused
         if (!away && win && !win.isDestroyed()) refocus();
+        if (!away) saveSyncBack(); // back from a game started anywhere (Steam too): its saves go to RomM (0.9.51)
       }
       gameFocus.away = away && m[1] !== '769'; if (gameFocus.away) gameFocus.otherAt = Date.now(); // 769 is Steam's own menu, where Exit game for Cartridge is
       // F11: a game Steam just started has no window yet, so gamescope shows the one it has (ours).
@@ -267,7 +293,8 @@ function watchGamescopeFocus() {
       if (fresh) { gameFocus.endedAt = 0; gameFocus.gameApp = null; } // a new game (even the same one again) is away as usual
       if (fresh && win && !win.isDestroyed() && win.isVisible()) { log('steam started another game, stepping aside'); hiddenFor = Date.now(); win.hide(); }
     }, () => { scanning = false; });
-  }, 600);
+  };
+  (function loop() { round(); setTimeout(loop, gameFocus.away ? 1500 : 600); })();
 }
 // Game Mode, another app in front or just closed (0.9.23, owner: closing a game started from Steam closed
 // Cartridge too). Steam ends a game by signalling its launch session, and on the way back Cartridge got
@@ -564,12 +591,34 @@ function scanMounts() {
   return found.filter((p) => !p.includes('/.'));
 }
 
+// 0.9.49 (owner: "Detected ROM folders, I don't know what that means"; the list showed one folder twice, under /media and
+// /run/media, and EmuDeck's entry pointed at the drive itself): a found folder is the games folder on it (a drive or an
+// Emulation folder becomes its roms folder), the same real folder is listed once, and each says which drive it's on and
+// how many consoles and games it holds, so the choice is plain.
+const KNOWN_DIRS = new Set(Object.values(PLATFORM_MAP).flat().map((x) => x.toLowerCase()));
+function romsFolderStats(dir) {
+  let consoles = 0, games = 0;
+  for (const n of listDirNames(dir)) {
+    if (!KNOWN_DIRS.has(n.toLowerCase())) continue;
+    let k = 0; try { k = fs.readdirSync(path.join(dir, n)).filter((f) => !f.startsWith('.') && !/^(media|metadata\.txt|systeminfo\.txt)$/i.test(f)).length; } catch {}
+    consoles++; games += k;
+  }
+  return { consoles, games };
+}
 function detectRoots() {
   const out = [];
+  const real = (x) => { try { return fs.realpathSync(x); } catch { return path.resolve(x); } };
+  const list = mounts();
   const add = (p, source) => {
     if (!p) return;
-    const norm = path.resolve(p);
-    if (!out.find((o) => o.path === norm)) out.push({ path: norm, source, exists: isDir(norm) });
+    let norm = path.resolve(p);
+    // a drive or an Emulation folder: the games folder in it
+    if (romsFolderStats(norm).consoles < 2) for (const sub of ['roms', 'Emulation/roms']) if (isDir(path.join(norm, sub)) && romsFolderStats(path.join(norm, sub)).consoles >= 2) { norm = path.join(norm, sub); break; }
+    const r = real(norm);
+    const had = out.find((o) => o.real === r);
+    if (had) { if (!had.source.includes(source)) had.source += ` · ${source}`; return; }
+    const dv = isDir(norm) ? driveOf(norm, list) : null;
+    out.push({ path: norm, real: r, source, exists: isDir(norm), drive: dv ? (dv.label === 'This device' ? 'Main Drive' : dv.label) : '', ...romsFolderStats(norm) });
   };
   const emu = readEmuDeckSettings();
   if (emu.romsPath) add(emu.romsPath, 'EmuDeck settings');
@@ -584,7 +633,7 @@ function detectRoots() {
     const r = out.find((o) => o.exists);
     if (r) { const b = path.join(path.dirname(r.path), 'bios'); if (isDir(b)) bios = b; }
   }
-  return { roots: out, bios };
+  return { roots: out.filter((o) => o.exists), bios };
 }
 
 function listDirNames(dir) {
@@ -638,12 +687,16 @@ function platformDirs(p) {
   return [main, ...extraRoots().filter((r) => isDir(r)).map((r) => rootFolder(r, p))].filter(Boolean);
 }
 // where a new download goes: the folder picked in Storage, else the drive with the most free space
-function downloadDir(p, need = 0) {
+// root: a games folder picked for this one download (0.9.49, Always Ask), else the one picked in Storage
+function downloadDir(p, need = 0, root = null) {
   const main = platformPath(p).path;
   const roots = extraRoots().filter((r) => isDir(r));
   if (!roots.length || config.paths[p.slug]) return main; // one drive, or a folder you set for this console
   const opts = [main, ...roots.map((r) => rootFolder(r, p))].filter(Boolean);
-  const pick = config.downloadRoot && config.downloadRoot !== 'most' ? opts.find((d) => path.resolve(d).startsWith(path.resolve(config.downloadRoot) + path.sep)) : null;
+  const want = root || (config.downloadRoot && config.downloadRoot !== 'most' ? config.downloadRoot : null);
+  // the main games folder (config.romsRoot) holds main, which may sit under another path than romsRoot's (a console
+  // folder set by name), so the main root picks main itself
+  const pick = want ? (path.resolve(want) === path.resolve(config.romsRoot || '') ? main : opts.find((d) => path.resolve(d).startsWith(path.resolve(want) + path.sep))) : null;
   if (pick) return pick;
   const free = (d) => { let x = d; while (x && !isDir(x)) { const up = path.dirname(x); if (up === x) break; x = up; } try { const st = fs.statfsSync(x || '/'); return st.bavail * st.bsize; } catch { return 0; } };
   const ranked = opts.map((d) => ({ d, f: free(d) })).sort((a, b) => b.f - a.f);
@@ -830,6 +883,7 @@ function computeInstalled() {
   if (!library) return out;
   for (const p of library.platforms) Object.assign(out, installedState(library.roms[p.id] || [], p));
   installedMap = out;
+  try { identity.bump(); } catch {} // the game identity index follows what's on the device (defined further down)
   playSyncAt = 0; // play time can be matched to games now: sync again
   broadcast('installed', out);
   return out;
@@ -1060,6 +1114,40 @@ async function scanServer({ platforms = [], quiet = false } = {}) {
 }
 
 // ---------------------------------------------------------------- image protocol (auth + disk cache)
+// The image pipeline (0.9.48): a picture is kept at the size it's shown, not the size it was made. With ?w= (covers ask
+// for their card size) and for every sharp hero (asked at this screen's width), a copy is shrunk once and kept beside
+// the original (<file>.w<width>), so the interface decodes a 360 px cover instead of a 600 px one, and a 1280 px
+// banner instead of a 3840 px one on a handheld. Only ever smaller; GIFs and SVGs (animation, drawings) untouched;
+// anything nativeImage can't read is served as it was.
+async function sizedImage(buf, type, w, file, jpeg = false) {
+  if (!w || !buf || !/jpe?g|png|webp/i.test(type || '')) return null;
+  const out = file + '.w' + w;
+  try { const b = await fsp.readFile(out); return { buf: b, type: (await fsp.readFile(out + '.type', 'utf8').catch(() => '')) || 'image/jpeg' }; } catch {}
+  try {
+    const { nativeImage } = require('electron');
+    const im = nativeImage.createFromBuffer(buf);
+    if (im.isEmpty() || im.getSize().width <= w * 1.15) return null; // already about that size
+    const small = im.resize({ width: w, quality: 'better' });
+    const png = !jpeg && /png/i.test(type), b = png ? small.toPNG() : small.toJPEG(88), t = png ? 'image/png' : 'image/jpeg';
+    fsp.writeFile(out, b).then(() => fsp.writeFile(out + '.type', t)).catch(() => {});
+    return { buf: b, type: t };
+  } catch { return null; }
+}
+async function trimImageCache(limit) {
+  let names = []; try { names = await fsp.readdir(IMG_CACHE); } catch { return; }
+  const files = [];
+  for (const n of names) { try { const st = await fsp.stat(path.join(IMG_CACHE, n)); files.push({ n, size: st.size, t: st.mtimeMs }); } catch {} }
+  let total = files.reduce((a, f) => a + f.size, 0);
+  if (total <= limit) return;
+  files.sort((a, b) => a.t - b.t);
+  let gone = 0;
+  for (const f of files) { if (total <= limit * 0.8) break; try { await fsp.unlink(path.join(IMG_CACHE, f.n)); total -= f.size; gone++; } catch {} }
+  log('image cache trimmed', gone, 'files, now', Math.round(total / 1048576), 'MB');
+}
+// the width a full-screen picture needs on this screen, in steps so a resize doesn't make a new copy every time
+function screenWidth() {
+  try { const d = screen.getPrimaryDisplay(); return Math.min(3840, Math.max(1280, Math.ceil((d.size.width * (d.scaleFactor || 1)) / 640) * 640)); } catch { return 1920; }
+}
 async function handleImage(request) {
   const u = new URL(request.url);
   const sl = u.searchParams.get('sys');
@@ -1094,7 +1182,12 @@ async function handleImage(request) {
   }
   const hz = u.searchParams.get('hz');
   if (hz) {
-    try { const b = await fsp.readFile(path.join(HERO_DIR, path.basename(hz))); return new Response(b, { headers: { 'Content-Type': onAndroid ? sniffType(b) : 'image/png', 'Cache-Control': 'max-age=31536000' } }); } catch { return new Response('nf', { status: 404 }); }
+    if (onAndroid) { try { const b = await fsp.readFile(path.join(HERO_DIR, path.basename(hz))); return new Response(b, { headers: { 'Content-Type': sniffType(b), 'Cache-Control': 'max-age=31536000' } }); } catch { return new Response('nf', { status: 404 }); } } // Android: as sent (nativeImage is slow there)
+    try {
+      const f = path.join(HERO_DIR, path.basename(hz)), b = await fsp.readFile(f);
+      const sz = await sizedImage(b, 'image/png', Number(u.searchParams.get('w')) || screenWidth(), f, true); // heroes are opaque: JPEG
+      return new Response(sz ? sz.buf : b, { headers: { 'Content-Type': sz ? sz.type : 'image/png', 'Cache-Control': 'max-age=31536000' } });
+    } catch { return new Response('nf', { status: 404 }); }
   }
   const lf = u.searchParams.get('f');
   if (lf) {
@@ -1107,11 +1200,18 @@ async function handleImage(request) {
   const file = path.join(IMG_CACHE, key);
   // RomM's Sony controllers carry its parody marks ("ROMMY"): Sony's own wordmark and logo go in (0.9.31)
   const sony = require('./sonyArt'), sonySlug = sony.isSonyArt(target), mark = (b) => (sonySlug ? sony.fix(sonySlug, b) : b);
+  const want = Math.min(2000, Number(u.searchParams.get('w')) || 0);
   try {
     const buf = mark(await fsp.readFile(file));
     const type = (await fsp.readFile(file + '.type', 'utf8').catch(() => '')) || 'image/jpeg';
-    return new Response(buf, { headers: { 'Content-Type': type, 'Cache-Control': 'max-age=31536000' } });
+    const sz = !sonySlug && want ? await sizedImage(buf, type, want, file) : null;
+    return new Response(sz ? sz.buf : buf, { headers: { 'Content-Type': sz ? sz.type : type, 'Cache-Control': 'max-age=31536000' } });
   } catch {}
+  // away from the server (0.9.52): the small copy libraryArt() kept serves a card at once, and stands in for any size
+  // when RomM can't be reached
+  const libFile = path.join(LIB_ART, key + '.jpg');
+  const fromLib = async () => { try { return new Response(await fsp.readFile(libFile), { headers: { 'Content-Type': 'image/jpeg' } }); } catch { return null; } };
+  if (want && want <= LIB_ART_W * 1.15 && !sonySlug) { const r = await fromLib(); if (r) return r; }
   try {
     let url, headers = {};
     if (/^https?:\/\//.test(target)) url = target.replace(/^\/\//, 'https://');
@@ -1119,13 +1219,14 @@ async function handleImage(request) {
     if (url.startsWith('//')) url = 'https:' + url;
     // outside sites through webFetch (Electron's network, as the rest of Cartridge: sites behind Cloudflare refuse Node's)
     const r = /^https?:\/\//.test(target) ? await webFetch(url, { headers: { 'User-Agent': 'Cartridge (https://github.com/abdu2304/cartridge)' }, signal: AbortSignal.timeout(20000) }) : await fetch(url, { headers, signal: AbortSignal.timeout(20000) });
-    if (!r.ok) return new Response('nf', { status: 404 });
+    if (!r.ok) return (await fromLib()) || new Response('nf', { status: 404 });
     const buf = Buffer.from(await r.arrayBuffer());
     const type = r.headers.get('content-type') || 'image/jpeg';
-    fsp.mkdir(IMG_CACHE, { recursive: true }).then(() => Promise.all([fsp.writeFile(file, buf), fsp.writeFile(file + '.type', type)])).catch(() => {});
-    return new Response(mark(buf), { headers: { 'Content-Type': type } });
+    await fsp.mkdir(IMG_CACHE, { recursive: true }).then(() => Promise.all([fsp.writeFile(file, buf), fsp.writeFile(file + '.type', type)])).catch(() => {});
+    const sz = !sonySlug && want ? await sizedImage(buf, type, want, file) : null;
+    return new Response(sz ? sz.buf : mark(buf), { headers: { 'Content-Type': sz ? sz.type : type } });
   } catch {
-    return new Response('err', { status: 502 });
+    return (await fromLib()) || new Response('err', { status: 502 });
   }
 }
 // Android's romimg answer (0.9.17): a cached answer that isn't an image (a proxy or tunnel's 200 page) is
@@ -1205,6 +1306,41 @@ async function sgdbGrid(id, name) {
   });
   gridInflight.set(k, job);
   try { return await job; } finally { gridInflight.delete(k); }
+}
+// Every game's cover kept small (0.9.52, owner: a RomM at home with no tunnel; away, the library should still look
+// whole, without taking much room). Once the library is synced and RomM answers, each cover is fetched once, shrunk
+// to a 360 px JPEG (about 25 KB, so 2,000 games is about 50 MB) and kept apart from the picture cache, which trims
+// itself. Covers of games that left the library are dropped. The budget stops it at 250 MB on very big libraries.
+const LIB_ART_W = 360, LIB_ART_MAX = 250 * 1048576;
+async function libraryArt() {
+  if (!library || library.local || !config.configured) return;
+  const want = new Map();
+  for (const list of Object.values(library.roms || {})) for (const r of list) { const p = r.path_cover_small || r.path_cover_large || r.url_cover; if (p) want.set(crypto.createHash('sha1').update(p).digest('hex'), p); }
+  await fsp.mkdir(LIB_ART, { recursive: true });
+  let have = []; try { have = await fsp.readdir(LIB_ART); } catch {}
+  let total = 0;
+  for (const n of have) { const k = n.replace(/\.jpg$/, ''); if (!want.has(k)) await fsp.unlink(path.join(LIB_ART, n)).catch(() => {}); else { total += (await fsp.stat(path.join(LIB_ART, n)).catch(() => ({ size: 0 }))).size; want.delete(k); } }
+  if (!want.size) return;
+  let base; try { base = await resolveBase(); } catch { return; }
+  if (!base || !(await probe(base, config.server, 4000).catch(() => null))?.ok) return; // not reachable: next time
+  const { nativeImage } = require('electron');
+  let made = 0;
+  for (const [k, p] of want) {
+    if (total > LIB_ART_MAX || gameFocus.away || runOn) break; // a game started: stop, carry on next time
+    try {
+      let url, headers = {};
+      if (/^https?:\/\//.test(p)) url = p; else { url = base + (p.startsWith('/') ? '' : '/') + p; headers = authHeaders(); delete headers.Accept; }
+      const r = /^https?:\/\//.test(p) ? await webFetch(url, { signal: AbortSignal.timeout(20000) }) : await fetch(url, { headers, signal: AbortSignal.timeout(20000) });
+      if (!r.ok) continue;
+      const im = nativeImage.createFromBuffer(Buffer.from(await r.arrayBuffer()));
+      if (im.isEmpty()) continue;
+      const b = (im.getSize().width > LIB_ART_W ? im.resize({ width: LIB_ART_W, quality: 'better' }) : im).toJPEG(82);
+      await fsp.writeFile(path.join(LIB_ART, k + '.jpg'), b);
+      total += b.length; made++;
+    } catch {}
+    await new Promise((ok) => setTimeout(ok, 120)); // gentle on the server and the device
+  }
+  if (made) log('library art: kept', made, 'covers,', Math.round(total / 1048576), 'MB in all');
 }
 
 // ---------------------------------------------------------------- logos + custom artwork
@@ -1997,7 +2133,7 @@ async function runJob(it) {
     const rom = await api(`/api/roms/${it.romId}`);
     // Android: Install to another drive (it.root, one of the drives' ROMs folders); else upstream's choice
     const onDrive = onAndroid && it.root && driveRoots().some((r) => path.resolve(r) === path.resolve(it.root));
-    const target = onDrive ? platformPathIn(it.root, { slug: rom.platform_slug, fs_slug: rom.platform_fs_slug }).path : downloadDir({ slug: rom.platform_slug, fs_slug: rom.platform_fs_slug }, rom.fs_size_bytes || 0); // 0.9.38: any drive
+    const target = onDrive ? platformPathIn(it.root, { slug: rom.platform_slug, fs_slug: rom.platform_fs_slug }).path : downloadDir({ slug: rom.platform_slug, fs_slug: rom.platform_fs_slug }, rom.fs_size_bytes || 0, onAndroid ? null : it.root || null); // 0.9.38: any drive; 0.9.49: the one asked for
     if (!target) throw new Error('No folder set for this platform. Set it in Settings.');
     await fsp.mkdir(target, { recursive: true });
     const files = (rom.files || []).slice().sort((a, b) => a.full_path.localeCompare(b.full_path));
@@ -2104,7 +2240,8 @@ async function runJob(it) {
       it.retryAt = it.switched ? Date.now() + 20e3 : 0;
       it.switched = true;
     }
-    else { it.status = 'error'; it.error = e.message; }
+    // 0.9.52: away from a RomM with no tunnel the library still shows; say so plainly instead of a network code
+    else { it.status = 'error'; it.error = /ENOTFOUND|EAI_AGAIN|ECONNREFUSED|EHOSTUNREACH|ENETUNREACH|ETIMEDOUT|fetch failed|ERR_(NAME_NOT_RESOLVED|INTERNET_DISCONNECTED|CONNECTION_|ADDRESS_UNREACHABLE)/.test(String(e.message)) ? 'Your RomM server can’t be reached from here. Games already on this device still play; try again when you’re back on its network.' : e.message; }
     // a re-download that didn't finish: the old copy goes back, so the game is never left missing
     if (it.backup && ['error', 'cancelled'].includes(it.status)) await restoreBackup(it);
   }
@@ -2505,6 +2642,22 @@ const patchesMod = require('./patches');
 const cheatsMod = require('./cheats');
 const webFetch = require('./webFetch'); // outside services through Chromium's network stack (0.9.17: 403s)
 // add-ons Cartridge installed (0.9.17): { key: { dest, files, ... } }; Remove deletes only those files
+// The web and mods engines (0.9.52): one place for outside services, one shape for every mod source (web.js, modEngine.js)
+let webEngine = null, modEngine = null;
+const webEng = () => (webEngine ||= require('./web').createWeb({ cacheDir: path.join(USER_DATA, 'web-cache'), log }));
+const modsEng = () => (modEngine ||= require('./modEngine').createModEngine({ web: webEng(), key: (n) => (n === 'nexus' ? String(config.nexusKey || '').trim() || null : null), cacheFile: path.join(USER_DATA, 'addons-ps2-catalog.json'), log }));
+// a library game as the mods engine sees it: its name and Cartridge's console folder name (RomM's slug mapped)
+const modGame = (rom) => ({ name: rom.name || rom.fs_name || '', slug: (PLATFORM_MAP[rom.platform_slug] || PLATFORM_MAP[rom.platform_fs_slug] || [rom.platform_slug])[0], romId: rom.id });
+// how a ROM hack can be used for a game: RetroArch patches games as it loads them (a patch beside the game, named like
+// it), so with RetroArch nothing is written into the game; otherwise a patched copy is made beside the original
+function hackModes(rom) {
+  const file = installedMap[rom.id];
+  if (!file || file === MARKED) return { here: false };
+  let t = null; try { t = steamMgr.gameTemplate(rom.id, modGame(rom).slug); } catch {}
+  const ra = !!t && (/retroarch/i.test(t.exe || '') || /(^|\s)-L\s/.test(t.lo || ''));
+  return { here: true, retroarch: ra, file: path.basename(file), dir: fs.existsSync(file) && fs.statSync(file).isDirectory() };
+}
+const hackCache = new Map(); // ROM hack downloads read by hacks:prepare, kept 30 minutes for hacks:apply
 const ADDONS_FILE = path.join(USER_DATA, 'addons-installed.json');
 let addonBrowser = null;
 let addonRun = null, addonCache = null, emuGetRun = null;
@@ -2653,39 +2806,39 @@ function ppssppPatchState(romId, r) {
   return { emu: 'ppsspp', serial: id, version: '', dir, title: r?.name || '' };
 }
 // every game with what Syncthing's files can be matched by: its name, serials and title IDs in its file names
-const syncIdCache = new Map();
 function syncGameList() {
   const S = require('./syncthing');
   return [...romIndexMain().values()].map((r) => {
     const where = installedMap[r.id];
-    const ids = [...S.serialsIn([r.fs_name, ...(r.files || []).map((f) => f.file_name), where && where !== MARKED ? path.basename(where) : ''].join(' '))];
-    // 0.9.28: disc IDs read from the game itself, for folders named after them (Dolphin's GALE01, Azahar's title IDs)
-    const discIds = [];
-    if (where && where !== MARKED && /\.(iso|gcm|rvz|wia|wbfs|ciso|gcz|3ds|cci|cia|cxi)$/i.test(where)) {
-      if (!syncIdCache.has(where)) { let id = null; try { id = /\.(3ds|cci|cia|cxi)$/i.test(where) ? require('./addons').n3dsTitleId(where) : cheatsMod.gcWiiId(where); } catch {} syncIdCache.set(where, id); }
-      if (syncIdCache.get(where)) discIds.push(String(syncIdCache.get(where)));
-    }
+    const ids = require('./cide').parse([r.fs_name, ...(r.files || []).map((f) => f.file_name), where && where !== MARKED ? path.basename(where) : ''].join(' '));
+    // 0.9.28: disc IDs read from the game itself, for folders named after them (Dolphin's GALE01, Azahar's title IDs);
+    // read through the game identity engine since 0.9.48 (same readers, one cache)
+    const discIds = where && where !== MARKED && /\.(iso|gcm|rvz|wia|wbfs|ciso|gcz|3ds|cci|cia|cxi)$/i.test(where) ? identity.fileIds(r, where) : [];
     return { id: r.id, name: r.name || '', ids, discIds };
   });
 }
 // ---- Saves on this device (0.9.29, The Syncthing Update): electron/saves.js finds them, this matches them
-// to the library with every ID Cartridge can read from the game itself (cached per file and size)
-const saveIdCache = new Map();
-function saveIdsOf(r, where) {
-  const file = mainFile(where), slugs = `${r.platform_slug} ${r.platform_fs_slug}`;
-  let st; try { st = fs.statSync(file || where); } catch { return []; }
-  const k = (file || where) + ':' + st.size;
-  if (saveIdCache.has(k)) return saveIdCache.get(k);
-  const ids = [];
-  try {
-    if (/\bswitch\b/i.test(slugs) && file) { const A = require('./addons'); A.setKeyRoots([config.emulationRoot]); const id = A.switchTitleId(file); if (id) ids.push(id); }
-    else if (/ps3/i.test(slugs)) { const id = ps3Serial(r.id, where); if (id) ids.push(id); }
-    else if (/\bpsx\b/i.test(slugs) && file) { const id = require('./addons').psxSerial(file); if (id) ids.push(id); }
-    else if (/\bpsp\b/i.test(slugs) && file) { const id = ppssppPatchState(r.id, r)?.serial; if (id) ids.push(id); }
-  } catch {}
-  saveIdCache.set(k, ids);
-  return ids;
+// to the library with every ID Cartridge can read from the game itself. Since 0.9.48 the reading and its cache live in
+// the game identity engine (electron/gameId.js), shared with trophies and Syncthing
+function gameFileIds(r, where) {
+  const file = mainFile(where), slugs = `${r.platform_slug} ${r.platform_fs_slug}`, A = require('./addons');
+  if (/\bswitch\b/i.test(slugs) && file) { A.setKeyRoots([config.emulationRoot]); return [A.switchTitleId(file)]; }
+  if (/ps3/i.test(slugs)) return [ps3Serial(r.id, where)];
+  if (/\bpsx\b/i.test(slugs) && file) return [A.psxSerial(file)];
+  if (/\bpsp\b/i.test(slugs) && file) return [ppssppPatchState(r.id, r)?.serial];
+  if (/\bps2\b/i.test(slugs) && /\.(iso|chd|cso|zso)$/i.test(file)) return [patchesMod.ps2IsoInfo(file)?.serial];
+  if (/\b(ngc|gc|gamecube|wii)\b/i.test(slugs) && /\.(iso|gcm|rvz|wia|wbfs|ciso|gcz)$/i.test(file)) return [cheatsMod.gcWiiId(file)];
+  if (/\b(3ds|n3ds)\b/i.test(slugs) && /\.(3ds|cci|cia|cxi)$/i.test(file)) return [A.n3dsTitleId(file)];
+  return [];
 }
+const identity = require('./gameId').createIdentity({
+  file: path.join(USER_DATA, 'game-ids.json'),
+  roms: () => [...romIndexMain().values()],
+  whereOf: (id) => { const w = installedMap[id]; return w && w !== MARKED ? w : ''; },
+  extract: gameFileIds,
+  log,
+});
+const saveIdsOf = (r, where) => identity.fileIds(r, where);
 function savesGameList() {
   return syncGameList().map((g) => {
     const r = romIndexMain().get(g.id), where = installedMap[g.id];
@@ -2730,6 +2883,105 @@ async function savesList(fresh) {
   savesCache = { at: Date.now(), list };
   return list;
 }
+// ---- Cartridge Save Sync (0.9.51): saves on your RomM, brought to every device (electron/saveSync.js does the work,
+// this gives it the library, RomM and the timing). A device uses this or Syncthing for saves, never both (owner).
+const SAVESYNC_FILE = path.join(USER_DATA, 'save-sync.json'), SAVE_BACKUPS = path.join(USER_DATA, 'save-backups');
+let ssData = loadJson(SAVESYNC_FILE, { ledger: {}, last: null });
+let ssSaveT = null;
+const ssLedger = { get: (k) => ssData.ledger[k], set: (k, v) => { ssData.ledger[k] = v; clearTimeout(ssSaveT); ssSaveT = setTimeout(() => saveJson(SAVESYNC_FILE, ssData, false), 500); } };
+const syncthingSaves = () => !!config.syncthing?.role; // Cartridge set Syncthing up for saves (main or joined)
+const saveSyncOn = () => !onAndroid && config.saveSync === 'cartridge' && !syncthingSaves() && config.configured && !config.localOnly; // Android: it reads desktop emulators' save folders
+// RomM's console slugs for each emulator's console, for the carrier game of a whole memory card
+const SS_CONSOLES = { switch: ['switch'], ps3: ['ps3'], psp: ['psp'], psvita: ['psvita', 'vita'], ps4: ['ps4'], ps2: ['ps2'], psx: ['psx', 'ps1', 'ps'], ngc: ['ngc', 'gc', 'gamecube'], wiiu: ['wiiu'], '3ds': ['3ds', 'n3ds'], xbox360: ['xbox360'] };
+const ssConsoleOf = (r) => Object.keys(SS_CONSOLES).find((c) => SS_CONSOLES[c].includes(r?.platform_slug) || SS_CONSOLES[c].includes(r?.platform_fs_slug)) || null;
+function ssCarriers() {
+  const out = {};
+  for (const r of romIndexMain().values()) { const c = ssConsoleOf(r); if (c && (out[c] == null || r.id < out[c])) out[c] = r.id; }
+  return out;
+}
+// the library for matching: every ID read from the game, plus the game's file name (RetroArch names saves after it)
+function ssGames() {
+  const list = savesGameList();
+  for (const r of romIndexMain().values()) { const stem = String(r.fs_name || '').replace(/\.[^.]+$/, ''); if (stem) list.push({ id: r.id, name: stem, ids: [], discIds: [] }); }
+  return list;
+}
+// RomM's saves API (electron/saveSync.js rommRpc, tested against a fake RomM server)
+const ssRpc = (devId) => require('./saveSync').rommRpc({ base: resolveBase, headers: authHeaders, devId });
+// a game's saves: its own, plus the whole memory card of its console
+const ssFor = (u, romId) => { if (romId == null) return true; if (u.romId === romId) return true; const r = romIndexMain().get(romId); return u.card && require('./saveSync').CONSOLE[u.emu] === ssConsoleOf(r); };
+let ssBusy = null;
+async function saveSyncRun({ romId = null, key = null, choice = null, dry = false, why = 'run' } = {}) {
+  if (!saveSyncOn()) return { off: true, syncthing: syncthingSaves() };
+  if (ssBusy) return ssBusy; // one sync at a time; a second ask shares the running one
+  ssBusy = (async () => {
+    const SS = require('./saveSync'), extra = saveExtras();
+    romId = romId == null ? null : Number(romId);
+    const local = SS.units({ extra, games: ssGames(), carriers: ssCarriers() });
+    let remotes = [];
+    try { remotes = await (await ssRpcList(romId)); } catch (e) { log('save sync: RomM unreachable', e.message); if (why !== 'before' && !dry) ssHold(romId); return { offline: true, error: e.message, held: ssData.held || null }; }
+    const devId = await rommDevice(), rpc = ssRpc(devId);
+    const todo = [...local, ...SS.remoteOnly(remotes, new Set(local.map((u) => u.key)))].filter((u) => ssFor(u, romId) && (!key || u.key === key));
+    const results = [];
+    broadcast('savesync', { state: 'run', done: 0, of: todo.length, why, romId });
+    for (const [i, u] of todo.entries()) {
+      let r;
+      try { r = await SS.syncUnit(u, rpc, ssLedger, { extra, backupsRoot: SAVE_BACKUPS, choice: key ? choice : null, dry }); } catch (e) { r = { key: u.key, result: e.code === 'auth' ? 'auth' : 'error', error: e.message }; }
+      results.push({ ...r, label: u.label || u.key, emu: u.emu, emuName: SS.LABEL[u.emu] || u.emu, romId: u.romId, card: u.card, states: !!u.states });
+      if (!['none', 'same', 'unmatched'].includes(r.result)) log('save sync:', u.key, r.result, r.error || '');
+      broadcast('savesync', { state: 'run', done: i + 1, of: todo.length, why, romId });
+      if (r.result === 'auth') break;
+    }
+    const counts = {}; for (const r of results) counts[r.result] = (counts[r.result] || 0) + 1;
+    if (romId == null && !dry) { ssData.last = { at: Date.now(), counts, conflicts: results.filter((r) => r.result === 'conflict').map((r) => ({ key: r.key, label: r.label, emuName: r.emuName, romId: r.romId })) }; saveJson(SAVESYNC_FILE, ssData, false); }
+    broadcast('savesync', { state: 'done', counts, why, romId });
+    return { results, counts };
+  })().finally(() => { ssBusy = null; });
+  return ssBusy;
+}
+// Away from the server (0.9.52, owner: a RomM at home with no tunnel, played on a handheld away). Nothing special
+// is needed to keep a save: the emulator keeps writing it on this device, played again or not. What Cartridge adds is
+// the hold: the games played while RomM couldn't be reached are noted (save-sync.json held), RomM is checked every
+// minute while something is held (never while a game runs), and the moment it answers they go up. The ledger then
+// decides as always: changed only here = up, changed on another device too = a conflict you settle (never guessed).
+let ssHoldT = null;
+function ssHold(romId) {
+  const h = ssData.held || { since: Date.now(), romIds: [], all: false };
+  if (romId == null) h.all = true; else if (!h.romIds.includes(romId)) h.romIds.push(romId);
+  h.at = Date.now(); ssData.held = h; saveJson(SAVESYNC_FILE, ssData, false);
+  broadcast('savesync', { state: 'held', held: h });
+  ssWatchBack();
+}
+function ssWatchBack() {
+  if (ssHoldT || !ssData.held) return;
+  ssHoldT = setInterval(async () => {
+    if (!ssData.held || !saveSyncOn()) { clearInterval(ssHoldT); ssHoldT = null; return; }
+    if (gameFocus.away || runOn) return; // a game is in front: wait, it may be writing its save
+    let ok = false;
+    try { const b = await resolveBase(true); ok = !!b && !!(await probe(b, config.server, 4000))?.ok; } catch {}
+    if (!ok) return;
+    const held = ssData.held;
+    const r = await saveSyncRun({ why: 'reconnected' }).catch(() => null);
+    if (!r || r.offline) return;
+    if (ssData.held === held) delete ssData.held;
+    saveJson(SAVESYNC_FILE, ssData, false);
+    log('save sync: server back, held saves synced', JSON.stringify(r.counts || {}));
+    broadcast('savesync', { state: 'released', counts: r.counts || {}, held });
+    clearInterval(ssHoldT); ssHoldT = null;
+  }, 60000);
+}
+// every save of ours in RomM (or one game's): what other devices put there
+async function ssRpcList(romId) {
+  // one game: its saves and its console's carrier game (where the whole memory card is)
+  const ids = romId == null ? [null] : [...new Set([romId, ssCarriers()[ssConsoleOf(romIndexMain().get(romId))]].filter((x) => x != null))];
+  const all = [];
+  for (const id of ids) all.push(...((await api('/api/saves', { query: id == null ? {} : { rom_id: id } })) || []));
+  return all.filter((s) => String(s.slot || '').startsWith('cartridge:'));
+}
+// after a game: its saves go up a few seconds after it closes (emulators write on exit)
+function saveSyncAfter(romId) { if (saveSyncOn()) setTimeout(() => saveSyncRun({ romId, why: 'after' }).catch(() => {}), 4000); }
+let ssBackAt = 0;
+function saveSyncBack() { if (saveSyncOn() && Date.now() - ssBackAt > 120000) { ssBackAt = Date.now(); setTimeout(() => saveSyncRun({ why: 'back' }).catch(() => {}), 6000); } }
+
 function patchState(romId) {
   const r = romIndexMain().get(Number(romId));
   const slugs = `${r?.platform_slug} ${r?.platform_fs_slug}`;
@@ -3173,7 +3425,14 @@ function createWindow() {
   // console collections kept whole by themselves (0.9.34): 30 s after start, and again every 10 minutes, games of a
   // console that are in Steam but not in its collection are put in, only with Steam's interface reachable (no restart)
   const colsAuto = () => { if (!config.steam?.consoleCollections) return; steamMgr.fillCollections({ auto: true }).then((r) => { if (r.count) broadcast('toast', { text: `${r.count} game${r.count === 1 ? '' : 's'} added to ${r.count === 1 ? 'its' : 'their'} console collection in Steam`, kind: 'ok', icon: 'mdiSteam' }); }).catch((e) => log('console collections by itself:', e.message)); };
-  if (!globalThis.__colsAuto) { globalThis.__colsAuto = true; setTimeout(colsAuto, 30000); setInterval(colsAuto, 600000); if (!onAndroid) setTimeout(() => biosSetup({ install: true }).catch(() => {}), 45000); /* Android: its own BIOS check (android:bios) */ /* 0.9.38: firmware too, when an emulator lacks it */ }
+  // 0.9.48: on the scheduler (electron/scheduler.js), so both wait while a game runs and run once it has ended
+  if (!globalThis.__colsAuto) {
+    globalThis.__colsAuto = true;
+    if (ssData.held) ssWatchBack(); // saves held from last time go up once RomM answers (0.9.52)
+    scheduler.add('save-sync', { every: 30 * 60000, firstAfter: 40000, deferWhilePlaying: true, run: () => saveSyncRun({ why: 'scheduled' }) }); // 0.9.51
+    scheduler.add('steam-collections', { every: 600000, firstAfter: 30000, deferWhilePlaying: true, run: async () => colsAuto() });
+    if (!onAndroid) scheduler.add('bios-check', /* Android: its own BIOS check (android:bios) */ { once: true, firstAfter: 45000, deferWhilePlaying: true, run: () => biosSetup({ install: true }).catch(() => {}) }); // 0.9.38: firmware too, when an emulator lacks it
+  }
   win.webContents.once('did-finish-load', () => log('ui loaded', Date.now() - startedAt + 'ms', 'window=' + win.getContentSize().join('x'), 'zoom=' + currentZoom()));
   win.webContents.on('did-finish-load', applyZoom);
   win.on('resize', () => { clearTimeout(zoomT); zoomT = setTimeout(applyZoom, 150); });
@@ -3189,10 +3448,11 @@ function createWindow() {
   win.webContents.setWindowOpenHandler(({ url }) => { shell.openExternal(url); return { action: 'deny' }; });
 }
 
-const trophySvc = require('./trophyService')({
+const trophySvc = require('./trophyService')({ busy: () => !!(gameFocus.away || runOn),
   USER_DATA, api, broadcast: (c, d) => broadcast(c, d), log, loadJson,
   getConfig: () => config, saveConfig: () => saveConfig(), getLibrary: () => library,
   codeName: (src, code) => require('./titleNames').nameFor(src, code),
+  findRom: (q) => identity.findRom(q),
 });
 require('./titleNames').setup({ dir: USER_DATA, fetchImpl: (...a) => webFetch(...a) });
 // PS5 trophy names come from each game's own trophy package (0.9.37, KytyPS5): the downloaded PS5 game folders
@@ -3659,6 +3919,40 @@ const handlers08 = {
   'syncsaves:restore': ({ id, files }) => { log('syncthing: restore', id, Object.keys(files || {}).join(' ')); savesCache = null; return require('./syncthing').restore(id, files); },
   // every save on this device with the game it belongs to (0.9.29); read only
   'saves:list': ({ fresh } = {}) => savesList(fresh),
+  // Cartridge Save Sync (0.9.51)
+  'savesync:status': () => ({ mode: config.saveSync || null, on: saveSyncOn(), syncthing: syncthingSaves(), busy: !!ssBusy, last: ssData.last, saved: Object.keys(ssData.ledger).length, backups: SAVE_BACKUPS, held: ssData.held ? { ...ssData.held, games: ssData.held.romIds.map((id) => romIndexMain().get(id)?.name).filter(Boolean) } : null }),
+  'savesync:set': ({ on } = {}) => {
+    if (on && syncthingSaves()) throw new Error('This device syncs saves with Syncthing. Stop using Syncthing for saves first: a device uses one or the other.');
+    config.saveSync = on ? 'cartridge' : null; saveConfig();
+    if (on) setTimeout(() => saveSyncRun({ why: 'on' }).catch(() => {}), 1500);
+    return handlers['savesync:status']();
+  },
+  // Syncthing stops being this device's way to sync saves: Cartridge stops managing it; Syncthing itself and its
+  // folders are left as they are (remove the folders in Syncthing if you don't want them any more)
+  'savesync:leaveSyncthing': () => { config.syncthing = { ...(config.syncthing || {}), role: null, mainId: null }; saveConfig(); clearInterval(joinT); return handlers['savesync:status'](); },
+  'savesync:run': (o = {}) => saveSyncRun(o),
+  // Cartridge Cloud Sync before a game starts: this game's saves checked against RomM, the newest brought here
+  'savesync:before': ({ romId }) => saveSyncRun({ romId: Number(romId), why: 'before' }),
+  'savesync:resolve': ({ key, choice, romId }) => saveSyncRun({ key, choice: choice === 'mine' ? 'mine' : 'theirs', romId: romId == null ? null : Number(romId), why: 'resolve' }),
+  // older versions of a game's saves in RomM, and putting one back
+  'savesync:versions': async ({ romId }) => {
+    const SS = require('./saveSync');
+    return (await ssRpcList(Number(romId))).map((x) => { const m = /^cartridge:([^:]+):(dir|file|files):(.+)$/.exec(x.slot) || []; return { id: x.id, key: m[3], emu: m[1], emuName: SS.LABEL[m[1]] || m[1], at: x.updated_at, size: x.file_size_bytes, device: x.device_syncs?.find((d) => d.device_id === x.origin_device_id)?.device_name || '' }; }).sort((a, b) => String(b.at).localeCompare(String(a.at)));
+  },
+  'savesync:restore': async ({ id, romId }) => {
+    if (!saveSyncOn()) throw new Error('Cartridge Save Sync is off.');
+    const SS = require('./saveSync'), extra = saveExtras();
+    const saves = await ssRpcList(Number(romId)), save = saves.find((x) => x.id === Number(id));
+    if (!save) throw new Error('That version isn’t in RomM any more.');
+    const local = SS.units({ extra, games: ssGames(), carriers: ssCarriers() });
+    const u = local.find((x) => x.slot === save.slot) || SS.remoteOnly([save], new Set())[0];
+    const r = await SS.restore(u, save, ssRpc(await rommDevice()), ssLedger, { extra, backupsRoot: SAVE_BACKUPS });
+    if (r.result === 'busy') throw new Error(`Close ${SS.LABEL[u.emu] || u.emu} first: Cartridge never changes saves while the emulator is open.`);
+    if (r.result === 'unplaced') throw new Error(`${SS.LABEL[u.emu] || u.emu} hasn’t made its save folders on this device yet. Open it once, then try again.`);
+    if (r.result === 'damaged') throw new Error('That version didn’t match RomM’s check, so nothing was changed.');
+    log('save sync: restored', u.key, 'version', id);
+    return r;
+  },
   'saves:forRom': async ({ romId }) => (await savesList()).filter((s) => (s.romIds || []).includes(Number(romId))),
   'sync:server': () => require('./syncthing').server(config.syncthing?.server || {}),
   'sync:setServer': async (srv) => {
@@ -3952,6 +4246,8 @@ const handlers = {
     notRunning(id, P.NAMES[id] || id);
     const d = P.setPath(id, rid, value);
     log('emulator folder', id, rid, Array.isArray(value) ? value.join(', ') : value || '(default)');
+    // PPSSPP's Flatpak follows the link only when it may see where it points (0.9.49)
+    if (id === 'ppsspp' && value && P.locate('ppsspp')?.flatpak) try { require('child_process').execFileSync('flatpak', ['override', '--user', `--filesystem=${value}`, 'org.ppsspp.PPSSPP'], { timeout: 15000 }); } catch (e) { log('ppsspp flatpak access', e.message); }
     return d;
   },
   'fs:openFolder': async ({ path: p }) => { if (!p || !isDir(p)) throw new Error('That folder isn’t there yet.'); const err = await require('electron').shell.openPath(p); if (err) throw new Error(err); return true; },
@@ -4079,7 +4375,7 @@ const handlers = {
     const r = await fetch(`${b}/api/auth/device/init`, {
       method: 'POST', headers: { ...authHeaders({ ...config.server, auth: 'none', username: '' }), 'Content-Type': 'application/json' }, signal: AbortSignal.timeout(15000),
       body: JSON.stringify({ client_device_identifier: config.deviceId, name: `Cartridge on ${os.hostname()}`.slice(0, 255), client: 'Cartridge', platform: 'linux', client_version: app.getVersion(),
-        requested_scopes: ['me.read', 'roms.read', 'roms.user.read', 'roms.user.write', 'platforms.read', 'assets.read', 'firmware.read', 'collections.read', 'collections.write', 'roms.write', 'devices.read', 'devices.write'] }),
+        requested_scopes: ['me.read', 'roms.read', 'roms.user.read', 'roms.user.write', 'platforms.read', 'assets.read', 'assets.write', 'firmware.read', 'collections.read', 'collections.write', 'roms.write', 'devices.read', 'devices.write'] }),
     });
     if (r.status === 404 || r.status === 405) throw new Error('This RomM version has no QR pairing. Use a pairing code instead.');
     if (r.status === 429) throw new Error('RomM is limiting pairing requests. Try again in a minute.');
@@ -4275,13 +4571,14 @@ const handlers = {
     }
     if (slug === 'switch') { const k = require('./bios').status('switch', { roots: emuRootsAll() }); const v = switchVersionOf(where && where !== MARKED ? where : '', k?.ok ? [path.dirname(k.where)] : []); if (v) { ids.version = v; if (!ids.switchId && v.titleId) { ids.switchId = v.titleId; ids.switchIdLower = v.titleId.toLowerCase(); } } }
     if (typeof out === 'function') out(ids);
-    const list = A.forGame(slug, ids, A.emulators());
+    const R = require('./modRules');
+    const list = A.forGame(slug, ids, A.emulators()).map((x) => { const r = R.RULES[R.kindOf(x.id)]; return r ? { ...x, rule: { what: r.what, needs: r.needs, on: r.on } } : x; }); // 0.9.52: what it takes, shown in the sheet
     // 0.9.38 (owner: mods for shadPS4): shadPS4 lays <game folder>-mods over the game (read only, above -UPDATE), so a
     // mod goes beside the game and never into it; the game folder is the one holding eboot.bin
     if (slug === 'ps4' && where && where !== MARKED) {
       let g = where;
       try { if (!fs.existsSync(path.join(g, 'eboot.bin'))) g = fs.readdirSync(where).map((n) => path.join(where, n)).find((d) => fs.existsSync(path.join(d, 'eboot.bin'))) || ''; } catch { g = ''; }
-      if (g) list.push({ id: 'shadps4', name: 'shadPS4', on: true, mods: true, emuRoot: 'shadps4:' + g, root: path.dirname(g), folder: g + '-mods', has: fs.existsSync(g + '-mods'), game: g });
+      if (g) list.push({ id: 'shadps4', name: 'shadPS4', on: true, mods: true, rule: (({ what, needs, on }) => ({ what, needs, on }))(R.RULES.shadps4), emuRoot: 'shadps4:' + g, root: path.dirname(g), folder: g + '-mods', has: fs.existsSync(g + '-mods'), game: g });
     }
     return list;
   },
@@ -4306,12 +4603,19 @@ const handlers = {
     return hit.folder;
   },
   // Add-on downloads (0.9.17): what can be installed for a game, from where, and what Cartridge put in
-  'addons:available': async ({ romId, sort = 'downloads' }) => {
+  // 0.9.52: every source is a provider of the mods engine (modEngine.js); sources lists the game's (EmuCoreX, GameBanana,
+  // Nexus Mods, ROM hacks) and source picks one; the PS2 catalog and GameBanana keep their own path below, unchanged
+  'addons:available': async ({ romId, sort = 'downloads', source = '' }) => {
     const rom = romIndexMain().get(Number(romId));
     if (!rom) return { emus: [], packs: [], installed: [] };
     const emus = handlers['addons:forGame']({ romId });
     const installed = Object.entries(addonRecs()).filter(([, r]) => r.romId === rom.id).map(([key, r]) => ({ key, ...r, files: undefined, count: r.files.length }));
-    const out = { emus, installed, packs: [], source: null, error: '', featured: [] };
+    const out = { emus, installed, packs: [], source: null, error: '', featured: [], sources: modsEng().sourcesFor({ ...modGame(rom), mods: emus.some((e) => require('./modRules').takesMods(e.id)) }) };
+    if (source === 'nexus' || source === 'rh') {
+      if (source === 'nexus' && !emus.some((e) => require('./modRules').takesMods(e.id))) return { ...out, source, error: 'None of the emulators for this console on this device take mods Cartridge knows how to install.' };
+      const r = await modsEng().list(source, modGame(rom), { sort });
+      return { ...out, source, packs: r.items, error: r.error || '', modGame: r.game || null, hackMode: source === 'rh' ? hackModes(rom) : null };
+    }
     // 0.9.23: hand-picked texture packs from their creators' pages (Dolphin by game ID)
     // featured texture packs: GameCube by game ID, and HenrikoMagnifico's GameCube, Wii and 3DS packs by ID or name (0.9.24)
     try {
@@ -4343,6 +4647,71 @@ const handlers = {
     return out;
   },
   'addons:gbFiles': ({ modId }) => require('./addonSources').gbFiles(modId),
+  // one add-on in full from any source (0.9.52): files, text, pictures (AddonDetail)
+  'addons:detail': ({ source, item }) => modsEng().detail(source, item),
+  // the Nexus Mods key in Settings: who it belongs to and whether downloads are one press (Premium)
+  'nexus:check': async ({ key }) => { const k = String(key || '').trim(); if (!k) return null; return modsEng().get('nexus').account(k); },
+  // ROM hacks (0.9.52): the hack's download read for its patches (IPS, UPS, BPS; xdelta and PPF named but not applied)
+  'hacks:prepare': async ({ romId, item }) => {
+    const rom = romIndexMain().get(Number(romId));
+    if (!rom) throw new Error('That game isn’t in the library.');
+    const d = await modsEng().detail('rh', item);
+    const f = d.files[0];
+    if (!f) throw new Error('Romhacking.net has no download for this hack.');
+    const buf = await webEng().buffer(f.url, { headers: { Accept: '*/*' }, timeout: 120000 });
+    const P = require('./romPatch'), patches = [];
+    const isZip = buf.length > 4 && buf.readUInt32LE(0) === 0x04034b50;
+    const take = (name, data) => { const kind = P.kindOf(name, data); if (kind) patches.push({ name, kind, supported: P.SOFT.has(kind), size: data.length, data }); };
+    if (isZip) {
+      await new Promise((ok, bad) => require('yauzl').fromBuffer(buf, { lazyEntries: true }, (e, z) => {
+        if (e) return bad(new Error('The hack’s download couldn’t be opened.'));
+        z.on('entry', (en) => {
+          if (/\/$/.test(en.fileName) || !/\.(ips|ups|bps|xdelta|vcdiff|ppf|aps)$/i.test(en.fileName) || en.uncompressedSize > 256 << 20) return z.readEntry();
+          z.openReadStream(en, (er, st) => { if (er) return z.readEntry(); const parts = []; st.on('data', (c) => parts.push(c)); st.on('end', () => { take(en.fileName, Buffer.concat(parts)); z.readEntry(); }); });
+        });
+        z.on('end', ok); z.on('error', bad); z.readEntry();
+      }));
+    } else take(f.name.replace(/\.zip$/i, ''), buf);
+    if (!patches.length) throw new Error('No patch file was found in this hack’s download.');
+    const id = `rh-${item.id}-${Date.now()}`;
+    hackCache.set(id, { item, patches, at: Date.now() });
+    for (const [k, v] of hackCache) if (Date.now() - v.at > 30 * 60e3) hackCache.delete(k);
+    return { id, romInfo: d.romInfo || '', modes: hackModes(rom), patches: patches.map(({ name, kind, supported, size }, i) => ({ i, name, kind, supported, size })) };
+  },
+  // use one patch: 'soft' puts it beside the game for RetroArch (the game file is never written), 'copy' writes a
+  // patched copy beside the original (never over a file). Both are recorded like add-ons, so Delete removes them.
+  'hacks:apply': async ({ romId, id, index = 0, mode }) => {
+    const rom = romIndexMain().get(Number(romId)), prep = hackCache.get(id);
+    if (!rom || !prep) throw new Error('Open the hack again: its download expired.');
+    const pt = prep.patches[index], P = require('./romPatch');
+    if (!pt?.supported) throw new Error(`${P.KIND[pt?.kind] || 'This'} patches need a separate tool; Cartridge uses IPS, UPS and BPS.`);
+    let file = installedMap[rom.id];
+    if (!file || file === MARKED) throw new Error('Download the game first: the hack is applied to your copy.');
+    if (fs.statSync(file).isDirectory()) throw new Error('This game is a folder; ROM hacks are for single-file games.');
+    const dir = path.dirname(file), recs = addonRecs(), key = `rh:${prep.item.id}:${rom.id}:${mode}`;
+    if (recs[key]) throw new Error('This hack is already in use for this game.');
+    let made;
+    if (mode === 'soft') {
+      if (!hackModes(rom).retroarch) throw new Error('Only RetroArch patches games as it loads them. Make a patched copy instead.');
+      made = P.softName(file, pt.kind);
+      // one hack at a time: RetroArch reads the patch named like the game
+      if (fs.existsSync(made)) throw new Error('A patch for this game is already beside it. Delete it first (Installed above).');
+      fs.writeFileSync(made, pt.data, { flag: 'wx' });
+    } else {
+      let rom0 = null, ext = path.extname(file);
+      if (/\.zip$/i.test(file)) { // the ROM inside a zip: its biggest file
+        rom0 = await new Promise((ok, bad) => require('yauzl').open(file, { lazyEntries: true }, (e, z) => { if (e) return bad(e); let best = null; z.on('entry', (en) => { if (!/\/$/.test(en.fileName) && (!best || en.uncompressedSize > best.uncompressedSize)) best = en; z.readEntry(); }); z.on('end', () => { if (!best) return bad(new Error('The game’s zip is empty.')); ext = path.extname(best.fileName); z.openReadStream(best, (er, st) => { if (er) return bad(er); const parts = []; st.on('data', (c) => parts.push(c)); st.on('end', () => ok(Buffer.concat(parts))); }); }); z.readEntry(); }));
+      } else rom0 = fs.readFileSync(file);
+      const out = P.apply(rom0, pt.data, pt.name);
+      const label = String(prep.item.name || 'Hack').replace(/[\\/:*?"<>|]+/g, ' ').trim().slice(0, 80);
+      made = path.join(dir, `${path.basename(file).replace(/\.[^.]+$/, '')} [${label}]${ext}`);
+      fs.writeFileSync(made, out, { flag: 'wx' });
+    }
+    recs[key] = { source: 'rh', id: prep.item.id, name: prep.item.name, category: 'ROM Hack', romId: rom.id, game: rom.name, emu: mode === 'soft' ? 'retroarch' : 'copy', emuName: mode === 'soft' ? 'RetroArch' : 'Patched copy', emuRoot: dir, dest: dir, alt: {}, files: [path.basename(made)], bytes: fs.statSync(made).size, at: Date.now(), from: prep.item.url, mode };
+    saveJson(ADDONS_FILE, recs);
+    log('rom hack', mode, prep.item.id, 'for', rom.id);
+    return { file: made, mode };
+  },
   'addons:gbMod': ({ modId }) => require('./addonSources').gbMod(modId),
   // { romId, emuRoot (the emulator copy), pack (from addons:available), file (GameBanana only) }
   'addons:install': async ({ romId, emuRoot, pack, file }) => {
@@ -4352,9 +4721,17 @@ const handlers = {
     if (!rom || !e) throw new Error('That emulator wasn’t found.');
     if (!e.folder) throw new Error(`Cartridge couldn’t read this game’s ID, so it doesn’t know which ${e.name} folder it goes in.`);
     if (require('./raLogin').running().has(e.id)) throw new Error(`Close ${e.name} first.`);
+    // 0.9.52: Nexus Mods gives Premium members the file; for anyone else its page opens in Cartridge's window, where
+    // the download (after Nexus's own sign-in) is caught and installed like any other (addons:browse)
+    if (pack.source === 'nexus') {
+      const d = await modsEng().download('nexus', pack, file);
+      if (d.page) { handlers['addons:browse']({ url: d.page, romId, emuRoot, kind: 'mods', name: pack.name }); return { page: true }; }
+      file = { ...file, url: d.url };
+    }
     // each emulator's own layout (addonInstall.plan, 0.9.18); PCSX2 and DuckStation: the game folder is
     // textures/<SERIAL>, the pack brings replacements/ (e.folder ends in it)
-    const kind = pack.source === 'ps2' ? 'ps2' : /^(eden|citron|yuzu|ryujinx)$/.test(e.id) ? 'switch' : ['pcsx2', 'duckstation', 'ppsspp', 'dolphin', 'azahar', 'citra', 'cemu', 'shadps4'].includes(e.id) ? e.id : 'plain';
+    const kind = require('./emuProfiles').modKind(e.id, pack.source); // 0.9.48: the emulator's profile says how its add-ons are laid out
+    if (kind === 'plain') throw new Error(require('./modRules').refusal(null)); // 0.9.52: no rule, nothing unpacked anywhere
     const dest = /\/replacements$/.test(e.folder) ? path.dirname(e.folder) : e.folder;
     const key = `${pack.source}:${pack.id}${file ? ':' + file.id : ''}:${rom.id}:${e.emuRoot}`;
     if (addonRecs()[key]) throw new Error('This add-on is already installed.');
@@ -4581,7 +4958,8 @@ const handlers = {
           r = await G.getFlatpak(e.fp, (pct) => send({ pct }));
         }
       }
-      log('emulator downloaded', id, r.path || r.fp);
+      log('emulator downloaded', id, r.path || r.fp, r.fellBack ? `(the newest can't start here: ${r.fellBack.reason || 'glibc'}; ${r.version})` : '');
+      if (r.fellBack) { config.emuGlibcHold = { ...(config.emuGlibcHold || {}), [id]: { t: Date.now(), have: require('./detect').systemGlibc() } }; saveConfig(); r.note ||= `The newest build can’t start on this system, so ${r.version} went in instead`; }
       // 0.9.37 (owner: fix the shadPS4 install): the Qt launcher comes with no shadPS4 in it, so games had nothing
       // to start with; the newest release goes in beside it as the launcher's default, as its own Versions does
       if (id === 'shadps4') { try { send({ pct: 99, text: 'Adding shadPS4 itself' }); r.shadVersion = await shadDefaultVersion(); } catch (e2) { log('shadPS4 version after install', e2.message); r.note = `shadPS4’s launcher is in, but its newest version couldn’t be added (${e2.message}). Add one in Versions.`; } }
@@ -4701,14 +5079,25 @@ const handlers = {
       // 0.9.23: a copy that can't start (system libraries missing, e.g. Vita3K's Qt6 zip build on SteamOS)
       // is offered its update as a repair, newer or not
       const broken = kind === 'program' || kind === 'folder' ? U.missingLibs(e.path) : [];
+      // 0.9.47: an AppImage (or program) built for a newer glibc than this system has can't start: a repair too
+      const gp = e.kind !== 'flatpak' && e.path && !/\.exe$/i.test(e.path) ? require('./detect').glibcProblem(e.path) : null;
+      if (gp) broken.push(`glibc ${gp.need} (this system has ${gp.have})`);
+      // 0.9.49 (owner: "Vita3K genuinely doesn't open"): an emulator that can say whether it starts is asked (emuStart),
+      // since a copy whose libraries are all there can still die at once (EmuDeck's Qt 6 Vita3K on a system with another Qt 6)
+      const ES = require('./emuStart'), prog = e.path && /\.sh$/i.test(e.path) ? ES.scriptProgram(e.path) : e.path;
+      if (prog && ES.has(e.id) && !gp && cached) { const r = ES.cached(e.id, prog); if (r && !r.ok) broken.push(r.reason); }
+      else if (prog && ES.has(e.id) && !gp) jobs.push(ES.check(e.id, prog).then((r) => { if (r && !r.ok) { broken.push(r.reason); log('emulator start check', e.id, prog, r.reason, r.detail ? '| ' + r.detail.replace(/\n/g, ' | ').slice(0, 600) : ''); } }));
+      const hold = config.emuGlibcHold?.[e.id], held = hold && !gp && Date.now() - hold.t < 14 * 864e5 && hold.have === require('./detect').systemGlibc();
       const ck = e.id + ':' + path.basename(e.path || '') + (kind === 'folder' ? ':folder' : '') + ':' + (channel || '');
       const c0 = cache[ck];
-      if (spec && !cached && (fresh || broken.length || !c0 || Date.now() - c0.t > TTL)) jobs.push(U.latestRelease(e.id, { file: e.path, channel }).then((rel) => { cache[ck] = { t: Date.now(), rel }; }).catch((err) => { cache[ck] = { t: c0?.t || 0, rel: c0?.rel || null, error: err.message }; }));
-      out.push(() => { const c = cache[ck]; return ({ ...e, build: kind, broken: broken.length ? broken : null, update: c?.rel && (broken.length || U.isNewer(c.rel, e)) ? c.rel : null, latest: c?.rel || null, error: c?.error || null, noSource: !spec, channel, channels: spec ? ch.options : [], page: spec?.repo ? `https://github.com/${spec.repo}/releases` : null }); });
+      if (spec && !cached && (fresh || broken.length || ES.has(e.id) || !c0 || Date.now() - c0.t > TTL)) jobs.push(U.latestRelease(e.id, { file: e.path, channel }).then((rel) => { cache[ck] = { t: Date.now(), rel }; }).catch((err) => { cache[ck] = { t: c0?.t || 0, rel: c0?.rel || null, error: err.message }; }));
+      out.push(() => { const c = cache[ck]; return ({ ...e, build: kind, broken: broken.length ? broken : null, update: c?.rel && (broken.length || (!held && U.isNewer(c.rel, e))) ? c.rel : null, latest: c?.rel || null, error: c?.error || null, noSource: !spec, channel, channels: spec ? ch.options : [], page: spec?.repo ? `https://github.com/${spec.repo}/releases` : null }); });
     }
     await Promise.all(jobs);
     const fpd = await fpRun;
-    const res = out.map((f) => f(fpd));
+    // every emulator's own website and download page come from CEE (0.9.49), Flatpaks and forks included
+    const CL = require('./cee').LINKS, FAM = require('./emuProfiles').FAMILY;
+    const res = out.map((f) => f(fpd)).map((x) => { const id = String(x.id || '').split('@')[0], l = CL[id] || CL[FAM[id]]; return x.custom || !l ? x : { ...x, page: l.downloads || x.page, site: l.site }; });
     if (!cached) log('emulator updates checked', `${res.length} in ${Date.now() - t0} ms, ${jobs.length} asked`);
     if (cached) return res;
     saveJson(file, cache);
@@ -4733,7 +5122,11 @@ const handlers = {
     broadcast('emu-update', { path: file, state: 'downloading', pct: 0 });
     let got = 0;
     await U.replaceAppImage(file, rel, (url, dest) => downloadTo(url, dest, { abort: new AbortController() }, (n) => { got += n; broadcast('emu-update', { path: file, state: 'downloading', pct: rel.size ? Math.round((got / rel.size) * 100) : null }); }, { plain: true }));
-    log('emulator updated (appimage)', own.id, own.version, '->', rel.version || rel.tag);
+    log('emulator updated (appimage)', own.id, own.version, '->', rel.version || rel.tag, rel.fellBack ? `(the newest can't start here: ${rel.fellBack.reason || `it needs glibc ${rel.fellBack.need}, this has ${rel.fellBack.have}`})` : '');
+    // 0.9.47: the newest build can't start here: its update isn't offered again for two weeks (it would come down and be refused)
+    // 0.9.49: the same when it came down and didn't start (emuStart)
+    if (rel.fellBack) { config.emuGlibcHold = { ...(config.emuGlibcHold || {}), [own.id]: { t: Date.now(), have: rel.fellBack.have || require('./detect').systemGlibc() } }; saveConfig(); }
+    else if (config.emuGlibcHold?.[own.id]) { delete config.emuGlibcHold[own.id]; saveConfig(); }
     const cf = path.join(USER_DATA, 'emulator-releases.json'), cache = loadJson(cf, {});
     try { (cache.installed ||= {})[file] = { version: rel.version || rel.tag, size: fs.statSync(file).size, at: Date.now() }; saveJson(cf, cache); } catch {}
     broadcast('emu-update', { path: file, state: 'done' });
@@ -4889,7 +5282,21 @@ const handlers = {
     else { if (!file || !fs.existsSync(file)) return reject(new Error('That emulator isn’t there any more.')); cmd = file; cwd = path.dirname(file); }
     const env = { ...process.env };
     for (const k of ['LD_PRELOAD', 'LD_LIBRARY_PATH', 'APPDIR', 'APPIMAGE', 'ARGV0', 'OWD']) delete env[k];
-    const p = require('child_process').spawn(cmd, args, { cwd, env, detached: true, stdio: 'ignore' });
+    // 0.9.49 (owner: Vita3K "doesn't open, nothing happens"): what it prints goes to a log, and one that closes within
+    // 12 s with an error says why instead of nothing
+    const runLog = path.join(USER_DATA, 'emulator-runs', `${String(id || 'emulator').replace(/[^\w.@-]/g, '_')}.log`);
+    let fd = 'ignore'; try { fs.mkdirSync(path.dirname(runLog), { recursive: true }); fd = fs.openSync(runLog, 'w'); } catch {}
+    const p = require('child_process').spawn(cmd, args, { cwd, env, detached: true, stdio: ['ignore', fd, fd] });
+    if (typeof fd === 'number') try { fs.closeSync(fd); } catch {}
+    const t0 = Date.now();
+    p.once('exit', (code, signal) => {
+      if (Date.now() - t0 > 12000 || (!code && !signal)) return;
+      let text = ''; try { text = fs.readFileSync(runLog, 'utf8').slice(-8000); } catch {}
+      if (/vita3k/i.test(String(id))) text += '\n' + require('./pkgInstall').vita3kLogTail(file);
+      const why = require('./emuStart').reasonOf(text, code, signal);
+      log('emulator closed straight away', id || '', fp || file, code, signal || '', why);
+      broadcast('toast', { text: `${emuLabel(String(id || '').split('@')[0]) || 'The emulator'} closed straight away: ${why}`, kind: 'error', icon: 'mdiAlertCircleOutline' });
+    });
     p.once('error', (e) => reject(new Error(e.code === 'EACCES' ? 'It isn’t allowed to run (its file isn’t executable).' : `It didn’t start: ${e.message}`)));
     p.once('spawn', () => {
       log('emulator opened', id || '', fp || file);
@@ -5057,11 +5464,17 @@ const handlers = {
   'fs:mkdir': async (dir) => { await fsp.mkdir(dir, { recursive: true }); return true; },
   'storage:overview': () => storageOverview(),
   // the space where a console's next download would go (0.9.38: any drive with a games folder)
-  'fs:downloadSpace': async ({ slug, fs_slug, need = 0 } = {}) => { const d = downloadDir({ slug, fs_slug }, need); const sp = await handlers['fs:space'](d); return sp && { ...sp, dir: d }; },
+  'fs:downloadSpace': async ({ slug, fs_slug, need = 0, root = null } = {}) => { const d = downloadDir({ slug, fs_slug }, need, root); const sp = await handlers['fs:space'](d); return sp && { ...sp, dir: d }; },
   // the games folders: this device's and each extra drive's, with free space (Settings → Storage, 0.9.38)
   'roots:list': async () => {
-    const one = async (p, main) => { const sp = await handlers['fs:space'](p); return { path: p, main, here: isDir(p), free: sp?.free || 0, total: sp?.total || 0 }; };
-    return { roots: [await one(config.romsRoot, true), ...(await Promise.all(extraRoots().map((r) => one(r, false))))].filter((r) => r.path), to: config.downloadRoot || 'most' };
+    // 0.9.49 (owner: "This Device" was the main games folder, which was on the MicroSD, so games went there): each
+    // folder is named after the drive it's really on: Main Drive for this device's own disk, else the drive's name
+    const list = mounts();
+    const one = async (p, main) => { const sp = await handlers['fs:space'](p); const dv = p && isDir(p) ? driveOf(p, list) : null; return { path: p, main, here: isDir(p), free: sp?.free || 0, total: sp?.total || 0, drive: dv ? (dv.label === 'This device' ? 'Main Drive' : dv.label) : path.basename(path.dirname(path.dirname(p || '')) || '') || 'Drive', mount: dv?.mount || '' }; };
+    const roots = [await one(config.romsRoot, true), ...(await Promise.all(extraRoots().map((r) => one(r, false))))].filter((r) => r.path);
+    // two folders on one drive: the drive's name and the folder's
+    for (const r of roots) if (roots.filter((x) => x.drive === r.drive).length > 1) r.drive = `${r.drive} · ${path.basename(path.dirname(r.path)) === 'Emulation' ? path.basename(path.dirname(path.dirname(r.path))) : path.basename(path.dirname(r.path))}`;
+    return { roots, to: config.downloadRoot || 'most', ask: !!config.downloads?.askWhere };
   },
   // a drive picked: an ES-DE roms folder made on it (a folder per console in the library), added to every
   // set-up emulator's game list that has one, and opened to Flatpak emulators; never moves or deletes a game
@@ -5129,31 +5542,50 @@ const handlers = {
   // RomM on this device (0.9.15 section 1): Podman pod from RomM's own compose; secrets in romm-local.env
   'romm:localInfo': async () => {
     const rl = require('./rommLocal'), h = os.homedir();
+    // 0.9.49 (owner): the choices are your games folders (the main one, those on other drives, and any found on the
+    // device), each with its drive and what's in it; several can be picked. A new folder is the fallback.
+    const list = mounts(), real = (x) => { try { return fs.realpathSync(x); } catch { return path.resolve(x); } };
+    const folders = [];
+    const add = (p, from, main = false) => {
+      if (!p || !isDir(p) || folders.some((f) => f.real === real(p))) return;
+      const dv = driveOf(p, list);
+      folders.push({ path: p, real: real(p), from, main, drive: dv ? (dv.label === 'This device' ? 'Main Drive' : dv.label) : '', ...romsFolderStats(p) });
+    };
+    add(config.romsRoot, 'Your games folder', true);
+    for (const r of extraRoots()) add(r, 'Games on another drive');
+    try { for (const r of detectRoots().roots) add(r.path, r.source); } catch {}
     const emu = readEmuDeckSettings();
-    const libs = [];
-    if (emu.emulationPath && fs.existsSync(path.join(emu.emulationPath, 'roms'))) libs.push({ path: emu.emulationPath, from: 'EmuDeck' });
-    if (fs.existsSync(path.join(h, 'retrodeck', 'roms'))) libs.push({ path: path.join(h, 'retrodeck'), from: 'RetroDECK' });
-    libs.push({ path: path.join(h, 'RomM'), from: 'New folder' });
+    if (emu.emulationPath) add(path.join(emu.emulationPath, 'roms'), 'EmuDeck');
+    add(path.join(h, 'retrodeck', 'roms'), 'RetroDECK');
     const st = await rl.status();
-    return { ...st, ready: rl.readiness(), libraries: libs, port: config.rommLocal?.port || null, lan: config.rommLocal?.port ? rl.lanUrls(config.rommLocal.port) : [] };
+    const s = config.server || {};
+    return { ...st, ready: rl.readiness(), folders, newFolder: path.join(h, 'RomM'), chosen: config.rommLocal?.roms || null,
+      linked: !!(config.configured && !config.localOnly && (s.localUrl || s.remoteUrl)), mine: !!config.rommLocal?.port,
+      port: config.rommLocal?.port || null, lan: config.rommLocal?.port ? rl.lanUrls(config.rommLocal.port) : [] };
   },
   // Podman made ready from Cartridge (0.9.17); the device password is used once and never kept
   'romm:localPrepare': async ({ password } = {}) => {
     try { return { ok: true, ready: await require('./rommLocal').prepare({ password }, (p) => broadcast('romm-local', p)) }; }
     catch (e) { if (e.code === 'password') return { needPassword: true }; log('podman prepare failed:', e.message); throw e; }
   },
-  'romm:localSetup': async ({ username, password, library, name, keys }) => {
+  // which console folders are in more than one picked folder (shown before setup)
+  'romm:localPlan': ({ roms } = {}) => ({ conflicts: require('./rommLocal').planMounts((roms || []).filter((p) => isDir(p)), path.join(os.homedir(), '.local/share/cartridge-romm/library')).conflicts }),
+  // roms: games folders picked (0.9.49); library: a new folder that will hold roms/<console> (the old way)
+  'romm:localSetup': async ({ username, password, library, roms, name, keys }) => {
     const rl = require('./rommLocal');
     const dataDir = path.join(os.homedir(), '.local/share/cartridge-romm');
-    const r = await rl.setup({ username, password, library, dataDir, keys, name, envFile: path.join(USER_DATA, 'romm-local.env'), port: config.rommLocal?.port }, (p) => broadcast('romm-local', p));
-    config.rommLocal = { port: r.port, library, dataDir, name: String(name || '').slice(0, 40), at: Date.now(), boot: r.boot };
+    roms = (roms || []).filter((p) => isDir(p));
+    const r = await rl.setup({ username, password, library, roms, dataDir, keys, name, envFile: path.join(USER_DATA, 'romm-local.env'), port: config.rommLocal?.port }, (p) => broadcast('romm-local', p));
+    config.rommLocal = { port: r.port, library: roms.length ? null : library, roms: roms.length ? roms : null, dataDir, name: String(name || '').slice(0, 40), at: Date.now(), boot: r.boot };
     config.server = { ...config.server, localUrl: r.base, remoteUrl: config.server.remoteUrl || '', mode: config.server.remoteUrl ? 'auto' : 'local', auth: 'password', username: r.user, password, token: '' };
-    if (!config.romsRoot) config.romsRoot = path.join(library, 'roms');
+    if (!config.romsRoot) config.romsRoot = roms[0] || path.join(library, 'roms');
+    // the other picked folders become games folders on other drives, so downloads and the library see them too
+    for (const p of roms.slice(1)) if (path.resolve(p) !== path.resolve(config.romsRoot) && !extraRoots().some((x) => path.resolve(x) === path.resolve(p))) config.extraRoots = [...(config.extraRoots || []), { path: p }];
     saveConfig();
-    log('romm local: running on port', r.port, 'boot', r.boot);
-    return { ...r, lan: rl.lanUrls(r.port), romsRoot: config.romsRoot };
+    log('romm local: running on port', r.port, 'boot', r.boot, 'folders', roms.length || 1, 'conflicts', r.conflicts?.length || 0);
+    return { ...r, lan: rl.lanUrls(r.port), romsRoot: config.romsRoot, folders: roms };
   },
-  'romm:localUpdate': ({ keys } = {}) => require('./rommLocal').update({ envFile: path.join(USER_DATA, 'romm-local.env'), library: config.rommLocal?.library, dataDir: config.rommLocal?.dataDir, keys, keysOnly: !!keys }),
+  'romm:localUpdate': ({ keys } = {}) => require('./rommLocal').update({ envFile: path.join(USER_DATA, 'romm-local.env'), library: config.rommLocal?.library, roms: config.rommLocal?.roms, dataDir: config.rommLocal?.dataDir, keys, keysOnly: !!keys }),
   // which metadata keys are set (never the keys themselves)
   'romm:localKeys': () => { const k = require('./rommLocal').keysOf(require('./rommLocal').readEnv(path.join(USER_DATA, 'romm-local.env'))); return { igdb: !!(k.igdbId && k.igdbSecret), ss: !!(k.ssUser && k.ssPass) }; },
   // Welcome's scan (0.9.16): games already in Steam that Cartridge didn't add, per console (C7 take over)
@@ -5172,7 +5604,7 @@ const handlers = {
       emudeck: ex('.config/EmuDeck/settings.sh') || ex('emudeck'),
       retrodeck: ex('.var/app/net.retrodeck.retrodeck') || ex('retrodeck'),
       steam: steamFound, live, gamescope: isGamescope(), appimage: !!process.env.APPIMAGE,
-      inSteam: !!process.env.CARTRIDGE_FROM_STEAM || require('./steamArt').cartridgeInSteam(),
+      inSteam: !!process.env.CARTRIDGE_FROM_STEAM || require('./steamArt').cartridgeInSteam(), fromSteam: !!process.env.CARTRIDGE_FROM_STEAM,
       host: os.hostname(), device: deviceKind(),
     };
   },
@@ -5330,6 +5762,22 @@ const JOB_EVENTS = {
 const sendRaw = broadcast;
 broadcast = (ch, data) => { sendRaw(ch, data); const f = JOB_EVENTS[ch]; if (f && data) { try { const [k, o] = f(data); if (k && bgJobs.has(k)) bgJob(k, Object.fromEntries(Object.entries(o).filter(([, v]) => v != null))); } catch {} } };
 handlers['jobs:list'] = () => [...bgJobs.values()];
+handlers['emu:profiles'] = () => require('./emuProfiles').all(); // 0.9.48: what Cartridge knows per emulator (diagnostics)
+handlers['cide:map'] = () => { const C = require('./cide'); return C.map(require('./cee').consoleKeys()); }; // 0.9.51: each console's ID kinds and readers, or why it has none (diagnostics)
+handlers['cee:emulators'] = () => require('./cee').emulators(); // 0.9.49 CEE: every emulator, its install kinds, launch lines, links
+handlers['cee:coverage'] = () => require('./cee').coverage(); // every console RomM can send and how it's played
+handlers['emu:startCheck'] = ({ id, path: p }) => require('./emuStart').check(id, p);
+handlers['scheduler:status'] = () => scheduler.status(); // 0.9.48: the background jobs and whether they wait for a game
+// the performance overlay (0.9.48, Settings → About): CPU since the last ask, as a share of one core, and memory, over all of
+// Cartridge's processes (Electron's own figures, nothing sent anywhere)
+let perfPrev = null;
+handlers['perf:sample'] = () => {
+  const m = app.getAppMetrics(), t = Date.now();
+  const cpu = m.reduce((a, x) => a + (x.cpu?.cumulativeCPUUsage || 0), 0), mem = m.reduce((a, x) => a + (x.memory?.workingSetSize || 0), 0);
+  const pct = perfPrev && t > perfPrev.t ? ((cpu - perfPrev.cpu) / ((t - perfPrev.t) / 1000)) * 100 : null;
+  perfPrev = { cpu, t };
+  return { cpu: pct, memMB: Math.round(mem / 1024), procs: m.length, playing: !!(gameFocus.away || runOn) };
+};
 
 for (const [ch, fn] of Object.entries(handlers)) {
   ipcMain.handle(ch, async (_e, arg) => {
@@ -5367,10 +5815,16 @@ app.whenReady().then(() => {
     if (config.configured && (config.sync.onLaunch || !library)) syncLibrary().catch(() => {});
     setTimeout(() => trophySvc.start().catch((e) => log('trophies failed', e.message)), 1500);
   });
-  setInterval(() => {
-    const every = (config.sync.everyMinutes || 0) * 60e3;
-    if (config.configured && every && library && Date.now() - library.syncedAt > every) syncLibrary().catch(() => {});
-  }, 60e3);
+  // image pipeline (0.9.48): the picture cache stays under 1.5 GB; the oldest pictures go first and come back from RomM
+  // or SteamGridDB if they're shown again. Looked at once a day, never during a game
+  // every game's cover kept small for browsing away from the server (0.9.52), every 6 hours, never during a game
+  // (not on Android: nativeImage is slow there and its pictures go through androidImage)
+  if (!onAndroid) scheduler.add('library-art', { every: 6 * 3600e3, firstAfter: 3 * 60e3, deferWhilePlaying: true, run: () => libraryArt() });
+  scheduler.add('image-cache-trim', { every: 24 * 3600e3, firstAfter: 5 * 60e3, deferWhilePlaying: true, run: () => trimImageCache(1.5 * 1024 ** 3) });
+  // the library sync (every hour by default), looked at each minute; it waits while a game runs (0.9.48, owner)
+  scheduler.add('library-sync', { every: 60e3, firstAfter: 60e3, deferWhilePlaying: true,
+    due: () => { const every = (config.sync.everyMinutes || 0) * 60e3; return !!(config.configured && every && library && Date.now() - library.syncedAt > every); },
+    run: () => syncLibrary().catch(() => {}) });
   win.on('focus', () => { if (library) computeInstalled(); });
   watchGamescopeFocus();
   setupUpdater();

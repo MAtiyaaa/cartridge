@@ -9,6 +9,8 @@
   "scripts": {
     "dev": "vite",
     "test": "node --test test/*.test.js",
+    "audit:ui": "node tools/ui-audit/run.js",
+    "audit:visual": "node tools/ui-audit/visual.js",
     "build:ui": "vite build && vite build --mode remote",
     "start": "vite build && vite build --mode remote && electron .",
     "dist": "vite build && vite build --mode remote && electron-builder --linux AppImage --x64 --publish never",
