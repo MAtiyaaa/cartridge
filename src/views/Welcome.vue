@@ -1,16 +1,12 @@
 <template>
   <div class="welcome" :class="{ 'w-out': leaving, 'w-intro-on': intro }" ref="el">
-    <!-- 0.9.17: the opening, once, before the first card (any press skips it) -->
-    <div v-if="intro" class="w-intro" @pointerdown="intro = false">
-      <div class="wi-ring" /><div class="wi-ring r2" />
-      <div class="wi-mark"><Logo :size="132" /><i class="wi-glint" /></div>
-      <div class="wi-name"><span v-for="(c, i) in 'Cartridge'" :key="i" :style="{ animationDelay: 0.75 + i * 0.045 + 's' }">{{ c }}</span></div>
-    </div>
+    <!-- 0.9.52: the opening, rebuilt on CAE (WelcomeIntro.vue); any press skips it -->
+    <WelcomeIntro v-if="intro" @done="intro = false" />
     <div class="w-top">
       <!-- 0.9.17: going back is always visible: an arrow to tap, and B on a controller (hint below) -->
       <button v-if="at > 0 && !only" class="w-back" data-focus aria-label="Back" @click="handlers.back()"><Icon name="mdiArrowLeft" :size="22" /></button>
       <Logo :size="34" />
-      <div class="w-dots"><template v-if="!only"><i v-for="(s, i) in STEPS" :key="s" :class="{ on: i === at, done: i < at }" /></template></div>
+      <div class="w-steps" :class="{ hidden: only }" role="progressbar" :aria-valuenow="at + 1" :aria-valuemax="STEPS_C.length"><i :style="{ transform: `scaleX(${STEPS_C.length > 1 ? at / (STEPS_C.length - 1) : 0})` }" /></div>
       <button class="btn small" data-focus @click="leave"><Icon name="mdiClose" :size="18" />{{ only ? 'Close' : replay ? 'Leave' : 'Skip Setup' }}</button>
     </div>
 
@@ -26,23 +22,37 @@
           <div class="w-act"><button class="btn primary xl" data-focus @click="next()">Get started<Icon name="mdiArrowRight" /></button></div>
         </template>
 
-        <!-- 2 -->
-        <template v-else-if="step === 'name'">
-          <h1>What Should We Call You?</h1>
-          <p class="w-lead">For a hello when Cartridge starts, and to name this device in RomM.</p>
-          <div class="w-box"><TextField v-model="name" label="Your name" placeholder="Sam" icon="mdiAccount" /></div>
-          <p v-if="name.trim()" class="muted small">This device will be called <b>{{ deviceName }}</b>. You can change it in Settings → About.</p>
-          <div class="w-act">
-            <button class="btn" data-focus @click="prev"><Icon name="mdiArrowLeft" />Back</button>
-            <button class="btn primary" data-focus @click="saveName">{{ name.trim() ? 'Continue' : 'Skip' }}<Icon name="mdiArrowRight" /></button>
+        <!-- 0.9.52 (owner): the very first launch, on the desktop: Cartridge is made for Game Mode. Add to Steam closes and
+             reopens Steam, waits until Steam has it, says goodbye and closes; the setup then starts in Game Mode. Never
+             again after this first time (ui.gameModeAsked), nor in Game Mode, from Steam, or when the setup is run again. -->
+        <template v-else-if="step === 'gamemode'">
+          <div class="w-gm-icon" :class="{ ok: gm === 'done' }"><Icon :name="gm === 'done' ? 'mdiCheckCircle' : 'mdiSteam'" :size="64" /></div>
+          <template v-if="gm === 'done'">
+            <h1 class="w-big">Added to Steam</h1>
+            <p class="w-lead">See you in Game Mode. Open Cartridge from your library there and the setup carries on with your controller.</p>
+          </template>
+          <template v-else>
+            <h1 class="w-big">Cartridge Is Made for Game Mode</h1>
+            <p class="w-lead">Add it to Steam, then open it from Game Mode to set it up with your controller.</p>
+            <p v-if="gm === 'adding'" class="w-gm-busy"><Icon name="mdiSync" :size="18" class="spin" />{{ gmText }}</p>
+            <p v-else-if="st.inSteam" class="muted small">Cartridge is already in your Steam library.</p>
+            <p v-else-if="!st.appimage" class="muted small">Adding to Steam works from the AppImage. You can also add it in Steam yourself: Add a Game, then Add a Non-Steam Game.</p>
+          </template>
+          <div v-if="gm !== 'done'" class="w-act">
+            <button class="btn" data-focus :disabled="gm === 'adding'" @click="next()">Set Up Here Instead</button>
+            <button v-if="st.inSteam" class="btn primary" data-focus @click="call('app:quit')"><Icon name="mdiSteam" />Close and Open From Game Mode</button>
+            <button v-else-if="st.appimage" class="btn primary" data-focus :disabled="gm === 'adding'" @click="gmAdd"><Icon name="mdiSteam" />{{ gm === 'adding' ? 'Adding…' : 'Add to Steam' }}</button>
           </div>
         </template>
 
         <!-- 2b (0.9.47, owner): make it yours early: Style, colour and background, the same settings as Look & Feel -->
         <template v-else-if="step === 'look'">
           <h1>Make It Yours</h1>
-          <p class="w-lead">Pick how Cartridge looks. Everything here can be changed later in Settings → Look &amp; Feel.</p>
+          <p class="w-lead">Your name, and how Cartridge looks. Everything here can be changed later in Settings.</p>
           <div class="w-box stack w-look">
+            <!-- 0.9.52: the name lives here now (a hello when Cartridge starts, and this device's name in RomM) -->
+            <TextField v-model="name" label="Your name" placeholder="Sam" icon="mdiAccount" />
+            <span v-if="name.trim()" class="muted small">This device will be called <b>{{ deviceName }}</b> in RomM.</span>
             <span class="muted small">Style</span>
             <div class="seg"><button v-for="(v, k) in STYLES" :key="k" data-focus :class="{ on: styleOf(store.config.ui) === k }" @click="pickStyle(k)">{{ v.label }}</button></div>
             <span class="muted small w-look-sub">{{ STYLES[styleOf(store.config.ui)].sub }}</span>
@@ -53,7 +63,7 @@
           </div>
           <div class="w-act">
             <button class="btn" data-focus @click="prev"><Icon name="mdiArrowLeft" />Back</button>
-            <button class="btn primary" data-focus @click="next()">Continue<Icon name="mdiArrowRight" /></button>
+            <button class="btn primary" data-focus @click="saveName">Continue<Icon name="mdiArrowRight" /></button>
           </div>
         </template>
 
@@ -100,6 +110,12 @@
               <button class="btn primary" data-focus @click="liveOn"><Icon name="mdiFlash" />Turn on</button>
             </template>
             <button v-else class="btn primary" data-focus @click="next()">Continue<Icon name="mdiArrowRight" /></button>
+          </div>
+          <!-- 0.9.52: Cartridge itself in Steam, on the same step (it was a step of its own) -->
+          <div v-if="st.steam && !st.gamescope" class="w-box w-self">
+            <Icon :name="st.inSteam || selfDone ? 'mdiCheckCircle' : 'mdiSteam'" :size="26" />
+            <div class="l-mid"><b>{{ st.inSteam || selfDone ? 'Cartridge is in Steam' : 'Add Cartridge to Steam' }}</b><span class="l-sub">{{ st.inSteam || selfDone ? 'Open it from Game Mode, with its own artwork.' : st.appimage ? 'So you can open it from Game Mode. Steam closes and reopens once.' : 'This works from the AppImage build. You can do it later in Settings → Steam.' }}</span></div>
+            <button v-if="!st.inSteam && !selfDone && st.appimage" class="btn" data-focus :disabled="busy" @click="addSelf"><Icon name="mdiSteam" />{{ busy ? 'Adding…' : 'Add' }}</button>
           </div>
         </template>
 
@@ -234,14 +250,14 @@
               <div class="qr-img" v-html="guideQr" />
               <div class="stack">
                 <b>Scan with your phone</b>
-                <p class="muted small">RomM's guide explains the setup step by step. When the server is running, come back and pick "Yes, sign in".</p>
+                <p class="muted small">RomM's guide explains the setup step by step. When the server is running, come back and pick "Yes, Sign In".</p>
                 <p class="small mono">{{ ROMM_GUIDE }}</p>
               </div>
             </div>
             <div class="w-act">
               <button class="btn" data-focus @click="romm = 'what'"><Icon name="mdiArrowLeft" />Back</button>
               <button class="btn" data-focus @click="next()">Later</button>
-              <button class="btn primary" data-focus @click="romm = 'signin'">Yes, sign in</button>
+              <button class="btn primary" data-focus @click="romm = 'signin'">Yes, Sign In</button>
             </div>
           </template>
           <template v-else>
@@ -250,7 +266,7 @@
             <div class="w-act w-act-c">
               <button class="btn" data-focus @click="prev"><Icon name="mdiArrowLeft" />Back</button>
               <button class="btn" data-focus @click="romm = 'what'">No</button>
-              <button class="btn primary" data-focus @click="romm = 'signin'">Yes, sign in</button>
+              <button class="btn primary" data-focus @click="romm = 'signin'">Yes, Sign In</button>
             </div>
           </template>
         </template>
@@ -434,27 +450,6 @@
           </template>
         </template>
 
-        <!-- 10 -->
-        <template v-else-if="step === 'self'">
-          <h1>Add Cartridge to Steam</h1>
-          <template v-if="st.inSteam || selfDone">
-            <div class="w-good"><Icon name="mdiCheckCircle" :size="28" /><span>Cartridge is in Steam</span></div>
-            <p class="w-lead">Find it in your library in Game Mode, with its own artwork.</p>
-          </template>
-          <template v-else>
-            <p class="w-lead">So you can open Cartridge from Game Mode, with its artwork. Steam closes and reopens once to pick it up.</p>
-            <p v-if="!st.appimage" class="muted small">This only works from the AppImage build. You can do it later in Settings → Steam.</p>
-          </template>
-          <div class="w-act">
-            <button class="btn" data-focus @click="prev"><Icon name="mdiArrowLeft" />Back</button>
-            <template v-if="!st.inSteam && !selfDone && st.appimage">
-              <button class="btn" data-focus @click="next()">Skip</button>
-              <button class="btn primary" data-focus :disabled="busy" @click="addSelf"><Icon name="mdiSteam" />{{ busy ? 'Adding…' : 'Add to Steam' }}</button>
-            </template>
-            <button v-else class="btn primary" data-focus @click="next()">Continue<Icon name="mdiArrowRight" /></button>
-          </div>
-        </template>
-
         <!-- 11 -->
         <template v-else-if="step === 'done'">
           <div class="w-good w-done"><Icon name="mdiCheckCircle" :size="72" /></div>
@@ -478,6 +473,7 @@ import { store, call, saveConfig, toast, tab, confirm, openModal, choose, pickFo
 import { focusFirst, input } from '../nav.js';
 import { useView } from '../useView.js';
 import Logo from '../components/Logo.vue';
+import WelcomeIntro from '../components/WelcomeIntro.vue';
 import Icon from '../components/Icon.vue';
 import Btn from '../components/Btn.vue';
 import TextField from '../components/TextField.vue';
@@ -490,11 +486,16 @@ import { padInfo, detectPad, padKind } from '../pad.js';
 import { THEMES, STYLES, styleOf, paletteOf } from '../themes.js';
 import { BACKGROUNDS, RENDERERS, bgPreview } from '../bgRenderers.js';
 
-const STEPS = ['hello', 'name', 'look', 'pad', 'steam', 'emus', 'romm', 'scan', 'extras', 'sync', 'self', 'done'];
+// 0.9.52 (owner): RomM first (the rest needs it), your name with the look, Controls only with a controller of your own,
+// Cartridge in Steam on the Steam step, and the Game Mode screen on the very first desktop launch only. The plan is fixed
+// once at the start (pad and Steam are read first), so a step never shifts under you.
+const ALL_STEPS = ['hello', 'gamemode', 'romm', 'look', 'pad', 'emus', 'scan', 'steam', 'sync', 'extras', 'done'];
+const plan = ref({ gamemode: false, pad: true });
+const STEPS_C = computed(() => ALL_STEPS.filter((s) => (s !== 'gamemode' || plan.value.gamemode) && (s !== 'pad' || plan.value.pad)));
 const ROMM_GUIDE = 'https://docs.romm.app/latest/getting-started/quick-start/'; // RomM's setup guide (owner: not the docs home)
 const el = ref(null);
 const at = ref(0), dir = ref(1);
-const step = computed(() => STEPS[at.value]);
+const step = computed(() => STEPS_C.value[at.value]);
 const replay = !!store.config.welcomed;
 // Settings → RomM → Set up RomM on this device opens just that step, on the same background
 const only = store.welcoming === 'romm-local';
@@ -511,7 +512,7 @@ const deviceName = computed(() => `${name.value.trim()}'s ${st.value.device || '
 // RomM has no server name of its own, so the name picked for RomM on this device is Cartridge's label for it
 const serverName = computed(() => { const s = store.config.server || {}; if (store.config.rommLocal?.name && s.localUrl && s.localUrl.includes(':' + store.config.rommLocal.port)) return store.config.rommLocal.name; try { return new URL(s.localUrl || s.remoteUrl).host; } catch { return 'your RomM server'; } });
 
-function go(i, d) { dir.value = d; at.value = Math.max(0, Math.min(STEPS.length - 1, i)); }
+function go(i, d) { dir.value = d; at.value = Math.max(0, Math.min(STEPS_C.value.length - 1, i)); }
 function next() { romm.value = ''; sy.value = ''; picking.value = false; go(at.value + 1, 1); }
 function prev() { romm.value = ''; sy.value = ''; picking.value = false; go(at.value - 1, -1); }
 
@@ -650,6 +651,22 @@ async function useFolder(dir, label) {
   catch (e) { toast(e.message, 'error', 5000); }
 }
 async function customFolder() { const d = await pickFolder({ title: 'The folder Syncthing keeps in sync', start: store.info?.home }); if (d) useFolder(d); }
+// the first desktop launch (0.9.52): add to Steam, wait until Steam is back and has Cartridge, then close
+const gm = ref(''), gmText = ref('');
+async function gmAdd() {
+  try {
+    const s0 = await call('steam:status');
+    gm.value = 'adding'; gmText.value = s0.running ? 'Adding to Steam. Steam closes and opens again…' : 'Adding to Steam…';
+    await call('steam:add', { restartSteam: true });
+    if (s0.running) {
+      gmText.value = 'Waiting for Steam to open again…';
+      for (let i = 0; i < 90; i++) { const s = await call('steam:status').catch(() => ({})); if (s.running && s.added) break; await new Promise((r) => setTimeout(r, 1000)); }
+    }
+    gm.value = 'done';
+    await saveConfig({ ui: { welcomeStep: '' } }); // the setup starts from the top in Game Mode
+    setTimeout(() => call('app:quit'), 3200);
+  } catch (e) { gm.value = ''; toast(e.message, 'error', 7000); }
+}
 async function addSelf() {
   try {
     const s = await call('steam:status');
@@ -725,8 +742,11 @@ useView(handlers, [{ b: 'A', label: 'Select' }, { b: 'B', label: 'Back' }]);
 watch(step, (v) => { if (!replay && !only && v !== 'done') saveConfig({ ui: { welcomeStep: v } }); });
 // the installer focuses itself once its drives or list are there; leaving it focuses the step's first choice
 watch(picking, async (v) => { await nextTick(); if (!v) setTimeout(() => focusFirst(el.value?.querySelector('.w-step') || el.value, '.w-step [data-focus]'), 120); else setTimeout(() => { const eg = el.value?.querySelector('.eg'); if (eg && !eg.contains(document.activeElement)) focusFirst(eg); }, 120); });
+watch(step, async (v) => {
+  if (v === 'sync' && store.config.configured && !store.config.localOnly && !store.config.saveSync && !store.config.syncthing?.role) { try { await call('savesync:set', { on: true }); store.config = await call('config:get'); } catch {} }
+});
 watch([step, romm, sy], async () => {
-  if (step.value === 'self' && st.value.inSteam === false) await load();
+  if (step.value === 'steam' && st.value.inSteam === false) await load();
   if (step.value === 'scan') loadScanExtras();
   await nextTick(); await nextTick();
   if (!(step.value === 'scan' || (step.value === 'romm' && (romm.value === 'signin' || romm.value === 'local')))) store.viewHandlers = handlers;
@@ -738,20 +758,26 @@ watch([step, romm, sy], async () => {
   }
 });
 onMounted(async () => {
-  if (only) { at.value = STEPS.indexOf('romm'); romm.value = 'local'; }
+  // the plan first (0.9.52): the Game Mode screen on the very first desktop launch only; Controls with a controller of
+  // your own (not a Steam Deck's built-in one, and not keyboard and mouse alone)
+  await Promise.all([load(), detectPad()]);
+  const pi = padInfo.value;
+  plan.value = {
+    gamemode: !replay && !only && !store.config.ui.gameModeAsked && !st.value.gamescope && !st.value.fromSteam,
+    pad: !!(pi?.kind ? pi.kind !== 'steam' || /pro|dual|xbox|8bitdo|wireless/i.test(pi.name || '') : input.padName && !/steam deck|28de/i.test(input.padName)),
+  };
+  if (plan.value.gamemode) saveConfig({ ui: { gameModeAsked: true } }); // asked once, whatever is picked
+  if (only) { at.value = STEPS_C.value.indexOf('romm'); romm.value = 'local'; }
   // picks up where it was left (closed halfway, or off to Desktop Mode for EmuDeck), 0.9.16
-  else if (!replay && STEPS.includes(store.config.ui.welcomeStep)) at.value = STEPS.indexOf(store.config.ui.welcomeStep);
+  else if (!replay && STEPS_C.value.includes(store.config.ui.welcomeStep)) at.value = STEPS_C.value.indexOf(store.config.ui.welcomeStep);
   store.welcoming ||= true;
   if (step.value === 'hello' && !only && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
-    intro.value = true;
+    intro.value = true; // WelcomeIntro ends itself (about 2.8 s)
     const skip = () => { intro.value = false; };
-    setTimeout(skip, 2600);
     window.addEventListener('keydown', skip, { once: true, capture: true });
   }
   off = window.cart.on('welcome-progress', (p) => { if (p.percent != null) progress.value = p.percent; });
   window.addEventListener('keydown', onKeyUse, true); window.addEventListener('pointerdown', onPointerUse, true);
-  detectPad();
-  await load();
   await nextTick(); focusFirst(el.value, '.w-act .btn.primary');
 });
 onBeforeUnmount(() => { off?.(); clearTimeout(padT); window.removeEventListener('keydown', onKeyUse, true); window.removeEventListener('pointerdown', onPointerUse, true); });
@@ -760,10 +786,17 @@ onBeforeUnmount(() => { off?.(); clearTimeout(padT); window.removeEventListener(
 <style scoped>
 .welcome { position: relative; z-index: 1; height: 100%; display: flex; flex-direction: column; overflow: hidden; }
 .w-top { display: flex; align-items: center; gap: var(--s-4); padding: var(--s-4) var(--s-5); flex: none; }
-.w-dots { flex: 1; display: flex; justify-content: center; gap: 8px; }
-.w-dots i { width: 8px; height: 8px; border-radius: 50%; background: rgba(255, 255, 255, 0.22); transition: background var(--d-2, 0.2s), transform var(--d-2, 0.2s); }
-.w-dots i.done { background: rgba(255, 255, 255, 0.55); }
-.w-dots i.on { background: #fff; transform: scale(1.3); }
+.w-steps { flex: 1; max-width: 360px; height: 4px; margin: 0 auto; border-radius: 2px; background: rgba(255, 255, 255, 0.14); overflow: hidden; }
+.w-steps.hidden { visibility: hidden; }
+.w-steps i { display: block; height: 100%; border-radius: inherit; background: #fff; transform-origin: left; transition: transform var(--spring-soft-d) var(--spring-soft); }
+/* 0.9.52: the Game Mode screen (first desktop launch) and Cartridge in Steam on the Steam step */
+.w-step > .w-gm-icon { width: 112px; }
+.w-gm-icon { display: grid; place-items: center; width: 112px; height: 112px; margin: 0 auto 8px; border-radius: 30px; background: rgba(255, 255, 255, 0.06); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1); }
+.w-gm-icon.ok { color: var(--green-l, #7ee787); }
+.w-gm-busy { display: flex; align-items: center; justify-content: center; gap: 8px; color: var(--muted); }
+.w-self { display: flex; align-items: center; gap: var(--s-3); margin-top: var(--s-4); text-align: left; }
+.w-self .l-mid { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.w-self .l-sub { font-size: var(--t-sm); color: var(--muted); }
 .w-stage { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; padding: 0 var(--s-5) calc(var(--s-6) + 28px); } /* room for the A/B hints */
 .w-step { width: min(960px, 100%); max-height: 100%; overflow-y: auto; display: flex; flex-direction: column; align-items: center; gap: var(--s-4); padding: var(--s-6) var(--s-6) var(--s-6); text-align: center; box-shadow: 0 24px 80px rgba(0, 0, 0, 0.45); }
 .w-step > * { max-width: 820px; width: 100%; flex: none; }
@@ -821,7 +854,7 @@ onBeforeUnmount(() => { off?.(); clearTimeout(padT); window.removeEventListener(
 .w-hello > :nth-child(3) { animation-delay: 0.32s; }
 .w-hello > :nth-child(4) { animation-delay: 0.46s; }
 @keyframes wIn { from { opacity: 0; transform: translateY(18px); } }
-@keyframes wLogo { 0% { opacity: 0; transform: scale(0.7) rotate(-6deg); } 60% { opacity: 1; transform: scale(1.06) rotate(1deg); } 100% { transform: none; } }
+@keyframes wLogo { 0% { opacity: 0; transform: scale(0.9); } 100% { opacity: 1; transform: none; } } /* CAE: arrives and stops, no wobble (0.9.52) */
 .welcome.w-out .w-stage, .welcome.w-out .w-top { transition: opacity var(--fade-slow), transform var(--spring-d) var(--spring); opacity: 0; transform: translateY(-24px) scale(0.97); }
 .w-next-enter-active, .w-next-leave-active, .w-prev-enter-active, .w-prev-leave-active { transition: opacity var(--fade-in), transform var(--spring-d) var(--spring); }
 .w-next-enter-from, .w-prev-leave-to { opacity: 0; transform: translateX(40px); }
@@ -833,20 +866,8 @@ onBeforeUnmount(() => { off?.(); clearTimeout(padT); window.removeEventListener(
 .w-hints > span { display: inline-flex; align-items: center; gap: 8px; line-height: 1; text-box: trim-both cap alphabetic; } /* the word centred on its button, not on its descenders (0.9.24) */
 /* the opening (0.9.17): the mark comes into focus inside two rings of light, a glint crosses it, the
    name follows letter by letter, then everything lifts away to the first card */
-.w-intro { position: absolute; inset: 0; z-index: 5; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px; background: radial-gradient(60% 60% at 50% 45%, rgba(18, 18, 22, 0.55), rgba(5, 5, 7, 0.96)); animation: wiOut var(--spring-soft-d) var(--spring-soft) 2.1s forwards; }
-.wi-mark { position: relative; animation: wiMark var(--move-slow) both; overflow: hidden; border-radius: 28px; }
-.wi-glint { position: absolute; inset: -20%; background: linear-gradient(105deg, transparent 38%, rgba(255, 255, 255, 0.55) 50%, transparent 62%); transform: translateX(-120%); animation: wiGlint var(--move-slow) 0.7s forwards; mix-blend-mode: overlay; }
-.wi-ring { position: absolute; top: 45%; left: 50%; width: 180px; height: 180px; margin: -90px 0 0 -90px; border-radius: 50%; border: 1.5px solid rgba(239, 75, 35, 0.55); box-shadow: 0 0 60px rgba(239, 75, 35, 0.35); opacity: 0; animation: wiRing var(--move-ambient) 0.15s forwards; }
-.wi-ring.r2 { border-color: rgba(255, 255, 255, 0.25); box-shadow: none; animation-delay: 0.35s; }
-.wi-name { display: flex; font-family: var(--display); font-size: calc(var(--t-2xl) * 1.2); font-weight: 800; letter-spacing: -0.02em; }
-.wi-name span { opacity: 0; transform: translateY(14px); filter: blur(6px); animation: wiChar var(--spring-soft-d) var(--spring-soft) forwards; }
 .welcome.w-intro-on .w-top, .welcome.w-intro-on .w-stage { opacity: 0; }
 .welcome:not(.w-intro-on) .w-top, .welcome:not(.w-intro-on) .w-stage { transition: opacity var(--fade-cross); }
-@keyframes wiMark { 0% { opacity: 0; transform: scale(0.62); filter: blur(14px); } 100% { opacity: 1; transform: none; filter: none; } }
-@keyframes wiGlint { to { transform: translateX(120%); } }
-@keyframes wiRing { 0% { opacity: 0; transform: scale(0.6); } 30% { opacity: 0.9; } 100% { opacity: 0; transform: scale(2.4); } }
-@keyframes wiChar { to { opacity: 1; transform: none; filter: none; } }
-@keyframes wiOut { to { opacity: 0; transform: scale(1.04); visibility: hidden; } }
 .w-warn { display: flex; align-items: center; justify-content: center; gap: 10px; color: #ffd978; font-weight: 600; }
 .w-miss { text-align: left; margin: 0 auto; padding-left: 1.2em; display: flex; flex-direction: column; gap: 6px; max-width: 640px !important; color: var(--muted); line-height: 1.45; }
 .w-miss b { color: var(--text, #fff); }

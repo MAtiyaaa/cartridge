@@ -4958,7 +4958,7 @@ const handlers = {
       emudeck: ex('.config/EmuDeck/settings.sh') || ex('emudeck'),
       retrodeck: ex('.var/app/net.retrodeck.retrodeck') || ex('retrodeck'),
       steam: steamFound, live, gamescope: isGamescope(), appimage: !!process.env.APPIMAGE,
-      inSteam: !!process.env.CARTRIDGE_FROM_STEAM || require('./steamArt').cartridgeInSteam(),
+      inSteam: !!process.env.CARTRIDGE_FROM_STEAM || require('./steamArt').cartridgeInSteam(), fromSteam: !!process.env.CARTRIDGE_FROM_STEAM,
       host: os.hostname(), device: deviceKind(),
     };
   },
