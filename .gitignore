@@ -6,3 +6,4 @@ release/
 android-dist/
 remote-dist/
 .ui-audit/
+tools/brand/out/
