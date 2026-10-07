@@ -15,6 +15,7 @@ const path = require('path');
 const os = require('os');
 const crypto = require('crypto');
 const { spawn, execFileSync } = require('child_process');
+const CS = require('./cide').steam; // every ID rule Steam uses lives in CIDE (0.9.52), unchanged
 const { parseVdf, shortcutId, steamRunning } = require('./steamArt');
 const frameGen = require('./frameGen');
 const SC = require('./steamCollections');
@@ -248,7 +249,7 @@ module.exports = function createSteamManager(ctx) {
     const args = ci >= 0 ? toks.slice(ci + 1) : toks;
     let gi = -1, kind = null, folder = null, sub = '', romRoot = '', sample = '';
     // RPCS3's own shortcut format: "%RPCS3_GAMEID%:BLUS30405"
-    gi = args.findIndex((t) => /%RPCS3_GAMEID%:[A-Z]{4}\d{5}/.test(t.val));
+    gi = args.findIndex((t) => CS.isRpcs3Arg(t.val));
     if (gi >= 0) { kind = 'serial'; folder = 'ps3'; }
     if (gi < 0) {
       gi = args.findIndex((t) => /\/roms\/[^/]+\//i.test(t.val));
@@ -263,7 +264,7 @@ module.exports = function createSteamManager(ctx) {
     }
     if (gi < 0) {
       // a PS4 game started by its title ID ("-g CUSA12345")
-      gi = args.findIndex((t) => /^(CUSA|PPSA)\d{5}$/.test(t.val));
+      gi = args.findIndex((t) => CS.isPs4Arg(t.val));
       if (gi >= 0) { kind = 'titleid'; folder = 'ps4'; }
     }
     if (gi < 0) {
@@ -275,7 +276,7 @@ module.exports = function createSteamManager(ctx) {
     }
     const slug = folderSlug(folder);
     const zp = /^Z:\//i.test(args[gi].val) ? args[gi].val.slice(0, 2) : '';
-    const placeholder = kind === 'serial' || kind === 'titleid' ? args[gi].raw.replace(/[A-Z]{4}\d{5}/, '{SERIAL}') : args[gi].raw.replace(args[gi].val, zp + '{ROM}');
+    const placeholder = kind === 'serial' || kind === 'titleid' ? CS.toPlaceholder(args[gi].raw) : args[gi].raw.replace(args[gi].val, zp + '{ROM}');
     const argT = args.map((t, i) => (i === gi ? placeholder : t.raw));
     const preT = stripFramegen(pre).map((t) => t.raw);
     let start = sc.start;
@@ -561,14 +562,14 @@ module.exports = function createSteamManager(ctx) {
   }
   function serialOf(rom, p) {
     const tag = String(rom.fs_name || '') + ' ' + String(rom.name || '') + ' ' + path.basename(p || '');
-    const m = tag.match(/\b([A-Z]{4})-?(\d{5})\b/); // "BLUS30443" or "BLUS-30443" in a name
-    if (m) return m[1] + m[2];
+    const named = CS.nameSerial(tag); // "BLUS30443" or "BLUS-30443" in a name
+    if (named) return named;
     // a folder game: PS3_GAME/PARAM.SFO holds the serial
     // (also one folder down: a download folder holding the game folder)
     const sfos = [path.join(p, 'PS3_GAME', 'PARAM.SFO'), path.join(p, 'PARAM.SFO'), path.join(p, 'sce_sys', 'param.sfo')];
     if (isDir(p)) for (const n of ls(p)) if (isDir(path.join(p, n))) sfos.push(path.join(p, n, 'PS3_GAME', 'PARAM.SFO'), path.join(p, n, 'sce_sys', 'param.sfo'));
     for (const f of sfos) {
-      try { const b = fs.readFileSync(f); const s = b.toString('latin1').match(/[A-Z]{4}\d{5}/); if (s) return s[0]; } catch {}
+      try { const s = CS.anySerial(fs.readFileSync(f).toString('latin1')); if (s) return s; } catch {}
     }
     // an ISO inside a folder
     if (isDir(p)) { const iso = ls(p).find((n) => /\.iso$/i.test(n)); if (iso) p = path.join(p, iso); }
@@ -576,19 +577,19 @@ module.exports = function createSteamManager(ctx) {
     try {
       const fd = fs.openSync(p, 'r'); const b = Buffer.alloc(1024 * 1024);
       fs.readSync(fd, b, 0, b.length, 0); fs.closeSync(fd);
-      const s = b.toString('latin1').match(/(BL|BC|NP)(US|ES|JS|AS|KS|UB|EB|JM|JB|HB|UA|EA|JA|HA|KA|UJ|UZ)\d{5}/); // NPUA, NPEB and the rest too (0.9.15)
-      if (s) return s[0];
+      const s = CS.ps3Disc(b.toString('latin1')); // NPUA, NPEB and the rest too (0.9.15)
+      if (s) return s;
     } catch {}
     return null;
   }
   // Vita title ID (PCSE00000): from the name, else from the start of the .pkg/.vpk (its content ID)
   function vitaTitleId(rom, file) {
-    const m = (String(rom.fs_name || '') + ' ' + String(rom.name || '') + ' ' + path.basename(file || '')).match(/\b(PCS[A-Z]\d{5})\b/);
-    if (m) return m[1];
+    const named = CS.vitaName(String(rom.fs_name || '') + ' ' + String(rom.name || '') + ' ' + path.basename(file || ''));
+    if (named) return named;
     try {
       const f = isDir(file) ? path.join(file, ls(file).find((n) => /\.(pkg|vpk)$/i.test(n)) || '') : file;
       const fd = fs.openSync(f, 'r'); const b = Buffer.alloc(256 * 1024); fs.readSync(fd, b, 0, b.length, 0); fs.closeSync(fd);
-      const s = b.toString('latin1').match(/PCS[A-Z]\d{5}/); if (s) return s[0];
+      const s = CS.vitaAny(b.toString('latin1')); if (s) return s;
     } catch {}
     return null;
   }
@@ -601,7 +602,7 @@ module.exports = function createSteamManager(ctx) {
     const want = nameKeyOf(rom.name), sfo = require('./patches').sfoAt;
     if (!want) return null;
     for (const p of vitaPrefsAll()) for (const id of ls(path.join(p, 'ux0/app'))) {
-      if (!/^PCS[A-Z]\d{5}$/.test(id)) continue;
+      if (!CS.isVitaId(id)) continue;
       const t = nameKeyOf(sfo(path.join(p, 'ux0/app', id, 'sce_sys', 'param.sfo')).TITLE);
       if (t && (t === want || t.replace(/ /g, '') === want.replace(/ /g, ''))) return id;
     }
@@ -616,7 +617,7 @@ module.exports = function createSteamManager(ctx) {
   }
   function ps4TitleId(dir) {
     for (const f of [path.join(dir, 'sce_sys', 'param.sfo')]) {
-      try { const m = fs.readFileSync(f).toString('latin1').match(/(CUSA|PPSA)\d{5}/); if (m) return m[0]; } catch {}
+      try { const m = CS.ps4Any(fs.readFileSync(f).toString('latin1')); if (m) return m; } catch {}
     }
     return null;
   }
@@ -662,7 +663,7 @@ module.exports = function createSteamManager(ctx) {
       return { ROM: styled(target, t), fallback: 'path' };
     }
     if (t.kind === 'titleid') {
-      const id = (String(rom.fs_name || '') + ' ' + path.basename(file) + ' ' + (rom.name || '')).match(/\b(CUSA|PPSA)\d{5}\b/i)?.[0]?.toUpperCase() || ps4TitleId(file);
+      const id = CS.ps4Name(String(rom.fs_name || '') + ' ' + path.basename(file) + ' ' + (rom.name || '')) || ps4TitleId(file);
       if (id) return { SERIAL: id };
       const e = findEboot(file);
       return { ROM: styled(e || file, t), fallback: 'path' };
@@ -858,7 +859,7 @@ module.exports = function createSteamManager(ctx) {
   function gameSerial(g) {
     const k = g.rom.id + '|' + g.file;
     if (serialCache.has(k)) return serialCache.get(k);
-    let s = (String(g.rom.fs_name + ' ' + (g.file ? path.basename(g.file) : '')).match(/\b([A-Z]{4}\d{5})\b/) || [])[1] || null;
+    let s = CS.plainSerial(String(g.rom.fs_name + ' ' + (g.file ? path.basename(g.file) : '')));
     if (!s && g.file && ['ps3', 'psp', 'psvita'].includes(g.key)) { try { s = serialOf(g.rom, g.file) || null; } catch {} }
     serialCache.set(k, s);
     return s;
@@ -872,7 +873,7 @@ module.exports = function createSteamManager(ctx) {
     const byPath = new Map(), byName = new Map();
     for (const sc of scs) {
       for (const t of tokenize(sc.lo)) { const v = t.val.replace(/^Z:(?=\/)/i, ''); if (v.startsWith('/')) byPath.set(normPath(v), sc); } // Z: = Xenia under Proton
-      const serial = (sc.lo.match(/%RPCS3_GAMEID%:([A-Z]{4}\d{5})/) || sc.lo.match(/(?:^|\s)["']?((?:CUSA|PPSA)\d{5})\b/) || [])[1];
+      const serial = CS.launchSerial(sc.lo);
       if (serial) byPath.set('serial:' + serial, sc);
       let con = null;
       try { con = learnOne(sc)?.console || null; } catch {}
@@ -1889,7 +1890,7 @@ module.exports = function createSteamManager(ctx) {
     gameEmu: (romId) => (cfg().gameEmus || {})[romId] || null,
     addedAt: (romId) => Math.min(...Object.values(reg).filter((r) => r.romId === romId && r.at).map((r) => r.at), Infinity),
     // exposed for tests
-    _learnOne: learnOne, _tokenize: tokenize, _buildLaunch: buildLaunch, _learnAll: learnAll, _readShortcuts: () => { const e = environment(); return e.account ? readShortcuts(e.account) : []; }, _candidates: candidates, appImagesFor, serialOf, flatpakSteamAccess, _hostLaunch: hostLaunch, _launchFor: launchFor, _withFg: withFg, _withShadVersion: withShadVersion, shadVersions, _multiDisc: multiDisc, _startOf: startOf, _templateFor: templateFor, _templateForGame: templateForGame,
+    _learnOne: learnOne, _tokenize: tokenize, _buildLaunch: buildLaunch, _inSteamIndex: inSteamIndex, _gameSerial: gameSerial, _vitaTitleId: vitaTitleId, _gameRef: gameRef, _learnAll: learnAll, _readShortcuts: () => { const e = environment(); return e.account ? readShortcuts(e.account) : []; }, _candidates: candidates, appImagesFor, serialOf, flatpakSteamAccess, _hostLaunch: hostLaunch, _launchFor: launchFor, _withFg: withFg, _withShadVersion: withShadVersion, shadVersions, _multiDisc: multiDisc, _startOf: startOf, _templateFor: templateFor, _templateForGame: templateForGame,
   };
   return api;
 };

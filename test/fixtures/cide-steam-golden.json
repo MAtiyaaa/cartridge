@@ -1,0 +1,6734 @@
+{
+ "launch": [
+  [
+   "Demons Souls",
+   "ps3/Demons Souls.iso",
+   "--no-gui \"%RPCS3_GAMEID%:{SERIAL}\"",
+   {
+    "lo": "--no-gui \"%RPCS3_GAMEID%:BLUS30443\"",
+    "args": "--no-gui \"%RPCS3_GAMEID%:BLUS30443\""
+   }
+  ],
+  [
+   "Demons Souls",
+   "ps3/Demons Souls.iso",
+   "--no-gui {SERIAL}",
+   {
+    "lo": "--no-gui BLUS30443",
+    "args": "--no-gui BLUS30443"
+   }
+  ],
+  [
+   "Demons Souls",
+   "ps3/Demons Souls.iso",
+   "run net.rpcs3.RPCS3 --no-gui \"{ROM}\"",
+   {
+    "lo": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Demons Souls.iso\"",
+    "args": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Demons Souls.iso\""
+   }
+  ],
+  [
+   "Demons Souls",
+   "ps3/Demons Souls.iso",
+   "\"{ROM}\"",
+   {
+    "lo": "\"~/Emulation/roms/ps3/Demons Souls.iso\"",
+    "args": "\"~/Emulation/roms/ps3/Demons Souls.iso\""
+   }
+  ],
+  [
+   "Demons Souls",
+   "ps3/Flower PSN.iso",
+   "--no-gui \"%RPCS3_GAMEID%:{SERIAL}\"",
+   {
+    "lo": "--no-gui \"~/Emulation/roms/ps3/Flower PSN.iso\"",
+    "args": "--no-gui \"~/Emulation/roms/ps3/Flower PSN.iso\"",
+    "fallback": "path"
+   }
+  ],
+  [
+   "Demons Souls",
+   "ps3/Flower PSN.iso",
+   "--no-gui {SERIAL}",
+   {
+    "lo": "--no-gui \"~/Emulation/roms/ps3/Flower PSN.iso\"",
+    "args": "--no-gui \"~/Emulation/roms/ps3/Flower PSN.iso\"",
+    "fallback": "path"
+   }
+  ],
+  [
+   "Demons Souls",
+   "ps3/Flower PSN.iso",
+   "run net.rpcs3.RPCS3 --no-gui \"{ROM}\"",
+   {
+    "lo": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Flower PSN.iso\"",
+    "args": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Flower PSN.iso\""
+   }
+  ],
+  [
+   "Demons Souls",
+   "ps3/Flower PSN.iso",
+   "\"{ROM}\"",
+   {
+    "lo": "\"~/Emulation/roms/ps3/Flower PSN.iso\"",
+    "args": "\"~/Emulation/roms/ps3/Flower PSN.iso\""
+   }
+  ],
+  [
+   "Demons Souls",
+   "ps3/No Serial Here.iso",
+   "--no-gui \"%RPCS3_GAMEID%:{SERIAL}\"",
+   {
+    "lo": "--no-gui \"~/Emulation/roms/ps3/No Serial Here.iso\"",
+    "args": "--no-gui \"~/Emulation/roms/ps3/No Serial Here.iso\"",
+    "fallback": "path"
+   }
+  ],
+  [
+   "Demons Souls",
+   "ps3/No Serial Here.iso",
+   "--no-gui {SERIAL}",
+   {
+    "lo": "--no-gui \"~/Emulation/roms/ps3/No Serial Here.iso\"",
+    "args": "--no-gui \"~/Emulation/roms/ps3/No Serial Here.iso\"",
+    "fallback": "path"
+   }
+  ],
+  [
+   "Demons Souls",
+   "ps3/No Serial Here.iso",
+   "run net.rpcs3.RPCS3 --no-gui \"{ROM}\"",
+   {
+    "lo": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/No Serial Here.iso\"",
+    "args": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/No Serial Here.iso\""
+   }
+  ],
+  [
+   "Demons Souls",
+   "ps3/No Serial Here.iso",
+   "\"{ROM}\"",
+   {
+    "lo": "\"~/Emulation/roms/ps3/No Serial Here.iso\"",
+    "args": "\"~/Emulation/roms/ps3/No Serial Here.iso\""
+   }
+  ],
+  [
+   "Demons Souls",
+   "ps3/Lower blus30443 name.iso",
+   "--no-gui \"%RPCS3_GAMEID%:{SERIAL}\"",
+   {
+    "lo": "--no-gui \"~/Emulation/roms/ps3/Lower blus30443 name.iso\"",
+    "args": "--no-gui \"~/Emulation/roms/ps3/Lower blus30443 name.iso\"",
+    "fallback": "path"
+   }
+  ],
+  [
+   "Demons Souls",
+   "ps3/Lower blus30443 name.iso",
+   "--no-gui {SERIAL}",
+   {
+    "lo": "--no-gui \"~/Emulation/roms/ps3/Lower blus30443 name.iso\"",
+    "args": "--no-gui \"~/Emulation/roms/ps3/Lower blus30443 name.iso\"",
+    "fallback": "path"
+   }
+  ],
+  [
+   "Demons Souls",
+   "ps3/Lower blus30443 name.iso",
+   "run net.rpcs3.RPCS3 --no-gui \"{ROM}\"",
+   {
+    "lo": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Lower blus30443 name.iso\"",
+    "args": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Lower blus30443 name.iso\""
+   }
+  ],
+  [
+   "Demons Souls",
+   "ps3/Lower blus30443 name.iso",
+   "\"{ROM}\"",
+   {
+    "lo": "\"~/Emulation/roms/ps3/Lower blus30443 name.iso\"",
+    "args": "\"~/Emulation/roms/ps3/Lower blus30443 name.iso\""
+   }
+  ],
+  [
+   "Demons Souls",
+   "ps3/Uncharted",
+   "--no-gui \"%RPCS3_GAMEID%:{SERIAL}\"",
+   {
+    "lo": "--no-gui \"%RPCS3_GAMEID%:BCES00052\"",
+    "args": "--no-gui \"%RPCS3_GAMEID%:BCES00052\""
+   }
+  ],
+  [
+   "Demons Souls",
+   "ps3/Uncharted",
+   "--no-gui {SERIAL}",
+   {
+    "lo": "--no-gui BCES00052",
+    "args": "--no-gui BCES00052"
+   }
+  ],
+  [
+   "Demons Souls",
+   "ps3/Uncharted",
+   "run net.rpcs3.RPCS3 --no-gui \"{ROM}\"",
+   {
+    "lo": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Uncharted\"",
+    "args": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Uncharted\""
+   }
+  ],
+  [
+   "Demons Souls",
+   "ps3/Uncharted",
+   "\"{ROM}\"",
+   {
+    "lo": "\"~/Emulation/roms/ps3/Uncharted/PS3_GAME/USRDIR/EBOOT.BIN\"",
+    "args": "\"~/Emulation/roms/ps3/Uncharted/PS3_GAME/USRDIR/EBOOT.BIN\""
+   }
+  ],
+  [
+   "Demons Souls",
+   "ps3/Wrapped",
+   "--no-gui \"%RPCS3_GAMEID%:{SERIAL}\"",
+   {
+    "lo": "--no-gui \"~/Emulation/roms/ps3/Wrapped\"",
+    "args": "--no-gui \"~/Emulation/roms/ps3/Wrapped\"",
+    "fallback": "path"
+   }
+  ],
+  [
+   "Demons Souls",
+   "ps3/Wrapped",
+   "--no-gui {SERIAL}",
+   {
+    "lo": "--no-gui \"~/Emulation/roms/ps3/Wrapped\"",
+    "args": "--no-gui \"~/Emulation/roms/ps3/Wrapped\"",
+    "fallback": "path"
+   }
+  ],
+  [
+   "Demons Souls",
+   "ps3/Wrapped",
+   "run net.rpcs3.RPCS3 --no-gui \"{ROM}\"",
+   {
+    "lo": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Wrapped\"",
+    "args": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Wrapped\""
+   }
+  ],
+  [
+   "Demons Souls",
+   "ps3/Wrapped",
+   "\"{ROM}\"",
+   {
+    "lo": "\"~/Emulation/roms/ps3/Wrapped\"",
+    "args": "\"~/Emulation/roms/ps3/Wrapped\""
+   }
+  ],
+  [
+   "Demons Souls",
+   "ps3/Iso In Folder",
+   "--no-gui \"%RPCS3_GAMEID%:{SERIAL}\"",
+   {
+    "lo": "--no-gui \"%RPCS3_GAMEID%:BLJM60066\"",
+    "args": "--no-gui \"%RPCS3_GAMEID%:BLJM60066\""
+   }
+  ],
+  [
+   "Demons Souls",
+   "ps3/Iso In Folder",
+   "--no-gui {SERIAL}",
+   {
+    "lo": "--no-gui BLJM60066",
+    "args": "--no-gui BLJM60066"
+   }
+  ],
+  [
+   "Demons Souls",
+   "ps3/Iso In Folder",
+   "run net.rpcs3.RPCS3 --no-gui \"{ROM}\"",
+   {
+    "lo": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Iso In Folder\"",
+    "args": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Iso In Folder\""
+   }
+  ],
+  [
+   "Demons Souls",
+   "ps3/Iso In Folder",
+   "\"{ROM}\"",
+   {
+    "lo": "\"~/Emulation/roms/ps3/Iso In Folder\"",
+    "args": "\"~/Emulation/roms/ps3/Iso In Folder\""
+   }
+  ],
+  [
+   "Demons Souls",
+   "ps3/Plain Folder",
+   "--no-gui \"%RPCS3_GAMEID%:{SERIAL}\"",
+   {
+    "lo": "--no-gui \"~/Emulation/roms/ps3/Plain Folder\"",
+    "args": "--no-gui \"~/Emulation/roms/ps3/Plain Folder\"",
+    "fallback": "path"
+   }
+  ],
+  [
+   "Demons Souls",
+   "ps3/Plain Folder",
+   "--no-gui {SERIAL}",
+   {
+    "lo": "--no-gui \"~/Emulation/roms/ps3/Plain Folder\"",
+    "args": "--no-gui \"~/Emulation/roms/ps3/Plain Folder\"",
+    "fallback": "path"
+   }
+  ],
+  [
+   "Demons Souls",
+   "ps3/Plain Folder",
+   "run net.rpcs3.RPCS3 --no-gui \"{ROM}\"",
+   {
+    "lo": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Plain Folder\"",
+    "args": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Plain Folder\""
+   }
+  ],
+  [
+   "Demons Souls",
+   "ps3/Plain Folder",
+   "\"{ROM}\"",
+   {
+    "lo": "\"~/Emulation/roms/ps3/Plain Folder\"",
+    "args": "\"~/Emulation/roms/ps3/Plain Folder\""
+   }
+  ],
+  [
+   "Demons Souls",
+   "ps3/Pkg Game",
+   "--no-gui \"%RPCS3_GAMEID%:{SERIAL}\"",
+   {
+    "lo": "--no-gui \"~/Emulation/roms/ps3/Pkg Game\"",
+    "args": "--no-gui \"~/Emulation/roms/ps3/Pkg Game\"",
+    "fallback": "path"
+   }
+  ],
+  [
+   "Demons Souls",
+   "ps3/Pkg Game",
+   "--no-gui {SERIAL}",
+   {
+    "lo": "--no-gui \"~/Emulation/roms/ps3/Pkg Game\"",
+    "args": "--no-gui \"~/Emulation/roms/ps3/Pkg Game\"",
+    "fallback": "path"
+   }
+  ],
+  [
+   "Demons Souls",
+   "ps3/Pkg Game",
+   "run net.rpcs3.RPCS3 --no-gui \"{ROM}\"",
+   {
+    "lo": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Pkg Game\"",
+    "args": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Pkg Game\""
+   }
+  ],
+  [
+   "Demons Souls",
+   "ps3/Pkg Game",
+   "\"{ROM}\"",
+   {
+    "lo": "\"~/Emulation/roms/ps3/Pkg Game\"",
+    "args": "\"~/Emulation/roms/ps3/Pkg Game\""
+   }
+  ],
+  [
+   "Demon's Souls [BLUS30443]",
+   "ps3/Demons Souls.iso",
+   "--no-gui \"%RPCS3_GAMEID%:{SERIAL}\"",
+   {
+    "lo": "--no-gui \"%RPCS3_GAMEID%:BLUS30443\"",
+    "args": "--no-gui \"%RPCS3_GAMEID%:BLUS30443\""
+   }
+  ],
+  [
+   "Demon's Souls [BLUS30443]",
+   "ps3/Demons Souls.iso",
+   "--no-gui {SERIAL}",
+   {
+    "lo": "--no-gui BLUS30443",
+    "args": "--no-gui BLUS30443"
+   }
+  ],
+  [
+   "Demon's Souls [BLUS30443]",
+   "ps3/Demons Souls.iso",
+   "run net.rpcs3.RPCS3 --no-gui \"{ROM}\"",
+   {
+    "lo": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Demons Souls.iso\"",
+    "args": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Demons Souls.iso\""
+   }
+  ],
+  [
+   "Demon's Souls [BLUS30443]",
+   "ps3/Demons Souls.iso",
+   "\"{ROM}\"",
+   {
+    "lo": "\"~/Emulation/roms/ps3/Demons Souls.iso\"",
+    "args": "\"~/Emulation/roms/ps3/Demons Souls.iso\""
+   }
+  ],
+  [
+   "Demon's Souls [BLUS30443]",
+   "ps3/Flower PSN.iso",
+   "--no-gui \"%RPCS3_GAMEID%:{SERIAL}\"",
+   {
+    "lo": "--no-gui \"%RPCS3_GAMEID%:BLUS30443\"",
+    "args": "--no-gui \"%RPCS3_GAMEID%:BLUS30443\""
+   }
+  ],
+  [
+   "Demon's Souls [BLUS30443]",
+   "ps3/Flower PSN.iso",
+   "--no-gui {SERIAL}",
+   {
+    "lo": "--no-gui BLUS30443",
+    "args": "--no-gui BLUS30443"
+   }
+  ],
+  [
+   "Demon's Souls [BLUS30443]",
+   "ps3/Flower PSN.iso",
+   "run net.rpcs3.RPCS3 --no-gui \"{ROM}\"",
+   {
+    "lo": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Flower PSN.iso\"",
+    "args": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Flower PSN.iso\""
+   }
+  ],
+  [
+   "Demon's Souls [BLUS30443]",
+   "ps3/Flower PSN.iso",
+   "\"{ROM}\"",
+   {
+    "lo": "\"~/Emulation/roms/ps3/Flower PSN.iso\"",
+    "args": "\"~/Emulation/roms/ps3/Flower PSN.iso\""
+   }
+  ],
+  [
+   "Demon's Souls [BLUS30443]",
+   "ps3/No Serial Here.iso",
+   "--no-gui \"%RPCS3_GAMEID%:{SERIAL}\"",
+   {
+    "lo": "--no-gui \"%RPCS3_GAMEID%:BLUS30443\"",
+    "args": "--no-gui \"%RPCS3_GAMEID%:BLUS30443\""
+   }
+  ],
+  [
+   "Demon's Souls [BLUS30443]",
+   "ps3/No Serial Here.iso",
+   "--no-gui {SERIAL}",
+   {
+    "lo": "--no-gui BLUS30443",
+    "args": "--no-gui BLUS30443"
+   }
+  ],
+  [
+   "Demon's Souls [BLUS30443]",
+   "ps3/No Serial Here.iso",
+   "run net.rpcs3.RPCS3 --no-gui \"{ROM}\"",
+   {
+    "lo": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/No Serial Here.iso\"",
+    "args": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/No Serial Here.iso\""
+   }
+  ],
+  [
+   "Demon's Souls [BLUS30443]",
+   "ps3/No Serial Here.iso",
+   "\"{ROM}\"",
+   {
+    "lo": "\"~/Emulation/roms/ps3/No Serial Here.iso\"",
+    "args": "\"~/Emulation/roms/ps3/No Serial Here.iso\""
+   }
+  ],
+  [
+   "Demon's Souls [BLUS30443]",
+   "ps3/Lower blus30443 name.iso",
+   "--no-gui \"%RPCS3_GAMEID%:{SERIAL}\"",
+   {
+    "lo": "--no-gui \"%RPCS3_GAMEID%:BLUS30443\"",
+    "args": "--no-gui \"%RPCS3_GAMEID%:BLUS30443\""
+   }
+  ],
+  [
+   "Demon's Souls [BLUS30443]",
+   "ps3/Lower blus30443 name.iso",
+   "--no-gui {SERIAL}",
+   {
+    "lo": "--no-gui BLUS30443",
+    "args": "--no-gui BLUS30443"
+   }
+  ],
+  [
+   "Demon's Souls [BLUS30443]",
+   "ps3/Lower blus30443 name.iso",
+   "run net.rpcs3.RPCS3 --no-gui \"{ROM}\"",
+   {
+    "lo": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Lower blus30443 name.iso\"",
+    "args": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Lower blus30443 name.iso\""
+   }
+  ],
+  [
+   "Demon's Souls [BLUS30443]",
+   "ps3/Lower blus30443 name.iso",
+   "\"{ROM}\"",
+   {
+    "lo": "\"~/Emulation/roms/ps3/Lower blus30443 name.iso\"",
+    "args": "\"~/Emulation/roms/ps3/Lower blus30443 name.iso\""
+   }
+  ],
+  [
+   "Demon's Souls [BLUS30443]",
+   "ps3/Uncharted",
+   "--no-gui \"%RPCS3_GAMEID%:{SERIAL}\"",
+   {
+    "lo": "--no-gui \"%RPCS3_GAMEID%:BLUS30443\"",
+    "args": "--no-gui \"%RPCS3_GAMEID%:BLUS30443\""
+   }
+  ],
+  [
+   "Demon's Souls [BLUS30443]",
+   "ps3/Uncharted",
+   "--no-gui {SERIAL}",
+   {
+    "lo": "--no-gui BLUS30443",
+    "args": "--no-gui BLUS30443"
+   }
+  ],
+  [
+   "Demon's Souls [BLUS30443]",
+   "ps3/Uncharted",
+   "run net.rpcs3.RPCS3 --no-gui \"{ROM}\"",
+   {
+    "lo": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Uncharted\"",
+    "args": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Uncharted\""
+   }
+  ],
+  [
+   "Demon's Souls [BLUS30443]",
+   "ps3/Uncharted",
+   "\"{ROM}\"",
+   {
+    "lo": "\"~/Emulation/roms/ps3/Uncharted/PS3_GAME/USRDIR/EBOOT.BIN\"",
+    "args": "\"~/Emulation/roms/ps3/Uncharted/PS3_GAME/USRDIR/EBOOT.BIN\""
+   }
+  ],
+  [
+   "Demon's Souls [BLUS30443]",
+   "ps3/Wrapped",
+   "--no-gui \"%RPCS3_GAMEID%:{SERIAL}\"",
+   {
+    "lo": "--no-gui \"%RPCS3_GAMEID%:BLUS30443\"",
+    "args": "--no-gui \"%RPCS3_GAMEID%:BLUS30443\""
+   }
+  ],
+  [
+   "Demon's Souls [BLUS30443]",
+   "ps3/Wrapped",
+   "--no-gui {SERIAL}",
+   {
+    "lo": "--no-gui BLUS30443",
+    "args": "--no-gui BLUS30443"
+   }
+  ],
+  [
+   "Demon's Souls [BLUS30443]",
+   "ps3/Wrapped",
+   "run net.rpcs3.RPCS3 --no-gui \"{ROM}\"",
+   {
+    "lo": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Wrapped\"",
+    "args": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Wrapped\""
+   }
+  ],
+  [
+   "Demon's Souls [BLUS30443]",
+   "ps3/Wrapped",
+   "\"{ROM}\"",
+   {
+    "lo": "\"~/Emulation/roms/ps3/Wrapped\"",
+    "args": "\"~/Emulation/roms/ps3/Wrapped\""
+   }
+  ],
+  [
+   "Demon's Souls [BLUS30443]",
+   "ps3/Iso In Folder",
+   "--no-gui \"%RPCS3_GAMEID%:{SERIAL}\"",
+   {
+    "lo": "--no-gui \"%RPCS3_GAMEID%:BLUS30443\"",
+    "args": "--no-gui \"%RPCS3_GAMEID%:BLUS30443\""
+   }
+  ],
+  [
+   "Demon's Souls [BLUS30443]",
+   "ps3/Iso In Folder",
+   "--no-gui {SERIAL}",
+   {
+    "lo": "--no-gui BLUS30443",
+    "args": "--no-gui BLUS30443"
+   }
+  ],
+  [
+   "Demon's Souls [BLUS30443]",
+   "ps3/Iso In Folder",
+   "run net.rpcs3.RPCS3 --no-gui \"{ROM}\"",
+   {
+    "lo": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Iso In Folder\"",
+    "args": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Iso In Folder\""
+   }
+  ],
+  [
+   "Demon's Souls [BLUS30443]",
+   "ps3/Iso In Folder",
+   "\"{ROM}\"",
+   {
+    "lo": "\"~/Emulation/roms/ps3/Iso In Folder\"",
+    "args": "\"~/Emulation/roms/ps3/Iso In Folder\""
+   }
+  ],
+  [
+   "Demon's Souls [BLUS30443]",
+   "ps3/Plain Folder",
+   "--no-gui \"%RPCS3_GAMEID%:{SERIAL}\"",
+   {
+    "lo": "--no-gui \"%RPCS3_GAMEID%:BLUS30443\"",
+    "args": "--no-gui \"%RPCS3_GAMEID%:BLUS30443\""
+   }
+  ],
+  [
+   "Demon's Souls [BLUS30443]",
+   "ps3/Plain Folder",
+   "--no-gui {SERIAL}",
+   {
+    "lo": "--no-gui BLUS30443",
+    "args": "--no-gui BLUS30443"
+   }
+  ],
+  [
+   "Demon's Souls [BLUS30443]",
+   "ps3/Plain Folder",
+   "run net.rpcs3.RPCS3 --no-gui \"{ROM}\"",
+   {
+    "lo": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Plain Folder\"",
+    "args": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Plain Folder\""
+   }
+  ],
+  [
+   "Demon's Souls [BLUS30443]",
+   "ps3/Plain Folder",
+   "\"{ROM}\"",
+   {
+    "lo": "\"~/Emulation/roms/ps3/Plain Folder\"",
+    "args": "\"~/Emulation/roms/ps3/Plain Folder\""
+   }
+  ],
+  [
+   "Demon's Souls [BLUS30443]",
+   "ps3/Pkg Game",
+   "--no-gui \"%RPCS3_GAMEID%:{SERIAL}\"",
+   {
+    "lo": "--no-gui \"%RPCS3_GAMEID%:BLUS30443\"",
+    "args": "--no-gui \"%RPCS3_GAMEID%:BLUS30443\""
+   }
+  ],
+  [
+   "Demon's Souls [BLUS30443]",
+   "ps3/Pkg Game",
+   "--no-gui {SERIAL}",
+   {
+    "lo": "--no-gui BLUS30443",
+    "args": "--no-gui BLUS30443"
+   }
+  ],
+  [
+   "Demon's Souls [BLUS30443]",
+   "ps3/Pkg Game",
+   "run net.rpcs3.RPCS3 --no-gui \"{ROM}\"",
+   {
+    "lo": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Pkg Game\"",
+    "args": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Pkg Game\""
+   }
+  ],
+  [
+   "Demon's Souls [BLUS30443]",
+   "ps3/Pkg Game",
+   "\"{ROM}\"",
+   {
+    "lo": "\"~/Emulation/roms/ps3/Pkg Game\"",
+    "args": "\"~/Emulation/roms/ps3/Pkg Game\""
+   }
+  ],
+  [
+   "Demons Souls (BLUS-30443)",
+   "ps3/Demons Souls.iso",
+   "--no-gui \"%RPCS3_GAMEID%:{SERIAL}\"",
+   {
+    "lo": "--no-gui \"%RPCS3_GAMEID%:BLUS30443\"",
+    "args": "--no-gui \"%RPCS3_GAMEID%:BLUS30443\""
+   }
+  ],
+  [
+   "Demons Souls (BLUS-30443)",
+   "ps3/Demons Souls.iso",
+   "--no-gui {SERIAL}",
+   {
+    "lo": "--no-gui BLUS30443",
+    "args": "--no-gui BLUS30443"
+   }
+  ],
+  [
+   "Demons Souls (BLUS-30443)",
+   "ps3/Demons Souls.iso",
+   "run net.rpcs3.RPCS3 --no-gui \"{ROM}\"",
+   {
+    "lo": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Demons Souls.iso\"",
+    "args": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Demons Souls.iso\""
+   }
+  ],
+  [
+   "Demons Souls (BLUS-30443)",
+   "ps3/Demons Souls.iso",
+   "\"{ROM}\"",
+   {
+    "lo": "\"~/Emulation/roms/ps3/Demons Souls.iso\"",
+    "args": "\"~/Emulation/roms/ps3/Demons Souls.iso\""
+   }
+  ],
+  [
+   "Demons Souls (BLUS-30443)",
+   "ps3/Flower PSN.iso",
+   "--no-gui \"%RPCS3_GAMEID%:{SERIAL}\"",
+   {
+    "lo": "--no-gui \"%RPCS3_GAMEID%:BLUS30443\"",
+    "args": "--no-gui \"%RPCS3_GAMEID%:BLUS30443\""
+   }
+  ],
+  [
+   "Demons Souls (BLUS-30443)",
+   "ps3/Flower PSN.iso",
+   "--no-gui {SERIAL}",
+   {
+    "lo": "--no-gui BLUS30443",
+    "args": "--no-gui BLUS30443"
+   }
+  ],
+  [
+   "Demons Souls (BLUS-30443)",
+   "ps3/Flower PSN.iso",
+   "run net.rpcs3.RPCS3 --no-gui \"{ROM}\"",
+   {
+    "lo": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Flower PSN.iso\"",
+    "args": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Flower PSN.iso\""
+   }
+  ],
+  [
+   "Demons Souls (BLUS-30443)",
+   "ps3/Flower PSN.iso",
+   "\"{ROM}\"",
+   {
+    "lo": "\"~/Emulation/roms/ps3/Flower PSN.iso\"",
+    "args": "\"~/Emulation/roms/ps3/Flower PSN.iso\""
+   }
+  ],
+  [
+   "Demons Souls (BLUS-30443)",
+   "ps3/No Serial Here.iso",
+   "--no-gui \"%RPCS3_GAMEID%:{SERIAL}\"",
+   {
+    "lo": "--no-gui \"%RPCS3_GAMEID%:BLUS30443\"",
+    "args": "--no-gui \"%RPCS3_GAMEID%:BLUS30443\""
+   }
+  ],
+  [
+   "Demons Souls (BLUS-30443)",
+   "ps3/No Serial Here.iso",
+   "--no-gui {SERIAL}",
+   {
+    "lo": "--no-gui BLUS30443",
+    "args": "--no-gui BLUS30443"
+   }
+  ],
+  [
+   "Demons Souls (BLUS-30443)",
+   "ps3/No Serial Here.iso",
+   "run net.rpcs3.RPCS3 --no-gui \"{ROM}\"",
+   {
+    "lo": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/No Serial Here.iso\"",
+    "args": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/No Serial Here.iso\""
+   }
+  ],
+  [
+   "Demons Souls (BLUS-30443)",
+   "ps3/No Serial Here.iso",
+   "\"{ROM}\"",
+   {
+    "lo": "\"~/Emulation/roms/ps3/No Serial Here.iso\"",
+    "args": "\"~/Emulation/roms/ps3/No Serial Here.iso\""
+   }
+  ],
+  [
+   "Demons Souls (BLUS-30443)",
+   "ps3/Lower blus30443 name.iso",
+   "--no-gui \"%RPCS3_GAMEID%:{SERIAL}\"",
+   {
+    "lo": "--no-gui \"%RPCS3_GAMEID%:BLUS30443\"",
+    "args": "--no-gui \"%RPCS3_GAMEID%:BLUS30443\""
+   }
+  ],
+  [
+   "Demons Souls (BLUS-30443)",
+   "ps3/Lower blus30443 name.iso",
+   "--no-gui {SERIAL}",
+   {
+    "lo": "--no-gui BLUS30443",
+    "args": "--no-gui BLUS30443"
+   }
+  ],
+  [
+   "Demons Souls (BLUS-30443)",
+   "ps3/Lower blus30443 name.iso",
+   "run net.rpcs3.RPCS3 --no-gui \"{ROM}\"",
+   {
+    "lo": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Lower blus30443 name.iso\"",
+    "args": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Lower blus30443 name.iso\""
+   }
+  ],
+  [
+   "Demons Souls (BLUS-30443)",
+   "ps3/Lower blus30443 name.iso",
+   "\"{ROM}\"",
+   {
+    "lo": "\"~/Emulation/roms/ps3/Lower blus30443 name.iso\"",
+    "args": "\"~/Emulation/roms/ps3/Lower blus30443 name.iso\""
+   }
+  ],
+  [
+   "Demons Souls (BLUS-30443)",
+   "ps3/Uncharted",
+   "--no-gui \"%RPCS3_GAMEID%:{SERIAL}\"",
+   {
+    "lo": "--no-gui \"%RPCS3_GAMEID%:BLUS30443\"",
+    "args": "--no-gui \"%RPCS3_GAMEID%:BLUS30443\""
+   }
+  ],
+  [
+   "Demons Souls (BLUS-30443)",
+   "ps3/Uncharted",
+   "--no-gui {SERIAL}",
+   {
+    "lo": "--no-gui BLUS30443",
+    "args": "--no-gui BLUS30443"
+   }
+  ],
+  [
+   "Demons Souls (BLUS-30443)",
+   "ps3/Uncharted",
+   "run net.rpcs3.RPCS3 --no-gui \"{ROM}\"",
+   {
+    "lo": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Uncharted\"",
+    "args": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Uncharted\""
+   }
+  ],
+  [
+   "Demons Souls (BLUS-30443)",
+   "ps3/Uncharted",
+   "\"{ROM}\"",
+   {
+    "lo": "\"~/Emulation/roms/ps3/Uncharted/PS3_GAME/USRDIR/EBOOT.BIN\"",
+    "args": "\"~/Emulation/roms/ps3/Uncharted/PS3_GAME/USRDIR/EBOOT.BIN\""
+   }
+  ],
+  [
+   "Demons Souls (BLUS-30443)",
+   "ps3/Wrapped",
+   "--no-gui \"%RPCS3_GAMEID%:{SERIAL}\"",
+   {
+    "lo": "--no-gui \"%RPCS3_GAMEID%:BLUS30443\"",
+    "args": "--no-gui \"%RPCS3_GAMEID%:BLUS30443\""
+   }
+  ],
+  [
+   "Demons Souls (BLUS-30443)",
+   "ps3/Wrapped",
+   "--no-gui {SERIAL}",
+   {
+    "lo": "--no-gui BLUS30443",
+    "args": "--no-gui BLUS30443"
+   }
+  ],
+  [
+   "Demons Souls (BLUS-30443)",
+   "ps3/Wrapped",
+   "run net.rpcs3.RPCS3 --no-gui \"{ROM}\"",
+   {
+    "lo": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Wrapped\"",
+    "args": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Wrapped\""
+   }
+  ],
+  [
+   "Demons Souls (BLUS-30443)",
+   "ps3/Wrapped",
+   "\"{ROM}\"",
+   {
+    "lo": "\"~/Emulation/roms/ps3/Wrapped\"",
+    "args": "\"~/Emulation/roms/ps3/Wrapped\""
+   }
+  ],
+  [
+   "Demons Souls (BLUS-30443)",
+   "ps3/Iso In Folder",
+   "--no-gui \"%RPCS3_GAMEID%:{SERIAL}\"",
+   {
+    "lo": "--no-gui \"%RPCS3_GAMEID%:BLUS30443\"",
+    "args": "--no-gui \"%RPCS3_GAMEID%:BLUS30443\""
+   }
+  ],
+  [
+   "Demons Souls (BLUS-30443)",
+   "ps3/Iso In Folder",
+   "--no-gui {SERIAL}",
+   {
+    "lo": "--no-gui BLUS30443",
+    "args": "--no-gui BLUS30443"
+   }
+  ],
+  [
+   "Demons Souls (BLUS-30443)",
+   "ps3/Iso In Folder",
+   "run net.rpcs3.RPCS3 --no-gui \"{ROM}\"",
+   {
+    "lo": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Iso In Folder\"",
+    "args": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Iso In Folder\""
+   }
+  ],
+  [
+   "Demons Souls (BLUS-30443)",
+   "ps3/Iso In Folder",
+   "\"{ROM}\"",
+   {
+    "lo": "\"~/Emulation/roms/ps3/Iso In Folder\"",
+    "args": "\"~/Emulation/roms/ps3/Iso In Folder\""
+   }
+  ],
+  [
+   "Demons Souls (BLUS-30443)",
+   "ps3/Plain Folder",
+   "--no-gui \"%RPCS3_GAMEID%:{SERIAL}\"",
+   {
+    "lo": "--no-gui \"%RPCS3_GAMEID%:BLUS30443\"",
+    "args": "--no-gui \"%RPCS3_GAMEID%:BLUS30443\""
+   }
+  ],
+  [
+   "Demons Souls (BLUS-30443)",
+   "ps3/Plain Folder",
+   "--no-gui {SERIAL}",
+   {
+    "lo": "--no-gui BLUS30443",
+    "args": "--no-gui BLUS30443"
+   }
+  ],
+  [
+   "Demons Souls (BLUS-30443)",
+   "ps3/Plain Folder",
+   "run net.rpcs3.RPCS3 --no-gui \"{ROM}\"",
+   {
+    "lo": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Plain Folder\"",
+    "args": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Plain Folder\""
+   }
+  ],
+  [
+   "Demons Souls (BLUS-30443)",
+   "ps3/Plain Folder",
+   "\"{ROM}\"",
+   {
+    "lo": "\"~/Emulation/roms/ps3/Plain Folder\"",
+    "args": "\"~/Emulation/roms/ps3/Plain Folder\""
+   }
+  ],
+  [
+   "Demons Souls (BLUS-30443)",
+   "ps3/Pkg Game",
+   "--no-gui \"%RPCS3_GAMEID%:{SERIAL}\"",
+   {
+    "lo": "--no-gui \"%RPCS3_GAMEID%:BLUS30443\"",
+    "args": "--no-gui \"%RPCS3_GAMEID%:BLUS30443\""
+   }
+  ],
+  [
+   "Demons Souls (BLUS-30443)",
+   "ps3/Pkg Game",
+   "--no-gui {SERIAL}",
+   {
+    "lo": "--no-gui BLUS30443",
+    "args": "--no-gui BLUS30443"
+   }
+  ],
+  [
+   "Demons Souls (BLUS-30443)",
+   "ps3/Pkg Game",
+   "run net.rpcs3.RPCS3 --no-gui \"{ROM}\"",
+   {
+    "lo": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Pkg Game\"",
+    "args": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Pkg Game\""
+   }
+  ],
+  [
+   "Demons Souls (BLUS-30443)",
+   "ps3/Pkg Game",
+   "\"{ROM}\"",
+   {
+    "lo": "\"~/Emulation/roms/ps3/Pkg Game\"",
+    "args": "\"~/Emulation/roms/ps3/Pkg Game\""
+   }
+  ],
+  [
+   "blus30443",
+   "ps3/Demons Souls.iso",
+   "--no-gui \"%RPCS3_GAMEID%:{SERIAL}\"",
+   {
+    "lo": "--no-gui \"%RPCS3_GAMEID%:BLUS30443\"",
+    "args": "--no-gui \"%RPCS3_GAMEID%:BLUS30443\""
+   }
+  ],
+  [
+   "blus30443",
+   "ps3/Demons Souls.iso",
+   "--no-gui {SERIAL}",
+   {
+    "lo": "--no-gui BLUS30443",
+    "args": "--no-gui BLUS30443"
+   }
+  ],
+  [
+   "blus30443",
+   "ps3/Demons Souls.iso",
+   "run net.rpcs3.RPCS3 --no-gui \"{ROM}\"",
+   {
+    "lo": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Demons Souls.iso\"",
+    "args": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Demons Souls.iso\""
+   }
+  ],
+  [
+   "blus30443",
+   "ps3/Demons Souls.iso",
+   "\"{ROM}\"",
+   {
+    "lo": "\"~/Emulation/roms/ps3/Demons Souls.iso\"",
+    "args": "\"~/Emulation/roms/ps3/Demons Souls.iso\""
+   }
+  ],
+  [
+   "blus30443",
+   "ps3/Flower PSN.iso",
+   "--no-gui \"%RPCS3_GAMEID%:{SERIAL}\"",
+   {
+    "lo": "--no-gui \"~/Emulation/roms/ps3/Flower PSN.iso\"",
+    "args": "--no-gui \"~/Emulation/roms/ps3/Flower PSN.iso\"",
+    "fallback": "path"
+   }
+  ],
+  [
+   "blus30443",
+   "ps3/Flower PSN.iso",
+   "--no-gui {SERIAL}",
+   {
+    "lo": "--no-gui \"~/Emulation/roms/ps3/Flower PSN.iso\"",
+    "args": "--no-gui \"~/Emulation/roms/ps3/Flower PSN.iso\"",
+    "fallback": "path"
+   }
+  ],
+  [
+   "blus30443",
+   "ps3/Flower PSN.iso",
+   "run net.rpcs3.RPCS3 --no-gui \"{ROM}\"",
+   {
+    "lo": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Flower PSN.iso\"",
+    "args": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Flower PSN.iso\""
+   }
+  ],
+  [
+   "blus30443",
+   "ps3/Flower PSN.iso",
+   "\"{ROM}\"",
+   {
+    "lo": "\"~/Emulation/roms/ps3/Flower PSN.iso\"",
+    "args": "\"~/Emulation/roms/ps3/Flower PSN.iso\""
+   }
+  ],
+  [
+   "blus30443",
+   "ps3/No Serial Here.iso",
+   "--no-gui \"%RPCS3_GAMEID%:{SERIAL}\"",
+   {
+    "lo": "--no-gui \"~/Emulation/roms/ps3/No Serial Here.iso\"",
+    "args": "--no-gui \"~/Emulation/roms/ps3/No Serial Here.iso\"",
+    "fallback": "path"
+   }
+  ],
+  [
+   "blus30443",
+   "ps3/No Serial Here.iso",
+   "--no-gui {SERIAL}",
+   {
+    "lo": "--no-gui \"~/Emulation/roms/ps3/No Serial Here.iso\"",
+    "args": "--no-gui \"~/Emulation/roms/ps3/No Serial Here.iso\"",
+    "fallback": "path"
+   }
+  ],
+  [
+   "blus30443",
+   "ps3/No Serial Here.iso",
+   "run net.rpcs3.RPCS3 --no-gui \"{ROM}\"",
+   {
+    "lo": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/No Serial Here.iso\"",
+    "args": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/No Serial Here.iso\""
+   }
+  ],
+  [
+   "blus30443",
+   "ps3/No Serial Here.iso",
+   "\"{ROM}\"",
+   {
+    "lo": "\"~/Emulation/roms/ps3/No Serial Here.iso\"",
+    "args": "\"~/Emulation/roms/ps3/No Serial Here.iso\""
+   }
+  ],
+  [
+   "blus30443",
+   "ps3/Lower blus30443 name.iso",
+   "--no-gui \"%RPCS3_GAMEID%:{SERIAL}\"",
+   {
+    "lo": "--no-gui \"~/Emulation/roms/ps3/Lower blus30443 name.iso\"",
+    "args": "--no-gui \"~/Emulation/roms/ps3/Lower blus30443 name.iso\"",
+    "fallback": "path"
+   }
+  ],
+  [
+   "blus30443",
+   "ps3/Lower blus30443 name.iso",
+   "--no-gui {SERIAL}",
+   {
+    "lo": "--no-gui \"~/Emulation/roms/ps3/Lower blus30443 name.iso\"",
+    "args": "--no-gui \"~/Emulation/roms/ps3/Lower blus30443 name.iso\"",
+    "fallback": "path"
+   }
+  ],
+  [
+   "blus30443",
+   "ps3/Lower blus30443 name.iso",
+   "run net.rpcs3.RPCS3 --no-gui \"{ROM}\"",
+   {
+    "lo": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Lower blus30443 name.iso\"",
+    "args": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Lower blus30443 name.iso\""
+   }
+  ],
+  [
+   "blus30443",
+   "ps3/Lower blus30443 name.iso",
+   "\"{ROM}\"",
+   {
+    "lo": "\"~/Emulation/roms/ps3/Lower blus30443 name.iso\"",
+    "args": "\"~/Emulation/roms/ps3/Lower blus30443 name.iso\""
+   }
+  ],
+  [
+   "blus30443",
+   "ps3/Uncharted",
+   "--no-gui \"%RPCS3_GAMEID%:{SERIAL}\"",
+   {
+    "lo": "--no-gui \"%RPCS3_GAMEID%:BCES00052\"",
+    "args": "--no-gui \"%RPCS3_GAMEID%:BCES00052\""
+   }
+  ],
+  [
+   "blus30443",
+   "ps3/Uncharted",
+   "--no-gui {SERIAL}",
+   {
+    "lo": "--no-gui BCES00052",
+    "args": "--no-gui BCES00052"
+   }
+  ],
+  [
+   "blus30443",
+   "ps3/Uncharted",
+   "run net.rpcs3.RPCS3 --no-gui \"{ROM}\"",
+   {
+    "lo": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Uncharted\"",
+    "args": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Uncharted\""
+   }
+  ],
+  [
+   "blus30443",
+   "ps3/Uncharted",
+   "\"{ROM}\"",
+   {
+    "lo": "\"~/Emulation/roms/ps3/Uncharted/PS3_GAME/USRDIR/EBOOT.BIN\"",
+    "args": "\"~/Emulation/roms/ps3/Uncharted/PS3_GAME/USRDIR/EBOOT.BIN\""
+   }
+  ],
+  [
+   "blus30443",
+   "ps3/Wrapped",
+   "--no-gui \"%RPCS3_GAMEID%:{SERIAL}\"",
+   {
+    "lo": "--no-gui \"~/Emulation/roms/ps3/Wrapped\"",
+    "args": "--no-gui \"~/Emulation/roms/ps3/Wrapped\"",
+    "fallback": "path"
+   }
+  ],
+  [
+   "blus30443",
+   "ps3/Wrapped",
+   "--no-gui {SERIAL}",
+   {
+    "lo": "--no-gui \"~/Emulation/roms/ps3/Wrapped\"",
+    "args": "--no-gui \"~/Emulation/roms/ps3/Wrapped\"",
+    "fallback": "path"
+   }
+  ],
+  [
+   "blus30443",
+   "ps3/Wrapped",
+   "run net.rpcs3.RPCS3 --no-gui \"{ROM}\"",
+   {
+    "lo": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Wrapped\"",
+    "args": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Wrapped\""
+   }
+  ],
+  [
+   "blus30443",
+   "ps3/Wrapped",
+   "\"{ROM}\"",
+   {
+    "lo": "\"~/Emulation/roms/ps3/Wrapped\"",
+    "args": "\"~/Emulation/roms/ps3/Wrapped\""
+   }
+  ],
+  [
+   "blus30443",
+   "ps3/Iso In Folder",
+   "--no-gui \"%RPCS3_GAMEID%:{SERIAL}\"",
+   {
+    "lo": "--no-gui \"%RPCS3_GAMEID%:BLJM60066\"",
+    "args": "--no-gui \"%RPCS3_GAMEID%:BLJM60066\""
+   }
+  ],
+  [
+   "blus30443",
+   "ps3/Iso In Folder",
+   "--no-gui {SERIAL}",
+   {
+    "lo": "--no-gui BLJM60066",
+    "args": "--no-gui BLJM60066"
+   }
+  ],
+  [
+   "blus30443",
+   "ps3/Iso In Folder",
+   "run net.rpcs3.RPCS3 --no-gui \"{ROM}\"",
+   {
+    "lo": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Iso In Folder\"",
+    "args": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Iso In Folder\""
+   }
+  ],
+  [
+   "blus30443",
+   "ps3/Iso In Folder",
+   "\"{ROM}\"",
+   {
+    "lo": "\"~/Emulation/roms/ps3/Iso In Folder\"",
+    "args": "\"~/Emulation/roms/ps3/Iso In Folder\""
+   }
+  ],
+  [
+   "blus30443",
+   "ps3/Plain Folder",
+   "--no-gui \"%RPCS3_GAMEID%:{SERIAL}\"",
+   {
+    "lo": "--no-gui \"~/Emulation/roms/ps3/Plain Folder\"",
+    "args": "--no-gui \"~/Emulation/roms/ps3/Plain Folder\"",
+    "fallback": "path"
+   }
+  ],
+  [
+   "blus30443",
+   "ps3/Plain Folder",
+   "--no-gui {SERIAL}",
+   {
+    "lo": "--no-gui \"~/Emulation/roms/ps3/Plain Folder\"",
+    "args": "--no-gui \"~/Emulation/roms/ps3/Plain Folder\"",
+    "fallback": "path"
+   }
+  ],
+  [
+   "blus30443",
+   "ps3/Plain Folder",
+   "run net.rpcs3.RPCS3 --no-gui \"{ROM}\"",
+   {
+    "lo": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Plain Folder\"",
+    "args": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Plain Folder\""
+   }
+  ],
+  [
+   "blus30443",
+   "ps3/Plain Folder",
+   "\"{ROM}\"",
+   {
+    "lo": "\"~/Emulation/roms/ps3/Plain Folder\"",
+    "args": "\"~/Emulation/roms/ps3/Plain Folder\""
+   }
+  ],
+  [
+   "blus30443",
+   "ps3/Pkg Game",
+   "--no-gui \"%RPCS3_GAMEID%:{SERIAL}\"",
+   {
+    "lo": "--no-gui \"~/Emulation/roms/ps3/Pkg Game\"",
+    "args": "--no-gui \"~/Emulation/roms/ps3/Pkg Game\"",
+    "fallback": "path"
+   }
+  ],
+  [
+   "blus30443",
+   "ps3/Pkg Game",
+   "--no-gui {SERIAL}",
+   {
+    "lo": "--no-gui \"~/Emulation/roms/ps3/Pkg Game\"",
+    "args": "--no-gui \"~/Emulation/roms/ps3/Pkg Game\"",
+    "fallback": "path"
+   }
+  ],
+  [
+   "blus30443",
+   "ps3/Pkg Game",
+   "run net.rpcs3.RPCS3 --no-gui \"{ROM}\"",
+   {
+    "lo": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Pkg Game\"",
+    "args": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Pkg Game\""
+   }
+  ],
+  [
+   "blus30443",
+   "ps3/Pkg Game",
+   "\"{ROM}\"",
+   {
+    "lo": "\"~/Emulation/roms/ps3/Pkg Game\"",
+    "args": "\"~/Emulation/roms/ps3/Pkg Game\""
+   }
+  ],
+  [
+   "Flower NPUB30025",
+   "ps3/Demons Souls.iso",
+   "--no-gui \"%RPCS3_GAMEID%:{SERIAL}\"",
+   {
+    "lo": "--no-gui \"~/Emulation/roms/ps3/Demons Souls.iso\"",
+    "args": "--no-gui \"~/Emulation/roms/ps3/Demons Souls.iso\"",
+    "fallback": "path"
+   }
+  ],
+  [
+   "Flower NPUB30025",
+   "ps3/Demons Souls.iso",
+   "--no-gui {SERIAL}",
+   {
+    "lo": "--no-gui \"~/Emulation/roms/ps3/Demons Souls.iso\"",
+    "args": "--no-gui \"~/Emulation/roms/ps3/Demons Souls.iso\"",
+    "fallback": "path"
+   }
+  ],
+  [
+   "Flower NPUB30025",
+   "ps3/Demons Souls.iso",
+   "run net.rpcs3.RPCS3 --no-gui \"{ROM}\"",
+   {
+    "lo": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Demons Souls.iso\"",
+    "args": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Demons Souls.iso\""
+   }
+  ],
+  [
+   "Flower NPUB30025",
+   "ps3/Demons Souls.iso",
+   "\"{ROM}\"",
+   {
+    "lo": "\"~/Emulation/roms/ps3/Demons Souls.iso\"",
+    "args": "\"~/Emulation/roms/ps3/Demons Souls.iso\""
+   }
+  ],
+  [
+   "Flower NPUB30025",
+   "ps3/Flower PSN.iso",
+   "--no-gui \"%RPCS3_GAMEID%:{SERIAL}\"",
+   {
+    "lo": "--no-gui \"~/Emulation/roms/ps3/Flower PSN.iso\"",
+    "args": "--no-gui \"~/Emulation/roms/ps3/Flower PSN.iso\"",
+    "fallback": "path"
+   }
+  ],
+  [
+   "Flower NPUB30025",
+   "ps3/Flower PSN.iso",
+   "--no-gui {SERIAL}",
+   {
+    "lo": "--no-gui \"~/Emulation/roms/ps3/Flower PSN.iso\"",
+    "args": "--no-gui \"~/Emulation/roms/ps3/Flower PSN.iso\"",
+    "fallback": "path"
+   }
+  ],
+  [
+   "Flower NPUB30025",
+   "ps3/Flower PSN.iso",
+   "run net.rpcs3.RPCS3 --no-gui \"{ROM}\"",
+   {
+    "lo": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Flower PSN.iso\"",
+    "args": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Flower PSN.iso\""
+   }
+  ],
+  [
+   "Flower NPUB30025",
+   "ps3/Flower PSN.iso",
+   "\"{ROM}\"",
+   {
+    "lo": "\"~/Emulation/roms/ps3/Flower PSN.iso\"",
+    "args": "\"~/Emulation/roms/ps3/Flower PSN.iso\""
+   }
+  ],
+  [
+   "Flower NPUB30025",
+   "ps3/No Serial Here.iso",
+   "--no-gui \"%RPCS3_GAMEID%:{SERIAL}\"",
+   {
+    "lo": "--no-gui \"~/Emulation/roms/ps3/No Serial Here.iso\"",
+    "args": "--no-gui \"~/Emulation/roms/ps3/No Serial Here.iso\"",
+    "fallback": "path"
+   }
+  ],
+  [
+   "Flower NPUB30025",
+   "ps3/No Serial Here.iso",
+   "--no-gui {SERIAL}",
+   {
+    "lo": "--no-gui \"~/Emulation/roms/ps3/No Serial Here.iso\"",
+    "args": "--no-gui \"~/Emulation/roms/ps3/No Serial Here.iso\"",
+    "fallback": "path"
+   }
+  ],
+  [
+   "Flower NPUB30025",
+   "ps3/No Serial Here.iso",
+   "run net.rpcs3.RPCS3 --no-gui \"{ROM}\"",
+   {
+    "lo": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/No Serial Here.iso\"",
+    "args": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/No Serial Here.iso\""
+   }
+  ],
+  [
+   "Flower NPUB30025",
+   "ps3/No Serial Here.iso",
+   "\"{ROM}\"",
+   {
+    "lo": "\"~/Emulation/roms/ps3/No Serial Here.iso\"",
+    "args": "\"~/Emulation/roms/ps3/No Serial Here.iso\""
+   }
+  ],
+  [
+   "Flower NPUB30025",
+   "ps3/Lower blus30443 name.iso",
+   "--no-gui \"%RPCS3_GAMEID%:{SERIAL}\"",
+   {
+    "lo": "--no-gui \"~/Emulation/roms/ps3/Lower blus30443 name.iso\"",
+    "args": "--no-gui \"~/Emulation/roms/ps3/Lower blus30443 name.iso\"",
+    "fallback": "path"
+   }
+  ],
+  [
+   "Flower NPUB30025",
+   "ps3/Lower blus30443 name.iso",
+   "--no-gui {SERIAL}",
+   {
+    "lo": "--no-gui \"~/Emulation/roms/ps3/Lower blus30443 name.iso\"",
+    "args": "--no-gui \"~/Emulation/roms/ps3/Lower blus30443 name.iso\"",
+    "fallback": "path"
+   }
+  ],
+  [
+   "Flower NPUB30025",
+   "ps3/Lower blus30443 name.iso",
+   "run net.rpcs3.RPCS3 --no-gui \"{ROM}\"",
+   {
+    "lo": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Lower blus30443 name.iso\"",
+    "args": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Lower blus30443 name.iso\""
+   }
+  ],
+  [
+   "Flower NPUB30025",
+   "ps3/Lower blus30443 name.iso",
+   "\"{ROM}\"",
+   {
+    "lo": "\"~/Emulation/roms/ps3/Lower blus30443 name.iso\"",
+    "args": "\"~/Emulation/roms/ps3/Lower blus30443 name.iso\""
+   }
+  ],
+  [
+   "Flower NPUB30025",
+   "ps3/Uncharted",
+   "--no-gui \"%RPCS3_GAMEID%:{SERIAL}\"",
+   {
+    "lo": "--no-gui \"~/Emulation/roms/ps3/Uncharted/PS3_GAME/USRDIR/EBOOT.BIN\"",
+    "args": "--no-gui \"~/Emulation/roms/ps3/Uncharted/PS3_GAME/USRDIR/EBOOT.BIN\"",
+    "fallback": "path"
+   }
+  ],
+  [
+   "Flower NPUB30025",
+   "ps3/Uncharted",
+   "--no-gui {SERIAL}",
+   {
+    "lo": "--no-gui \"~/Emulation/roms/ps3/Uncharted/PS3_GAME/USRDIR/EBOOT.BIN\"",
+    "args": "--no-gui \"~/Emulation/roms/ps3/Uncharted/PS3_GAME/USRDIR/EBOOT.BIN\"",
+    "fallback": "path"
+   }
+  ],
+  [
+   "Flower NPUB30025",
+   "ps3/Uncharted",
+   "run net.rpcs3.RPCS3 --no-gui \"{ROM}\"",
+   {
+    "lo": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Uncharted\"",
+    "args": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Uncharted\""
+   }
+  ],
+  [
+   "Flower NPUB30025",
+   "ps3/Uncharted",
+   "\"{ROM}\"",
+   {
+    "lo": "\"~/Emulation/roms/ps3/Uncharted/PS3_GAME/USRDIR/EBOOT.BIN\"",
+    "args": "\"~/Emulation/roms/ps3/Uncharted/PS3_GAME/USRDIR/EBOOT.BIN\""
+   }
+  ],
+  [
+   "Flower NPUB30025",
+   "ps3/Wrapped",
+   "--no-gui \"%RPCS3_GAMEID%:{SERIAL}\"",
+   {
+    "lo": "--no-gui \"~/Emulation/roms/ps3/Wrapped\"",
+    "args": "--no-gui \"~/Emulation/roms/ps3/Wrapped\"",
+    "fallback": "path"
+   }
+  ],
+  [
+   "Flower NPUB30025",
+   "ps3/Wrapped",
+   "--no-gui {SERIAL}",
+   {
+    "lo": "--no-gui \"~/Emulation/roms/ps3/Wrapped\"",
+    "args": "--no-gui \"~/Emulation/roms/ps3/Wrapped\"",
+    "fallback": "path"
+   }
+  ],
+  [
+   "Flower NPUB30025",
+   "ps3/Wrapped",
+   "run net.rpcs3.RPCS3 --no-gui \"{ROM}\"",
+   {
+    "lo": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Wrapped\"",
+    "args": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Wrapped\""
+   }
+  ],
+  [
+   "Flower NPUB30025",
+   "ps3/Wrapped",
+   "\"{ROM}\"",
+   {
+    "lo": "\"~/Emulation/roms/ps3/Wrapped\"",
+    "args": "\"~/Emulation/roms/ps3/Wrapped\""
+   }
+  ],
+  [
+   "Flower NPUB30025",
+   "ps3/Iso In Folder",
+   "--no-gui \"%RPCS3_GAMEID%:{SERIAL}\"",
+   {
+    "lo": "--no-gui \"~/Emulation/roms/ps3/Iso In Folder\"",
+    "args": "--no-gui \"~/Emulation/roms/ps3/Iso In Folder\"",
+    "fallback": "path"
+   }
+  ],
+  [
+   "Flower NPUB30025",
+   "ps3/Iso In Folder",
+   "--no-gui {SERIAL}",
+   {
+    "lo": "--no-gui \"~/Emulation/roms/ps3/Iso In Folder\"",
+    "args": "--no-gui \"~/Emulation/roms/ps3/Iso In Folder\"",
+    "fallback": "path"
+   }
+  ],
+  [
+   "Flower NPUB30025",
+   "ps3/Iso In Folder",
+   "run net.rpcs3.RPCS3 --no-gui \"{ROM}\"",
+   {
+    "lo": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Iso In Folder\"",
+    "args": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Iso In Folder\""
+   }
+  ],
+  [
+   "Flower NPUB30025",
+   "ps3/Iso In Folder",
+   "\"{ROM}\"",
+   {
+    "lo": "\"~/Emulation/roms/ps3/Iso In Folder\"",
+    "args": "\"~/Emulation/roms/ps3/Iso In Folder\""
+   }
+  ],
+  [
+   "Flower NPUB30025",
+   "ps3/Plain Folder",
+   "--no-gui \"%RPCS3_GAMEID%:{SERIAL}\"",
+   {
+    "lo": "--no-gui \"~/Emulation/roms/ps3/Plain Folder\"",
+    "args": "--no-gui \"~/Emulation/roms/ps3/Plain Folder\"",
+    "fallback": "path"
+   }
+  ],
+  [
+   "Flower NPUB30025",
+   "ps3/Plain Folder",
+   "--no-gui {SERIAL}",
+   {
+    "lo": "--no-gui \"~/Emulation/roms/ps3/Plain Folder\"",
+    "args": "--no-gui \"~/Emulation/roms/ps3/Plain Folder\"",
+    "fallback": "path"
+   }
+  ],
+  [
+   "Flower NPUB30025",
+   "ps3/Plain Folder",
+   "run net.rpcs3.RPCS3 --no-gui \"{ROM}\"",
+   {
+    "lo": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Plain Folder\"",
+    "args": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Plain Folder\""
+   }
+  ],
+  [
+   "Flower NPUB30025",
+   "ps3/Plain Folder",
+   "\"{ROM}\"",
+   {
+    "lo": "\"~/Emulation/roms/ps3/Plain Folder\"",
+    "args": "\"~/Emulation/roms/ps3/Plain Folder\""
+   }
+  ],
+  [
+   "Flower NPUB30025",
+   "ps3/Pkg Game",
+   "--no-gui \"%RPCS3_GAMEID%:{SERIAL}\"",
+   {
+    "lo": "--no-gui \"~/Emulation/roms/ps3/Pkg Game\"",
+    "args": "--no-gui \"~/Emulation/roms/ps3/Pkg Game\"",
+    "fallback": "path"
+   }
+  ],
+  [
+   "Flower NPUB30025",
+   "ps3/Pkg Game",
+   "--no-gui {SERIAL}",
+   {
+    "lo": "--no-gui \"~/Emulation/roms/ps3/Pkg Game\"",
+    "args": "--no-gui \"~/Emulation/roms/ps3/Pkg Game\"",
+    "fallback": "path"
+   }
+  ],
+  [
+   "Flower NPUB30025",
+   "ps3/Pkg Game",
+   "run net.rpcs3.RPCS3 --no-gui \"{ROM}\"",
+   {
+    "lo": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Pkg Game\"",
+    "args": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Pkg Game\""
+   }
+  ],
+  [
+   "Flower NPUB30025",
+   "ps3/Pkg Game",
+   "\"{ROM}\"",
+   {
+    "lo": "\"~/Emulation/roms/ps3/Pkg Game\"",
+    "args": "\"~/Emulation/roms/ps3/Pkg Game\""
+   }
+  ],
+  [
+   "ABCD12345 Fake",
+   "ps3/Demons Souls.iso",
+   "--no-gui \"%RPCS3_GAMEID%:{SERIAL}\"",
+   {
+    "lo": "--no-gui \"~/Emulation/roms/ps3/Demons Souls.iso\"",
+    "args": "--no-gui \"~/Emulation/roms/ps3/Demons Souls.iso\"",
+    "fallback": "path"
+   }
+  ],
+  [
+   "ABCD12345 Fake",
+   "ps3/Demons Souls.iso",
+   "--no-gui {SERIAL}",
+   {
+    "lo": "--no-gui \"~/Emulation/roms/ps3/Demons Souls.iso\"",
+    "args": "--no-gui \"~/Emulation/roms/ps3/Demons Souls.iso\"",
+    "fallback": "path"
+   }
+  ],
+  [
+   "ABCD12345 Fake",
+   "ps3/Demons Souls.iso",
+   "run net.rpcs3.RPCS3 --no-gui \"{ROM}\"",
+   {
+    "lo": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Demons Souls.iso\"",
+    "args": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Demons Souls.iso\""
+   }
+  ],
+  [
+   "ABCD12345 Fake",
+   "ps3/Demons Souls.iso",
+   "\"{ROM}\"",
+   {
+    "lo": "\"~/Emulation/roms/ps3/Demons Souls.iso\"",
+    "args": "\"~/Emulation/roms/ps3/Demons Souls.iso\""
+   }
+  ],
+  [
+   "ABCD12345 Fake",
+   "ps3/Flower PSN.iso",
+   "--no-gui \"%RPCS3_GAMEID%:{SERIAL}\"",
+   {
+    "lo": "--no-gui \"~/Emulation/roms/ps3/Flower PSN.iso\"",
+    "args": "--no-gui \"~/Emulation/roms/ps3/Flower PSN.iso\"",
+    "fallback": "path"
+   }
+  ],
+  [
+   "ABCD12345 Fake",
+   "ps3/Flower PSN.iso",
+   "--no-gui {SERIAL}",
+   {
+    "lo": "--no-gui \"~/Emulation/roms/ps3/Flower PSN.iso\"",
+    "args": "--no-gui \"~/Emulation/roms/ps3/Flower PSN.iso\"",
+    "fallback": "path"
+   }
+  ],
+  [
+   "ABCD12345 Fake",
+   "ps3/Flower PSN.iso",
+   "run net.rpcs3.RPCS3 --no-gui \"{ROM}\"",
+   {
+    "lo": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Flower PSN.iso\"",
+    "args": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Flower PSN.iso\""
+   }
+  ],
+  [
+   "ABCD12345 Fake",
+   "ps3/Flower PSN.iso",
+   "\"{ROM}\"",
+   {
+    "lo": "\"~/Emulation/roms/ps3/Flower PSN.iso\"",
+    "args": "\"~/Emulation/roms/ps3/Flower PSN.iso\""
+   }
+  ],
+  [
+   "ABCD12345 Fake",
+   "ps3/No Serial Here.iso",
+   "--no-gui \"%RPCS3_GAMEID%:{SERIAL}\"",
+   {
+    "lo": "--no-gui \"~/Emulation/roms/ps3/No Serial Here.iso\"",
+    "args": "--no-gui \"~/Emulation/roms/ps3/No Serial Here.iso\"",
+    "fallback": "path"
+   }
+  ],
+  [
+   "ABCD12345 Fake",
+   "ps3/No Serial Here.iso",
+   "--no-gui {SERIAL}",
+   {
+    "lo": "--no-gui \"~/Emulation/roms/ps3/No Serial Here.iso\"",
+    "args": "--no-gui \"~/Emulation/roms/ps3/No Serial Here.iso\"",
+    "fallback": "path"
+   }
+  ],
+  [
+   "ABCD12345 Fake",
+   "ps3/No Serial Here.iso",
+   "run net.rpcs3.RPCS3 --no-gui \"{ROM}\"",
+   {
+    "lo": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/No Serial Here.iso\"",
+    "args": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/No Serial Here.iso\""
+   }
+  ],
+  [
+   "ABCD12345 Fake",
+   "ps3/No Serial Here.iso",
+   "\"{ROM}\"",
+   {
+    "lo": "\"~/Emulation/roms/ps3/No Serial Here.iso\"",
+    "args": "\"~/Emulation/roms/ps3/No Serial Here.iso\""
+   }
+  ],
+  [
+   "ABCD12345 Fake",
+   "ps3/Lower blus30443 name.iso",
+   "--no-gui \"%RPCS3_GAMEID%:{SERIAL}\"",
+   {
+    "lo": "--no-gui \"~/Emulation/roms/ps3/Lower blus30443 name.iso\"",
+    "args": "--no-gui \"~/Emulation/roms/ps3/Lower blus30443 name.iso\"",
+    "fallback": "path"
+   }
+  ],
+  [
+   "ABCD12345 Fake",
+   "ps3/Lower blus30443 name.iso",
+   "--no-gui {SERIAL}",
+   {
+    "lo": "--no-gui \"~/Emulation/roms/ps3/Lower blus30443 name.iso\"",
+    "args": "--no-gui \"~/Emulation/roms/ps3/Lower blus30443 name.iso\"",
+    "fallback": "path"
+   }
+  ],
+  [
+   "ABCD12345 Fake",
+   "ps3/Lower blus30443 name.iso",
+   "run net.rpcs3.RPCS3 --no-gui \"{ROM}\"",
+   {
+    "lo": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Lower blus30443 name.iso\"",
+    "args": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Lower blus30443 name.iso\""
+   }
+  ],
+  [
+   "ABCD12345 Fake",
+   "ps3/Lower blus30443 name.iso",
+   "\"{ROM}\"",
+   {
+    "lo": "\"~/Emulation/roms/ps3/Lower blus30443 name.iso\"",
+    "args": "\"~/Emulation/roms/ps3/Lower blus30443 name.iso\""
+   }
+  ],
+  [
+   "ABCD12345 Fake",
+   "ps3/Uncharted",
+   "--no-gui \"%RPCS3_GAMEID%:{SERIAL}\"",
+   {
+    "lo": "--no-gui \"~/Emulation/roms/ps3/Uncharted/PS3_GAME/USRDIR/EBOOT.BIN\"",
+    "args": "--no-gui \"~/Emulation/roms/ps3/Uncharted/PS3_GAME/USRDIR/EBOOT.BIN\"",
+    "fallback": "path"
+   }
+  ],
+  [
+   "ABCD12345 Fake",
+   "ps3/Uncharted",
+   "--no-gui {SERIAL}",
+   {
+    "lo": "--no-gui \"~/Emulation/roms/ps3/Uncharted/PS3_GAME/USRDIR/EBOOT.BIN\"",
+    "args": "--no-gui \"~/Emulation/roms/ps3/Uncharted/PS3_GAME/USRDIR/EBOOT.BIN\"",
+    "fallback": "path"
+   }
+  ],
+  [
+   "ABCD12345 Fake",
+   "ps3/Uncharted",
+   "run net.rpcs3.RPCS3 --no-gui \"{ROM}\"",
+   {
+    "lo": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Uncharted\"",
+    "args": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Uncharted\""
+   }
+  ],
+  [
+   "ABCD12345 Fake",
+   "ps3/Uncharted",
+   "\"{ROM}\"",
+   {
+    "lo": "\"~/Emulation/roms/ps3/Uncharted/PS3_GAME/USRDIR/EBOOT.BIN\"",
+    "args": "\"~/Emulation/roms/ps3/Uncharted/PS3_GAME/USRDIR/EBOOT.BIN\""
+   }
+  ],
+  [
+   "ABCD12345 Fake",
+   "ps3/Wrapped",
+   "--no-gui \"%RPCS3_GAMEID%:{SERIAL}\"",
+   {
+    "lo": "--no-gui \"~/Emulation/roms/ps3/Wrapped\"",
+    "args": "--no-gui \"~/Emulation/roms/ps3/Wrapped\"",
+    "fallback": "path"
+   }
+  ],
+  [
+   "ABCD12345 Fake",
+   "ps3/Wrapped",
+   "--no-gui {SERIAL}",
+   {
+    "lo": "--no-gui \"~/Emulation/roms/ps3/Wrapped\"",
+    "args": "--no-gui \"~/Emulation/roms/ps3/Wrapped\"",
+    "fallback": "path"
+   }
+  ],
+  [
+   "ABCD12345 Fake",
+   "ps3/Wrapped",
+   "run net.rpcs3.RPCS3 --no-gui \"{ROM}\"",
+   {
+    "lo": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Wrapped\"",
+    "args": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Wrapped\""
+   }
+  ],
+  [
+   "ABCD12345 Fake",
+   "ps3/Wrapped",
+   "\"{ROM}\"",
+   {
+    "lo": "\"~/Emulation/roms/ps3/Wrapped\"",
+    "args": "\"~/Emulation/roms/ps3/Wrapped\""
+   }
+  ],
+  [
+   "ABCD12345 Fake",
+   "ps3/Iso In Folder",
+   "--no-gui \"%RPCS3_GAMEID%:{SERIAL}\"",
+   {
+    "lo": "--no-gui \"~/Emulation/roms/ps3/Iso In Folder\"",
+    "args": "--no-gui \"~/Emulation/roms/ps3/Iso In Folder\"",
+    "fallback": "path"
+   }
+  ],
+  [
+   "ABCD12345 Fake",
+   "ps3/Iso In Folder",
+   "--no-gui {SERIAL}",
+   {
+    "lo": "--no-gui \"~/Emulation/roms/ps3/Iso In Folder\"",
+    "args": "--no-gui \"~/Emulation/roms/ps3/Iso In Folder\"",
+    "fallback": "path"
+   }
+  ],
+  [
+   "ABCD12345 Fake",
+   "ps3/Iso In Folder",
+   "run net.rpcs3.RPCS3 --no-gui \"{ROM}\"",
+   {
+    "lo": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Iso In Folder\"",
+    "args": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Iso In Folder\""
+   }
+  ],
+  [
+   "ABCD12345 Fake",
+   "ps3/Iso In Folder",
+   "\"{ROM}\"",
+   {
+    "lo": "\"~/Emulation/roms/ps3/Iso In Folder\"",
+    "args": "\"~/Emulation/roms/ps3/Iso In Folder\""
+   }
+  ],
+  [
+   "ABCD12345 Fake",
+   "ps3/Plain Folder",
+   "--no-gui \"%RPCS3_GAMEID%:{SERIAL}\"",
+   {
+    "lo": "--no-gui \"~/Emulation/roms/ps3/Plain Folder\"",
+    "args": "--no-gui \"~/Emulation/roms/ps3/Plain Folder\"",
+    "fallback": "path"
+   }
+  ],
+  [
+   "ABCD12345 Fake",
+   "ps3/Plain Folder",
+   "--no-gui {SERIAL}",
+   {
+    "lo": "--no-gui \"~/Emulation/roms/ps3/Plain Folder\"",
+    "args": "--no-gui \"~/Emulation/roms/ps3/Plain Folder\"",
+    "fallback": "path"
+   }
+  ],
+  [
+   "ABCD12345 Fake",
+   "ps3/Plain Folder",
+   "run net.rpcs3.RPCS3 --no-gui \"{ROM}\"",
+   {
+    "lo": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Plain Folder\"",
+    "args": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Plain Folder\""
+   }
+  ],
+  [
+   "ABCD12345 Fake",
+   "ps3/Plain Folder",
+   "\"{ROM}\"",
+   {
+    "lo": "\"~/Emulation/roms/ps3/Plain Folder\"",
+    "args": "\"~/Emulation/roms/ps3/Plain Folder\""
+   }
+  ],
+  [
+   "ABCD12345 Fake",
+   "ps3/Pkg Game",
+   "--no-gui \"%RPCS3_GAMEID%:{SERIAL}\"",
+   {
+    "lo": "--no-gui \"~/Emulation/roms/ps3/Pkg Game\"",
+    "args": "--no-gui \"~/Emulation/roms/ps3/Pkg Game\"",
+    "fallback": "path"
+   }
+  ],
+  [
+   "ABCD12345 Fake",
+   "ps3/Pkg Game",
+   "--no-gui {SERIAL}",
+   {
+    "lo": "--no-gui \"~/Emulation/roms/ps3/Pkg Game\"",
+    "args": "--no-gui \"~/Emulation/roms/ps3/Pkg Game\"",
+    "fallback": "path"
+   }
+  ],
+  [
+   "ABCD12345 Fake",
+   "ps3/Pkg Game",
+   "run net.rpcs3.RPCS3 --no-gui \"{ROM}\"",
+   {
+    "lo": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Pkg Game\"",
+    "args": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Pkg Game\""
+   }
+  ],
+  [
+   "ABCD12345 Fake",
+   "ps3/Pkg Game",
+   "\"{ROM}\"",
+   {
+    "lo": "\"~/Emulation/roms/ps3/Pkg Game\"",
+    "args": "\"~/Emulation/roms/ps3/Pkg Game\""
+   }
+  ],
+  [
+   "Game",
+   "ps3/Demons Souls.iso",
+   "--no-gui \"%RPCS3_GAMEID%:{SERIAL}\"",
+   {
+    "lo": "--no-gui \"%RPCS3_GAMEID%:BLUS30443\"",
+    "args": "--no-gui \"%RPCS3_GAMEID%:BLUS30443\""
+   }
+  ],
+  [
+   "Game",
+   "ps3/Demons Souls.iso",
+   "--no-gui {SERIAL}",
+   {
+    "lo": "--no-gui BLUS30443",
+    "args": "--no-gui BLUS30443"
+   }
+  ],
+  [
+   "Game",
+   "ps3/Demons Souls.iso",
+   "run net.rpcs3.RPCS3 --no-gui \"{ROM}\"",
+   {
+    "lo": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Demons Souls.iso\"",
+    "args": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Demons Souls.iso\""
+   }
+  ],
+  [
+   "Game",
+   "ps3/Demons Souls.iso",
+   "\"{ROM}\"",
+   {
+    "lo": "\"~/Emulation/roms/ps3/Demons Souls.iso\"",
+    "args": "\"~/Emulation/roms/ps3/Demons Souls.iso\""
+   }
+  ],
+  [
+   "Game",
+   "ps3/Flower PSN.iso",
+   "--no-gui \"%RPCS3_GAMEID%:{SERIAL}\"",
+   {
+    "lo": "--no-gui \"~/Emulation/roms/ps3/Flower PSN.iso\"",
+    "args": "--no-gui \"~/Emulation/roms/ps3/Flower PSN.iso\"",
+    "fallback": "path"
+   }
+  ],
+  [
+   "Game",
+   "ps3/Flower PSN.iso",
+   "--no-gui {SERIAL}",
+   {
+    "lo": "--no-gui \"~/Emulation/roms/ps3/Flower PSN.iso\"",
+    "args": "--no-gui \"~/Emulation/roms/ps3/Flower PSN.iso\"",
+    "fallback": "path"
+   }
+  ],
+  [
+   "Game",
+   "ps3/Flower PSN.iso",
+   "run net.rpcs3.RPCS3 --no-gui \"{ROM}\"",
+   {
+    "lo": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Flower PSN.iso\"",
+    "args": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Flower PSN.iso\""
+   }
+  ],
+  [
+   "Game",
+   "ps3/Flower PSN.iso",
+   "\"{ROM}\"",
+   {
+    "lo": "\"~/Emulation/roms/ps3/Flower PSN.iso\"",
+    "args": "\"~/Emulation/roms/ps3/Flower PSN.iso\""
+   }
+  ],
+  [
+   "Game",
+   "ps3/No Serial Here.iso",
+   "--no-gui \"%RPCS3_GAMEID%:{SERIAL}\"",
+   {
+    "lo": "--no-gui \"~/Emulation/roms/ps3/No Serial Here.iso\"",
+    "args": "--no-gui \"~/Emulation/roms/ps3/No Serial Here.iso\"",
+    "fallback": "path"
+   }
+  ],
+  [
+   "Game",
+   "ps3/No Serial Here.iso",
+   "--no-gui {SERIAL}",
+   {
+    "lo": "--no-gui \"~/Emulation/roms/ps3/No Serial Here.iso\"",
+    "args": "--no-gui \"~/Emulation/roms/ps3/No Serial Here.iso\"",
+    "fallback": "path"
+   }
+  ],
+  [
+   "Game",
+   "ps3/No Serial Here.iso",
+   "run net.rpcs3.RPCS3 --no-gui \"{ROM}\"",
+   {
+    "lo": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/No Serial Here.iso\"",
+    "args": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/No Serial Here.iso\""
+   }
+  ],
+  [
+   "Game",
+   "ps3/No Serial Here.iso",
+   "\"{ROM}\"",
+   {
+    "lo": "\"~/Emulation/roms/ps3/No Serial Here.iso\"",
+    "args": "\"~/Emulation/roms/ps3/No Serial Here.iso\""
+   }
+  ],
+  [
+   "Game",
+   "ps3/Lower blus30443 name.iso",
+   "--no-gui \"%RPCS3_GAMEID%:{SERIAL}\"",
+   {
+    "lo": "--no-gui \"~/Emulation/roms/ps3/Lower blus30443 name.iso\"",
+    "args": "--no-gui \"~/Emulation/roms/ps3/Lower blus30443 name.iso\"",
+    "fallback": "path"
+   }
+  ],
+  [
+   "Game",
+   "ps3/Lower blus30443 name.iso",
+   "--no-gui {SERIAL}",
+   {
+    "lo": "--no-gui \"~/Emulation/roms/ps3/Lower blus30443 name.iso\"",
+    "args": "--no-gui \"~/Emulation/roms/ps3/Lower blus30443 name.iso\"",
+    "fallback": "path"
+   }
+  ],
+  [
+   "Game",
+   "ps3/Lower blus30443 name.iso",
+   "run net.rpcs3.RPCS3 --no-gui \"{ROM}\"",
+   {
+    "lo": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Lower blus30443 name.iso\"",
+    "args": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Lower blus30443 name.iso\""
+   }
+  ],
+  [
+   "Game",
+   "ps3/Lower blus30443 name.iso",
+   "\"{ROM}\"",
+   {
+    "lo": "\"~/Emulation/roms/ps3/Lower blus30443 name.iso\"",
+    "args": "\"~/Emulation/roms/ps3/Lower blus30443 name.iso\""
+   }
+  ],
+  [
+   "Game",
+   "ps3/Uncharted",
+   "--no-gui \"%RPCS3_GAMEID%:{SERIAL}\"",
+   {
+    "lo": "--no-gui \"%RPCS3_GAMEID%:BCES00052\"",
+    "args": "--no-gui \"%RPCS3_GAMEID%:BCES00052\""
+   }
+  ],
+  [
+   "Game",
+   "ps3/Uncharted",
+   "--no-gui {SERIAL}",
+   {
+    "lo": "--no-gui BCES00052",
+    "args": "--no-gui BCES00052"
+   }
+  ],
+  [
+   "Game",
+   "ps3/Uncharted",
+   "run net.rpcs3.RPCS3 --no-gui \"{ROM}\"",
+   {
+    "lo": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Uncharted\"",
+    "args": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Uncharted\""
+   }
+  ],
+  [
+   "Game",
+   "ps3/Uncharted",
+   "\"{ROM}\"",
+   {
+    "lo": "\"~/Emulation/roms/ps3/Uncharted/PS3_GAME/USRDIR/EBOOT.BIN\"",
+    "args": "\"~/Emulation/roms/ps3/Uncharted/PS3_GAME/USRDIR/EBOOT.BIN\""
+   }
+  ],
+  [
+   "Game",
+   "ps3/Wrapped",
+   "--no-gui \"%RPCS3_GAMEID%:{SERIAL}\"",
+   {
+    "lo": "--no-gui \"~/Emulation/roms/ps3/Wrapped\"",
+    "args": "--no-gui \"~/Emulation/roms/ps3/Wrapped\"",
+    "fallback": "path"
+   }
+  ],
+  [
+   "Game",
+   "ps3/Wrapped",
+   "--no-gui {SERIAL}",
+   {
+    "lo": "--no-gui \"~/Emulation/roms/ps3/Wrapped\"",
+    "args": "--no-gui \"~/Emulation/roms/ps3/Wrapped\"",
+    "fallback": "path"
+   }
+  ],
+  [
+   "Game",
+   "ps3/Wrapped",
+   "run net.rpcs3.RPCS3 --no-gui \"{ROM}\"",
+   {
+    "lo": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Wrapped\"",
+    "args": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Wrapped\""
+   }
+  ],
+  [
+   "Game",
+   "ps3/Wrapped",
+   "\"{ROM}\"",
+   {
+    "lo": "\"~/Emulation/roms/ps3/Wrapped\"",
+    "args": "\"~/Emulation/roms/ps3/Wrapped\""
+   }
+  ],
+  [
+   "Game",
+   "ps3/Iso In Folder",
+   "--no-gui \"%RPCS3_GAMEID%:{SERIAL}\"",
+   {
+    "lo": "--no-gui \"%RPCS3_GAMEID%:BLJM60066\"",
+    "args": "--no-gui \"%RPCS3_GAMEID%:BLJM60066\""
+   }
+  ],
+  [
+   "Game",
+   "ps3/Iso In Folder",
+   "--no-gui {SERIAL}",
+   {
+    "lo": "--no-gui BLJM60066",
+    "args": "--no-gui BLJM60066"
+   }
+  ],
+  [
+   "Game",
+   "ps3/Iso In Folder",
+   "run net.rpcs3.RPCS3 --no-gui \"{ROM}\"",
+   {
+    "lo": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Iso In Folder\"",
+    "args": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Iso In Folder\""
+   }
+  ],
+  [
+   "Game",
+   "ps3/Iso In Folder",
+   "\"{ROM}\"",
+   {
+    "lo": "\"~/Emulation/roms/ps3/Iso In Folder\"",
+    "args": "\"~/Emulation/roms/ps3/Iso In Folder\""
+   }
+  ],
+  [
+   "Game",
+   "ps3/Plain Folder",
+   "--no-gui \"%RPCS3_GAMEID%:{SERIAL}\"",
+   {
+    "lo": "--no-gui \"~/Emulation/roms/ps3/Plain Folder\"",
+    "args": "--no-gui \"~/Emulation/roms/ps3/Plain Folder\"",
+    "fallback": "path"
+   }
+  ],
+  [
+   "Game",
+   "ps3/Plain Folder",
+   "--no-gui {SERIAL}",
+   {
+    "lo": "--no-gui \"~/Emulation/roms/ps3/Plain Folder\"",
+    "args": "--no-gui \"~/Emulation/roms/ps3/Plain Folder\"",
+    "fallback": "path"
+   }
+  ],
+  [
+   "Game",
+   "ps3/Plain Folder",
+   "run net.rpcs3.RPCS3 --no-gui \"{ROM}\"",
+   {
+    "lo": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Plain Folder\"",
+    "args": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Plain Folder\""
+   }
+  ],
+  [
+   "Game",
+   "ps3/Plain Folder",
+   "\"{ROM}\"",
+   {
+    "lo": "\"~/Emulation/roms/ps3/Plain Folder\"",
+    "args": "\"~/Emulation/roms/ps3/Plain Folder\""
+   }
+  ],
+  [
+   "Game",
+   "ps3/Pkg Game",
+   "--no-gui \"%RPCS3_GAMEID%:{SERIAL}\"",
+   {
+    "lo": "--no-gui \"~/Emulation/roms/ps3/Pkg Game\"",
+    "args": "--no-gui \"~/Emulation/roms/ps3/Pkg Game\"",
+    "fallback": "path"
+   }
+  ],
+  [
+   "Game",
+   "ps3/Pkg Game",
+   "--no-gui {SERIAL}",
+   {
+    "lo": "--no-gui \"~/Emulation/roms/ps3/Pkg Game\"",
+    "args": "--no-gui \"~/Emulation/roms/ps3/Pkg Game\"",
+    "fallback": "path"
+   }
+  ],
+  [
+   "Game",
+   "ps3/Pkg Game",
+   "run net.rpcs3.RPCS3 --no-gui \"{ROM}\"",
+   {
+    "lo": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Pkg Game\"",
+    "args": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Pkg Game\""
+   }
+  ],
+  [
+   "Game",
+   "ps3/Pkg Game",
+   "\"{ROM}\"",
+   {
+    "lo": "\"~/Emulation/roms/ps3/Pkg Game\"",
+    "args": "\"~/Emulation/roms/ps3/Pkg Game\""
+   }
+  ],
+  [
+   "Uncharted",
+   "ps3/Demons Souls.iso",
+   "--no-gui \"%RPCS3_GAMEID%:{SERIAL}\"",
+   {
+    "lo": "--no-gui \"%RPCS3_GAMEID%:BLUS30443\"",
+    "args": "--no-gui \"%RPCS3_GAMEID%:BLUS30443\""
+   }
+  ],
+  [
+   "Uncharted",
+   "ps3/Demons Souls.iso",
+   "--no-gui {SERIAL}",
+   {
+    "lo": "--no-gui BLUS30443",
+    "args": "--no-gui BLUS30443"
+   }
+  ],
+  [
+   "Uncharted",
+   "ps3/Demons Souls.iso",
+   "run net.rpcs3.RPCS3 --no-gui \"{ROM}\"",
+   {
+    "lo": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Demons Souls.iso\"",
+    "args": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Demons Souls.iso\""
+   }
+  ],
+  [
+   "Uncharted",
+   "ps3/Demons Souls.iso",
+   "\"{ROM}\"",
+   {
+    "lo": "\"~/Emulation/roms/ps3/Demons Souls.iso\"",
+    "args": "\"~/Emulation/roms/ps3/Demons Souls.iso\""
+   }
+  ],
+  [
+   "Uncharted",
+   "ps3/Flower PSN.iso",
+   "--no-gui \"%RPCS3_GAMEID%:{SERIAL}\"",
+   {
+    "lo": "--no-gui \"~/Emulation/roms/ps3/Flower PSN.iso\"",
+    "args": "--no-gui \"~/Emulation/roms/ps3/Flower PSN.iso\"",
+    "fallback": "path"
+   }
+  ],
+  [
+   "Uncharted",
+   "ps3/Flower PSN.iso",
+   "--no-gui {SERIAL}",
+   {
+    "lo": "--no-gui \"~/Emulation/roms/ps3/Flower PSN.iso\"",
+    "args": "--no-gui \"~/Emulation/roms/ps3/Flower PSN.iso\"",
+    "fallback": "path"
+   }
+  ],
+  [
+   "Uncharted",
+   "ps3/Flower PSN.iso",
+   "run net.rpcs3.RPCS3 --no-gui \"{ROM}\"",
+   {
+    "lo": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Flower PSN.iso\"",
+    "args": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Flower PSN.iso\""
+   }
+  ],
+  [
+   "Uncharted",
+   "ps3/Flower PSN.iso",
+   "\"{ROM}\"",
+   {
+    "lo": "\"~/Emulation/roms/ps3/Flower PSN.iso\"",
+    "args": "\"~/Emulation/roms/ps3/Flower PSN.iso\""
+   }
+  ],
+  [
+   "Uncharted",
+   "ps3/No Serial Here.iso",
+   "--no-gui \"%RPCS3_GAMEID%:{SERIAL}\"",
+   {
+    "lo": "--no-gui \"~/Emulation/roms/ps3/No Serial Here.iso\"",
+    "args": "--no-gui \"~/Emulation/roms/ps3/No Serial Here.iso\"",
+    "fallback": "path"
+   }
+  ],
+  [
+   "Uncharted",
+   "ps3/No Serial Here.iso",
+   "--no-gui {SERIAL}",
+   {
+    "lo": "--no-gui \"~/Emulation/roms/ps3/No Serial Here.iso\"",
+    "args": "--no-gui \"~/Emulation/roms/ps3/No Serial Here.iso\"",
+    "fallback": "path"
+   }
+  ],
+  [
+   "Uncharted",
+   "ps3/No Serial Here.iso",
+   "run net.rpcs3.RPCS3 --no-gui \"{ROM}\"",
+   {
+    "lo": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/No Serial Here.iso\"",
+    "args": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/No Serial Here.iso\""
+   }
+  ],
+  [
+   "Uncharted",
+   "ps3/No Serial Here.iso",
+   "\"{ROM}\"",
+   {
+    "lo": "\"~/Emulation/roms/ps3/No Serial Here.iso\"",
+    "args": "\"~/Emulation/roms/ps3/No Serial Here.iso\""
+   }
+  ],
+  [
+   "Uncharted",
+   "ps3/Lower blus30443 name.iso",
+   "--no-gui \"%RPCS3_GAMEID%:{SERIAL}\"",
+   {
+    "lo": "--no-gui \"~/Emulation/roms/ps3/Lower blus30443 name.iso\"",
+    "args": "--no-gui \"~/Emulation/roms/ps3/Lower blus30443 name.iso\"",
+    "fallback": "path"
+   }
+  ],
+  [
+   "Uncharted",
+   "ps3/Lower blus30443 name.iso",
+   "--no-gui {SERIAL}",
+   {
+    "lo": "--no-gui \"~/Emulation/roms/ps3/Lower blus30443 name.iso\"",
+    "args": "--no-gui \"~/Emulation/roms/ps3/Lower blus30443 name.iso\"",
+    "fallback": "path"
+   }
+  ],
+  [
+   "Uncharted",
+   "ps3/Lower blus30443 name.iso",
+   "run net.rpcs3.RPCS3 --no-gui \"{ROM}\"",
+   {
+    "lo": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Lower blus30443 name.iso\"",
+    "args": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Lower blus30443 name.iso\""
+   }
+  ],
+  [
+   "Uncharted",
+   "ps3/Lower blus30443 name.iso",
+   "\"{ROM}\"",
+   {
+    "lo": "\"~/Emulation/roms/ps3/Lower blus30443 name.iso\"",
+    "args": "\"~/Emulation/roms/ps3/Lower blus30443 name.iso\""
+   }
+  ],
+  [
+   "Uncharted",
+   "ps3/Uncharted",
+   "--no-gui \"%RPCS3_GAMEID%:{SERIAL}\"",
+   {
+    "lo": "--no-gui \"%RPCS3_GAMEID%:BCES00052\"",
+    "args": "--no-gui \"%RPCS3_GAMEID%:BCES00052\""
+   }
+  ],
+  [
+   "Uncharted",
+   "ps3/Uncharted",
+   "--no-gui {SERIAL}",
+   {
+    "lo": "--no-gui BCES00052",
+    "args": "--no-gui BCES00052"
+   }
+  ],
+  [
+   "Uncharted",
+   "ps3/Uncharted",
+   "run net.rpcs3.RPCS3 --no-gui \"{ROM}\"",
+   {
+    "lo": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Uncharted\"",
+    "args": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Uncharted\""
+   }
+  ],
+  [
+   "Uncharted",
+   "ps3/Uncharted",
+   "\"{ROM}\"",
+   {
+    "lo": "\"~/Emulation/roms/ps3/Uncharted/PS3_GAME/USRDIR/EBOOT.BIN\"",
+    "args": "\"~/Emulation/roms/ps3/Uncharted/PS3_GAME/USRDIR/EBOOT.BIN\""
+   }
+  ],
+  [
+   "Uncharted",
+   "ps3/Wrapped",
+   "--no-gui \"%RPCS3_GAMEID%:{SERIAL}\"",
+   {
+    "lo": "--no-gui \"~/Emulation/roms/ps3/Wrapped\"",
+    "args": "--no-gui \"~/Emulation/roms/ps3/Wrapped\"",
+    "fallback": "path"
+   }
+  ],
+  [
+   "Uncharted",
+   "ps3/Wrapped",
+   "--no-gui {SERIAL}",
+   {
+    "lo": "--no-gui \"~/Emulation/roms/ps3/Wrapped\"",
+    "args": "--no-gui \"~/Emulation/roms/ps3/Wrapped\"",
+    "fallback": "path"
+   }
+  ],
+  [
+   "Uncharted",
+   "ps3/Wrapped",
+   "run net.rpcs3.RPCS3 --no-gui \"{ROM}\"",
+   {
+    "lo": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Wrapped\"",
+    "args": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Wrapped\""
+   }
+  ],
+  [
+   "Uncharted",
+   "ps3/Wrapped",
+   "\"{ROM}\"",
+   {
+    "lo": "\"~/Emulation/roms/ps3/Wrapped\"",
+    "args": "\"~/Emulation/roms/ps3/Wrapped\""
+   }
+  ],
+  [
+   "Uncharted",
+   "ps3/Iso In Folder",
+   "--no-gui \"%RPCS3_GAMEID%:{SERIAL}\"",
+   {
+    "lo": "--no-gui \"%RPCS3_GAMEID%:BLJM60066\"",
+    "args": "--no-gui \"%RPCS3_GAMEID%:BLJM60066\""
+   }
+  ],
+  [
+   "Uncharted",
+   "ps3/Iso In Folder",
+   "--no-gui {SERIAL}",
+   {
+    "lo": "--no-gui BLJM60066",
+    "args": "--no-gui BLJM60066"
+   }
+  ],
+  [
+   "Uncharted",
+   "ps3/Iso In Folder",
+   "run net.rpcs3.RPCS3 --no-gui \"{ROM}\"",
+   {
+    "lo": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Iso In Folder\"",
+    "args": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Iso In Folder\""
+   }
+  ],
+  [
+   "Uncharted",
+   "ps3/Iso In Folder",
+   "\"{ROM}\"",
+   {
+    "lo": "\"~/Emulation/roms/ps3/Iso In Folder\"",
+    "args": "\"~/Emulation/roms/ps3/Iso In Folder\""
+   }
+  ],
+  [
+   "Uncharted",
+   "ps3/Plain Folder",
+   "--no-gui \"%RPCS3_GAMEID%:{SERIAL}\"",
+   {
+    "lo": "--no-gui \"~/Emulation/roms/ps3/Plain Folder\"",
+    "args": "--no-gui \"~/Emulation/roms/ps3/Plain Folder\"",
+    "fallback": "path"
+   }
+  ],
+  [
+   "Uncharted",
+   "ps3/Plain Folder",
+   "--no-gui {SERIAL}",
+   {
+    "lo": "--no-gui \"~/Emulation/roms/ps3/Plain Folder\"",
+    "args": "--no-gui \"~/Emulation/roms/ps3/Plain Folder\"",
+    "fallback": "path"
+   }
+  ],
+  [
+   "Uncharted",
+   "ps3/Plain Folder",
+   "run net.rpcs3.RPCS3 --no-gui \"{ROM}\"",
+   {
+    "lo": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Plain Folder\"",
+    "args": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Plain Folder\""
+   }
+  ],
+  [
+   "Uncharted",
+   "ps3/Plain Folder",
+   "\"{ROM}\"",
+   {
+    "lo": "\"~/Emulation/roms/ps3/Plain Folder\"",
+    "args": "\"~/Emulation/roms/ps3/Plain Folder\""
+   }
+  ],
+  [
+   "Uncharted",
+   "ps3/Pkg Game",
+   "--no-gui \"%RPCS3_GAMEID%:{SERIAL}\"",
+   {
+    "lo": "--no-gui \"~/Emulation/roms/ps3/Pkg Game\"",
+    "args": "--no-gui \"~/Emulation/roms/ps3/Pkg Game\"",
+    "fallback": "path"
+   }
+  ],
+  [
+   "Uncharted",
+   "ps3/Pkg Game",
+   "--no-gui {SERIAL}",
+   {
+    "lo": "--no-gui \"~/Emulation/roms/ps3/Pkg Game\"",
+    "args": "--no-gui \"~/Emulation/roms/ps3/Pkg Game\"",
+    "fallback": "path"
+   }
+  ],
+  [
+   "Uncharted",
+   "ps3/Pkg Game",
+   "run net.rpcs3.RPCS3 --no-gui \"{ROM}\"",
+   {
+    "lo": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Pkg Game\"",
+    "args": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Pkg Game\""
+   }
+  ],
+  [
+   "Uncharted",
+   "ps3/Pkg Game",
+   "\"{ROM}\"",
+   {
+    "lo": "\"~/Emulation/roms/ps3/Pkg Game\"",
+    "args": "\"~/Emulation/roms/ps3/Pkg Game\""
+   }
+  ],
+  [
+   "ULUS10041 psp named",
+   "ps3/Demons Souls.iso",
+   "--no-gui \"%RPCS3_GAMEID%:{SERIAL}\"",
+   {
+    "lo": "--no-gui \"~/Emulation/roms/ps3/Demons Souls.iso\"",
+    "args": "--no-gui \"~/Emulation/roms/ps3/Demons Souls.iso\"",
+    "fallback": "path"
+   }
+  ],
+  [
+   "ULUS10041 psp named",
+   "ps3/Demons Souls.iso",
+   "--no-gui {SERIAL}",
+   {
+    "lo": "--no-gui \"~/Emulation/roms/ps3/Demons Souls.iso\"",
+    "args": "--no-gui \"~/Emulation/roms/ps3/Demons Souls.iso\"",
+    "fallback": "path"
+   }
+  ],
+  [
+   "ULUS10041 psp named",
+   "ps3/Demons Souls.iso",
+   "run net.rpcs3.RPCS3 --no-gui \"{ROM}\"",
+   {
+    "lo": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Demons Souls.iso\"",
+    "args": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Demons Souls.iso\""
+   }
+  ],
+  [
+   "ULUS10041 psp named",
+   "ps3/Demons Souls.iso",
+   "\"{ROM}\"",
+   {
+    "lo": "\"~/Emulation/roms/ps3/Demons Souls.iso\"",
+    "args": "\"~/Emulation/roms/ps3/Demons Souls.iso\""
+   }
+  ],
+  [
+   "ULUS10041 psp named",
+   "ps3/Flower PSN.iso",
+   "--no-gui \"%RPCS3_GAMEID%:{SERIAL}\"",
+   {
+    "lo": "--no-gui \"~/Emulation/roms/ps3/Flower PSN.iso\"",
+    "args": "--no-gui \"~/Emulation/roms/ps3/Flower PSN.iso\"",
+    "fallback": "path"
+   }
+  ],
+  [
+   "ULUS10041 psp named",
+   "ps3/Flower PSN.iso",
+   "--no-gui {SERIAL}",
+   {
+    "lo": "--no-gui \"~/Emulation/roms/ps3/Flower PSN.iso\"",
+    "args": "--no-gui \"~/Emulation/roms/ps3/Flower PSN.iso\"",
+    "fallback": "path"
+   }
+  ],
+  [
+   "ULUS10041 psp named",
+   "ps3/Flower PSN.iso",
+   "run net.rpcs3.RPCS3 --no-gui \"{ROM}\"",
+   {
+    "lo": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Flower PSN.iso\"",
+    "args": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Flower PSN.iso\""
+   }
+  ],
+  [
+   "ULUS10041 psp named",
+   "ps3/Flower PSN.iso",
+   "\"{ROM}\"",
+   {
+    "lo": "\"~/Emulation/roms/ps3/Flower PSN.iso\"",
+    "args": "\"~/Emulation/roms/ps3/Flower PSN.iso\""
+   }
+  ],
+  [
+   "ULUS10041 psp named",
+   "ps3/No Serial Here.iso",
+   "--no-gui \"%RPCS3_GAMEID%:{SERIAL}\"",
+   {
+    "lo": "--no-gui \"~/Emulation/roms/ps3/No Serial Here.iso\"",
+    "args": "--no-gui \"~/Emulation/roms/ps3/No Serial Here.iso\"",
+    "fallback": "path"
+   }
+  ],
+  [
+   "ULUS10041 psp named",
+   "ps3/No Serial Here.iso",
+   "--no-gui {SERIAL}",
+   {
+    "lo": "--no-gui \"~/Emulation/roms/ps3/No Serial Here.iso\"",
+    "args": "--no-gui \"~/Emulation/roms/ps3/No Serial Here.iso\"",
+    "fallback": "path"
+   }
+  ],
+  [
+   "ULUS10041 psp named",
+   "ps3/No Serial Here.iso",
+   "run net.rpcs3.RPCS3 --no-gui \"{ROM}\"",
+   {
+    "lo": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/No Serial Here.iso\"",
+    "args": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/No Serial Here.iso\""
+   }
+  ],
+  [
+   "ULUS10041 psp named",
+   "ps3/No Serial Here.iso",
+   "\"{ROM}\"",
+   {
+    "lo": "\"~/Emulation/roms/ps3/No Serial Here.iso\"",
+    "args": "\"~/Emulation/roms/ps3/No Serial Here.iso\""
+   }
+  ],
+  [
+   "ULUS10041 psp named",
+   "ps3/Lower blus30443 name.iso",
+   "--no-gui \"%RPCS3_GAMEID%:{SERIAL}\"",
+   {
+    "lo": "--no-gui \"~/Emulation/roms/ps3/Lower blus30443 name.iso\"",
+    "args": "--no-gui \"~/Emulation/roms/ps3/Lower blus30443 name.iso\"",
+    "fallback": "path"
+   }
+  ],
+  [
+   "ULUS10041 psp named",
+   "ps3/Lower blus30443 name.iso",
+   "--no-gui {SERIAL}",
+   {
+    "lo": "--no-gui \"~/Emulation/roms/ps3/Lower blus30443 name.iso\"",
+    "args": "--no-gui \"~/Emulation/roms/ps3/Lower blus30443 name.iso\"",
+    "fallback": "path"
+   }
+  ],
+  [
+   "ULUS10041 psp named",
+   "ps3/Lower blus30443 name.iso",
+   "run net.rpcs3.RPCS3 --no-gui \"{ROM}\"",
+   {
+    "lo": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Lower blus30443 name.iso\"",
+    "args": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Lower blus30443 name.iso\""
+   }
+  ],
+  [
+   "ULUS10041 psp named",
+   "ps3/Lower blus30443 name.iso",
+   "\"{ROM}\"",
+   {
+    "lo": "\"~/Emulation/roms/ps3/Lower blus30443 name.iso\"",
+    "args": "\"~/Emulation/roms/ps3/Lower blus30443 name.iso\""
+   }
+  ],
+  [
+   "ULUS10041 psp named",
+   "ps3/Uncharted",
+   "--no-gui \"%RPCS3_GAMEID%:{SERIAL}\"",
+   {
+    "lo": "--no-gui \"~/Emulation/roms/ps3/Uncharted/PS3_GAME/USRDIR/EBOOT.BIN\"",
+    "args": "--no-gui \"~/Emulation/roms/ps3/Uncharted/PS3_GAME/USRDIR/EBOOT.BIN\"",
+    "fallback": "path"
+   }
+  ],
+  [
+   "ULUS10041 psp named",
+   "ps3/Uncharted",
+   "--no-gui {SERIAL}",
+   {
+    "lo": "--no-gui \"~/Emulation/roms/ps3/Uncharted/PS3_GAME/USRDIR/EBOOT.BIN\"",
+    "args": "--no-gui \"~/Emulation/roms/ps3/Uncharted/PS3_GAME/USRDIR/EBOOT.BIN\"",
+    "fallback": "path"
+   }
+  ],
+  [
+   "ULUS10041 psp named",
+   "ps3/Uncharted",
+   "run net.rpcs3.RPCS3 --no-gui \"{ROM}\"",
+   {
+    "lo": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Uncharted\"",
+    "args": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Uncharted\""
+   }
+  ],
+  [
+   "ULUS10041 psp named",
+   "ps3/Uncharted",
+   "\"{ROM}\"",
+   {
+    "lo": "\"~/Emulation/roms/ps3/Uncharted/PS3_GAME/USRDIR/EBOOT.BIN\"",
+    "args": "\"~/Emulation/roms/ps3/Uncharted/PS3_GAME/USRDIR/EBOOT.BIN\""
+   }
+  ],
+  [
+   "ULUS10041 psp named",
+   "ps3/Wrapped",
+   "--no-gui \"%RPCS3_GAMEID%:{SERIAL}\"",
+   {
+    "lo": "--no-gui \"~/Emulation/roms/ps3/Wrapped\"",
+    "args": "--no-gui \"~/Emulation/roms/ps3/Wrapped\"",
+    "fallback": "path"
+   }
+  ],
+  [
+   "ULUS10041 psp named",
+   "ps3/Wrapped",
+   "--no-gui {SERIAL}",
+   {
+    "lo": "--no-gui \"~/Emulation/roms/ps3/Wrapped\"",
+    "args": "--no-gui \"~/Emulation/roms/ps3/Wrapped\"",
+    "fallback": "path"
+   }
+  ],
+  [
+   "ULUS10041 psp named",
+   "ps3/Wrapped",
+   "run net.rpcs3.RPCS3 --no-gui \"{ROM}\"",
+   {
+    "lo": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Wrapped\"",
+    "args": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Wrapped\""
+   }
+  ],
+  [
+   "ULUS10041 psp named",
+   "ps3/Wrapped",
+   "\"{ROM}\"",
+   {
+    "lo": "\"~/Emulation/roms/ps3/Wrapped\"",
+    "args": "\"~/Emulation/roms/ps3/Wrapped\""
+   }
+  ],
+  [
+   "ULUS10041 psp named",
+   "ps3/Iso In Folder",
+   "--no-gui \"%RPCS3_GAMEID%:{SERIAL}\"",
+   {
+    "lo": "--no-gui \"~/Emulation/roms/ps3/Iso In Folder\"",
+    "args": "--no-gui \"~/Emulation/roms/ps3/Iso In Folder\"",
+    "fallback": "path"
+   }
+  ],
+  [
+   "ULUS10041 psp named",
+   "ps3/Iso In Folder",
+   "--no-gui {SERIAL}",
+   {
+    "lo": "--no-gui \"~/Emulation/roms/ps3/Iso In Folder\"",
+    "args": "--no-gui \"~/Emulation/roms/ps3/Iso In Folder\"",
+    "fallback": "path"
+   }
+  ],
+  [
+   "ULUS10041 psp named",
+   "ps3/Iso In Folder",
+   "run net.rpcs3.RPCS3 --no-gui \"{ROM}\"",
+   {
+    "lo": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Iso In Folder\"",
+    "args": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Iso In Folder\""
+   }
+  ],
+  [
+   "ULUS10041 psp named",
+   "ps3/Iso In Folder",
+   "\"{ROM}\"",
+   {
+    "lo": "\"~/Emulation/roms/ps3/Iso In Folder\"",
+    "args": "\"~/Emulation/roms/ps3/Iso In Folder\""
+   }
+  ],
+  [
+   "ULUS10041 psp named",
+   "ps3/Plain Folder",
+   "--no-gui \"%RPCS3_GAMEID%:{SERIAL}\"",
+   {
+    "lo": "--no-gui \"~/Emulation/roms/ps3/Plain Folder\"",
+    "args": "--no-gui \"~/Emulation/roms/ps3/Plain Folder\"",
+    "fallback": "path"
+   }
+  ],
+  [
+   "ULUS10041 psp named",
+   "ps3/Plain Folder",
+   "--no-gui {SERIAL}",
+   {
+    "lo": "--no-gui \"~/Emulation/roms/ps3/Plain Folder\"",
+    "args": "--no-gui \"~/Emulation/roms/ps3/Plain Folder\"",
+    "fallback": "path"
+   }
+  ],
+  [
+   "ULUS10041 psp named",
+   "ps3/Plain Folder",
+   "run net.rpcs3.RPCS3 --no-gui \"{ROM}\"",
+   {
+    "lo": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Plain Folder\"",
+    "args": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Plain Folder\""
+   }
+  ],
+  [
+   "ULUS10041 psp named",
+   "ps3/Plain Folder",
+   "\"{ROM}\"",
+   {
+    "lo": "\"~/Emulation/roms/ps3/Plain Folder\"",
+    "args": "\"~/Emulation/roms/ps3/Plain Folder\""
+   }
+  ],
+  [
+   "ULUS10041 psp named",
+   "ps3/Pkg Game",
+   "--no-gui \"%RPCS3_GAMEID%:{SERIAL}\"",
+   {
+    "lo": "--no-gui \"~/Emulation/roms/ps3/Pkg Game\"",
+    "args": "--no-gui \"~/Emulation/roms/ps3/Pkg Game\"",
+    "fallback": "path"
+   }
+  ],
+  [
+   "ULUS10041 psp named",
+   "ps3/Pkg Game",
+   "--no-gui {SERIAL}",
+   {
+    "lo": "--no-gui \"~/Emulation/roms/ps3/Pkg Game\"",
+    "args": "--no-gui \"~/Emulation/roms/ps3/Pkg Game\"",
+    "fallback": "path"
+   }
+  ],
+  [
+   "ULUS10041 psp named",
+   "ps3/Pkg Game",
+   "run net.rpcs3.RPCS3 --no-gui \"{ROM}\"",
+   {
+    "lo": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Pkg Game\"",
+    "args": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Pkg Game\""
+   }
+  ],
+  [
+   "ULUS10041 psp named",
+   "ps3/Pkg Game",
+   "\"{ROM}\"",
+   {
+    "lo": "\"~/Emulation/roms/ps3/Pkg Game\"",
+    "args": "\"~/Emulation/roms/ps3/Pkg Game\""
+   }
+  ],
+  [
+   "PS3 BCES-00052 Dash",
+   "ps3/Demons Souls.iso",
+   "--no-gui \"%RPCS3_GAMEID%:{SERIAL}\"",
+   {
+    "lo": "--no-gui \"%RPCS3_GAMEID%:BCES00052\"",
+    "args": "--no-gui \"%RPCS3_GAMEID%:BCES00052\""
+   }
+  ],
+  [
+   "PS3 BCES-00052 Dash",
+   "ps3/Demons Souls.iso",
+   "--no-gui {SERIAL}",
+   {
+    "lo": "--no-gui BCES00052",
+    "args": "--no-gui BCES00052"
+   }
+  ],
+  [
+   "PS3 BCES-00052 Dash",
+   "ps3/Demons Souls.iso",
+   "run net.rpcs3.RPCS3 --no-gui \"{ROM}\"",
+   {
+    "lo": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Demons Souls.iso\"",
+    "args": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Demons Souls.iso\""
+   }
+  ],
+  [
+   "PS3 BCES-00052 Dash",
+   "ps3/Demons Souls.iso",
+   "\"{ROM}\"",
+   {
+    "lo": "\"~/Emulation/roms/ps3/Demons Souls.iso\"",
+    "args": "\"~/Emulation/roms/ps3/Demons Souls.iso\""
+   }
+  ],
+  [
+   "PS3 BCES-00052 Dash",
+   "ps3/Flower PSN.iso",
+   "--no-gui \"%RPCS3_GAMEID%:{SERIAL}\"",
+   {
+    "lo": "--no-gui \"%RPCS3_GAMEID%:BCES00052\"",
+    "args": "--no-gui \"%RPCS3_GAMEID%:BCES00052\""
+   }
+  ],
+  [
+   "PS3 BCES-00052 Dash",
+   "ps3/Flower PSN.iso",
+   "--no-gui {SERIAL}",
+   {
+    "lo": "--no-gui BCES00052",
+    "args": "--no-gui BCES00052"
+   }
+  ],
+  [
+   "PS3 BCES-00052 Dash",
+   "ps3/Flower PSN.iso",
+   "run net.rpcs3.RPCS3 --no-gui \"{ROM}\"",
+   {
+    "lo": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Flower PSN.iso\"",
+    "args": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Flower PSN.iso\""
+   }
+  ],
+  [
+   "PS3 BCES-00052 Dash",
+   "ps3/Flower PSN.iso",
+   "\"{ROM}\"",
+   {
+    "lo": "\"~/Emulation/roms/ps3/Flower PSN.iso\"",
+    "args": "\"~/Emulation/roms/ps3/Flower PSN.iso\""
+   }
+  ],
+  [
+   "PS3 BCES-00052 Dash",
+   "ps3/No Serial Here.iso",
+   "--no-gui \"%RPCS3_GAMEID%:{SERIAL}\"",
+   {
+    "lo": "--no-gui \"%RPCS3_GAMEID%:BCES00052\"",
+    "args": "--no-gui \"%RPCS3_GAMEID%:BCES00052\""
+   }
+  ],
+  [
+   "PS3 BCES-00052 Dash",
+   "ps3/No Serial Here.iso",
+   "--no-gui {SERIAL}",
+   {
+    "lo": "--no-gui BCES00052",
+    "args": "--no-gui BCES00052"
+   }
+  ],
+  [
+   "PS3 BCES-00052 Dash",
+   "ps3/No Serial Here.iso",
+   "run net.rpcs3.RPCS3 --no-gui \"{ROM}\"",
+   {
+    "lo": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/No Serial Here.iso\"",
+    "args": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/No Serial Here.iso\""
+   }
+  ],
+  [
+   "PS3 BCES-00052 Dash",
+   "ps3/No Serial Here.iso",
+   "\"{ROM}\"",
+   {
+    "lo": "\"~/Emulation/roms/ps3/No Serial Here.iso\"",
+    "args": "\"~/Emulation/roms/ps3/No Serial Here.iso\""
+   }
+  ],
+  [
+   "PS3 BCES-00052 Dash",
+   "ps3/Lower blus30443 name.iso",
+   "--no-gui \"%RPCS3_GAMEID%:{SERIAL}\"",
+   {
+    "lo": "--no-gui \"%RPCS3_GAMEID%:BCES00052\"",
+    "args": "--no-gui \"%RPCS3_GAMEID%:BCES00052\""
+   }
+  ],
+  [
+   "PS3 BCES-00052 Dash",
+   "ps3/Lower blus30443 name.iso",
+   "--no-gui {SERIAL}",
+   {
+    "lo": "--no-gui BCES00052",
+    "args": "--no-gui BCES00052"
+   }
+  ],
+  [
+   "PS3 BCES-00052 Dash",
+   "ps3/Lower blus30443 name.iso",
+   "run net.rpcs3.RPCS3 --no-gui \"{ROM}\"",
+   {
+    "lo": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Lower blus30443 name.iso\"",
+    "args": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Lower blus30443 name.iso\""
+   }
+  ],
+  [
+   "PS3 BCES-00052 Dash",
+   "ps3/Lower blus30443 name.iso",
+   "\"{ROM}\"",
+   {
+    "lo": "\"~/Emulation/roms/ps3/Lower blus30443 name.iso\"",
+    "args": "\"~/Emulation/roms/ps3/Lower blus30443 name.iso\""
+   }
+  ],
+  [
+   "PS3 BCES-00052 Dash",
+   "ps3/Uncharted",
+   "--no-gui \"%RPCS3_GAMEID%:{SERIAL}\"",
+   {
+    "lo": "--no-gui \"%RPCS3_GAMEID%:BCES00052\"",
+    "args": "--no-gui \"%RPCS3_GAMEID%:BCES00052\""
+   }
+  ],
+  [
+   "PS3 BCES-00052 Dash",
+   "ps3/Uncharted",
+   "--no-gui {SERIAL}",
+   {
+    "lo": "--no-gui BCES00052",
+    "args": "--no-gui BCES00052"
+   }
+  ],
+  [
+   "PS3 BCES-00052 Dash",
+   "ps3/Uncharted",
+   "run net.rpcs3.RPCS3 --no-gui \"{ROM}\"",
+   {
+    "lo": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Uncharted\"",
+    "args": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Uncharted\""
+   }
+  ],
+  [
+   "PS3 BCES-00052 Dash",
+   "ps3/Uncharted",
+   "\"{ROM}\"",
+   {
+    "lo": "\"~/Emulation/roms/ps3/Uncharted/PS3_GAME/USRDIR/EBOOT.BIN\"",
+    "args": "\"~/Emulation/roms/ps3/Uncharted/PS3_GAME/USRDIR/EBOOT.BIN\""
+   }
+  ],
+  [
+   "PS3 BCES-00052 Dash",
+   "ps3/Wrapped",
+   "--no-gui \"%RPCS3_GAMEID%:{SERIAL}\"",
+   {
+    "lo": "--no-gui \"%RPCS3_GAMEID%:BCES00052\"",
+    "args": "--no-gui \"%RPCS3_GAMEID%:BCES00052\""
+   }
+  ],
+  [
+   "PS3 BCES-00052 Dash",
+   "ps3/Wrapped",
+   "--no-gui {SERIAL}",
+   {
+    "lo": "--no-gui BCES00052",
+    "args": "--no-gui BCES00052"
+   }
+  ],
+  [
+   "PS3 BCES-00052 Dash",
+   "ps3/Wrapped",
+   "run net.rpcs3.RPCS3 --no-gui \"{ROM}\"",
+   {
+    "lo": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Wrapped\"",
+    "args": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Wrapped\""
+   }
+  ],
+  [
+   "PS3 BCES-00052 Dash",
+   "ps3/Wrapped",
+   "\"{ROM}\"",
+   {
+    "lo": "\"~/Emulation/roms/ps3/Wrapped\"",
+    "args": "\"~/Emulation/roms/ps3/Wrapped\""
+   }
+  ],
+  [
+   "PS3 BCES-00052 Dash",
+   "ps3/Iso In Folder",
+   "--no-gui \"%RPCS3_GAMEID%:{SERIAL}\"",
+   {
+    "lo": "--no-gui \"%RPCS3_GAMEID%:BCES00052\"",
+    "args": "--no-gui \"%RPCS3_GAMEID%:BCES00052\""
+   }
+  ],
+  [
+   "PS3 BCES-00052 Dash",
+   "ps3/Iso In Folder",
+   "--no-gui {SERIAL}",
+   {
+    "lo": "--no-gui BCES00052",
+    "args": "--no-gui BCES00052"
+   }
+  ],
+  [
+   "PS3 BCES-00052 Dash",
+   "ps3/Iso In Folder",
+   "run net.rpcs3.RPCS3 --no-gui \"{ROM}\"",
+   {
+    "lo": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Iso In Folder\"",
+    "args": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Iso In Folder\""
+   }
+  ],
+  [
+   "PS3 BCES-00052 Dash",
+   "ps3/Iso In Folder",
+   "\"{ROM}\"",
+   {
+    "lo": "\"~/Emulation/roms/ps3/Iso In Folder\"",
+    "args": "\"~/Emulation/roms/ps3/Iso In Folder\""
+   }
+  ],
+  [
+   "PS3 BCES-00052 Dash",
+   "ps3/Plain Folder",
+   "--no-gui \"%RPCS3_GAMEID%:{SERIAL}\"",
+   {
+    "lo": "--no-gui \"%RPCS3_GAMEID%:BCES00052\"",
+    "args": "--no-gui \"%RPCS3_GAMEID%:BCES00052\""
+   }
+  ],
+  [
+   "PS3 BCES-00052 Dash",
+   "ps3/Plain Folder",
+   "--no-gui {SERIAL}",
+   {
+    "lo": "--no-gui BCES00052",
+    "args": "--no-gui BCES00052"
+   }
+  ],
+  [
+   "PS3 BCES-00052 Dash",
+   "ps3/Plain Folder",
+   "run net.rpcs3.RPCS3 --no-gui \"{ROM}\"",
+   {
+    "lo": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Plain Folder\"",
+    "args": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Plain Folder\""
+   }
+  ],
+  [
+   "PS3 BCES-00052 Dash",
+   "ps3/Plain Folder",
+   "\"{ROM}\"",
+   {
+    "lo": "\"~/Emulation/roms/ps3/Plain Folder\"",
+    "args": "\"~/Emulation/roms/ps3/Plain Folder\""
+   }
+  ],
+  [
+   "PS3 BCES-00052 Dash",
+   "ps3/Pkg Game",
+   "--no-gui \"%RPCS3_GAMEID%:{SERIAL}\"",
+   {
+    "lo": "--no-gui \"%RPCS3_GAMEID%:BCES00052\"",
+    "args": "--no-gui \"%RPCS3_GAMEID%:BCES00052\""
+   }
+  ],
+  [
+   "PS3 BCES-00052 Dash",
+   "ps3/Pkg Game",
+   "--no-gui {SERIAL}",
+   {
+    "lo": "--no-gui BCES00052",
+    "args": "--no-gui BCES00052"
+   }
+  ],
+  [
+   "PS3 BCES-00052 Dash",
+   "ps3/Pkg Game",
+   "run net.rpcs3.RPCS3 --no-gui \"{ROM}\"",
+   {
+    "lo": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Pkg Game\"",
+    "args": "run net.rpcs3.RPCS3 --no-gui \"~/Emulation/roms/ps3/Pkg Game\""
+   }
+  ],
+  [
+   "PS3 BCES-00052 Dash",
+   "ps3/Pkg Game",
+   "\"{ROM}\"",
+   {
+    "lo": "\"~/Emulation/roms/ps3/Pkg Game\"",
+    "args": "\"~/Emulation/roms/ps3/Pkg Game\""
+   }
+  ],
+  [
+   "Bloodborne",
+   "ps4/Bloodborne",
+   "-g {SERIAL}",
+   {
+    "lo": "-g CUSA00900",
+    "args": "-g CUSA00900"
+   }
+  ],
+  [
+   "Bloodborne",
+   "ps4/Bloodborne",
+   "-g \"{ROM}\"",
+   {
+    "lo": "-g \"~/Emulation/roms/ps4/Bloodborne/eboot.bin\"",
+    "args": "-g \"~/Emulation/roms/ps4/Bloodborne/eboot.bin\""
+   }
+  ],
+  [
+   "Bloodborne",
+   "ps4/Bloodborne",
+   "-g \"{ROM}\"",
+   {
+    "lo": "-g \"~/Emulation/roms/ps4/Bloodborne\"",
+    "args": "-g \"~/Emulation/roms/ps4/Bloodborne\""
+   }
+  ],
+  [
+   "Bloodborne",
+   "ps4/Astro",
+   "-g {SERIAL}",
+   {
+    "lo": "-g PPSA01325",
+    "args": "-g PPSA01325"
+   }
+  ],
+  [
+   "Bloodborne",
+   "ps4/Astro",
+   "-g \"{ROM}\"",
+   {
+    "lo": "-g \"~/Emulation/roms/ps4/Astro/eboot.bin\"",
+    "args": "-g \"~/Emulation/roms/ps4/Astro/eboot.bin\""
+   }
+  ],
+  [
+   "Bloodborne",
+   "ps4/Astro",
+   "-g \"{ROM}\"",
+   {
+    "lo": "-g \"~/Emulation/roms/ps4/Astro\"",
+    "args": "-g \"~/Emulation/roms/ps4/Astro\""
+   }
+  ],
+  [
+   "Bloodborne",
+   "ps4/NoId",
+   "-g {SERIAL}",
+   {
+    "lo": "-g \"~/Emulation/roms/ps4/NoId/eboot.bin\"",
+    "args": "-g \"~/Emulation/roms/ps4/NoId/eboot.bin\"",
+    "fallback": "path"
+   }
+  ],
+  [
+   "Bloodborne",
+   "ps4/NoId",
+   "-g \"{ROM}\"",
+   {
+    "lo": "-g \"~/Emulation/roms/ps4/NoId/eboot.bin\"",
+    "args": "-g \"~/Emulation/roms/ps4/NoId/eboot.bin\""
+   }
+  ],
+  [
+   "Bloodborne",
+   "ps4/NoId",
+   "-g \"{ROM}\"",
+   {
+    "lo": "-g \"~/Emulation/roms/ps4/NoId\"",
+    "args": "-g \"~/Emulation/roms/ps4/NoId\""
+   }
+  ],
+  [
+   "Bloodborne CUSA00900",
+   "ps4/Bloodborne",
+   "-g {SERIAL}",
+   {
+    "lo": "-g CUSA00900",
+    "args": "-g CUSA00900"
+   }
+  ],
+  [
+   "Bloodborne CUSA00900",
+   "ps4/Bloodborne",
+   "-g \"{ROM}\"",
+   {
+    "lo": "-g \"~/Emulation/roms/ps4/Bloodborne/eboot.bin\"",
+    "args": "-g \"~/Emulation/roms/ps4/Bloodborne/eboot.bin\""
+   }
+  ],
+  [
+   "Bloodborne CUSA00900",
+   "ps4/Bloodborne",
+   "-g \"{ROM}\"",
+   {
+    "lo": "-g \"~/Emulation/roms/ps4/Bloodborne\"",
+    "args": "-g \"~/Emulation/roms/ps4/Bloodborne\""
+   }
+  ],
+  [
+   "Bloodborne CUSA00900",
+   "ps4/Astro",
+   "-g {SERIAL}",
+   {
+    "lo": "-g CUSA00900",
+    "args": "-g CUSA00900"
+   }
+  ],
+  [
+   "Bloodborne CUSA00900",
+   "ps4/Astro",
+   "-g \"{ROM}\"",
+   {
+    "lo": "-g \"~/Emulation/roms/ps4/Astro/eboot.bin\"",
+    "args": "-g \"~/Emulation/roms/ps4/Astro/eboot.bin\""
+   }
+  ],
+  [
+   "Bloodborne CUSA00900",
+   "ps4/Astro",
+   "-g \"{ROM}\"",
+   {
+    "lo": "-g \"~/Emulation/roms/ps4/Astro\"",
+    "args": "-g \"~/Emulation/roms/ps4/Astro\""
+   }
+  ],
+  [
+   "Bloodborne CUSA00900",
+   "ps4/NoId",
+   "-g {SERIAL}",
+   {
+    "lo": "-g CUSA00900",
+    "args": "-g CUSA00900"
+   }
+  ],
+  [
+   "Bloodborne CUSA00900",
+   "ps4/NoId",
+   "-g \"{ROM}\"",
+   {
+    "lo": "-g \"~/Emulation/roms/ps4/NoId/eboot.bin\"",
+    "args": "-g \"~/Emulation/roms/ps4/NoId/eboot.bin\""
+   }
+  ],
+  [
+   "Bloodborne CUSA00900",
+   "ps4/NoId",
+   "-g \"{ROM}\"",
+   {
+    "lo": "-g \"~/Emulation/roms/ps4/NoId\"",
+    "args": "-g \"~/Emulation/roms/ps4/NoId\""
+   }
+  ],
+  [
+   "bloodborne cusa00900",
+   "ps4/Bloodborne",
+   "-g {SERIAL}",
+   {
+    "lo": "-g CUSA00900",
+    "args": "-g CUSA00900"
+   }
+  ],
+  [
+   "bloodborne cusa00900",
+   "ps4/Bloodborne",
+   "-g \"{ROM}\"",
+   {
+    "lo": "-g \"~/Emulation/roms/ps4/Bloodborne/eboot.bin\"",
+    "args": "-g \"~/Emulation/roms/ps4/Bloodborne/eboot.bin\""
+   }
+  ],
+  [
+   "bloodborne cusa00900",
+   "ps4/Bloodborne",
+   "-g \"{ROM}\"",
+   {
+    "lo": "-g \"~/Emulation/roms/ps4/Bloodborne\"",
+    "args": "-g \"~/Emulation/roms/ps4/Bloodborne\""
+   }
+  ],
+  [
+   "bloodborne cusa00900",
+   "ps4/Astro",
+   "-g {SERIAL}",
+   {
+    "lo": "-g CUSA00900",
+    "args": "-g CUSA00900"
+   }
+  ],
+  [
+   "bloodborne cusa00900",
+   "ps4/Astro",
+   "-g \"{ROM}\"",
+   {
+    "lo": "-g \"~/Emulation/roms/ps4/Astro/eboot.bin\"",
+    "args": "-g \"~/Emulation/roms/ps4/Astro/eboot.bin\""
+   }
+  ],
+  [
+   "bloodborne cusa00900",
+   "ps4/Astro",
+   "-g \"{ROM}\"",
+   {
+    "lo": "-g \"~/Emulation/roms/ps4/Astro\"",
+    "args": "-g \"~/Emulation/roms/ps4/Astro\""
+   }
+  ],
+  [
+   "bloodborne cusa00900",
+   "ps4/NoId",
+   "-g {SERIAL}",
+   {
+    "lo": "-g CUSA00900",
+    "args": "-g CUSA00900"
+   }
+  ],
+  [
+   "bloodborne cusa00900",
+   "ps4/NoId",
+   "-g \"{ROM}\"",
+   {
+    "lo": "-g \"~/Emulation/roms/ps4/NoId/eboot.bin\"",
+    "args": "-g \"~/Emulation/roms/ps4/NoId/eboot.bin\""
+   }
+  ],
+  [
+   "bloodborne cusa00900",
+   "ps4/NoId",
+   "-g \"{ROM}\"",
+   {
+    "lo": "-g \"~/Emulation/roms/ps4/NoId\"",
+    "args": "-g \"~/Emulation/roms/ps4/NoId\""
+   }
+  ],
+  [
+   "Astro PPSA01325",
+   "ps4/Bloodborne",
+   "-g {SERIAL}",
+   {
+    "lo": "-g PPSA01325",
+    "args": "-g PPSA01325"
+   }
+  ],
+  [
+   "Astro PPSA01325",
+   "ps4/Bloodborne",
+   "-g \"{ROM}\"",
+   {
+    "lo": "-g \"~/Emulation/roms/ps4/Bloodborne/eboot.bin\"",
+    "args": "-g \"~/Emulation/roms/ps4/Bloodborne/eboot.bin\""
+   }
+  ],
+  [
+   "Astro PPSA01325",
+   "ps4/Bloodborne",
+   "-g \"{ROM}\"",
+   {
+    "lo": "-g \"~/Emulation/roms/ps4/Bloodborne\"",
+    "args": "-g \"~/Emulation/roms/ps4/Bloodborne\""
+   }
+  ],
+  [
+   "Astro PPSA01325",
+   "ps4/Astro",
+   "-g {SERIAL}",
+   {
+    "lo": "-g PPSA01325",
+    "args": "-g PPSA01325"
+   }
+  ],
+  [
+   "Astro PPSA01325",
+   "ps4/Astro",
+   "-g \"{ROM}\"",
+   {
+    "lo": "-g \"~/Emulation/roms/ps4/Astro/eboot.bin\"",
+    "args": "-g \"~/Emulation/roms/ps4/Astro/eboot.bin\""
+   }
+  ],
+  [
+   "Astro PPSA01325",
+   "ps4/Astro",
+   "-g \"{ROM}\"",
+   {
+    "lo": "-g \"~/Emulation/roms/ps4/Astro\"",
+    "args": "-g \"~/Emulation/roms/ps4/Astro\""
+   }
+  ],
+  [
+   "Astro PPSA01325",
+   "ps4/NoId",
+   "-g {SERIAL}",
+   {
+    "lo": "-g PPSA01325",
+    "args": "-g PPSA01325"
+   }
+  ],
+  [
+   "Astro PPSA01325",
+   "ps4/NoId",
+   "-g \"{ROM}\"",
+   {
+    "lo": "-g \"~/Emulation/roms/ps4/NoId/eboot.bin\"",
+    "args": "-g \"~/Emulation/roms/ps4/NoId/eboot.bin\""
+   }
+  ],
+  [
+   "Astro PPSA01325",
+   "ps4/NoId",
+   "-g \"{ROM}\"",
+   {
+    "lo": "-g \"~/Emulation/roms/ps4/NoId\"",
+    "args": "-g \"~/Emulation/roms/ps4/NoId\""
+   }
+  ],
+  [
+   "CUSA-00900 dash",
+   "ps4/Bloodborne",
+   "-g {SERIAL}",
+   {
+    "lo": "-g CUSA00900",
+    "args": "-g CUSA00900"
+   }
+  ],
+  [
+   "CUSA-00900 dash",
+   "ps4/Bloodborne",
+   "-g \"{ROM}\"",
+   {
+    "lo": "-g \"~/Emulation/roms/ps4/Bloodborne/eboot.bin\"",
+    "args": "-g \"~/Emulation/roms/ps4/Bloodborne/eboot.bin\""
+   }
+  ],
+  [
+   "CUSA-00900 dash",
+   "ps4/Bloodborne",
+   "-g \"{ROM}\"",
+   {
+    "lo": "-g \"~/Emulation/roms/ps4/Bloodborne\"",
+    "args": "-g \"~/Emulation/roms/ps4/Bloodborne\""
+   }
+  ],
+  [
+   "CUSA-00900 dash",
+   "ps4/Astro",
+   "-g {SERIAL}",
+   {
+    "lo": "-g PPSA01325",
+    "args": "-g PPSA01325"
+   }
+  ],
+  [
+   "CUSA-00900 dash",
+   "ps4/Astro",
+   "-g \"{ROM}\"",
+   {
+    "lo": "-g \"~/Emulation/roms/ps4/Astro/eboot.bin\"",
+    "args": "-g \"~/Emulation/roms/ps4/Astro/eboot.bin\""
+   }
+  ],
+  [
+   "CUSA-00900 dash",
+   "ps4/Astro",
+   "-g \"{ROM}\"",
+   {
+    "lo": "-g \"~/Emulation/roms/ps4/Astro\"",
+    "args": "-g \"~/Emulation/roms/ps4/Astro\""
+   }
+  ],
+  [
+   "CUSA-00900 dash",
+   "ps4/NoId",
+   "-g {SERIAL}",
+   {
+    "lo": "-g \"~/Emulation/roms/ps4/NoId/eboot.bin\"",
+    "args": "-g \"~/Emulation/roms/ps4/NoId/eboot.bin\"",
+    "fallback": "path"
+   }
+  ],
+  [
+   "CUSA-00900 dash",
+   "ps4/NoId",
+   "-g \"{ROM}\"",
+   {
+    "lo": "-g \"~/Emulation/roms/ps4/NoId/eboot.bin\"",
+    "args": "-g \"~/Emulation/roms/ps4/NoId/eboot.bin\""
+   }
+  ],
+  [
+   "CUSA-00900 dash",
+   "ps4/NoId",
+   "-g \"{ROM}\"",
+   {
+    "lo": "-g \"~/Emulation/roms/ps4/NoId\"",
+    "args": "-g \"~/Emulation/roms/ps4/NoId\""
+   }
+  ],
+  [
+   "Game",
+   "ps4/Bloodborne",
+   "-g {SERIAL}",
+   {
+    "lo": "-g CUSA00900",
+    "args": "-g CUSA00900"
+   }
+  ],
+  [
+   "Game",
+   "ps4/Bloodborne",
+   "-g \"{ROM}\"",
+   {
+    "lo": "-g \"~/Emulation/roms/ps4/Bloodborne/eboot.bin\"",
+    "args": "-g \"~/Emulation/roms/ps4/Bloodborne/eboot.bin\""
+   }
+  ],
+  [
+   "Game",
+   "ps4/Bloodborne",
+   "-g \"{ROM}\"",
+   {
+    "lo": "-g \"~/Emulation/roms/ps4/Bloodborne\"",
+    "args": "-g \"~/Emulation/roms/ps4/Bloodborne\""
+   }
+  ],
+  [
+   "Game",
+   "ps4/Astro",
+   "-g {SERIAL}",
+   {
+    "lo": "-g PPSA01325",
+    "args": "-g PPSA01325"
+   }
+  ],
+  [
+   "Game",
+   "ps4/Astro",
+   "-g \"{ROM}\"",
+   {
+    "lo": "-g \"~/Emulation/roms/ps4/Astro/eboot.bin\"",
+    "args": "-g \"~/Emulation/roms/ps4/Astro/eboot.bin\""
+   }
+  ],
+  [
+   "Game",
+   "ps4/Astro",
+   "-g \"{ROM}\"",
+   {
+    "lo": "-g \"~/Emulation/roms/ps4/Astro\"",
+    "args": "-g \"~/Emulation/roms/ps4/Astro\""
+   }
+  ],
+  [
+   "Game",
+   "ps4/NoId",
+   "-g {SERIAL}",
+   {
+    "lo": "-g \"~/Emulation/roms/ps4/NoId/eboot.bin\"",
+    "args": "-g \"~/Emulation/roms/ps4/NoId/eboot.bin\"",
+    "fallback": "path"
+   }
+  ],
+  [
+   "Game",
+   "ps4/NoId",
+   "-g \"{ROM}\"",
+   {
+    "lo": "-g \"~/Emulation/roms/ps4/NoId/eboot.bin\"",
+    "args": "-g \"~/Emulation/roms/ps4/NoId/eboot.bin\""
+   }
+  ],
+  [
+   "Game",
+   "ps4/NoId",
+   "-g \"{ROM}\"",
+   {
+    "lo": "-g \"~/Emulation/roms/ps4/NoId\"",
+    "args": "-g \"~/Emulation/roms/ps4/NoId\""
+   }
+  ],
+  [
+   "Persona 4 Golden",
+   "psvita/Persona.vpk",
+   "-F -r {SERIAL}",
+   {
+    "lo": "-F -r PCSE00120",
+    "args": "-F -r PCSE00120"
+   }
+  ],
+  [
+   "Persona 4 Golden",
+   "psvita/Persona.vpk",
+   "{SERIAL}",
+   {
+    "lo": "vblank_mode=0 %command% PCSE00120",
+    "args": "PCSE00120"
+   }
+  ],
+  [
+   "Persona 4 Golden",
+   "psvita/Gravity",
+   "-F -r {SERIAL}",
+   {
+    "lo": "-F -r PCSB00999",
+    "args": "-F -r PCSB00999"
+   }
+  ],
+  [
+   "Persona 4 Golden",
+   "psvita/Gravity",
+   "{SERIAL}",
+   {
+    "lo": "vblank_mode=0 %command% PCSB00999",
+    "args": "PCSB00999"
+   }
+  ],
+  [
+   "Persona 4 Golden",
+   "psvita/Unknown.vpk",
+   "-F -r {SERIAL}",
+   {
+    "lo": "-F -r PCSE00120",
+    "args": "-F -r PCSE00120"
+   }
+  ],
+  [
+   "Persona 4 Golden",
+   "psvita/Unknown.vpk",
+   "{SERIAL}",
+   {
+    "lo": "vblank_mode=0 %command% PCSE00120",
+    "args": "PCSE00120"
+   }
+  ],
+  [
+   "Persona 4 Golden",
+   "psvita/Named Only.vpk",
+   "-F -r {SERIAL}",
+   {
+    "lo": "-F -r PCSE00120",
+    "args": "-F -r PCSE00120"
+   }
+  ],
+  [
+   "Persona 4 Golden",
+   "psvita/Named Only.vpk",
+   "{SERIAL}",
+   {
+    "lo": "vblank_mode=0 %command% PCSE00120",
+    "args": "PCSE00120"
+   }
+  ],
+  [
+   "Persona [PCSE00120]",
+   "psvita/Persona.vpk",
+   "-F -r {SERIAL}",
+   {
+    "lo": "-F -r PCSE00120",
+    "args": "-F -r PCSE00120"
+   }
+  ],
+  [
+   "Persona [PCSE00120]",
+   "psvita/Persona.vpk",
+   "{SERIAL}",
+   {
+    "lo": "vblank_mode=0 %command% PCSE00120",
+    "args": "PCSE00120"
+   }
+  ],
+  [
+   "Persona [PCSE00120]",
+   "psvita/Gravity",
+   "-F -r {SERIAL}",
+   {
+    "lo": "-F -r PCSE00120",
+    "args": "-F -r PCSE00120"
+   }
+  ],
+  [
+   "Persona [PCSE00120]",
+   "psvita/Gravity",
+   "{SERIAL}",
+   {
+    "lo": "vblank_mode=0 %command% PCSE00120",
+    "args": "PCSE00120"
+   }
+  ],
+  [
+   "Persona [PCSE00120]",
+   "psvita/Unknown.vpk",
+   "-F -r {SERIAL}",
+   {
+    "lo": "-F -r PCSE00120",
+    "args": "-F -r PCSE00120"
+   }
+  ],
+  [
+   "Persona [PCSE00120]",
+   "psvita/Unknown.vpk",
+   "{SERIAL}",
+   {
+    "lo": "vblank_mode=0 %command% PCSE00120",
+    "args": "PCSE00120"
+   }
+  ],
+  [
+   "Persona [PCSE00120]",
+   "psvita/Named Only.vpk",
+   "-F -r {SERIAL}",
+   {
+    "lo": "-F -r PCSE00120",
+    "args": "-F -r PCSE00120"
+   }
+  ],
+  [
+   "Persona [PCSE00120]",
+   "psvita/Named Only.vpk",
+   "{SERIAL}",
+   {
+    "lo": "vblank_mode=0 %command% PCSE00120",
+    "args": "PCSE00120"
+   }
+  ],
+  [
+   "pcse00120 lower",
+   "psvita/Persona.vpk",
+   "-F -r {SERIAL}",
+   {
+    "lo": "-F -r PCSE00120",
+    "args": "-F -r PCSE00120"
+   }
+  ],
+  [
+   "pcse00120 lower",
+   "psvita/Persona.vpk",
+   "{SERIAL}",
+   {
+    "lo": "vblank_mode=0 %command% PCSE00120",
+    "args": "PCSE00120"
+   }
+  ],
+  [
+   "pcse00120 lower",
+   "psvita/Gravity",
+   "-F -r {SERIAL}",
+   {
+    "lo": "-F -r PCSB00999",
+    "args": "-F -r PCSB00999"
+   }
+  ],
+  [
+   "pcse00120 lower",
+   "psvita/Gravity",
+   "{SERIAL}",
+   {
+    "lo": "vblank_mode=0 %command% PCSB00999",
+    "args": "PCSB00999"
+   }
+  ],
+  [
+   "pcse00120 lower",
+   "psvita/Unknown.vpk",
+   "-F -r {SERIAL}",
+   {
+    "lo": "-F -r ",
+    "args": "-F -r ",
+    "missing": "Install this game in Vita3K first (File → Install .pkg or .vpk), then add it to Steam."
+   }
+  ],
+  [
+   "pcse00120 lower",
+   "psvita/Unknown.vpk",
+   "{SERIAL}",
+   {
+    "lo": "vblank_mode=0 %command%",
+    "args": "",
+    "missing": "Install this game in Vita3K first (File → Install .pkg or .vpk), then add it to Steam."
+   }
+  ],
+  [
+   "pcse00120 lower",
+   "psvita/Named Only.vpk",
+   "-F -r {SERIAL}",
+   {
+    "lo": "-F -r ",
+    "args": "-F -r ",
+    "missing": "Install this game in Vita3K first (File → Install .pkg or .vpk), then add it to Steam."
+   }
+  ],
+  [
+   "pcse00120 lower",
+   "psvita/Named Only.vpk",
+   "{SERIAL}",
+   {
+    "lo": "vblank_mode=0 %command%",
+    "args": "",
+    "missing": "Install this game in Vita3K first (File → Install .pkg or .vpk), then add it to Steam."
+   }
+  ],
+  [
+   "Gravity Rush",
+   "psvita/Persona.vpk",
+   "-F -r {SERIAL}",
+   {
+    "lo": "-F -r PCSE00120",
+    "args": "-F -r PCSE00120"
+   }
+  ],
+  [
+   "Gravity Rush",
+   "psvita/Persona.vpk",
+   "{SERIAL}",
+   {
+    "lo": "vblank_mode=0 %command% PCSE00120",
+    "args": "PCSE00120"
+   }
+  ],
+  [
+   "Gravity Rush",
+   "psvita/Gravity",
+   "-F -r {SERIAL}",
+   {
+    "lo": "-F -r PCSB00999",
+    "args": "-F -r PCSB00999"
+   }
+  ],
+  [
+   "Gravity Rush",
+   "psvita/Gravity",
+   "{SERIAL}",
+   {
+    "lo": "vblank_mode=0 %command% PCSB00999",
+    "args": "PCSB00999"
+   }
+  ],
+  [
+   "Gravity Rush",
+   "psvita/Unknown.vpk",
+   "-F -r {SERIAL}",
+   {
+    "lo": "-F -r PCSB00999",
+    "args": "-F -r PCSB00999"
+   }
+  ],
+  [
+   "Gravity Rush",
+   "psvita/Unknown.vpk",
+   "{SERIAL}",
+   {
+    "lo": "vblank_mode=0 %command% PCSB00999",
+    "args": "PCSB00999"
+   }
+  ],
+  [
+   "Gravity Rush",
+   "psvita/Named Only.vpk",
+   "-F -r {SERIAL}",
+   {
+    "lo": "-F -r PCSB00999",
+    "args": "-F -r PCSB00999"
+   }
+  ],
+  [
+   "Gravity Rush",
+   "psvita/Named Only.vpk",
+   "{SERIAL}",
+   {
+    "lo": "vblank_mode=0 %command% PCSB00999",
+    "args": "PCSB00999"
+   }
+  ],
+  [
+   "Named Only",
+   "psvita/Persona.vpk",
+   "-F -r {SERIAL}",
+   {
+    "lo": "-F -r PCSE00120",
+    "args": "-F -r PCSE00120"
+   }
+  ],
+  [
+   "Named Only",
+   "psvita/Persona.vpk",
+   "{SERIAL}",
+   {
+    "lo": "vblank_mode=0 %command% PCSE00120",
+    "args": "PCSE00120"
+   }
+  ],
+  [
+   "Named Only",
+   "psvita/Gravity",
+   "-F -r {SERIAL}",
+   {
+    "lo": "-F -r PCSB00999",
+    "args": "-F -r PCSB00999"
+   }
+  ],
+  [
+   "Named Only",
+   "psvita/Gravity",
+   "{SERIAL}",
+   {
+    "lo": "vblank_mode=0 %command% PCSB00999",
+    "args": "PCSB00999"
+   }
+  ],
+  [
+   "Named Only",
+   "psvita/Unknown.vpk",
+   "-F -r {SERIAL}",
+   {
+    "lo": "-F -r PCSA00011",
+    "args": "-F -r PCSA00011"
+   }
+  ],
+  [
+   "Named Only",
+   "psvita/Unknown.vpk",
+   "{SERIAL}",
+   {
+    "lo": "vblank_mode=0 %command% PCSA00011",
+    "args": "PCSA00011"
+   }
+  ],
+  [
+   "Named Only",
+   "psvita/Named Only.vpk",
+   "-F -r {SERIAL}",
+   {
+    "lo": "-F -r PCSA00011",
+    "args": "-F -r PCSA00011"
+   }
+  ],
+  [
+   "Named Only",
+   "psvita/Named Only.vpk",
+   "{SERIAL}",
+   {
+    "lo": "vblank_mode=0 %command% PCSA00011",
+    "args": "PCSA00011"
+   }
+  ],
+  [
+   "Unknown",
+   "psvita/Persona.vpk",
+   "-F -r {SERIAL}",
+   {
+    "lo": "-F -r PCSE00120",
+    "args": "-F -r PCSE00120"
+   }
+  ],
+  [
+   "Unknown",
+   "psvita/Persona.vpk",
+   "{SERIAL}",
+   {
+    "lo": "vblank_mode=0 %command% PCSE00120",
+    "args": "PCSE00120"
+   }
+  ],
+  [
+   "Unknown",
+   "psvita/Gravity",
+   "-F -r {SERIAL}",
+   {
+    "lo": "-F -r PCSB00999",
+    "args": "-F -r PCSB00999"
+   }
+  ],
+  [
+   "Unknown",
+   "psvita/Gravity",
+   "{SERIAL}",
+   {
+    "lo": "vblank_mode=0 %command% PCSB00999",
+    "args": "PCSB00999"
+   }
+  ],
+  [
+   "Unknown",
+   "psvita/Unknown.vpk",
+   "-F -r {SERIAL}",
+   {
+    "lo": "-F -r ",
+    "args": "-F -r ",
+    "missing": "Install this game in Vita3K first (File → Install .pkg or .vpk), then add it to Steam."
+   }
+  ],
+  [
+   "Unknown",
+   "psvita/Unknown.vpk",
+   "{SERIAL}",
+   {
+    "lo": "vblank_mode=0 %command%",
+    "args": "",
+    "missing": "Install this game in Vita3K first (File → Install .pkg or .vpk), then add it to Steam."
+   }
+  ],
+  [
+   "Unknown",
+   "psvita/Named Only.vpk",
+   "-F -r {SERIAL}",
+   {
+    "lo": "-F -r ",
+    "args": "-F -r ",
+    "missing": "Install this game in Vita3K first (File → Install .pkg or .vpk), then add it to Steam."
+   }
+  ],
+  [
+   "Unknown",
+   "psvita/Named Only.vpk",
+   "{SERIAL}",
+   {
+    "lo": "vblank_mode=0 %command%",
+    "args": "",
+    "missing": "Install this game in Vita3K first (File → Install .pkg or .vpk), then add it to Steam."
+   }
+  ],
+  [
+   "PCSB00999",
+   "psvita/Persona.vpk",
+   "-F -r {SERIAL}",
+   {
+    "lo": "-F -r PCSB00999",
+    "args": "-F -r PCSB00999"
+   }
+  ],
+  [
+   "PCSB00999",
+   "psvita/Persona.vpk",
+   "{SERIAL}",
+   {
+    "lo": "vblank_mode=0 %command% PCSB00999",
+    "args": "PCSB00999"
+   }
+  ],
+  [
+   "PCSB00999",
+   "psvita/Gravity",
+   "-F -r {SERIAL}",
+   {
+    "lo": "-F -r PCSB00999",
+    "args": "-F -r PCSB00999"
+   }
+  ],
+  [
+   "PCSB00999",
+   "psvita/Gravity",
+   "{SERIAL}",
+   {
+    "lo": "vblank_mode=0 %command% PCSB00999",
+    "args": "PCSB00999"
+   }
+  ],
+  [
+   "PCSB00999",
+   "psvita/Unknown.vpk",
+   "-F -r {SERIAL}",
+   {
+    "lo": "-F -r PCSB00999",
+    "args": "-F -r PCSB00999"
+   }
+  ],
+  [
+   "PCSB00999",
+   "psvita/Unknown.vpk",
+   "{SERIAL}",
+   {
+    "lo": "vblank_mode=0 %command% PCSB00999",
+    "args": "PCSB00999"
+   }
+  ],
+  [
+   "PCSB00999",
+   "psvita/Named Only.vpk",
+   "-F -r {SERIAL}",
+   {
+    "lo": "-F -r PCSB00999",
+    "args": "-F -r PCSB00999"
+   }
+  ],
+  [
+   "PCSB00999",
+   "psvita/Named Only.vpk",
+   "{SERIAL}",
+   {
+    "lo": "vblank_mode=0 %command% PCSB00999",
+    "args": "PCSB00999"
+   }
+  ]
+ ],
+ "learn": [
+  [
+   "RPCS3",
+   {
+    "console": "ps3",
+    "slug": "ps3",
+    "template": {
+     "exe": "/home/u/Emulation/tools/launchers/rpcs3.sh",
+     "start": "/home/u/Emulation/tools/launchers",
+     "pre": [],
+     "command": false,
+     "args": "--no-gui \"%RPCS3_GAMEID%:{SERIAL}\"",
+     "kind": "serial",
+     "romRoot": "",
+     "sub": "",
+     "sample": "",
+     "from": "RPCS3",
+     "fromId": 1,
+     "how": "learned"
+    }
+   }
+  ],
+  [
+   "RPCS3 Flatpak",
+   {
+    "console": "ps3",
+    "slug": "ps3",
+    "template": {
+     "exe": "/usr/bin/flatpak",
+     "start": "/usr/bin",
+     "pre": [],
+     "command": false,
+     "args": "run net.rpcs3.RPCS3 --no-gui %RPCS3_GAMEID%:{SERIAL}",
+     "kind": "serial",
+     "romRoot": "",
+     "sub": "",
+     "sample": "",
+     "from": "RPCS3 Flatpak",
+     "fromId": 1,
+     "how": "learned"
+    }
+   }
+  ],
+  [
+   "RPCS3 path",
+   {
+    "console": "ps3",
+    "slug": "ps3",
+    "template": {
+     "exe": "/home/u/Applications/rpcs3.AppImage",
+     "start": "/home/u/Applications",
+     "pre": [],
+     "command": false,
+     "args": "--no-gui \"{ROM}\"",
+     "kind": "eboot",
+     "romRoot": "/home/u/Emulation/roms/",
+     "sub": "Uncharted/PS3_GAME/USRDIR",
+     "sample": "/home/u/Emulation/roms/ps3/Uncharted/PS3_GAME/USRDIR/EBOOT.BIN",
+     "from": "RPCS3 path",
+     "fromId": 1,
+     "how": "learned"
+    }
+   }
+  ],
+  [
+   "shadPS4",
+   {
+    "console": "ps4",
+    "slug": "ps4",
+    "template": {
+     "exe": "/home/u/Applications/shadPS4.AppImage",
+     "start": "/home/u/Applications",
+     "pre": [],
+     "command": false,
+     "args": "-g {SERIAL}",
+     "kind": "titleid",
+     "romRoot": "",
+     "sub": "",
+     "sample": "",
+     "from": "shadPS4",
+     "fromId": 1,
+     "how": "learned"
+    }
+   }
+  ],
+  [
+   "shadPS4 quoted",
+   {
+    "console": "ps4",
+    "slug": "ps4",
+    "template": {
+     "exe": "/home/u/Applications/shadPS4.AppImage",
+     "start": "/home/u/Applications",
+     "pre": [],
+     "command": false,
+     "args": "-g \"{SERIAL}\" --fullscreen true",
+     "kind": "titleid",
+     "romRoot": "",
+     "sub": "",
+     "sample": "",
+     "from": "shadPS4 quoted",
+     "fromId": 1,
+     "how": "learned"
+    }
+   }
+  ],
+  [
+   "shadPS4 path",
+   {
+    "console": "ps4",
+    "slug": "ps4",
+    "template": {
+     "exe": "/home/u/Applications/shadPS4.AppImage",
+     "start": "/home/u/Applications",
+     "pre": [],
+     "command": false,
+     "args": "-g \"{ROM}\"",
+     "kind": "eboot",
+     "romRoot": "/home/u/Emulation/roms/",
+     "sub": "Bloodborne",
+     "sample": "/home/u/Emulation/roms/ps4/Bloodborne/eboot.bin",
+     "from": "shadPS4 path",
+     "fromId": 1,
+     "how": "learned"
+    }
+   }
+  ],
+  [
+   "Vita3K",
+   null
+  ],
+  [
+   "Vita3K env",
+   null
+  ],
+  [
+   "Dolphin",
+   {
+    "console": "gc",
+    "slug": "gc",
+    "template": {
+     "exe": "/usr/bin/flatpak",
+     "start": "/usr/bin",
+     "pre": [],
+     "command": false,
+     "args": "run org.DolphinEmu.dolphin-emu -b -e \"{ROM}\"",
+     "kind": "path",
+     "romRoot": "/home/u/Emulation/roms/",
+     "sub": "",
+     "sample": "/home/u/Emulation/roms/gc/Melee.iso",
+     "from": "Dolphin",
+     "fromId": 1,
+     "how": "learned"
+    }
+   }
+  ],
+  [
+   "Xenia",
+   {
+    "console": "xbox360",
+    "slug": "xbox360",
+    "template": {
+     "exe": "/home/u/Emulation/roms/xbox360/xenia_canary.exe",
+     "start": "/home/u/Emulation/roms/xbox360",
+     "pre": [],
+     "command": false,
+     "args": "\"Z:{ROM}\"",
+     "kind": "path",
+     "romRoot": "/home/u/Emulation/roms/",
+     "sub": "",
+     "sample": "/home/u/Emulation/roms/xbox360/Halo 3.iso",
+     "from": "Xenia",
+     "fromId": 1,
+     "how": "learned"
+    }
+   }
+  ],
+  [
+   "Nothing",
+   null
+  ],
+  [
+   "Fake serial",
+   {
+    "console": "ps3",
+    "slug": "ps3",
+    "template": {
+     "exe": "/x/rpcs3.sh",
+     "start": "/x",
+     "pre": [],
+     "command": false,
+     "args": "--no-gui \"%RPCS3_GAMEID%:{SERIAL}\"",
+     "kind": "serial",
+     "romRoot": "",
+     "sub": "",
+     "sample": "",
+     "from": "Fake serial",
+     "fromId": 1,
+     "how": "learned"
+    }
+   }
+  ],
+  [
+   "Lower",
+   null
+  ],
+  [
+   "Demon's Souls",
+   {
+    "console": "ps3",
+    "slug": "ps3",
+    "template": {
+     "exe": "/x/rpcs3.sh",
+     "start": "/x",
+     "pre": [],
+     "command": false,
+     "args": "--no-gui %RPCS3_GAMEID%:{SERIAL}",
+     "kind": "serial",
+     "romRoot": "",
+     "sub": "",
+     "sample": "",
+     "from": "Demon's Souls",
+     "fromId": 1,
+     "how": "learned"
+    }
+   }
+  ],
+  [
+   "Bloodborne (PS4)",
+   {
+    "console": "ps4",
+    "slug": "ps4",
+    "template": {
+     "exe": "/x/shadPS4.AppImage",
+     "start": "/x",
+     "pre": [],
+     "command": false,
+     "args": "-g {SERIAL}",
+     "kind": "titleid",
+     "romRoot": "",
+     "sub": "",
+     "sample": "",
+     "from": "Bloodborne (PS4)",
+     "fromId": 1,
+     "how": "learned"
+    }
+   }
+  ]
+ ],
+ "match": [
+  [
+   "ps3",
+   "Demons Souls",
+   "ps3/Demons Souls.iso",
+   113
+  ],
+  [
+   "ps3",
+   "Demons Souls",
+   "ps3/Flower PSN.iso",
+   null
+  ],
+  [
+   "ps3",
+   "Demons Souls",
+   "ps3/No Serial Here.iso",
+   null
+  ],
+  [
+   "ps3",
+   "Demons Souls",
+   "ps3/Lower blus30443 name.iso",
+   null
+  ],
+  [
+   "ps3",
+   "Demons Souls",
+   "ps3/Uncharted",
+   101
+  ],
+  [
+   "ps3",
+   "Demons Souls",
+   "ps3/Wrapped",
+   null
+  ],
+  [
+   "ps3",
+   "Demons Souls",
+   "ps3/Iso In Folder",
+   null
+  ],
+  [
+   "ps3",
+   "Demons Souls",
+   "ps3/Plain Folder",
+   null
+  ],
+  [
+   "ps3",
+   "Demons Souls",
+   "ps3/Pkg Game",
+   null
+  ],
+  [
+   "ps3",
+   "Demons Souls",
+   null,
+   null
+  ],
+  [
+   "ps3",
+   "Demon's Souls [BLUS30443]",
+   "ps3/Demons Souls.iso",
+   113
+  ],
+  [
+   "ps3",
+   "Demon's Souls [BLUS30443]",
+   "ps3/Flower PSN.iso",
+   113
+  ],
+  [
+   "ps3",
+   "Demon's Souls [BLUS30443]",
+   "ps3/No Serial Here.iso",
+   113
+  ],
+  [
+   "ps3",
+   "Demon's Souls [BLUS30443]",
+   "ps3/Lower blus30443 name.iso",
+   113
+  ],
+  [
+   "ps3",
+   "Demon's Souls [BLUS30443]",
+   "ps3/Uncharted",
+   113
+  ],
+  [
+   "ps3",
+   "Demon's Souls [BLUS30443]",
+   "ps3/Wrapped",
+   113
+  ],
+  [
+   "ps3",
+   "Demon's Souls [BLUS30443]",
+   "ps3/Iso In Folder",
+   113
+  ],
+  [
+   "ps3",
+   "Demon's Souls [BLUS30443]",
+   "ps3/Plain Folder",
+   113
+  ],
+  [
+   "ps3",
+   "Demon's Souls [BLUS30443]",
+   "ps3/Pkg Game",
+   113
+  ],
+  [
+   "ps3",
+   "Demon's Souls [BLUS30443]",
+   null,
+   113
+  ],
+  [
+   "ps3",
+   "Demons Souls (BLUS-30443)",
+   "ps3/Demons Souls.iso",
+   113
+  ],
+  [
+   "ps3",
+   "Demons Souls (BLUS-30443)",
+   "ps3/Flower PSN.iso",
+   113
+  ],
+  [
+   "ps3",
+   "Demons Souls (BLUS-30443)",
+   "ps3/No Serial Here.iso",
+   113
+  ],
+  [
+   "ps3",
+   "Demons Souls (BLUS-30443)",
+   "ps3/Lower blus30443 name.iso",
+   113
+  ],
+  [
+   "ps3",
+   "Demons Souls (BLUS-30443)",
+   "ps3/Uncharted",
+   113
+  ],
+  [
+   "ps3",
+   "Demons Souls (BLUS-30443)",
+   "ps3/Wrapped",
+   113
+  ],
+  [
+   "ps3",
+   "Demons Souls (BLUS-30443)",
+   "ps3/Iso In Folder",
+   113
+  ],
+  [
+   "ps3",
+   "Demons Souls (BLUS-30443)",
+   "ps3/Plain Folder",
+   113
+  ],
+  [
+   "ps3",
+   "Demons Souls (BLUS-30443)",
+   "ps3/Pkg Game",
+   113
+  ],
+  [
+   "ps3",
+   "Demons Souls (BLUS-30443)",
+   null,
+   null
+  ],
+  [
+   "ps3",
+   "blus30443",
+   "ps3/Demons Souls.iso",
+   113
+  ],
+  [
+   "ps3",
+   "blus30443",
+   "ps3/Flower PSN.iso",
+   null
+  ],
+  [
+   "ps3",
+   "blus30443",
+   "ps3/No Serial Here.iso",
+   null
+  ],
+  [
+   "ps3",
+   "blus30443",
+   "ps3/Lower blus30443 name.iso",
+   null
+  ],
+  [
+   "ps3",
+   "blus30443",
+   "ps3/Uncharted",
+   101
+  ],
+  [
+   "ps3",
+   "blus30443",
+   "ps3/Wrapped",
+   null
+  ],
+  [
+   "ps3",
+   "blus30443",
+   "ps3/Iso In Folder",
+   null
+  ],
+  [
+   "ps3",
+   "blus30443",
+   "ps3/Plain Folder",
+   null
+  ],
+  [
+   "ps3",
+   "blus30443",
+   "ps3/Pkg Game",
+   null
+  ],
+  [
+   "ps3",
+   "blus30443",
+   null,
+   null
+  ],
+  [
+   "ps3",
+   "Flower NPUB30025",
+   "ps3/Demons Souls.iso",
+   null
+  ],
+  [
+   "ps3",
+   "Flower NPUB30025",
+   "ps3/Flower PSN.iso",
+   null
+  ],
+  [
+   "ps3",
+   "Flower NPUB30025",
+   "ps3/No Serial Here.iso",
+   null
+  ],
+  [
+   "ps3",
+   "Flower NPUB30025",
+   "ps3/Lower blus30443 name.iso",
+   null
+  ],
+  [
+   "ps3",
+   "Flower NPUB30025",
+   "ps3/Uncharted",
+   null
+  ],
+  [
+   "ps3",
+   "Flower NPUB30025",
+   "ps3/Wrapped",
+   null
+  ],
+  [
+   "ps3",
+   "Flower NPUB30025",
+   "ps3/Iso In Folder",
+   null
+  ],
+  [
+   "ps3",
+   "Flower NPUB30025",
+   "ps3/Plain Folder",
+   null
+  ],
+  [
+   "ps3",
+   "Flower NPUB30025",
+   "ps3/Pkg Game",
+   null
+  ],
+  [
+   "ps3",
+   "Flower NPUB30025",
+   null,
+   null
+  ],
+  [
+   "ps3",
+   "ABCD12345 Fake",
+   "ps3/Demons Souls.iso",
+   111
+  ],
+  [
+   "ps3",
+   "ABCD12345 Fake",
+   "ps3/Flower PSN.iso",
+   111
+  ],
+  [
+   "ps3",
+   "ABCD12345 Fake",
+   "ps3/No Serial Here.iso",
+   111
+  ],
+  [
+   "ps3",
+   "ABCD12345 Fake",
+   "ps3/Lower blus30443 name.iso",
+   111
+  ],
+  [
+   "ps3",
+   "ABCD12345 Fake",
+   "ps3/Uncharted",
+   111
+  ],
+  [
+   "ps3",
+   "ABCD12345 Fake",
+   "ps3/Wrapped",
+   111
+  ],
+  [
+   "ps3",
+   "ABCD12345 Fake",
+   "ps3/Iso In Folder",
+   111
+  ],
+  [
+   "ps3",
+   "ABCD12345 Fake",
+   "ps3/Plain Folder",
+   111
+  ],
+  [
+   "ps3",
+   "ABCD12345 Fake",
+   "ps3/Pkg Game",
+   111
+  ],
+  [
+   "ps3",
+   "ABCD12345 Fake",
+   null,
+   111
+  ],
+  [
+   "ps3",
+   "Game",
+   "ps3/Demons Souls.iso",
+   113
+  ],
+  [
+   "ps3",
+   "Game",
+   "ps3/Flower PSN.iso",
+   null
+  ],
+  [
+   "ps3",
+   "Game",
+   "ps3/No Serial Here.iso",
+   null
+  ],
+  [
+   "ps3",
+   "Game",
+   "ps3/Lower blus30443 name.iso",
+   null
+  ],
+  [
+   "ps3",
+   "Game",
+   "ps3/Uncharted",
+   101
+  ],
+  [
+   "ps3",
+   "Game",
+   "ps3/Wrapped",
+   null
+  ],
+  [
+   "ps3",
+   "Game",
+   "ps3/Iso In Folder",
+   null
+  ],
+  [
+   "ps3",
+   "Game",
+   "ps3/Plain Folder",
+   null
+  ],
+  [
+   "ps3",
+   "Game",
+   "ps3/Pkg Game",
+   null
+  ],
+  [
+   "ps3",
+   "Game",
+   null,
+   null
+  ],
+  [
+   "ps3",
+   "Uncharted",
+   "ps3/Demons Souls.iso",
+   113
+  ],
+  [
+   "ps3",
+   "Uncharted",
+   "ps3/Flower PSN.iso",
+   null
+  ],
+  [
+   "ps3",
+   "Uncharted",
+   "ps3/No Serial Here.iso",
+   null
+  ],
+  [
+   "ps3",
+   "Uncharted",
+   "ps3/Lower blus30443 name.iso",
+   null
+  ],
+  [
+   "ps3",
+   "Uncharted",
+   "ps3/Uncharted",
+   101
+  ],
+  [
+   "ps3",
+   "Uncharted",
+   "ps3/Wrapped",
+   null
+  ],
+  [
+   "ps3",
+   "Uncharted",
+   "ps3/Iso In Folder",
+   null
+  ],
+  [
+   "ps3",
+   "Uncharted",
+   "ps3/Plain Folder",
+   null
+  ],
+  [
+   "ps3",
+   "Uncharted",
+   "ps3/Pkg Game",
+   null
+  ],
+  [
+   "ps3",
+   "Uncharted",
+   null,
+   null
+  ],
+  [
+   "ps3",
+   "ULUS10041 psp named",
+   "ps3/Demons Souls.iso",
+   null
+  ],
+  [
+   "ps3",
+   "ULUS10041 psp named",
+   "ps3/Flower PSN.iso",
+   null
+  ],
+  [
+   "ps3",
+   "ULUS10041 psp named",
+   "ps3/No Serial Here.iso",
+   null
+  ],
+  [
+   "ps3",
+   "ULUS10041 psp named",
+   "ps3/Lower blus30443 name.iso",
+   null
+  ],
+  [
+   "ps3",
+   "ULUS10041 psp named",
+   "ps3/Uncharted",
+   null
+  ],
+  [
+   "ps3",
+   "ULUS10041 psp named",
+   "ps3/Wrapped",
+   null
+  ],
+  [
+   "ps3",
+   "ULUS10041 psp named",
+   "ps3/Iso In Folder",
+   null
+  ],
+  [
+   "ps3",
+   "ULUS10041 psp named",
+   "ps3/Plain Folder",
+   null
+  ],
+  [
+   "ps3",
+   "ULUS10041 psp named",
+   "ps3/Pkg Game",
+   null
+  ],
+  [
+   "ps3",
+   "ULUS10041 psp named",
+   null,
+   null
+  ],
+  [
+   "ps3",
+   "PS3 BCES-00052 Dash",
+   "ps3/Demons Souls.iso",
+   101
+  ],
+  [
+   "ps3",
+   "PS3 BCES-00052 Dash",
+   "ps3/Flower PSN.iso",
+   101
+  ],
+  [
+   "ps3",
+   "PS3 BCES-00052 Dash",
+   "ps3/No Serial Here.iso",
+   101
+  ],
+  [
+   "ps3",
+   "PS3 BCES-00052 Dash",
+   "ps3/Lower blus30443 name.iso",
+   101
+  ],
+  [
+   "ps3",
+   "PS3 BCES-00052 Dash",
+   "ps3/Uncharted",
+   101
+  ],
+  [
+   "ps3",
+   "PS3 BCES-00052 Dash",
+   "ps3/Wrapped",
+   101
+  ],
+  [
+   "ps3",
+   "PS3 BCES-00052 Dash",
+   "ps3/Iso In Folder",
+   101
+  ],
+  [
+   "ps3",
+   "PS3 BCES-00052 Dash",
+   "ps3/Plain Folder",
+   101
+  ],
+  [
+   "ps3",
+   "PS3 BCES-00052 Dash",
+   "ps3/Pkg Game",
+   101
+  ],
+  [
+   "ps3",
+   "PS3 BCES-00052 Dash",
+   null,
+   null
+  ],
+  [
+   "ps3",
+   "Demon's Souls",
+   "ps3/Demons Souls.iso",
+   113
+  ],
+  [
+   "ps3",
+   "Demon's Souls",
+   "ps3/Flower PSN.iso",
+   113
+  ],
+  [
+   "ps3",
+   "Demon's Souls",
+   "ps3/No Serial Here.iso",
+   113
+  ],
+  [
+   "ps3",
+   "Demon's Souls",
+   "ps3/Lower blus30443 name.iso",
+   113
+  ],
+  [
+   "ps3",
+   "Demon's Souls",
+   "ps3/Uncharted",
+   101
+  ],
+  [
+   "ps3",
+   "Demon's Souls",
+   "ps3/Wrapped",
+   113
+  ],
+  [
+   "ps3",
+   "Demon's Souls",
+   "ps3/Iso In Folder",
+   113
+  ],
+  [
+   "ps3",
+   "Demon's Souls",
+   "ps3/Plain Folder",
+   113
+  ],
+  [
+   "ps3",
+   "Demon's Souls",
+   "ps3/Pkg Game",
+   113
+  ],
+  [
+   "ps3",
+   "Demon's Souls",
+   null,
+   113
+  ],
+  [
+   "ps3",
+   "Bloodborne",
+   "ps3/Demons Souls.iso",
+   113
+  ],
+  [
+   "ps3",
+   "Bloodborne",
+   "ps3/Flower PSN.iso",
+   null
+  ],
+  [
+   "ps3",
+   "Bloodborne",
+   "ps3/No Serial Here.iso",
+   null
+  ],
+  [
+   "ps3",
+   "Bloodborne",
+   "ps3/Lower blus30443 name.iso",
+   null
+  ],
+  [
+   "ps3",
+   "Bloodborne",
+   "ps3/Uncharted",
+   101
+  ],
+  [
+   "ps3",
+   "Bloodborne",
+   "ps3/Wrapped",
+   null
+  ],
+  [
+   "ps3",
+   "Bloodborne",
+   "ps3/Iso In Folder",
+   null
+  ],
+  [
+   "ps3",
+   "Bloodborne",
+   "ps3/Plain Folder",
+   null
+  ],
+  [
+   "ps3",
+   "Bloodborne",
+   "ps3/Pkg Game",
+   null
+  ],
+  [
+   "ps3",
+   "Bloodborne",
+   null,
+   null
+  ],
+  [
+   "ps4",
+   "Bloodborne",
+   "ps4/Bloodborne",
+   114
+  ],
+  [
+   "ps4",
+   "Bloodborne",
+   "ps4/Astro",
+   114
+  ],
+  [
+   "ps4",
+   "Bloodborne",
+   "ps4/NoId",
+   114
+  ],
+  [
+   "ps4",
+   "Bloodborne",
+   null,
+   114
+  ],
+  [
+   "ps4",
+   "Bloodborne CUSA00900",
+   "ps4/Bloodborne",
+   114
+  ],
+  [
+   "ps4",
+   "Bloodborne CUSA00900",
+   "ps4/Astro",
+   114
+  ],
+  [
+   "ps4",
+   "Bloodborne CUSA00900",
+   "ps4/NoId",
+   114
+  ],
+  [
+   "ps4",
+   "Bloodborne CUSA00900",
+   null,
+   114
+  ],
+  [
+   "ps4",
+   "bloodborne cusa00900",
+   "ps4/Bloodborne",
+   null
+  ],
+  [
+   "ps4",
+   "bloodborne cusa00900",
+   "ps4/Astro",
+   null
+  ],
+  [
+   "ps4",
+   "bloodborne cusa00900",
+   "ps4/NoId",
+   null
+  ],
+  [
+   "ps4",
+   "bloodborne cusa00900",
+   null,
+   null
+  ],
+  [
+   "ps4",
+   "Astro PPSA01325",
+   "ps4/Bloodborne",
+   104
+  ],
+  [
+   "ps4",
+   "Astro PPSA01325",
+   "ps4/Astro",
+   104
+  ],
+  [
+   "ps4",
+   "Astro PPSA01325",
+   "ps4/NoId",
+   104
+  ],
+  [
+   "ps4",
+   "Astro PPSA01325",
+   null,
+   104
+  ],
+  [
+   "ps4",
+   "CUSA-00900 dash",
+   "ps4/Bloodborne",
+   null
+  ],
+  [
+   "ps4",
+   "CUSA-00900 dash",
+   "ps4/Astro",
+   null
+  ],
+  [
+   "ps4",
+   "CUSA-00900 dash",
+   "ps4/NoId",
+   null
+  ],
+  [
+   "ps4",
+   "CUSA-00900 dash",
+   null,
+   null
+  ],
+  [
+   "ps4",
+   "Game",
+   "ps4/Bloodborne",
+   null
+  ],
+  [
+   "ps4",
+   "Game",
+   "ps4/Astro",
+   null
+  ],
+  [
+   "ps4",
+   "Game",
+   "ps4/NoId",
+   null
+  ],
+  [
+   "ps4",
+   "Game",
+   null,
+   null
+  ],
+  [
+   "ps4",
+   "Demon's Souls",
+   "ps4/Bloodborne",
+   null
+  ],
+  [
+   "ps4",
+   "Demon's Souls",
+   "ps4/Astro",
+   null
+  ],
+  [
+   "ps4",
+   "Demon's Souls",
+   "ps4/NoId",
+   null
+  ],
+  [
+   "ps4",
+   "Demon's Souls",
+   null,
+   null
+  ],
+  [
+   "ps4",
+   "Bloodborne",
+   "ps4/Bloodborne",
+   114
+  ],
+  [
+   "ps4",
+   "Bloodborne",
+   "ps4/Astro",
+   114
+  ],
+  [
+   "ps4",
+   "Bloodborne",
+   "ps4/NoId",
+   114
+  ],
+  [
+   "ps4",
+   "Bloodborne",
+   null,
+   114
+  ],
+  [
+   "psvita",
+   "Persona 4 Golden",
+   "psvita/Persona.vpk",
+   null
+  ],
+  [
+   "psvita",
+   "Persona 4 Golden",
+   "psvita/Gravity",
+   null
+  ],
+  [
+   "psvita",
+   "Persona 4 Golden",
+   "psvita/Unknown.vpk",
+   null
+  ],
+  [
+   "psvita",
+   "Persona 4 Golden",
+   "psvita/Named Only.vpk",
+   null
+  ],
+  [
+   "psvita",
+   "Persona 4 Golden",
+   null,
+   null
+  ],
+  [
+   "psvita",
+   "Persona [PCSE00120]",
+   "psvita/Persona.vpk",
+   null
+  ],
+  [
+   "psvita",
+   "Persona [PCSE00120]",
+   "psvita/Gravity",
+   null
+  ],
+  [
+   "psvita",
+   "Persona [PCSE00120]",
+   "psvita/Unknown.vpk",
+   null
+  ],
+  [
+   "psvita",
+   "Persona [PCSE00120]",
+   "psvita/Named Only.vpk",
+   null
+  ],
+  [
+   "psvita",
+   "Persona [PCSE00120]",
+   null,
+   null
+  ],
+  [
+   "psvita",
+   "pcse00120 lower",
+   "psvita/Persona.vpk",
+   null
+  ],
+  [
+   "psvita",
+   "pcse00120 lower",
+   "psvita/Gravity",
+   null
+  ],
+  [
+   "psvita",
+   "pcse00120 lower",
+   "psvita/Unknown.vpk",
+   null
+  ],
+  [
+   "psvita",
+   "pcse00120 lower",
+   "psvita/Named Only.vpk",
+   null
+  ],
+  [
+   "psvita",
+   "pcse00120 lower",
+   null,
+   null
+  ],
+  [
+   "psvita",
+   "Gravity Rush",
+   "psvita/Persona.vpk",
+   null
+  ],
+  [
+   "psvita",
+   "Gravity Rush",
+   "psvita/Gravity",
+   null
+  ],
+  [
+   "psvita",
+   "Gravity Rush",
+   "psvita/Unknown.vpk",
+   null
+  ],
+  [
+   "psvita",
+   "Gravity Rush",
+   "psvita/Named Only.vpk",
+   null
+  ],
+  [
+   "psvita",
+   "Gravity Rush",
+   null,
+   null
+  ],
+  [
+   "psvita",
+   "Named Only",
+   "psvita/Persona.vpk",
+   null
+  ],
+  [
+   "psvita",
+   "Named Only",
+   "psvita/Gravity",
+   null
+  ],
+  [
+   "psvita",
+   "Named Only",
+   "psvita/Unknown.vpk",
+   null
+  ],
+  [
+   "psvita",
+   "Named Only",
+   "psvita/Named Only.vpk",
+   null
+  ],
+  [
+   "psvita",
+   "Named Only",
+   null,
+   null
+  ],
+  [
+   "psvita",
+   "Unknown",
+   "psvita/Persona.vpk",
+   null
+  ],
+  [
+   "psvita",
+   "Unknown",
+   "psvita/Gravity",
+   null
+  ],
+  [
+   "psvita",
+   "Unknown",
+   "psvita/Unknown.vpk",
+   null
+  ],
+  [
+   "psvita",
+   "Unknown",
+   "psvita/Named Only.vpk",
+   null
+  ],
+  [
+   "psvita",
+   "Unknown",
+   null,
+   null
+  ],
+  [
+   "psvita",
+   "PCSB00999",
+   "psvita/Persona.vpk",
+   null
+  ],
+  [
+   "psvita",
+   "PCSB00999",
+   "psvita/Gravity",
+   null
+  ],
+  [
+   "psvita",
+   "PCSB00999",
+   "psvita/Unknown.vpk",
+   null
+  ],
+  [
+   "psvita",
+   "PCSB00999",
+   "psvita/Named Only.vpk",
+   null
+  ],
+  [
+   "psvita",
+   "PCSB00999",
+   null,
+   null
+  ],
+  [
+   "psvita",
+   "Demon's Souls",
+   "psvita/Persona.vpk",
+   null
+  ],
+  [
+   "psvita",
+   "Demon's Souls",
+   "psvita/Gravity",
+   null
+  ],
+  [
+   "psvita",
+   "Demon's Souls",
+   "psvita/Unknown.vpk",
+   null
+  ],
+  [
+   "psvita",
+   "Demon's Souls",
+   "psvita/Named Only.vpk",
+   null
+  ],
+  [
+   "psvita",
+   "Demon's Souls",
+   null,
+   null
+  ],
+  [
+   "psvita",
+   "Bloodborne",
+   "psvita/Persona.vpk",
+   null
+  ],
+  [
+   "psvita",
+   "Bloodborne",
+   "psvita/Gravity",
+   null
+  ],
+  [
+   "psvita",
+   "Bloodborne",
+   "psvita/Unknown.vpk",
+   null
+  ],
+  [
+   "psvita",
+   "Bloodborne",
+   "psvita/Named Only.vpk",
+   null
+  ],
+  [
+   "psvita",
+   "Bloodborne",
+   null,
+   null
+  ]
+ ],
+ "serial": [
+  [
+   "Demons Souls",
+   "ps3/Demons Souls.iso",
+   "BLUS30443",
+   null,
+   "BLUS30443"
+  ],
+  [
+   "Demons Souls",
+   "ps3/Flower PSN.iso",
+   "NPEB01234",
+   null,
+   "NPEB01234"
+  ],
+  [
+   "Demons Souls",
+   "ps3/No Serial Here.iso",
+   null,
+   null,
+   null
+  ],
+  [
+   "Demons Souls",
+   "ps3/Lower blus30443 name.iso",
+   null,
+   null,
+   null
+  ],
+  [
+   "Demons Souls",
+   "ps3/Uncharted",
+   "BCES00052",
+   null,
+   "BCES00052"
+  ],
+  [
+   "Demons Souls",
+   "ps3/Wrapped",
+   "BLES00932",
+   null,
+   "BLES00932"
+  ],
+  [
+   "Demons Souls",
+   "ps3/Iso In Folder",
+   "BLJM60066",
+   null,
+   "BLJM60066"
+  ],
+  [
+   "Demons Souls",
+   "ps3/Plain Folder",
+   null,
+   null,
+   null
+  ],
+  [
+   "Demons Souls",
+   "ps3/Pkg Game",
+   null,
+   null,
+   null
+  ],
+  [
+   "Demon's Souls [BLUS30443]",
+   "ps3/Demons Souls.iso",
+   "BLUS30443",
+   null,
+   "BLUS30443"
+  ],
+  [
+   "Demon's Souls [BLUS30443]",
+   "ps3/Flower PSN.iso",
+   "BLUS30443",
+   null,
+   "BLUS30443"
+  ],
+  [
+   "Demon's Souls [BLUS30443]",
+   "ps3/No Serial Here.iso",
+   "BLUS30443",
+   null,
+   "BLUS30443"
+  ],
+  [
+   "Demon's Souls [BLUS30443]",
+   "ps3/Lower blus30443 name.iso",
+   "BLUS30443",
+   null,
+   "BLUS30443"
+  ],
+  [
+   "Demon's Souls [BLUS30443]",
+   "ps3/Uncharted",
+   "BLUS30443",
+   null,
+   "BLUS30443"
+  ],
+  [
+   "Demon's Souls [BLUS30443]",
+   "ps3/Wrapped",
+   "BLUS30443",
+   null,
+   "BLUS30443"
+  ],
+  [
+   "Demon's Souls [BLUS30443]",
+   "ps3/Iso In Folder",
+   "BLUS30443",
+   null,
+   "BLUS30443"
+  ],
+  [
+   "Demon's Souls [BLUS30443]",
+   "ps3/Plain Folder",
+   "BLUS30443",
+   null,
+   "BLUS30443"
+  ],
+  [
+   "Demon's Souls [BLUS30443]",
+   "ps3/Pkg Game",
+   "BLUS30443",
+   null,
+   "BLUS30443"
+  ],
+  [
+   "Demons Souls (BLUS-30443)",
+   "ps3/Demons Souls.iso",
+   "BLUS30443",
+   null,
+   "BLUS30443"
+  ],
+  [
+   "Demons Souls (BLUS-30443)",
+   "ps3/Flower PSN.iso",
+   "BLUS30443",
+   null,
+   "BLUS30443"
+  ],
+  [
+   "Demons Souls (BLUS-30443)",
+   "ps3/No Serial Here.iso",
+   "BLUS30443",
+   null,
+   "BLUS30443"
+  ],
+  [
+   "Demons Souls (BLUS-30443)",
+   "ps3/Lower blus30443 name.iso",
+   "BLUS30443",
+   null,
+   "BLUS30443"
+  ],
+  [
+   "Demons Souls (BLUS-30443)",
+   "ps3/Uncharted",
+   "BLUS30443",
+   null,
+   "BLUS30443"
+  ],
+  [
+   "Demons Souls (BLUS-30443)",
+   "ps3/Wrapped",
+   "BLUS30443",
+   null,
+   "BLUS30443"
+  ],
+  [
+   "Demons Souls (BLUS-30443)",
+   "ps3/Iso In Folder",
+   "BLUS30443",
+   null,
+   "BLUS30443"
+  ],
+  [
+   "Demons Souls (BLUS-30443)",
+   "ps3/Plain Folder",
+   "BLUS30443",
+   null,
+   "BLUS30443"
+  ],
+  [
+   "Demons Souls (BLUS-30443)",
+   "ps3/Pkg Game",
+   "BLUS30443",
+   null,
+   "BLUS30443"
+  ],
+  [
+   "blus30443",
+   "ps3/Demons Souls.iso",
+   "BLUS30443",
+   null,
+   "BLUS30443"
+  ],
+  [
+   "blus30443",
+   "ps3/Flower PSN.iso",
+   "NPEB01234",
+   null,
+   "NPEB01234"
+  ],
+  [
+   "blus30443",
+   "ps3/No Serial Here.iso",
+   null,
+   null,
+   null
+  ],
+  [
+   "blus30443",
+   "ps3/Lower blus30443 name.iso",
+   null,
+   null,
+   null
+  ],
+  [
+   "blus30443",
+   "ps3/Uncharted",
+   "BCES00052",
+   null,
+   "BCES00052"
+  ],
+  [
+   "blus30443",
+   "ps3/Wrapped",
+   "BLES00932",
+   null,
+   "BLES00932"
+  ],
+  [
+   "blus30443",
+   "ps3/Iso In Folder",
+   "BLJM60066",
+   null,
+   "BLJM60066"
+  ],
+  [
+   "blus30443",
+   "ps3/Plain Folder",
+   null,
+   null,
+   null
+  ],
+  [
+   "blus30443",
+   "ps3/Pkg Game",
+   null,
+   null,
+   null
+  ],
+  [
+   "Flower NPUB30025",
+   "ps3/Demons Souls.iso",
+   "NPUB30025",
+   null,
+   "NPUB30025"
+  ],
+  [
+   "Flower NPUB30025",
+   "ps3/Flower PSN.iso",
+   "NPUB30025",
+   null,
+   "NPUB30025"
+  ],
+  [
+   "Flower NPUB30025",
+   "ps3/No Serial Here.iso",
+   "NPUB30025",
+   null,
+   "NPUB30025"
+  ],
+  [
+   "Flower NPUB30025",
+   "ps3/Lower blus30443 name.iso",
+   "NPUB30025",
+   null,
+   "NPUB30025"
+  ],
+  [
+   "Flower NPUB30025",
+   "ps3/Uncharted",
+   "NPUB30025",
+   null,
+   "NPUB30025"
+  ],
+  [
+   "Flower NPUB30025",
+   "ps3/Wrapped",
+   "NPUB30025",
+   null,
+   "NPUB30025"
+  ],
+  [
+   "Flower NPUB30025",
+   "ps3/Iso In Folder",
+   "NPUB30025",
+   null,
+   "NPUB30025"
+  ],
+  [
+   "Flower NPUB30025",
+   "ps3/Plain Folder",
+   "NPUB30025",
+   null,
+   "NPUB30025"
+  ],
+  [
+   "Flower NPUB30025",
+   "ps3/Pkg Game",
+   "NPUB30025",
+   null,
+   "NPUB30025"
+  ],
+  [
+   "ABCD12345 Fake",
+   "ps3/Demons Souls.iso",
+   "ABCD12345",
+   null,
+   "ABCD12345"
+  ],
+  [
+   "ABCD12345 Fake",
+   "ps3/Flower PSN.iso",
+   "ABCD12345",
+   null,
+   "ABCD12345"
+  ],
+  [
+   "ABCD12345 Fake",
+   "ps3/No Serial Here.iso",
+   "ABCD12345",
+   null,
+   "ABCD12345"
+  ],
+  [
+   "ABCD12345 Fake",
+   "ps3/Lower blus30443 name.iso",
+   "ABCD12345",
+   null,
+   "ABCD12345"
+  ],
+  [
+   "ABCD12345 Fake",
+   "ps3/Uncharted",
+   "ABCD12345",
+   null,
+   "ABCD12345"
+  ],
+  [
+   "ABCD12345 Fake",
+   "ps3/Wrapped",
+   "ABCD12345",
+   null,
+   "ABCD12345"
+  ],
+  [
+   "ABCD12345 Fake",
+   "ps3/Iso In Folder",
+   "ABCD12345",
+   null,
+   "ABCD12345"
+  ],
+  [
+   "ABCD12345 Fake",
+   "ps3/Plain Folder",
+   "ABCD12345",
+   null,
+   "ABCD12345"
+  ],
+  [
+   "ABCD12345 Fake",
+   "ps3/Pkg Game",
+   "ABCD12345",
+   null,
+   "ABCD12345"
+  ],
+  [
+   "Game",
+   "ps3/Demons Souls.iso",
+   "BLUS30443",
+   null,
+   "BLUS30443"
+  ],
+  [
+   "Game",
+   "ps3/Flower PSN.iso",
+   "NPEB01234",
+   null,
+   "NPEB01234"
+  ],
+  [
+   "Game",
+   "ps3/No Serial Here.iso",
+   null,
+   null,
+   null
+  ],
+  [
+   "Game",
+   "ps3/Lower blus30443 name.iso",
+   null,
+   null,
+   null
+  ],
+  [
+   "Game",
+   "ps3/Uncharted",
+   "BCES00052",
+   null,
+   "BCES00052"
+  ],
+  [
+   "Game",
+   "ps3/Wrapped",
+   "BLES00932",
+   null,
+   "BLES00932"
+  ],
+  [
+   "Game",
+   "ps3/Iso In Folder",
+   "BLJM60066",
+   null,
+   "BLJM60066"
+  ],
+  [
+   "Game",
+   "ps3/Plain Folder",
+   null,
+   null,
+   null
+  ],
+  [
+   "Game",
+   "ps3/Pkg Game",
+   null,
+   null,
+   null
+  ],
+  [
+   "Uncharted",
+   "ps3/Demons Souls.iso",
+   "BLUS30443",
+   null,
+   "BLUS30443"
+  ],
+  [
+   "Uncharted",
+   "ps3/Flower PSN.iso",
+   "NPEB01234",
+   null,
+   "NPEB01234"
+  ],
+  [
+   "Uncharted",
+   "ps3/No Serial Here.iso",
+   null,
+   null,
+   null
+  ],
+  [
+   "Uncharted",
+   "ps3/Lower blus30443 name.iso",
+   null,
+   null,
+   null
+  ],
+  [
+   "Uncharted",
+   "ps3/Uncharted",
+   "BCES00052",
+   null,
+   "BCES00052"
+  ],
+  [
+   "Uncharted",
+   "ps3/Wrapped",
+   "BLES00932",
+   null,
+   "BLES00932"
+  ],
+  [
+   "Uncharted",
+   "ps3/Iso In Folder",
+   "BLJM60066",
+   null,
+   "BLJM60066"
+  ],
+  [
+   "Uncharted",
+   "ps3/Plain Folder",
+   null,
+   null,
+   null
+  ],
+  [
+   "Uncharted",
+   "ps3/Pkg Game",
+   null,
+   null,
+   null
+  ],
+  [
+   "ULUS10041 psp named",
+   "ps3/Demons Souls.iso",
+   "ULUS10041",
+   null,
+   "ULUS10041"
+  ],
+  [
+   "ULUS10041 psp named",
+   "ps3/Flower PSN.iso",
+   "ULUS10041",
+   null,
+   "ULUS10041"
+  ],
+  [
+   "ULUS10041 psp named",
+   "ps3/No Serial Here.iso",
+   "ULUS10041",
+   null,
+   "ULUS10041"
+  ],
+  [
+   "ULUS10041 psp named",
+   "ps3/Lower blus30443 name.iso",
+   "ULUS10041",
+   null,
+   "ULUS10041"
+  ],
+  [
+   "ULUS10041 psp named",
+   "ps3/Uncharted",
+   "ULUS10041",
+   null,
+   "ULUS10041"
+  ],
+  [
+   "ULUS10041 psp named",
+   "ps3/Wrapped",
+   "ULUS10041",
+   null,
+   "ULUS10041"
+  ],
+  [
+   "ULUS10041 psp named",
+   "ps3/Iso In Folder",
+   "ULUS10041",
+   null,
+   "ULUS10041"
+  ],
+  [
+   "ULUS10041 psp named",
+   "ps3/Plain Folder",
+   "ULUS10041",
+   null,
+   "ULUS10041"
+  ],
+  [
+   "ULUS10041 psp named",
+   "ps3/Pkg Game",
+   "ULUS10041",
+   null,
+   "ULUS10041"
+  ],
+  [
+   "PS3 BCES-00052 Dash",
+   "ps3/Demons Souls.iso",
+   "BCES00052",
+   null,
+   "BCES00052"
+  ],
+  [
+   "PS3 BCES-00052 Dash",
+   "ps3/Flower PSN.iso",
+   "BCES00052",
+   null,
+   "BCES00052"
+  ],
+  [
+   "PS3 BCES-00052 Dash",
+   "ps3/No Serial Here.iso",
+   "BCES00052",
+   null,
+   "BCES00052"
+  ],
+  [
+   "PS3 BCES-00052 Dash",
+   "ps3/Lower blus30443 name.iso",
+   "BCES00052",
+   null,
+   "BCES00052"
+  ],
+  [
+   "PS3 BCES-00052 Dash",
+   "ps3/Uncharted",
+   "BCES00052",
+   null,
+   "BCES00052"
+  ],
+  [
+   "PS3 BCES-00052 Dash",
+   "ps3/Wrapped",
+   "BCES00052",
+   null,
+   "BCES00052"
+  ],
+  [
+   "PS3 BCES-00052 Dash",
+   "ps3/Iso In Folder",
+   "BCES00052",
+   null,
+   "BCES00052"
+  ],
+  [
+   "PS3 BCES-00052 Dash",
+   "ps3/Plain Folder",
+   "BCES00052",
+   null,
+   "BCES00052"
+  ],
+  [
+   "PS3 BCES-00052 Dash",
+   "ps3/Pkg Game",
+   "BCES00052",
+   null,
+   "BCES00052"
+  ],
+  [
+   "Bloodborne",
+   "ps4/Bloodborne",
+   null,
+   null,
+   "CUSA00900"
+  ],
+  [
+   "Bloodborne",
+   "ps4/Astro",
+   null,
+   null,
+   "PPSA01325"
+  ],
+  [
+   "Bloodborne",
+   "ps4/NoId",
+   null,
+   null,
+   null
+  ],
+  [
+   "Bloodborne CUSA00900",
+   "ps4/Bloodborne",
+   "CUSA00900",
+   null,
+   "CUSA00900"
+  ],
+  [
+   "Bloodborne CUSA00900",
+   "ps4/Astro",
+   "CUSA00900",
+   null,
+   "CUSA00900"
+  ],
+  [
+   "Bloodborne CUSA00900",
+   "ps4/NoId",
+   "CUSA00900",
+   null,
+   "CUSA00900"
+  ],
+  [
+   "bloodborne cusa00900",
+   "ps4/Bloodborne",
+   null,
+   null,
+   "CUSA00900"
+  ],
+  [
+   "bloodborne cusa00900",
+   "ps4/Astro",
+   null,
+   null,
+   "PPSA01325"
+  ],
+  [
+   "bloodborne cusa00900",
+   "ps4/NoId",
+   null,
+   null,
+   null
+  ],
+  [
+   "Astro PPSA01325",
+   "ps4/Bloodborne",
+   "PPSA01325",
+   null,
+   "PPSA01325"
+  ],
+  [
+   "Astro PPSA01325",
+   "ps4/Astro",
+   "PPSA01325",
+   null,
+   "PPSA01325"
+  ],
+  [
+   "Astro PPSA01325",
+   "ps4/NoId",
+   "PPSA01325",
+   null,
+   "PPSA01325"
+  ],
+  [
+   "CUSA-00900 dash",
+   "ps4/Bloodborne",
+   null,
+   null,
+   "CUSA00900"
+  ],
+  [
+   "CUSA-00900 dash",
+   "ps4/Astro",
+   null,
+   null,
+   "CUSA00900"
+  ],
+  [
+   "CUSA-00900 dash",
+   "ps4/NoId",
+   null,
+   null,
+   "CUSA00900"
+  ],
+  [
+   "Game",
+   "ps4/Bloodborne",
+   null,
+   null,
+   "CUSA00900"
+  ],
+  [
+   "Game",
+   "ps4/Astro",
+   null,
+   null,
+   "PPSA01325"
+  ],
+  [
+   "Game",
+   "ps4/NoId",
+   null,
+   null,
+   null
+  ],
+  [
+   "Persona 4 Golden",
+   "psvita/Persona.vpk",
+   null,
+   "PCSE00120",
+   null
+  ],
+  [
+   "Persona 4 Golden",
+   "psvita/Gravity",
+   null,
+   "PCSB00999",
+   null
+  ],
+  [
+   "Persona 4 Golden",
+   "psvita/Unknown.vpk",
+   null,
+   null,
+   null
+  ],
+  [
+   "Persona 4 Golden",
+   "psvita/Named Only.vpk",
+   null,
+   null,
+   null
+  ],
+  [
+   "Persona [PCSE00120]",
+   "psvita/Persona.vpk",
+   "PCSE00120",
+   "PCSE00120",
+   "PCSE00120"
+  ],
+  [
+   "Persona [PCSE00120]",
+   "psvita/Gravity",
+   "PCSE00120",
+   "PCSE00120",
+   "PCSE00120"
+  ],
+  [
+   "Persona [PCSE00120]",
+   "psvita/Unknown.vpk",
+   "PCSE00120",
+   "PCSE00120",
+   "PCSE00120"
+  ],
+  [
+   "Persona [PCSE00120]",
+   "psvita/Named Only.vpk",
+   "PCSE00120",
+   "PCSE00120",
+   "PCSE00120"
+  ],
+  [
+   "pcse00120 lower",
+   "psvita/Persona.vpk",
+   null,
+   "PCSE00120",
+   null
+  ],
+  [
+   "pcse00120 lower",
+   "psvita/Gravity",
+   null,
+   "PCSB00999",
+   null
+  ],
+  [
+   "pcse00120 lower",
+   "psvita/Unknown.vpk",
+   null,
+   null,
+   null
+  ],
+  [
+   "pcse00120 lower",
+   "psvita/Named Only.vpk",
+   null,
+   null,
+   null
+  ],
+  [
+   "Gravity Rush",
+   "psvita/Persona.vpk",
+   null,
+   "PCSE00120",
+   null
+  ],
+  [
+   "Gravity Rush",
+   "psvita/Gravity",
+   null,
+   "PCSB00999",
+   null
+  ],
+  [
+   "Gravity Rush",
+   "psvita/Unknown.vpk",
+   null,
+   null,
+   null
+  ],
+  [
+   "Gravity Rush",
+   "psvita/Named Only.vpk",
+   null,
+   null,
+   null
+  ],
+  [
+   "Named Only",
+   "psvita/Persona.vpk",
+   null,
+   "PCSE00120",
+   null
+  ],
+  [
+   "Named Only",
+   "psvita/Gravity",
+   null,
+   "PCSB00999",
+   null
+  ],
+  [
+   "Named Only",
+   "psvita/Unknown.vpk",
+   null,
+   null,
+   null
+  ],
+  [
+   "Named Only",
+   "psvita/Named Only.vpk",
+   null,
+   null,
+   null
+  ],
+  [
+   "Unknown",
+   "psvita/Persona.vpk",
+   null,
+   "PCSE00120",
+   null
+  ],
+  [
+   "Unknown",
+   "psvita/Gravity",
+   null,
+   "PCSB00999",
+   null
+  ],
+  [
+   "Unknown",
+   "psvita/Unknown.vpk",
+   null,
+   null,
+   null
+  ],
+  [
+   "Unknown",
+   "psvita/Named Only.vpk",
+   null,
+   null,
+   null
+  ],
+  [
+   "PCSB00999",
+   "psvita/Persona.vpk",
+   "PCSB00999",
+   "PCSB00999",
+   "PCSB00999"
+  ],
+  [
+   "PCSB00999",
+   "psvita/Gravity",
+   "PCSB00999",
+   "PCSB00999",
+   "PCSB00999"
+  ],
+  [
+   "PCSB00999",
+   "psvita/Unknown.vpk",
+   "PCSB00999",
+   "PCSB00999",
+   "PCSB00999"
+  ],
+  [
+   "PCSB00999",
+   "psvita/Named Only.vpk",
+   "PCSB00999",
+   "PCSB00999",
+   "PCSB00999"
+  ]
+ ]
+}

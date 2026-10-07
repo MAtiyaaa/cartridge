@@ -86,6 +86,39 @@ function consoleOf(id) {
   const cs = Object.keys(CONSOLES).filter((c) => CONSOLES[c].kinds.some((k) => ks.includes(k)));
   return cs.length === 1 ? cs[0] : null;
 }
+// ---------------------------------------------------------------- Steam's rules (0.9.52)
+// The Steam manager reads IDs to start a game by its ID (RPCS3 by serial, Vita3K by title ID, shadPS4 by CUSA) and
+// to tell whether a game already has a shortcut. Its rules are looser than KINDS on purpose (a PS3 shortcut accepts
+// any 4 letters + 5 digits, as RPCS3 itself does), and every shortcut ever made came from them: so they live here
+// exactly as they were, by name, and steamManager calls these. test/cideSteam.test.js runs the old inline rules and
+// these side by side over a large corpus and the whole shortcut plan, and fails on any difference.
+const STEAM = {
+  nameSerial: /\b([A-Z]{4})-?(\d{5})\b/, // "BLUS30443" or "BLUS-30443" in a name (serialOf)
+  plainSerial: /\b([A-Z]{4}\d{5})\b/, // a serial written whole in a name (gameSerial)
+  anySerial: /[A-Z]{4}\d{5}/, // inside PARAM.SFO, and the part of a launch argument {SERIAL} replaces
+  ps3Disc: /(BL|BC|NP)(US|ES|JS|AS|KS|UB|EB|JM|JB|HB|UA|EA|JA|HA|KA|UJ|UZ)\d{5}/, // near the start of a PS3 ISO
+  vitaName: /\b(PCS[A-Z]\d{5})\b/, vitaAny: /PCS[A-Z]\d{5}/, vitaId: /^PCS[A-Z]\d{5}$/,
+  ps4Name: /\b(CUSA|PPSA)\d{5}\b/i, ps4Any: /(CUSA|PPSA)\d{5}/, ps4Arg: /^(CUSA|PPSA)\d{5}$/,
+  rpcs3Arg: /%RPCS3_GAMEID%:[A-Z]{4}\d{5}/, rpcs3Id: /%RPCS3_GAMEID%:([A-Z]{4}\d{5})/, ps4InLaunch: /(?:^|\s)["']?((?:CUSA|PPSA)\d{5})\b/,
+};
+const steam = {
+  RE: STEAM,
+  nameSerial: (text) => { const m = String(text).match(STEAM.nameSerial); return m ? m[1] + m[2] : null; },
+  plainSerial: (text) => (String(text).match(STEAM.plainSerial) || [])[1] || null,
+  anySerial: (text) => (String(text).match(STEAM.anySerial) || [])[0] || null,
+  ps3Disc: (text) => (String(text).match(STEAM.ps3Disc) || [])[0] || null,
+  vitaName: (text) => (String(text).match(STEAM.vitaName) || [])[1] || null,
+  vitaAny: (text) => (String(text).match(STEAM.vitaAny) || [])[0] || null,
+  isVitaId: (id) => STEAM.vitaId.test(id),
+  ps4Name: (text) => String(text).match(STEAM.ps4Name)?.[0]?.toUpperCase() || null,
+  ps4Any: (text) => (String(text).match(STEAM.ps4Any) || [])[0] || null,
+  isPs4Arg: (v) => STEAM.ps4Arg.test(v),
+  isRpcs3Arg: (v) => STEAM.rpcs3Arg.test(v),
+  // the serial a shortcut's launch options start a game by (RPCS3 game ID, else a PS4 title ID)
+  launchSerial: (lo) => (String(lo).match(STEAM.rpcs3Id) || String(lo).match(STEAM.ps4InLaunch) || [])[1] || null,
+  toPlaceholder: (raw) => String(raw).replace(STEAM.anySerial, '{SERIAL}'),
+};
+
 // what Cartridge knows about a console's IDs (Settings and the tests read this)
 function console_(key) {
   if (CONSOLES[key]) return { key, kinds: CONSOLES[key].kinds.map((k) => ({ kind: k, ...KINDS[k], re: String(KINDS[k].re) })), read: CONSOLES[key].read, byName: false };
@@ -94,4 +127,4 @@ function console_(key) {
 }
 const map = (keys) => keys.map((k) => console_(k) || { key: k, unknown: true });
 
-module.exports = { KINDS, CONSOLES, BY_NAME, NO_ID, parse, kindsOf, base, same, consoleOf, console: console_, map, up };
+module.exports = { KINDS, CONSOLES, BY_NAME, NO_ID, parse, kindsOf, base, same, consoleOf, console: console_, map, up, steam };

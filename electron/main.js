@@ -2374,7 +2374,7 @@ function syncGameList() {
   const S = require('./syncthing');
   return [...romIndexMain().values()].map((r) => {
     const where = installedMap[r.id];
-    const ids = [...S.serialsIn([r.fs_name, ...(r.files || []).map((f) => f.file_name), where && where !== MARKED ? path.basename(where) : ''].join(' '))];
+    const ids = require('./cide').parse([r.fs_name, ...(r.files || []).map((f) => f.file_name), where && where !== MARKED ? path.basename(where) : ''].join(' '));
     // 0.9.28: disc IDs read from the game itself, for folders named after them (Dolphin's GALE01, Azahar's title IDs);
     // read through the game identity engine since 0.9.48 (same readers, one cache)
     const discIds = where && where !== MARKED && /\.(iso|gcm|rvz|wia|wbfs|ciso|gcz|3ds|cci|cia|cxi)$/i.test(where) ? identity.fileIds(r, where) : [];
