@@ -4,14 +4,8 @@
   <div class="cs-scrim">
     <div class="dialog cs" role="status" aria-live="polite">
       <div class="cs-mark" :class="st.state">
-        <svg viewBox="0 0 64 64" aria-hidden="true">
-          <path class="cs-cloud" d="M20 46h26a11 11 0 0 0 1.6-21.9A15 15 0 0 0 19.3 27 9.5 9.5 0 0 0 20 46z" />
-          <circle class="cs-arc" cx="32" cy="32" r="29" pathLength="100" />
-        </svg>
-        <Icon v-if="st.state === 'done'" name="mdiCheck" :size="22" class="cs-ico" />
-        <Icon v-else-if="st.state === 'offline' || st.state === 'error'" name="mdiCloudOffOutline" :size="20" class="cs-ico" />
-        <Icon v-else-if="st.state === 'conflict'" name="mdiCallSplit" :size="20" class="cs-ico" />
-        <Icon v-else name="mdiSync" :size="20" class="cs-ico spin" />
+        <svg viewBox="0 0 64 64" aria-hidden="true"><circle class="cs-track" cx="32" cy="32" r="29" /><circle class="cs-arc" cx="32" cy="32" r="29" pathLength="100" /></svg>
+        <Icon :name="ICON[st.state] || 'mdiCloudSyncOutline'" :size="30" class="cs-ico" />
       </div>
       <div class="cs-text">
         <div class="cs-title">Cartridge Cloud Sync</div>
@@ -28,6 +22,7 @@ import { store } from '../store.js';
 import { pushLayer } from '../nav.js';
 import Icon from './Icon.vue';
 const st = computed(() => store.cloudSync || {});
+const ICON = { done: 'mdiCloudCheckOutline', offline: 'mdiCloudOffOutline', error: 'mdiCloudAlertOutline', conflict: 'mdiCallSplit' };
 // while it checks, presses wait (a conflict's question opens over it with its own layer)
 let layer;
 const none = () => {};
@@ -39,11 +34,11 @@ onBeforeUnmount(() => layer?.pop());
 .cs { min-width: 0; width: min(440px, calc(100vw - 32px)); display: grid; grid-template-columns: auto 1fr; gap: var(--s-4); align-items: center; padding: var(--s-5); }
 .cs-mark { position: relative; width: 64px; height: 64px; color: var(--text); }
 .cs-mark svg { width: 64px; height: 64px; display: block; }
-.cs-cloud { fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linejoin: round; opacity: 0.9; }
+.cs-track { fill: none; stroke: currentColor; stroke-width: 2.4; opacity: 0.12; }
 .cs-arc { fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-dasharray: 22 100; transform-origin: 32px 32px; animation: cs-turn 1.1s linear infinite; opacity: 0.85; }
 .cs-mark.done .cs-arc { stroke-dasharray: 100 100; animation: none; stroke: var(--green, #2fb36a); transition: stroke-dasharray 0.4s var(--ease-out, ease-out); }
 .cs-mark.offline .cs-arc, .cs-mark.error .cs-arc, .cs-mark.conflict .cs-arc { animation: none; stroke-dasharray: 0 100; }
-.cs-ico { position: absolute; left: 50%; top: 56%; translate: -50% -50%; }
+.cs-ico { position: absolute; left: 50%; top: 50%; translate: -50% -50%; }
 .cs-mark.done .cs-ico { color: var(--green, #2fb36a); }
 @keyframes cs-turn { to { transform: rotate(360deg); } }
 .cs-text { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
