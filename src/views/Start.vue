@@ -1353,7 +1353,7 @@ watch(() => store.play, loadWeek);
 /* the parts every tile shares; sizes follow the tile (container units) */
 /* 0.9.32 (owner: "no trailing anywhere, a new line is fine"): a tile's name wraps instead of ending in … */
 .st-label { font-size: clamp(11px, min(10cqh, 6cqw), 15px); font-weight: 600; color: var(--muted); letter-spacing: -0.005em; position: relative; z-index: 1; flex: none; line-height: 1.2; text-wrap: balance; overflow-wrap: anywhere; }
-.st-label.on-art { color: rgba(255, 255, 255, 0.86); }
+.st-label.on-art { color: rgba(255, 255, 255, 0.92); text-shadow: 0 1px 6px rgba(0, 0, 0, 0.45); }
 .st-num { display: flex; align-items: baseline; gap: 4px; margin-top: auto; line-height: 1; }
 .st-big { font-family: var(--display); font-stretch: var(--display-stretch); font-weight: 800; font-size: clamp(22px, min(32cqh, 20cqw), 104px); letter-spacing: -0.02em; }
 .st-unit { font-family: var(--display); font-weight: 700; font-size: clamp(12px, min(11cqh, 7cqw), 24px); color: var(--muted); margin-right: 6px; }
@@ -1374,7 +1374,8 @@ watch(() => store.play, loadWeek);
 /* art tiles: the picture fills the tile, a scrim keeps the words readable */
 .st-art { position: absolute; inset: 0; z-index: -2; background-size: cover; background-position: center 30%; transition: transform 700ms var(--ease); }
 .st-tile.art:focus .st-art { transform: scale(1.04); }
-.st-scrim { position: absolute; inset: 0; z-index: -1; background: linear-gradient(to top, rgba(8, 9, 12, 0.92) 0%, rgba(8, 9, 12, 0.55) 38%, rgba(8, 9, 12, 0.08) 72%), linear-gradient(to right, rgba(8, 9, 12, 0.5), transparent 60%); }
+/* 0.9.52: a soft band at the top too, so the tile's label reads on a bright cover */
+.st-scrim { position: absolute; inset: 0; z-index: -1; background: linear-gradient(to bottom, rgba(8, 9, 12, 0.6) 0%, rgba(8, 9, 12, 0.25) 16%, transparent 32%), linear-gradient(to top, rgba(8, 9, 12, 0.92) 0%, rgba(8, 9, 12, 0.55) 38%, rgba(8, 9, 12, 0.08) 72%), linear-gradient(to right, rgba(8, 9, 12, 0.5), transparent 60%); }
 .st-cp { margin-top: auto; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; min-width: 0; max-width: 100%; }
 .st-cp :deep(.game-logo) { margin: 0 0 4px; filter: drop-shadow(0 4px 14px rgba(0, 0, 0, 0.55)); }
 .st-cp :deep(.st-cp-name) { margin: 0; font-family: var(--display); font-stretch: var(--display-stretch); font-weight: 800; font-size: clamp(16px, min(14cqh, 9cqw), 44px); line-height: 1.05; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
