@@ -6,6 +6,14 @@ The branch for 0.9.3 work is `claude/relaxed-fermat-30pigp`. Pull it before star
 
 ---
 
+## 7 Oct 2026 · 0.9.53: brand B and the new README
+- Owner picked brand B (Marquee) and the README Showcase layout, asked for logos and metadata in the pictures (SteamGridDB key given), real console pictures instead of placeholders, an Achievements screen (RA key given), private details hidden, and a fluid header GIF.
+- Done: logos for 154 games and heroes from SteamGridDB, RomM console pictures (Sony fix applied), RA overview with the user shown as "player"; all 32 shots in four looks plus achievements; GIF at about 33 fps; brand assets from tools/brand/gen.js; README rewritten. Found and fixed: console card names dark in Light.
+- Credentials (RomM, SteamGridDB, RetroAchievements, Nexus) were used only in the session's scratch folder and deleted afterwards with every downloaded file; none are in the repo.
+- Owner to do: set docs/social-preview.png as the repo's social preview (GitHub → Settings → General → Social preview); Add to Steam again for the new Cartridge artwork.
+
+---
+
 ## 7 Oct 2026 · 0.9.52: mods engine + rule book, web engine, CIDE for Steam, CAE timings, new welcome, offline
 - Built (owner: "start building everything we discussed"): CIDE for Steam (golden-tested, shortcuts identical), web engine, mods engine (GameBanana, EmuCoreX, Nexus Mods, ROM hacks beta; right stick and chips switch sources), every animation on CAE tokens, contrast audit fixes + Start label shade, firmware installs tested for real, onboarding rebuild (CAE intro, first-launch Game Mode screen, 8-step order the owner approved).
 - Owner's mid-build messages, all in this update: GIF search was poor (Tenor added, ~50 results); mods must only be offered where Cartridge knows the emulator's install rules (modRules.js rule book with sources; mismatches refused; no mod sites without an emulator that takes mods); away from a local-only RomM: library browsable offline with small cached covers, saves held and pushed on reconnect (rules: the emulator keeps writing locally, playing again overwrites locally, held games noted, RomM probed each minute outside games, three-way ledger decides, two-device changes are a conflict the owner chooses).
