@@ -53,7 +53,7 @@ const logo = computed(() => (props.c.series && store.config.ui.logos !== false &
 .coll { flex: none; width: 250px; display: flex; flex-direction: column; gap: 10px; border-radius: var(--r-md); }
 .coll.wide { width: 330px; }
 .coll:focus { box-shadow: none !important; }
-.mosaic, .art { height: 150px; border-radius: var(--r-md); overflow: hidden; background: #151924; box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45); transition: transform 0.22s var(--ease), box-shadow 0.22s; }
+.mosaic, .art { height: 150px; border-radius: var(--r-md); overflow: hidden; background: #151924; box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45); transition: transform var(--spring-d) var(--spring), box-shadow var(--tint); }
 .art { position: relative; height: 180px; }
 .mosaic { display: grid; gap: 2px; }
 .mosaic.n1 { grid-template-columns: 1fr; } .mosaic.n2 { grid-template-columns: 1fr 1fr; } .mosaic.n3 { grid-template-columns: 1fr 1fr 1fr; } .mosaic.n4 { grid-template-columns: repeat(4, 1fr); }

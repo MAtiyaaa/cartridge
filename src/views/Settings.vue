@@ -1305,9 +1305,9 @@ onMounted(() => {
 
 <style scoped>
 .style-seg { align-self: flex-start; } /* two choices: as wide as they are, not the whole page */
-.set-view { position: absolute; inset: 0; display: grid; grid-template-columns: 270px 1fr; gap: 10px; padding: 16px 36px 0; animation: viewIn 0.16s ease-out; }
+.set-view { position: absolute; inset: 0; display: grid; grid-template-columns: 270px 1fr; gap: 10px; padding: 16px 36px 0; animation: viewIn var(--fade-in); }
 .rail { display: flex; flex-direction: column; gap: 4px; padding-top: 10px; }
-.rail-item { display: flex; align-items: center; gap: 14px; padding: 13px 16px; border-radius: var(--r-md); color: var(--muted); font-weight: 500; transition: background 0.15s, color 0.15s; }
+.rail-item { display: flex; align-items: center; gap: 14px; padding: 13px 16px; border-radius: var(--r-md); color: var(--muted); font-weight: 500; transition: background var(--tint), color var(--tint); }
 /* the page follows the list as you move, so the current section only needs brighter text, no box */
 .sync-lock { display: flex; align-items: center; gap: 8px; margin: 0 0 var(--s-2); }
 .rail-item.on { color: var(--text); background: var(--sel); } /* the open section: chosen, the softer fill (docs/design-rules.md 6) */
@@ -1394,7 +1394,7 @@ onMounted(() => {
 .fonttile span { font-size: var(--t-xs); color: var(--muted); }
 .fonttile.on { background: var(--sel); }
 .steam-grid { width: 130px; border-radius: var(--r-sm); box-shadow: 0 14px 34px rgba(0, 0, 0, 0.5); flex: none; }
-.fadeup-enter-active { transition: opacity 0.15s, transform 0.2s var(--ease); }
+.fadeup-enter-active { transition: opacity var(--fade-in), transform var(--spring-d) var(--spring); }
 .fadeup-enter-from { opacity: 0; transform: translateX(10px); }
 .fadeup-leave-active { display: none; }
 .tabs-edit { display: flex; flex-direction: column; gap: 6px; }
@@ -1406,7 +1406,7 @@ onMounted(() => {
 /* LB, the pages and RB always on one row (owner: RB fell to a second row on Emulators' seven pages);
    the pages scroll sideways when they don't fit */
 /* a setting found with Y: a moment of light on it */
-.pane :deep(.found) { animation: found 1.6s var(--ease-out); }
+.pane :deep(.found) { animation: found var(--move-ambient); }
 @keyframes found { 0%, 40% { box-shadow: 0 0 0 3px var(--focus); } 100% { box-shadow: 0 0 0 3px transparent; } }
 .rail-find { color: var(--text-2, var(--muted)); margin-bottom: 6px; }
 .sec-head { display: flex; flex-direction: column; gap: 4px; margin: 0 0 var(--s-3); }
@@ -1441,10 +1441,10 @@ onMounted(() => {
 /* the download along the row: a track and a fill that read on the row and on a selected one (0.9.21) */
 .up-row::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 4px; background: transparent; }
 .up-row.busy::after { background: rgba(255, 255, 255, 0.12); }
-.up-bar { position: absolute; left: 0; bottom: 0; z-index: 1; height: 4px; background: var(--text); border-radius: 0 2px 2px 0; transition: width var(--d-2, 240ms) ease, background 160ms; }
+.up-bar { position: absolute; left: 0; bottom: 0; z-index: 1; height: 4px; background: var(--text); border-radius: 0 2px 2px 0; transition: width var(--progress), background var(--tint); }
 .pad-mode .up-row:focus .up-bar, .up-row:focus-visible .up-bar { background: var(--on-focus); }
 .pad-mode .up-row.busy:focus::after, .up-row.busy:focus-visible::after { background: color-mix(in srgb, var(--on-focus) 15%, transparent); }
-.up-bar.live { animation: upLive 1.2s ease-in-out infinite; transform-origin: left; }
+.up-bar.live { animation: upLive var(--loop-pulse) infinite; transform-origin: left; }
 @keyframes upLive { 0% { transform: scaleX(0.05); opacity: 0.4; } 50% { transform: scaleX(0.6); opacity: 0.9; } 100% { transform: scaleX(1); opacity: 0.2; } }
 .up-cover { width: 30px; height: 40px; object-fit: cover; border-radius: var(--r-sm); flex: none; }
 .ps3-head { display: flex; align-items: center; gap: var(--s-4); padding: var(--s-4); border-radius: var(--r-lg); background: linear-gradient(120deg, rgba(0, 59, 160, 0.35), rgba(0, 0, 0, 0) 70%), var(--s1); margin-bottom: var(--s-3); }

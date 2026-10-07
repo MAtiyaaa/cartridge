@@ -102,5 +102,5 @@ onBeforeUnmount(() => { layer?.pop(); off?.(); });
 .sv-row { position: relative; overflow: hidden; }
 .sv-badge { flex: none; min-width: 72px; text-align: center; font-size: var(--t-xs); font-weight: 700; letter-spacing: 0.02em; padding: 4px 8px; border-radius: var(--r-sm); background: var(--s3); color: var(--muted); }
 .sv-badge.pre { color: #ffd978; background: rgba(245, 197, 66, 0.14); }
-.sv-fill { position: absolute; left: 0; bottom: 0; height: 3px; background: var(--bar, var(--primary)); transition: width 0.25s ease; }
+.sv-fill { position: absolute; left: 0; bottom: 0; height: 3px; background: var(--bar, var(--primary)); transition: width var(--progress); }
 </style>

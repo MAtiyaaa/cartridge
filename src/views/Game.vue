@@ -848,7 +848,7 @@ onMounted(async () => {
 .fact { display: flex; flex-direction: column; gap: 2px; word-break: break-word; }
 .fact span { font-size: var(--t-xs); color: var(--muted); font-weight: 600; }
 .fact b { font-weight: 500; font-size: var(--t-sm); }
-.viewer { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.94); z-index: 40; display: grid; place-items: center; animation: fade 0.2s; }
+.viewer { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.94); z-index: 40; display: grid; place-items: center; animation: fade var(--fade-in); }
 .viewer img { max-width: 94vw; max-height: 84vh; border-radius: var(--r-sm); box-shadow: 0 30px 80px rgba(0, 0, 0, 0.7); }
 .vhint { position: absolute; bottom: 26px; display: flex; gap: 8px; align-items: center; color: var(--muted); font-size: var(--t-sm); }
 @media (max-width: 1100px) { .g-body { grid-template-columns: minmax(0, 1fr) 200px; gap: 28px; } .g-cover, .facts { width: 200px; } .g-cover { margin-top: -150px; } .g-banner-logo { right: 270px; } }
@@ -858,7 +858,7 @@ onMounted(async () => {
 .ra-sum-bar i { background: linear-gradient(90deg, #f5c542, #ffdf80); }
 .small { font-size: var(--t-sm); }
 .ra-badges { gap: 10px; padding: 12px 20px 12px var(--s-7); margin: 0 0 0 calc(-1 * var(--s-7)); }
-.ra-b { flex: none; width: 60px; height: 60px; border-radius: var(--r-md); overflow: hidden; transition: transform 0.14s ease-out; box-shadow: 0 6px 14px rgba(0, 0, 0, 0.4); }
+.ra-b { flex: none; width: 60px; height: 60px; border-radius: var(--r-md); overflow: hidden; transition: transform var(--spring-snappy-d) var(--spring-snappy); box-shadow: 0 6px 14px rgba(0, 0, 0, 0.4); }
 .ra-b img { width: 100%; height: 100%; display: block; }
 .ra-b.locked { opacity: 0.55; }
 .ra-b:focus { transform: scale(1.12); }

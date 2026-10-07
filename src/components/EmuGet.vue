@@ -412,15 +412,15 @@ defineExpose({ load });
 .eg-chip.on { background: var(--sel); }
 .eg-chip:focus { background: var(--focus); color: var(--on-focus); outline: none; }
 .eg-ghbar { height: 6px; border-radius: 3px; background: rgba(255, 255, 255, 0.12); overflow: hidden; }
-.eg-ghbar i { display: block; height: 100%; background: currentColor; transition: width 0.3s ease; }
-.eg-ghbar i.live { animation: egLive 1.2s ease-in-out infinite; transform-origin: left; }
+.eg-ghbar i { display: block; height: 100%; background: currentColor; transition: width var(--progress); }
+.eg-ghbar i.live { animation: egLive var(--loop-pulse) infinite; transform-origin: left; }
 .eg-intro { display: flex; flex-direction: column; gap: 6px; text-align: center; }
 .eg-intro b { font-size: var(--t-lg); }
 .eg-drives { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: var(--s-3); }
 .eg-drive { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding: var(--s-4); border-radius: var(--r-lg); background: var(--s2); color: inherit; border: 0; text-align: left; transition: transform var(--d-1, 0.12s), background var(--d-1, 0.12s); }
 .eg-drive b { font-size: var(--t-md); }
 .eg-fp { display: flex; gap: var(--s-2); align-items: flex-start; padding: 10px 12px; border-radius: var(--r-md); background: var(--s2); color: var(--muted); }
-.eg-drive.busy { cursor: progress; animation: eg-wait 1.1s var(--ease-in-out, ease-in-out) infinite alternate; }
+.eg-drive.busy { cursor: progress; animation: eg-wait var(--loop-pulse) infinite alternate; }
 @keyframes eg-wait { to { opacity: 0.72; } }
 .eg-drive:focus { background: var(--focus); color: var(--on-focus); outline: none; transform: translateY(-2px); }
 .eg-drive:focus .muted { color: var(--on-focus-dim); }
@@ -444,7 +444,7 @@ defineExpose({ load });
 .eg-mid .small {  overflow-wrap: anywhere; }
 .eg-get { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: rgba(255, 255, 255, 0.08); flex: none; }
 .eg-emu:focus .eg-get { background: rgba(0, 0, 0, 0.1); }
-.eg-bar-fill { position: absolute; left: 0; bottom: 0; height: 3px; background: currentColor; transition: width 0.3s ease; }
-.eg-bar-fill.live { animation: egLive 1.2s ease-in-out infinite; transform-origin: left; }
+.eg-bar-fill { position: absolute; left: 0; bottom: 0; height: 3px; background: currentColor; transition: width var(--progress); }
+.eg-bar-fill.live { animation: egLive var(--loop-pulse) infinite; transform-origin: left; }
 @keyframes egLive { 0% { transform: scaleX(0.05); opacity: 0.4; } 50% { transform: scaleX(0.6); opacity: 0.9; } 100% { transform: scaleX(1); opacity: 0.2; } }
 </style>

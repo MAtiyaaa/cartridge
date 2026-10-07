@@ -815,33 +815,33 @@ onBeforeUnmount(() => { off?.(); clearTimeout(padT); window.removeEventListener(
 .w-scan-lead { text-align: center; max-width: 1180px !important; }
 .w-emu { position: relative !important; inset: auto !important; height: auto !important; overflow: visible !important; padding: 0 !important; text-align: left; max-width: 1180px !important; animation: none !important; }
 /* the first screen arrives in a short sequence: the mark, the title, then the rest (0.9.16) */
-.w-hello > * { animation: wIn 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
-.w-hello > .w-logo { animation-name: wLogo; animation-duration: 0.9s; }
+.w-hello > * { animation: wIn var(--spring-soft-d) var(--spring-soft) both; }
+.w-hello > .w-logo { animation-name: wLogo; animation-duration: var(--d-move-slow); }
 .w-hello > :nth-child(2) { animation-delay: 0.18s; }
 .w-hello > :nth-child(3) { animation-delay: 0.32s; }
 .w-hello > :nth-child(4) { animation-delay: 0.46s; }
 @keyframes wIn { from { opacity: 0; transform: translateY(18px); } }
 @keyframes wLogo { 0% { opacity: 0; transform: scale(0.7) rotate(-6deg); } 60% { opacity: 1; transform: scale(1.06) rotate(1deg); } 100% { transform: none; } }
-.welcome.w-out .w-stage, .welcome.w-out .w-top { transition: opacity 0.4s ease, transform 0.4s cubic-bezier(0.4, 0, 0.2, 1); opacity: 0; transform: translateY(-24px) scale(0.97); }
-.w-next-enter-active, .w-next-leave-active, .w-prev-enter-active, .w-prev-leave-active { transition: opacity 0.22s ease, transform 0.22s ease; }
+.welcome.w-out .w-stage, .welcome.w-out .w-top { transition: opacity var(--fade-slow), transform var(--spring-d) var(--spring); opacity: 0; transform: translateY(-24px) scale(0.97); }
+.w-next-enter-active, .w-next-leave-active, .w-prev-enter-active, .w-prev-leave-active { transition: opacity var(--fade-in), transform var(--spring-d) var(--spring); }
 .w-next-enter-from, .w-prev-leave-to { opacity: 0; transform: translateX(40px); }
 .w-next-leave-to, .w-prev-enter-from { opacity: 0; transform: translateX(-40px); }
-@media (prefers-reduced-motion: reduce) { .w-next-enter-active, .w-next-leave-active, .w-prev-enter-active, .w-prev-leave-active { transition: opacity 0.15s; transform: none !important; } }
+@media (prefers-reduced-motion: reduce) { .w-next-enter-active, .w-next-leave-active, .w-prev-enter-active, .w-prev-leave-active { transition: opacity var(--fade-in); transform: none !important; } }
 .w-back { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; background: rgba(255, 255, 255, 0.08); color: inherit; border: 0; flex: none; }
 .w-back:focus, .w-back:hover { background: var(--focus); color: var(--on-focus); outline: none; }
 .w-hints { position: absolute; left: 0; right: 0; bottom: 14px; display: flex; justify-content: center; gap: 22px; color: var(--muted); font-size: var(--t-sm); pointer-events: none; }
 .w-hints > span { display: inline-flex; align-items: center; gap: 8px; line-height: 1; text-box: trim-both cap alphabetic; } /* the word centred on its button, not on its descenders (0.9.24) */
 /* the opening (0.9.17): the mark comes into focus inside two rings of light, a glint crosses it, the
    name follows letter by letter, then everything lifts away to the first card */
-.w-intro { position: absolute; inset: 0; z-index: 5; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px; background: radial-gradient(60% 60% at 50% 45%, rgba(18, 18, 22, 0.55), rgba(5, 5, 7, 0.96)); animation: wiOut 0.5s cubic-bezier(0.4, 0, 0.2, 1) 2.1s forwards; }
-.wi-mark { position: relative; animation: wiMark 1.1s cubic-bezier(0.16, 1, 0.3, 1) both; overflow: hidden; border-radius: 28px; }
-.wi-glint { position: absolute; inset: -20%; background: linear-gradient(105deg, transparent 38%, rgba(255, 255, 255, 0.55) 50%, transparent 62%); transform: translateX(-120%); animation: wiGlint 0.9s ease-in-out 0.7s forwards; mix-blend-mode: overlay; }
-.wi-ring { position: absolute; top: 45%; left: 50%; width: 180px; height: 180px; margin: -90px 0 0 -90px; border-radius: 50%; border: 1.5px solid rgba(239, 75, 35, 0.55); box-shadow: 0 0 60px rgba(239, 75, 35, 0.35); opacity: 0; animation: wiRing 1.6s cubic-bezier(0.16, 1, 0.3, 1) 0.15s forwards; }
+.w-intro { position: absolute; inset: 0; z-index: 5; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px; background: radial-gradient(60% 60% at 50% 45%, rgba(18, 18, 22, 0.55), rgba(5, 5, 7, 0.96)); animation: wiOut var(--spring-soft-d) var(--spring-soft) 2.1s forwards; }
+.wi-mark { position: relative; animation: wiMark var(--move-slow) both; overflow: hidden; border-radius: 28px; }
+.wi-glint { position: absolute; inset: -20%; background: linear-gradient(105deg, transparent 38%, rgba(255, 255, 255, 0.55) 50%, transparent 62%); transform: translateX(-120%); animation: wiGlint var(--move-slow) 0.7s forwards; mix-blend-mode: overlay; }
+.wi-ring { position: absolute; top: 45%; left: 50%; width: 180px; height: 180px; margin: -90px 0 0 -90px; border-radius: 50%; border: 1.5px solid rgba(239, 75, 35, 0.55); box-shadow: 0 0 60px rgba(239, 75, 35, 0.35); opacity: 0; animation: wiRing var(--move-ambient) 0.15s forwards; }
 .wi-ring.r2 { border-color: rgba(255, 255, 255, 0.25); box-shadow: none; animation-delay: 0.35s; }
 .wi-name { display: flex; font-family: var(--display); font-size: calc(var(--t-2xl) * 1.2); font-weight: 800; letter-spacing: -0.02em; }
-.wi-name span { opacity: 0; transform: translateY(14px); filter: blur(6px); animation: wiChar 0.55s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+.wi-name span { opacity: 0; transform: translateY(14px); filter: blur(6px); animation: wiChar var(--spring-soft-d) var(--spring-soft) forwards; }
 .welcome.w-intro-on .w-top, .welcome.w-intro-on .w-stage { opacity: 0; }
-.welcome:not(.w-intro-on) .w-top, .welcome:not(.w-intro-on) .w-stage { transition: opacity 0.5s ease; }
+.welcome:not(.w-intro-on) .w-top, .welcome:not(.w-intro-on) .w-stage { transition: opacity var(--fade-cross); }
 @keyframes wiMark { 0% { opacity: 0; transform: scale(0.62); filter: blur(14px); } 100% { opacity: 1; transform: none; filter: none; } }
 @keyframes wiGlint { to { transform: translateX(120%); } }
 @keyframes wiRing { 0% { opacity: 0; transform: scale(0.6); } 30% { opacity: 0.9; } 100% { opacity: 0; transform: scale(2.4); } }

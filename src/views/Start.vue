@@ -370,6 +370,7 @@
 </template>
 
 <script setup>
+import { timing } from '../motion.js';
 // Start (0.9.19): a menu of tiles the user arranges (owner: inspired by a frontend on someone's device;
 // its widget look wasn't wanted, these follow docs/design.md). 0.9.21 (owner: drag to any size, resize
 // per edge, smooth weighted motion, more character): tiles sit on an 8-column board at their own place
@@ -1078,7 +1079,7 @@ function ovMove(d) {
   clearTimeout(ovJumpT);
   if (ovJump.value) {
     ovJumpT = setTimeout(() => (ovJump.value = false), 320);
-    nextTick(() => { for (const c of ovEl.value?.querySelectorAll('.st-ov-page:not(.st-ov-addpg)') || []) c.animate([{ opacity: 0.35 }, { opacity: 1 }], { duration: 240, easing: 'cubic-bezier(0.23, 1, 0.32, 1)' }); });
+    nextTick(() => { for (const c of ovEl.value?.querySelectorAll('.st-ov-page:not(.st-ov-addpg)') || []) c.animate([{ opacity: 0.35 }, { opacity: 1 }], timing('fade-slow')); });
   }
   const cur = pages.value[page.value];
   // up/down carry the page a row (the ones between shift along by one); left/right swap neighbours
@@ -1256,22 +1257,22 @@ watch(() => store.play, loadWeek);
 .start:has(.st-pages) .st-scroll { padding-bottom: var(--s-3); }
 @media (max-width: 1400px) { .st-scroll { padding-left: 36px; padding-right: 36px; } }
 /* the board: tiles placed in pixels from their cell (startLayout.js), so moves and resizes glide */
-.st-board { position: relative; transition: height 460ms cubic-bezier(0.32, 0.72, 0, 1); }
-.st-tile { --glide: 460ms cubic-bezier(0.32, 0.72, 0, 1); position: absolute; left: 0; top: 0; padding: 0; background: none; border-radius: var(--r-lg); color: var(--text); text-align: left; will-change: transform;
-  transition: transform var(--glide), width var(--glide), height var(--glide), opacity 200ms ease; }
+.st-board { position: relative; transition: height var(--spring-soft-d) var(--spring-soft); }
+.st-tile { --glide: var(--spring-soft-d) var(--spring-soft); position: absolute; left: 0; top: 0; padding: 0; background: none; border-radius: var(--r-lg); color: var(--text); text-align: left; will-change: transform;
+  transition: transform var(--glide), width var(--glide), height var(--glide), opacity var(--fade-in); }
 .st-tile:focus-visible, .pad-mode .st-tile:focus { box-shadow: none; }
 /* the face carries the look, so the tile itself only moves */
 .st-face { position: absolute; inset: 0; display: flex; flex-direction: column; min-width: 0; min-height: 0; padding: clamp(10px, min(9cqh, 7cqw), 22px); border-radius: inherit; background: var(--s1); overflow: hidden; isolation: isolate; container-type: size;
   box-shadow: var(--weight-edge), var(--weight);
-  transition: transform 380ms cubic-bezier(0.32, 0.72, 0, 1), box-shadow 240ms ease, opacity 200ms ease;
-  animation: st-in 640ms cubic-bezier(0.22, 1, 0.36, 1) both; animation-delay: calc(var(--n, 0) * 45ms); }
+  transition: transform var(--spring-d) var(--spring), box-shadow var(--tint), opacity var(--fade-in);
+  animation: st-in var(--spring-soft-d) var(--spring-soft) both; animation-delay: calc(var(--n, 0) * 45ms); }
 /* tiles arrive one after another, rising and settling */
 @keyframes st-in { from { opacity: 0; transform: translateY(18px) scale(0.97); } }
 :global(body.motion-reduce .st-face) { animation: none; }
 /* focus (0.9.29, owner: choppy on handhelds): the ring and lift shadow sit on the tile's ::before and fade in
    by opacity, and the face lifts on its own layer; animating the face's box-shadow repainted the whole
    tile on every frame without the GPU. Same look, same timing. */
-.st-tile::before { content: ''; position: absolute; inset: 0; border-radius: inherit; box-shadow: var(--ring), 0 0 0 8px rgba(0, 0, 0, 0.32), 0 26px 50px -24px rgba(0, 0, 0, 0.85); opacity: 0; transform: translateY(0); transition: opacity 240ms ease, transform 380ms cubic-bezier(0.32, 0.72, 0, 1); pointer-events: none; }
+.st-tile::before { content: ''; position: absolute; inset: 0; border-radius: inherit; box-shadow: var(--ring), 0 0 0 8px rgba(0, 0, 0, 0.32), 0 26px 50px -24px rgba(0, 0, 0, 0.85); opacity: 0; transform: translateY(0); transition: opacity var(--fade-in), transform var(--spring-d) var(--spring); pointer-events: none; }
 .st-tile:focus-visible::before, .pad-mode .st-tile:focus::before { opacity: 1; transform: translateY(-3px); }
 :global(body.theme-light .st-tile::before) { box-shadow: var(--ring), 0 12px 22px -12px rgba(0, 0, 0, 0.45); }
 /* 0.9.49 (owner's photos: shadows cut off hard in Light, the Spotlight card and a cover tile): a shadow made for the
@@ -1289,20 +1290,20 @@ watch(() => store.play, loadWeek);
 .st-tile:nth-child(3n + 1) .st-face::after { --glint-a: 104deg; }
 .st-tile:nth-child(3n + 2) .st-face::after { --glint-a: 118deg; animation-duration: 1050ms !important; }
 .st-tile:nth-child(3n) .st-face::after { --glint-a: 96deg; animation-duration: 820ms !important; }
-.pad-mode .st-tile:focus .st-face::after, .st-tile:focus-visible .st-face::after { animation: st-glint 940ms var(--ease-out); }
+.pad-mode .st-tile:focus .st-face::after, .st-tile:focus-visible .st-face::after { animation: st-glint var(--move-slow); }
 @keyframes st-glint { to { transform: translateX(110%); } }
 :global(body.light-fx .st-face::after) { display: none; }
 :global(body.light-fx .st-face) { animation-name: st-fadein !important; }
 @keyframes st-fadein { from { opacity: 0; } }
 :global(body.motion-reduce .st-face::after) { animation: none !important; }
-.st-tile:active .st-face { transform: scale(0.985); transition-duration: 90ms; }
+.st-tile:active .st-face { transform: scale(0.985); transition-duration: var(--press); }
 .st-tile.leaving { opacity: 0; }
 .st-tile.leaving .st-face { transform: scale(0.9); }
 
 /* arranging: the grid shows, every tile shows its edge; a held tile lifts and follows the finger */
-.st-slots i { position: absolute; left: 0; top: 0; border-radius: var(--r-md); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06); background: rgba(255, 255, 255, 0.015); animation: st-fade 300ms ease both; }
+.st-slots i { position: absolute; left: 0; top: 0; border-radius: var(--r-md); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06); background: rgba(255, 255, 255, 0.015); animation: st-fade var(--spring-d) var(--spring) both; }
 @keyframes st-fade { from { opacity: 0; } }
-.st-ghost { position: absolute; left: 0; top: 0; border-radius: var(--r-lg); box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.45); background: rgba(255, 255, 255, 0.05); transition: transform 220ms cubic-bezier(0.32, 0.72, 0, 1), width 220ms cubic-bezier(0.32, 0.72, 0, 1), height 220ms cubic-bezier(0.32, 0.72, 0, 1); pointer-events: none; }
+.st-ghost { position: absolute; left: 0; top: 0; border-radius: var(--r-lg); box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.45); background: rgba(255, 255, 255, 0.05); transition: transform var(--spring-d) var(--spring), width var(--spring-d) var(--spring), height var(--spring-d) var(--spring); pointer-events: none; }
 .editing .st-face { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12); }
 .editing .st-tile:not(.held):not(.picked) .st-face { transform: scale(0.975); }
 .editing .st-tile:focus .st-face, .editing .st-tile:focus-visible .st-face { box-shadow: var(--ring); transform: none; }
@@ -1326,7 +1327,7 @@ watch(() => store.play, loadWeek);
 /* edges and corners to drag (mouse and touch); with a controller only the lit corner shows */
 .st-handle { position: absolute; z-index: 6; touch-action: none; }
 .st-handle::before { content: ''; position: absolute; inset: -10px; } /* a bigger target for fingers */
-.st-handle::after { content: ''; position: absolute; inset: 0; border-radius: 999px; background: #fff; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5); opacity: 0.85; transition: transform 160ms ease, opacity 160ms ease; }
+.st-handle::after { content: ''; position: absolute; inset: 0; border-radius: 999px; background: #fff; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5); opacity: 0.85; transition: transform var(--spring-snappy-d) var(--spring-snappy), opacity var(--fade-in); }
 .st-handle:hover::after { transform: scale(1.25); opacity: 1; }
 .h-n, .h-s { left: calc(50% - 18px); width: 36px; height: 6px; cursor: ns-resize; }
 .h-n { top: -3px; } .h-s { bottom: -3px; }
@@ -1336,14 +1337,14 @@ watch(() => store.play, loadWeek);
 .h-ne { top: -5px; right: -5px; cursor: nesw-resize; } .h-sw { bottom: -5px; left: -5px; cursor: nesw-resize; }
 .h-nw { top: -5px; left: -5px; cursor: nwse-resize; } .h-se { bottom: -5px; right: -5px; cursor: nwse-resize; }
 .st-tile:not(:hover):not(:focus):not(.held):not(.resized) .st-handle { opacity: 0; pointer-events: none; }
-.st-handle { transition: opacity 160ms ease; }
+.st-handle { transition: opacity var(--fade-in); }
 .pad-mode .st-handle { display: none; }
 .pad-mode .st-handle.on { display: block; }
-.st-handle.on::after { background: var(--focus); box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.25), 0 2px 10px rgba(0, 0, 0, 0.6); transform: scale(1.5); animation: st-pulse 1.4s ease-in-out infinite; }
+.st-handle.on::after { background: var(--focus); box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.25), 0 2px 10px rgba(0, 0, 0, 0.6); transform: scale(1.5); animation: st-pulse var(--loop-pulse) infinite; }
 @keyframes st-pulse { 50% { transform: scale(1.15); } }
 :global(body.light-fx .st-handle.on::after) { animation: none; }
-.st-add { display: flex; align-items: center; justify-content: center; gap: 14px; padding: 0 18px; border-radius: var(--r-lg); color: var(--muted); background: transparent; border: 1.5px dashed rgba(255, 255, 255, 0.14); box-shadow: none !important; transition: background 160ms ease, color 160ms ease, border-color 160ms ease; } /* a quiet slot, not another card (0.9.24) */
-.st-add-plus { width: 36px; height: 36px; flex: none; border-radius: 50%; display: grid; place-items: center; background: rgba(255, 255, 255, 0.06); color: var(--text); transition: transform 240ms var(--ease-out), background 160ms ease; }
+.st-add { display: flex; align-items: center; justify-content: center; gap: 14px; padding: 0 18px; border-radius: var(--r-lg); color: var(--muted); background: transparent; border: 1.5px dashed rgba(255, 255, 255, 0.14); box-shadow: none !important; transition: background var(--tint), color var(--tint), border-color var(--tint); } /* a quiet slot, not another card (0.9.24) */
+.st-add-plus { width: 36px; height: 36px; flex: none; border-radius: 50%; display: grid; place-items: center; background: rgba(255, 255, 255, 0.06); color: var(--text); transition: transform var(--spring-d) var(--spring), background var(--tint); }
 .st-add-t { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .st-add-t b { color: var(--text); font-family: var(--display); font-size: var(--t-md); }
 .st-add-t span { font-size: var(--t-xs);  overflow-wrap: anywhere; }
@@ -1361,18 +1362,18 @@ watch(() => store.play, loadWeek);
 .st-quiet { margin-top: auto; }
 .tnum { font-variant-numeric: tabular-nums; }
 .st-meter { height: 4px; margin-top: 10px; border-radius: 2px; background: rgba(255, 255, 255, 0.1); overflow: hidden; flex: none; }
-.st-meter i { display: block; height: 100%; border-radius: inherit; background: var(--text); transition: width 600ms var(--ease); }
+.st-meter i { display: block; height: 100%; border-radius: inherit; background: var(--text); transition: width var(--spring-soft-d) var(--spring-soft); }
 .st-empty { margin: auto; display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; color: var(--muted); }
 .st-empty b { color: var(--text); font-family: var(--display); }
 .st-empty.small { font-size: var(--t-sm); padding: 0 var(--s-3); }
 .st-center { margin: auto; display: flex; flex-direction: column; align-items: center; gap: 8px; font-family: var(--display); font-weight: 700; }
-.st-tile:focus .st-dice { animation: st-roll 700ms cubic-bezier(0.22, 1, 0.36, 1); }
+.st-tile:focus .st-dice { animation: st-roll var(--spring-soft-d) var(--spring-soft); }
 @keyframes st-roll { 40% { transform: rotate(-20deg) scale(1.12); } 70% { transform: rotate(8deg); } }
 @container (max-height: 110px) and (max-width: 200px) { .st-label { display: none; } .st-center b { display: none; } }
 @container (max-height: 90px) { .st-sub { display: none; } }
 
 /* art tiles: the picture fills the tile, a scrim keeps the words readable */
-.st-art { position: absolute; inset: 0; z-index: -2; background-size: cover; background-position: center 30%; transition: transform 700ms var(--ease); }
+.st-art { position: absolute; inset: 0; z-index: -2; background-size: cover; background-position: center 30%; transition: transform var(--spring-soft-d) var(--spring-soft); }
 .st-tile.art:focus .st-art { transform: scale(1.04); }
 /* 0.9.52: a soft band at the top too, so the tile's label reads on a bright cover */
 .st-scrim { position: absolute; inset: 0; z-index: -1; background: linear-gradient(to bottom, rgba(8, 9, 12, 0.6) 0%, rgba(8, 9, 12, 0.25) 16%, transparent 32%), linear-gradient(to top, rgba(8, 9, 12, 0.92) 0%, rgba(8, 9, 12, 0.55) 38%, rgba(8, 9, 12, 0.08) 72%), linear-gradient(to right, rgba(8, 9, 12, 0.5), transparent 60%); }
@@ -1411,20 +1412,20 @@ watch(() => store.play, loadWeek);
 .st-lname { min-width: 0; text-wrap: balance; }
 
 /* pages: the board slides a little and settles, its tiles arriving as they do on opening */
-.st-pg-next-leave-active, .st-pg-prev-leave-active { transition: opacity 140ms ease-out, transform 140ms ease-out; }
+.st-pg-next-leave-active, .st-pg-prev-leave-active { transition: opacity var(--fade-out), transform var(--spring-snappy-d) var(--spring-snappy); }
 .st-pg-next-leave-to { opacity: 0; transform: translateX(-3%); }
 .st-pg-prev-leave-to { opacity: 0; transform: translateX(3%); }
-.st-pg-next-enter-active, .st-pg-prev-enter-active { transition: opacity 360ms var(--ease-out), transform 420ms var(--ease-out); }
+.st-pg-next-enter-active, .st-pg-prev-enter-active { transition: opacity var(--fade-slow), transform var(--spring-d) var(--spring); }
 .st-pg-next-enter-from { opacity: 0; transform: translateX(4%); }
 .st-pg-prev-enter-from { opacity: 0; transform: translateX(-4%); }
 :global(body.motion-reduce .st-board) { transition: none !important; transform: none !important; }
 /* 0.9.41 (owner: moving pages across rows went laggy): no blur of the whole board behind (it was redrawn every frame of
    a move), a nearly solid page instead */
-.st-ov { position: absolute; inset: 0; z-index: 20; display: flex; flex-direction: column; gap: var(--s-5); padding: var(--s-6) var(--s-7); background: color-mix(in srgb, var(--s0) 96%, transparent); animation: viewIn 220ms var(--ease-out); }
+.st-ov { position: absolute; inset: 0; z-index: 20; display: flex; flex-direction: column; gap: var(--s-5); padding: var(--s-6) var(--s-7); background: color-mix(in srgb, var(--s0) 96%, transparent); animation: viewIn var(--fade-in); }
 .st-ov-head { display: flex; align-items: baseline; gap: var(--s-4); }
 .st-ov-head b { font-family: var(--display); font-size: var(--t-xl); }
 .st-ov-list { display: flex; gap: var(--s-4); flex-wrap: wrap; align-content: flex-start; }
-.st-ov-page { width: clamp(200px, 22vw, 360px); display: flex; flex-direction: column; gap: 10px; padding: 12px; border-radius: var(--r-lg); background: var(--s1); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06); transition: transform 260ms var(--ease-out), box-shadow 160ms ease; }
+.st-ov-page { width: clamp(200px, 22vw, 360px); display: flex; flex-direction: column; gap: 10px; padding: 12px; border-radius: var(--r-lg); background: var(--s1); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06); transition: transform var(--spring-d) var(--spring), box-shadow var(--tint); }
 .st-ov-page.on { box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.35); }
 .st-ov-page:focus { box-shadow: var(--ring); }
 /* the lift uses translate/scale, not transform: the slide to a new place (TransitionGroup) writes transform, and the
@@ -1439,7 +1440,7 @@ watch(() => store.play, loadWeek);
 .st-ov-tag { display: flex; align-items: center; gap: 4px; min-width: 0; color: rgba(255, 255, 255, 0.8); font-size: 10px; font-weight: 600; }
 .st-ov-tag em { font-style: normal; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .st-ov-clock { align-self: center; margin: auto; font-family: var(--display); font-weight: 800; font-size: clamp(12px, 1.4vw, 22px); color: #fff; }
-.st-ov-page { position: relative; transition: translate var(--spring-pop-d, 300ms) var(--spring-pop, ease-out), scale var(--spring-pop-d, 300ms) var(--spring-pop, ease-out), box-shadow 260ms var(--ease-out), opacity 200ms ease; }
+.st-ov-page { position: relative; transition: translate var(--spring-pop-d, 300ms) var(--spring-pop, ease-out), scale var(--spring-pop-d, 300ms) var(--spring-pop, ease-out), box-shadow var(--fade-slow), opacity var(--fade-in); }
 .st-ov-page.dim { opacity: 0.55; }
 .st-ov-carry { position: absolute; top: -12px; left: 50%; transform: translateX(-50%); display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; background: var(--focus); color: var(--on-focus); font-size: var(--t-xs); font-weight: 700; box-shadow: 0 6px 16px rgba(0, 0, 0, 0.45); }
 .st-ovj-move { transition: none; }
@@ -1458,7 +1459,7 @@ watch(() => store.play, loadWeek);
 .st-blank:focus { box-shadow: var(--ring); color: var(--text); }
 
 /* rows of games: the first one in front, with its art behind the words; the rest fanned beside it */
-.st-row-art { position: absolute; inset: 0; z-index: -2; background-size: cover; background-position: center 30%; opacity: 0.5; transition: transform 700ms var(--ease-out), opacity 400ms ease; will-change: transform; } /* 0.9.29: its own layer, so the focus zoom isn't a repaint per frame */
+.st-row-art { position: absolute; inset: 0; z-index: -2; background-size: cover; background-position: center 30%; opacity: 0.5; transition: transform var(--spring-soft-d) var(--spring-soft), opacity var(--fade-slow); will-change: transform; } /* 0.9.29: its own layer, so the focus zoom isn't a repaint per frame */
 .st-tile:focus .st-row-art { transform: scale(1.03); opacity: 0.6; }
 .st-row-fade { position: absolute; inset: 0; z-index: -1; background: linear-gradient(90deg, var(--s1) 22%, color-mix(in srgb, var(--s1) 70%, transparent) 48%, color-mix(in srgb, var(--s1) 35%, transparent)), linear-gradient(0deg, color-mix(in srgb, var(--s1) 70%, transparent), transparent 50%); }
 .st-row { flex: 1; min-height: 0; display: flex; gap: clamp(10px, 3cqw, 24px); }
@@ -1471,24 +1472,24 @@ watch(() => store.play, loadWeek);
 .st-fan-c { position: absolute; top: 0; height: 100cqh; width: auto; aspect-ratio: 3 / 4; object-fit: cover; border-radius: var(--r-md); background: var(--s2);
   left: calc(var(--i) * 37.5cqh); z-index: calc(20 - var(--i)); box-shadow: 0 10px 24px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.07);
   transform: scale(calc(1 - var(--i) * 0.035)); transform-origin: left center; filter: brightness(calc(1 - var(--i) * 0.07));
-  transition: transform 420ms var(--ease-out); transition-delay: calc(var(--i) * 18ms); }
+  transition: transform var(--spring-d) var(--spring); transition-delay: calc(var(--i) * 18ms); }
 /* the covers spread on focus by transform, not `left` (0.9.29: moving `left` laid out and repainted the
    tile on every frame; the same spread, now the compositor's work) */
 .st-tile:focus .st-fan-c { transform: translateX(calc(var(--i) * 4.5cqh)) scale(calc(1 - var(--i) * 0.035)); }
 .st-tile:focus .st-fan-c:first-child { transform: translateY(-2%); }
 /* a row moving to its next game (0.9.28): the art crossfades, the name slides in, the covers glide along */
-.st-row-art.st-xf-enter-active, .st-row-art.st-xf-leave-active { transition: opacity 900ms var(--ease-in-out, ease); }
+.st-row-art.st-xf-enter-active, .st-row-art.st-xf-leave-active { transition: opacity var(--fade-cross); }
 .st-row-art.st-xf-enter-from, .st-row-art.st-xf-leave-to { opacity: 0; }
 /* the old name and the new one share the spot and cross over (no empty moment between them) */
 .st-lead-wrap { margin-top: auto; display: grid; min-width: 0; }
 .st-lead-wrap > .st-row-lead { grid-area: 1 / 1; margin-top: 0; justify-content: flex-end; }
-.st-lead-leave-active { transition: opacity 360ms ease, transform 520ms var(--ease-out); }
-.st-lead-enter-active { transition: opacity 520ms ease 120ms, transform 640ms var(--ease-out) 60ms; }
+.st-lead-leave-active { transition: opacity var(--fade-slow), transform var(--spring-soft-d) var(--spring-soft); }
+.st-lead-enter-active { transition: opacity var(--fade-cross) 120ms, transform var(--spring-soft-d) var(--spring-soft) 60ms; }
 .st-lead-leave-to { opacity: 0; transform: translateX(-12px); }
 .st-lead-enter-from { opacity: 0; transform: translateX(16px); }
-.st-fan-c.st-fan-leave-active { transition: opacity 380ms ease, transform 420ms var(--ease-out); z-index: 21; }
+.st-fan-c.st-fan-leave-active { transition: opacity var(--fade-slow), transform var(--spring-d) var(--spring); z-index: 21; }
 .st-fan-c.st-fan-leave-to { opacity: 0; transform: translateX(-18%) scale(0.96); }
-.st-fan-c.st-fan-enter-active { transition: opacity 520ms ease 180ms; }
+.st-fan-c.st-fan-enter-active { transition: opacity var(--fade-cross) 180ms; }
 .st-fan-c.st-fan-enter-from { opacity: 0; }
 :global(body.motion-reduce .st-tile *) { transition-duration: 0s !important; }
 .st-row.narrow .st-row-info { display: none; }
@@ -1501,7 +1502,7 @@ watch(() => store.play, loadWeek);
 /* trophies: the newest large, the ones before it as small badges */
 .st-tro { flex: 1; min-height: 0; display: flex; flex-direction: column; justify-content: flex-end; gap: clamp(6px, 4cqh, 14px); margin-top: 6px; }
 .st-tro-list { display: grid; gap: 10px 18px; align-content: end; }
-.st-tro-main { display: flex; align-items: center; gap: 12px; min-width: 0; animation: st-in 520ms var(--ease-out) both; animation-delay: calc(var(--i) * 35ms + 120ms); }
+.st-tro-main { display: flex; align-items: center; gap: 12px; min-width: 0; animation: st-in var(--spring-soft-d) var(--spring-soft) both; animation-delay: calc(var(--i) * 35ms + 120ms); }
 .st-tro-badge { width: 48px; aspect-ratio: 1; flex: none; border-radius: var(--r-md); overflow: hidden; display: grid; place-items: center; background: var(--s2); box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 210, 120, 0.28); }
 .st-tro.one .st-tro-badge { width: clamp(36px, 34cqh, 64px); }
 .st-tro-badge img { width: 100%; height: 100%; object-fit: cover; }
@@ -1523,7 +1524,7 @@ watch(() => store.play, loadWeek);
 .st-tro.feat .st-tro-feat b { font-size: clamp(18px, 6cqmin, 40px); }
 .st-tro.feat .st-tro-fd { font-size: clamp(13px, 2.4cqmin, 17px); }
 .st-tro-side { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; justify-content: center; gap: 10px; }
-.st-tro-game { display: flex; align-items: center; gap: 12px; min-width: 0; animation: st-in 520ms var(--ease-out) both; animation-delay: calc(var(--i) * 35ms + 160ms); }
+.st-tro-game { display: flex; align-items: center; gap: 12px; min-width: 0; animation: st-in var(--spring-soft-d) var(--spring-soft) both; animation-delay: calc(var(--i) * 35ms + 160ms); }
 .st-tro-gart { width: 44px; height: 44px; flex: none; border-radius: var(--r-sm); overflow: hidden; background: var(--s2); box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35); }
 .st-tro-gart img { width: 100%; height: 100%; object-fit: cover; }
 .st-tro-gt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
@@ -1539,7 +1540,7 @@ watch(() => store.play, loadWeek);
 .st-tro.solo .st-tro-t b { font-size: clamp(14px, 9cqh, 22px); white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 .st-tro.feat .st-tro-list { flex: 1; align-content: center; }
 .st-tro.feat .st-tro-strip { display: none; }
-.st-tro-feat { flex: 0 0 40%; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 6px; padding: clamp(12px, 4cqh, 22px); border-radius: var(--r-lg); background: radial-gradient(120% 90% at 20% 10%, rgba(255, 210, 120, 0.12), transparent 60%), rgba(255, 255, 255, 0.04); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06); animation: st-in 520ms var(--ease-out) both; }
+.st-tro-feat { flex: 0 0 40%; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 6px; padding: clamp(12px, 4cqh, 22px); border-radius: var(--r-lg); background: radial-gradient(120% 90% at 20% 10%, rgba(255, 210, 120, 0.12), transparent 60%), rgba(255, 255, 255, 0.04); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06); animation: st-in var(--spring-soft-d) var(--spring-soft) both; }
 .st-tro-fbadge { width: clamp(56px, 30cqh, 96px); aspect-ratio: 1; border-radius: var(--r-lg); overflow: hidden; display: grid; place-items: center; background: var(--s2); box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 210, 120, 0.25); margin-bottom: 6px; }
 .st-tro-fbadge img { width: 100%; height: 100%; object-fit: cover; }
 .st-tro-feat b { font-family: var(--display); font-weight: 800; font-size: clamp(16px, 7cqh, 28px); line-height: 1.1; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
@@ -1556,10 +1557,10 @@ watch(() => store.play, loadWeek);
 .st-emu-t b { font-family: var(--display); font-weight: 800; font-size: clamp(15px, 14cqh, 28px);  overflow-wrap: anywhere; }
 .st-emu-t > span:not(.status) { color: var(--muted); font-size: var(--t-xs); }
 .st-emu-t .status { align-self: flex-start; }
-.st-spot-enter-active, .st-spot-leave-active { transition: opacity 900ms ease; }
+.st-spot-enter-active, .st-spot-leave-active { transition: opacity var(--fade-cross); }
 .st-spot-enter-from, .st-spot-leave-to { opacity: 0; }
 .st-band { flex: 1; min-height: 0; display: flex; gap: 10px; align-items: center; margin: 10px 0 4px; overflow: hidden; mask-image: linear-gradient(90deg, #000 80%, transparent); }
-.st-band img { height: min(100%, 220px); aspect-ratio: 2 / 3; object-fit: cover; border-radius: var(--r-md); box-shadow: var(--weight-edge), var(--weight); animation: st-in 520ms var(--ease-out) both; }
+.st-band img { height: min(100%, 220px); aspect-ratio: 2 / 3; object-fit: cover; border-radius: var(--r-md); box-shadow: var(--weight-edge), var(--weight); animation: st-in var(--spring-soft-d) var(--spring-soft) both; }
 .st-band:empty { display: none; }
 /* 0.9.41 (owner): "On this device" is the same green tick the game cards carry */
 .st-dev-tick { display: inline-grid; place-items: center; width: 22px; height: 22px; margin-left: 10px; border-radius: 50%; background: var(--green); color: #fff; vertical-align: middle; box-shadow: 0 0 0 2px rgba(6, 7, 11, 0.55); }
@@ -1573,7 +1574,7 @@ watch(() => store.play, loadWeek);
 @container (max-width: 220px) { .st-cs-mark { text-align: center; } .st-band.fit { justify-content: center; } }
 /* a one-column tile: two numbers, one per line, whole words */
 @container (max-width: 200px) { .st-stats.cs { grid-template-columns: 1fr; text-align: center; } .st-stats.cs > div { align-items: center; } .st-stats.cs > div:nth-child(n+3) { display: none; } .st-stats.cs span { overflow-wrap: normal; } }
-.st-tro-mini { width: 34px; height: 34px; flex: none; border-radius: var(--r-sm); overflow: hidden; display: grid; place-items: center; background: var(--s2); opacity: calc(1 - var(--i) * 0.06); animation: st-in 420ms var(--ease-out) both; animation-delay: calc(var(--i) * 30ms + 200ms); }
+.st-tro-mini { width: 34px; height: 34px; flex: none; border-radius: var(--r-sm); overflow: hidden; display: grid; place-items: center; background: var(--s2); opacity: calc(1 - var(--i) * 0.06); animation: st-in var(--spring-d) var(--spring) both; animation-delay: calc(var(--i) * 30ms + 200ms); }
 .st-tro-mini img { width: 100%; height: 100%; object-fit: cover; }
 @container (max-height: 84px) { .st-tro-strip { display: none; } }
 @container (max-width: 200px) { .st-tro-t { display: none; } .st-tro-main:not(:first-child) { display: none; } .st-tro-main { justify-content: center; flex: 1; } .st-tro-badge { width: min(64cqw, 60cqh); } }
@@ -1582,7 +1583,7 @@ watch(() => store.play, loadWeek);
 /* Surprise me: three cards fanned, dealt again each time */
 .st-deal { position: absolute; right: 8%; top: 12%; bottom: 12%; width: 50%; container-type: size; }
 .st-deal-c { position: absolute; top: 0; right: 0; height: 100cqh; aspect-ratio: 3 / 4; object-fit: cover; border-radius: var(--r-md); background: var(--s2); box-shadow: 0 10px 26px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.08);
-  z-index: calc(5 - var(--i)); transform-origin: 50% 110%; animation: st-deal 560ms var(--ease-out) both; animation-delay: calc(var(--i) * 70ms); transform: rotate(calc(var(--i) * -9deg)) translateX(calc(var(--i) * -16%)); }
+  z-index: calc(5 - var(--i)); transform-origin: 50% 110%; animation: st-deal var(--spring-soft-d) var(--spring-soft) both; animation-delay: calc(var(--i) * 70ms); transform: rotate(calc(var(--i) * -9deg)) translateX(calc(var(--i) * -16%)); }
 @keyframes st-deal { from { opacity: 0; transform: translateY(18%) rotate(0deg) scale(0.92); } }
 .st-deal-t { margin-top: auto; display: flex; flex-direction: column; align-items: flex-start; gap: 4px; position: relative; z-index: 6; max-width: 48%; }
 .st-deal-t b { font-family: var(--display); font-weight: 700; font-size: clamp(13px, 13cqh, 20px); }
@@ -1606,7 +1607,7 @@ watch(() => store.play, loadWeek);
    way. Without the GPU an endless animation keeps the CPU busy, so there it only leans in a little on focus. */
 .st-img { animation: st-drift 40s ease-in-out infinite alternate; transform-origin: 60% 40%; will-change: transform; }
 @keyframes st-drift { from { transform: scale(1.02) translate(0, 0); } to { transform: scale(1.09) translate(-1.5%, 1%); } }
-:global(body.light-fx .st-img), :global(body.motion-reduce .st-img) { animation: none; will-change: auto; transition: transform 1.6s var(--ease-out); }
+:global(body.light-fx .st-img), :global(body.motion-reduce .st-img) { animation: none; will-change: auto; transition: transform var(--move-ambient); }
 :global(body.light-fx .st-tile:focus .st-img) { transform: scale(1.04); }
 .t-html .st-face { padding: 0; }
 .st-html { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: transparent; pointer-events: none; }
@@ -1618,7 +1619,7 @@ watch(() => store.play, loadWeek);
 .st-store-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .st-gauge { position: relative; flex: none; height: 100%; aspect-ratio: 1; max-width: 50%; display: grid; place-items: center; container-type: inline-size; }
 .st-gauge svg { position: absolute; inset: 0; width: 100%; height: 100%; }
-.st-gauge line { stroke: color-mix(in srgb, var(--text) 12%, transparent); /* 0.9.44: the text colour, so Light gets dark ticks */ stroke-width: 2.6; stroke-linecap: round; transition: stroke 260ms ease; transition-delay: calc(var(--i) * 16ms + 200ms); }
+.st-gauge line { stroke: color-mix(in srgb, var(--text) 12%, transparent); /* 0.9.44: the text colour, so Light gets dark ticks */ stroke-width: 2.6; stroke-linecap: round; transition: stroke var(--fade-slow); transition-delay: calc(var(--i) * 16ms + 200ms); }
 .st-gauge line.on { stroke: var(--text); }
 .st-gauge.low line.on { stroke: #ffb547; }
 .st-gauge > span { font-family: var(--display); font-weight: 700; font-size: clamp(13px, 22cqw, 40px); letter-spacing: -0.02em; }
@@ -1645,7 +1646,7 @@ watch(() => store.play, loadWeek);
 .st-bars { flex: 1; min-width: 0; display: flex; align-items: stretch; justify-content: space-between; gap: clamp(4px, 2cqw, 14px); padding-top: 14px; }
 .st-bar { flex: 1; max-width: 34px; display: flex; flex-direction: column; align-items: center; gap: 7px; min-height: 0; }
 .st-col { flex: 1; min-height: 0; width: 100%; position: relative; }
-.st-bar i { position: absolute; left: 0; right: 0; bottom: 0; border-radius: 6px; background: linear-gradient(to top, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.24)); transform-origin: bottom; animation: st-rise 760ms cubic-bezier(0.22, 1, 0.36, 1) both; animation-delay: calc(var(--i) * 55ms + 180ms); transition: height 500ms var(--ease); }
+.st-bar i { position: absolute; left: 0; right: 0; bottom: 0; border-radius: 6px; background: linear-gradient(to top, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.24)); transform-origin: bottom; animation: st-rise var(--move-slow) both; animation-delay: calc(var(--i) * 55ms + 180ms); transition: height var(--progress); }
 .st-bar.today i { background: linear-gradient(to top, rgba(255, 255, 255, 0.78), #fff); }
 .st-bar.none i { height: 7%; min-height: 4px; background: rgba(255, 255, 255, 0.1); } /* a day without play is a low bar, so the chart reads as one (0.9.24) */
 .st-bar em { position: absolute; left: 50%; transform: translate(-50%, -6px); font-style: normal; font-size: 11px; font-weight: 700; color: var(--text); white-space: nowrap; font-variant-numeric: tabular-nums; }
@@ -1671,7 +1672,7 @@ watch(() => store.play, loadWeek);
 .st-covers { flex: 1; min-height: 0; display: grid; grid-auto-flow: column; grid-auto-columns: max-content; gap: clamp(6px, 1.4cqw, 12px); margin-top: 10px; overflow: hidden; -webkit-mask-image: linear-gradient(90deg, #000 80%, transparent); mask-image: linear-gradient(90deg, #000 80%, transparent); }
 .st-ambient { position: absolute; inset: -40px; z-index: -1; background-size: cover; background-position: center; filter: blur(38px) saturate(1.2); opacity: 0.34; }
 .st-ambient::after { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(10, 11, 14, 0.2), rgba(10, 11, 14, 0.75)); }
-.st-cover { height: 100%; width: auto; aspect-ratio: 3 / 4; object-fit: cover; border-radius: var(--r-sm); box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.06); transition: transform 380ms cubic-bezier(0.32, 0.72, 0, 1); transition-delay: calc(var(--i) * 18ms); background: var(--s2); }
+.st-cover { height: 100%; width: auto; aspect-ratio: 3 / 4; object-fit: cover; border-radius: var(--r-sm); box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.06); transition: transform var(--spring-d) var(--spring); transition-delay: calc(var(--i) * 18ms); background: var(--s2); }
 .st-tile:focus .st-cover { transform: translateY(-3px); }
 .st-first { margin-top: 8px; color: var(--text); font-weight: 600; }
 @container (max-height: 150px) { .st-first { display: none; } }
@@ -1679,7 +1680,7 @@ watch(() => store.play, loadWeek);
 
 /* trophies: as many as fit, smaller; a narrow tile shows the newest badge alone */
 .st-ach { flex: 1; min-height: 0; display: grid; align-content: start; gap: 10px 16px; margin-top: 8px; }
-.st-ach-row { display: flex; align-items: center; gap: 10px; min-width: 0; animation: st-in 520ms cubic-bezier(0.22, 1, 0.36, 1) both; animation-delay: calc(var(--i) * 40ms + 120ms); }
+.st-ach-row { display: flex; align-items: center; gap: 10px; min-width: 0; animation: st-in var(--spring-soft-d) var(--spring-soft) both; animation-delay: calc(var(--i) * 40ms + 120ms); }
 .st-ach-img { width: 44px; height: 44px; flex: none; border-radius: var(--r-sm); object-fit: cover; display: grid; place-items: center; background: var(--s2); }
 .st-ach-t { display: flex; flex-direction: column; min-width: 0; }
 .st-ach-t b { font-family: var(--display); font-weight: 700; font-size: var(--t-sm); white-space: normal; text-wrap: balance; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
@@ -1711,7 +1712,7 @@ watch(() => store.play, loadWeek);
 .st-media-t b { font-family: var(--display); font-weight: 800; font-size: clamp(14px, 7cqmin, 24px); line-height: 1.15; text-wrap: balance; }
 .st-media-t span { color: var(--muted); font-size: var(--t-xs); }
 @container (max-height: 200px) { .st-media:not(.wide) .st-media-t { display: none; } }
-.st-media-enter-active, .st-media-leave-active { transition: opacity 420ms var(--ease-out), transform 520ms var(--ease-out); }
+.st-media-enter-active, .st-media-leave-active { transition: opacity var(--fade-slow), transform var(--spring-soft-d) var(--spring-soft); }
 .st-media-enter-from { opacity: 0; transform: translateX(18%) scale(0.92); }
 .st-media-leave-to { opacity: 0; transform: translateX(-18%) scale(0.92); }
 :global(body.light-fx .st-disc), :global(body.motion-reduce .st-disc), :global(body.light-fx .st-cart), :global(body.motion-reduce .st-cart) { animation: none; }
@@ -1719,7 +1720,7 @@ watch(() => store.play, loadWeek);
 /* Game Shelf (0.9.42, option B): cases on a lit shelf. Each case is a spine with the console's band on top and its
    cover showing faintly through; the picked one turns out (rotateY, spring) to show its whole cover. The spot and
    the blurred cover behind light it. Springs, not keyframes, so a quick L1/R1 run retargets smoothly. */
-.st-shelf-amb { position: absolute; inset: -40px; z-index: -1; background-size: cover; background-position: center; filter: blur(40px) saturate(1.3); opacity: 0.34; transition: background-image 600ms var(--ease-out); pointer-events: none; }
+.st-shelf-amb { position: absolute; inset: -40px; z-index: -1; background-size: cover; background-position: center; filter: blur(40px) saturate(1.3); opacity: 0.34; transition: background-image var(--fade-slow); pointer-events: none; }
 .st-shelf-head { display: flex; align-items: center; gap: 0; }
 .st-shelf-t { margin-left: auto; padding-left: 12px; text-align: right; min-width: 0; display: flex; flex-direction: column; align-items: flex-end; }
 .st-shelf-t b { font-family: var(--display); font-weight: 800; font-size: clamp(13px, 1.4em, 19px); color: var(--text); line-height: 1.15; overflow-wrap: anywhere; text-wrap: balance; }
@@ -1730,9 +1731,9 @@ watch(() => store.play, loadWeek);
 .st-shelf-spot { position: absolute; left: 0; top: -30%; width: 60%; height: 130%; background: radial-gradient(55% 55% at 35% 0, rgba(255, 255, 255, 0.14), transparent 70%); pointer-events: none; }
 .st-spine { position: relative; flex: none; width: 36px; height: 90%; border-radius: 3px; overflow: hidden; cursor: pointer; background: #1c1d22; transform-origin: right center;
   box-shadow: inset 1px 0 0 rgba(255, 255, 255, 0.18), inset -8px 0 12px rgba(0, 0, 0, 0.5), 0 6px 10px rgba(0, 0, 0, 0.4);
-  transition: width 560ms var(--spring), height 560ms var(--spring), transform 560ms var(--spring), margin 560ms var(--spring), box-shadow 300ms ease; }
+  transition: width var(--spring-soft-d) var(--spring-soft), height var(--spring-soft-d) var(--spring-soft), transform var(--spring-soft-d) var(--spring-soft), margin var(--spring-soft-d) var(--spring-soft), box-shadow var(--fade-slow); }
 .st-spine::after { content: ''; position: absolute; left: 0; right: 0; top: 0; height: clamp(14px, 9%, 24px); background: linear-gradient(color-mix(in srgb, var(--case) 100%, #fff 12%), var(--case)); box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.22), 0 1px 0 rgba(0, 0, 0, 0.35); z-index: 2; }
-.st-spine-art { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: left center; opacity: 0.5; filter: blur(1px); transition: opacity 320ms ease, filter 320ms ease; }
+.st-spine-art { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: left center; opacity: 0.5; filter: blur(1px); transition: opacity var(--fade-slow), filter var(--fade-slow); }
 .st-spine-t { position: absolute; inset: clamp(22px, 13%, 32px) 0 8px; z-index: 1; writing-mode: vertical-rl; transform: rotate(180deg); display: block; text-overflow: ellipsis; font-family: var(--display); font-weight: 700; font-size: 12px; color: #fff; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.9); overflow: hidden; white-space: nowrap; line-height: 36px; }
 .st-spine.out { width: min(36%, calc((100cqh - 96px) * 0.7)); min-width: 60px; height: 100%; margin: 0 12px 0 6px; transform: rotateY(-12deg); border-radius: 4px;
   box-shadow: 0 24px 40px rgba(0, 0, 0, 0.6), inset 0 0 0 1px rgba(255, 255, 255, 0.2); }
@@ -1750,7 +1751,7 @@ watch(() => store.play, loadWeek);
 .st-media-stage { cursor: pointer; }
 /* focused: the disc spins faster (a second turn on top, so it never jumps) and lifts; the cartridge rises as if
    pulled from the slot; a game on this device has a soft green glow */
-.st-media-obj { transition: transform 420ms var(--ease-out); }
+.st-media-obj { transition: transform var(--spring-d) var(--spring); }
 .st-tile:focus .st-media-obj, .st-tile:hover .st-media-obj { transform: translateY(-3%) scale(1.04); }
 .st-media-obj.dev .st-disc-boost, .st-media-obj.dev .st-cart { box-shadow: 0 14px 34px rgba(0, 0, 0, 0.55), 0 0 0 2px rgba(127, 224, 160, 0.35), 0 0 24px rgba(127, 224, 160, 0.18); }
 .st-disc-boost { height: 92%; aspect-ratio: 1; border-radius: 50%; display: grid; place-items: center; } /* 0.9.39: no faster spin on focus any more */
