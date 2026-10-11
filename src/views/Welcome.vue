@@ -486,7 +486,7 @@ import EmuSetup from './EmuSetup.vue';
 import EmuGet from '../components/EmuGet.vue';
 import RommLocal from '../components/RommLocal.vue';
 import { padInfo, detectPad, padKind } from '../pad.js';
-import { THEMES, STYLES, styleOf, paletteOf } from '../themes.js';
+import { THEMES, STYLES, styleOf, paletteOf, autoColors } from '../themes.js';
 import { BACKGROUNDS, RENDERERS, bgPreview } from '../bgRenderers.js';
 import { IS_ANDROID } from '../platform.js';
 
@@ -527,7 +527,7 @@ function pickStyle(k) { saveConfig({ ui: { style: k, surface: k === 'glass' ? 'g
 function pickTheme(k) {
   const ui = store.config.ui, light = !!THEMES[k]?.light, dock = ui.dockColor;
   const dockColor = light && dock === 'black' ? 'white' : !light && dock === 'white' && THEMES[ui.theme]?.light ? 'black' : undefined;
-  saveConfig({ ui: { theme: k, gameTheme: null, ...(dockColor ? { dockColor } : {}) } });
+  saveConfig({ ui: { theme: k, gameTheme: null, ...(dockColor ? { dockColor } : {}), ...autoColors(k, ui) } }); // Light: black parts, OLED: white (0.9.56)
 }
 // the animated ones and Still (game artwork and wallpapers need a library or a file, so they stay in Settings)
 const LOOK_BGS = BACKGROUNDS.filter((b) => b.group === 'Theme' || b.v === 'solid');
@@ -848,7 +848,7 @@ onBeforeUnmount(() => { off?.(); clearTimeout(padT); window.removeEventListener(
 .small { font-size: var(--t-sm); margin: 0; line-height: 1.5; }
 .mono { font-family: ui-monospace, monospace; word-break: break-all; }
 .lrow .status { margin-left: 8px; vertical-align: middle; }
-.lrow.sel { background: var(--sel); }
+.lrow.sel { background: var(--sel-bg); box-shadow: var(--sel-ring); color: var(--on-sel); }
 .w-scan { text-align: left; align-items: stretch; }
 .w-scan-extra { display: flex; flex-direction: column; gap: var(--s-2); max-width: 1180px !important; text-align: left; }
 .w-scan-extra .l-end { color: var(--muted); font-size: var(--t-sm); white-space: nowrap; }

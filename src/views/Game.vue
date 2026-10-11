@@ -51,16 +51,16 @@
               <button class="btn danger" data-focus @click="call('dl:cancel', dl.id)"><Icon name="mdiClose" />Cancel</button>
             </template>
             <template v-else-if="installedPath && marked">
-              <button class="btn ok xl" data-focus data-autofocus @click="toast('You marked this game as installed', 'info', 3000, 'mdiCheckCircle')"><Icon name="mdiCheckCircle" />Marked as installed</button>
+              <button class="btn primary ok xl" data-focus data-autofocus @click="toast('You marked this game as installed', 'info', 3000, 'mdiCheckCircle')"><Icon name="mdiCheckCircle" />Marked as installed</button>
               <button class="btn" data-focus @click="dlNow"><Icon name="mdiDownload" />Download</button>
               <button class="btn" data-focus @click="setMark(false)"><Icon name="mdiCheckboxBlankOffOutline" />Unmark</button>
             </template>
             <template v-else-if="installedPath">
-              <button v-if="pkgBusy" class="btn xl" data-focus data-autofocus @click="cancelPkg"><Icon name="mdiLoading" class="spin" :size="22" />{{ pkgProg?.opens ? `Close ${emuName} to finish` : `Installing in ${emuName}` }}{{ pkgProg?.of > 1 ? ` · ${pkgProg.step} of ${pkgProg.of}` : '' }}</button>
+              <button v-if="pkgBusy" class="btn xl" data-focus data-autofocus @click="cancelPkg"><Icon name="mdiLoading" class="spin" :size="22" />{{ pkgProg?.opens ? `Close ${emuName} to finish` : `Installing in ${emuName}` }}{{ pkgPct != null ? ` · ${pkgPct}%` : '' }}{{ pkgProg?.of > 1 ? ` · ${pkgProg.step} of ${pkgProg.of}` : '' }}</button>
               <button v-else-if="needsInstall" class="btn primary xl" data-focus data-autofocus @click="installPkg"><Icon name="mdiPackageDown" :size="22" />Install in {{ emuName }}</button>
               <button v-else-if="pkg?.licenceMissing?.length" class="btn primary xl" data-focus data-autofocus @click="addLicence"><Icon name="mdiKeyOutline" :size="22" />Get licence (.rap)</button>
               <button v-else-if="ap?.supported" class="btn primary xl" data-focus data-autofocus :disabled="ap.st.launching" @click="ap.launch()"><Icon name="mdiPlay" :size="24" />Play</button>
-              <button v-else class="btn ok xl" data-focus data-autofocus @click="IS_ANDROID ? toast(installedPath, 'info', 4000, 'mdiFolder') : playNow()"><Icon name="mdiCheckCircle" />Ready to play</button>
+              <button v-else class="btn primary ok xl" data-focus data-autofocus @click="IS_ANDROID ? toast(installedPath, 'info', 4000, 'mdiFolder') : playNow()"><Icon name="mdiCheckCircle" />Ready to play</button>
               <!-- Re-download and Delete live in More → Options (owner, 0.9.16); the ring shows while deleting -->
               <button v-if="deleting != null" class="btn danger icon-btn" data-focus disabled><Ring :pct="deleting" :size="22" /><span>Deleting</span></button>
             </template>
@@ -278,13 +278,14 @@ async function remove() {
 // the download, whether Cartridge installed it, and the install's progress.
 const pkg = ref(null);
 const pkgProg = ref(null);
+const pkgPct = computed(() => pkgProg.value?.pct ?? bgJob('pkg:' + props.romId)?.pct ?? null); // 0.9.60: also when the page opened mid-install
 const pkgBusy = computed(() => pkgProg.value?.state === 'running' || pkg.value?.running || !!bgJob('pkg:' + props.romId)); // 0.9.32: still installing from before
 const needsInstall = computed(() => pkg.value?.pkgs > 0 && !pkg.value.installed);
 const emuName = computed(() => pkg.value?.emuName || 'RPCS3');
 // Android: emulators install packages from their own menus (Settings → Emulators lists what's waiting)
 async function loadPkg() { if (IS_ANDROID) return; pkg.value = installedPath.value ? await call('pkg:check', { romId: Number(props.romId) }).catch(() => null) : null; }
 watch(installedPath, loadPkg);
-const offPkg = window.cart.on('pkg-progress', (p) => { if (p.romId === Number(props.romId)) pkgProg.value = p; });
+const offPkg = window.cart.on('pkg-progress', (p) => { if (p.romId === Number(props.romId)) pkgProg.value = { ...pkgProg.value, ...p }; }); // 0.9.60: a step keeps the last percentage
 onBeforeUnmount(() => { try { offPkg?.(); } catch {} });
 async function installPkg() {
   const p = pkg.value, emu = emuName.value;
@@ -659,12 +660,13 @@ async function more() {
   // PS3 game updates are a tab in Add-ons (0.9.29, owner: no second place for them)
   // 0.9.23 (owner: edit a game's emulator settings from Cartridge)
   // Android: game settings, add-ons and saves are desktop emulators' own files, not reachable there
-  if (!IS_ANDROID && installedPath.value && !marked.value && (pe || /\bpsx\b/i.test(slugs))) play.push({ label: 'Game settings', sub: `${pe || 'DuckStation'}’s settings for this game only`, value: 'gamesettings', icon: 'mdiTune' });
+  // 0.9.62 (owner: across the board): every installed game; the window says when its emulator has none of a game's own
+  if (!IS_ANDROID && installedPath.value && !marked.value) play.push({ label: 'Game settings', sub: `${pe || (/\bpsx\b/i.test(slugs) ? 'DuckStation' : 'The emulator')}’s settings for this game only`, value: 'gamesettings', icon: 'mdiTune' });
   // patches and cheats are in Game Add-ons (0.9.24, owner: no separate row for them here)
   // 0.9.28 (owner: PS4 patches had gone from here): PS3 and PS4 too; Game Add-ons shows only the tabs the console has
   // 0.9.52: cartridge consoles too, for ROM hacks (and Nexus Mods on the mods engine's other sources)
   const HACKS = /\b(nes|famicom|snes|sfam|n64|gb|gbc|gba|nds|genesis-slash-megadrive|sms|gamegear|turbografx16--1)\b/i;
-  if (!IS_ANDROID && installedPath.value && !marked.value && (/\b(ps2|ps3|ps4|psx|ngc|gamecube|gc|wii|psp|3ds|n3ds|switch|wiiu)\b/i.test(slugs) || HACKS.test(slugs))) play.push({ label: 'Add-ons', value: 'textures', icon: 'mdiPuzzleOutline',
+  if (!IS_ANDROID && installedPath.value && !marked.value && (/\b(ps2|ps3|ps4|psx|ngc|gamecube|gc|wii|psp|3ds|n3ds|switch|wiiu|xbox360)\b/i.test(slugs) || HACKS.test(slugs))) play.push({ label: 'Add-ons', value: 'textures', icon: 'mdiPuzzleOutline',
     sub: HACKS.test(slugs) ? 'ROM hacks and mods' : /ps4/i.test(slugs) ? 'Patches from shadPS4 and GoldHEN' : /ps3/i.test(slugs) ? 'Patches and game updates' : /\bps2\b/i.test(slugs) ? 'Texture packs and patches' : /\bpsp\b/i.test(slugs) ? 'Mods and cheats' : 'Mods, packs and patches, and what’s installed' });
   // 0.9.29 (The Syncthing Update): this game's saves on this device, found by the save's own ID
   const sv = IS_ANDROID ? null : await Promise.race([call('saves:forRom', { romId: Number(props.romId) }).catch(() => []), new Promise((r) => setTimeout(() => r(null), 1500))]);
@@ -770,7 +772,7 @@ async function more() {
     try { await call('steam:addToCollections', { romId: Number(props.romId), names }); toast(`Added to ${names.join(', ')}`, 'ok', 3000, 'mdiSteam'); } catch (e) { toast(e.message, 'error', 6000); }
     return;
   }
-  if (v === 'textures') { const sl = `${base.value.platform_slug} ${base.value.platform_fs_slug}`; await openModal('gameaddons', { romId: Number(props.romId), name: base.value.name, tab: /ps3|ps4/i.test(sl) ? 'patches' : /\bps2\b/i.test(sl) ? 'tex' : 'mods' }); return; }
+  if (v === 'textures') { const sl = `${base.value.platform_slug} ${base.value.platform_fs_slug}`; await openModal('gameaddons', { romId: Number(props.romId), name: base.value.name, tab: /ps3|ps4|xbox360/i.test(sl) ? 'patches' : /\bps2\b/i.test(sl) ? 'tex' : 'mods' }); return; }
   // Android: rom:detail trims huge file lists (0.9.18)
   if (v === 'refresh') { try { detail.value = await (IS_ANDROID ? call('rom:detail', { romId: Number(props.romId) }) : call('api:get', { path: `/api/roms/${props.romId}` })); resetLogos(props.romId); toast('Details refreshed', 'ok', 2000, 'mdiRefresh'); } catch (e) { toast(e.message, 'error'); } return; }
   if (v === 'reset') { store.art = { ...store.art }; delete store.art[props.romId]; await call('art:reset', { id: props.romId }); resetLogos(props.romId); toast('Artwork reset', 'ok', 2000, 'mdiRestore'); return; }
@@ -839,8 +841,10 @@ onMounted(async () => {
 .g-actions .btn:not(.xl) { padding: 0 var(--s-4); flex-shrink: 0; }
 @media (max-width: 1100px) { .g-actions .icon-btn span { display: none; } }
 .dlbox { width: 380px; padding: 12px 16px; display: flex; flex-direction: column; gap: 8px; }
-.dest { display: flex; align-items: center; gap: 8px; font-size: var(--t-xs); color: var(--muted); max-width: 700px; white-space: nowrap; min-width: 0; }
-.dest .mono { min-width: 0; }
+.dest { display: flex; align-items: flex-start; flex-wrap: wrap; gap: 4px 8px; font-size: var(--t-xs); color: var(--muted); max-width: 700px; min-width: 0; }
+.dest .icon { flex: none; margin-top: 1px; }
+.dest .mono { min-width: 0; overflow-wrap: anywhere; } /* 0.9.60: a long path wraps; it ran under the free space (owner's photo) */
+.dest .muted { white-space: nowrap; }
 .g-cover { flex: none; width: 250px; margin-top: -200px; z-index: 2; aspect-ratio: 2/3; border-radius: var(--r-md); overflow: hidden; box-shadow: var(--shadow-pop); background: var(--s2); }
 .g-cover img { width: 100%; height: 100%; object-fit: cover; }
 .noart { height: 100%; display: grid; place-items: center; padding: 20px; text-align: center; font-family: var(--display); font-size: var(--t-lg); }

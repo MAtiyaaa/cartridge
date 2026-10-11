@@ -86,6 +86,9 @@ at 1280x800, 1920x1080 and 3840x2160. When a rule and a request disagree, ask th
   glass. **(checked: `tools/ui-audit/focus.js`, a focused thing must look different from itself unfocused, six looks)**
 - **Chosen is never focus.** Chosen is a softer fill (`--sel`, or brighter glass `--lg-sel`) or a green tick. A chosen
   row that's focused looks focused. A page's own chosen style must not beat the focus style (0.9.49: RomM's chosen row).
+- **Focus stays as it is (owner, 0.9.61: "I loved the old selection method").** 0.9.60's glow focus and tinted chosen
+  with a bar were tried and taken back: focus is the ring with a lift on cards and tiles and the fill elsewhere, chosen a
+  thin ring in the highlight colour. Don't change either without asking.
 - **Focus never falls off the page.** If the focused thing disappears, focus goes to the nearest thing on the page
   (`keepFocus`). After a button opens another page, the button that continues the flow keeps focus (the tour).
 - **Pointer and touch never show rings;** the controller and keyboard always do.
@@ -130,6 +133,17 @@ at 1280x800, 1920x1080 and 3840x2160. When a rule and a request disagree, ask th
 - **Every slider, list and grid works with the D-pad.** A slider changes with left and right while it has focus.
 - **Hints show the buttons of the controller you hold,** only in controller mode; never a key and a button together.
 - **Hold A** expands a trailing text; B folds it back first.
+
+## 10b. Speed (owner, 0.9.60: "the whole app feels slower")
+
+- **Nothing heavy on Electron's main thread.** It answers the controller's window, every call and gamescope; a picture
+  shrunk there held it 25 to 120 ms (measured), and hundreds of them froze the app. Pictures are shrunk, probed and
+  converted in the window's image worker (`src/imageWorker.js`); games' IDs are read in the background a game at a time
+  (`gameId` lazy, `ready()`); never `execSync`/`execFileSync` in code that runs on its own (0.9.55).
+  **(checked: `test/designRules.test.js` pins the only places left that decode pictures there)**
+- **Pictures at the size they're drawn:** covers through `cover(rom)`, other pictures with a width (`img(p, w)`), never
+  full size in a card.
+- The log says how long the main thread was held up (`main thread: longest stall`), and the Performance overlay shows it.
 
 ## 11. A new screen is finished when
 

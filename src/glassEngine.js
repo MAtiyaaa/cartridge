@@ -5,8 +5,8 @@
 //   (feDisplacementMap) so it bends at the rim the way light does through curved glass (Snell's law, small-angle:
 //   the offset follows the surface slope). The glass is thick in the middle and tapers at the rounded edge, so the
 //   middle stays calm and the rim magnifies what's behind it.
-// - Light: the rim's specular highlight turns towards the pointer (mouse) or the focused thing (controller), so the
-//   edge catches the light as you move. One custom property on <html>, changed only when the angle moves 4 degrees.
+// - Light: the rim's specular highlight comes from the top left and stays there (0.9.56: it used to follow the pointer
+//   and the focus, which read as white shapes moving round everything).
 // - Cost: a lens map is made once per size (rounded to 8 px) and kept (at most 32); nothing runs per frame. While
 //   frames come slower than 50 a second during movement, the engine steps down to plain frost (body.lg-lite) for a
 //   minute, then tries again. Off without the GPU path (light effects), with reduced motion or reduced transparency,
@@ -58,11 +58,15 @@ function ensureDefs() {
   return defs;
 }
 // frost (blur), strength (how far the rim pulls) and bezel by the kind of surface: big sheets frost more so text on
-// them reads; controls refract more, as the skill's controls-and-navigation glass does
+// them reads; controls refract more, as the skill's controls-and-navigation glass does. 0.9.56: a narrower, gentler
+// bend (owner: shapes sliding round the glass while scrolling); what's behind still curves at the very edge
 function paramsOf(el, w, h) {
   const big = el.classList.contains('dialog'), small = Math.min(w, h);
-  return { frost: big ? 14 : el.classList.contains('tabs') ? 7 : 5, bezel: Math.max(8, Math.min(big ? 26 : 18, small * 0.32)), scale: big ? 34 : Math.min(44, small * 0.6) };
+  return { frost: big ? 14 : el.classList.contains('tabs') ? 7 : 5, bezel: Math.max(6, Math.min(big ? 18 : 12, small * 0.22)), scale: big ? 18 : Math.min(20, small * 0.35) };
 }
+// 0.9.54 (owner: dark Glass looked milky): dark glass keeps the colours behind it rich but not loud (saturate 1.45,
+// contrast 1.05, as its CSS backdrop); Light keeps 1.6. A theme change gives every piece its new filter (key 'd'/'l').
+const tone = () => (document.body.classList.contains('theme-light') ? { k: 'l', sat: 1.6, con: 1 } : { k: 'd', sat: 1.45, con: 1.05 });
 function filterFor(el) {
   // 0.9.49: the layout size, not getBoundingClientRect: a pop-up measured while it arrives (scaled to 0.9) got a filter
   // smaller than itself, and the part outside showed the page sharp along its edges (the keyboard, owner's photos)
@@ -70,8 +74,8 @@ function filterFor(el) {
   if (bw < 24 || bh < 16) return null;
   const w = Math.ceil(bw / 8) * 8, h = Math.ceil(bh / 8) * 8;
   const r = Math.min(parseFloat(getComputedStyle(el).borderTopLeftRadius) || 0, w / 2, h / 2);
-  const p = paramsOf(el, w, h);
-  const key = `${w}x${h}r${Math.round(r)}f${p.frost}`;
+  const p = paramsOf(el, w, h), t = tone();
+  const key = `${w}x${h}r${Math.round(r)}f${p.frost}${t.k}`;
   let f = filters.get(key);
   if (!f) {
     if (filters.size >= 32) { const old = [...filters.entries()].sort((a, b2) => a[1].used - b2[1].used)[0]; document.getElementById(old[1].id)?.remove(); filters.delete(old[0]); }
@@ -92,8 +96,8 @@ function filterFor(el) {
       + `<feImage href="${lensMap(w, h, r, p.bezel)}" x="0" y="0" width="${w}" height="${h}" preserveAspectRatio="none" result="lensPic"/>`
       + `<feComposite in="lensPic" in2="still" operator="over" result="lens"/>`
       + `<feDisplacementMap in="frost" in2="lens" scale="${p.scale}" xChannelSelector="R" yChannelSelector="G" result="bent"/>`
-      + `<feColorMatrix in="bent" type="saturate" values="1.6" result="sat"/>`
-      + `<feComponentTransfer in="sat"><feFuncA type="table" tableValues="1 1"/></feComponentTransfer>`;
+      + `<feColorMatrix in="bent" type="saturate" values="${t.sat}" result="sat"/>`
+      + `<feComponentTransfer in="sat">${t.con === 1 ? '' : ['R', 'G', 'B'].map((c) => `<feFunc${c} type="linear" slope="${t.con}" intercept="${((1 - t.con) / 2).toFixed(3)}"/>`).join('')}<feFuncA type="table" tableValues="1 1"/></feComponentTransfer>`;
     ensureDefs().appendChild(node);
     f = { id, used: 0 };
     filters.set(key, f);
@@ -126,18 +130,9 @@ function enable(v) {
   if (on) scan();
 }
 
-// ---- the light: the rim's highlight faces the pointer or the focus
-let angle = 135, lastSet = 135, pend = null;
-function aim(x, y) {
-  const a = (Math.atan2(y - innerHeight / 2, x - innerWidth / 2) * 180) / Math.PI + 180; // light comes from that side
-  pend = a;
-  frame(() => {
-    if (pend == null) return false;
-    angle = pend; pend = null;
-    if (Math.abs(((angle - lastSet + 540) % 360) - 180) >= 4) { lastSet = angle; document.documentElement.style.setProperty('--lg-angle', angle.toFixed(0) + 'deg'); }
-    return false;
-  });
-}
+// ---- the light (0.9.56, owner: white shapes moving round the focused thing in dark Glass "that don't correspond to
+// anything"): the rim's highlight used to turn towards the pointer or the focus, so every glass edge on screen swung its
+// light as you moved. The light is fixed now, from the top left (--lg-angle's default, 135deg), like a lamp in the room.
 
 // ---- the step down: slow frames while things move -> plain frost for a minute
 let sampling = false, liteUntil = 0;
@@ -163,10 +158,8 @@ export function startGlass() {
   });
   mo.observe(document.body, { childList: true, subtree: true });
   // the body's classes say whether Glass, light effects or reduced motion are on
-  new MutationObserver(() => enable(allowed())).observe(document.body, { attributes: true, attributeFilter: ['class'] });
+  new MutationObserver(() => { enable(allowed()); if (on) scan(); }).observe(document.body, { attributes: true, attributeFilter: ['class'] });
   enable(allowed());
   let lastScroll = 0;
   addEventListener('scroll', () => { const t = performance.now(); if (on && t - lastScroll > 5000) { lastScroll = t; glassSample(); } }, { capture: true, passive: true });
-  addEventListener('pointermove', (e) => { if (on && e.pointerType === 'mouse') aim(e.clientX, e.clientY); }, { passive: true });
-  addEventListener('focusin', (e) => { if (!on) return; const b = e.target.getBoundingClientRect?.(); if (b && b.width) aim(b.left + b.width / 2, b.top + b.height / 2); });
 }

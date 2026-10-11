@@ -320,7 +320,7 @@ async function bulk(what) {
     if (!(await confirm(`Download ${todo.length} game${todo.length === 1 ? '' : 's'}?`, `${bytes(size)} total`, 'Download'))) return;
     const root = await installTo(todo.length); // Android: which drive, asked once
     if (root === null) return;
-    for (const r of todo) await download(r, { checkSpace: todo.length === 1, root });
+    for (const r of todo) await download(r, { checkSpace: todo.length === 1, pick: todo.length === 1, root }); // 0.9.63: many at once never ask per game
   }
   if (what === 'collection' && !(await addToCollection(roms.map((r) => r.id)))) return;
   if (what === 'uncollect') {

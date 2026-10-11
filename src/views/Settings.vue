@@ -109,14 +109,29 @@
 
           <!-- Syncthing (its own tab in 0.9.21; renamed with its logo in 0.9.23, owner) -->
           <template v-else-if="sec === 'syncthing'">
-            <!-- 0.9.51: Cartridge Save Sync (RomM) or Syncthing, chosen in Advanced; a device uses one, never both (owner) -->
+            <!-- 0.9.51: Cartridge Save Sync (RomM) or Syncthing; a device uses one, never both (owner) -->
+            <!-- 0.9.58 (owner): two tabs, Cartridge Save Sync and Syncthing; Syncthing's parts are cards that open, and the
+                 choice of which one this device uses sits at the end of both tabs (it was a third tab, Advanced) -->
             <div class="lookpages"><Btn b="LB" /><div class="seg"><button v-for="p in SYNC_PAGES" :key="p.v" data-focus :data-key="'sync-' + p.v" :class="{ on: syncPage === p.v }" @click="syncPage = p.v">{{ p.l }}</button></div><Btn b="RB" /></div>
-            <SaveSyncCard v-if="syncPage === 'saves'" @advanced="syncPage = 'advanced'" />
-            <template v-else-if="syncPage === 'syncthing'">
+            <SaveSyncCard v-if="syncPage === 'saves'" @advanced="toChoice" />
+            <template v-else-if="!stView">
+              <div class="st-hub-head"><SyncthingLogo :size="44" /><div><h2>Syncthing</h2><p class="muted small">Keeps folders the same on all your devices. Cartridge reads what it shares, and only sets it up when you ask.</p></div></div>
               <p v-if="ssMode === 'cartridge'" class="muted small sync-lock"><Icon name="mdiLockOutline" :size="16" />This device syncs saves with Cartridge Save Sync, so Syncthing isn't used for saves here. Syncthing still shows what else it keeps in step.</p>
-              <SyncCard ref="syncRef" />
+              <div class="st-hub">
+                <button v-for="c in ST_CARDS" :key="c.v" class="st-hub-card glass" data-focus :data-key="'sth-' + c.v" @click="openSt(c.v)">
+                  <Icon :name="c.icon" :size="30" />
+                  <b>{{ c.l }}</b>
+                  <span class="muted small">{{ c.sub }}</span>
+                  <Icon name="mdiChevronRight" :size="20" class="st-hub-go" />
+                </button>
+              </div>
             </template>
             <template v-else>
+              <button class="lrow st-back" data-focus data-key="st-back" @click="closeSt"><Icon name="mdiArrowLeft" :size="22" /><div class="l-mid"><b>Syncthing</b><span class="l-sub">{{ ST_CARDS.find((c) => c.v === stView)?.l }} · B goes back</span></div></button>
+              <SyncCard ref="syncRef" :page="stView" />
+            </template>
+            <template v-if="syncPage === 'saves' || !stView">
+              <div data-key="ss-choice" tabindex="-1" class="ss-choice-anchor" />
               <div class="subh">How This Device Syncs Saves</div>
               <p class="muted small">One way per device: two ways moving the same saves would fight each other.</p>
               <div class="stack">
@@ -159,7 +174,7 @@
               <button v-for="(i, n) in issues" :key="n" class="lrow" data-focus @click="fixIssue(i)">
                 <Icon :name="ISSUE_ICON[i.kind] || 'mdiAlertCircleOutline'" :size="24" style="color: #ffd978" />
                 <div class="l-mid"><b>{{ i.text }}</b><span v-if="i.sub" class="l-sub">{{ i.sub }}</span></div>
-                <span class="l-end"><Btn b="A" />{{ { collections: 'See them', health: 'Shortcut health', setup: 'Emulator setup', romm: 'RomM settings', fpsteam: 'Allow' }[i.fix] }}</span>
+                <span class="l-end"><Btn b="A" />{{ { collections: 'See them', health: 'Shortcut health', setup: 'Emulator setup', romm: 'RomM settings', fpsteam: 'Allow', rpcs3cfg: 'Repair' }[i.fix] }}</span>
               </button>
             </div>
             <!-- 0.9.37 (owner: BIOS and firmware put where each emulator reads it, by itself): each console that needs some -->
@@ -233,6 +248,14 @@
                 </button>
               </div>
             <p v-if="!texEmus.length" class="muted">None of the emulators that take texture packs or mods (PCSX2, DuckStation, Dolphin, PPSSPP, Azahar, Cemu, Eden, Citron, Yuzu, Ryujinx) are set up here yet.</p>
+              <!-- 0.9.52: Nexus Mods lists mods without a key; Premium members' key makes their downloads one press. 0.9.56 (owner): here
+                   with the mods, not in Look & Feel -->
+              <div class="subh">Nexus Mods</div>
+              <p class="muted small" style="margin-top: -6px">Mods from Nexus Mods show in a game’s Mods without a key. With a Premium account, your personal API key (nexusmods.com → your profile → API Keys) downloads them in one press. {{ store.config.nexusKey ? (nexusWho ? 'Key saved: ' + nexusWho + '.' : 'Key saved.') : '' }}</p>
+              <div class="row" style="align-items: flex-end; gap: 12px">
+                <TextField v-model="nexusKey" label="Nexus Mods API key" placeholder="Paste your key" password icon="mdiKeyVariant" style="flex: 1" />
+                <button class="btn" data-focus :disabled="nexusBusy" @click="saveNexus"><Icon name="mdiCheck" :size="18" />{{ nexusBusy ? 'Checking…' : 'Save key' }}</button>
+              </div>
             </template>
             <LinkedFolders v-else-if="emuPage === 'links'" />
             <template v-else-if="emuPage === 'folders'">
@@ -306,7 +329,9 @@
                 <span class="ft-sw" :style="{ background: (ui.colors || {})[f.k] || f.def() }"><Icon v-if="!(ui.colors || {})[f.k]" name="mdiPaletteOutline" :size="14" /></span>
                 <span class="ft-t"><b>{{ f.l }}</b><small>{{ (ui.colors || {})[f.k] ? 'Custom' : 'From theme' }}</small></span>
               </button>
-              <button v-if="Object.values(ui.colors || {}).some(Boolean)" class="btn small" data-focus @click="saveConfig({ ui: { colors: { highlight: '', buttons: '', bars: '', background: '' } } })"><Icon name="mdiRestore" :size="16" />Use theme colours</button>
+              <!-- 0.9.56 (owner): Highlights, Buttons and Progress Bars in pure black in one press -->
+              <button class="btn small" data-focus :class="{ on: pureBlack }" @click="setPureBlack"><Icon name="mdiCircle" :size="16" />Pure Black</button>
+              <button v-if="Object.values(ui.colors || {}).some(Boolean)" class="btn small" data-focus @click="saveConfig({ ui: { colors: { highlight: '', buttons: '', bars: '', background: '' }, colorsAuto: '' } })"><Icon name="mdiRestore" :size="16" />Use Theme Colours</button>
             </div>
             <div class="row"><span class="lbl">Text</span><div class="seg"><button v-for="(v, k) in TEXTS" :key="k" data-focus :class="{ on: (ui.text || 'normal') === k }" @click="saveConfig({ ui: { text: k } })">{{ v.label }}</button></div></div>
 
@@ -333,7 +358,7 @@
             <div class="row"><span class="lbl">Box art size</span><div class="seg"><button v-for="(v, k) in CARD_SIZES" :key="k" data-focus :class="{ on: (ui.gridSize || 'md') === k }" @click="saveConfig({ ui: { gridSize: k } })">{{ v.label }}</button></div></div>
             <Toggle :model-value="ui.cardTitles !== false" label="Game names under box art" desc="Turn off for a clean wall of covers" @update:model-value="(v) => saveConfig({ ui: { cardTitles: v } })" />
             <Toggle :model-value="ui.mediaBar !== false" label="Media bar" desc="Show artwork of the highlighted game at the top of Home" @update:model-value="(v) => saveConfig({ ui: { mediaBar: v } })" />
-            <div v-if="ui.mediaBar !== false" class="row"><span class="lbl">Media bar size</span><div class="seg"><button v-for="m in mediaSizes" :key="m.v" data-focus :class="{ on: (ui.mediaSize || MEDIA_DEFAULT) === m.v }" @click="saveConfig({ ui: { mediaSize: m.v } })">{{ m.l }}</button></div></div>
+            <div v-if="ui.mediaBar !== false" class="row"><span class="lbl">Media bar size</span><div class="seg"><button v-for="m in mediaSizes" :key="m.v" data-focus :class="{ on: ((ui.mediaSize === 'spacious' ? 'large' : ui.mediaSize) || MEDIA_DEFAULT) === m.v }" @click="saveConfig({ ui: { mediaSize: m.v } })">{{ m.l }}</button></div></div>
             <button class="lrow adv-tg" data-focus @click="lookAdv = !lookAdv"><Icon name="mdiTuneVariant" :size="22" /><div class="l-mid"><b>Advanced</b></div><Icon :name="lookAdv ? 'mdiChevronUp' : 'mdiChevronDown'" :size="22" /></button>
             <template v-if="lookAdv">
             <div class="row"><span class="lbl">Card corners</span><div class="seg"><button v-for="(v, k) in CARD_SHAPES" :key="k" data-focus :class="{ on: (ui.cardShape || 'rounded') === k }" @click="saveConfig({ ui: { cardShape: k } })">{{ v.label }}</button></div></div>
@@ -350,16 +375,6 @@
                 <TextField v-model="sgdbKey" label="SteamGridDB API key" placeholder="Paste your key" password icon="mdiKeyVariant" style="flex: 1" />
                 <button class="btn" data-focus :disabled="sgdbBusy" @click="saveSgdb"><Icon name="mdiCheck" :size="18" />{{ sgdbBusy ? 'Checking…' : 'Save key' }}</button>
               </div>
-              <!-- 0.9.52: Nexus Mods lists mods without a key; Premium members' key makes their downloads one press.
-                   Android: no mods (Add-ons are desktop only) -->
-              <template v-if="!IS_ANDROID">
-              <div class="subh">Nexus Mods</div>
-              <p class="muted small" style="margin-top: -6px">Mods from Nexus Mods show in a game’s Mods without a key. With a Premium account, your personal API key (nexusmods.com → your profile → API Keys) downloads them in one press. {{ store.config.nexusKey ? (nexusWho ? 'Key saved: ' + nexusWho + '.' : 'Key saved.') : '' }}</p>
-              <div class="row" style="align-items: flex-end; gap: 12px">
-                <TextField v-model="nexusKey" label="Nexus Mods API key" placeholder="Paste your key" password icon="mdiKeyVariant" style="flex: 1" />
-                <button class="btn" data-focus :disabled="nexusBusy" @click="saveNexus"><Icon name="mdiCheck" :size="18" />{{ nexusBusy ? 'Checking…' : 'Save key' }}</button>
-              </div>
-              </template>
               <div class="subh">Fetch Ahead of Time</div>
               <p class="muted small" style="margin-top: -6px">Gets art now, instead of as you browse, so pages open with everything in place.</p>
               <div v-if="logoJob" class="row" style="gap: 12px; align-items: center">
@@ -610,7 +625,7 @@ import { store, call, go, tab, saveConfig, pickFolder, choose, confirm, toast, o
 import PhoneRemote from './PhoneRemote.vue';
 import { useView } from '../useView.js';
 import { input, focusFirst, setPointerPref, setRumble, rumble, stopScroll } from '../nav.js';
-import { THEMES, STYLES, styleOf, dockOf, TEXTS, FONTS, CARD_SHAPES, CARD_SIZES, DENSITIES, themeFrom, themeOf, paletteOf } from '../themes.js';
+import { THEMES, STYLES, styleOf, dockOf, TEXTS, FONTS, CARD_SHAPES, CARD_SIZES, DENSITIES, themeFrom, themeOf, paletteOf, autoColors } from '../themes.js';
 import { BACKGROUNDS, RENDERERS, LEGACY_ART, bgPreview } from '../bgRenderers.js';
 import { setSoundEnabled, setSoundStyle, previewSound, SOUND_PACKS } from '../sfx.js';
 import Icon from '../components/Icon.vue';
@@ -669,10 +684,20 @@ const ANDROID_HIDDEN = ['syncthing'];
 const railSections = computed(() => sections.filter((s) => (IS_ANDROID ? !ANDROID_HIDDEN.includes(s.id) && (s.id !== 'steam' || store.config.android?.steamApps === true) : s.id !== 'android')));
 const lead = computed(() => sections.find((x) => x.id === sec.value)?.lead || '');
 // pages in Library and Downloads and Updates
-const LIB_PAGES = [{ v: 'server', l: 'RomM Server' }, { v: 'folders', l: 'Games and Storage' }];
+const LIB_PAGES = [{ v: 'folders', l: 'Games and Storage' }, { v: 'server', l: 'RomM Server' }]; // 0.9.60 (owner): games first
 const DLUP_PAGES = [{ v: 'downloads', l: 'Downloads' }, { v: 'updates', l: 'Cartridge Updates' }];
 // Saves and Sync (0.9.51): Cartridge Save Sync, Syncthing, and Advanced (which one this device uses)
-const SYNC_PAGES = [{ v: 'saves', l: 'Cartridge Save Sync' }, { v: 'syncthing', l: 'Syncthing' }, { v: 'advanced', l: 'Advanced' }];
+// Saves and Sync (0.9.58, owner): two tabs; Syncthing's parts are cards that open in place (stView), B goes back to them
+const SYNC_PAGES = [{ v: 'saves', l: 'Cartridge Save Sync' }, { v: 'syncthing', l: 'Syncthing' }];
+const stView = ref('');
+const ST_CARDS = computed(() => [
+  { v: 'games', l: 'Games', icon: 'mdiGamepadVariantOutline', sub: 'Which games’ saves, textures and more Syncthing keeps in step' },
+  ...(store.config.syncthing?.role === 'main' ? [{ v: 'here', l: 'This Device · Main Server', icon: 'mdiServerOutline', sub: 'This device keeps everyone’s saves: its folders and devices' }]
+    : [{ v: 'here', l: 'This Device', icon: 'mdiLaptop', sub: 'Syncthing on this device: running, folders, devices' }, { v: 'server', l: 'Main Server', icon: 'mdiServerOutline', sub: 'The device that keeps everyone’s saves' }]),
+]);
+function openSt(v) { stView.value = v; nextTick(() => focusFirst(paneEl.value, '[data-key="st-back"]')); }
+function closeSt() { const v = stView.value; stView.value = ''; nextTick(() => focusFirst(paneEl.value, `[data-key="sth-${v}"]`)); }
+function toChoice() { nextTick(() => { const a = paneEl.value?.querySelector('[data-key="ss-choice"]'); a?.scrollIntoView({ block: 'start' }); focusFirst(a?.parentElement || paneEl.value, '.ss-choice-anchor ~ .stack .lrow'); }); }
 const ssLocked = computed(() => !!store.config.syncthing?.role);
 const ssMode = computed(() => (store.config.syncthing?.role ? 'syncthing' : store.config.saveSync === 'cartridge' ? 'cartridge' : store.config.saveSync === 'syncthing' ? 'syncthing' : null));
 const syncPage = ref(ssMode.value === 'syncthing' ? 'syncthing' : 'saves');
@@ -683,7 +708,7 @@ async function setSaveSync(v) {
     if (v === 'cartridge') await call('savesync:set', { on: true });
     else { await call('savesync:set', { on: false }); await saveConfig({ saveSync: v }); }
     store.config = await call('config:get');
-    if (v === 'syncthing') syncPage.value = 'syncthing'; else if (v === 'cartridge') syncPage.value = 'saves';
+    if (v === 'syncthing') { syncPage.value = 'syncthing'; stView.value = ''; } else if (v === 'cartridge') syncPage.value = 'saves';
   } catch (e) { toast(e.message, 'error', 6000); }
 }
 async function leaveSyncthing() {
@@ -691,7 +716,7 @@ async function leaveSyncthing() {
   await call('savesync:leaveSyncthing'); store.config = await call('config:get');
   toast('Syncthing no longer syncs saves here. You can turn on Cartridge Save Sync now.', 'ok', 4000, 'mdiLinkOff');
 }
-const libPage = ref(startSec[0] === 'library' && startSec[1] ? startSec[1] : 'server');
+const libPage = ref(startSec[0] === 'library' && startSec[1] ? startSec[1] : 'folders');
 const dlupPage = ref(startSec[0] === 'dlup' && startSec[1] ? startSec[1] : 'downloads');
 // Settings search (0.9.49, owner's Settings refresh): Y lists every setting by name; picking one opens its section and
 // page and puts the highlight on it. [what, where it is, section, page]
@@ -703,11 +728,11 @@ const SEARCH = [
   ['New games go to', 'Library · Games and Storage', 'library', 'folders'], ['Always ask where downloads go', 'Library · Games and Storage', 'library', 'folders'],
   ['BIOS folder', 'Library · Games and Storage', 'library', 'folders'], ['Free up space, storage manager', 'Library · Games and Storage', 'library', 'folders'], ['Check downloaded games', 'Library · Games and Storage', 'library', 'folders'],
   ['Get and update emulators', 'Emulators', 'emu', 'emus'], ['Vita3K, RPCS3, shadPS4, Dolphin, PCSX2...', 'Emulators', 'emu', 'emus'],
-  ['Game add-ons, mods, texture packs, patches', 'Emulators · Game Add-ons', 'emu', 'addons'], ['BIOS and firmware', 'Emulators · Setup and Health', 'emu', 'overview'],
+  ['Game add-ons, mods, texture packs, patches', 'Emulators · Game Add-ons', 'emu', 'addons'], ['Nexus Mods API key', 'Emulators · Game Add-ons', 'emu', 'addons'], ['BIOS and firmware', 'Emulators · Setup and Health', 'emu', 'overview'],
   ['Shortcut health, issues', 'Emulators · Setup and Health', 'emu', 'overview'], ['Console folders', 'Emulators · Console Folders', 'emu', 'folders'], ['Linked folders, share saves with a fork', 'Emulators · Linked Folders', 'emu', 'links'],
   ['Add games to Steam', 'Steam', 'steam'], ['Steam collections', 'Steam', 'steam'], ['Add Cartridge to Steam', 'Steam', 'steam'], ['Frame generation', 'Steam', 'steam'],
   ['RetroAchievements sign in', 'Achievements', 'ra'], ['Sign in to emulators', 'Achievements', 'ra'], ['Trophy folders', 'Achievements', 'ra'], ['Hidden games', 'Achievements', 'ra'], ['Trophy sync', 'Achievements', 'ra'],
-  ['Syncthing', 'Saves and Sync', 'syncthing'], ['Save sync', 'Saves and Sync', 'syncthing'],
+  ['Syncthing', 'Saves and Sync', 'syncthing'], ['Save sync', 'Saves and Sync', 'syncthing'], ['Where your saves are, search for saves', 'Saves and Sync', 'syncthing'],
   ['Colour, theme', 'Look & Feel · Theme', 'ui', 'theme'], ['Plain or Glass style', 'Look & Feel · Theme', 'ui', 'theme'], ['Background', 'Look & Feel · Theme', 'ui', 'theme'], ['Light, OLED', 'Look & Feel · Theme', 'ui', 'theme'],
   ['Font, text size', 'Look & Feel · Text and Cards', 'ui', 'cards'], ['Interface size, scale', 'Look & Feel · Text and Cards', 'ui', 'cards'], ['Card shape and size', 'Look & Feel · Text and Cards', 'ui', 'cards'],
   ['Logos, SteamGridDB key', 'Look & Feel · Metadata', 'ui', 'meta'], ['Idle screen', 'Look & Feel · Motion and Sound', 'ui', 'motion'], ['Sounds', 'Look & Feel · Motion and Sound', 'ui', 'motion'], ['Rumble', 'Look & Feel · Motion and Sound', 'ui', 'motion'], ['Reduced motion, effects', 'Look & Feel · Motion and Sound', 'ui', 'motion'],
@@ -859,6 +884,8 @@ const fineTune = [
   { k: 'bars', l: 'Progress bars', sub: 'Downloads, trophies', def: () => cssVar('--primary') },
   { k: 'background', l: 'Background', sub: 'Waves and gradients', def: () => cssVar('--g2') },
 ];
+const pureBlack = computed(() => ['highlight', 'buttons', 'bars'].every((k) => String((ui.value.colors || {})[k] || '').toLowerCase() === '#000000'));
+function setPureBlack() { saveConfig({ ui: { colors: { highlight: '#000000', buttons: '#000000', bars: '#000000' }, colorsAuto: '' } }); }
 async function pickPart(f) {
   const c = await openModal('color', { value: (ui.value.colors || {})[f.k] || f.def(), title: f.l, note: f.sub, allowReset: !!(ui.value.colors || {})[f.k] });
   if (c === '__theme') await saveConfig({ ui: { colors: { [f.k]: '' } } });
@@ -867,7 +894,7 @@ async function pickPart(f) {
 const customT = computed(() => themeFrom(ui.value.customColor || '#8b74e8'));
 async function pickColor() {
   const c = await openModal('color', { value: ui.value.customColor || THEMES[ui.value.theme]?.accent?.[0] || '#8b74e8' });
-  if (c) await saveConfig({ ui: { theme: 'custom', customColor: c, gameTheme: null } });
+  if (c) await saveConfig({ ui: { theme: 'custom', customColor: c, gameTheme: null, ...autoColors('custom', ui.value) } });
 }
 async function setBg(v) {
   if (v === 'wallpaper' && !ui.value.wallpaper) { await chooseWallpaper(); return; }
@@ -880,31 +907,16 @@ async function chooseWallpaper() {
 }
 // A (0.9.15): each console with enough covers in your library can be the background
 const artBgs = computed(() => (store.lib?.platforms || []).filter((p) => p.rom_count >= 6).map((p) => ({ v: 'art:' + p.slug, l: consoleName(p), sub: 'Your games, slowly panning', group: 'Art' })).sort((a, b) => a.l.localeCompare(b.l)));
-// your five most used consoles first (0.9.16): play time, then games on this device, each as its
-// own games panning (0.9.19: the console scenes were retired)
-const topConsoles = computed(() => {
-  const score = {};
-  for (const r of allRoms()) {
-    const pl = store.play[r.id], inst = !!store.installed[r.id];
-    if (!pl?.min && !inst) continue;
-    const s = (score[r.platform_slug] ||= { min: 0, inst: 0 });
-    s.min += pl?.min || 0; s.inst += inst ? 1 : 0;
-  }
-  return (store.lib?.platforms || []).filter((p) => score[p.slug]).sort((a, b) => score[b.slug].min - score[a.slug].min || score[b.slug].inst - score[a.slug].inst).slice(0, 5);
-});
-const allBgs = computed(() => {
-  const theme = BACKGROUNDS.filter((b) => b.group === 'Theme'), scenes = BACKGROUNDS.filter((b) => b.group === 'Scenes'), other = BACKGROUNDS.filter((b) => b.group === 'Other');
-  const top = topConsoles.value.map((p) => ({ v: 'art:' + p.slug, l: consoleName(p), sub: 'Your games, slowly panning', group: 'Top' }));
-  const used = new Set(top.map((b) => b.v));
-  return [...theme, ...scenes, ...top, ...artBgs.value.filter((b) => !used.has(b.v)), ...other];
-});
-const bgNow = computed(() => { const v = ui.value.bgStyle || 'solid'; const m = LEGACY_ART[v] ? 'art:' + LEGACY_ART[v] : v; return allBgs.value.find((b) => b.v === m) || BACKGROUNDS[0]; });
+// 0.9.56 (owner): the menu is your theme's colours, the scenes' own colours and the rest; the console and game art
+// backgrounds left the menu (a background already set to one keeps working and shows as the current one)
+const allBgs = computed(() => ['Theme', 'Scenes', 'Other'].flatMap((g) => BACKGROUNDS.filter((b) => b.group === g)));
+const bgNow = computed(() => { const v = ui.value.bgStyle || 'solid'; const m = LEGACY_ART[v] ? 'art:' + LEGACY_ART[v] : v; return allBgs.value.find((b) => b.v === m) || artBgs.value.find((b) => b.v === m) || BACKGROUNDS[0]; });
 const BG_ICON = { Theme: 'mdiWaves', Scenes: 'mdiWaves', Top: 'mdiStarOutline', Consoles: 'mdiGamepadVariantOutline', Art: 'mdiImageMultipleOutline', Other: 'mdiImageOutline' };
 async function pickBg() {
   let last = '';
   const pal = paletteOf(ui.value);
   // a picture of each animated one (0.9.3 L); still, artwork and wallpaper keep their icon
-  const options = allBgs.value.map((b) => { const o = { label: b.l, sub: b.sub, value: b.v, icon: BG_ICON[b.group], img: RENDERERS[b.v] ? bgPreview(b.v, pal) : '', selected: bgNow.value.v === b.v, raw: b.group === 'Art' || (b.group === 'Top' && b.v.startsWith('art:')), heading: b.group !== last ? { Theme: 'Your theme colours', Scenes: 'Their own colours', Top: 'Your most played consoles', Art: 'Your games', Other: 'Other' }[b.group] : '' }; last = b.group; return o; });
+  const options = allBgs.value.map((b) => { const o = { label: b.l, sub: b.sub, value: b.v, icon: BG_ICON[b.group], img: RENDERERS[b.v] ? bgPreview(b.v, pal) : '', selected: bgNow.value.v === b.v, heading: b.group !== last ? { Theme: 'Your Theme Colours', Scenes: 'Their Own Colours', Other: 'Other' }[b.group] : '' }; last = b.group; return o; });
   const v = await choose({ title: 'Background', options });
   if (v) await setBg(v);
 }
@@ -926,7 +938,7 @@ function moveTab(n, d) {
   [l[i], l[j]] = [l[j], l[i]];
   saveConfig({ ui: { tabs: l } });
 }
-const LOOK_KEYS = ['theme', 'customColor', 'colors', 'idle', 'style', 'surface', 'elements', 'text', 'font', 'bgStyle', 'wallDim', 'cardShape', 'density', 'gridSize', 'cardTitles', 'mediaBar', 'mediaSize', 'logos', 'motion', 'effects', 'sounds', 'soundPack', 'volume', 'rumble'];
+const LOOK_KEYS = ['theme', 'customColor', 'colors', 'colorsAuto', 'idle', 'style', 'surface', 'elements', 'text', 'font', 'bgStyle', 'wallDim', 'cardShape', 'density', 'gridSize', 'cardTitles', 'mediaBar', 'mediaSize', 'logos', 'motion', 'effects', 'sounds', 'soundPack', 'volume', 'rumble'];
 const presets = computed(() => store.config.lookPresets || []);
 const presetStyle = (p) => { const g = themeOf(p.ui).grad; return { background: `linear-gradient(135deg, ${g[0]}, ${g[2]} 60%, ${g[4]})` }; };
 function lookNow() { const o = {}; for (const k of LOOK_KEYS) if (ui.value[k] !== undefined) o[k] = JSON.parse(JSON.stringify(ui.value[k])); return o; }
@@ -1027,11 +1039,12 @@ function paneLeft() {
   if (more) return false;
   focusFirst(el.value, `[data-key="sec-${sec.value}"]`);
 }
-useView({ right: railRight, left: paneLeft, back: () => { if (!document.activeElement?.closest('.rail')) { focusFirst(el.value, `[data-key="sec-${sec.value}"]`); return; } return false; }, lb: () => (sec.value === 'emu' ? stepEmu(-1) : sec.value === 'library' ? stepPages(LIB_PAGES, libPage, 'lib', -1) : sec.value === 'dlup' ? stepPages(DLUP_PAGES, dlupPage, 'dlup', -1) : sec.value === 'syncthing' ? stepPages(SYNC_PAGES, syncPage, 'sync', -1) : sec.value === 'steam' ? steamRef.value?.step(-1) : stepLook(-1)), rb: () => (sec.value === 'emu' ? stepEmu(1) : sec.value === 'library' ? stepPages(LIB_PAGES, libPage, 'lib', 1) : sec.value === 'dlup' ? stepPages(DLUP_PAGES, dlupPage, 'dlup', 1) : sec.value === 'syncthing' ? stepPages(SYNC_PAGES, syncPage, 'sync', 1) : sec.value === 'steam' ? steamRef.value?.step(1) : stepLook(1)), y: () => searchSettings() },
+function stepSync(d) { stView.value = ''; stepPages(SYNC_PAGES, syncPage, 'sync', d); }
+useView({ right: railRight, left: paneLeft, back: () => { if (sec.value === 'syncthing' && syncPage.value === 'syncthing' && stView.value && !document.activeElement?.closest('.rail')) { closeSt(); return; } if (!document.activeElement?.closest('.rail')) { focusFirst(el.value, `[data-key="sec-${sec.value}"]`); return; } return false; }, lb: () => (sec.value === 'emu' ? stepEmu(-1) : sec.value === 'library' ? stepPages(LIB_PAGES, libPage, 'lib', -1) : sec.value === 'dlup' ? stepPages(DLUP_PAGES, dlupPage, 'dlup', -1) : sec.value === 'syncthing' ? stepSync(-1) : sec.value === 'steam' ? steamRef.value?.step(-1) : stepLook(-1)), rb: () => (sec.value === 'emu' ? stepEmu(1) : sec.value === 'library' ? stepPages(LIB_PAGES, libPage, 'lib', 1) : sec.value === 'dlup' ? stepPages(DLUP_PAGES, dlupPage, 'dlup', 1) : sec.value === 'syncthing' ? stepSync(1) : sec.value === 'steam' ? steamRef.value?.step(1) : stepLook(1)), y: () => searchSettings() },
   [{ b: 'A', label: 'Select' }, { b: 'B', label: 'Back' }, { b: 'Y', label: 'Find a Setting' }, { b: 'LT+RT', label: 'Tabs' }]);
 // Settings → Emulators → Issues
 const issues = ref(null);
-const ISSUE_ICON = { collections: 'mdiFolderSyncOutline', moved: 'mdiLinkVariantOff', game: 'mdiFileHidden', core: 'mdiPuzzleRemoveOutline', setup: 'mdiRadar', bios: 'mdiChip', romm: 'mdiServerOutline', fpsteam: 'mdiSteam' };
+const ISSUE_ICON = { collections: 'mdiFolderSyncOutline', moved: 'mdiLinkVariantOff', game: 'mdiFileHidden', core: 'mdiPuzzleRemoveOutline', setup: 'mdiRadar', bios: 'mdiChip', romm: 'mdiServerOutline', fpsteam: 'mdiSteam', rpcs3cfg: 'mdiFileAlertOutline' };
 async function loadIssues() { issues.value = await call('issues:list').catch(() => []); store.issues = issues.value.length; texEmus.value = (await call('addons:emulators').catch(() => null)) || []; }
 const texEmus = ref([]);
 // Add-ons page (0.9.17): installed games of consoles with add-ons, by console, and what Cartridge installed
@@ -1096,6 +1109,12 @@ async function fixIssue(i) {
   if (i.fix === 'health') return go('steam-health');
   if (i.fix === 'setup') return go('emu-setup');
   if (i.fix === 'romm') { sec.value = 'romm'; return; }
+  if (!i.fix) return;
+  if (i.fix === 'rpcs3cfg') {
+    if (!(await confirm('Repair RPCS3’s Settings File?', 'Cartridge keeps a copy of the file as it is now, then removes only the text an older EmuDeck left behind. If the file still can’t be read afterwards, the copy goes back and nothing changes.', 'Repair'))) return;
+    try { const r = await call('rpcs3:repairConfig', { root: i.root }); toast(r.already ? 'It reads fine already' : 'Repaired. RPCS3 can load its settings again.', 'ok', 3500, 'mdiCheck'); loadIssues(); } catch (e) { toast(e.message, 'error', 8000); }
+    return;
+  }
   if (i.fix === 'fpsteam') {
     if (!(await confirm('Allow Flatpak Steam?', 'Runs: flatpak override --user --talk-name=org.freedesktop.Flatpak com.valvesoftware.Steam\n\nSteam can then start your emulators from its shortcuts. Restart Steam afterwards.', 'Allow'))) return;
     try { await call('setup:steamFlatpakAllow'); toast('Allowed. Restart Steam to use it.', 'ok', 3500, 'mdiCheck'); loadIssues(); } catch (e) { toast(e.message, 'error', 6000); }
@@ -1208,7 +1227,9 @@ async function loadAll() {
   const list = await call('platforms:supported');
   supported.value = list.map((p) => ({ ...p, display_name: p.display_name || p.name })).sort((a, b) => a.display_name.localeCompare(b.display_name));
 }
-const mediaSizes = [{ v: 'compact', l: 'Compact' }, { v: 'spacious', l: 'Spacious' }, { v: 'large', l: 'Large' }];
+// 0.9.60 (owner): today's Large is Medium, a new bigger Large; 'large' keeps its value so saved choices look the same,
+// Spacious (58%) shows as Medium
+const mediaSizes = [{ v: 'compact', l: 'Compact' }, { v: 'large', l: 'Medium' }, { v: 'xl', l: 'Large' }];
 // Emulators pages (0.9.16)
 // 0.9.28 (owner: the flow felt confusing): what you have first, then add-ons, then setup and health checks, then folders
 // Android: its own overview (AndroidEmulators) and Console Folders; getting, updating, linking and adding to desktop emulators is desktop only
@@ -1270,14 +1291,14 @@ function pickStyle(k) { saveConfig({ ui: { style: k, surface: k === 'glass' ? 'g
 function pickTheme(k) {
   const light = !!THEMES[k]?.light, dock = ui.value.dockColor;
   const dockColor = light && dock === 'black' ? 'white' : !light && dock === 'white' && THEMES[ui.value.theme]?.light ? 'black' : undefined;
-  saveConfig({ ui: { theme: k, gameTheme: null, ...(dockColor ? { dockColor } : {}) } });
+  saveConfig({ ui: { theme: k, gameTheme: null, ...(dockColor ? { dockColor } : {}), ...autoColors(k, ui.value) } }); // Light: black parts, OLED: white (0.9.56)
 }
 const DOCK_COLOR = [{ v: 'black', l: 'Black' }, { v: 'white', l: 'White' }, { v: 'accent', l: 'Accent' }]; // Plain only: in Glass the Dock is glass (0.9.45)
 const BAR_ALIGN = [{ v: 'start', l: 'Aligned' }, { v: 'center', l: 'Centred' }];
 const BAR_STYLE = [{ v: 'plain', l: 'Plain' }, { v: 'pill', l: 'Floating Pill' }, { v: 'circle', l: 'Circles' }];
 const LOOK_PAGES = [{ v: 'theme', l: 'Theme' }, { v: 'cards', l: 'Text and Cards' }, { v: 'meta', l: 'Metadata' }, { v: 'motion', l: 'Motion and Sound' }]; // Controls is its own section (0.9.49)
 const lookPage = ref(sec.value === 'ui' && backTo ? backTo : 'theme'), lookAdv = ref(false);
-watch(sec, (v, was) => { if (was && v !== was) { emuPage.value = 'emus'; lookPage.value = 'theme'; lookAdv.value = false; libPage.value = 'server'; dlupPage.value = 'downloads'; } }); // a section always opens on its first page
+watch(sec, (v, was) => { if (was && v !== was) { emuPage.value = 'emus'; lookPage.value = 'theme'; lookAdv.value = false; libPage.value = 'folders'; dlupPage.value = 'downloads'; } }); // a section always opens on its first page
 watch([sec, emuPage, lookPage, libPage, dlupPage], () => { store.settingsPage = sec.value === 'emu' ? emuPage.value : sec.value === 'ui' ? lookPage.value : sec.value === 'library' ? libPage.value : sec.value === 'dlup' ? dlupPage.value : null; }, { immediate: true });
 function setLookPage(v) { lookPage.value = v; lookAdv.value = false; }
 function stepLook(d) {
@@ -1355,13 +1376,26 @@ onMounted(() => {
 .rail-item { display: flex; align-items: center; gap: 14px; padding: 13px 16px; border-radius: var(--r-md); color: var(--muted); font-weight: 500; transition: background var(--tint), color var(--tint); }
 /* the page follows the list as you move, so the current section only needs brighter text, no box */
 .sync-lock { display: flex; align-items: center; gap: 8px; margin: 0 0 var(--s-2); }
-.rail-item.on { color: var(--text); background: var(--sel); } /* the open section: chosen, the softer fill (docs/design-rules.md 6) */
+/* Syncthing's parts as cards (0.9.58) */
+.st-hub-head { display: flex; align-items: center; gap: var(--s-3); margin-bottom: var(--s-3); }
+.st-hub-head h2 { margin: 0 0 2px; font-size: var(--t-xl); }
+.st-hub-head p { margin: 0; }
+.st-hub { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: var(--s-3); }
+.st-hub-card { position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding: var(--s-4) var(--s-5) var(--s-4) var(--s-4); border-radius: var(--r-lg); text-align: left; min-height: 132px; transition: transform var(--spring-snappy-d) var(--spring-snappy), background var(--tint); }
+.st-hub-card b { font-family: var(--display); font-size: var(--t-lg); }
+.st-hub-card .small { overflow-wrap: anywhere; }
+.st-hub-go { position: absolute; top: var(--s-4); right: var(--s-3); color: var(--muted); }
+.st-hub-card:is(:focus-visible), .pad-mode .st-hub-card:focus { background: var(--focus); color: var(--on-focus); }
+.st-hub-card:is(:focus-visible, :focus) :is(.muted, .st-hub-go) { color: var(--on-focus-dim); }
+.st-back { margin-bottom: var(--s-3); }
+.ss-choice-anchor { height: 0; outline: none; }
+.rail-item.on { color: var(--on-sel); background: var(--sel-bg); box-shadow: var(--sel-ring); } /* the open section: chosen, the softer fill (docs/design-rules.md 6) */
 .rail-item:focus { background: var(--focus); color: var(--on-focus); box-shadow: none; }
 .pane { overflow-y: auto; padding: 6px 12px 60px 24px; }
 .ga-cons { display: flex; gap: 8px; overflow-x: auto; padding: 8px 6px 10px; margin: 0 -6px; scrollbar-width: none; } /* room for a selected chip (0.9.28: it was cut off) */
 .ga-con { flex: none; display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 999px; background: var(--s1); box-shadow: var(--weight-edge); font-weight: 600; font-size: var(--t-sm); }
 .ga-con em { font-style: normal; color: var(--muted); font-weight: 500; }
-.ga-con.on { background: var(--sel); }
+.ga-con.on { background: var(--sel-bg); box-shadow: var(--sel-ring); color: var(--on-sel); }
 .ga-con:focus-visible, .pad-mode .ga-con:focus { background: var(--focus); color: var(--on-focus); box-shadow: none; outline: none; } /* the standard highlight: white fill, dark text, no ring */
 .pad-mode .ga-con:focus em { color: var(--on-focus-dim); }
 .rail-st { color: inherit !important; }
@@ -1415,7 +1449,7 @@ onMounted(() => {
 .bgnow-t small { font-size: var(--t-xs); color: var(--muted); }
 .bgnow-c { display: inline-flex; align-items: center; gap: 2px; font-size: var(--t-sm); font-weight: 600; color: var(--primary-t); }
 .bgtile { position: relative; display: flex; flex-direction: column; gap: 2px; padding: 10px; border-radius: var(--r-md); background: var(--s2); text-align: left; }
-.bgtile.on { background: var(--sel); }
+.bgtile.on { background: var(--sel-bg); box-shadow: var(--sel-ring); color: var(--on-sel); }
 .bgtile b { font-size: var(--t-sm); font-weight: 600; margin-top: 6px; }
 .bgtile small { font-size: var(--t-xs); color: var(--muted); }
 .bgp { position: relative; height: 54px; border-radius: var(--r-sm); overflow: hidden; background: var(--xmb); }
@@ -1437,7 +1471,7 @@ onMounted(() => {
 .fonttile { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 12px 8px; border-radius: var(--r-md); background: var(--s2); }
 .fonttile b { font-size: var(--t-xl); font-weight: 600; line-height: 1.1; }
 .fonttile span { font-size: var(--t-xs); color: var(--muted); }
-.fonttile.on { background: var(--sel); }
+.fonttile.on { background: var(--sel-bg); box-shadow: var(--sel-ring); color: var(--on-sel); }
 .steam-grid { width: 130px; border-radius: var(--r-sm); box-shadow: 0 14px 34px rgba(0, 0, 0, 0.5); flex: none; }
 .fadeup-enter-active { transition: opacity var(--fade-in), transform var(--spring-d) var(--spring); }
 .fadeup-enter-from { opacity: 0; transform: translateX(10px); }
