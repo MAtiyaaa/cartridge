@@ -13,7 +13,12 @@ import './styles.css';
 import App from './App.vue';
 import { installSprings, slidingPills, startGovernor } from './motion.js';
 import { startGlass } from './glassEngine.js';
+import { startImageWorker } from './imageWorker.js';
+import { openModal, closeModal } from './store.js';
+import { IS_ANDROID } from './platform.js';
 installSprings();
+if (!IS_ANDROID) startImageWorker(); // 0.9.60: picture shrinking and logo trimming off Electron's main thread (Android: the bridge carries no raw bytes, logos are made in the backend)
+window.__cartStore = { openModal, closeModal }; // the UI audits open pop-ups with it (tools/ui-audit)
 startGovernor(); // CAE: idle and away states (motion.js) // spring easings as CSS tokens (0.9.37), before the first paint
 createApp(App).mount('#app');
 startGlass(); // Glass engine: refraction in Glass mode only (glassEngine.js)

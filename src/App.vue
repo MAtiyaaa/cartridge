@@ -80,7 +80,12 @@
     <ArtPicker v-else-if="store.modal?.type === 'art'" :key="store.modal.props.query || ''" v-bind="store.modal.props" />
     <GameTimeline v-else-if="store.modal?.type === 'timeline'" v-bind="store.modal.props" />
     <GameAbout v-else-if="store.modal?.type === 'gameabout'" v-bind="store.modal.props" />
+    <FilePick v-else-if="store.modal?.type === 'filepick'" v-bind="store.modal.props" />
     <ConsoleCollection v-else-if="store.modal?.type === 'consolecol'" v-bind="store.modal.props" />
+    <LinkSetup v-else-if="store.modal?.type === 'linksetup'" v-bind="store.modal.props" />
+    <SaveGame v-else-if="store.modal?.type === 'savegame'" :key="'sg' + store.modal.props.romId" v-bind="store.modal.props" />
+    <SaveLocations v-else-if="store.modal?.type === 'savelocations'" key="savelocations" />
+    <FolderView v-else-if="store.modal?.type === 'folderview'" :key="'fv' + store.modal.props.path" v-bind="store.modal.props" />
     <ManualViewer v-else-if="store.modal?.type === 'manual'" v-bind="store.modal.props" />
     <PatchesSheet v-else-if="store.modal?.type === 'patches'" v-bind="store.modal.props" />
     <AddonsSheet v-else-if="store.modal?.type === 'addons'" :key="'addons' + store.modal.props.romId" v-bind="store.modal.props" />
@@ -140,7 +145,12 @@ import Menu from './components/Menu.vue';
 import ArtPicker from './components/ArtPicker.vue';
 import GameTimeline from './components/GameTimeline.vue';
 import GameAbout from './components/GameAbout.vue';
+import FilePick from './components/FilePick.vue';
 import ConsoleCollection from './components/ConsoleCollection.vue';
+import LinkSetup from './components/LinkSetup.vue';
+import SaveGame from './components/SaveGame.vue';
+import SaveLocations from './components/SaveLocations.vue';
+import FolderView from './components/FolderView.vue';
 import FirstTour from './components/FirstTour.vue';
 import CloudSync from './components/CloudSync.vue';
 // the manual reader brings pdf.js: loaded the first time a manual opens, not at start

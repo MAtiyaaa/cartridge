@@ -11,7 +11,7 @@
     </div>
     <div class="st-scroll" data-scroll ref="scroller" @pointerdown="swipeDown">
       <Transition :name="'st-pg-' + pageDir" mode="out-in" @after-enter="afterPage">
-      <div class="st-board" :key="page" :data-pg="page" :style="{ height: boardH + 'px' }" @transitionend="tileSettled">
+      <div class="st-board" :class="{ editing }" :key="page" :data-pg="page" :style="{ height: boardH + 'px' }" @transitionend="tileSettled">
         <!-- arranging: the grid's empty cells show, and where the held tile will land -->
         <div v-if="editing" class="st-slots" aria-hidden="true"><i v-for="c in slots" :key="c.k" :style="c.s" /></div>
         <div v-if="ghost" class="st-ghost" :style="ghost" aria-hidden="true" />
@@ -24,7 +24,8 @@
           <!-- Continue playing: the game you played last, its art, logo and when -->
           <template v-if="t.type === 'continue'">
             <template v-if="cur">
-              <div class="st-art" :style="{ backgroundImage: bgUrl(artOf(cur)) }" />
+              <!-- 0.9.60 (owner: switching games just cut): the next game's art is decoded first, then crossfades, panning in step -->
+              <Transition name="st-xf"><div :key="steadyArt('c' + t.id, cur).id" class="st-art" :class="{ 'st-pan': bigArt(t) }" :style="{ backgroundImage: bgUrl(steadyArt('c' + t.id, cur).url), animationDelay: panDelay() }" /></Transition>
               <div class="st-scrim" />
               <div class="st-label on-art">Continue playing</div>
               <div class="st-cp">
@@ -97,7 +98,7 @@
                game in front with its art, logo and a line about it; the next ones fanned out beside it -->
           <template v-else-if="COVER_ROWS[t.type]">
             <template v-if="listOf(t).length">
-              <Transition name="st-xf"><div :key="rowView(t)[0].id" class="st-row-art" :style="{ backgroundImage: bgUrl(artOf(rowView(t)[0]) || cover(rowView(t)[0], true)) }" /></Transition>
+              <Transition name="st-xf"><div :key="steadyArt(t.id, rowView(t)[0]).id" class="st-row-art" :style="{ backgroundImage: bgUrl(steadyArt(t.id, rowView(t)[0]).url) }" /></Transition>
               <div class="st-row-fade" />
               <div class="st-row" :class="{ tall: t.h > 1, narrow: t.w <= 2 }">
                 <div class="st-row-info">
@@ -200,13 +201,15 @@
           <!-- Console Spotlight (0.9.28): a console's games take turns, with their art -->
           <template v-else-if="t.type === 'spotlight'">
             <template v-if="spotOf(t)">
-              <Transition name="st-spot"><div :key="spotOf(t).id" class="st-art" :style="{ backgroundImage: bgUrl(t.h > t.w ? cover(spotOf(t), true) : artOf(spotOf(t)) || cover(spotOf(t), true)) }" /></Transition>
+              <Transition name="st-xf"><div :key="spotOf(t).id" class="st-art" :class="{ 'st-pan': bigArt(t) }" :style="{ backgroundImage: bgUrl(t.h > t.w ? cover(spotOf(t), true) : artOf(spotOf(t)) || cover(spotOf(t), true)), animationDelay: panDelay() }" /></Transition>
               <div class="st-scrim" />
               <div class="st-label on-art">{{ platformById(t.platformId)?.display_name }} Spotlight</div>
               <div class="st-pin">
                 <GameLogo :key="spotOf(t).id" :logo="store.config.ui.logos !== false ? logoOf(spotOf(t)) : null" :name="spotOf(t).name" cls="st-pin-name" :area="Math.min(22000, box(t).pw * box(t).ph * 0.12)" :max-w="box(t).pw * 0.7" :max-h="Math.min(110, box(t).ph * 0.32)" />
                 <span class="st-mark">{{ store.play[spotOf(t).id]?.min ? playtimeText(store.play[spotOf(t).id].min) + ' played' : '' }}<i v-if="store.installed[spotOf(t).id]" class="st-dev-tick" title="On this device"><Icon name="mdiCheckBold" :size="13" /></i></span>
               </div>
+              <!-- 0.9.61 (owner): the same dots as Continue playing, so it's clear L1/R1 step through the games -->
+              <div v-if="spotDots(t).n > 1 && box(t).pw >= 280" class="st-dots"><i v-for="i in spotDots(t).n" :key="i" :class="{ on: i - 1 === spotDots(t).on }" /></div>
             </template>
             <div v-else class="st-empty small"><span>No games for this console yet</span></div>
           </template>
@@ -215,7 +218,7 @@
           <template v-else-if="t.type === 'media'">
             <template v-if="mediaOf(t)">
               <div class="st-label"><span class="st-lname">{{ platformById(t.platformId)?.display_name }}</span><span class="st-count">{{ (sel[t.id] || 0) + 1 }} / {{ conList(t.platformId).length }}</span></div>
-              <Transition name="st-xf"><div :key="mediaOf(t).id" class="st-media-bg" :class="{ tall: box(t).pw <= box(t).ph * 1.4 }" :style="{ backgroundImage: bgUrl(artOf(mediaOf(t)) || cover(mediaOf(t), true)) }" /></Transition>
+              <Transition name="st-xf"><div :key="steadyArt('m' + t.id, mediaOf(t)).id" class="st-media-bg" :class="{ tall: box(t).pw <= box(t).ph * 1.4 }" :style="{ backgroundImage: bgUrl(steadyArt('m' + t.id, mediaOf(t)).url) }" /></Transition>
               <div class="st-media" :class="[isDisc(t) ? 'disc' : 'cart', { wide: box(t).pw > box(t).ph * 1.4 }]">
                 <div class="st-media-stage" @click="ejectMedia($event, t)"><Transition name="st-media"><div :key="mediaOf(t).id" class="st-media-obj" :class="{ dev: store.installed[mediaOf(t).id] }">
                   <div v-if="isDisc(t)" class="st-disc-boost"><div class="st-disc" :style="{ backgroundImage: bgUrl(cover(mediaOf(t), true)) }"><i class="st-disc-sheen" /><i class="st-disc-hub" /></div></div>
@@ -276,7 +279,7 @@
           </template>
           <template v-else-if="t.type === 'daily'">
             <template v-if="daily">
-              <div class="st-art" :style="{ backgroundImage: bgUrl(t.h > t.w ? cover(daily, true) : artOf(daily) || cover(daily, true)) }" />
+              <div class="st-art" :class="{ 'st-pan': bigArt(t) }" :style="{ backgroundImage: bgUrl(t.h > t.w ? cover(daily, true) : artOf(daily) || cover(daily, true)) }" />
               <div class="st-scrim" />
               <div class="st-label on-art">Game of the Day</div>
               <div class="st-pin">
@@ -298,7 +301,7 @@
           <!-- One game, pinned -->
           <template v-else-if="t.type === 'game'">
             <template v-if="romById(t.romId)">
-              <div class="st-art" :style="{ backgroundImage: bgUrl(t.h > t.w ? cover(romById(t.romId), true) : artOf(romById(t.romId))) }" />
+              <div class="st-art" :class="{ 'st-pan': bigArt(t) }" :style="{ backgroundImage: bgUrl(t.h > t.w ? cover(romById(t.romId), true) : artOf(romById(t.romId))) }" />
               <div class="st-scrim" />
               <!-- 0.9.23 (owner): its logo, not its name in text -->
               <div class="st-pin">
@@ -432,7 +435,30 @@ const isArt = (t) => t.type === 'continue' ? !!cur.value : (t.type === 'spotligh
 const BLANK = 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==';
 const noImg = (e) => { if (e.target.src !== BLANK) e.target.src = BLANK; };
 const bgUrl = (u) => (u ? `url("${String(u).replace(/"/g, '%22')}")` : 'none');
+// 0.9.58 (owner: Recently Played "just cuts midway" when it changes game): the next game's picture used to start fading
+// in before it had loaded, so it appeared halfway through. A tile keeps showing its current picture until the next one
+// is loaded and decoded, then the new one fades in over it. decoded is reactive (set when a picture is ready, never
+// during a render); what each tile shows is plain bookkeeping.
+const decoded = reactive({}), started = new Set(), showing = new Map();
+function loadArt(url) {
+  if (!url || started.has(url)) return;
+  started.add(url);
+  const im = new Image(); im.decoding = 'async'; im.src = url;
+  (im.decode ? im.decode() : new Promise((ok, no) => { im.onload = ok; im.onerror = no; })).then(() => { decoded[url] = true; }, () => { decoded[url] = true; });
+}
+const bigArt = (t) => t.w >= 2 && t.h >= 2; // the art tiles that move (0.9.58)
+function steadyArt(key, r) {
+  const url = r ? artOf(r) || cover(r, true) : '', next = { id: r?.id ?? 0, url };
+  const cur = showing.get(key);
+  if (!cur || !url || cur.url === url || decoded[url]) { showing.set(key, next); if (url) loadArt(url); return next; }
+  loadArt(url);
+  return cur;
+}
 const artOf = (r) => heroArt(r)?.src || ''; // SteamGridDB's hero only, no RomM picture first (0.9.21)
+// every pan runs on one clock (0.9.60): a picture that replaces another starts where the last one was, so the two line up
+// through the crossfade instead of jumping back to the start of the pan
+const PAN_S = 52; // st-pan: 26 s each way
+const panDelay = () => `-${((performance.now() / 1000) % PAN_S).toFixed(2)}s`;
 const platformById = (id) => store.lib?.platforms.find((p) => p.id === id) || null;
 
 // ---- the board: cell size from the screen (8 columns, 4 rows fill it), tiles placed in pixels
@@ -505,8 +531,12 @@ const troGamesOf = (t) => (t.console ? troGames.value.filter((g) => sameConsole(
 // the newest unlock's game art, behind its card (its cover from the library, else the trophy set's icon, else the badge)
 const troArt = (t) => { const a = achView(t)[0]; if (!a) return ''; const g = troGames.value.find((x) => x.title === a.game); return (g && g.art) || a.badge || ''; };
 // Console Spotlight (0.9.28): the console's games take turns, a new one every 12 seconds
-const spotTick = ref(0);
-const spotOf = (t) => { const l = conList(t.platformId); return l.length ? l[(spotTick.value + (t.id.length % 7)) % l.length] : null; };
+// 0.9.60 (owner): L1/R1 step through its games like the other rows; a tile you stepped waits ROLL_HOLD before moving on
+const spotTick = ref(0), spotIdx = reactive({});
+const spotPos = (t) => spotIdx[t.id] ?? spotTick.value + (t.id.length % 7);
+// up to five dots; with more games the lit one walks round them as the spotlight steps
+const spotDots = (t) => { const n = Math.min(5, conList(t.platformId).length); return { n, on: n ? ((spotPos(t) % n) + n) % n : 0 }; };
+const spotOf = (t) => { const l = conList(t.platformId); return l.length ? l[((spotPos(t) % l.length) + l.length) % l.length] : null; };
 // An Emulator (0.9.28): its version and whether an update is out, from Settings → Emulators' list
 const emuInfo = ref({});
 // Android has no An Emulator widget, and this list scans for desktop emulators
@@ -601,6 +631,7 @@ function pickSpine(e, t, r) {
 function stepTile(t, d) {
   const n = COVER_ROWS[t.type] ? listOf(t).length : t.type === 'trophies' ? achOf(t).list.length : t.type === 'media' || t.type === 'shelf' ? conList(t.platformId).length : 0;
   if (t.type === 'surprise') { deal(); sfx.move?.(); focusTile(t); return true; }
+  if (t.type === 'spotlight') { if (conList(t.platformId).length < 2) return false; spotIdx[t.id] = spotPos(t) + d; stepped[t.id] = Date.now(); sfx.move?.(); focusTile(t); return true; }
   if (n < 2) return false;
   sel[t.id] = ((sel[t.id] || 0) + d + n) % n; stepped[t.id] = Date.now(); due[t.id] = Date.now() + ROLL_HOLD; sfx.move?.(); focusTile(t); return true;
 }
@@ -1237,7 +1268,7 @@ let clockT = 0, spaceT = 0, ro = null;
 let spotT = 0, rollT = 0;
 onMounted(async () => {
   clockT = setInterval(tick, 5000);
-  spotT = setInterval(() => { if (!store.away) spotTick.value++; }, 12000);
+  spotT = setInterval(() => { if (store.away) return; spotTick.value++; for (const id of Object.keys(spotIdx)) if (!(stepped[id] > Date.now() - ROLL_HOLD)) spotIdx[id]++; }, 12000);
   rollT = setInterval(roll, 1000);
   // 0.9.28 (owner: hints are hidden now, so first-timers get Start's tips once, in a short tour)
   if (store.config.ui.toured && !store.config.ui.startTips) setTimeout(async () => { if (store.modal || store.route.name !== 'start') return; saveConfig({ ui: { startTips: 1 } }); await openTour({ start: true, only: true }); }, 900);
@@ -1267,8 +1298,8 @@ watch(() => store.play, loadWeek);
 .st-face { position: absolute; inset: 0; display: flex; flex-direction: column; min-width: 0; min-height: 0; padding: clamp(10px, min(9cqh, 7cqw), 22px); border-radius: inherit; background: var(--s1); overflow: hidden; isolation: isolate; container-type: size;
   box-shadow: var(--weight-edge), var(--weight);
   transition: transform var(--spring-d) var(--spring), box-shadow var(--tint), opacity var(--fade-in);
-  animation: st-in var(--spring-soft-d) var(--spring-soft) both; animation-delay: calc(var(--n, 0) * 45ms); }
-/* tiles arrive one after another, rising and settling */
+  animation: st-in var(--spring-soft-d) var(--spring-soft) both; animation-delay: calc(min(var(--n, 0), 6) * 30ms); }
+/* tiles arrive one after another, rising and settling (0.9.56: 30 ms apart, the last within 180 ms, so a page is whole sooner) */
 @keyframes st-in { from { opacity: 0; transform: translateY(18px) scale(0.97); } }
 :global(body.motion-reduce .st-face) { animation: none; }
 /* focus (0.9.29, owner: choppy on handhelds): the ring and lift shadow sit on the tile's ::before and fade in
@@ -1377,6 +1408,15 @@ watch(() => store.play, loadWeek);
 /* art tiles: the picture fills the tile, a scrim keeps the words readable */
 .st-art { position: absolute; inset: 0; z-index: -2; background-size: cover; background-position: center 30%; transition: transform var(--spring-soft-d) var(--spring-soft); }
 .st-tile.art:focus .st-art { transform: scale(1.04); }
+/* 0.9.57/0.9.58 (owner: Start looked still; "I don't see the pan anywhere"): big art tiles (2 by 2 or larger: Continue
+   Playing, a pinned game, Spotlight, Game of the Day) move like a slow camera: a pan across and a gentle zoom to 105%,
+   26 s each way. The picture is a little bigger than the tile so its edge never shows; `translate` and `scale` leave the
+   focus zoom's transform alone. It runs with light effects too (one layer, nothing redrawn); Reduce Motion, arranging
+   and Cartridge being away (body.away) stop it. */
+.st-art.st-pan { inset: -4%; animation: st-pan 26s var(--ease-in-out) infinite alternate; will-change: translate, scale; }
+@keyframes st-pan { from { translate: 2.5% 1%; scale: 1; } to { translate: -2.5% -1%; scale: 1.05; } }
+:global(body.motion-reduce .st-art.st-pan), .st-board.editing .st-art.st-pan { animation: none; translate: none; scale: none; will-change: auto; }
+@media (prefers-reduced-motion: reduce) { .st-art.st-pan { animation: none; } }
 /* 0.9.52: a soft band at the top too, so the tile's label reads on a bright cover */
 .st-scrim { position: absolute; inset: 0; z-index: -1; background: linear-gradient(to bottom, rgba(8, 9, 12, 0.6) 0%, rgba(8, 9, 12, 0.25) 16%, transparent 32%), linear-gradient(to top, rgba(8, 9, 12, 0.92) 0%, rgba(8, 9, 12, 0.55) 38%, rgba(8, 9, 12, 0.08) 72%), linear-gradient(to right, rgba(8, 9, 12, 0.5), transparent 60%); }
 .st-cp { margin-top: auto; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; min-width: 0; max-width: 100%; }
@@ -1414,10 +1454,12 @@ watch(() => store.play, loadWeek);
 .st-lname { min-width: 0; text-wrap: balance; }
 
 /* pages: the board slides a little and settles, its tiles arriving as they do on opening */
-.st-pg-next-leave-active, .st-pg-prev-leave-active { transition: opacity var(--fade-out), transform var(--spring-snappy-d) var(--spring-snappy); }
+/* 0.9.56 (owner: page turns slower than they used to be): out-in waits for the old page to leave, so it goes as fast as it
+   did before 0.9.52 (the snappy spring made that wait 344 ms); the new page then starts at full speed */
+.st-pg-next-leave-active, .st-pg-prev-leave-active { transition: opacity var(--fade-out), transform var(--fade-out); }
 .st-pg-next-leave-to { opacity: 0; transform: translateX(-3%); }
 .st-pg-prev-leave-to { opacity: 0; transform: translateX(3%); }
-.st-pg-next-enter-active, .st-pg-prev-enter-active { transition: opacity var(--fade-slow), transform var(--spring-d) var(--spring); }
+.st-pg-next-enter-active, .st-pg-prev-enter-active { transition: opacity var(--fade-in), transform var(--spring-d) var(--spring); }
 .st-pg-next-enter-from { opacity: 0; transform: translateX(4%); }
 .st-pg-prev-enter-from { opacity: 0; transform: translateX(-4%); }
 :global(body.motion-reduce .st-board) { transition: none !important; transform: none !important; }
@@ -1480,8 +1522,13 @@ watch(() => store.play, loadWeek);
 .st-tile:focus .st-fan-c { transform: translateX(calc(var(--i) * 4.5cqh)) scale(calc(1 - var(--i) * 0.035)); }
 .st-tile:focus .st-fan-c:first-child { transform: translateY(-2%); }
 /* a row moving to its next game (0.9.28): the art crossfades, the name slides in, the covers glide along */
-.st-row-art.st-xf-enter-active, .st-row-art.st-xf-leave-active { transition: opacity var(--fade-cross); }
-.st-row-art.st-xf-enter-from, .st-row-art.st-xf-leave-to { opacity: 0; }
+/* 0.9.57 (owner: switching games the picture went see-through, then more see-through): the new picture fades in over
+   the old one, which stays as it is underneath until it's covered (two half see-through pictures fading against each
+   other dipped to about a quarter mid-way) */
+:is(.st-row-art, .st-media-bg, .st-art).st-xf-enter-active { transition: opacity var(--fade-cross); }
+:is(.st-row-art, .st-media-bg, .st-art).st-xf-enter-from { opacity: 0; }
+:is(.st-row-art, .st-media-bg, .st-art).st-xf-leave-active { transition: visibility var(--fade-cross); z-index: -3; }
+:is(.st-row-art, .st-media-bg, .st-art).st-xf-leave-to { visibility: hidden; }
 /* the old name and the new one share the spot and cross over (no empty moment between them) */
 .st-lead-wrap { margin-top: auto; display: grid; min-width: 0; }
 .st-lead-wrap > .st-row-lead { grid-area: 1 / 1; margin-top: 0; justify-content: flex-end; }
@@ -1559,8 +1606,6 @@ watch(() => store.play, loadWeek);
 .st-emu-t b { font-family: var(--display); font-weight: 800; font-size: clamp(15px, 14cqh, 28px);  overflow-wrap: anywhere; }
 .st-emu-t > span:not(.status) { color: var(--muted); font-size: var(--t-xs); }
 .st-emu-t .status { align-self: flex-start; }
-.st-spot-enter-active, .st-spot-leave-active { transition: opacity var(--fade-cross); }
-.st-spot-enter-from, .st-spot-leave-to { opacity: 0; }
 .st-band { flex: 1; min-height: 0; display: flex; gap: 10px; align-items: center; margin: 10px 0 4px; overflow: hidden; mask-image: linear-gradient(90deg, #000 80%, transparent); }
 .st-band img { height: min(100%, 220px); aspect-ratio: 2 / 3; object-fit: cover; border-radius: var(--r-md); box-shadow: var(--weight-edge), var(--weight); animation: st-in var(--spring-soft-d) var(--spring-soft) both; }
 .st-band:empty { display: none; }

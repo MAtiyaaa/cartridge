@@ -17,8 +17,10 @@ Code: `src/glassEngine.js` (the engine), the end of `src/styles.css` (Liquid Gla
 art) gets an SVG filter as its `backdrop-filter`:
 
 ```
-feGaussianBlur (frost) -> feImage (lens map) -> feDisplacementMap -> feColorMatrix (saturate 1.6)
+feGaussianBlur (frost) -> feImage (lens map) -> feDisplacementMap -> feColorMatrix (saturate) -> contrast
 ```
+
+The tone depends on the theme (0.9.54): dark glass saturates 1.45 and adds 5% contrast, so game art stays rich under smoked glass without turning loud; Light keeps saturate 1.6. Each piece's filter key carries the tone, and a theme change rebuilds them. Dark glass itself is smoked obsidian (near-black with 9% of the chosen colour, 72% fill, 80% on sheets, no brightening of the backdrop), shaped by its edges: the moving rim light fading to a dark line on the far side, a light bevel top-left and a dark one bottom-right, a faint top-down sheen, a contact shadow on controls and a deep one on floating pieces.
 
 The lens map is drawn once per size on a canvas at half resolution: a rounded rectangle's signed distance field;
 inside the bezel the surface curves down to the rim like a quarter circle, and the slope of that curve sets how far
@@ -27,15 +29,16 @@ the rim magnifies what is behind it. Red and green hold the x and y offsets (128
 
 | Surface | Frost | Bezel | Strength |
 |---|---|---|---|
-| Pop-ups and sheets | 14 | up to 26 px | 34 |
-| Dock | 7 | up to 18 px | up to 44 |
-| Search, toasts, buttons | 5 | up to 18 px | up to 44 |
+| Pop-ups and sheets | 14 | up to 18 px | 18 |
+| Dock | 7 | up to 12 px | up to 20 |
+| Search, toasts, buttons | 5 | up to 12 px | up to 20 |
 
 Big sheets frost more so text on them reads; controls refract more, as the skill's controls-and-navigation glass does.
 
-**Light.** The rim's highlight (`--lg-rim-grad`, `--lg-lit-rim`) is a gradient at `--lg-angle`. The engine turns it
-towards the mouse pointer, or towards the focused thing when using a controller, so edges catch the light as you
-move. It only writes the property when the angle changes by 4 degrees or more.
+**Light.** The rim's highlight (`--lg-rim-grad`, `--lg-lit-rim`) is a gradient at `--lg-angle`, fixed at 135deg: light
+from the top left, like a lamp in the room. Until 0.9.56 it turned towards the pointer or the focus, which the owner
+saw as white shapes moving round everything in dark Glass. Dark Glass also lost the white halo round focus and the
+white sweep on a press (Light keeps the sweep), and the bend at the rim is narrower and gentler (0.9.56).
 
 **Liquid morph.** In Glass only, pop-ups grow out of the button that opened them (scale 0.9 from the trigger's
 position on `--spring-soft`). Plain keeps its own arrival.

@@ -122,6 +122,14 @@ function parseTextVdf(t) {
   }
   return root;
 }
+// Steam's own default compatibility tool (0.9.64, owner: "use Steam's Proton"): Settings → Compatibility → "Run other
+// titles with", kept in config.vdf as CompatToolMapping "0" { "name" }. Empty when it was never set.
+function steamDefaultProton(acc) {
+  let t; try { t = fs.readFileSync(files(acc).config, 'utf8'); } catch { return ''; }
+  const v = parseTextVdf(t), find = (o, k) => (o && typeof o === 'object' ? (Object.keys(o).find((x) => x.toLowerCase() === k.toLowerCase()) ?? null) : null);
+  let o = v; for (const k of ['InstallConfigStore', 'Software', 'Valve', 'Steam', 'CompatToolMapping', '0']) { const key = find(o, k); if (key == null) return ''; o = o[key]; }
+  return typeof o?.name === 'string' ? o.name : '';
+}
 // Play time Steam keeps per app, shortcuts included: appid -> { min, last (ms) }. Shortcuts show
 // up under their 32-bit id, or as the long game id ((appid << 32) | 0x02000000) in some versions.
 function readPlaytime(acc) {
@@ -319,7 +327,8 @@ module.exports = function createSteamManager(ctx) {
   let flatpaks = null;
   function flatpakApps() {
     if (flatpaks) return flatpaks;
-    try { flatpaks = execFileSync('flatpak', ['list', '--app', '--columns=application'], { encoding: 'utf8', timeout: 8000 }).split('\n').map((s) => s.trim()).filter(Boolean); } catch { flatpaks = []; }
+    flatpaks = require('./detect').flatpakApps(HOME); // from Flatpak's folders: `flatpak list` froze the app for seconds
+    if (!flatpaks) try { flatpaks = execFileSync('flatpak', ['list', '--app', '--columns=application'], { encoding: 'utf8', timeout: 8000 }).split('\n').map((s) => s.trim()).filter(Boolean); } catch { flatpaks = []; }
     return flatpaks;
   }
   // ---------------------------------------------------------------- 0.9: emulators found anywhere (Setup)
@@ -343,7 +352,9 @@ module.exports = function createSteamManager(ctx) {
     // folder builds (0.9.21): the program with its data folder beside it, as Vita3K's zip (EmuDeck's
     // ~/Applications/Vita3K/Vita3K) unpacks; found by the scan, or in its own folder under ~/Applications
     const U = require('./emuUpdates'), seen = new Set(out.map((x) => x.path));
-    const addFolder = (id, p, version = '') => { if (!seen.has(p) && exists(p) && U.installKind(p) === 'folder') { seen.add(p); out.push({ id, label: labelOf(id), kind: 'folder', path: p, version }); } };
+    // 0.9.58 (owner: Vita3K's sheet wouldn't open, only "already on this device"): EmuDeck keeps Vita3K's AppImage as
+    // ~/Applications/Vita3K/Vita3K (no extension, in its own folder); an AppImage there is listed as one, not skipped
+    const addFolder = (id, p, version = '') => { if (seen.has(p) || !exists(p)) return; const k = U.installKind(p); if (k === 'folder' || k === 'appimage') { seen.add(p); out.push({ id, label: labelOf(id), kind: k, path: p, version }); } };
     for (const x of found?.items || []) if (x.kind === 'program' && x.id && x.conf >= 2 && !/\/\.mount_|cartridge/i.test(x.path)) addFolder(x.id, x.path, x.version || '');
     for (const [id, e] of Object.entries(EMU)) for (const d of APP_DIRS()) for (const b of e.bin || []) addFolder(id, path.join(d, e.label || id, b));
     for (const [id, e] of Object.entries(EMU)) for (const n of e.dir || []) for (const d of APP_DIRS()) for (const b of e.bin || []) addFolder(id, path.join(d, n, b));
@@ -405,7 +416,9 @@ module.exports = function createSteamManager(ctx) {
   // what emulators exist and how each starts: electron/emulators.js (only installed ones are offered)
   const { EMU, CORES, RA_FIRST, emulatorsFor, argsFor, coreName, DISC_FIRST, GAME_EXT, DIR_GAMES, forkOf, realName } = require('./emulators');
   let extraBins = null; // Snap, Nix, Homebrew, a login shell's PATH (looked up once)
-  const BIN_DIRS = () => [...new Set([...(process.env.PATH || '').split(':'), '/usr/bin', '/usr/local/bin', '/usr/games', '/app/bin', path.join(HOME, '.local/bin'), '/var/lib/flatpak/exports/bin', ...(extraBins ||= detect.extraBinDirs(HOME))].filter((d) => d && d.startsWith('/') && !d.includes('/tmp/.mount_')))];
+  // kept only once the login shell has answered (it's asked in the background, never waited for)
+  const binsNow = () => { const d = detect.extraBinDirs(HOME); if (detect.loginPathKnown()) extraBins = d; return d; };
+  const BIN_DIRS = () => [...new Set([...(process.env.PATH || '').split(':'), '/usr/bin', '/usr/local/bin', '/usr/games', '/app/bin', path.join(HOME, '.local/bin'), '/var/lib/flatpak/exports/bin', ...(extraBins || binsNow())].filter((d) => d && d.startsWith('/') && !d.includes('/tmp/.mount_')))];
   const findBin = (names) => { for (const d of BIN_DIRS()) for (const n of names || []) { const f = path.join(d, n); if (exists(f) && !isDir(f)) return f; } return null; };
   const kindOf = (key) => (key === 'ps4' ? 'eboot' : key === 'wiiu' ? 'rpx' : 'path');
   // Every emulator for this console that is installed here: [{ id, label, t }]. Each copy is listed
@@ -1050,7 +1063,7 @@ module.exports = function createSteamManager(ctx) {
       const appid = shortcutId(target, name);
       entries.push({
         romId: g.rom.id, console: g.key, sig: sigOf(t, mode), name, exe, target, start, lo: launch, directLo: lo, directExe: t.exe, directStart: startOf(t), appid, how: t.how, from: t.from, fallback, emu: t.emu || null,
-        proton: /\.exe$/i.test(t.exe) ? (cfg().proton || 'proton_experimental') : null,
+        proton: /\.exe$/i.test(t.exe) ? (cfg().proton || steamDefaultProton(env.account) || 'proton_experimental') : null, // yours, else Steam's own default (0.9.64)
         // 0.9: console collections on: also the Steam collection named after its console. Only
         // Steam's own collections: Cartridge (RomM) collections are never copied into Steam.
         collections: [...new Set([...(a.collections || []), ...(cfg().consoleCollections ? [colName(g)] : [])])],

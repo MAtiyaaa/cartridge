@@ -52,7 +52,7 @@
   --ease: cubic-bezier(0.2, 0, 0, 1);
   /* 0.9.23 motion (owner: other menus should feel like Start, smooth and not distracting): one strong
      ease-out for things arriving, one ease-in-out for things moving on screen */
-  --ease-out: cubic-bezier(0.23, 1, 0.32, 1); --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1); --d-settle: 520ms;
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1); --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1); --d-settle: 380ms;
   /* CAE's named timings (0.9.52, owner: every animation on the Cartridge Animation Engine). Movement uses the springs
      (--spring-snappy, --spring, --spring-soft, --spring-pop, written by motion.js); everything else uses these, so no
      .vue or .css file writes its own curve or duration (test/cae.test.js checks it). docs/cae.md has the rules. */
@@ -226,7 +226,7 @@ body.bar-left main.main[data-dir='l'] > * { animation-name: viewFromT; }
 @keyframes viewFromL { from { opacity: 0; transform: translateX(-24px); } }
 @keyframes viewDeeper { from { opacity: 0; transform: translateY(12px) scale(0.985); } }
 @keyframes viewBack { from { opacity: 0; transform: scale(1.015); } }
-main.main[data-dir] > * { animation-duration: var(--spring-soft-d, 460ms); animation-timing-function: var(--spring-soft, var(--ease-out)); } /* CAE: pages are big surfaces, the heavy profile */
+main.main[data-dir] > * { animation-duration: var(--spring-d, 340ms); animation-timing-function: var(--spring, var(--ease-out)); } /* CAE: pages on the settle spring (0.9.56: the heavy one made every page change feel slow) */
 /* without the GPU a whole page moving or fading is the one costly thing (measured in 0.9.38: going back to a full
    Library doubled the slow frames), so pages keep their short fade there; the picture flying in, the sliding pills,
    presses and pop-ups carry the motion instead */
@@ -234,7 +234,7 @@ body.light-fx main.main[data-dir] > * { animation-name: viewIn; animation-durati
 main.main[data-dir='r'] > * { animation-name: viewFromR; }
 main.main[data-dir='l'] > * { animation-name: viewFromL; }
 main.main[data-dir='in'] > * { animation-name: viewDeeper; }
-main.main[data-dir='out'] > * { animation-name: viewBack; animation-duration: var(--spring-d, 340ms); animation-timing-function: var(--spring, var(--ease-out)); } /* back: quicker than going in */
+main.main[data-dir='out'] > * { animation-name: viewBack; animation-duration: var(--spring-snappy-d, 260ms); animation-timing-function: var(--spring-snappy, var(--ease-out)); } /* back: quicker than going in (as quick as 0.9.46's 260 ms) */
 body.motion-reduce main.main[data-dir] > * { animation-name: viewIn; animation-duration: var(--d-fast); }
 /* 0.9.23: Start's arrival everywhere. A page's parts (its header, then each section or row) settle in one
    after another: up a little, from just smaller, 40 ms apart, once when the page opens. Only opacity
@@ -284,6 +284,10 @@ body.surface-glass .glass, body.elements-glass .glass { background: var(--glass-
 .btn.primary { background: var(--btn, var(--primary)); color: var(--on-btn, var(--on-primary)); font-weight: 700; }
 .btn.danger { color: var(--danger-t, #ff9b93); }
 .btn.ok { color: var(--green-l); }
+/* Ready to Play (0.9.58, owner: in Light it looked nothing like Download): the game's main button, styled like Download,
+   with the green tick as its sign */
+.btn.primary.ok { color: var(--on-btn, var(--on-primary)); }
+.btn.primary.ok .icon { color: var(--green, #2fb36a); }
 .btn.small { height: 38px; padding: 0 16px; font-size: var(--t-sm); border-radius: var(--r-sm); }
 .btn.xl { height: 56px; padding: 0 28px; font-size: var(--t-lg); }
 .btn[disabled] { opacity: 0.4; pointer-events: none; }
@@ -383,7 +387,8 @@ body.light-fx .systile .glyph { filter: saturate(0.6) brightness(1.1); }
 .menu-list > * { flex: none; }
 .menu-item { display: flex; align-items: center; gap: 14px; padding: 14px 16px; border-radius: var(--r-md); background: var(--s2); font-size: var(--t-md); font-weight: 500; transition: background var(--d-fast), color var(--d-fast); }
 .menu-item.danger { color: var(--danger-t, #ff9b93); }
-.menu-item.selected { background: var(--sel); }
+.menu-item.selected { background: var(--sel-bg); box-shadow: var(--sel-ring); color: var(--on-sel); }
+.menu-item.selected :is(.sub, .muted, small) { color: var(--on-sel-dim); }
 /* the chosen option's mark (0.9.49, owner: the tick vanished on a highlighted row; use the green tick everywhere): the
    same green disc with a white check as "On this device", readable on any fill, focused or not */
 .tick-ok { display: inline-grid; place-items: center; flex: none; width: 22px; height: 22px; margin-left: 8px; border-radius: 50%; background: var(--green, #2fb36a); color: #fff; box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.18); }
@@ -400,7 +405,7 @@ body.light-fx .systile .glyph { filter: saturate(0.6) brightness(1.1); }
 .field .box span.val { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .seg { display: inline-flex; background: var(--s2); border-radius: var(--r-md); padding: 4px; gap: 4px; }
 .seg button { padding: 8px 16px; border-radius: var(--r-sm); color: var(--muted); font-size: var(--t-sm); font-weight: 600; transition: background var(--d-fast), color var(--d-fast); }
-.seg button.on { background: var(--sel); color: var(--text); }
+.seg button.on { background: var(--sel-bg); box-shadow: var(--sel-ring); color: var(--on-sel); }
 .seg button:focus-visible, .pad-mode .seg button:focus { background: var(--focus); color: var(--on-focus); box-shadow: none; }
 .toggle { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 15px 18px; border-radius: var(--r-md); background: var(--s2); width: 100%; font-weight: 500; }
 .toggle:focus-visible, .pad-mode .toggle:focus { background: var(--focus); color: var(--on-focus); box-shadow: none; }
@@ -489,7 +494,7 @@ body.light-fx .coll .art, body.light-fx .coll .mosaic { transition-property: tra
 /* section titles are words only (docs/design.md): the icons some screens put in front are hidden */
 .subh > svg.icon:first-child { display: none; }
 /* rows that turn white on focus don't also get the ring */
-.pad-mode :is(.menu-item, .rail-item, .prow, .qm-item, .up-row, .sm-row, .ss-emu, .lrow, .toggle, .tab, .ga-row, .cc-row, .lf-card, .tl-e, .aa-row, .ad-row, .eg-emu, .pt-row, .file, .eg-drive):focus, :is(.menu-item, .rail-item, .prow, .qm-item, .up-row, .sm-row, .ss-emu, .lrow, .ga-row, .cc-row, .lf-card, .tl-e, .aa-row, .ad-row, .eg-emu, .pt-row, .file, .eg-drive):focus-visible { box-shadow: none; } /* rows: the fill is the focus (0.9.37: About, Its Games, Linked Folders had the ring too) */
+.pad-mode :is(.menu-item, .rail-item, .prow, .qm-item, .up-row, .sm-row, .ss-emu, .lrow, .toggle, .tab, .ga-row, .cc-row, .lf-card, .tl-e, .aa-row, .ad-row, .eg-emu, .pt-row, .file, .eg-drive, .ssc-count, .ls-pick, .st-hub-card):focus, :is(.menu-item, .rail-item, .prow, .qm-item, .up-row, .sm-row, .ss-emu, .lrow, .ga-row, .cc-row, .lf-card, .tl-e, .aa-row, .ad-row, .eg-emu, .pt-row, .file, .eg-drive, .ssc-count, .ls-pick, .st-hub-card):focus-visible { box-shadow: none; } /* rows: the fill is the focus (0.9.37: About, Its Games, Linked Folders had the ring too) */
 
 /* a small count on a page tab (Emulators → Updates, 0.9.16) */
 .count-dot { display: inline-grid; place-items: center; min-width: 1.4em; height: 1.4em; padding: 0 0.35em; margin-left: 6px; border-radius: 999px; background: #f5c542; color: #1a1400; font-size: 0.75em; font-weight: 700; }
@@ -547,7 +552,15 @@ input, textarea, select { transition: box-shadow var(--spring-snappy-d) var(--sp
 /* segmented rows: one pill glides to the choice (motion.js slidingPills) */
 .seg { position: relative; }
 .seg > button { position: relative; z-index: 1; }
-.seg-ink { position: absolute; left: 0; top: 0; z-index: 0; border-radius: var(--r-sm); background: var(--sel); pointer-events: none; }
+/* one scrolling row of tabs (0.9.63, owner): never two rows, never cut; motion.js keeps the chosen one in view */
+.seg.strip { display: flex; flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; max-width: 100%; min-width: 0; }
+.seg.strip::-webkit-scrollbar { display: none; }
+.seg.strip > button { flex: none; white-space: nowrap; }
+:has(> .seg.strip) > :not(.seg) { flex: none; } /* the L1/R1 glyphs beside it keep their size */
+.seg.strip.fade-r { mask-image: linear-gradient(to right, #000 calc(100% - 36px), transparent); }
+.seg.strip.fade-l { mask-image: linear-gradient(to left, #000 calc(100% - 36px), transparent); }
+.seg.strip.fade-l.fade-r { mask-image: linear-gradient(to right, transparent, #000 36px, #000 calc(100% - 36px), transparent); }
+.seg-ink { position: absolute; left: 0; top: 0; z-index: 0; border-radius: var(--r-sm); background: var(--sel-bg); box-shadow: var(--sel-ring); pointer-events: none; }
 .seg-ink.live { transition: transform var(--spring-pop-d) var(--spring-pop), width var(--spring-pop-d) var(--spring-pop), height var(--spring-d) var(--spring), opacity var(--d-fast); }
 .seg.inked > button.on { background: transparent; }
 /* 0.9.44 (owner: the selected pill went grey): the chosen button's own fill gives way to the sliding pill, but never its
@@ -569,10 +582,14 @@ body.theme-light {
   --green: #1f8a3a; --green-l: #1b7a33; --red: #c8332a; --gold: #9a6b00;
   --text-2: #3c3c43; --score: #1b7a33; --danger-t: #c0281f; --ondev: #1b7a33; --faint: rgba(0, 0, 0, 0.5); --line-2: rgba(0, 0, 0, 0.12);
   /* 0.9.41 rebuilt: soft, cool shadows that lift near-white cards off the grey page, a fine edge instead of a glow */
-  --shadow-card: 0 1px 2px rgba(20, 20, 30, 0.06), 0 10px 24px -6px rgba(20, 20, 30, 0.16);
-  --shadow-pop: 0 2px 6px rgba(20, 20, 30, 0.06), 0 24px 60px -12px rgba(20, 20, 30, 0.24);
-  --weight: 0 1px 2px rgba(20, 20, 30, 0.06), 0 8px 20px -8px rgba(20, 20, 30, 0.16);
-  --weight-edge: inset 0 0 0 1px rgba(0, 0, 0, 0.05);
+  /* 0.9.56 (owner: cards blended into the page): a firmer edge and a deeper shadow under white cards */
+  /* 0.9.57 (owner: card shadows clipped in Light): no deeper than 18 px below a card, inside the 20 px rows and
+     scrollers leave under it (they reached 26 to 32 px and were cut at the row's edge); as firm, just tighter */
+  /* 0.9.58 (owner: they end abruptly): more blur at the same reach, so the shadow fades out instead of stopping */
+  --shadow-card: 0 1px 2px rgba(20, 20, 30, 0.1), 0 2px 8px -2px rgba(20, 20, 30, 0.08), 0 6px 26px -12px rgba(20, 20, 30, 0.34);
+  --shadow-pop: 0 2px 6px rgba(20, 20, 30, 0.08), 0 24px 60px -12px rgba(20, 20, 30, 0.28);
+  --weight: 0 1px 2px rgba(20, 20, 30, 0.1), 0 2px 8px -2px rgba(20, 20, 30, 0.08), 0 6px 26px -12px rgba(20, 20, 30, 0.34);
+  --weight-edge: inset 0 0 0 1px rgba(0, 0, 0, 0.08);
   --tile-bg: #e3e3e8; --tile-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.05), 0 4px 10px -4px rgba(20, 20, 30, 0.18);
 }
 /* Light: cards, rows and dialogs are raised; what's chosen is a grey fill, where you are is near-black */
@@ -588,9 +605,9 @@ body.theme-light .top-search:not(.open):not(:focus-within) { color: rgba(28, 28,
 body.theme-light .top-search:not(.open):not(:focus-within):hover { color: #1c1c1e; background: rgba(0, 0, 0, 0.05); }
 body.theme-light :is(.ss-warn, .status.warn, .chip.none, .lf-wire.bad, .sv-badge.pre, .sp-e.skip) { color: #8a5a00; }
 body.theme-light .btn:not(.primary):not(:focus):not(:focus-visible) { box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.06); }
-body.theme-light .scrim { background: rgba(235, 235, 239, 0.6); }
-body.theme-light .statusbar::before { background: linear-gradient(180deg, rgba(235, 235, 239, 0.9) 0%, rgba(235, 235, 239, 0.5) 62%, rgba(235, 235, 239, 0) 100%); }
-body.theme-light.bar-bottom .statusbar::before { background: linear-gradient(0deg, rgba(235, 235, 239, 0.9) 0%, rgba(235, 235, 239, 0.5) 62%, rgba(235, 235, 239, 0) 100%); }
+body.theme-light .scrim { background: rgba(227, 227, 233, 0.6); }
+body.theme-light .statusbar::before { background: linear-gradient(180deg, rgba(227, 227, 233, 0.9) 0%, rgba(227, 227, 233, 0.5) 62%, rgba(227, 227, 233, 0) 100%); }
+body.theme-light.bar-bottom .statusbar::before { background: linear-gradient(0deg, rgba(227, 227, 233, 0.9) 0%, rgba(227, 227, 233, 0.5) 62%, rgba(227, 227, 233, 0) 100%); }
 body.theme-light.bar-pill.dock-white .tabs { background: rgba(255, 255, 255, 0.92); box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.06), 0 10px 30px -10px rgba(20, 20, 30, 0.28); }
 body.theme-light .card:focus .title { color: var(--text); }
 /* console wordmarks: dark on the page, white where they sit on a picture or the idle screen */
@@ -628,21 +645,32 @@ body.theme-oled .statusbar::before { background: linear-gradient(0deg, #000 0%, 
    The focused or chosen control is lit glass: more fill (the highlight colour), a brighter rim and a glow. Glass
    inside glass (tabs in the Dock, buttons in a sheet) keeps rim and gloss but never blurs again. Light effects and
    reduced transparency keep every layer but the blur, with a denser fill; more contrast gives a solid edge. */
+/* 0.9.54 (owner: dark Glass read as milky "plastic slate grey"; Light was right): dark glass is smoked obsidian now.
+   The white fill and the brightened backdrop made the grey film; the body is near-black with a hint of the chosen colour
+   (kept under 10% lightness), the backdrop is blurred denser and its colours kept rich (saturate, a little contrast,
+   no brightening), and the glass gets its shape from its edges: a hairline catching the light on the lit side, a dark
+   refraction line on the other, a faint top-down sheen inside, and a two-layer shadow (contact plus a deep one on the
+   pieces that float). Light keeps its own values below. */
 body.elements-glass {
-  --lg-fill: rgba(255, 255, 255, 0.055);
-  --lg-fill-hover: rgba(255, 255, 255, 0.1);
-  --lg-pane: rgba(var(--lg-tint), 0.5); /* sheets and pop-ups: dark glass so long text reads, like the frosted window */
-  --lg-blur: blur(22px) saturate(1.8) brightness(1.08);
-  --lg-rim-grad: linear-gradient(var(--lg-angle, 135deg), rgba(255, 255, 255, 0.9) 0%, rgba(255, 255, 255, 0.26) 20%, rgba(255, 255, 255, 0.07) 46%, rgba(255, 255, 255, 0.14) 74%, rgba(255, 255, 255, 0.72) 100%);
-  --lg-bevel: inset 0 1px 1px rgba(255, 255, 255, 0.26), inset 0 -1px 2px rgba(0, 0, 0, 0.34), inset 0 0 0 3px rgba(255, 255, 255, 0.03), inset 0 12px 26px -16px rgba(255, 255, 255, 0.22);
-  --lg-drop: 0 18px 44px -16px rgba(0, 0, 0, 0.62), 0 2px 6px rgba(0, 0, 0, 0.22);
-  --lg-gloss: linear-gradient(166deg, rgba(255, 255, 255, 0.15) 0%, rgba(255, 255, 255, 0.06) 36%, rgba(255, 255, 255, 0) 36.4%);
-  --lg-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 .5 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.2'/%3E%3C/svg%3E");
-  --lg-lit: rgba(var(--lg-hi), 0.88); /* prominent glass: the highlight colour nearly solid, so focus reads white with dark text (owner: not grey) */
+  /* 0.9.57 (owner: dark Glass looked grey, not black): nearly black smoke, more of it, so what's behind only tints it */
+  --lg-ob: color-mix(in srgb, rgb(var(--lg-tint)) 5%, rgb(4, 5, 8));
+  --lg-fill: color-mix(in srgb, var(--lg-ob) 84%, transparent);
+  --lg-fill-hover: color-mix(in srgb, var(--lg-ob) 92%, transparent);
+  --lg-pane: color-mix(in srgb, var(--lg-ob) 90%, transparent); /* sheets and pop-ups: smoked glass so long text reads */
+  --lg-blur: blur(28px) saturate(1.3) contrast(1.05) brightness(0.85);
+  --lg-rim-grad: linear-gradient(var(--lg-angle, 135deg), rgba(255, 255, 255, 0.5) 0%, rgba(255, 255, 255, 0.14) 22%, rgba(255, 255, 255, 0.04) 50%, rgba(0, 0, 0, 0.3) 78%, rgba(0, 0, 0, 0.45) 100%);
+  --lg-bevel: inset 0 1px 0 rgba(255, 255, 255, 0.12), inset 1px 0 0 rgba(255, 255, 255, 0.06), inset 0 -1px 0 rgba(0, 0, 0, 0.45), inset -1px 0 0 rgba(0, 0, 0, 0.3);
+  --lg-drop: 0 4px 8px rgba(0, 0, 0, 0.5);
+  --lg-drop-deep: 0 4px 8px rgba(0, 0, 0, 0.5), 0 20px 40px rgba(0, 0, 0, 0.65);
+  --lg-gloss: linear-gradient(180deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0) 40%, rgba(0, 0, 0, 0.25) 100%), linear-gradient(166deg, rgba(255, 255, 255, 0.06) 0%, rgba(255, 255, 255, 0.02) 36%, rgba(255, 255, 255, 0) 36.4%);
+  --lg-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 .5 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.12'/%3E%3C/svg%3E");
+  --lg-lit: rgb(var(--lg-hi)); /* prominent glass: the highlight colour, solid (0.9.57: 0.88 still read grey over black) */
   --lg-lit-rim: linear-gradient(var(--lg-angle, 135deg), #fff 0%, rgba(255, 255, 255, 0.55) 30%, rgba(255, 255, 255, 0.3) 55%, rgba(255, 255, 255, 0.9) 100%);
-  --lg-lit-glow: 0 0 0 1px rgba(255, 255, 255, 0.35), 0 0 26px -2px rgba(var(--lg-hi), 0.45), 0 14px 34px -14px rgba(0, 0, 0, 0.6);
+  /* 0.9.56 (owner: white shadows moving round whatever is focused in dark Glass): no white halo round focus any more,
+     only a fine edge and the same contact shadow as everything else */
+  --lg-lit-glow: 0 0 0 1px rgba(255, 255, 255, 0.35), 0 4px 10px rgba(0, 0, 0, 0.5);
   --lg-on-lit: var(--lg-on-hi);
-  --lg-sel: rgba(255, 255, 255, 0.2); /* chosen but not focused (0.9.47): brighter glass with white text, never the lit focus look */
+  --lg-sel: var(--sel-bg); /* chosen (0.9.58, owner's pick A): a ring in the highlight colour (--sel-ring), as in Plain */
 }
 body.elements-glass.theme-light {
   --lg-fill: rgba(255, 255, 255, 0.42);
@@ -652,6 +680,7 @@ body.elements-glass.theme-light {
   --lg-rim-grad: linear-gradient(var(--lg-angle, 135deg), #fff 0%, rgba(255, 255, 255, 0.7) 24%, rgba(0, 0, 0, 0.06) 50%, rgba(255, 255, 255, 0.6) 76%, #fff 100%);
   --lg-bevel: inset 0 1px 1px #fff, inset 0 -1px 2px rgba(30, 30, 45, 0.12), inset 0 0 0 3px rgba(255, 255, 255, 0.25);
   --lg-drop: 0 16px 40px -18px rgba(30, 30, 45, 0.32), 0 1px 3px rgba(30, 30, 45, 0.1);
+  --lg-drop-deep: var(--lg-drop);
   --lg-gloss: linear-gradient(166deg, rgba(255, 255, 255, 0.55) 0%, rgba(255, 255, 255, 0.2) 36%, rgba(255, 255, 255, 0) 36.4%);
   --lg-lit: rgba(var(--lg-hi), 0.96); /* 0.9.49 (owner: black frosted buttons in Light): crisp dark, not a muddy see-through grey */
   --lg-lit-rim: linear-gradient(var(--lg-angle, 135deg), rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0.12) 40%, rgba(255, 255, 255, 0.5));
@@ -664,6 +693,7 @@ body.elements-glass.theme-light {
 body.elements-glass :is(.bar-pill.dock-glass .tabs, .top-search, .dialog, .toast, .btn, .seg) { isolation: isolate; }
 body.elements-glass.bar-pill.dock-glass .tabs, body.elements-glass :is(.top-search, .dialog, .toast, .btn:not(.primary), .seg) { background: var(--lg-fill); box-shadow: var(--lg-bevel), var(--lg-drop); }
 body.elements-glass :is(.dialog, .toast) { background: var(--lg-pane); }
+body.elements-glass.bar-pill.dock-glass .tabs, body.elements-glass :is(.top-search, .dialog, .toast) { box-shadow: var(--lg-bevel), var(--lg-drop-deep); } /* they float: contact plus deep shadow (0.9.54) */
 body.elements-glass.bar-pill.dock-glass .tabs, body.elements-glass :is(.top-search, .dialog, .toast) { -webkit-backdrop-filter: var(--lg-blur); backdrop-filter: var(--lg-blur); }
 body.elements-glass .g-actions .btn:not(.primary) { -webkit-backdrop-filter: var(--lg-blur); backdrop-filter: var(--lg-blur); } /* over the game's art */
 /* the rim (::before) and the reflection (::after, under the content) */
@@ -674,24 +704,26 @@ body.elements-glass.bar-pill.dock-glass .tabs::before, body.elements-glass :is(.
 body.elements-glass.bar-pill.dock-glass .tabs::after, body.elements-glass :is(.top-search, .dialog, .toast, .btn, .seg)::after {
   content: ''; position: absolute; inset: 0; border-radius: inherit; background: var(--lg-gloss); pointer-events: none; z-index: -1;
 }
-body.elements-glass :is(.dialog, .toast)::after { background: var(--lg-gloss), var(--lg-grain); background-size: auto, 160px 160px; opacity: 0.9; }
-body.elements-glass .dialog::after { background: linear-gradient(170deg, rgba(255, 255, 255, 0.09) 0%, rgba(255, 255, 255, 0.025) 22%, rgba(255, 255, 255, 0) 22.3%), var(--lg-grain); background-size: auto, 160px 160px; }
+/* 0.9.57: no white grain in dark Glass (on black it read as grey speckle); Light keeps its frost */
+body.elements-glass :is(.dialog, .toast)::after { background: var(--lg-gloss); opacity: 0.9; }
+body.elements-glass .dialog::after { background: linear-gradient(180deg, rgba(255, 255, 255, 0.04) 0%, rgba(255, 255, 255, 0) 30%); }
 body.elements-glass.theme-light .dialog::after { background: linear-gradient(170deg, rgba(255, 255, 255, 0.6) 0%, rgba(255, 255, 255, 0.2) 22%, rgba(255, 255, 255, 0) 22.3%); }
 body.elements-glass .btn:not(.primary):hover { background: var(--lg-fill-hover); }
 /* rows in a glass sheet sit on the glass (no grey blocks), only a hairline marks them; the focused one is lit glass */
-body.elements-glass .dialog .menu-item { background: rgba(255, 255, 255, 0.035); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.05); }
+body.elements-glass .dialog .menu-item { background: rgba(255, 255, 255, 0.025); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), inset 0 -1px 0 rgba(0, 0, 0, 0.3); }
 body.elements-glass.theme-light .dialog .menu-item { background: rgba(255, 255, 255, 0.4); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.7); }
 body.elements-glass .dialog .menu-item:hover { background: var(--lg-fill-hover); }
+body.elements-glass:not(.theme-light) .dialog .menu-item.selected:not(:focus) { box-shadow: var(--sel-ring); } /* chosen: the ring (0.9.58) */
 body.elements-glass .dialog .menu-item:focus { background: var(--lg-lit); color: var(--lg-on-lit); box-shadow: var(--lg-bevel), var(--lg-lit-glow); }
 body.elements-glass .dialog .menu-item:focus :is(.sub, .muted) { color: color-mix(in srgb, var(--lg-on-lit) 74%, transparent); }
 /* lit glass: the current tab, the chosen switch, the primary button, whatever is focused */
 body.elements-glass.bar-pill.dock-glass .tab-ink { background: var(--lg-lit); box-shadow: var(--lg-bevel), var(--lg-lit-glow); }
 /* 0.9.47 (owner: "I don't know what I'm selecting"): the chosen option of a switch was lit like focus (0.88 white against
    focus's white), so the two read the same. Chosen is brighter glass now; only focus is lit, as in Plain (grey vs white). */
-body.elements-glass .seg-ink { background: var(--lg-sel); box-shadow: var(--lg-bevel); }
+body.elements-glass .seg-ink { background: var(--lg-sel); box-shadow: var(--sel-ring), var(--lg-bevel); }
 body.elements-glass.bar-pill.dock-glass .tab.active, body.elements-glass.bar-pill.dock-glass .tab.active:hover { color: var(--lg-on-lit); }
-body.elements-glass .seg.inked > button.on { color: var(--text); }
-body.elements-glass .btn.primary { background: rgba(var(--primary-rgb), 0.62); color: var(--on-btn, var(--on-primary)); box-shadow: var(--lg-bevel), var(--lg-drop); }
+body.elements-glass .seg.inked > button.on { color: var(--on-sel); }
+body.elements-glass .btn.primary { background: var(--btn, var(--primary)); color: var(--on-btn, var(--on-primary)); box-shadow: var(--lg-bevel), var(--lg-drop); } /* 0.9.57: solid (see-through white over dark was the grey the owner hated) */
 /* 0.9.49 (owner: in Light the main buttons were black frosted glass): on a light page the prominent button is bright
    glass, nearly white, with dark text; it stands out from the others by its brightness, weight and shadow. Focus is
    still the dark lit glass, so where you are never reads the same as what's prominent. */
@@ -707,23 +739,25 @@ body.elements-glass.theme-light.bar-pill.dock-glass .tab:not(.active):hover { co
 body.elements-glass.theme-light.bar-pill.dock-glass .tab-trig { filter: invert(1); }
 /* interactive: pressed glass lights up from inside */
 /* ...and a band of light sweeps across it (liquid-glass skill: interactive glass scales, bounces and shimmers) */
-body.elements-glass .btn.lg-shine::after { background: var(--lg-gloss), linear-gradient(105deg, rgba(255, 255, 255, 0) 38%, rgba(255, 255, 255, 0.42) 50%, rgba(255, 255, 255, 0) 62%) no-repeat; background-size: auto, 260% 100%; animation: lg-shine var(--spring-soft-d) var(--spring-soft) both; }
+body.elements-glass.theme-light .btn.lg-shine::after { background: var(--lg-gloss), linear-gradient(105deg, rgba(255, 255, 255, 0) 38%, rgba(255, 255, 255, 0.42) 50%, rgba(255, 255, 255, 0) 62%) no-repeat; background-size: auto, 260% 100%; animation: lg-shine var(--spring-soft-d) var(--spring-soft) both; }
+/* 0.9.56: in dark Glass a press no longer sends a white band across the button (owner: white shapes moving that
+   correspond to nothing); Light keeps it */
 @keyframes lg-shine { from { background-position: 0 0, 115% 0; } to { background-position: 0 0, -15% 0; } }
 body.elements-glass.motion-reduce .btn.lg-shine::after { animation: none; background: var(--lg-gloss); }
-@media (prefers-reduced-motion: reduce) { body.elements-glass .btn.lg-shine::after { animation: none; background: var(--lg-gloss); } }
+@media (prefers-reduced-motion: reduce) { body.elements-glass.theme-light .btn.lg-shine::after { animation: none; background: var(--lg-gloss); } }
 /* clear glass over the game's art (the skill's .clear: media-rich backgrounds): more see-through and brighter, the
    label kept legible by a soft shadow */
-body.elements-glass:not(.light-fx):not(.theme-light) .g-actions .btn:not(.primary):not(:focus) { background: rgba(255, 255, 255, 0.025); -webkit-backdrop-filter: blur(12px) saturate(2) brightness(1.18); backdrop-filter: blur(12px) saturate(2) brightness(1.18); text-shadow: 0 1px 8px rgba(0, 0, 0, 0.55); }
+body.elements-glass:not(.light-fx):not(.theme-light) .g-actions .btn:not(.primary):not(:focus) { background: color-mix(in srgb, var(--lg-ob) 38%, transparent); -webkit-backdrop-filter: blur(14px) saturate(1.45) contrast(1.05); backdrop-filter: blur(14px) saturate(1.45) contrast(1.05); text-shadow: 0 1px 8px rgba(0, 0, 0, 0.55); } /* 0.9.54: smoked, not brightened */
 /* concentric corners: a shape inside another follows its curve (outer radius less the gap) */
 body.elements-glass .seg-ink { border-radius: calc(var(--r-md) - 4px); }
-body.elements-glass :is(.btn, .seg button):is(:active, .pressed) { box-shadow: var(--lg-bevel), inset 0 0 24px rgba(255, 255, 255, 0.3), var(--lg-drop); }
+body.elements-glass :is(.btn, .seg button):is(:active, .pressed) { box-shadow: var(--lg-bevel), inset 0 0 24px rgba(255, 255, 255, 0.18), var(--lg-drop); }
 /* without blur: every layer stays, the fill gets denser so it still reads */
 body.elements-glass.light-fx :is(.tabs, .top-search, .dialog, .toast, .btn) { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
-body.elements-glass.light-fx { --lg-fill: rgba(var(--lg-tint), 0.72); --lg-fill-hover: rgba(var(--lg-tint), 0.82); --lg-pane: rgba(var(--lg-tint), 0.94); }
+body.elements-glass.light-fx { --lg-fill: color-mix(in srgb, var(--lg-ob) 88%, transparent); --lg-fill-hover: color-mix(in srgb, var(--lg-ob) 94%, transparent); --lg-pane: color-mix(in srgb, var(--lg-ob) 96%, transparent); }
 body.elements-glass.light-fx.theme-light { --lg-fill: rgba(250, 250, 251, 0.88); --lg-fill-hover: #fff; --lg-pane: rgba(250, 250, 251, 0.97); }
 @media (prefers-reduced-transparency: reduce) {
   body.elements-glass :is(.tabs, .top-search, .dialog, .toast, .btn) { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
-  body.elements-glass { --lg-fill: rgba(var(--lg-tint), 0.92); --lg-pane: rgba(var(--lg-tint), 0.97); --lg-lit: rgb(var(--lg-hi)); }
+  body.elements-glass { --lg-fill: color-mix(in srgb, var(--lg-ob) 94%, transparent); --lg-pane: color-mix(in srgb, var(--lg-ob) 98%, transparent); --lg-lit: rgb(var(--lg-hi)); }
 }
 @media (prefers-contrast: more) {
   body.elements-glass { --lg-rim-grad: linear-gradient(rgba(255, 255, 255, 0.75), rgba(255, 255, 255, 0.75)); }
@@ -748,16 +782,16 @@ body.style-plain:not(.theme-light):not(.theme-oled) :is(.glass, .eg-con, .lrow, 
 body.style-plain:not(.theme-light):not(.theme-oled) .btn:not(.primary):not(:focus):not(:focus-visible) { box-shadow: var(--pl-top), var(--pl-raise); }
 body.style-plain:not(.theme-light):not(.theme-oled) .btn.primary:not(:focus):not(:focus-visible) { box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), var(--pl-raise); }
 body.style-plain:not(.theme-light):not(.theme-oled) .seg { box-shadow: var(--pl-sink); }
-body.style-plain:not(.theme-light):not(.theme-oled) .seg-ink { background: var(--s3); box-shadow: var(--pl-top), var(--pl-raise); }
+body.style-plain:not(.theme-light):not(.theme-oled) .seg-ink { background: var(--sel-bg); box-shadow: var(--sel-ring); }
 body.style-plain:not(.theme-light):not(.theme-oled) :is(.dialog, .toast) { box-shadow: var(--pl-top), var(--pl-edge), var(--shadow-pop); }
 body.style-plain:not(.theme-light):not(.theme-oled) .dialog .menu-item:not(:focus) { box-shadow: var(--pl-edge); }
+body.style-plain:not(.theme-light) .dialog .menu-item.selected:not(:focus) { box-shadow: var(--sel-ring); }
 body.style-plain:not(.theme-light):not(.theme-oled).bar-pill:is(.dock-black, .dock-accent) .tabs { box-shadow: var(--pl-top), var(--pl-edge), 0 10px 26px -10px rgba(0, 0, 0, 0.7); }
 body.style-plain:not(.theme-light):not(.theme-oled).bar-pill .tab-ink { box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5), 0 2px 6px -2px rgba(0, 0, 0, 0.6); }
 body.style-plain:not(.theme-light):not(.theme-oled) .top-search { box-shadow: var(--pl-sink); }
 
-/* CAE governor (0.9.47, motion.js): idle for a minute, the slow decorative loops hold still (they cost frames for
-   nothing while nobody looks); any input lets them run on from where they were */
-body.cae-idle :is(.bg-stage .layer, .media img, .sc-clouds g, .sc-clouds .c1, .sc-clouds .c2, .sc-stars circle, .st-img) { animation-play-state: paused !important; }
+/* CAE governor: idle no longer pauses anything you can see (0.9.56, owner: the background stopping after a while felt
+   broken). Scenery stops only while a game or another app is in front (body.away). */
 
 /* ---- Glass engine (0.9.47, src/glassEngine.js; Glass only, dark and light): real refraction. Each glass surface gets
    an SVG lens as its backdrop-filter (frost, then the view bent at the rim); the rim's highlight follows --lg-angle.

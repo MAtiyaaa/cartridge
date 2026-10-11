@@ -63,3 +63,14 @@ test('the rule book points at its checks', () => {
   const t = fs.readFileSync(path.join(ROOT, 'docs/design-rules.md'), 'utf8');
   for (const x of ['clipping.js', 'contrast.js', 'focus.js', 'styleModes.test.js', 'logos.test.js']) assert.ok(t.includes(x), x);
 });
+
+// Nothing decodes or shrinks pictures on Electron's main thread in code that runs by itself (0.9.60: 25 to 120 ms a
+// picture there froze the controller and every call). The image worker (src/imageWorker.js) does it; these are the only
+// places left, each on demand or a fallback, pinned so a new one has to be argued for.
+test('picture work stays off the main thread', () => {
+  const t = fs.readFileSync(path.join(ROOT, 'electron/main.js'), 'utf8');
+  const fns = [...t.matchAll(/nativeImage\.createFromBuffer/g)].map((m) => { const before = t.slice(0, m.index); const f = [...before.matchAll(/\n(?:async )?function (\w+)/g)].pop(); return f ? f[1] : '?'; });
+  // coverCrop and iconOpaque: Steam art, made when you add games to Steam; asPng, sgdbImage, prepareLogoHere: only when
+  // the image worker can't answer
+  assert.deepStrictEqual([...new Set(fns)].sort(), ['asPng', 'coverCrop', 'iconOpaque', 'prepareLogoHere', 'sgdbImage'].sort());
+});

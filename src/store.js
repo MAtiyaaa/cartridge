@@ -78,7 +78,12 @@ export function go(name, params = {}) {
   if (card?.querySelector('.art img')) return morph(card.querySelector('.art'), () => goNow(name, params), '.g-cover', nextTick);
   goNow(name, params);
 }
+// 0.9.55 (owner: open a game from Home, go back, and a second later the screen dims and comes back): morph-back
+// switched Home's arrival animations off and a 900 ms timer switched them on again, which restarted them on the page
+// already showing, so it faded in from nothing a second time. The class now stays until the next page change.
+const calm = () => document.documentElement.classList.remove('morph-back');
 function goNow(name, params) {
+  calm();
   // leaving Settings for one of its screens: remember the row (Settings puts focus back on it, 0.9.3 L)
   const el = document.activeElement;
   if (store.route.name === 'settings' && el?.closest?.('.pane')) store.settingsSpot = { sec: store.settingsSection, page: store.settingsPage, text: (el.textContent || '').trim().slice(0, 60) };
@@ -90,13 +95,13 @@ export function back() {
   if (!store.history.length) return false;
   const from = store.route.name === 'game' && document.querySelector('.g-cover img') && store.route.params?.romId;
   const prev = store.history[store.history.length - 1];
+  calm();
   const change = () => { store.navDir = 'out'; store.route = store.history.pop(); };
   if (from && prev?.focusKey === 'rom-' + from) {
     // 0.9.49 (owner: "the return feels glitchy", on Home only): Home's rows settle in one after another (up to 720 ms)
     // while the cover flies back into one of them, so it chased a moving card and the card kept moving after it
     // landed. Coming back to a card, the page arrives still; going to a game is unchanged.
-    const root = document.documentElement;
-    root.classList.add('morph-back'); clearTimeout(back.t); back.t = setTimeout(() => root.classList.remove('morph-back'), 900);
+    document.documentElement.classList.add('morph-back');
     morph(document.querySelector('.g-cover'), change, `.card[data-key="rom-${from}"] .art`, nextTick);
   } else change();
   return true;
@@ -106,6 +111,8 @@ export function tab(name) {
   const order = activeTabs(), from = order.indexOf(store.history[0]?.name || store.route.name), to = order.indexOf(name);
   store.navDir = from < 0 || to < 0 || from === to ? 'in' : to > from ? 'r' : 'l';
   store.history = [];
+  calm();
+  if (name !== 'search') store.lastSearch = ''; // 0.9.60 (owner): a search done stays done; another tab closes it
   store.route = { name, params: {} };
 }
 // Back with nowhere left to go. Android sets it when Fuse opened Cartridge (src/android/fuse.js).
@@ -161,7 +168,7 @@ export async function playGame(romId) {
   romId = Number(romId);
   if (saveSyncOn()) {
     const game = romById(romId)?.name || '';
-    const show = (o) => { store.cloudSync = { ...(store.cloudSync || {}), game, ...o }; };
+    const show = (o) => { store.cloudSync = { ...(store.cloudSync || {}), game, romId, ...o }; };
     const t0 = Date.now();
     show({ state: 'check', label: 'Checking your saves with RomM', done: 0, of: 0 });
     const off = window.cart.on('savesync', (p) => { if (p?.why === 'before' && store.cloudSync && p.state === 'run') show({ done: p.done, of: p.of, label: p.of ? `Checking your saves (${p.done} of ${p.of})` : 'Checking your saves with RomM' }); });
@@ -171,14 +178,14 @@ export async function playGame(romId) {
       show({ state: 'conflict', label: `${c.label || 'A save'} changed here and on another device` });
       const v = await choose({ title: 'Which Save?', message: `${c.label || 'This save'} (${c.emuName}) changed on this device and on another one since they last synced. The one you don't pick is kept as an older version.`, options: [{ label: 'Use the One From RomM', sub: 'The save from your other device', value: 'theirs', icon: 'mdiCloudDownloadOutline' }, { label: 'Keep This Device’s', sub: 'It goes to RomM as the newest', value: 'mine', icon: 'mdiCellphoneArrowDown' }] });
       if (!v) { store.cloudSync = null; return; } // B: nothing changes and the game doesn't start
-      show({ state: 'check', label: v === 'mine' ? 'Saving this device’s save to RomM' : 'Bringing the save from RomM' });
+      show({ state: 'check', dir: v === 'mine' ? 'up' : 'down', label: v === 'mine' ? 'Saving this device’s save to RomM' : 'Bringing the save from RomM' });
       try { await call('savesync:resolve', { key: c.key, choice: v, romId }); } catch (e) { toast(e.message, 'error', 5000); }
     }
     const res = r?.results || [], n = (k) => res.filter((x) => x.result === k).length;
     const busy = n('busy'), auth = res.find((x) => x.result === 'auth');
     if (r?.offline || r?.error || auth) show({ state: 'offline', label: auth ? auth.error : 'RomM couldn’t be reached. Playing with this device’s save.' });
     else if (busy) show({ state: 'error', label: 'The emulator is already open, so its saves weren’t changed.' });
-    else show({ state: 'done', label: n('down') ? 'Your latest save is here' : n('up') ? 'Your save is in RomM' : 'Your saves are up to date', done: 1, of: 1 });
+    else show({ state: 'done', dir: n('down') ? 'down' : 'up', label: n('down') ? 'Your latest save is here' : n('up') ? 'Your save is in RomM' : 'Your saves are up to date', done: 1, of: 1 });
     await new Promise((ok) => setTimeout(ok, Math.max(r?.offline || auth ? 1800 : 700, 1100 - (Date.now() - t0))));
     store.cloudSync = null;
   }
@@ -354,7 +361,7 @@ export function downloadFor(romId) {
 }
 // Android: root is the drive it goes to (Install to, src/android/drives.js): '' the main ROMs folder, else another
 // drive's ROMs folder; undefined asks (ask: false takes the drive used last). The desktop never passes it.
-export async function download(rom, { checkSpace = true, root, ask = true } = {}) {
+export async function download(rom, { checkSpace = true, pick = true, root, ask = true } = {}) {
   const p = platformById(rom.platform_id);
   if (import.meta.env.MODE === 'android') {
     if (root === undefined) { root = await (await import('./android/drives.js')).pickDrive({ ask }); if (root === null) return false; }
@@ -375,8 +382,19 @@ export async function download(rom, { checkSpace = true, root, ask = true } = {}
       if (!root) return false;
     }
   }
-  if (checkSpace && p?.target?.path && rom.fs_size_bytes && !(await roomFor(rom, p, root))) return false;
-  await call('dl:add', { romId: rom.id, name: rom.name, platformSlug: rom.platform_slug, platformName: rom.platform_display_name, size: rom.fs_size_bytes, cover: rom.path_cover_small || rom.url_cover, root });
+  // 0.9.63 (owner: "if a ROM has multiple files ask before download which one they want, and an option to select all"):
+  // a game made of separate files side by side (a .pkg and a .zip, discs, updates) asks which; nothing starts ticked.
+  // Folder games (files in folders: a PS3 game) always come whole.
+  let only = null, size = rom.fs_size_bytes;
+  const parts = rom.files || [];
+  if (pick && parts.length > 1 && parts.length <= 60 && !parts.some((f) => f.nested)) {
+    only = await openModal('filepick', { name: rom.name, files: parts });
+    if (!only || !only.length) return false;
+    if (only.length === parts.length) only = null; // all of them: the usual whole download
+    else size = parts.filter((f) => only.includes(f.file_name)).reduce((a, f) => a + (f.size || 0), 0) || size;
+  }
+  if (checkSpace && p?.target?.path && size && !(await roomFor({ ...rom, fs_size_bytes: size }, p, root))) return false;
+  await call('dl:add', { romId: rom.id, name: rom.name, platformSlug: rom.platform_slug, platformName: rom.platform_display_name, size, cover: rom.path_cover_small || rom.url_cover, root, only });
   toast(`Downloading ${rom.name}`, 'info', 2000, 'mdiDownload');
   return true;
 }
