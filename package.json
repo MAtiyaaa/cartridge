@@ -1,7 +1,7 @@
 {
   "name": "cartridge",
   "productName": "Cartridge",
-  "version": "0.9.30",
+  "version": "0.9.31",
   "description": "Controller-first RomM client for SteamOS, Bazzite and Android",
   "main": "electron/main.js",
   "author": "abdu2304",
@@ -54,7 +54,7 @@
       }
     ],
     "releaseInfo": {
-      "releaseName": "Cartridge 0.9.30 · A New Look",
+      "releaseName": "Cartridge 0.9.31 · Quick and Clear",
       "releaseNotesFile": "RELEASE_NOTES.md"
     }
   },
